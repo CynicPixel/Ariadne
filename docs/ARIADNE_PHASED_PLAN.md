@@ -29,9 +29,9 @@ a phase; unmarked items are on the phase's critical path in listed order.
   (§7.4). `∥A`
 - [ ] **0.3** COOL day-1 check on the free trial: launch AMI, run one stock pipeline unmodified, first microbenchmark,
   confirm result-publication terms. `∥B`
-- [ ] **0.4** `core/`: SE(3)/SO(3) math with one perturbation convention (§11.3), timestamp types, covariance
+- [x] **0.4** `core/`: SE(3)/SO(3) math with one perturbation convention (§11.3), timestamp types, covariance
   transport, FlatBuffers schemas + single serialization boundary with ByteRecord accounting (§4.4, §15.7). `∥C`
-- [ ] **0.5** Logging/event schema (§41), run-manifest writer (§28.2), deterministic seed plumbing.
+- [x] **0.5** Logging/event schema (§41), run-manifest writer (§28.2), deterministic seed plumbing.
 - [ ] **0.6** CI per §27.2 (amd64 + arm64 jobs, ccache, opencv-base layer, ECR push by digest); Terraform modules
   applied for network/storage/registry (§27.3). `∥B`
 - [ ] **0.7** MCAP record/replay skeleton (§5.9) and the seeded degradation operator `D(image, params, seed,

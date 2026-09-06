@@ -57,6 +57,21 @@ requires (it asks only for reproducibility twice within a run).
   proven for the degradation operator and the deterministic math, which is what the plan's
   gate wording actually requires.
 
+### 0.5 done — observability and seed plumbing
+
+- `core/random/seed.hpp` — no global RNG anywhere. Each subsystem derives its seed from the
+  run's root seed plus a NAME-hashed purpose id, so adding a subsystem later cannot shift an
+  existing one's stream and silently move every ablation baseline. splitmix64 finalizer, so
+  sweep seeds 1..N decorrelate rather than producing structured sub-seeds.
+- `runtime/logging/event_log.hpp` — §41's 20 event types, JSONL, with a chained `state_hash`.
+  The chain is the diagnostic: comparing two runs gives the exact `sequence_id` where they
+  first diverged, turning a determinism failure in a long mission into a bisection.
+- `runtime/manifest/run_manifest.hpp` — §28.2 fields. Images by digest not tag; OpenCV by
+  build hash not version string (C7); `execution_mode` recorded because replay is
+  bit-deterministic and live is not (§5.9); `imu_mode` recorded so §10.7's fallback is an
+  honest downgrade. `MissingRequiredFields` refuses a run whose tree was dirty, since the
+  commit then does not identify the code that ran.
+
 ### Remaining in Phase 0
 
 0.5 logging/event schema, run manifest, seed plumbing; 0.6 CI and Terraform; 0.7 MCAP

@@ -56,7 +56,7 @@ OpenCV 5 is a core part of the system rather than a preprocessing dependency.
 | ------------ | ---------------------------- | ------------------------------------------------------- |
 | Restoration  | `photo`, `imgproc`, `xphoto` | denoising, illumination compensation, contrast recovery |
 | Tracking     | `video`                      | pyramidal optical flow                                  |
-| Features     | `features`                   | ALIKED, DISK, XFeat                                     |
+| Features     | `features`                   | ALIKED, DISK; XFeat implemented on OpenCV 5 primitives  |
 | Matching     | `features`                   | LightGlue, ANNIndex                                     |
 | Geometry     | `geometry`                   | essential matrix, PnP, triangulation                    |
 | Calibration  | `calib`                      | camera and multi-camera calibration                     |
