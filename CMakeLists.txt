@@ -23,6 +23,8 @@ option(ARIADNE_BUILD_TESTS "Build the test suite" ON)
 include(cmake/AriadneDependencies.cmake)
 
 add_subdirectory(cpp/core)
+add_subdirectory(cpp/perception)
+add_subdirectory(cpp/runtime)
 
 if(ARIADNE_BUILD_TESTS)
   enable_testing()
