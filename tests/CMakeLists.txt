@@ -21,3 +21,8 @@ add_executable(test_phase0_gate
   end_to_end/test_phase0_gate.cpp)
 target_link_libraries(test_phase0_gate PRIVATE ariadne::runtime GTest::gtest_main)
 gtest_discover_tests(test_phase0_gate)
+
+add_executable(test_unit
+  unit/test_observability.cpp)
+target_link_libraries(test_unit PRIVATE ariadne::runtime GTest::gtest_main)
+gtest_discover_tests(test_unit)
