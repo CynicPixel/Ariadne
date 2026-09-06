@@ -1,0 +1,111 @@
+// Ariadne wire schema (arch §4.1-4.4, §15.2, §15.5, §15.7).
+//
+// This file is the SINGLE definition of what crosses the network. Generated
+// headers are produced by flatc at build time and are never committed, so the
+// schema cannot drift from the code that uses it.
+//
+// Sizing intent from §15.7, which the byte-accounting tests assert against:
+//   Pose            7 x f32                      = 28 B
+//   SE(3) pose edge 7 x f32 + 21 x f32 + ids     ~ 150 B
+//   Pose-graph node                              ~ 28 B
+
+namespace ariadne.wire;
+
+/// §4.4. Values are pinned: the wire format depends on them, so reordering
+/// this enum is a breaking protocol change.
+enum MessageClass : ubyte {
+  HEARTBEAT = 0,
+  GLOBAL_DESCRIPTOR = 1,
+  LOCAL_DESCRIPTOR = 2,
+  MATCH_REQUEST = 3,
+  MATCH_RESPONSE = 4,
+  POSE_EDGE = 5,
+  POSE_GRAPH = 6,
+  SUBMAP_SUMMARY = 7,
+  SUBMAP_PATCH = 8,
+  TASK_BID = 9,
+  TASK_CONSENSUS = 10,
+  HUMAN_REQUEST = 11,
+  ACK = 12
+}
+
+enum EdgeStatus : ubyte {
+  CANDIDATE = 0,
+  GEOMETRY_VERIFIED = 1,
+  DEGENERATE = 2,
+  PCM_REJECTED = 3,
+  GNC_INLIER = 4,
+  GNC_OUTLIER = 5
+}
+
+struct Quaternion { w:float; x:float; y:float; z:float; }
+struct Translation { x:float; y:float; z:float; }
+
+/// SE(3) only. C2: a wire schema cannot contain "Sim3 or SE3"; stereo makes
+/// scale observable per agent, so inter-agent edges are SE(3). Sim(3) exists
+/// only in the monocular ablation and in offline Umeyama alignment, neither of
+/// which crosses this serializer.
+struct Pose { q:Quaternion; t:Translation; }
+
+/// §15.5 reference-frame algebra. Every pose is frame-tagged and the
+/// deserializer REJECTS untagged poses, because a pose whose frame is unknown
+/// cannot be composed with anything.
+struct FrameTag { agent:uint; epoch:uint; }
+
+table PoseNode {
+  agent:uint;
+  keyframe:ulong;
+  stamp_ns:long;
+  pose:Pose;
+  frame:FrameTag;
+}
+
+/// §4.3.
+table LoopEdge {
+  agent_a:uint;
+  keyframe_a:ulong;
+  agent_b:uint;
+  keyframe_b:ulong;
+  measurement:Pose;
+  /// Upper triangle of the 6x6 information matrix, row-major: 21 floats.
+  information:[float];
+  frame_a:FrameTag;
+  frame_b:FrameTag;
+  status:EdgeStatus;
+  inlier_count:uint;
+  retrieval_score:float;
+  pcm_score:float;
+  gnc_weight:float;
+  degeneracy_flag:bool;
+}
+
+table PoseGraph {
+  nodes:[PoseNode];
+  edges:[LoopEdge];
+  anchor:FrameTag;
+}
+
+table Heartbeat {
+  agent:uint;
+  stamp_ns:long;
+  pose:Pose;
+  frame:FrameTag;
+  battery:float;
+  link_state:float;
+  keyframe_watermark:ulong;
+}
+
+/// Every message on the wire is an Envelope. One root type means one
+/// serialization boundary, which is what makes byte accounting honest.
+table Envelope {
+  cls:MessageClass;
+  sender:uint;
+  receiver:uint;
+  stamp_ns:long;
+  sequence:ulong;
+  heartbeat:Heartbeat;
+  pose_graph:PoseGraph;
+  edge:LoopEdge;
+}
+
+root_type Envelope;
