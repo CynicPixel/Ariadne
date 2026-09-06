@@ -24,12 +24,15 @@ trap 'rm -rf "$WORK"' EXIT
 # re-deriving every golden degradation digest that depends on them.
 EXPECTED_DET_MATH="8409701359450404215"
 EXPECTED_PHILOX="215287054852263674"
+EXPECTED_DEGRADE="12016663175328231476"
 
 cat > "$WORK/digest.cpp" <<'CPP'
 #include "core/math/det_math.hpp"
 #include "core/random/philox.hpp"
+#include "perception/degradation/degradation.hpp"
 #include <cstdio>
 using namespace ariadne::core;
+using namespace ariadne::perception;
 int main() {
     uint64_t d = 1469598103934665603ull;
     auto absorb = [&d](double v) {
@@ -46,6 +49,28 @@ int main() {
         for (int i = 0; i < 8; ++i) { r ^= (b >> (i*8)) & 0xFFull; r *= 1099511628211ull; }
     }
     std::printf("philox_digest=%llu\n", (unsigned long long)r);
+
+    // The Phase 0 exit criterion names D specifically: bit-identical for a
+    // fixed (seed, frame_id) across machines. This exercises the whole chain,
+    // including the Poisson and Gaussian samplers and the dust field.
+    ImageU8 img(64, 64, 3);
+    for (int y = 0; y < 64; ++y)
+      for (int x = 0; x < 64; ++x)
+        for (int c = 0; c < 3; ++c)
+          img.At(x, y, c) = (unsigned char)((x*3 + y*5 + c*7) & 0xFF);
+    ImageF32 depth(64, 64);
+    for (int y = 0; y < 64; ++y)
+      for (int x = 0; x < 64; ++x) depth.At(x, y) = 0.5f + 0.1f * (float)x;
+    DegradationParams p;
+    p.radiance_scale = 0.08; p.photon_scale = 8000.0;
+    p.read_noise_electrons = 3.0; p.vignette_strength = 0.35;
+    p.prnu_sigma = 0.02; p.analog_gain = 2.0;
+    p.enable_dust = true; p.dust_beta = 0.25;
+    p.dust_airlight = 0.55; p.dust_field_strength = 0.6;
+    ImageU8 out = Degrade(img, depth, p, 20260906ull, 7ull);
+    uint64_t g = 1469598103934665603ull;
+    for (unsigned char v : out.data) { g ^= v; g *= 1099511628211ull; }
+    std::printf("degrade_digest=%llu\n", (unsigned long long)g);
     return 0;
 }
 CPP
@@ -64,13 +89,18 @@ for CXX in g++ clang++; do
     out="$("$WORK/digest")"
     det="$(echo "$out" | sed -n 's/^det_math_digest=//p')"
     phi="$(echo "$out" | sed -n 's/^philox_digest=//p')"
+    deg="$(echo "$out" | sed -n 's/^degrade_digest=//p')"
     ran=$((ran + 1))
 
-    if [ "$det" = "$EXPECTED_DET_MATH" ] && [ "$phi" = "$EXPECTED_PHILOX" ]; then
-      printf '  PASS  %-9s %-4s  det=%s philox=%s\n' "$CXX" "$OPT" "$det" "$phi"
+    if [ "$det" = "$EXPECTED_DET_MATH" ] && [ "$phi" = "$EXPECTED_PHILOX" ] \
+       && [ "$deg" = "$EXPECTED_DEGRADE" ]; then
+      printf '  PASS  %-9s %-4s  det=%s philox=%s degrade=%s\n' \
+             "$CXX" "$OPT" "$det" "$phi" "$deg"
     else
-      printf '  FAIL  %-9s %-4s  det=%s (want %s) philox=%s (want %s)\n' \
-             "$CXX" "$OPT" "$det" "$EXPECTED_DET_MATH" "$phi" "$EXPECTED_PHILOX"
+      printf '  FAIL  %-9s %-4s\n' "$CXX" "$OPT"
+      [ "$det" = "$EXPECTED_DET_MATH" ] || printf '        det_math %s want %s\n' "$det" "$EXPECTED_DET_MATH"
+      [ "$phi" = "$EXPECTED_PHILOX" ]   || printf '        philox   %s want %s\n' "$phi" "$EXPECTED_PHILOX"
+      [ "$deg" = "$EXPECTED_DEGRADE" ]  || printf '        degrade  %s want %s\n' "$deg" "$EXPECTED_DEGRADE"
       status=1
     fi
   done
