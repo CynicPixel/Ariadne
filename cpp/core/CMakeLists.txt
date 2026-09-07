@@ -27,6 +27,7 @@ target_link_libraries(ariadne_core INTERFACE
   ariadne_eigen
   flatbuffers
   libzstd_static
+  yaml-cpp::yaml-cpp
   Threads::Threads)
 add_dependencies(ariadne_core ariadne_wire_gen)
 add_library(ariadne::core ALIAS ariadne_core)
