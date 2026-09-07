@@ -1,0 +1,40 @@
+# Ariadne degradation config: dark0_dust1
+#
+# Named parameter vector for the seeded degradation operator D (arch 5.6).
+# Referenced by run manifests; never inline constants.
+#
+# Darkness: nominal lighting; the clean baseline every DVE row is measured against
+# Dust:     light haze; distant structure loses contrast
+#
+# The sensor is IDENTICAL across every dark level: only scene radiance
+# changes. Read noise therefore stays constant while the signal falls, which
+# is what makes low light hard rather than merely dim.
+
+name: dark0_dust1
+
+# Stage 1: scene radiance
+radiance_scale: 1.0
+
+# Stages 2-3: sensor noise (fixed: same camera in every config)
+enable_shot_noise: true
+photon_scale: 10000.0
+read_noise_electrons: 2.5
+
+# Stage 4: optics and fixed-pattern response (fixed: same camera)
+vignette_strength: 0.28
+prnu_sigma: 0.012
+
+# Stage 5-6: exposure, gain, quantization
+exposure: 1.0
+analog_gain: 1.0
+digital_gain: 1.0
+bit_depth: 8
+saturation: 1.0
+
+# Stage 7: dust
+enable_dust: true
+dust_beta: 0.15
+dust_airlight: 0.55
+dust_field_frequency: 0.012
+dust_field_octaves: 3
+dust_field_strength: 0.55

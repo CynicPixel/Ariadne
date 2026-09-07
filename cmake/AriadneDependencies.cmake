@@ -17,6 +17,11 @@ FetchContent_Declare(eigen
 FetchContent_MakeAvailable(eigen)
 add_library(ariadne_eigen INTERFACE)
 target_include_directories(ariadne_eigen SYSTEM INTERFACE ${eigen_SOURCE_DIR})
+# Eigen is primarily MPL2 but ships some LGPL 2.1 code (see its COPYING.README).
+# EIGEN_MPL2_ONLY turns including any LGPL-licensed Eigen header into a COMPILE
+# ERROR, so permissive licensing becomes something the build proves rather than
+# something we assert. The competition checks component licences individually.
+target_compile_definitions(ariadne_eigen INTERFACE EIGEN_MPL2_ONLY)
 
 # FlatBuffers is the locked serializer (CLAUDE.md §1): schema-versioned,
 # zero-copy read, and deterministic size accounting at the single serialization
@@ -48,6 +53,38 @@ FetchContent_Declare(zstd
   GIT_SHALLOW    TRUE
   SOURCE_SUBDIR  build/cmake)
 FetchContent_MakeAvailable(zstd)
+
+# yaml-cpp: configs and run manifests are YAML (§28.2, §5.6). A hand-rolled
+# subset parser was considered and rejected: config files grow nested sections
+# (camera, comms, planner), and each extension of a bespoke parser is another
+# chance to mis-parse silently, which is the one failure mode a config loader
+# must not have.
+set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(YAML_CPP_FORMAT_SOURCE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(yaml-cpp
+  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+  GIT_TAG        yaml-cpp-0.9.0
+  GIT_SHALLOW    TRUE)
+FetchContent_MakeAvailable(yaml-cpp)
+
+# MCAP: the recording container of §5.9. The STANDALONE Foxglove C++ SDK, not
+# rosbag2 (D3): §3's dependency rule requires replay to work from files alone,
+# ROS-free, and MCAP is a container rather than a ROS API, so bags stay
+# rosbag2-compatible either way. Header-only; one TU defines MCAP_IMPLEMENTATION.
+FetchContent_Declare(mcap
+  GIT_REPOSITORY https://github.com/foxglove/mcap.git
+  GIT_TAG        releases/cpp/v2.1.3
+  GIT_SHALLOW    TRUE
+  SOURCE_SUBDIR  do-not-configure-mcap)
+FetchContent_MakeAvailable(mcap)
+add_library(ariadne_mcap INTERFACE)
+target_include_directories(ariadne_mcap SYSTEM INTERFACE ${mcap_SOURCE_DIR}/cpp/mcap/include)
+# LZ4 is not vendored and nothing needs it: chunk compression uses zstd, which
+# is already a dependency. Disabling it here avoids adding a library for a
+# codec we would never select.
+target_compile_definitions(ariadne_mcap INTERFACE MCAP_COMPRESSION_NO_LZ4)
+target_link_libraries(ariadne_mcap INTERFACE libzstd_static)
 
 if(ARIADNE_BUILD_TESTS)
   FetchContent_Declare(googletest

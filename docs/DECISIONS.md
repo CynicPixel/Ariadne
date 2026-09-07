@@ -302,3 +302,28 @@ items when Phase 2.1 opens:
 Risk: this is a Phase 2.1 critical-path item with real depth. If step 3 does not converge,
 the fallback is the ONNX route (unchanged in cost) or promoting ALIKED, which is native.
 Record whichever ships in the run manifest.
+
+## 2026-09-08 — D16: bags store FRAMED messages, and chunk compression is a storage choice
+
+`McapRecordWriter` stores the framed wire message (frame header plus
+possibly-compressed FlatBuffer), not the raw payload. Replay therefore exercises the
+identical decode path, frame-tag validation and byte accounting as a live run, so a
+wire-format bug cannot hide behind a different on-disk representation.
+
+MCAP chunk compression is set to zstd. This is a FILE-SIZE decision with no effect on wire
+byte accounting: bytes are counted at the serializer (§4.4), and a bag is storage rather
+than a link. Classes 4-6 arrive already compressed, so the additional gain falls mostly on
+the uncompressed classes.
+
+Log time comes from the message stamp, never a wall clock. A wall clock would make every
+bag unique and destroy the reproducibility §5.9 exists to provide. Asserted by
+`LogTimesComeFromMessageStampsNotWallClock`.
+
+Measured: bags written twice from identical inputs are **byte-identical**, which is stronger
+than the Phase 0 gate requires (identical metrics) and is what makes a bag checksum in a
+§28.2 manifest meaningful. Also measured: replaying through MCAP reproduces the record-file
+gate exactly (ATE 0.0633155, RPE 0.0174459, 8626 wire bytes), so adopting the container
+costs no determinism.
+
+LZ4 is disabled (`MCAP_COMPRESSION_NO_LZ4`): nothing selects it and vendoring a codec we
+would never use adds a dependency for nothing.

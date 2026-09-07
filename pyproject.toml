@@ -1,0 +1,57 @@
+# Python analysis environment (arch §3).
+#
+# Python is deliberately confined to analysis, reconstruction, orchestration and
+# tooling. Nothing in the estimator depends on it, so a broken Python
+# environment cannot stop the C++ core from building or the determinism gate
+# from running.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ariadne"
+version = "0.1.0"
+description = "Analysis, reconstruction and orchestration tooling for Ariadne"
+requires-python = ">=3.12"
+
+# Pinned with lower bounds and upper guards: an unbounded dependency makes a
+# figure irreproducible the moment upstream changes a default.
+dependencies = [
+  "numpy>=1.26,<3",
+  "scipy>=1.11,<2",
+  "pyyaml>=6.0,<7",          # reads the same configs the C++ side does
+  "pyarrow>=15,<21",         # metrics.parquet (§28.1)
+  "pandas>=2.1,<3",
+  "matplotlib>=3.8,<4",      # every figure is generated, never hand-edited (§36)
+]
+
+[project.optional-dependencies]
+# Trajectory evaluation oracle. §30.1 uses evo to cross-check our own ATE/RPE
+# rather than trusting a single implementation of the same formula.
+eval = [
+  "evo>=1.28,<2",
+]
+# Reconstruction service (§18.2). Separated because it pulls CUDA-sized wheels
+# that the analysis environment has no reason to carry.
+recon = [
+  "torch>=2.4",
+  "gsplat>=1.3",
+]
+# Recording container (§5.9).
+mcap = [
+  "mcap>=1.2,<2",
+]
+dev = [
+  "pytest>=8.0,<9",
+  "ruff>=0.6",
+]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["python/tests"]
