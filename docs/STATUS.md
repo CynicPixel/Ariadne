@@ -72,6 +72,66 @@ requires (it asks only for reproducibility twice within a run).
   honest downgrade. `MissingRequiredFields` refuses a run whose tree was dirty, since the
   commit then does not identify the code that ran.
 
+### 0.6 partial — CI and infrastructure as code
+
+- `.github/workflows/ci.yml` — build and test on amd64 and arm64 hosted runners, ccache and
+  dependency caches keyed on the pins file, the determinism gate on each arch, and then the
+  job that matters: **`cross-arch-determinism`**, which compares the two architectures'
+  digests against EACH OTHER. Each arch already checks itself against recorded values; this
+  proves they agree, which is what lets a Graviton result be compared with a dev-box result.
+  The digest-extraction logic was verified against real script output rather than assumed.
+  `[UNVERIFIED]` the workflow has not executed on GitHub. arm64 hosted runners are free for
+  public repos; if unavailable to this account, switch to a self-hosted Graviton label per
+  §27.2 and serialize benchmark jobs behind a lock.
+- `infra/aws/terraform/` — network, storage, registry modules (§27.3's stated 0.6 scope).
+  `terraform validate` passes. **Not applied**: no AWS credentials here, and applying is a
+  billable action that is the maintainer's to take.
+  - network: one VPC, one public subnet, no NAT gateway (~$32/month standing for nothing
+    this design needs). Worker SG is egress-only with SSM access rather than an open SSH
+    port. Console SG is closed until `allowed_console_cidrs` is set deliberately.
+  - storage: one bucket with §28.1 prefixes; versioning ON because run artifacts are
+    evidence and an overwritten metrics file with no history is indistinguishable from a
+    fabricated one; `runs/` to IA at 30 d, noncurrent versions expired at 90 d, incomplete
+    multipart uploads aborted at 7 d so they cannot bill invisibly.
+  - registry: five repos per §27.1, scan-on-push, untagged images expired at 14 d. Tags stay
+    mutable only because manifests pin digests (§27.2).
+
+### 0.1 done — config loader, named configs, licences, Python env
+
+- `core/config/config.hpp` — strict loading. **An unknown key is an error**, which is the
+  whole point: a permissive loader turns `radiance_scal:` into "use the default", so a
+  dark-scene ablation silently measures a lit scene and no test notices. Missing required
+  keys and wrong types fail the same way, and the message names the offending key.
+- `configs/degradation/dark{0..3}_dust{0..3}.yaml` — the 16 named configs §5.6 requires,
+  referenced by name from run manifests instead of inline constants. The sensor is identical
+  across darkness levels and only scene radiance changes, so read noise stays constant while
+  signal falls. That is what makes low light hard rather than merely dim, and a test asserts
+  it rather than trusting the files.
+- `LICENSES/THIRD_PARTY.md` — every dependency's licence verified from the fetched source,
+  not from memory. Two findings: zstd is dual BSD-OR-GPLv2 and we take BSD; Eigen ships some
+  LGPL code, so the build now defines **`EIGEN_MPL2_ONLY`**, making inclusion of any LGPL
+  Eigen header a compile error. Permissive licensing is therefore proven by compiling rather
+  than asserted. Ariadne's own licence is still `[UNDECIDED — maintainer]`; the competition
+  does not mandate one.
+- `pyproject.toml` — analysis environment with bounded pins, and `evo` as the trajectory
+  oracle (§30.1) so our ATE/RPE is cross-checked rather than self-certified.
+
+### 0.7 done — MCAP container
+
+`runtime/replay/mcap_recorder.hpp` over the standalone Foxglove SDK (D3), so replay works
+from files alone with no ROS present while bags stay rosbag2-readable.
+
+Bags store the FRAMED message, so replay exercises the production decode path rather than a
+parallel on-disk format. Verified:
+- Replaying through MCAP reproduces the record-file gate **exactly**: ATE 0.0633155, RPE
+  0.0174459, 8626 wire bytes. Adopting the container costs no determinism.
+- Frames survive the container byte for byte.
+- Messages replay in log-time order, and log time comes from the message stamp rather than a
+  wall clock, which would otherwise make every bag unique.
+- **Bags written twice from identical inputs are byte-identical**, which is stronger than the
+  gate requires and is what makes a bag checksum in a §28.2 manifest meaningful.
+- A missing or non-MCAP file is rejected rather than silently replayed as empty.
+
 ### Remaining in Phase 0
 
 0.5 logging/event schema, run manifest, seed plumbing; 0.6 CI and Terraform; 0.7 MCAP

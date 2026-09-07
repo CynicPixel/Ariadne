@@ -20,7 +20,7 @@ a phase; unmarked items are on the phase's critical path in listed order.
 
 ## Phase 0 — Plumbing and determinism substrate (I0 + smoke tests) · ~4 days
 
-- [ ] **0.1** Monorepo per §3: CMake superbuild, `pyproject.toml`, config schema loader, `LICENSES/`, `docs/` stubs
+- [x] **0.1** Monorepo per §3: CMake superbuild, `pyproject.toml`, config schema loader, `LICENSES/`, `docs/` stubs
   including `SMOKE_TEST_RESULTS.md`.
 - [ ] **0.2 Day-1 smoke tests (gates everything):** build OpenCV 5 + contrib from the pinned tag on amd64 and arm64;
   record in `SMOKE_TEST_RESULTS.md`: actual module/header layout (§0.2 naming discrepancy), presence of
@@ -32,9 +32,9 @@ a phase; unmarked items are on the phase's critical path in listed order.
 - [x] **0.4** `core/`: SE(3)/SO(3) math with one perturbation convention (§11.3), timestamp types, covariance
   transport, FlatBuffers schemas + single serialization boundary with ByteRecord accounting (§4.4, §15.7). `∥C`
 - [x] **0.5** Logging/event schema (§41), run-manifest writer (§28.2), deterministic seed plumbing.
-- [ ] **0.6** CI per §27.2 (amd64 + arm64 jobs, ccache, opencv-base layer, ECR push by digest); Terraform modules
+- [~] **0.6** CI per §27.2 (amd64 + arm64 jobs, ccache, opencv-base layer, ECR push by digest); Terraform modules
   applied for network/storage/registry (§27.3). `∥B`
-- [ ] **0.7** MCAP record/replay skeleton (§5.9) and the seeded degradation operator `D(image, params, seed,
+- [x] **0.7** MCAP record/replay skeleton (§5.9) and the seeded degradation operator `D(image, params, seed,
   frame_id)` with the sensor-response chain of §5.6 — built now, against synthetic images, before any simulator
   exists.
 

@@ -4,3 +4,10 @@ build/
 *.pyc
 .venv/
 evaluation/runs/**/raw/
+
+# Terraform: provider plugins are large and regenerable; the lock file IS
+# committed so `terraform init` resolves identical provider versions later.
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars

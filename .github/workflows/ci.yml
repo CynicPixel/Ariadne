@@ -1,0 +1,157 @@
+# Ariadne CI (arch §27.2).
+#
+# Three things this must accomplish, in order of importance:
+#   1. Prove the deterministic core is bit-identical on amd64 AND arm64. That
+#      is the Phase 0 gate, and it is the one property that cannot be recovered
+#      later if it breaks: every comparison claim in every phase rests on it.
+#   2. Keep the test suite green on both architectures.
+#   3. Rebuild the pinned opencv-base layer only when the pin moves, because it
+#      is expensive and almost never changes.
+#
+# [UNVERIFIED] This workflow has not yet executed on GitHub. arm64 hosted
+# runners (`ubuntu-24.04-arm`) are free for public repositories; if this
+# account cannot use them, switch `runner` to a self-hosted Graviton label per
+# §27.2 and serialize benchmark jobs behind a lock so a CI build never
+# contaminates a timing run.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same ref. Determinism jobs
+# are pure functions of the tree, so racing them wastes runner minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  build-test:
+    name: build+test (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false        # a failure on one arch must not hide the other
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build ccache clang git
+
+      # Eigen, GoogleTest, FlatBuffers and zstd are fetched by the build. The
+      # key includes the dependency pins, so a pin change invalidates the cache
+      # rather than silently reusing the previous version.
+      - name: Cache third-party sources
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: deps-${{ matrix.arch }}-${{ hashFiles('cmake/AriadneDependencies.cmake') }}
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ matrix.arch }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.arch }}-
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # The determinism gate proper: compares against the digests recorded in
+      # the script, across gcc and clang at three optimization levels.
+      - name: Determinism gate
+        run: ./infra/scripts/check_determinism.sh | tee determinism-${{ matrix.arch }}.txt
+
+      - name: Upload digests
+        uses: actions/upload-artifact@v4
+        with:
+          name: determinism-${{ matrix.arch }}
+          path: determinism-${{ matrix.arch }}.txt
+
+  cross-arch-determinism:
+    # THE JOB THAT MATTERS. Each architecture already checked itself against the
+    # recorded digests; this proves the two agree with EACH OTHER, which is the
+    # property that lets a result produced on Graviton be compared against one
+    # produced on a dev box. Without it, "bit-identical across machines" is an
+    # assertion rather than a test.
+    name: cross-architecture bit-identity
+    needs: build-test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: determinism-*
+          merge-multiple: false
+
+      - name: Compare digests across architectures
+        run: |
+          set -euo pipefail
+          extract() {
+            # Pull the three digests from a run log, sorted so ordering
+            # differences cannot cause a false mismatch.
+            grep -oE '(det|philox|degrade)=[0-9]+' "$1" | sort -u
+          }
+          amd64="$(extract determinism-amd64/determinism-amd64.txt)"
+          arm64="$(extract determinism-arm64/determinism-arm64.txt)"
+
+          echo "--- amd64 ---"; echo "$amd64"
+          echo "--- arm64 ---"; echo "$arm64"
+
+          if [ "$amd64" != "$arm64" ]; then
+            echo
+            echo "DETERMINISM FAILURE: amd64 and arm64 disagree."
+            echo "Every named degradation config that has produced published"
+            echo "results is suspect. Do not ship until resolved."
+            diff <(echo "$amd64") <(echo "$arm64") || true
+            exit 1
+          fi
+          echo
+          echo "CROSS_ARCH_DETERMINISM=PASS"
+
+  opencv-base:
+    # Expensive and almost never changes, so it is gated on the Dockerfile.
+    # Not pushed to ECR here: that needs credentials this workflow does not
+    # have yet. When it is wired, push BY DIGEST (§27.2) -- a tag is not a
+    # version, and run manifests reference digests.
+    name: opencv-base image
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build opencv-base
+        run: |
+          docker build -f infra/docker/opencv-base.Dockerfile \
+            --build-arg OPENCV_TAG=5.0.0 \
+            -t ariadne/opencv-base:5.0.0 infra/docker/
+      - name: Smoke test against the built image
+        run: |
+          docker run --rm -v "$PWD/infra/scripts:/w" -w /w \
+            ariadne/opencv-base:5.0.0 sh -c '
+              g++ -std=c++17 -O2 smoke_test.cpp -o /tmp/smoke \
+                -I/opt/opencv5/include/opencv5 -L/opt/opencv5/lib \
+                $(ls /opt/opencv5/lib/libopencv_*.so | sed "s|.*/lib|-l|;s|\.so$||")
+              LD_LIBRARY_PATH=/opt/opencv5/lib /tmp/smoke'
