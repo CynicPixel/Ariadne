@@ -71,6 +71,8 @@ struct RunManifest {
     std::string communication_config = kUnknownField;
     std::string planner_config = kUnknownField;
     std::string degradation_config = kUnknownField;  // e.g. dark2_dust1 (§5.6)
+    /// §7.3: keypoint caps and SGBM range are manifest fields, not constants.
+    std::string perception_config = kUnknownField;   // e.g. placeholder
 
     // --- Backend selections -----------------------------------------------
     std::string feature_engine = kUnknownField;
@@ -156,6 +158,7 @@ inline std::string ToYaml(const RunManifest& m) {
     detail::Field(out, "communication_config", m.communication_config);
     detail::Field(out, "planner_config", m.planner_config);
     detail::Field(out, "degradation_config", m.degradation_config);
+    detail::Field(out, "perception_config", m.perception_config);
 
     out << "\n# Backends\n";
     detail::Field(out, "feature_engine", m.feature_engine);

@@ -5,3 +5,18 @@ add_library(ariadne_perception INTERFACE)
 target_include_directories(ariadne_perception INTERFACE ${CMAKE_SOURCE_DIR}/cpp)
 target_link_libraries(ariadne_perception INTERFACE ariadne::core)
 add_library(ariadne::perception ALIAS ariadne_perception)
+
+# ariadne_perception_opencv: the OpenCV-backed front-end (arch §7-§9). Exists
+# only when OpenCV was found, so the OpenCV-free layer above keeps building and
+# testing on a host without it. OpenCV 5 module names: features (ORB), video
+# (pyramidal LK), stereo (SGBM), geometry (findFundamentalMat; ex-calib3d).
+if(OpenCV_FOUND)
+  add_library(ariadne_perception_opencv STATIC
+    features/orb_engine.cpp
+    tracking/klt_tracker.cpp
+    stereo/sgbm_stereo.cpp)
+  target_link_libraries(ariadne_perception_opencv PUBLIC
+    ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video
+    opencv_stereo opencv_geometry)
+  add_library(ariadne::perception_opencv ALIAS ariadne_perception_opencv)
+endif()

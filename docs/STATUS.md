@@ -4,7 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-29 (latest) — `ariadne-core` image; Phase 0 gate 4 closed on amd64
+## 2026-09-29 (latest) — 1.4 placeholder perception: components built, EuRoC run pending
+
+- ORB engine with §7.3 grid selection, pyramidal-LK tracker with forward-backward and epipolar rejection, SGBM
+  depth to the §9.6 contract, §9.4 range validator. D34.
+- 178/178 tests in the image (13 new OpenCV perception tests); host 161/161 (5 new config/validator tests).
+- Deterministic across OpenCV thread counts and global RNG state (verified bit-for-bit).
+- **Hazard found and bounded:** SGBM reports phantom FAR depths (0.3 m to >3 m) for surfaces nearer than Z_min.
+  Speckle window 200 cuts them ~10-30x; a measured dense-support gate (`DenseSupportMask`) rejects all survivors.
+  Rule for 1.8: carve free space only through supported depth. Synthetic numbers; re-measure on EuRoC.
+- Open for 1.4: EuRoC adapter + rectification + a real-sequence run (Invariant 5).
+
+---
+
+## 2026-09-29 — `ariadne-core` image; Phase 0 gate 4 closed on amd64
 
 - `infra/docker/core.Dockerfile` (`dev` + `ci` stages) FROM the pinned `opencv-base`; `infra/scripts/core.sh
   image|gate|dev`; CI job `core-image` via `docker-bake.hcl` (`[UNVERIFIED]` on GitHub). D33.

@@ -1,0 +1,49 @@
+# Phase 1 placeholder perception front-end (arch §7.3, §8, §9.3; plan item 1.4).
+# ORB + pyramidal LK + SGBM. Demoted to an ablation baseline when XFeat and the
+# WLS-filtered stereo of Phase 2 land; never deleted.
+name: placeholder
+
+features:
+  grid_cols: 8                  # §7.3 8x6 grid
+  grid_rows: 6
+  max_keypoints: 1200           # §7.3 "stored after filtering <= 1200"
+  detect_oversample: 4          # detect 4x the cap, then keep top-k per cell
+  orb_fast_threshold: 20        # ORB-SLAM iniThFAST
+  orb_fast_threshold_min: 7     # ORB-SLAM minThFAST, for starved cells
+  orb_levels: 8
+  orb_scale_factor: 1.2
+  orb_patch_size: 31
+
+tracker:
+  win_size: 21                  # VINS-Fusion / OpenVINS / OpenCV default
+  max_level: 3
+  term_max_iterations: 30
+  term_epsilon: 0.01
+  min_eig_threshold: 1.0e-4
+  fb_threshold_px: 0.5          # VINS-Fusion reverse-check tolerance
+  border_px: 1
+  target_tracks: 1200           # §7.3 "1000-1500 tracked points per frame"
+  min_track_distance_px: 20.0
+  replenish_request_factor: 4   # detections requested per missing track
+  f_ransac_threshold_px: 1.0
+  f_confidence: 0.99
+  f_max_iterations: 1000
+  f_min_points: 15
+  degraded_min_tracks: 50
+
+stereo:
+  min_disparity: 0
+  num_disparities: 256          # §9.4: Z_min ~0.25 m at f=640 px, B=0.10 m
+  block_size: 5                 # §9.3 5-7
+  p1_coefficient: 8.0           # §9.3 P1 = 8 * channels * blockSize^2
+  p2_coefficient: 32.0          # §9.3 P2 = 32 * channels * blockSize^2
+  uniqueness_ratio: 15          # top of §9.3's 10-15; halves near-range aliasing (D34)
+  speckle_window_size: 200       # top of §9.3's 100-200; removes most near-range aliases (D34)
+  speckle_range: 2
+  disp12_max_diff: 1
+  pre_filter_cap: 63
+  mode: sgbm_3way
+  sigma_disparity_px: 0.5       # upper end of §9.3's 0.25-0.5 px: conservative
+  required_min_range_m: 0.30    # §9.4 narrow-void requirement
+  support_window_px: 31         # dense-support gate for free-space carving (D34)
+  support_min_density: 0.75

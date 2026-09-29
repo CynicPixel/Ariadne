@@ -797,3 +797,66 @@ RPATH detector was checked against binaries deliberately linked with RPATH and w
 demonstrated: a hash CHANGE under a different OpenCV (needs a second build, e.g. COOL at 0.3). The first image
 build also exposed a latent bug: `run_manifest.hpp` used `uint64_t` without `<cstdint>` and compiled only through
 transitive includes; fixed, and every header under `cpp/` now compiles standalone.
+
+## 2026-09-29 — D34: placeholder perception front-end (1.4), and a near-range stereo hazard
+
+Built from OpenCV 5 primitives with the algorithm logic owned by Ariadne (§8.1's split), following the reference
+implementations read for it (VINS-Fusion `feature_tracker.cpp`, OpenVINS `TrackKLT.cpp` / `Grider_GRID`,
+ORB-SLAM3 `ORBextractor`) and the papers behind them (Rublee 2011 ORB; Shi & Tomasi 1994; Bouguet's pyramidal LK;
+Kalal 2010 forward-backward error; Hirschmueller 2008 SGM). API names verified against the installed 5.0.0
+headers: `features.hpp` (ORB), `video/tracking.hpp` (`buildOpticalFlowPyramid`, `calcOpticalFlowPyrLK`),
+`stereo.hpp` (`StereoSGBM`), `geometry/3d.hpp` (`findFundamentalMat`, `UsacParams`).
+
+- **`OrbEngine`** (§7.1 interface, with `Detect` split from `DetectAndCompute` so tracking never pays for
+  descriptors): ORB detect oversampled 4x; cells left starved re-detected at a lower FAST threshold through ORB's
+  mask argument (ORB-SLAM's iniThFAST/minThFAST); our own `GridSelect` keeps top-k per 8x6 cell (§7.3) with a
+  total tie-break order; descriptors computed on exactly the selected set. ORB's internal `nfeatures` cap is not
+  the selection, because it is a global top-N, which §7.3 forbids.
+- **`KltTracker`**: one pyramid per frame reused for the forward, backward and next-frame passes; forward-backward
+  check at 0.5 px; border check; epipolar rejection; VINS-style spacing mask with older tracks winning;
+  replenishment through the §7.1 engine (so the XFeat swap changes tracking too); `DEGRADED` below a configured
+  track count.
+- **Determinism:** `findFundamentalMat`'s `FM_RANSAC` path samples from `cv::theRNG()`, per-thread state that any
+  earlier OpenCV call advances. The tracker uses the `UsacParams` overload with `isParallel = false` and
+  `randomGeneratorState` drawn from Philox at `(seed, frame_id, reserved site)`. Verified: tracks, ORB descriptors
+  and SGBM disparity are bit-identical across 1, 2 and 8 OpenCV threads and across arbitrary `cv::theRNG()` state.
+- **§9.6 deviation:** `StereoDepth::disparity` is SGBM's native `CV_16S` (1/16 px), not fp16. fp16 spacing is
+  0.125 px above 128 px, i.e. coarser than SGBM's output for every depth under 0.5 m at f = 640 px, B = 0.10 m.
+  `CV_16S` is exact and also 2 bytes. Z and sigma_Z are computed in float32, then stored as fp16. `confidence` is an
+  all-zero `[PLACEHOLDER]` flagged by `confidence_is_placeholder` until the WLS filter (Phase 2).
+- **§9.4 validator** implemented (`ValidateStereoAgainstRig`), refusing e.g. B = 0.20 m at 256 disparities.
+- Parameters live in `configs/perception/placeholder.yaml`, recorded per run in the new manifest field
+  `perception_config` (§7.3: manifest fields, not constants). The OpenCV tests load that shipped file rather than
+  struct defaults, so the tests exercise what runs.
+
+**Hazard found: SGBM aliases surfaces nearer than its search range into phantom FAR depth.** A textured plane at
+0.20 m (true disparity 320, beyond the 255 searched) still yields "valid" pixels: 1.38% of the image at uniqueness
+10 and speckle window 100. The reported depths spread from 0.3 m to past 3 m rather than clustering at the range
+limit, so **they cannot be recognised by their value**. A consumer that carves free space along depth rays would
+carve it straight through a real obstacle: an error in the unsafe direction for egress.
+
+What does separate them was measured rather than assumed (probe over planes at 1.5, 0.30, 0.26 m true and 0.20,
+0.15, 0.10 m aliased):
+- **Structure:** aliases form ~48 blobs of 116-312 px; true surfaces form one connected region.
+- **Speckle window:** 100 lets those blobs through; 200 (top of §9.3's 100-200) cuts aliased pixels from 6518 to
+  720 / 215 / 0 at 0.20 / 0.15 / 0.10 m, with no loss of true depth on the planes. Set to 200. `uniqueness_ratio` is
+  set to 15 (top of §9.3's 10-15), which halves the rate relative to 10.
+- **Local density:** the fraction of valid pixels in a 31x31 window is >= 0.84 for true depth (1st percentile;
+  median 1.0) and <= 0.42 for the surviving aliases. `DenseSupportMask` (window 31, density >= 0.75, configured in
+  `stereo.support_*`) passes > 90% of true depth and none of the aliases (tested).
+
+Hand-off rule, testable: **1.8's occupancy placeholder carves free space only along rays whose depth is in
+`DenseSupportMask`.** Unsupported valid depth may mark occupancy but never free space. `[ASSUMPTION]` These numbers
+come from synthetic random-texture planes. Real scenes have genuinely sparse true depth (low texture, occlusion
+edges), where the gate discards true depth, which errs in the safe direction. They must be re-measured on EuRoC,
+and Phase 2's WLS confidence plus a near-field check (e.g. a reduced-resolution pass whose effective range covers
+the blind zone) replaces the gate before any egress claim rests on stereo free space.
+
+Measured (amd64, 8 threads, 1280x720 synthetic texture): 697 initial tracks; 689 survive a (3.3, -1.7) px shift
+with median error 0.013 px (p95 0.028 px); dark-half keypoints 33 -> 600 with the low-threshold rescue; SGBM valid
+fraction 0.80 = every non-blind column. Timings: pyramid 0.5 ms, tracking 18 ms/frame, ORB 48 ms/keyframe, SGBM
+235 ms/keyframe. Known shortfall: the first frame reaches 697 of the 1200 target tracks (20 px spacing with ORB's
+clustered corners); later frames reach about 1035.
+
+Not yet done for 1.4 (Invariant 5, datasets before simulator): a EuRoC sequence through rectification
+(`stereoRectify` / `initUndistortRectifyMap` / `remap`) and this front-end.

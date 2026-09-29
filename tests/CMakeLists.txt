@@ -26,7 +26,8 @@ gtest_discover_tests(test_phase0_gate)
 add_executable(test_unit
   unit/test_observability.cpp
   unit/test_config.cpp
-  unit/test_metrics.cpp)
+  unit/test_metrics.cpp
+  unit/test_perception_config.cpp)
 target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception GTest::gtest_main)
 # Tests read the shipped configs from the source tree.
 target_compile_definitions(test_unit PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -35,7 +36,10 @@ gtest_discover_tests(test_unit)
 # Tests that need OpenCV exist only where OpenCV does (the ariadne-core image).
 if(OpenCV_FOUND)
   add_executable(test_opencv
-    unit/test_opencv_identity.cpp)
-  target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv GTest::gtest_main)
+    unit/test_opencv_identity.cpp
+    unit/test_perception_cv.cpp)
+  target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
+    GTest::gtest_main)
+  target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   gtest_discover_tests(test_opencv)
 endif()

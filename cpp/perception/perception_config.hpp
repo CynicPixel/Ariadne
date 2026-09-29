@@ -1,0 +1,285 @@
+#pragma once
+// ---------------------------------------------------------------------------
+// Perception front-end parameters (arch §7.3, §8, §9.3-9.5) and their
+// validators. OpenCV-free on purpose: the checks are arithmetic, and keeping
+// them here lets the host test suite (no OpenCV) exercise them.
+//
+// §7.3: "These are manifest fields, not constants." Keypoint caps feed the §15.7
+// byte table, and SGBM's disparity range decides the minimum observable range,
+// so every value lives in a named config file that the run manifest references.
+//
+// The rig (focal length, baseline) is NOT in this file. §9.2: calibration is
+// immutable per sensor rig, while these are algorithm choices. The §9.4 check
+// joins the two, which is why it takes both.
+// ---------------------------------------------------------------------------
+#include "core/config/config.hpp"
+
+#include <cmath>
+#include <string>
+
+namespace ariadne::perception {
+
+using core::ConfigError;
+using core::StrictConfig;
+
+/// A rectified pinhole stereo pair: after rectification both cameras share fx,
+/// fy, cx, cy, image rows are epipolar lines, and disparity d = x_left - x_right
+/// maps to depth by Z = fx * B / d.
+struct RectifiedStereoRig {
+    int width = 0;
+    int height = 0;
+    double fx = 0.0;
+    double fy = 0.0;
+    double cx = 0.0;
+    double cy = 0.0;
+    double baseline_m = 0.0;
+};
+
+/// §7.3 keypoint selection: top-k per grid cell, never top-N globally.
+struct FeatureParams {
+    int grid_cols = 8;
+    int grid_rows = 6;
+    int max_keypoints = 1200;          // §7.3 "stored after filtering <= 1200"
+    int detect_oversample = 4;         // raw detections requested = cap * this
+    // ORB (the Phase 1 placeholder engine; demoted to an ablation baseline
+    // when XFeat lands). Two FAST thresholds, as in ORB-SLAM: cells that the
+    // normal threshold leaves starved are re-detected with the lower one,
+    // which is what keeps dark, low-texture regions from going empty.
+    int orb_fast_threshold = 20;
+    int orb_fast_threshold_min = 7;
+    int orb_levels = 8;
+    double orb_scale_factor = 1.2;
+    int orb_patch_size = 31;
+};
+
+/// §8.1-8.2 pyramidal Lucas-Kanade tracking.
+struct TrackerParams {
+    int win_size = 21;                 // LK window (px, square)
+    int max_level = 3;                 // pyramid levels above the base
+    int term_max_iterations = 30;
+    double term_epsilon = 0.01;        // px; stop when the update is smaller
+    double min_eig_threshold = 1e-4;   // LK drops points whose 2x2 system is this ill-conditioned
+    double fb_threshold_px = 0.5;      // forward-backward round-trip tolerance
+    int border_px = 1;                 // tracks this close to the edge are dropped
+    int target_tracks = 1200;          // §7.3 "1000-1500 tracked points per frame"
+    double min_track_distance_px = 20.0;
+    // Detections requested per missing track. ORB keypoints cluster, and the
+    // spacing mask then rejects most of a cluster, so asking for exactly the
+    // shortfall leaves the tracker far below target (measured: 339 of 1200).
+    int replenish_request_factor = 4;
+    // Epipolar outlier rejection on the surviving tracks.
+    double f_ransac_threshold_px = 1.0;
+    double f_confidence = 0.99;
+    int f_max_iterations = 1000;
+    int f_min_points = 15;             // below this, rejection is skipped
+    int degraded_min_tracks = 50;      // §8.2 "track support collapses"
+};
+
+/// §9.3 SGBM and §9.5 depth uncertainty.
+struct StereoParams {
+    int min_disparity = 0;
+    int num_disparities = 256;         // §9.4: the floor at f=640, B=0.10 m
+    int block_size = 5;
+    double p1_coefficient = 8.0;       // P1 = p1_coefficient * channels * block_size^2
+    double p2_coefficient = 32.0;      // P2 = p2_coefficient * channels * block_size^2
+    // Top of §9.3's 10-15: measured (D34), 15 halves the false matches SGBM
+    // reports for surfaces nearer than its search range, versus 10.
+    int uniqueness_ratio = 15;
+    // Top of §9.3's 100-200: measured (D34), SGBM's near-range aliases form
+    // blobs of ~120-300 px that a 100 px window lets through.
+    int speckle_window_size = 200;
+    int speckle_range = 2;
+    int disp12_max_diff = 1;           // left-right consistency, in px
+    int pre_filter_cap = 63;
+    std::string mode = "sgbm_3way";    // sgbm | hh | sgbm_3way | hh4
+    double sigma_disparity_px = 0.5;   // §9.3 "carry sigma_d = 0.25-0.5 px"
+    double required_min_range_m = 0.30;  // §9.4: a narrow void needs Z_min <= 0.3 m
+    // Dense-support gate (D34): a depth counts as SUPPORTED only where the
+    // fraction of valid pixels in a support_window_px square is at least
+    // support_min_density. True surfaces are dense; SGBM's near-range aliases
+    // are sparse blobs. Consumers that carve free space must use it.
+    int support_window_px = 31;
+    double support_min_density = 0.75;
+};
+
+struct PerceptionConfig {
+    std::string name;
+    FeatureParams features;
+    TrackerParams tracker;
+    StereoParams stereo;
+};
+
+/// The largest disparity SGBM searches: disparities run from min_disparity to
+/// min_disparity + num_disparities - 1 inclusive.
+inline int MaxSearchedDisparity(const StereoParams& s) {
+    return s.min_disparity + s.num_disparities - 1;
+}
+
+/// §9.4: the nearest depth the configured search can observe. Anything closer
+/// has a disparity outside the search range.
+inline double MinObservableRange(const StereoParams& s, const RectifiedStereoRig& rig) {
+    return rig.fx * rig.baseline_m / static_cast<double>(MaxSearchedDisparity(s));
+}
+
+inline void ValidateRig(const RectifiedStereoRig& rig) {
+    auto fail = [](const std::string& why) { throw ConfigError("stereo rig: " + why); };
+    if (rig.width <= 0 || rig.height <= 0) fail("image size must be positive");
+    if (!(rig.fx > 0.0) || !(rig.fy > 0.0)) fail("focal lengths must be > 0");
+    if (!(rig.baseline_m > 0.0)) fail("baseline must be > 0");
+}
+
+/// §9.4's validator: refuse a (f, B, disparity range) combination whose
+/// minimum observable range exceeds what the mission requires. Without it, a
+/// baseline change produces a blind zone that looks like sparse depth rather
+/// than like a misconfiguration.
+inline void ValidateStereoAgainstRig(const StereoParams& s, const RectifiedStereoRig& rig) {
+    ValidateRig(rig);
+    const double z_min = MinObservableRange(s, rig);
+    if (z_min > s.required_min_range_m) {
+        throw ConfigError(
+            "stereo: min observable range " + std::to_string(z_min) + " m (f=" +
+            std::to_string(rig.fx) + " px, B=" + std::to_string(rig.baseline_m) +
+            " m, max disparity " + std::to_string(MaxSearchedDisparity(s)) +
+            ") exceeds required_min_range_m=" + std::to_string(s.required_min_range_m) +
+            " m; raise num_disparities or accept the blind zone explicitly (§9.4)");
+    }
+    // Columns x < min_disparity + num_disparities have no full search range in
+    // the right image, so SGBM cannot produce valid disparity there.
+    if (s.min_disparity + s.num_disparities >= rig.width) {
+        throw ConfigError("stereo: disparity range covers the whole image width");
+    }
+}
+
+inline void ValidatePerception(const PerceptionConfig& c) {
+    auto fail = [&c](const std::string& why) {
+        throw ConfigError("perception config '" + c.name + "': " + why);
+    };
+    if (c.name.empty()) fail("name must not be empty");
+
+    const FeatureParams& f = c.features;
+    if (f.grid_cols < 1 || f.grid_rows < 1) fail("feature grid must be at least 1x1");
+    if (f.max_keypoints < f.grid_cols * f.grid_rows) {
+        fail("max_keypoints must allow at least one keypoint per grid cell");
+    }
+    if (f.detect_oversample < 1) fail("detect_oversample must be >= 1");
+    if (f.orb_fast_threshold_min < 1 || f.orb_fast_threshold_min > f.orb_fast_threshold) {
+        fail("orb_fast_threshold_min must be in [1, orb_fast_threshold]");
+    }
+    if (f.orb_levels < 1) fail("orb_levels must be >= 1");
+    if (!(f.orb_scale_factor > 1.0)) fail("orb_scale_factor must be > 1");
+    if (f.orb_patch_size < 2) fail("orb_patch_size must be >= 2");
+
+    const TrackerParams& t = c.tracker;
+    if (t.win_size < 3 || t.win_size % 2 == 0) fail("tracker win_size must be odd and >= 3");
+    if (t.max_level < 0) fail("tracker max_level must be >= 0");
+    if (t.term_max_iterations < 1 || !(t.term_epsilon > 0.0)) {
+        fail("tracker termination criteria must be positive");
+    }
+    if (!(t.fb_threshold_px > 0.0)) fail("fb_threshold_px must be > 0");
+    if (t.border_px < 0) fail("border_px must be >= 0");
+    if (t.target_tracks < 1) fail("target_tracks must be >= 1");
+    if (!(t.min_track_distance_px > 0.0)) fail("min_track_distance_px must be > 0");
+    if (t.replenish_request_factor < 1) fail("replenish_request_factor must be >= 1");
+    if (!(t.f_ransac_threshold_px > 0.0)) fail("f_ransac_threshold_px must be > 0");
+    if (!(t.f_confidence > 0.0 && t.f_confidence < 1.0)) fail("f_confidence must be in (0, 1)");
+    // Seven points is the minimal fundamental-matrix sample; with fewer there
+    // is no model to test against.
+    if (t.f_min_points < 8) fail("f_min_points must be >= 8");
+    if (t.degraded_min_tracks < 0 || t.degraded_min_tracks > t.target_tracks) {
+        fail("degraded_min_tracks must be in [0, target_tracks]");
+    }
+
+    const StereoParams& s = c.stereo;
+    // SGBM's own contract: the range is a positive multiple of 16 and the
+    // matching block is odd. P2 > P1 is what makes the smoothness penalty
+    // tolerate small depth steps (P1) more cheaply than large ones (P2).
+    if (s.num_disparities <= 0 || s.num_disparities % 16 != 0) {
+        fail("num_disparities must be a positive multiple of 16");
+    }
+    if (s.block_size < 1 || s.block_size % 2 == 0) fail("block_size must be odd and >= 1");
+    if (!(s.p1_coefficient > 0.0) || !(s.p2_coefficient > s.p1_coefficient)) {
+        fail("need 0 < p1_coefficient < p2_coefficient");
+    }
+    if (s.uniqueness_ratio < 0 || s.speckle_window_size < 0 || s.speckle_range < 0) {
+        fail("SGBM filter parameters must be >= 0");
+    }
+    if (s.mode != "sgbm" && s.mode != "hh" && s.mode != "sgbm_3way" && s.mode != "hh4") {
+        fail("stereo mode must be one of sgbm, hh, sgbm_3way, hh4");
+    }
+    if (!(s.sigma_disparity_px > 0.0)) fail("sigma_disparity_px must be > 0");
+    if (!(s.required_min_range_m > 0.0)) fail("required_min_range_m must be > 0");
+    if (s.support_window_px < 1 || s.support_window_px % 2 == 0) {
+        fail("support_window_px must be odd and >= 1");
+    }
+    if (!(s.support_min_density > 0.0 && s.support_min_density <= 1.0)) {
+        fail("support_min_density must be in (0, 1]");
+    }
+}
+
+inline PerceptionConfig ParsePerception(StrictConfig& config) {
+    PerceptionConfig c;
+    c.name = config.Require<std::string>("name");
+
+    StrictConfig fs = config.Section("features");
+    FeatureParams& f = c.features;
+    f.grid_cols = fs.Require<int>("grid_cols");
+    f.grid_rows = fs.Require<int>("grid_rows");
+    f.max_keypoints = fs.Require<int>("max_keypoints");
+    f.detect_oversample = fs.Optional<int>("detect_oversample", f.detect_oversample);
+    f.orb_fast_threshold = fs.Optional<int>("orb_fast_threshold", f.orb_fast_threshold);
+    f.orb_fast_threshold_min = fs.Optional<int>("orb_fast_threshold_min", f.orb_fast_threshold_min);
+    f.orb_levels = fs.Optional<int>("orb_levels", f.orb_levels);
+    f.orb_scale_factor = fs.Optional<double>("orb_scale_factor", f.orb_scale_factor);
+    f.orb_patch_size = fs.Optional<int>("orb_patch_size", f.orb_patch_size);
+    fs.RequireAllConsumed();
+
+    StrictConfig ts = config.Section("tracker");
+    TrackerParams& t = c.tracker;
+    t.win_size = ts.Optional<int>("win_size", t.win_size);
+    t.max_level = ts.Optional<int>("max_level", t.max_level);
+    t.term_max_iterations = ts.Optional<int>("term_max_iterations", t.term_max_iterations);
+    t.term_epsilon = ts.Optional<double>("term_epsilon", t.term_epsilon);
+    t.min_eig_threshold = ts.Optional<double>("min_eig_threshold", t.min_eig_threshold);
+    t.fb_threshold_px = ts.Optional<double>("fb_threshold_px", t.fb_threshold_px);
+    t.border_px = ts.Optional<int>("border_px", t.border_px);
+    t.target_tracks = ts.Require<int>("target_tracks");
+    t.min_track_distance_px = ts.Optional<double>("min_track_distance_px", t.min_track_distance_px);
+    t.replenish_request_factor =
+        ts.Optional<int>("replenish_request_factor", t.replenish_request_factor);
+    t.f_ransac_threshold_px = ts.Optional<double>("f_ransac_threshold_px", t.f_ransac_threshold_px);
+    t.f_confidence = ts.Optional<double>("f_confidence", t.f_confidence);
+    t.f_max_iterations = ts.Optional<int>("f_max_iterations", t.f_max_iterations);
+    t.f_min_points = ts.Optional<int>("f_min_points", t.f_min_points);
+    t.degraded_min_tracks = ts.Optional<int>("degraded_min_tracks", t.degraded_min_tracks);
+    ts.RequireAllConsumed();
+
+    StrictConfig ss = config.Section("stereo");
+    StereoParams& s = c.stereo;
+    s.min_disparity = ss.Optional<int>("min_disparity", s.min_disparity);
+    s.num_disparities = ss.Require<int>("num_disparities");
+    s.block_size = ss.Require<int>("block_size");
+    s.p1_coefficient = ss.Optional<double>("p1_coefficient", s.p1_coefficient);
+    s.p2_coefficient = ss.Optional<double>("p2_coefficient", s.p2_coefficient);
+    s.uniqueness_ratio = ss.Optional<int>("uniqueness_ratio", s.uniqueness_ratio);
+    s.speckle_window_size = ss.Optional<int>("speckle_window_size", s.speckle_window_size);
+    s.speckle_range = ss.Optional<int>("speckle_range", s.speckle_range);
+    s.disp12_max_diff = ss.Optional<int>("disp12_max_diff", s.disp12_max_diff);
+    s.pre_filter_cap = ss.Optional<int>("pre_filter_cap", s.pre_filter_cap);
+    s.mode = ss.Optional<std::string>("mode", s.mode);
+    s.sigma_disparity_px = ss.Optional<double>("sigma_disparity_px", s.sigma_disparity_px);
+    s.required_min_range_m = ss.Require<double>("required_min_range_m");
+    s.support_window_px = ss.Optional<int>("support_window_px", s.support_window_px);
+    s.support_min_density = ss.Optional<double>("support_min_density", s.support_min_density);
+    ss.RequireAllConsumed();
+
+    config.RequireAllConsumed();
+    ValidatePerception(c);
+    return c;
+}
+
+inline PerceptionConfig LoadPerception(const std::string& path) {
+    StrictConfig config = StrictConfig::FromFile(path);
+    return ParsePerception(config);
+}
+
+}  // namespace ariadne::perception
