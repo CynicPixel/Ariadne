@@ -4,7 +4,23 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-29 (latest) — `ariadne-sim` image builds and renders headlessly
+## 2026-09-29 (latest) — AWS live: tests-only spin-ups; determinism proven on real Graviton4
+
+- Account on the PAID plan with $200 of credits kept (D26, D27). Region **eu-north-1**, the cheapest region
+  meeting every need (D28). Minimal network: default VPC plus one egress-only security group (D29).
+- Terraform applied: bootstrap (state bucket, state migrated to S3) and main (23 resources + the
+  adopted budget, raised to $200; converged).
+- `infra/scripts/spinup.sh`: spot by default, cheapest AZ, three independent brakes, results pulled back,
+  cost ledger. First real run: **determinism PASS on Graviton4 with gcc 11.5 / clang 15**, identical digests
+  to x86-64 gcc 13 / clang 18, for **$0.0003**. See SMOKE_TEST_RESULTS §4e.
+- Pending with AWS: GPU quota (G/VT 4 vCPU, spot + on-demand) in eu-north-1. Bedrock is blocked until
+  post-upgrade account verification completes.
+- Still open: 0.2 arm64 OpenCV 5 build; 0.3 COOL trial (deliberately not started: it lasts 7 days and
+  can't be paused, so start it when the benchmark exists).
+
+---
+
+## 2026-09-29 — `ariadne-sim` image builds and renders headlessly
 
 Parallel track to Phase 1, started on the maintainer's go-ahead. `infra/docker/sim.Dockerfile`
 (ROS 2 Jazzy + Gazebo Harmonic, gz-sim8 8.15.0), run by `infra/scripts/sim.sh`, acceptance test

@@ -536,3 +536,195 @@ and against the snapshot's own InRelease signature, and the key is vendored at
 `infra/docker/keys/ros-snapshots.asc` with a build-time fingerprint check. The live ROS repo keeps
 only the newest build of each package, so `pkg=version` pins break on its next sync. The snapshot
 does not move.
+
+## 2026-09-29 — D26: AWS runs on the free plan, ~$100-200 of credits, in one standalone account
+
+The grant request did not go through. The account (`836505524290`, `ap-southeast-2`) is on the
+AWS **free plan**. Consequences, from AWS's own documentation:
+
+- **Never join AWS Organizations or set up Control Tower.** Either upgrades the account to paid
+  and **expires the free credits immediately** (Free Tier FAQ). This rules out org-instance IAM
+  Identity Center, and with it SSO permission sets. The account-instance Identity Center that was
+  created does not support permission sets (IAM Identity Center docs) and is unused.
+- The free plan **closes the account** when credits run out or after 6 months (data kept 90
+  days), and excludes "certain AWS Marketplace offers that can incur charges" — which may include
+  the COOL AMI. `[UNVERIFIED]`: attempt the COOL subscription to find out.
+- Credits: $100 at signup, up to $100 more from activities.
+
+Setup chosen (standard for a standalone account):
+
+| Concern | Choice |
+|---|---|
+| Human access | IAM user + MFA; `aws login --remote` (CLI 2.37.5) for short-lived credentials, no access keys |
+| Terraform credentials | provider cannot read the `aws login` cache (terraform-provider-aws #45316); `infra/scripts/aws.sh` exports current short-lived credentials into a mode-600 env file per run |
+| CI | GitHub OIDC -> IAM role scoped to ECR push on the project repos. Zero stored secrets |
+| State | S3 bucket `ariadne-tfstate-836505524290` (versioned, SSE, TLS-only, public access blocked), `use_lockfile = true`, Terraform >= 1.11; bootstrapped with local state then migrated |
+| Tooling | official `amazon/aws-cli:2.37.5` and `hashicorp/terraform:1.16.0` images, pinned by digest |
+
+**OIDC subject.** GitHub repos created after 2026-07-15 use the immutable subject
+`repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...` (GitHub OIDC reference). The owner id (`95163434`) is
+pinned. The repo id is wildcarded because the repository is private and its id was not readable
+without credentials. Tighten it once the first CI run shows the actual `sub` in CloudTrail.
+
+**Budget pulled forward from Phase 7.** The account closing on credit exhaustion would take the
+bags, ECR images and judging console with it. The budget uses `include_credit = false`: a cost
+budget nets credits by default, which would hold it at $0 so it never fires. Thresholds are 25/50/80%
+actual plus 100% forecast, and the limit is a variable (100 now, 200 after activities).
+`[UNVERIFIED]` whether Budgets sees gross spend on the free plan; check after the first billable run.
+
+**The budget is the backstop, not the brake.** Budget data lags by hours, and on a GPU instance
+the credits are gone before the email arrives. Every Phase 7 launch template MUST set
+`instance_initiated_shutdown_behavior = "terminate"` and a max-lifetime shutdown in user-data.
+
+**Locked-decision tension, for the maintainer.** CLAUDE.md §1 puts Gazebo on g5/g6. That may not fit
+the credit pool. Record-once rendering could move to local Mesa llvmpipe (proven at 320x240 / 5 Hz,
+unmeasured at 1280x720 stereo), but gsplat needs CUDA regardless. The maintainer decides once real
+prices are pulled.
+
+**D26 addendum (2026-09-29), credit activities done.** All five Free Tier credit activities were
+COMPLETED and the balance is **$200.00** (FREE plan). EC2, Budgets, Lambda and RDS were done via the CLI;
+completion is tracked by API calls, not console clicks. Bedrock was done in the console playground.
+All temporary resources were deleted and the account verified empty of billable resources.
+Two follow-ups:
+- The budget `ariadne-free-credits` ($100, gross spend, 25/50/80% + 100% forecast) was created via CLI.
+  Before the main stack's first apply: `terraform import module.budget.aws_budgets_budget.credits
+  836505524290:ariadne-free-credits`, and raise `credit_budget_usd` to 200.
+- Bedrock `converse` via the API returned `Operation not allowed` / `authorizationStatus: NOT_AUTHORIZED`
+  for Nova Micro on the free plan, although the model is region-available. The Phase 7 orchestrator
+  needs API access: re-test after the plan upgrade. `[UNVERIFIED]` cause.
+
+## 2026-09-29 — D27: tests-only AWS usage; cheapest configurations that run each workload
+
+The account is on the PAID plan with $200 of credits (upgraded via the console button, so the credits
+were kept). Graviton4 launches were verified after the upgrade. AWS is used ONLY for short, self-terminating
+test runs; development, CI and simulator bag rendering stay local.
+
+| Workload | Config | Sydney $/h (AWS price data 2026-09-29) | Quota |
+|---|---|---|---|
+| COOL / Arm CPU pipeline | **c8g.large** (Graviton4, 2 vCPU, 4 GiB) | 0.1038 on-demand, + $0.01 COOL software fee | Standard 5 vCPU: fits |
+| GPU: gsplat, NVIDIA EGL rendering | **g4dn.xlarge spot** (T4 16 GB, 4 vCPU) | 0.2622 spot (0.684 on-demand) | G/VT 0: **request 4** |
+
+Why these and not smaller:
+- GPU quotas count vCPUs, and g4dn.xlarge (4 vCPU) is the smallest standard NVIDIA type with a full GPU.
+  The only 2-vCPU GPU, g6f.large (1/8 L4), costs the same ($0.2626 on-demand) but has ~2.8 GiB VRAM and
+  needs GRID drivers with unverified headless EGL. That's the wrong trade for gsplat.
+- c8g.large is the smallest size on COOL's published price list (c8g.medium is not among the visible
+  dimensions).
+
+**Locked-decision tension, for the maintainer.** CLAUDE.md §1 / Invariant 2 name **m8g.4xlarge** for the
+COOL benchmark, and §27.1's concurrent-pipeline "knee" sweep is not meaningful on 2 vCPUs. c8g.large is
+right for development and smoke runs. Sizing the FINAL benchmark is the maintainer's call. m8g.4xlarge needs
+16 vCPU, above the current Standard quota of 5, so a request would be needed.
+
+**Biggest cost unknown:** whether local Mesa llvmpipe renders 1280x720 stereo at a usable rate. If it does,
+the GPU is needed for gsplat only. Measuring it is free.
+
+Mechanism: `infra/scripts/spinup.sh run --profile cpu|gpu -- '<cmd>'`. It uses spot by default; on-demand only via
+an explicit flag, never as a silent fallback. There are three independent brakes: (1) `shutdown -h +MAX` as the
+first user-data line, with shutdown meaning terminate; (2) a host trap that terminates on exit/Ctrl-C; (3) `sweep`,
+which terminates stray instances past their deadline and lists unattached volumes. Root volumes are forced to
+`DeleteOnTermination=true`. IMDSv2 is required, with hop limit 2 so containers can reach the instance role. The
+role can only read/write `runs/` in the artifact bucket and pull from the project's ECR repos. Debugging uses SSM,
+never SSH. Every run appends type, market, AZ, duration, the actual spot price and cost to `build/runs/ledger.csv`,
+which is also the cost evidence the COOL rubric asks for.
+
+~~`[UNVERIFIED]` until the first real run~~ **Verified 2026-09-29** (run `20260929T145114Z-cpu-762cb1`): AWS accepts
+spot + `instance-initiated-shutdown-behavior=terminate`, and an in-instance `shutdown -h` ends in `terminated`
+(reason `Client.InstanceInitiatedShutdown`), not `stopped`. Two silent-exit bugs were found on the way and fixed
+(a `read` at EOF-without-newline under `set -e`, and a SIGPIPE-prone `sort | while break`). The script now has an
+ERR trap that names the failing line.
+
+Open: the Bedrock API (`converse`) still returns `Operation not allowed` after the upgrade and as the IAM user
+(so neither the free plan nor root identity is the cause). Needed by the Phase 7 orchestrator; to investigate.
+
+## 2026-09-29 — D28: region is eu-north-1 (Stockholm), the cheapest one that meets every need
+
+Requirements, all in ONE region (cross-region traffic would distort cost-per-frame): c8g.large (Graviton4,
+COOL), g4dn.xlarge (T4 16 GB), the COOL Graviton4 AMI, and Bedrock with Anthropic models.
+
+Method: all 18 enabled regions scanned via the live API (offerings, current spot, Bedrock model lists).
+Then 7-day spot history (median / p90) for the leaders, plus on-demand from AWS's published price data.
+
+| Region | c8g.large spot 7d median | g4dn.xlarge spot 7d median (p90) | on-demand c8g / g4dn |
+|---|---|---|---|
+| **eu-north-1** | **0.0206** | **0.0814** (0.0899) | 0.0851 / 0.558 |
+| sa-east-1 | 0.0342 | 0.0973 | 0.122 / 0.894 |
+| ap-south-1 | 0.0262 | 0.2121 | 0.054 / 0.579 |
+| eu-west-3 | 0.0446 | 0.1906 | 0.094 / 0.615 |
+| ap-southeast-2 (previous choice) | ~0.046 | ~0.296 | 0.104 / 0.684 |
+
+ap-south-2 (Hyderabad) has the cheapest Graviton spot (0.011) but no g4dn at all, so it's excluded.
+ap-south-1 (Mumbai) has the cheapest on-demand Graviton: if the final COOL benchmark runs on-demand on
+m8g.4xlarge, Mumbai is $0.51/h against Stockholm's $0.76/h. Worth revisiting for that single run.
+
+- **COOL availability:** the listing page shows no region list, but Marketplace AMIs are public EC2 images.
+  Product code `aajkmdd4qo3r7yhqg61a7aah9` (image `Graviton5-COOL-v3-prod-k6u24vxijyzvg`, where
+  `prod-k6u24vxijyzvg` is the Graviton4 listing) is published in **all 18 regions**; in eu-north-1 it's
+  `ami-0a302ff85af8d8764`. (The earlier "0 images" result came from a case-sensitive name filter guess.)
+- **Spot placement scores were discarded.** AWS returns an artificially low score when fewer than three
+  instance types are specified, and the query named one type. Real capacity is proven only by a real launch.
+- **Bedrock "Operation not allowed" explained:** in eu-north-1 the same call returns "Your account is
+  currently being verified ... normally takes less than 2 hours". That's post-upgrade account verification,
+  not a configuration problem.
+- **Absolute savings are small** (a few dollars against $200 on tests-only use). The region choice matters less
+  than spot capacity and single-region co-location.
+- **Quotas are per region:** eu-north-1 has Standard 5 vCPU, and G/VT 0 for both on-demand and spot.
+
+## 2026-09-29 — D29: minimal network: the region's default VPC, one egress-only security group
+
+The maintainer asked for the network to be as minimal as possible to keep costs down. The main stack no longer
+creates a VPC. It uses eu-north-1's **default VPC** (172.31.0.0/16, one public subnet per AZ, internet
+gateway), which every region ships with, free and already present. The only network object Ariadne
+creates is `ariadne-test-runner`, an egress-only security group with no inbound rules; debugging goes
+through SSM, not SSH.
+
+Deliberately not used: NAT gateways (~$0.045/h each, the classic silent cost), Elastic IPs, interface
+endpoints, and a custom VPC. Runners use their auto-assigned public IPv4 (billed only while an instance runs).
+`modules/network` is kept, unused, in case the Phase 7 hosted console justifies its own VPC.
+
+`spinup.sh` launches spot runs into the AZ with the **lowest current spot price** (it reads all three
+AZs before launch), since spot prices differ per AZ.
+
+Applied 2026-09-29: bootstrap (6 resources; state migrated to `s3://ariadne-tfstate-836505524290/bootstrap/`)
+and main (1 imported, 23 added, 1 changed, 0 destroyed; post-apply plan converged). Verified by that
+apply: AWS accepted the GitHub OIDC provider without a `thumbprint_list`. The CLI-created budget was
+adopted with a declarative `import` block, because `terraform import` failed on the default-subnet
+`for_each`. The block was removed after the apply.
+
+GPU quota requests filed in eu-north-1 (quotas are per region): G/VT spot and on-demand to 4 vCPU,
+both PENDING at filing.
+
+## 2026-09-29 — D30: a GPU is needed ONLY for gsplat; the GPU quota is 0 and the spot request was denied
+
+- **Quota, authoritative:** `Running On-Demand G and VT instances` and `All G and VT Spot Instance Requests`
+  are both applied **0** in eu-north-1, and the AWS default is also 0. The account has no GPU access today.
+  **Both requests were denied** on 2026-09-29 with "ramp up gradually": case 179069316400187 (spot, 4 vCPU)
+  and case 179069316600303 (on-demand, 4 vCPU). The quota API still reported both as `CASE_OPENED` after the
+  denial emails, so the API status lags the support case; the applied value (0) is what counts. The appeal
+  text for both cases is in `docs/aws_quota_appeal.md`.
+- **What needs a GPU:** gsplat (CUDA-only). The Phase 1 exit gate includes "render a splat", which puts a GPU
+  on Phase 1's critical path, not just Phase 6's.
+- **What does not:** bag rendering (SMOKE_TEST_RESULTS §4f: software rendering records the full rig
+  completely at RTF 0.57), SLAM, COOL, Bedrock.
+- CLAUDE.md §1 places Gazebo on g5/g6. §4f shows that is not necessary for record-once bags, so the GPU
+  requirement shrinks to gsplat alone. The locked decision is not changed here; this only records the evidence.
+- Fallbacks if both cases fail (e.g. off-AWS GPU time for gsplat) conflict with the locked "gsplat service on
+  AWS g5/g6" and are the maintainer's call.
+
+## 2026-09-29 — D31: §30.2 becomes a code registry; rotational ATE added; "rotation/translation error" interpreted
+
+`cpp/runtime/metrics/metric_registry.hpp` holds the 27 §30.2 metrics (4 localization, 3 registration, 6 mapping,
+7 communication, 7 mission) as stable ids with units. `MissingMetrics()` treats absent AND non-finite values as
+missing, since "emits a number, however bad" must not be satisfiable by a NaN. `UnknownMetrics()` rejects
+unregistered ids, so a typo is an error rather than an orphaned value. The Phase 1 exit gate becomes
+`MissingMetrics(report).empty()` on the thin run's report.
+
+`[ASSUMPTION]` §30.2's localization line ("ATE RMSE, RPE, rotation error, translation error") does not say which
+quantity each error refers to. It is read the way evo reports trajectories: translation and rotation parts of
+both ATE and RPE (`ate_rmse_m`, `ate_rotation_rmse_rad`, `rpe_translation_rmse_m`, `rpe_rotation_rmse_rad`).
+
+`ComputeATERotation` closes the audit carry-over. It uses the same position-based Umeyama alignment as
+`ComputeATE` (factored into `AlignTrajectories`, so the two can never describe different registrations), then
+takes the angle of R_gt^T·(R_align·R_est) per pose, which is evo's APE rotation part. The test that motivates it:
+positions exact, every orientation off by 0.05 rad gives translation ATE = 0 and rotation ATE = 0.05.
+`energy_proxy` carries no invented unit; §30.2 gives none, and its definition lands with the planner (4.3).

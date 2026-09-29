@@ -226,3 +226,69 @@ Toolkit injecting the driver's EGL vendor library via glvnd (`NVIDIA_DRIVER_CAPA
 | PyPI wheel status for OpenCV 5 | `[PENDING]` — not needed; we build from tag per C7 |
 | COOL day-1 trial check (0.3) | `[PENDING]` — needs AWS account |
 | `ariadne-sim` NVIDIA EGL path on g5/g6 | `[PENDING]` — needs a GPU instance; Mesa path PASSES (§4c) |
+
+## 4d. AWS account capability probe `[ACCOUNT-VERIFIED]` 2026-09-29
+
+Account `836505524290`, `ap-southeast-2`, **free plan**. Read-only checks plus one real launch attempt.
+
+| Check | Result |
+|---|---|
+| Free-tier-eligible types (`describe-instance-types --filters free-tier-eligible=true`) | `c7i-flex.large m7i-flex.large t3.micro t3.small t4g.micro t4g.small t8i.micro t8i.small` |
+| Offered in region | c8g.medium/large, m8g.large, c7g.large, g4dn.xlarge, g6f.large: all yes |
+| Quota: Standard family (on-demand / spot) | 5 / 5 vCPU |
+| Quota: G and VT (on-demand / spot) | **0 / 0**: no GPU launch possible without an increase |
+| `run-instances --dry-run` | "would have succeeded" for every type, **including g4dn.xlarge at 0 quota**, so dry-run checks IAM only and cannot test plan or quota restrictions |
+| **Real launch, c8g.medium** (Graviton4) | **REFUSED**: `InvalidParameterCombination: The specified instance type is not eligible for Free Tier.` No resources created (verified: 0 instances, 0 volumes). |
+
+**Consequence:** on the free plan, COOL cannot run at all. It requires Graviton3/4 (c7g/m7g/r7g, c8g/m8g/r8g), and none are free-eligible. The Marketplace subscribe page rendering on the account does not change this, because the EC2 instance-type gate is separate. The only arm64 types this plan permits are `t4g.micro/small` (Graviton2), which the COOL listing does not support.
+
+## 4e. Determinism on real Graviton4 hardware `[HARDWARE-VERIFIED]` 2026-09-29
+
+Run `20260929T145114Z-cpu-762cb1` via `infra/scripts/spinup.sh run --profile cpu -- "$(cat infra/scripts/tests/determinism_graviton.sh)"`: **c8g.large spot,
+eu-north-1c, AWS Graviton4** (SVE2, AL2023 kernel 6.18), `infra/scripts/check_determinism.sh`.
+
+```
+g++ (GCC) 11.5.0   /   clang 15.0.7 (AWS)
+PASS g++ -O0/-O2/-O3 · clang++ -O0/-O2/-O3   det=11806531094783593156 philox=14182439601419266695 degrade=8535765251477677907
+arch=aarch64  configurations=6   DETERMINISM=PASS
+```
+
+Identical to the digests recorded on x86-64 with gcc 13.3 / clang 18.1. This is stronger than the earlier
+QEMU result in two ways: real silicon rather than an ISA emulator, and **different compiler major
+versions** (gcc 11 vs 13, clang 15 vs 18). Bit-identity now holds across architecture, compiler vendor,
+compiler version and optimization level.
+
+Cost: 67 s wall, spot $0.0151/h, **$0.0003 compute** (ledger: `build/runs/ledger.csv`).
+
+Guard verification: the instance ended `terminated` with state reason
+`Client.InstanceInitiatedShutdown`, so an in-instance `shutdown -h` TERMINATES rather than stops
+(brake 1 works). AWS accepts spot together with `instance-initiated-shutdown-behavior=terminate`.
+Post-run sweep: 0 stray instances, 0 EBS volumes.
+
+Scope: this covers the deterministic primitives (`det_math`, Philox, degradation operator). Item 0.2's
+arm64 **OpenCV 5 build + smoke test** is still open.
+
+## 4f. Full-rig recording throughput on software rendering `[IMAGE-VERIFIED]` 2026-09-29
+
+`infra/scripts/sim.sh python3 /opt/ariadne/bin/sim_throughput.py`, world `rig_throughput.sdf`: the arch 5.3 rig
+(stereo 1280x720 at 20 Hz, 10 cm baseline, IMU at 200 Hz) run for exactly 10 000 physics steps (10.0 sim-s),
+bridged by `ros_gz_bridge` and recorded by `ros2 bag record -s mcap`, then read back and checked.
+Host: 8-core x86-64, no GPU, Mesa llvmpipe.
+
+| Measure | Result |
+|---|---|
+| Realtime factor | **0.566** (10.0 sim-s in 17.7 wall-s) |
+| Left / right frames | 201 / 201 of 200 expected (includes the t=0 frame); max gap = nominal 0.05 s; 0 duplicate stamps |
+| Stereo pairing | **1.0**: every left frame has an identically-stamped right frame |
+| IMU samples | 1999 of 2000; max gap 0.010 s = **one dropped sample** |
+
+**Conclusion:** software rendering records the full rig **completely**. It slows the sim (RTF < 1) rather than
+dropping frames, which is the acceptable failure mode for record-once bags. Bag recording does not need a GPU;
+a 5-minute single-agent mission would take ~9 wall-minutes.
+
+Caveats, stated rather than assumed away:
+- One run, one simple scene. The Phase 1 two-room corridor, multiple agents (render cost scales roughly with
+  camera count), and Phase 5's shadow-casting lamp will all be slower. Re-measure there.
+- The single missing IMU sample is real. It happened in the bridge/recorder path, not the renderer, since the
+  cameras were complete. Preintegration tolerates a 10 ms gap, but completeness should be asserted per bag
+  rather than assumed.
