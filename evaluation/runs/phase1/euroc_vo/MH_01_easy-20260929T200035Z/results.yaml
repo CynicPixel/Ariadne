@@ -1,0 +1,13 @@
+# ariadne_euroc_vo results. Generated; do not hand-edit.
+sequence: MH_01_easy
+frames: 3682
+associated_poses: 3638  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 80.5145
+ate_se3: {rmse_m: 0.126268, mean_m: 0.109807, max_m: 0.364749, rotation_rmse_rad: 0.0772677}
+ate_rmse_percent_of_path: 0.156826
+sim3_scale: 1.00399  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.0139318, rotation_rmse_rad: 0.0024559}
+vo: {lost_frames: 0, keyframes: 556, ba_runs: 555, ba_mean_cost_ratio: 0.283133, landmarks_alive_at_end: 54, graph_edges: 555, graph_version: 1111}
+stereo_match_valid_fraction: 0.657547
+triangulation: {candidates: 113541, created: 22599, no_stereo: 55468, nonpositive_disparity: 0, depth_range: 34022, reprojection: 0, sgbm_inconsistent: 1452, uncertain: 0}
+timing_ms: {track_mean: 20.0932, vo_track_mean: 4.9616, keyframe_mean: 37.7466, opencv_threads: 8}
