@@ -9,6 +9,7 @@
 #include "core/math/det_math.hpp"
 #include "core/random/philox.hpp"
 
+#include "core/determinism/digests.hpp"
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -181,34 +182,12 @@ TEST(DetMath, SqrtIsExactPowersOfTwo) {
 // The digest is built from raw BITS, so it cannot be fooled by a comparison
 // that tolerates a one-ulp drift.
 TEST(DetMath, DigestOverFixedGridIsStable) {
-    uint64_t digest = 1469598103934665603ull;      // FNV-1a offset basis
-    auto absorb = [&digest](double value) {
-        uint64_t bits = DoubleToBits(value);
-        for (int byte = 0; byte < 8; ++byte) {
-            digest ^= (bits >> (byte * 8)) & 0xFFull;
-            digest *= 1099511628211ull;            // FNV-1a prime
-        }
-    };
-
-    for (int i = -2000; i <= 2000; ++i) {
-        absorb(DetExp(static_cast<double>(i) * 0.25));
-    }
-    for (int i = 1; i <= 4000; ++i) {
-        absorb(DetLog(static_cast<double>(i) * 0.125));
-    }
-    // Boundary coverage, mirroring check_determinism.sh. The grid above spans
-    // only |x| <= 500 and was therefore byte-identical across a real DetExp
-    // overflow bug; a digest that never evaluates the boundary cannot guard it.
-    for (int i = 0; i <= 400; ++i) absorb(DetExp(708.0 + i * 0.00445));
-    for (int i = 0; i <= 400; ++i) absorb(DetExp(-745.1332191019411 + i * 0.0028));
-
-    // Recorded 2026-09-08 from this implementation, gcc 13.3.0 / x86-64
-    // (the value is an OUTPUT of the code, not a specification of it).
-    // If this fails after a deliberate change to det_math.hpp, re-record it and
-    // re-derive any affected golden digests. If it fails WITHOUT such a change
-    // -- on another compiler or architecture -- the cross-platform guarantee is
-    // broken; investigate before shipping, because every named degradation
-    // config that has already produced published results is then suspect.
-    EXPECT_EQ(digest, 11806531094783593156ull)
+    // Computed by the shared implementation (core/determinism/digests.hpp), the
+    // same code check_determinism.sh and the run manifest call.
+    // Recorded 2026-09-08 (the value is an OUTPUT of the code, not a spec).
+    // Fails after a deliberate change to det_math.hpp: re-record it and every
+    // dependent golden digest. Fails WITHOUT such a change, on another compiler
+    // or architecture: the cross-platform guarantee is broken; investigate.
+    EXPECT_EQ(DetMathDigest(), 11806531094783593156ull)
         << "det_math digest changed -- see comment above";
 }

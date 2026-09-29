@@ -2,6 +2,7 @@
 #include "core/random/philox.hpp"
 #include "core/random/seed.hpp"
 #include "runtime/logging/event_log.hpp"
+#include "runtime/manifest/determinism.hpp"
 #include "runtime/manifest/run_manifest.hpp"
 
 #include <gtest/gtest.h>
@@ -285,4 +286,22 @@ TEST(RunManifest, ExecutionModeIsRecordedBecauseDeterminismDiffers) {
     EXPECT_EQ(m.execution_mode, "replay");
     m.execution_mode = "live";
     EXPECT_NE(ToYaml(m).find("execution_mode: live"), std::string::npos);
+}
+
+// D21/D32: the manifest's digests are MEASURED at run time by the same code
+// the tests and check_determinism.sh use. On a conforming host they equal the
+// committed constants; on a host with drifted math they would differ, and the
+// manifest would record the drift instead of hiding it.
+TEST(RunManifest, DeterminismDigestsAreMeasuredNotCopied) {
+    RunManifest m;
+    EXPECT_EQ(m.det_math_digest, "UNRECORDED");
+    RecordDeterminismDigests(m);
+    EXPECT_EQ(m.det_math_digest, "11806531094783593156");
+    EXPECT_EQ(m.philox_digest, "14182439601419266695");
+    EXPECT_EQ(m.degradation_digest, "8535765251477677907");
+
+    const auto missing = MissingRequiredFields(m);
+    for (const auto& f : missing) {
+        EXPECT_EQ(f.find("digest"), std::string::npos) << f << " still reported missing";
+    }
 }

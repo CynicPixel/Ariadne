@@ -33,80 +33,16 @@ EXPECTED_PHILOX="14182439601419266695"
 EXPECTED_DEGRADE="8535765251477677907"
 
 cat > "$WORK/digest.cpp" <<'CPP'
-#include "core/math/det_math.hpp"
-#include "core/random/philox.hpp"
-#include "perception/degradation/degradation.hpp"
+// The digest computations live in exactly one place (core/determinism/
+// digests.hpp, perception/degradation/degradation_digest.hpp), shared with the
+// tests and the run-manifest writer, so this script cannot drift from them.
+#include "core/determinism/digests.hpp"
+#include "perception/degradation/degradation_digest.hpp"
 #include <cstdio>
-using namespace ariadne::core;
-using namespace ariadne::perception;
 int main() {
-    uint64_t d = 1469598103934665603ull;
-    auto absorb = [&d](double v) {
-        uint64_t b = DoubleToBits(v);
-        for (int i = 0; i < 8; ++i) { d ^= (b >> (i*8)) & 0xFFull; d *= 1099511628211ull; }
-    };
-    for (int i = -2000; i <= 2000; ++i) absorb(DetExp(i * 0.25));
-    for (int i = 1; i <= 4000; ++i)     absorb(DetLog(i * 0.125));
-    // BOUNDARY COVERAGE. The sweep above spans only x in [-500, 500], which is
-    // why it stayed byte-identical through a real DetExp bug: the range
-    // reduction produced k=1024 (resp. -1075) only for |x| near the overflow
-    // and underflow limits, and Exp2Int saturated there. A digest that never
-    // evaluates the boundary cannot protect it.
-    for (int i = 0; i <= 400; ++i) absorb(DetExp(708.0 + i * 0.00445));
-    for (int i = 0; i <= 400; ++i) absorb(DetExp(-745.1332191019411 + i * 0.0028));
-    std::printf("det_math_digest=%llu\n", (unsigned long long)d);
-
-    uint64_t r = 1469598103934665603ull;
-    auto absorb64 = [&r](uint64_t b) {
-        for (int i = 0; i < 8; ++i) { r ^= (b >> (i*8)) & 0xFFull; r *= 1099511628211ull; }
-    };
-    for (uint64_t site = 0; site < 20000; ++site) {
-        absorb64(PhiloxStream(20260906ull, 17ull, site).NextBits64());
-    }
-    // HIGH SITE BITS AND MULTI-BLOCK DRAWS. As above, the sweep over sites
-    // 0..20000 drawing 2 words each left block=0 and site>>32 == 0, so it was
-    // blind to the counter layout entirely -- it stayed byte-identical through
-    // the repartition that fixed a real stream collision. These two loops
-    // exercise the site high half and the block index, which is where the
-    // (site, block) aliasing lived.
-    for (uint64_t hi = 0; hi < 64; ++hi) {
-        absorb64(PhiloxStream(20260906ull, 17ull,
-                              (hi << 32) | 0x1234ull).NextBits64());
-    }
-    // The ENDS of the declared domain, per D18: a digest must reach the limits
-    // of the contract it guards, not just a comfortable interior.
-    absorb64(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite).NextBits64());
-    absorb64(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite - 1).NextBits64());
-    {
-        // Draw to the last legal block (kMaxBlock = 65535, 4 words each).
-        PhiloxStream deep(20260906ull, 17ull, 99ull);
-        for (uint64_t i = 0; i < 2 * (PhiloxStream::kMaxBlock + 1); ++i) {
-            absorb64(deep.NextBits64());
-        }
-    }
-    std::printf("philox_digest=%llu\n", (unsigned long long)r);
-
-    // The Phase 0 exit criterion names D specifically: bit-identical for a
-    // fixed (seed, frame_id) across machines. This exercises the whole chain,
-    // including the Poisson and Gaussian samplers and the dust field.
-    ImageU8 img(64, 64, 3);
-    for (int y = 0; y < 64; ++y)
-      for (int x = 0; x < 64; ++x)
-        for (int c = 0; c < 3; ++c)
-          img.At(x, y, c) = (unsigned char)((x*3 + y*5 + c*7) & 0xFF);
-    ImageF32 depth(64, 64);
-    for (int y = 0; y < 64; ++y)
-      for (int x = 0; x < 64; ++x) depth.At(x, y) = 0.5f + 0.1f * (float)x;
-    DegradationParams p;
-    p.radiance_scale = 0.08; p.photon_scale = 8000.0;
-    p.read_noise_electrons = 3.0; p.vignette_strength = 0.35;
-    p.prnu_sigma = 0.02; p.analog_gain = 2.0;
-    p.enable_dust = true; p.dust_beta = 0.25;
-    p.dust_airlight = 0.55; p.dust_field_strength = 0.6;
-    ImageU8 out = Degrade(img, depth, p, 20260906ull, 7ull);
-    uint64_t g = 1469598103934665603ull;
-    for (unsigned char v : out.data) { g ^= v; g *= 1099511628211ull; }
-    std::printf("degrade_digest=%llu\n", (unsigned long long)g);
+    std::printf("det_math_digest=%llu\n", (unsigned long long)ariadne::core::DetMathDigest());
+    std::printf("philox_digest=%llu\n", (unsigned long long)ariadne::core::PhiloxDigest());
+    std::printf("degrade_digest=%llu\n", (unsigned long long)ariadne::perception::DegradeDigest());
     return 0;
 }
 CPP

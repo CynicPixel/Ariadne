@@ -7,6 +7,7 @@
 // reproducible by anyone, not merely self-consistent.
 #include "core/random/philox.hpp"
 
+#include "core/determinism/digests.hpp"
 #include <gtest/gtest.h>
 
 #include <map>
@@ -259,29 +260,6 @@ TEST(Philox, BitsToUniformConversionsAreExact) {
 // Recorded 2026-09-08; verified identical under gcc 13.3.0 and clang 18.1.3
 // at -O0/-O2/-O3.
 TEST(Philox, DigestOverFixedGridIsStable) {
-    uint64_t digest = 1469598103934665603ull;
-    auto absorb = [&digest](uint64_t bits) {
-        for (int byte = 0; byte < 8; ++byte) {
-            digest ^= (bits >> (byte * 8)) & 0xFFull;
-            digest *= 1099511628211ull;
-        }
-    };
-    for (uint64_t site = 0; site < 20000; ++site) {
-        absorb(PhiloxStream(20260906ull, 17ull, site).NextBits64());
-    }
-    // Sites with a non-zero high half, and a draw deep enough to advance the
-    // block index. The loop above does neither, so it stayed byte-identical
-    // across the counter repartition that fixed a real stream collision.
-    for (uint64_t hi = 0; hi < 64; ++hi) {
-        absorb(PhiloxStream(20260906ull, 17ull, (hi << 32) | 0x1234ull).NextBits64());
-    }
-    // The ends of the declared domain, per D18.
-    absorb(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite).NextBits64());
-    absorb(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite - 1).NextBits64());
-    PhiloxStream deep(20260906ull, 17ull, 99ull);
-    for (uint64_t i = 0; i < 2 * (PhiloxStream::kMaxBlock + 1); ++i) {
-        absorb(deep.NextBits64());
-    }
-
-    EXPECT_EQ(digest, 14182439601419266695ull);
+    // Shared implementation: core/determinism/digests.hpp.
+    EXPECT_EQ(PhiloxDigest(), 14182439601419266695ull);
 }

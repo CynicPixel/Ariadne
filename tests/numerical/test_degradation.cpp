@@ -2,6 +2,7 @@
 // gate that rests on it.
 #include "perception/degradation/degradation.hpp"
 
+#include "perception/degradation/degradation_digest.hpp"
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -326,36 +327,7 @@ TEST(Degradation, DustFieldVariesSpatially) {
 // single comparison, and so that an accidental change to any stage is caught
 // rather than silently altering every degraded frame in the project.
 TEST(Degradation, GoldenDigestForAFixedConfiguration) {
-    ImageU8 in(64, 64, 3);
-    for (int y = 0; y < 64; ++y)
-        for (int x = 0; x < 64; ++x)
-            for (int c = 0; c < 3; ++c)
-                in.At(x, y, c) = static_cast<uint8_t>((x * 3 + y * 5 + c * 7) & 0xFF);
-
-    ImageF32 depth(64, 64);
-    for (int y = 0; y < 64; ++y)
-        for (int x = 0; x < 64; ++x)
-            depth.At(x, y) = 0.5f + 0.1f * static_cast<float>(x);
-
-    DegradationParams p;
-    p.radiance_scale = 0.08;
-    p.photon_scale = 8000.0;
-    p.read_noise_electrons = 3.0;
-    p.vignette_strength = 0.35;
-    p.prnu_sigma = 0.02;
-    p.analog_gain = 2.0;
-    p.enable_dust = true;
-    p.dust_beta = 0.25;
-    p.dust_airlight = 0.55;
-    p.dust_field_strength = 0.6;
-
-    const ImageU8 out = Degrade(in, depth, p, 20260906ull, 7ull);
-
-    uint64_t digest = 1469598103934665603ull;
-    for (uint8_t v : out.data) {
-        digest ^= v;
-        digest *= 1099511628211ull;
-    }
-    EXPECT_EQ(digest, 8535765251477677907ull)
+    // Shared implementation: perception/degradation/degradation_digest.hpp.
+    EXPECT_EQ(DegradeDigest(), 8535765251477677907ull)
         << "degradation output changed; re-record deliberately or investigate";
 }

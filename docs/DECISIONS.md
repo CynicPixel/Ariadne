@@ -728,3 +728,20 @@ both ATE and RPE (`ate_rmse_m`, `ate_rotation_rmse_rad`, `rpe_translation_rmse_m
 takes the angle of R_gt^T·(R_align·R_est) per pose, which is evo's APE rotation part. The test that motivates it:
 positions exact, every orientation off by 0.05 rad gives translation ATE = 0 and rotation ATE = 0.05.
 `energy_proxy` carries no invented unit; §30.2 gives none, and its definition lands with the planner (4.3).
+
+## 2026-09-29 — D32: determinism digests exist once, and the run manifest measures them
+
+Each digest (det_math, Philox, degradation) previously existed twice, once in `check_determinism.sh`'s inline C++
+and once in a test, and the two agreed only because they were kept in sync by hand. They now live once:
+`core/determinism/digests.hpp` (`DetMathDigest`, `PhiloxDigest`, `Fnv1a64`) and
+`perception/degradation/degradation_digest.hpp` (`DegradeDigest`). The tests, the script, and the run manifest
+all call them, and the D18 boundary-coverage rationale moved with them.
+
+`runtime/manifest/determinism.hpp::RecordDeterminismDigests(RunManifest&)` fills the manifest by MEASURING
+the digests at run time. Copying the committed constants would make D21's "a result produced by drifted math is
+identifiable after the fact" empty again: the manifest would claim the recorded values whatever the host
+actually computed. `ariadne_runtime` now links `ariadne::perception`, which is allowed because runtime sits above
+the domain libraries in the §3 dependency order.
+
+Verified: 156 tests pass; `check_determinism.sh` PASS on 6/6 configurations using the shared code; committed
+constants unchanged.
