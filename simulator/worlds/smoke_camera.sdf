@@ -1,0 +1,87 @@
+<?xml version="1.0" ?>
+<!--
+  ariadne-sim acceptance world. NOT a Phase 1 scene: the two-room corridor of
+  item 1.1 is separate. This exists only to prove that the container renders a
+  camera image headlessly.
+
+  It is built so that a correct render has high pixel variance and a broken one
+  does not: a red box and a blue box in front of a grey ground plane, under a
+  directional light. Headless rendering failures commonly "succeed" and emit
+  uniformly black (or uniformly clear-colour) frames, so the smoke test asserts
+  on pixel statistics, never on exit codes.
+-->
+<sdf version="1.10">
+  <world name="smoke_camera">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <!-- Camera sensors need the render engine; ogre2 is the engine the
+         headless EGL path supports (arch §5.10). -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.2 -0.9</direction>
+    </light>
+
+    <model name="ground">
+      <static>true</static>
+      <link name="link">
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material>
+            <ambient>0.4 0.4 0.4 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="red_box">
+      <static>true</static>
+      <pose>2.0 -0.5 0.5 0 0 0.4</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>1 1 1</size></box></geometry>
+          <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.9 0.1 0.1 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="blue_box">
+      <static>true</static>
+      <pose>3.0 0.8 0.75 0 0 -0.3</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>1 1 1.5</size></box></geometry>
+          <material><ambient>0.1 0.1 0.8 1</ambient><diffuse>0.1 0.1 0.9 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="camera_rig">
+      <static>true</static>
+      <pose>0 0 0.8 0 0.1 0</pose>
+      <link name="link">
+        <sensor name="camera" type="camera">
+          <camera>
+            <horizontal_fov>1.2</horizontal_fov>
+            <image><width>320</width><height>240</height><format>R8G8B8</format></image>
+            <clip><near>0.1</near><far>50</far></clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>5</update_rate>
+          <topic>smoke/camera</topic>
+        </sensor>
+      </link>
+    </model>
+  </world>
+</sdf>
