@@ -29,6 +29,7 @@
 #include "core/config/config.hpp"
 #include "perception/features/orb_engine.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
+#include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
 #include "runtime/datasets/euroc.hpp"
@@ -129,25 +130,16 @@ std::vector<double> RowErrors(const OrbEngine& orb, const cv::Mat& l, const cv::
     return dy;
 }
 
-/// Sub-pixel row error, the VINS-Fusion stereo idiom: track left points into
-/// the right image with pyramidal LK (initial guess: same position), track
-/// back, keep round trips within 0.5 px, and report |dy| of the survivors.
-/// Unlike ORB keypoints (integer FAST positions at level 0), LK positions are
-/// sub-pixel, so this can resolve rectification error below 1 px.
-std::vector<double> LkRowErrors(const cv::Mat& l, const cv::Mat& r, const std::vector<cv::Point2f>& pts) {
+/// Sub-pixel row error via the ONE stereo LK implementation
+/// (perception/stereo/stereo_lk_matcher), with its row gate disabled: this
+/// function MEASURES the row error, so it must not filter on it.
+std::vector<double> LkRowErrors(const cv::Mat& l, const cv::Mat& r, const std::vector<cv::Point2f>& pts,
+                                StereoMatchParams p) {
+    p.max_dy_px = 1e9;
+    const StereoMatches m = MatchLeftToRight(l, r, pts, p);
     std::vector<double> dy;
-    if (pts.empty()) return dy;
-    std::vector<cv::Point2f> fwd, back = pts;
-    std::vector<uchar> st, st_back;
-    std::vector<float> err;
-    cv::calcOpticalFlowPyrLK(l, r, pts, fwd, st, err, cv::Size(21, 21), 3);
-    cv::calcOpticalFlowPyrLK(r, l, fwd, back, st_back, err, cv::Size(21, 21), 3,
-                             cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01),
-                             cv::OPTFLOW_USE_INITIAL_FLOW);
     for (size_t i = 0; i < pts.size(); ++i) {
-        if (!st[i] || !st_back[i] || cv::norm(back[i] - pts[i]) > 0.5) continue;
-        if (fwd[i].x < 0 || fwd[i].x >= r.cols || fwd[i].y < 0 || fwd[i].y >= r.rows) continue;
-        dy.push_back(std::abs(fwd[i].y - pts[i].y));
+        if (m.valid[i]) dy.push_back(std::abs(m.right[i].y - pts[i].y));
     }
     return dy;
 }
@@ -263,11 +255,11 @@ int main(int argc, char** argv) {
         wrong_rectifier.Rectify(l_raw, r_raw, lw, rw);
         const auto e_wrong = RowErrors(orb, lw, rw, nullptr);
         dy_wrong.insert(dy_wrong.end(), e_wrong.begin(), e_wrong.end());
-        auto lk = LkRowErrors(l, r, tf.points);
+        auto lk = LkRowErrors(l, r, tf.points, cfg.stereo_match);
         lk_dy_rect.insert(lk_dy_rect.end(), lk.begin(), lk.end());
-        lk = LkRowErrors(l_raw, r_raw, tf.points);   // raw-image control (same seeds)
+        lk = LkRowErrors(l_raw, r_raw, tf.points, cfg.stereo_match);   // raw-image control (same seeds)
         lk_dy_raw.insert(lk_dy_raw.end(), lk.begin(), lk.end());
-        lk = LkRowErrors(lw, rw, tf.points);         // 1-degree pitch control
+        lk = LkRowErrors(lw, rw, tf.points, cfg.stereo_match);         // 1-degree pitch control
         lk_dy_wrong.insert(lk_dy_wrong.end(), lk.begin(), lk.end());
 
         // Stereo + dual-range alias measurement.

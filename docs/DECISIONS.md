@@ -877,7 +877,7 @@ rightsstatements.org InC-NC 1.0). The competition licenses every *submitted* mat
 lawful commercial or noncommercial purpose" (`opencv-ai-competition-2026.md` line 209); data only referenced is
 not covered (line 210); third-party-terms violations disqualify (line 222). Therefore **no EuRoC pixels in any
 submitted material** (report figures, demo video, S3/ECR artifacts). Derived metrics are treated as facts that may
-be reported, `[ASSUMPTION]` pending the maintainer's confirmation. The data lives only in `.cache/` (gitignored and
+be reported (confirmed by the maintainer 2026-09-30: report EuRoC numbers, never its pixels). The data lives only in `.cache/` (gitignored and
 dockerignored; `spinup.sh` snapshots via `git ls-files --exclude-standard`, so it never uploads).
 
 **Fetch** (`infra/scripts/fetch_euroc.py`, stdlib only). The server honours HTTP Range. The script reads the outer
@@ -930,3 +930,70 @@ zone at ~1/4 the cost), with any carving gated by it.
 Also: the run manifest now records `compiler`/`architecture` (shared `build_identity.hpp`), `imu_mode: none` (the
 default `attitude_only` would claim an inertial estimator ran), `loop_backend: none`, ISO `created_utc`, and the
 exact command in `extra.command` (§36). `core.sh euroc` reproduces the run with provenance.
+
+## 2026-09-30 — D36: placeholder stereo VO (1.5), conventions, and the MH_01 trajectory
+
+Reference implementations read for it: ORB-SLAM3 (`StereoInitialization`, `ThDepth` = 60 B close points,
+`NeedNewKeyFrame`'s 0.75 reference ratio), VINS-Fusion (`solvePoseByPnP`, stereo DLT `triangulatePoint`), and evo
+(`associate_trajectories` max_diff 0.01 s, TUM format). OpenCV 5 signatures were verified in the installed headers:
+`solvePnPRansac(..., UsacParams)`, `solvePnPRefineLM`, `triangulatePoints`.
+
+**Conventions (one place each).** The solver state is world->camera `T_C_W` with a LEFT perturbation
+`T <- exp([rho; phi]) T` (§11.3). Nodes and keyframes store `T_W_C` (§4.2); their covariance is converted once
+with `core::InvertCovariance`. Pinhole Jacobians (`core/geometry/pinhole.hpp`) are finite-difference tested at
+typical depth, near-zero depth (1 cm), a wide-FOV ray (X/Z = 5), per tangent direction, and for the right camera
+of a rectified pair. **Monte Carlo covariance consistency**: the mean NEES over 2000 noisy PnP solves is 5.93 (400 trials gave 6.37, by chance) (chi^2
+with 6 dof, i.e. about 6) for both `T_C_W` and the transported `T_W_C`. The §12.2 edge residual
+`Log(Z^-1 X_i^-1 X_j)` is a right-side error on Z, so an edge stores its information in the residual's tangent,
+converted through `Adj(Z^-1)`. A Monte Carlo test with a 1-rad relative rotation confirms it (mean r^T Info r ~ 6).
+
+**One optimizer** (`slam/bundle_adjustment/reprojection_lm.hpp`): LM (§11.6 Madsen-Nielsen damping, lambda_0 =
+1e-4 max diag H, x1/3 on accept, x2 on reject, a relative-cost OR step-size stop, 15 iterations), Huber (§11.3),
+Schur elimination of landmark blocks (§11.5), and pose covariance by solving `S X = E` (§11.6). With landmarks
+fixed it is the PnP refinement, and it agrees with `cv::solvePnPRefineLM` to 1e-6. With the older keyframe fixed as
+the gauge it is the two-frame BA stub. Dense S for now; sparse Cholesky arrives with the Phase 2 window.
+
+**Stereo VO** (`slam/odometry/stereo_vo.*`, plain inputs per §3; runtime glues perception to it):
+constant-velocity prediction; `solvePnPRansac` with the `UsacParams` overload seeded from Philox at a new
+reserved site (`kMaxSite - 2`), single-threaded; the shared LM for the pose and its covariance; ORB-SLAM3's keyframe
+rule plus min-tracked and max-frames limits; at keyframes, LK left->right correspondences (promoted to
+`perception/stereo/stereo_lk_matcher`, the idiom validated at 0.135 px in D35), `triangulatePoints` with the §11.2
+rejections (depth range, reprojection in both views, sigma_Z/Z, SGBM consistency where SGBM passes
+`DenseSupportMask`), the two-frame BA, and an ODOMETRY edge carrying the BA's relative covariance. When PnP fails it
+holds the motion model, flags the frame, and forces a keyframe with an uninformative (1 m / 1 rad) edge; it never
+silently resets. Parameters live in `configs/slam/{placeholder,euroc}.yaml` (strict loader), with `slam_config`
+added to the run manifest. **Limits:** a landmark lives only as long as its LK track (no re-association, so no
+loop closure), two-keyframe BA, no IMU.
+
+**Interfaces:** `slam::PoseGraph` (§12.1 edge types, §12.2 residual, a version counter bumped on every mutation, and
+ODOMETRY's GNC weight fixed at 1); the §4.2 `Keyframe` and §18.2 `KeyframeBundle` records live in
+`runtime/agent/keyframe_records.hpp`, because they join slam and perception outputs. `KeyframeBundle` is stamped with
+the graph version (its `frame_id_of_pose`), and fields without a producer are listed and left unset.
+
+**Synthetic end-to-end test (CI, no dataset):** a textured room projected through a rectified stereo rig along an
+S-curve, with 0.3 px noise: 14 keyframes, **translation RMSE 4.6 mm over 3.5 m**, never lost. It stays lost-free
+with 10% of tracks jumping 20 px per frame, and is bit-identical across 1, 2 and 8 OpenCV threads and arbitrary
+`cv::theRNG()` state. (The test first tripped the D18 Philox exhaustion guard by drawing a whole sequence from one
+stream; it now keys noise per frame as (seed, frame_id, site).)
+
+**EuRoC MH_01_easy, all 3682 frames** (`ariadne_euroc_vo`; poses mapped to the body frame via
+`T_B_Crect = T_B_C0 [R1^T | 0]`, a round trip tested with a negative control; associated to 3638 ground-truth
+samples):
+- **ATE (SE(3)): 0.126 m RMSE over an 80.5 m path (0.16%)**, mean 0.110 m, max 0.365 m; rotation 0.077 rad.
+- **evo 1.31.1 as the oracle reproduces 0.126268 m and 0.077268 rad exactly** (ATE translation and rotation;
+  the evo RPE command was not captured), so the ATE metrics and the frame conversion agree with the
+  field-standard tool.
+- Sim(3) scale 1.004 (no scale drift). RPE over 1 s: 1.39 cm and 0.0025 rad.
+- The rotation error is drift, not a frame bug: anchored at the first pose it grows 0 -> 4.9 deg over 182 s. The
+  3.5 deg at t = 0 in the aligned view comes from the position-based alignment spreading the end drift.
+- 0 lost frames, 556 keyframes, 555 BA runs (mean final/initial cost 0.28). 22.6k landmarks created from 113.5k
+  candidates (rejections: 55.5k no stereo match, 34.0k depth range, 1.45k SGBM-inconsistent).
+- Timing: tracking 16.3 ms/frame, VO 4.0 ms/frame, keyframe (stereo + SGBM + triangulation + BA) 34.8 ms.
+
+Review fixes (2026-09-30): node covariance is ABSOLUTE, composed along the odometry chain from the gauge keyframe
+(`ComposeCovariance`); the conditional BA/PnP covariance stays on the edge, and `VoTrackResult` names its field
+`covariance_given_map`. Tested: the node covariance trace never decreases, and the final keyframe's NEES under the
+composed covariance is 1.01 (< 22.46). A blackout frame with no tracks is flagged LOST, holds the constant-velocity
+pose, forces a keyframe with an uninformative edge, and tracking resumes within 3 frames. `MatchLeftToRight` is the
+single stereo LK implementation (the frontend tool calls it with the row gate off) and has its own unit test. Every
+shipped config is load-tested on the host. The EuRoC ground-truth copy is written under the gitignored `raw/`.

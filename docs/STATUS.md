@@ -4,7 +4,22 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-30 (latest) — 1.4 complete on EuRoC MH_01_easy
+## 2026-09-30 (latest) — 1.5 placeholder stereo VO: MH_01 ATE 0.126 m (0.16% of path), evo-verified
+
+- Conventions pinned by tests: FD Jacobians (near-zero depth, wide FOV, right camera); Monte Carlo NEES 5.93 over 2000 trials (~6);
+  pose-graph edge information checked by Monte Carlo.
+- One LM (Huber, Schur, §11.6 damping, S X = E covariance) for PnP refinement and the two-frame BA; agrees with
+  `solvePnPRefineLM` to 1e-6.
+- Stereo VO: seeded USAC PnP, ORB-SLAM3 keyframe rule, §11.2 triangulation with an SGBM cross-check, pose graph with
+  a version counter; `KeyframeBundle` (§18.2) and `Keyframe` (§4.2) records.
+- Synthetic CI test: 4.6 mm RMSE over 3.5 m, robust to 10% corrupted tracks, deterministic across thread counts.
+- MH_01 (3682 frames): ATE 0.126 m RMSE, Sim(3) scale 1.004, 0 lost frames, rotation drift 4.9 deg/182 s (no loop
+  closure yet). evo reproduces the ATE translation and rotation numbers exactly.
+- Tests: image 210/210, host 185/185. Evidence run: `core.sh euroc-vo` from a clean tree after committing.
+
+---
+
+## 2026-09-30 — 1.4 complete on EuRoC MH_01_easy
 
 - EuRoC fetched by a ranged single-member download (1.57 GB of a 12.7 GB archive), CRC and sha256 verified.
   Licence InC-NC: no EuRoC pixels in submitted material (D35).

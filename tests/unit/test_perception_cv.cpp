@@ -7,6 +7,7 @@
 #include "perception/features/orb_engine.hpp"
 #include "perception/opencv/image_adapter.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
+#include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
 
@@ -332,6 +333,36 @@ TEST(PerceptionCv, SgbmNearRangeBoundary) {
         << "near-range aliasing rose above the D34 bound: " << beyond.valid_fraction;
     EXPECT_EQ(cv::countNonZero(DenseSupportMask(beyond, Placeholder().stereo)), 0)
         << "an aliased near-range depth passed the dense-support gate";
+}
+
+// --- Sparse stereo matcher ------------------------------------------------------
+
+// A known disparity must be recovered to sub-pixel; a pure VERTICAL offset (a
+// broken rectification) must be rejected by the row gate, not matched.
+TEST(PerceptionCv, StereoMatcherRecoversDisparityAndRejectsRowOffsets) {
+    const cv::Mat left = Texture(31, 752, 480);
+    std::vector<cv::Point2f> pts;
+    for (int y = 40; y < 440; y += 40)
+        for (int x = 120; x < 700; x += 40) pts.emplace_back(float(x), float(y));
+    const StereoMatchParams p = Placeholder().stereo_match;
+
+    const cv::Mat right = Shift(left, 17.25, 0.0);   // right(x) = left(x + 17.25): disparity 17.25
+    const StereoMatches m = MatchLeftToRight(left, right, pts, p);
+    int ok = 0;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        if (!m.valid[i]) continue;
+        ++ok;
+        EXPECT_NEAR(pts[i].x - m.right[i].x, 17.25, 0.05);
+        EXPECT_NEAR(m.right[i].y, pts[i].y, 0.05);
+    }
+    EXPECT_GT(ok, static_cast<int>(pts.size()) * 9 / 10);
+
+    const cv::Mat shifted_rows = Shift(left, 17.25, 3.0);   // 3 px vertical error
+    const StereoMatches bad = MatchLeftToRight(left, shifted_rows, pts, p);
+    int accepted = 0;
+    for (uchar v : bad.valid) accepted += v;
+    EXPECT_EQ(accepted, 0);
+    EXPECT_GT(bad.row_rejected, static_cast<int>(pts.size()) * 9 / 10);
 }
 
 // --- Rectification (§9.2) ---------------------------------------------------

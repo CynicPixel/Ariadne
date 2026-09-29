@@ -47,3 +47,9 @@ stereo:
   required_min_range_m: 0.30    # §9.4 narrow-void requirement
   support_window_px: 31         # dense-support gate for free-space carving (D34)
   support_min_density: 0.75
+
+stereo_match:                   # keyframe left->right LK correspondence (validated on EuRoC, D35)
+  win_size: 21
+  max_level: 3
+  fb_threshold_px: 0.5
+  max_dy_px: 1.0                # rectified pair: a correct match stays on its row

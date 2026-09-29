@@ -7,8 +7,12 @@ add_executable(test_numerical
   numerical/test_philox.cpp
   numerical/test_det_math.cpp
   numerical/test_distributions.cpp
-  numerical/test_degradation.cpp)
-target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception GTest::gtest_main)
+  numerical/test_degradation.cpp
+  numerical/test_pinhole.cpp
+  numerical/test_ba.cpp
+  numerical/test_pose_graph.cpp)
+target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
+  GTest::gtest_main)
 gtest_discover_tests(test_numerical)
 
 add_executable(test_protocol
@@ -29,7 +33,7 @@ add_executable(test_unit
   unit/test_metrics.cpp
   unit/test_perception_config.cpp
   unit/test_euroc.cpp)
-target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception GTest::gtest_main)
+target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception ariadne::slam GTest::gtest_main)
 # Tests read the shipped configs from the source tree.
 target_compile_definitions(test_unit PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 gtest_discover_tests(test_unit)
@@ -38,9 +42,10 @@ gtest_discover_tests(test_unit)
 if(OpenCV_FOUND)
   add_executable(test_opencv
     unit/test_opencv_identity.cpp
-    unit/test_perception_cv.cpp)
+    unit/test_perception_cv.cpp
+    unit/test_stereo_vo.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
-    GTest::gtest_main)
+    ariadne::slam_opencv GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   gtest_discover_tests(test_opencv)
 endif()

@@ -29,4 +29,9 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_euroc_frontend PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
   install(TARGETS ariadne_euroc_frontend RUNTIME DESTINATION bin COMPONENT ariadne)
+
+  add_executable(ariadne_euroc_vo tools/ariadne_euroc_vo.cpp)
+  target_link_libraries(ariadne_euroc_vo PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_euroc_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 endif()

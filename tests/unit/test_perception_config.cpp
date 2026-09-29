@@ -1,6 +1,9 @@
 // Perception parameters and the §9.4 minimum-range validator. OpenCV-free, so
 // these run in the host suite as well as in the image.
 #include "perception/perception_config.hpp"
+#include "slam/slam_config.hpp"
+
+#include <filesystem>
 
 #include <gtest/gtest.h>
 
@@ -82,4 +85,27 @@ tracker: {target_tracks: 1200, fb_treshold_px: 0.5}
 stereo: {num_disparities: 256, block_size: 5, required_min_range_m: 0.3}
 )", "inline");
     EXPECT_THROW(ParsePerception(config), ConfigError);
+}
+
+// Every shipped config parses and validates. Tools load them only at run time,
+// so without this a broken key would surface on the first real run.
+TEST(PerceptionConfig, EveryShippedConfigLoads) {
+    namespace fs = std::filesystem;
+    const fs::path root = fs::path(ARIADNE_SOURCE_DIR) / "configs";
+    int loaded = 0;
+    for (const auto& e : fs::directory_iterator(root / "perception")) {
+        EXPECT_NO_THROW(LoadPerception(e.path().string())) << e.path();
+        ++loaded;
+    }
+    for (const auto& e : fs::directory_iterator(root / "slam")) {
+        EXPECT_NO_THROW(ariadne::slam::LoadSlam(e.path().string())) << e.path();
+        ++loaded;
+    }
+    EXPECT_GE(loaded, 4);
+    // The rig each dataset config is meant for must pass the §9.4 validator.
+    RectifiedStereoRig euroc = Rig(0.1101);
+    euroc.width = 752;
+    euroc.height = 480;
+    euroc.fx = euroc.fy = 436.244;
+    EXPECT_NO_THROW(ValidateStereoAgainstRig(LoadPerception((root / "perception/euroc.yaml").string()).stereo, euroc));
 }

@@ -18,6 +18,8 @@
 #include "core/config/config.hpp"
 #include "perception/stereo/camera_model.hpp"
 
+#include <Eigen/Geometry>
+
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -170,6 +172,50 @@ inline StereoPairs PairByTimestamp(const EurocImageIndex& l, const EurocImageInd
     p.unmatched_left += static_cast<int>(l.t_ns.size() - i);
     p.unmatched_right += static_cast<int>(r.t_ns.size() - j);
     return p;
+}
+
+struct GroundTruthPose {
+    int64_t t_ns = 0;
+    core::SE3 T_W_B;   // body (IMU) -> Vicon/Leica world
+};
+
+/// state_groundtruth_estimate0/data.csv: "#timestamp, p_RS_R_x..z, q_RS_w, q_RS_x..z, v..., b_w..., b_a..."
+/// p_RS_R and q_RS are the body pose in the reference frame R. The ground-truth
+/// sensor's T_BS is identity (its sensor.yaml), so S is the body frame.
+inline std::vector<GroundTruthPose> ParseEurocGroundTruth(const std::string& text, const std::string& origin) {
+    std::vector<GroundTruthPose> out;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        std::vector<double> v;
+        int64_t t = 0;
+        std::istringstream ls(line);
+        std::string cell;
+        for (int col = 0; std::getline(ls, cell, ','); ++col) {
+            if (col == 0) t = std::stoll(cell);
+            else v.push_back(std::stod(cell));
+        }
+        if (v.size() < 7) throw ConfigError(origin + ": ground-truth row has fewer than 8 columns");
+        if (!out.empty() && t <= out.back().t_ns) throw ConfigError(origin + ": timestamps not increasing");
+        GroundTruthPose g;
+        g.t_ns = t;
+        g.T_W_B.t = core::Vec3(v[0], v[1], v[2]);
+        g.T_W_B.R = Eigen::Quaterniond(v[3], v[4], v[5], v[6]).normalized().toRotationMatrix();
+        out.push_back(g);
+    }
+    return out;
+}
+
+/// T_B_Crect: the RECTIFIED left camera in the body frame. Rectification
+/// rotates camera 0 by R1 (x_rect = R1 x_c0), so T_C0_Crect has rotation R1^T.
+/// Leaving R1 out barely moves positions but adds a constant rotation that
+/// trajectory alignment cannot remove (advisor, 1.5 design).
+inline core::SE3 BodyFromRectifiedLeft(const core::SE3& T_B_C0, const core::Mat3& R1) {
+    core::SE3 T_C0_Crect;
+    T_C0_Crect.R = R1.transpose();
+    return T_B_C0 * T_C0_Crect;
 }
 
 }  // namespace ariadne::runtime

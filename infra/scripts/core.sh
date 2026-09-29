@@ -15,6 +15,9 @@
 #                                      write manifest + results under
 #                                      evaluation/runs/phase1/euroc_frontend/
 #                                      (fetch first: infra/scripts/fetch_euroc.py)
+#   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
+#                                      sequence, scored against ground truth,
+#                                      into evaluation/runs/phase1/euroc_vo/
 #
 # Docker is the only host dependency.
 # ---------------------------------------------------------------------------
@@ -99,10 +102,26 @@ cmd_euroc() {
        --out /work/evaluation/runs/phase1/euroc_frontend --stereo-every 10"
 }
 
+cmd_euroc_vo() {
+  local seq="${1:-MH_01_easy}" commit dirty
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  dirty="$(git_dirty)"
+  [ -d "$REPO_ROOT/.cache/datasets/euroc/$seq/mav0" ] \
+    || { echo "missing $seq; run infra/scripts/fetch_euroc.py $seq" >&2; exit 1; }
+  cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_euroc_vo --parallel $JOBS >/dev/null \
+    && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty \
+       /work/build/docker/cpp/runtime/ariadne_euroc_vo \
+       --sequence /work/.cache/datasets/euroc/$seq \
+       --perception-config /work/configs/perception/euroc.yaml \
+       --slam-config /work/configs/slam/euroc.yaml \
+       --out /work/evaluation/runs/phase1/euroc_vo"
+}
+
 case "${1:-}" in
   image) shift; cmd_image "$@" ;;
   gate)  shift; cmd_gate "$@" ;;
   dev)   shift; cmd_dev "$@" ;;
   euroc) shift; cmd_euroc "$@" ;;
-  *) sed -n '2,21p' "$0"; exit 2 ;;
+  euroc-vo) shift; cmd_euroc_vo "$@" ;;
+  *) sed -n '2,24p' "$0"; exit 2 ;;
 esac

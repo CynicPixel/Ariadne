@@ -3,8 +3,12 @@
 // T_imu_cam in OpenVINS's config/euroc_mav, identical to EuRoC's T_BS), not from
 // copied dataset files, so these tests need no download.
 #include "runtime/datasets/euroc.hpp"
+#include "runtime/metrics/trajectory_io.hpp"
+#include "runtime/metrics/trajectory_metrics.hpp"
 
 #include <gtest/gtest.h>
+
+#include <fstream>
 
 #include <string>
 
@@ -107,4 +111,64 @@ TEST(Euroc, PairsByExactTimestampNotByRow) {
 
 TEST(Euroc, RejectsNonIncreasingTimestamps) {
     EXPECT_THROW(ParseEurocImageCsv("1,a.png\n1,b.png\n", "x"), ConfigError);
+}
+
+// --- Ground truth, association, frames (1.5) --------------------------------
+
+TEST(Euroc, ParsesGroundTruthRows) {
+    const auto gt = ParseEurocGroundTruth(
+        "#timestamp, p_RS_R_x [m], p_RS_R_y [m], p_RS_R_z [m], q_RS_w [], q_RS_x [], q_RS_y [], q_RS_z [], v...\n"
+        "1403636580838555648,4.688319,-1.786938,0.783338,0.534108,-0.153029,-0.827383,-0.082152,-0.027876,"
+        "0.033207,0.800006,-0.003172,0.021267,0.078502,-0.025266,0.136696,0.075593\n",
+        "gt");
+    ASSERT_EQ(gt.size(), 1u);
+    EXPECT_EQ(gt[0].t_ns, 1403636580838555648LL);
+    EXPECT_DOUBLE_EQ(gt[0].T_W_B.t.x(), 4.688319);
+    const Eigen::Quaterniond q(gt[0].T_W_B.R);   // w-first in the file, and unit after normalisation
+    EXPECT_NEAR(q.w(), 0.534108, 1e-5);
+    EXPECT_NEAR(q.y(), -0.827383, 1e-5);
+}
+
+TEST(Euroc, AssociatesNearestWithinEvoDefault) {
+    std::vector<TimedPose> ref{{0, {}}, {5'000'000, {}}, {10'000'000, {}}, {40'000'000, {}}};
+    std::vector<TimedPose> est{{4'000'000, {}}, {9'999'999, {}}, {25'000'001, {}}, {100'000'000, {}}};
+    const auto idx = AssociateNearest(est, ref);
+    EXPECT_EQ(idx[0], 1);
+    EXPECT_EQ(idx[1], 2);
+    EXPECT_EQ(idx[2], -1);   // 15 ms from the nearest: beyond evo's 0.01 s
+    EXPECT_EQ(idx[3], -1);
+}
+
+TEST(Euroc, WritesEvoCompatibleTum) {
+    core::SE3 T;
+    T.t = core::Vec3(1, 2, 3);
+    const std::string path = ::testing::TempDir() + "/traj.tum";
+    ASSERT_TRUE(WriteTum(path, {{1403636580838555648LL, T}}));
+    std::ifstream in(path);
+    std::string header, row;
+    std::getline(in, header);
+    std::getline(in, row);
+    EXPECT_EQ(row, "1403636580.838555648 1.000000000 2.000000000 3.000000000 0.000000000 0.000000000 0.000000000 1.000000000");
+}
+
+// The frame trap: poses are of the RECTIFIED left camera. Converting back to
+// the body with R1 recovers the body trajectory exactly; omitting R1 leaves a
+// constant rotation that SE(3) alignment cannot remove.
+TEST(Euroc, RectifiedCameraToBodyRoundTripNeedsR1) {
+    const core::SE3 T_B_C0 = Cam0().T_B_C;
+    const core::Mat3 R1 = core::SO3Exp(core::Vec3(0.004, -0.012, 0.003));   // ~0.75 deg
+    const core::SE3 T_B_Crect = BodyFromRectifiedLeft(T_B_C0, R1);
+    std::vector<core::TrajectorySample> truth, with_r1, without_r1;
+    for (int k = 0; k < 50; ++k) {
+        core::SE3 T_W_B;
+        T_W_B.R = core::SO3Exp(core::Vec3(0.1 * std::sin(0.1 * k), 0.2 * std::cos(0.07 * k), 0.05 * k));
+        T_W_B.t = core::Vec3(std::sin(0.1 * k), 0.1 * k, 0.3 * std::cos(0.05 * k));
+        const core::SE3 T_W_Crect = T_W_B * T_B_Crect;   // what the VO estimates
+        truth.push_back({core::Timestamp{k}, 0, T_W_B});
+        with_r1.push_back({core::Timestamp{k}, 0, T_W_Crect * T_B_Crect.inverse()});
+        without_r1.push_back({core::Timestamp{k}, 0, T_W_Crect * T_B_C0.inverse()});
+    }
+    EXPECT_LT(ComputeATE(with_r1, truth).rmse, 1e-12);
+    EXPECT_LT(ComputeATERotation(with_r1, truth).rmse, 1e-12);
+    EXPECT_GT(ComputeATERotation(without_r1, truth).rmse, 0.005);   // the constant R1 offset survives alignment
 }

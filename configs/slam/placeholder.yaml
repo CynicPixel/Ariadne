@@ -1,0 +1,30 @@
+# Phase 1 placeholder stereo VO (plan 1.5), for the simulated rig (§9.4:
+# Z_min ~0.25 m at f=640 px, B=0.10 m). Every key is required (strict loader).
+name: placeholder
+
+triangulation:
+  min_depth_m: 0.25             # the perception config's stereo Z_min
+  max_depth_baselines: 60.0     # ORB-SLAM3 ThDepth: trust only close stereo points
+  max_reprojection_px: 2.0
+  sgbm_gate_sigma: 3.0          # §9.6: inconsistent if |Z_tri - Z_sgbm| > 3 sigma
+  disparity_sigma_px: 0.5       # §9.3
+  max_relative_sigma: 0.1       # sigma_Z / Z
+
+pnp:
+  ransac_threshold_px: 2.0
+  confidence: 0.999
+  max_iterations: 200
+  min_correspondences: 15
+  min_inliers: 12
+  huber_delta: 2.0              # §11.3 1.5-2.5
+  sigma_px: 1.0
+
+keyframe:
+  ref_ratio: 0.75               # ORB-SLAM3 thRefRatio
+  min_tracked_landmarks: 50
+  max_frames_between: 20        # 1 s at 20 Hz
+
+ba:
+  huber_delta: 2.0
+  max_iterations: 15            # §11.6
+  sigma_px: 1.0

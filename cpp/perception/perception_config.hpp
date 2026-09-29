@@ -102,11 +102,20 @@ struct StereoParams {
     double support_min_density = 0.75;
 };
 
+/// Sparse left->right correspondence at keyframes (stereo_lk_matcher.hpp).
+struct StereoMatchParams {
+    int win_size = 21;
+    int max_level = 3;
+    double fb_threshold_px = 0.5;
+    double max_dy_px = 1.0;           // rectified: a correct match stays on its row
+};
+
 struct PerceptionConfig {
     std::string name;
     FeatureParams features;
     TrackerParams tracker;
     StereoParams stereo;
+    StereoMatchParams stereo_match;
 };
 
 /// The largest disparity SGBM searches: disparities run from min_disparity to
@@ -187,6 +196,12 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (t.f_min_points < 8) fail("f_min_points must be >= 8");
     if (t.degraded_min_tracks < 0 || t.degraded_min_tracks > t.target_tracks) {
         fail("degraded_min_tracks must be in [0, target_tracks]");
+    }
+
+    const StereoMatchParams& sm = c.stereo_match;
+    if (sm.win_size < 3 || sm.win_size % 2 == 0 || sm.max_level < 0 || !(sm.fb_threshold_px > 0.0) ||
+        !(sm.max_dy_px > 0.0)) {
+        fail("stereo_match: odd win_size >= 3, max_level >= 0, positive thresholds");
     }
 
     const StereoParams& s = c.stereo;
@@ -271,6 +286,18 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     s.support_window_px = ss.Optional<int>("support_window_px", s.support_window_px);
     s.support_min_density = ss.Optional<double>("support_min_density", s.support_min_density);
     ss.RequireAllConsumed();
+
+    // Optional section: absent means the defaults above, which are the
+    // parameters validated on EuRoC (D35). Present means strictly parsed.
+    if (config.Has("stereo_match")) {
+        StrictConfig ms = config.Section("stereo_match");
+        StereoMatchParams& m = c.stereo_match;
+        m.win_size = ms.Optional<int>("win_size", m.win_size);
+        m.max_level = ms.Optional<int>("max_level", m.max_level);
+        m.fb_threshold_px = ms.Optional<double>("fb_threshold_px", m.fb_threshold_px);
+        m.max_dy_px = ms.Optional<double>("max_dy_px", m.max_dy_px);
+        ms.RequireAllConsumed();
+    }
 
     config.RequireAllConsumed();
     ValidatePerception(c);

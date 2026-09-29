@@ -15,7 +15,8 @@ if(OpenCV_FOUND)
     features/orb_engine.cpp
     tracking/klt_tracker.cpp
     stereo/sgbm_stereo.cpp
-    stereo/stereo_rectifier.cpp)
+    stereo/stereo_rectifier.cpp
+    stereo/stereo_lk_matcher.cpp)
   target_link_libraries(ariadne_perception_opencv PUBLIC
     ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video
     opencv_stereo opencv_geometry)
