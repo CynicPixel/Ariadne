@@ -95,7 +95,7 @@ RUN (id -u ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true) \
  && useradd -m -u 1000 -s /bin/bash ariadne
 
 COPY --chown=ariadne:ariadne simulator/ /opt/ariadne/simulator/
-COPY --chown=ariadne:ariadne infra/scripts/sim_smoke.py /opt/ariadne/bin/sim_smoke.py
+COPY --chown=ariadne:ariadne infra/scripts/sim_smoke.py infra/scripts/sim_throughput.py /opt/ariadne/bin/
 
 # graphics = the capability that makes the toolkit inject EGL. Harmless on a
 # host with no NVIDIA runtime: nothing reads these variables there.

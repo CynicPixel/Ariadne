@@ -1,0 +1,77 @@
+<?xml version="1.0" ?>
+<!--
+  Throughput probe for the REAL sensor rig of arch 5.3: stereo 1280x720 at
+  20 Hz (the low end of the 20-30 Hz spec), 10 cm baseline, plus an IMU.
+  Measures whether software rendering (Mesa llvmpipe) can record the rig at a
+  usable wall-clock rate, which decides whether bag rendering needs a GPU
+  (DECISIONS D27/D30). Not a Phase 1 scene: 1.1's two-room corridor is separate.
+-->
+<sdf version="1.10">
+  <world name="rig_throughput">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.9 0.9 0.9 1</diffuse>
+      <direction>-0.5 0.2 -0.9</direction>
+    </light>
+
+    <model name="ground">
+      <static>true</static>
+      <link name="link">
+        <visual name="v"><geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material><ambient>0.4 0.4 0.4 1</ambient><diffuse>0.5 0.5 0.5 1</diffuse></material></visual>
+      </link>
+    </model>
+    <model name="red_box"><static>true</static><pose>2.0 -0.5 0.5 0 0 0.4</pose>
+      <link name="link"><visual name="v"><geometry><box><size>1 1 1</size></box></geometry>
+        <material><ambient>0.8 0.1 0.1 1</ambient><diffuse>0.9 0.1 0.1 1</diffuse></material></visual></link></model>
+    <model name="blue_box"><static>true</static><pose>3.0 0.8 0.75 0 0 -0.3</pose>
+      <link name="link"><visual name="v"><geometry><box><size>1 1 1.5</size></box></geometry>
+        <material><ambient>0.1 0.1 0.8 1</ambient><diffuse>0.1 0.1 0.9 1</diffuse></material></visual></link></model>
+
+    <model name="rig">
+      <static>true</static>
+      <pose>0 0 0.8 0 0.1 0</pose>
+      <link name="link">
+        <sensor name="left" type="camera">
+          <pose>0 0.05 0 0 0 0</pose>
+          <camera>
+            <horizontal_fov>1.5708</horizontal_fov>
+            <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+            <clip><near>0.05</near><far>50</far></clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>20</update_rate>
+          <topic>rig/left</topic>
+        </sensor>
+        <sensor name="right" type="camera">
+          <pose>0 -0.05 0 0 0 0</pose>
+          <camera>
+            <horizontal_fov>1.5708</horizontal_fov>
+            <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+            <clip><near>0.05</near><far>50</far></clip>
+          </camera>
+          <always_on>1</always_on>
+          <update_rate>20</update_rate>
+          <topic>rig/right</topic>
+        </sensor>
+        <sensor name="imu" type="imu">
+          <always_on>1</always_on>
+          <update_rate>200</update_rate>
+          <topic>rig/imu</topic>
+        </sensor>
+      </link>
+    </model>
+  </world>
+</sdf>
