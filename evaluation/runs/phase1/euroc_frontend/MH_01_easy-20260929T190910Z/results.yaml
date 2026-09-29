@@ -1,0 +1,17 @@
+# ariadne_euroc_frontend results. Generated; do not hand-edit.
+sequence: MH_01_easy
+pairs_total: 3682
+unmatched_left: 0
+unmatched_right: 0
+frames_run: 3682
+rig: {fx: 436.244, fy: 436.244, cx: 364.441, cy: 256.952, baseline_m: 0.110078}
+stereo_min_range_m: 0.505482
+# ORB matches: integer FAST positions, so |dy| has ~1 px resolution.
+rect_check_orb: {matches: 156884, median_abs_dy_px: 0, p90_abs_dy_px: 2.16, positive_dx_fraction: 0.960664, control_raw_median: 13, control_1deg_pitch_median: 8.39999}
+# LK left->right with reverse check: sub-pixel.
+rect_check_lk: {points: 96742, median_abs_dy_px: 0.135162, p90_abs_dy_px: 0.682823, control_raw_points: 93842, control_raw_median: 13.0727, control_1deg_pitch_points: 94780, control_1deg_pitch_median: 8.07193}
+tracker: {tracks_mean: 377.088, tracks_p10: 333, survivors_mean: 353.181, initializing: 1, tracking: 3681, degraded: 0, attempted: 1388039, lk_lost: 9354, fb_rejected: 34989, border_rejected: 779, epipolar_rejected: 8826, crowded_out: 33679, replenished: 88027}
+stereo: {keyframes: 369, valid_fraction_mean: 0.703638, supported_fraction_mean: 0.623126}
+# Pseudo-truth = wide-range SGBM, restricted to pixels its own dense-support gate keeps.
+aliasing: {wide_num_disparities: 288, narrow_valid_px: 93720482, pseudo_truth_px: 57946892, alias_px: 406347, alias_rate: 0.0070124, alias_rate_kf_max: 0.262027, keyframes_over_1pct: 43, gate_rejects_alias_fraction: 0.870374, residual_alias_rate: 0.000908987, gate_cost_interior: 0.00136259, gate_cost_rim: 0.00235857, agree_interior_px: 55229189, agree_rim_px: 2278919}
+timing_ms: {rectify_mean: 1.06536, track_mean: 17.1028, track_p95: 22.9036, sgbm_mean: 28.5557, opencv_threads: 8}
