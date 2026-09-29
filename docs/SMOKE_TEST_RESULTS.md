@@ -292,3 +292,47 @@ Caveats, stated rather than assumed away:
 - The single missing IMU sample is real. It happened in the bridge/recorder path, not the renderer, since the
   cameras were complete. Preintegration tolerates a 10 ms gap, but completeness should be asserted per bag
   rather than assumed.
+
+## 4g. Kinematic mover, render/pose timing, gz IMU, and 2-agent bag size `[IMAGE-VERIFIED]` 2026-09-30
+
+Probes in `simulator/smoke/kinematic_probe/` (README there), gz-sim 8.15.0, Mesa llvmpipe, 8-core x86-64.
+
+**Physics-free kinematic pose writes work.** A system plugin that overwrites `components::Pose` of the rig model
+in `PreUpdate` (and marks it `PeriodicChange`) moves the rendered cameras, the depth camera and a spot light
+attached to the link. Identical results with the model `<static>true` or `false`, and with or without the
+Physics system loaded. (`/world/<w>/set_pose` was not used: it goes through `WorldPoseCmd`, which only Physics
+consumes.)
+
+**Render time equals pose time.** The rig moved at 5 m/s toward a wall; the depth at the image centre implies
+the pose time of each frame. Offset between implied pose time and header stamp: **0.00 ms** on every frame
+(resolution better than 0.05 ms, i.e. far below one 1 ms step). A frame stamped t_k shows pose(t_k): no
+one-step lag. Scope of this claim: measured on the **depth camera, 320x180, one rig, light load**. RGB-camera
+timing was not isolated (the lamp-centroid pass cannot reveal RGB lag: the lamp moves with the camera), and
+a render-thread race would only show under load. The 1.1 acceptance test re-checks it on RGB under the full
+two-agent load before "zero camera-IMU offset" is claimed.
+Lateral motion kept the lamp's brightness centroid at the exact image centre column (159.5 of 320): the light
+follows the link.
+
+**gz's own IMU is blind to kinematic motion.** Over 401 samples spanning 5 m/s motion and a velocity
+discontinuity, the gz IMU sensor reported constant specific force (0, 0, 9.8), std 0, and zero angular
+velocity, in all three variants. The `Imu` system reads `AngularVelocity`/`LinearAcceleration` components that
+only Physics fills (gz-sim8 `src/systems/imu/Imu.cc`); a pose-written body never gets them. **Consequence:** under
+kinematic movers the IMU must be synthesized from the analytic trajectory (the OpenVINS simulator pattern:
+B-spline/closed-form derivatives plus seeded noise), not taken from gz.
+
+**Two-agent full-rig bag, 5.0 sim-s** (each agent: stereo 1280x720 RGB + co-located 1280x720 float32 depth, all
+20 Hz; textured 8x12 m room, two point lights, no shadows):
+
+| Measure | Result |
+|---|---|
+| Frames | 101/101 per camera (all 6), none dropped |
+| RTF | **0.217**, zstd_fast run, compressor sharing the CPU (vs 0.566 for one stereo rig without depth, §4f); the uncompressed run's RTF was lost to output truncation. Real worlds have ~10 lights, so re-measure |
+| Raw message bytes | 372 MB per sim-s (RGB 55.9 MB/s per camera, depth 74.5 MB/s per depth camera) |
+| MCAP `zstd_fast` | **74.6 MB per sim-s** (~5x) |
+
+A 4-minute two-agent mission is therefore ~18 GB and ~18 wall-minutes on llvmpipe. Recorded as a sizing input,
+not yet a decision.
+
+**Also observed:** PBR `<albedo_map>` loads under llvmpipe, but gz's `<box>` maps the full texture onto every
+face regardless of face aspect, so long thin faces and large floors are visibly stretched/streaked. Textured
+geometry needs explicit UVs (meshes), not primitive boxes.

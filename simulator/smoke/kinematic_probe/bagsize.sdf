@@ -1,0 +1,43 @@
+<?xml version="1.0" ?><sdf version="1.10"><world name="bagsize">
+<physics name="1ms" type="ignored"><max_step_size>0.001</max_step_size><real_time_factor>1.0</real_time_factor></physics>
+<plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+<plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors"><render_engine>ogre2</render_engine></plugin>
+<scene><ambient>0.4 0.4 0.4 1</ambient><grid>false</grid></scene>
+<light type="point" name="l1"><pose>0 3 2.8 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><attenuation><range>20</range><constant>0.5</constant><linear>0.05</linear><quadratic>0.01</quadratic></attenuation><cast_shadows>false</cast_shadows></light>
+<light type="point" name="l2"><pose>0 -3 2.8 0 0 0</pose><diffuse>0.8 0.8 0.8 1</diffuse><attenuation><range>20</range><constant>0.5</constant><linear>0.05</linear><quadratic>0.01</quadratic></attenuation><cast_shadows>false</cast_shadows></light>
+<model name="wn"><static>true</static><pose>0 6 1.5 0 0 0</pose><link name="l"><visual name="v">
+      <geometry><box><size>8 0.2 3</size></box></geometry><material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular>
+      <pbr><metal><albedo_map>tex_wn.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual></link></model>
+<model name="ws"><static>true</static><pose>0 -6 1.5 0 0 0</pose><link name="l"><visual name="v">
+      <geometry><box><size>8 0.2 3</size></box></geometry><material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular>
+      <pbr><metal><albedo_map>tex_ws.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual></link></model>
+<model name="we"><static>true</static><pose>4 0 1.5 0 0 0</pose><link name="l"><visual name="v">
+      <geometry><box><size>0.2 12 3</size></box></geometry><material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular>
+      <pbr><metal><albedo_map>tex_we.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual></link></model>
+<model name="ww"><static>true</static><pose>-4 0 1.5 0 0 0</pose><link name="l"><visual name="v">
+      <geometry><box><size>0.2 12 3</size></box></geometry><material><diffuse>1 1 1 1</diffuse><specular>0.1 0.1 0.1 1</specular>
+      <pbr><metal><albedo_map>tex_ww.png</albedo_map><roughness>0.9</roughness><metalness>0</metalness></metal></pbr></material></visual></link></model><model name="floor"><static>true</static><pose>0 0 -0.05 0 0 0</pose><link name="l"><visual name="v"><geometry><box><size>8 12 0.1</size></box></geometry>
+<material><diffuse>1 1 1 1</diffuse><pbr><metal><albedo_map>tex_floor.png</albedo_map><roughness>0.9</roughness></metal></pbr></material></visual></link></model>
+<model name="a0"><static>true</static><pose>0 3.0 1 0 0 0</pose><link name="link">
+    <sensor name="left" type="camera"><pose>0 0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a0/left</topic></sensor><sensor name="right" type="camera"><pose>0 -0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a0/right</topic></sensor>
+    <sensor name="depth" type="depth_camera"><pose>0 0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R_FLOAT32</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a0/depth</topic></sensor>
+    </link></model>
+    <plugin filename="KinematicRing" name="KinematicRing"><model_name>a0</model_name><y0>3.0</y0><speed>0.5</speed></plugin>
+<model name="a1"><static>true</static><pose>0 -3.0 1 0 0 0</pose><link name="link">
+    <sensor name="left" type="camera"><pose>0 0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a1/left</topic></sensor><sensor name="right" type="camera"><pose>0 -0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R8G8B8</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a1/right</topic></sensor>
+    <sensor name="depth" type="depth_camera"><pose>0 0.05 0 0 0 0</pose><camera><horizontal_fov>1.5708</horizontal_fov>
+      <image><width>1280</width><height>720</height><format>R_FLOAT32</format></image><clip><near>0.05</near><far>50</far></clip></camera>
+      <always_on>1</always_on><update_rate>20</update_rate><topic>a1/depth</topic></sensor>
+    </link></model>
+    <plugin filename="KinematicRing" name="KinematicRing"><model_name>a1</model_name><y0>-3.0</y0><speed>0.5</speed></plugin>
+</world></sdf>
