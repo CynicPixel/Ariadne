@@ -1534,7 +1534,12 @@ measures that gap directly.
 ```cpp
 class LocalFeatureEngine {
 public:
-    virtual FeatureSet detectAndCompute(const cv::Mat& image) = 0;
+    // Keypoints only: the tracker replenishes every frame and never uses
+    // descriptors, so it must not pay for them (D34, approved 2026-09-29).
+    virtual std::vector<cv::KeyPoint> detect(const cv::Mat& gray, const cv::Mat& mask,
+                                             int max_keypoints) = 0;
+    // Keyframes: keypoints and row-aligned descriptors.
+    virtual FeatureSet detectAndCompute(const cv::Mat& gray, const cv::Mat& mask) = 0;
 };
 ```
 
@@ -1870,13 +1875,20 @@ The stereo stage emits, at keyframe resolution:
 
 ```cpp
 struct StereoDepth {
-    cv::Mat disparity;   // fp16
-    cv::Mat Z;           // fp16
+    cv::Mat disparity;   // CV_16S, SGBM native fixed point (1/16 px) -- NOT fp16 (D34)
+    cv::Mat Z;           // fp16, computed in fp32 from the fixed-point disparity
     cv::Mat sigma_Z;     // fp16
     cv::Mat confidence;  // u8, from DisparityWLSFilter
     cv::Mat valid;       // mask
 };
 ```
+
+Disparity is not fp16 (D34, approved 2026-09-29): fp16 spacing is 0.125 px above 128 px, coarser than SGBM's
+1/16 px for every depth under 0.5 m at f = 640 px, B = 0.10 m, which is the confined-space range. `CV_16S` is exact
+at the same 2 bytes. Consumers that carve free space along depth rays use only depth with dense local support
+(`DenseSupportMask`, D34): SGBM reports surfaces nearer than its search range as sparse phantom far depths. The
+gate is a mitigation, not a guarantee: on EuRoC MH_01 it catches 87% of them (D35), so free-space carving from
+stereo additionally needs a near-field check.
 
 Two consumers depend on this contract precisely:
 
