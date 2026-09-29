@@ -101,14 +101,15 @@ inline ErrorStats Summarize(std::vector<double> errors) {
     return s;
 }
 
-/// Absolute Trajectory Error: align, then take per-pose translation residuals.
-/// Measures global consistency, so drift accumulated over the run shows up here.
-inline ErrorStats ComputeATE(const std::vector<TrajectorySample>& est,
-                             const std::vector<TrajectorySample>& gt,
-                             bool with_scale = false) {
-    ErrorStats stats;
-    if (est.size() != gt.size() || est.empty()) return stats;
-
+/// Align an estimated trajectory onto ground truth by its POSITIONS.
+///
+/// Both ATE components below use this one alignment, so the translational and
+/// rotational numbers always describe the same estimate-to-GT registration and
+/// can never be computed against two different frames.
+inline AlignmentResult AlignTrajectories(const std::vector<TrajectorySample>& est,
+                                         const std::vector<TrajectorySample>& gt,
+                                         bool with_scale) {
+    if (est.size() != gt.size() || est.empty()) return AlignmentResult{};
     std::vector<Vec3> src, dst;
     src.reserve(est.size());
     dst.reserve(gt.size());
@@ -116,14 +117,46 @@ inline ErrorStats ComputeATE(const std::vector<TrajectorySample>& est,
         src.push_back(est[i].pose.t);
         dst.push_back(gt[i].pose.t);
     }
-    const AlignmentResult a = UmeyamaAlign(src, dst, with_scale);
-    if (!a.valid) return stats;
+    return UmeyamaAlign(src, dst, with_scale);
+}
+
+/// Absolute Trajectory Error: align, then take per-pose translation residuals.
+/// Measures global consistency, so drift accumulated over the run shows up here.
+inline ErrorStats ComputeATE(const std::vector<TrajectorySample>& est,
+                             const std::vector<TrajectorySample>& gt,
+                             bool with_scale = false) {
+    const AlignmentResult a = AlignTrajectories(est, gt, with_scale);
+    if (!a.valid) return ErrorStats{};
 
     std::vector<double> errors;
     errors.reserve(est.size());
     for (size_t i = 0; i < est.size(); ++i) {
-        const Vec3 mapped = a.scale * (a.transform.R * src[i]) + a.transform.t;
-        errors.push_back((mapped - dst[i]).norm());
+        const Vec3 mapped = a.scale * (a.transform.R * est[i].pose.t) + a.transform.t;
+        errors.push_back((mapped - gt[i].pose.t).norm());
+    }
+    return Summarize(std::move(errors));
+}
+
+/// Rotational part of the absolute error (arch §30.2 "rotation error").
+///
+/// After the SAME position-based alignment as ComputeATE, the per-pose error is
+/// the angle of R_gt^T * (R_align * R_est). This is the convention of evo's APE
+/// "rotation part". Translation-only ATE cannot see an estimator whose
+/// positions are right but whose orientation is wrong, and orientation is what
+/// the pose graph, the NBV planner and the splat renderer all consume.
+///
+/// Scale does not enter: a Sim(3) alignment scales positions, not rotations.
+inline ErrorStats ComputeATERotation(const std::vector<TrajectorySample>& est,
+                                     const std::vector<TrajectorySample>& gt,
+                                     bool with_scale = false) {
+    const AlignmentResult a = AlignTrajectories(est, gt, with_scale);
+    if (!a.valid) return ErrorStats{};
+
+    std::vector<double> errors;
+    errors.reserve(est.size());
+    for (size_t i = 0; i < est.size(); ++i) {
+        const Mat3 aligned = a.transform.R * est[i].pose.R;
+        errors.push_back(core::SO3Log(gt[i].pose.R.transpose() * aligned).norm());
     }
     return Summarize(std::move(errors));
 }
