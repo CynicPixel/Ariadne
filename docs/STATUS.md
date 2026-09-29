@@ -4,7 +4,142 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-06 (latest) — Phase 0 exit gate built and passing
+## 2026-09-29 (latest) — `ariadne-sim` image builds and renders headlessly
+
+Parallel track to Phase 1, started on the maintainer's go-ahead. `infra/docker/sim.Dockerfile`
+(ROS 2 Jazzy + Gazebo Harmonic, gz-sim8 8.15.0), run by `infra/scripts/sim.sh`, acceptance test
+`infra/scripts/sim_smoke.py`. Full evidence in `SMOKE_TEST_RESULTS.md` §4c.
+
+- **PASS on Mesa llvmpipe** (this box has no GPU): headless camera frames rendered, bridged to
+  ROS 2, and recorded to MCAP. The test judges pixel statistics, and each of its three failure
+  branches has been made to fire.
+- **Not verified: NVIDIA EGL on g5/g6.** Needs a GPU instance; first task there.
+- **No OpenCV in the image** (D25): the `ros-jazzy-ros-gz` metapackage would have pulled Ubuntu's
+  OpenCV 4.6, so the image uses the bridge/sim subset and the build fails if OpenCV appears.
+- ROS packages pinned via the dated snapshot `jazzy/2026-09-11` (D25).
+
+Honest record of the bring-up: the first background run was reported green by its log wrapper
+while the test itself had failed (`SMOKE_EXIT=1`). The cause was the test's colour detector, not the
+renderer. Two further test/tooling mistakes were caught by looking at frames rather than trusting
+exit codes: `<sky>false</sky>` enables a sky in SDF, and `sim.sh` did not forward the timeout,
+which made a normal 5 Hz camera look like 15 Hz.
+
+**Not done by this:** item 1.1 (the two-room corridor scene) is still open; the smoke world is an
+acceptance fixture, not a Phase 1 scene. **Design gap for 1.3:** rosbag2 writes CDR images, the
+replay path reads Ariadne FlatBuffers (D25).
+
+---
+
+## 2026-09-08 — Phase 0 end-to-end audit: six claim-vs-reality gaps found and fixed
+
+A full re-read of Phase 0 with the advisor, hunting for claims the code does not
+support. Every finding below is that same shape: **not a crash, but a comment,
+test name or job name asserting a guarantee the code did not provide.** None of
+them produced a wrong published result, because nothing has been published.
+
+| # | Claim made | Reality | Status |
+|---|---|---|---|
+| 1 | `DetExp` accurate "to a few ulp" over its whole declared domain | returned `inf` for x in [709.44, 709.78] and `0` for x in [-745.13, -745.0], both INSIDE its own guard | fixed |
+| 2 | Philox block advance "without ever colliding with a neighbouring site's stream" | `(site=0, block=1)` and `(site=2^32, block=0)` produced byte-identical output | fixed |
+| 3 | CI determinism gate enforces bit-identity | `script \| tee file` under `bash -e` without `pipefail` exited with `tee`'s status; a `DETERMINISM=FAIL` went green | fixed |
+| 4 | `poisson_exact_max_lambda` is a safe config knob | above ~50 Knuth's loop hits its 10000-iteration cap and silently truncates every bright pixel | fixed |
+| 5 | manifest digests exist "so drifted math is identifiable after the fact" | `MissingRequiredFields` passed a manifest with all three digests `UNRECORDED` | fixed |
+| 6 | `CoeffC` cancellation is "~1e-9 relative" at t=1e-2 | actual is `eps*t/(t - sin t)` ~ 1.3e-11, off by ~100x | fixed |
+| 7 | `EventLog` chain localizes where two runs diverged | `state_hash_ != 0 ? ... : basis` used zero as a sentinel, so a zero chain value would silently restart the chain and let two histories converge | fixed |
+| 8 | "28 B emulated UDP/IP header per datagram" (§15.7) | charged once per MESSAGE; a 4266 B pose graph is 3 datagrams, so large classes were under-billed | fixed |
+| 9 | D17 (written in this same audit): Philox bounds "are asserted, so the guarantee is structural" | `assert` is compiled out under `NDEBUG`, and this project builds `Release`; in the shipped binary `site=2^48` aliased onto `site=0` and block 65536 wrapped onto block 0 | fixed |
+| 10 | `require("execution_mode", ...)` | defaults to `"replay"`, so the check could never fire; it read as a guarantee and verified nothing | fixed |
+
+Row 9 is the sharpest instance of the pattern: it is a false guarantee **introduced
+by this audit**, in the commit that fixed the original one. The bounds are now
+enforced by code that survives `NDEBUG` -- `site` is masked (documented 48-bit
+truncation, with `SiteFromHash64()` for callers holding 64-bit ids), and block
+exhaustion throws rather than silently wrapping onto a stream it already used.
+The determinism gate could not have caught it: `check_determinism.sh` compiles
+with bare `-O0/-O2/-O3` and no `-DNDEBUG`, so asserts are live there and dead in
+the binary that would run on Graviton.
+
+### The finding behind the findings
+
+Re-running the digests after fixing 1 and 2, **two of the three were unchanged**:
+
+- `det_math_digest` swept only x in [-500, 500] — the `DetExp` bug lived entirely outside it.
+- `philox_digest` used sites < 2^32 drawing 2 words each, so `site >> 32 == 0` and
+  `block == 0` — it never varied the two counter fields that aliased.
+
+Both golden digests were byte-identical across genuinely broken code. A digest only
+guards the inputs it evaluates, and these evaluated the safe interior of both
+functions. The sweeps now cover the overflow/underflow boundaries and the
+high site bits / multi-block draws respectively, and all three digests were
+re-recorded. This is the durable lesson from the audit, more than any individual bug.
+
+### Re-verification after the fixes
+
+```
+x86-64   PASS g++ -O0/-O2/-O3 · clang++ -O0/-O2/-O3   6/6 bit-identical
+aarch64  PASS g++ -O0/-O2/-O3 (QEMU)                  3/3, identical to x86-64
+det_math_digest = 11806531094783593156
+philox_digest   = 14182439601419266695
+degrade_digest  = 8535765251477677907
+```
+
+Control still fires: on aarch64 with `-ffp-contract=fast` at -O2/-O3 the det_math digest
+becomes `1750406000263991614`, so `-ffp-contract=off` remains load-bearing and the
+extended sweep is still a sensitive canary.
+
+`DetExp` is now within **1 ulp** of libm across both previously-broken bands.
+
+**146 tests green** (was 137; +9 regression tests pinning the defects). Note the
+suite builds `Release`, so the two new Philox bound tests exercise exactly the
+configuration where the old asserts were absent.
+
+Byte accounting moved with the per-datagram fix: the compressed 200n/40e pose graph
+goes 4294 -> 4350 wire bytes (ratio 4.93x unchanged, since that is payload over
+transmitted), and the Phase 0 gate 8647 -> 8759. MCAP still reproduces the gate
+byte-for-byte.
+
+Phase 0 gate re-run: `poses=200 messages=4 wire_bytes=8647`, ATE rmse 0.150672 m,
+RPE trans rmse 0.0175348 m, rot rmse 0.0033766 rad.
+
+The ATE moved from 0.0633 m because trajectory noise draws from Philox and the
+stream changed. **Measured, not assumed:** ATE rmse across 8 seeds spans
+0.0717 - 0.1507 m (median 0.1139), a 2.1x spread, so this metric is dominated by
+which noise realization it drew. Stated precisely: the new value sits at the top
+of that sampled spread and the old one at or below its bottom, so neither is
+anomalous but neither is central either. ATE is a single accumulated random-walk
+statistic and is high-variance by construction.
+
+The load-bearing check is RPE, which is local and averaged over 199 steps:
+trans rmse 0.0175 m still matches the model's sqrt(3) x 0.01 = 0.0173. That is
+what validates the noise model; ATE is reported, not gated.
+
+### Correction to an earlier claim in this file
+
+`cross-arch-determinism` was labelled "THE JOB THAT MATTERS". It is not: each
+architecture already asserts against the committed constants, so if both per-arch
+steps pass they necessarily agree with each other and the job cannot fail. It has
+been downgraded to a second, independent comparison that does not route through
+those constants, and given `if: always()` so it runs when a per-arch gate failed —
+which is the only case where it is informative.
+
+### Still open from the audit
+
+- **§30.2 "Core metrics" (arch line 4201) has never been read.** ATE/RPE were
+  implemented from §30.1 plus judgement. Phase 1.9 requires every §30.2 metric to
+  emit a number, so this is a **Phase 1 prerequisite**, not a Phase 0 defect. Two
+  things to check specifically: whether rotational ATE is wanted (only translation
+  is computed today, which is `evo`'s default but not universal), and whether RPE
+  deltas should be keyframe-, time-, or distance-based (only keyframe exists).
+- `IsCompressedClass` was checked and is sound: the policy is stated once, asserted
+  by a test, and D14 documents the POSE_GRAPH extension to §15.7's classes 4-5.
+  `ChainHash` and the framing arithmetic were both defective and are now fixed
+  (rows 7 and 8 above).
+- The MTU model is an `[ASSUMPTION]`: 1500 B Ethernet, IPv4 headers, no jumbo
+  frames. It should be revisited against the real link model in Phase 3.
+
+---
+
+## 2026-09-06 — Phase 0 exit gate built and passing
 
 ### The gate
 
@@ -52,10 +187,13 @@ requires (it asks only for reproducibility twice within a run).
 - The record file is **not MCAP**. §5.9 specifies MCAP as the simulator recording container;
   that remains open. This format is the deterministic substrate the gate needs, and MCAP will
   wrap the same framed messages when it lands.
-- Cross-ARCHITECTURE identity of the METRICS is not claimed: Umeyama uses Eigen's SVD, which
-  is not guaranteed bit-identical across architectures. Cross-architecture bit-identity IS
-  proven for the degradation operator and the deterministic math, which is what the plan's
-  gate wording actually requires.
+- Cross-ARCHITECTURE identity of the METRICS is not claimed. The dominant reason is that
+  `GenerateGroundTruth` calls `std::sin`/`std::cos`/`std::atan2`, which libm is not required
+  to round correctly; Eigen's SVD in Umeyama is a second, smaller contributor. (An earlier
+  version of this file named only the SVD, which understated the cause.) This is harmless:
+  the gate asserts equality WITHIN a run, and CI never compares gate metrics across
+  architectures. Cross-architecture bit-identity IS proven for the degradation operator and
+  the deterministic math, which is what the plan's gate wording actually requires.
 
 ### 0.5 done — observability and seed plumbing
 

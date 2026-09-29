@@ -327,3 +327,212 @@ costs no determinism.
 
 LZ4 is disabled (`MCAP_COMPRESSION_NO_LZ4`): nothing selects it and vendoring a codec we
 would never use adds a dependency for nothing.
+
+## 2026-09-08 — D17: Philox counter is PARTITIONED, and `site` is bounded to 48 bits
+
+`PhiloxStream` mixed its refill block index in with `ctr.v[3] ^= block`, while the
+constructor wrote `site >> 32` into that same word. The two therefore aliased:
+`(site=0, block=1)` and `(site=2^32, block=0)` produced an identical counter and
+byte-for-byte identical output. The code comment claimed a site could draw
+"without ever colliding with a neighbouring site's stream", which was false.
+
+Philox4x32's counter is 128 bits and has to hold `frame_id`, `site` and `block`,
+so one of the three must be bounded — there is no layout that gives all three
+64 bits. The options considered:
+
+| Layout | Cost | Verdict |
+|---|---|---|
+| Steal `block` from `frame_id`'s high word | `site` keeps 64 bits | **rejected**: `kFixedPatternFrameId` is the all-ones sentinel, so `frame_id` genuinely uses all 64 bits |
+| Bound `block` only | would cap draws per site very low | rejected |
+| **`site` < 2^48, `block` < 2^16, `frame_id` keeps 64** | 262144 words per site | **chosen** |
+
+`SiteId` for a 1280x720x3 image with 4 noise stages peaks around 11M, four orders
+of magnitude inside 2^48. `LatticeNoise` hashes a 2D cell to 64 bits and is now
+masked to 48; among the ~10^3-10^4 cells one image touches the birthday collision
+probability in 2^48 is ~1e-11, and a collision would mean two lattice cells sharing
+a value, not a correlated stream.
+
+The map from `(frame_id, site, block)` to the counter is injective on the declared
+domain. **Corrected same-day:** the first version of this entry claimed the bounds
+were "asserted, so the guarantee is structural". `assert` is compiled out under
+`NDEBUG`, which this project's `Release` build defines -- so in the shipped binary
+neither bound was checked, `site = 2^48` aliased onto `site = 0`, and block 65536
+wrapped onto block 0 and reused the stream. That is the same defect class the entry
+was written to close, reintroduced by its own fix. Now:
+
+- `site` is **masked in the constructor** in every build. It is a documented 48-bit
+  identifier; passing more bits is defined truncation, not an aliasing surprise.
+  Callers holding a 64-bit id (Phase 1 keyframe/landmark/submap hashes) must use
+  `SiteFromHash64()`, which mixes all 64 bits down with a splitmix64 finalizer so
+  the high bits still matter.
+- Block exhaustion **throws**, in every build. Wrapping would silently repeat a
+  site's numbers, and a determinism substrate that quietly repeats itself is worse
+  than one that stops. Cost is one comparison per four draws.
+
+Note the asymmetry that hid this: `check_determinism.sh` compiles with bare
+`-O0/-O2/-O3` and no `-DNDEBUG`, so asserts are live in the gate and dead in the
+release binary. The gate structurally could not have caught it. This matches how Random123-derived APIs partition counter words
+(JAX's `fold_in`/`split`, cuRAND's Philox usage) rather than XOR-mixing them.
+
+Consequence: `philox_digest` and `degrade_digest` changed. Nothing published
+depended on the old values.
+
+## 2026-09-08 — D18: golden digests must evaluate the boundaries they claim to guard
+
+`DetExp` returned `inf` for x in [709.44, 709.78] and `0` for x in [-745.13, -745.0]
+— inside its own guard, where the true results are finite and representable. The
+range reduction produces k=1024 (resp. -1075) there and `Exp2Int` saturates. Fixed
+by splitting the scaling so neither factor leaves the normal range; now within
+1 ulp of libm across both bands.
+
+The decision worth recording is not the fix but what it exposed. After fixing both
+`DetExp` and Philox, **two of the three golden digests were unchanged**:
+
+- `det_math_digest` swept x in [-500, 500] only — the bug lived outside it entirely.
+- `philox_digest` used sites < 2^32 drawing 2 words each, so `site >> 32` and `block`
+  were both always zero — it never varied the fields that aliased.
+
+Both digests were byte-identical across genuinely broken code, and would have stayed
+green through a release. **A digest guards only the inputs it evaluates.** The sweeps
+in `check_determinism.sh`, `test_det_math.cpp` and `test_philox.cpp` now include the
+overflow/underflow boundaries and high-site/multi-block draws respectively.
+
+Standing rule from this: when a function's contract names a domain, the digest
+sweep must reach the ends of that domain, not just its comfortable interior.
+
+## 2026-09-08 — D19: CI determinism gate must not be piped
+
+`run: ./infra/scripts/check_determinism.sh | tee determinism-$arch.txt` was green on
+failure. GitHub's default shell is `bash -e {0}` **without** `pipefail`, so the step
+exited with `tee`'s status; verified locally that even a compilation failure inside
+the script yielded exit 0. Replaced with redirect, capture status, `cat`, `exit`.
+`if: always()` added to the artifact upload, since the log matters most when the gate
+failed.
+
+Related correction: `cross-arch-determinism` was commented as "THE JOB THAT MATTERS".
+With per-arch assertion working it cannot fail — both arches are compared against the
+same committed constants, so reaching the job implies they agree. It is now described
+as a second, independent comparison, runs with `if: always()`, and the script emits a
+machine-readable `det=... philox=... degrade=...` line on **both** its pass and fail
+paths so two failing runs can still be diffed. Previously the failure path printed no
+`=` at all, so the extracting `grep` matched nothing and the job died on an empty
+match rather than reporting the mismatch.
+
+## 2026-09-08 — D20: `poisson_exact_max_lambda` is bounded at both the config and the sampler
+
+The field was config-exposed and unvalidated. Knuth's exact branch is hard-capped at
+10000 iterations; setting the threshold high enough would make every bright pixel
+return exactly 10000 photons — a plausible-looking image built on fabricated
+statistics, with no test failing.
+
+Bounded to (0, 50] in `ValidateDegradation`, and clamped again inside `SamplePoisson`
+for callers that do not come through a config. The Gaussian approximation is already
+accurate by lambda=30, so nothing is lost. With the clamp, `target = e^-lambda > 1e-22`
+and the 10000-iteration cap is unreachable short of a broken RNG, which turns it from
+a routine truncation path into a genuine guard.
+
+`dust_field_frequency` is now required `> 0` for the same reason: zero maps every pixel
+onto lattice cell 0, so the field silently becomes a spatial constant while still
+reading like a field in the config.
+
+## 2026-09-08 — D21: manifest required-field set now covers provenance, not just identity
+
+`MissingRequiredFields` returned empty for a manifest whose `seed`,
+`degradation_config`, `execution_mode` and all three determinism digests were
+`UNRECORDED`. §5.6 requires degradation parameters to be named configs *referenced by
+run manifests*, and the digests exist "so a result produced by drifted math is
+identifiable after the fact" — both guarantees were empty as written.
+
+All six added to the required set. `seed` needed a separate `seed_recorded` flag
+because 0 is a legitimate seed and the value alone cannot distinguish "seeded with 0"
+from "nobody recorded it".
+
+## 2026-09-08 — D22: `EventLog` chain hash must not use zero as a sentinel
+
+`ChainHash` began with `state_hash_ != 0 ? state_hash_ : kFnvOffsetBasis`, using
+zero to mean "no previous event". Zero is a legitimate hash value, so a chain that
+happened to produce it would silently RESTART, and two different histories could
+converge onto the same hash from then on. That destroys the property the chain
+exists for: localizing WHERE two runs diverged, not merely that they did.
+
+Replaced with a `chain_` member seeded at construction and always carried forward.
+`state_hash_` still reports 0 before the first event, so the public surface is
+unchanged. Same bug shape as treating `seed == 0` as unset in the run manifest
+(D21), which is why both were fixed in the same pass.
+
+## 2026-09-08 — D23: framing is charged per DATAGRAM, not per message
+
+Arch §15.7 (line 2699) specifies "28 B emulated UDP/IP header **per datagram**".
+The serializer charged it once per message, so any message exceeding the path MTU
+was under-billed. Doc wins per CLAUDE.md §6.
+
+Added `kPathMtuBytes = 1500`, `kDatagramPayloadBytes = 1472` and `DatagramCount()`;
+`wire_bytes = framed + 28 * DatagramCount(framed)`.
+
+Measured effect — it engages exactly where the byte table is load-bearing:
+
+| Message | framed | datagrams | wire before | wire after |
+|---|---|---|---|---|
+| pose graph 200n/40e (compressed) | 4266 | 3 | 4294 | **4350** |
+| Phase 0 gate, 4 messages total | — | — | 8647 | **8759** |
+
+Small messages are unaffected (one datagram, 28 B, as before). The correction is
+~1.3% on the compressed pose graph, so it does not threaten §15.7's <=15%
+prediction-error gate — but the Phase 3 spectral policy optimizes
+`gain / predicted_cost`, and systematically under-pricing the largest classes is
+exactly the bias that would distort which messages it chooses to send.
+
+Checked for a second mismatch, since Phase 3's gate measures against §15.7's table:
+**the table is payload-only.** Its rows are encoding arithmetic with no framing term
+at all (200 nodes x 28 B + 40 edges x 150 B = 11600 B, the printed "~12 KB"), and the
+28 B appears only in the formula line, which already says "per datagram". So the fix
+aligns the code with both the formula and the table; it does not trade one mismatch
+for another.
+
+Assumption recorded: 1500 B Ethernet MTU with no jumbo frames, and IPv4 (20 B)
+rather than IPv6 (40 B). Both are `[ASSUMPTION]` and should be revisited when the
+real link model lands in Phase 3.
+
+## 2026-09-08 — D24: `execution_mode` is validated by membership, not presence
+
+`MissingRequiredFields` called `require("execution_mode", ...)`, but the field
+defaults to `"replay"` -- non-empty and not `UNRECORDED` -- so the check could never
+fire. It read as a guarantee and verified nothing.
+
+§5.9 makes the distinction load-bearing: replayed runs are bit-deterministic, live
+closed-loop runs are not and must be reported over seeds. What matters is therefore
+that the value is one of the two known modes, which is now what is checked.
+
+**Follow-up for Phase 1:** nothing in the tree populates the six newly-required
+manifest fields yet. Whoever writes the first real manifest writer must wire
+`seed_recorded`, `degradation_config` and the three determinism digests, or the
+first real run will correctly report itself unpublishable.
+
+## 2026-09-29 — D25: sim image installs the ros_gz bridge/sim subset, not the `ros-jazzy-ros-gz` metapackage
+
+Arch §5 says "install `ros-jazzy-ros-gz` for the bridge and sim launch integration". Measured
+2026-09-29: the metapackage pulls `ros_gz_image -> image_transport_plugins -> cv_bridge`, which
+installs **Ubuntu's OpenCV 4.6 (43 packages)**. That puts a second OpenCV in `ariadne-sim`, against
+C7's "one OpenCV, built from the pinned tag", and makes a sim-image manifest's `opencv_build_hash`
+ambiguous.
+
+The image installs `ros-jazzy-ros-gz-bridge`, `ros-jazzy-ros-gz-sim` and `ros-jazzy-ros-gz-interfaces`
+instead: **zero** OpenCV packages, and still gz-sim8 8.15.0 / gz-rendering / gz-sensors / sdformat14 /
+ogre-next. This serves the doc's stated purpose (bridge + sim launch). Camera frames cross as
+`sensor_msgs/Image` through `parameter_bridge`, which needs no OpenCV. What is lost is
+`ros_gz_image`'s image_transport compression plugins, which Ariadne is not planning to use.
+
+**Open for Phase 1.3 `[DESIGN GAP]`:** rosbag2 records CDR-serialized `sensor_msgs/Image`
+(verified in the image), but `McapRecordReader` (D3) replays Ariadne-framed FlatBuffers on
+`/ariadne/wire`. Nothing converts between the two yet. 1.3 must decide whether sim bags stay
+rosbag2/CDR and a ROS-free CDR reader is added, or a recorder node writes the Ariadne wire form
+directly. The Dockerfile fails the build if any OpenCV package
+ever enters the image through a transitive dependency.
+
+Also recorded: ROS packages come from the dated snapshot `snapshots.ros.org/jazzy/2026-09-11`,
+signed by "ROS Snapshot builder <rosbuild@ros.org>", fingerprint
+`4B63CF8FDE49746E98FA01DDAD19BAB3CBF125EA`. The fingerprint was verified against keyserver.ubuntu.com
+and against the snapshot's own InRelease signature, and the key is vendored at
+`infra/docker/keys/ros-snapshots.asc` with a build-time fingerprint check. The live ROS repo keeps
+only the newest build of each package, so `pkg=version` pins break on its next sync. The snapshot
+does not move.

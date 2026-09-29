@@ -26,6 +26,7 @@ The built image records the **commit** SHAs at `/opt/opencv5/opt-opencv-core.sha
 |---|---|
 | `[SOURCE-VERIFIED]` | Read directly out of the pinned source tree. The declaration exists. |
 | `[BUILD-VERIFIED]` | Confirmed against a **built and installed** OpenCV 5 — `infra/scripts/smoke_test.cpp` compiles, links and runs inside `ariadne/opencv-base:5.0.0`. |
+| `[IMAGE-VERIFIED]` | Confirmed by running a built Ariadne container image other than the OpenCV one (e.g. `ariadne-sim`, which carries no OpenCV). Same strength as `[BUILD-VERIFIED]`, different artifact. |
 | `[PENDING]` | Not yet checked. |
 
 `[SOURCE-VERIFIED]` is deliberately weaker than `[BUILD-VERIFIED]`: a class can exist
@@ -164,6 +165,56 @@ SURF/BRIEF/FREAK/DAISY, and it triggers `boostdesc`/`vgg` blob downloads at *con
 time that stalled the build behind a slow third-party host (>136 s per blob, then hung).
 If a future need arises, pre-seed those blobs into the image rather than fetching at configure.
 
+## 4c. Simulator image `ariadne-sim` `[IMAGE-VERIFIED]` 2026-09-29
+
+`infra/docker/sim.Dockerfile`, built on this dev box (x86-64, **no GPU**), and exercised by
+`infra/scripts/sim.sh`, whose default command runs the acceptance test `infra/scripts/sim_smoke.py`.
+
+| Fact | Value |
+|---|---|
+| Base | `ros:jazzy-ros-base@sha256:c3706ef0a0aa45413c07803cf433602f543b22e45b4855f6fca955c2d8ecc4e8` |
+| ROS packages | dated snapshot `snapshots.ros.org/jazzy/2026-09-11`, signing key fingerprint verified (D25) |
+| Gazebo | `ros-jazzy-gz-sim-vendor 0.0.13` = gz-sim8 **8.15.0** (Harmonic) |
+| OpenCV in image | **none**; build fails if one appears (D25) |
+| Image | `sha256:90a1e5a6...3dda`, 740 MB (local dev tag, not yet pushed) |
+| Full package list | `/opt/ariadne/sim-versions.txt` inside the image |
+
+**Headless camera rendering: PASS on Mesa llvmpipe (software EGL).**
+`gz sim -s -r --headless-rendering`, camera bridged to ROS 2 by `ros_gz_bridge parameter_bridge`,
+frames received by rclpy: 320x240 rgb8, luma stddev 73.9, red box 31.8% / blue box 19.5% of the
+frame. The test judges pixel statistics, not exit codes. **Each failure branch has fired**:
+
+| Control | Result |
+|---|---|
+| No EGL vendor (`__EGL_VENDOR_LIBRARY_FILENAMES` -> nonexistent) | gz segfaults (-11), "exited early", exit 1 |
+| Clean render of a uniform frame (`smoke_blank.sdf`: no light, black background, camera at empty sky) | luma stddev 0.0, "near-uniform", exit 1 |
+| Real structure, wrong scene (a textured cloud sky, see below) | "without the expected red and blue boxes", exit 1 |
+
+The blank-world control only proved its branch on the second try. The first version of
+`smoke_blank.sdf` contained `<sky>false</sky>`, and in SDF the mere presence of `<sky>` ENABLES a
+textured cloud sky; the text is ignored. The control rendered clouds (stddev 33.1) and failed
+through the scene-mismatch branch instead. Removing the element gave the uniform frame intended.
+
+**Timing:** sensor stamps are exactly 0.200 s apart in sim time (5 Hz as configured), and wall-clock
+receive rate is ~4.8 Hz, so the world runs at RTF ~1. An earlier reading of "870 frames in 60 s"
+(3x rate) was wrong: `sim.sh` did not forward `ARIADNE_SMOKE_TIMEOUT`, so that run lasted the 180 s
+default. Fixed; the script now forwards the test's knobs.
+
+**MCAP recording works in the image:** `ros2 bag record -s mcap /smoke/camera` for ~11 s gave 55
+`sensor_msgs/msg/Image` messages, storage `mcap`, serialization `cdr`, 12.1 MiB.
+
+Bring-up defects in the TEST, both fixed: the first colour detector used a brightness floor of 100,
+but the shaded red box renders at (95, 30, 30), so a correct render was rejected for 870 frames
+with a message blaming black frames. The detector now uses channel dominance, and the failure
+message distinguishes a uniform frame from an unrecognised scene.
+
+**NOT verified: the NVIDIA EGL path on g5/g6** `[UNVERIFIED]`. It depends on the NVIDIA Container
+Toolkit injecting the driver's EGL vendor library via glvnd (`NVIDIA_DRIVER_CAPABILITIES` includes
+`graphics`). No GPU exists here. First task on a g5/g6: `infra/scripts/sim.sh` must print
+`render mode: nvidia-egl` and `SIM_SMOKE=PASS`.
+
+---
+
 ## 5. Open items
 
 | Item | Status |
@@ -174,3 +225,4 @@ If a future need arises, pre-seed those blobs into the image rather than fetchin
 | **arm64 build + full smoke test** | `[PENDING]` — no local arm64; deferred to Graviton / Arm CI runner |
 | PyPI wheel status for OpenCV 5 | `[PENDING]` — not needed; we build from tag per C7 |
 | COOL day-1 trial check (0.3) | `[PENDING]` — needs AWS account |
+| `ariadne-sim` NVIDIA EGL path on g5/g6 | `[PENDING]` — needs a GPU instance; Mesa path PASSES (§4c) |
