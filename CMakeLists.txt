@@ -19,6 +19,12 @@ endif()
 add_compile_options(-ffp-contract=off)
 
 option(ARIADNE_BUILD_TESTS "Build the test suite" ON)
+# OpenCV is optional on the HOST and required in the ariadne-core image. The
+# OpenCV-free layers (core, the degradation operator, replay, metrics) must
+# keep building and testing without it (arch §3), so its absence only drops
+# the targets that need it. The image sets this ON so a broken OpenCV lookup
+# fails the build instead of silently producing an image with no OpenCV code.
+option(ARIADNE_REQUIRE_OPENCV "Fail the configure step if OpenCV 5 is not found" OFF)
 
 include(cmake/AriadneDependencies.cmake)
 

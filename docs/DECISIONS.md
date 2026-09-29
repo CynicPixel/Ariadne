@@ -745,3 +745,55 @@ the domain libraries in the §3 dependency order.
 
 Verified: 156 tests pass; `check_determinism.sh` PASS on 6/6 configurations using the shared code; committed
 constants unchanged.
+
+## 2026-09-29 — D33: the ariadne-core image, and what the OpenCV build hash does and does not identify
+
+`infra/docker/core.Dockerfile` builds FROM `opencv-base` (tag locally; CI passes a reference through the
+`OPENCV_BASE` ARG, by digest once ECR push is wired). Two stages: `dev` (toolchain only; the repo is bind-mounted
+and built into `build/docker/`, never the host's `build/`) and `ci` (sources bind-mounted read-only for the build step so they never enter an image layer, configured with
+`ARIADNE_REQUIRE_OPENCV=ON`, full `ctest` run inside the build, `ariadne_identity` installed). ONNX models from the
+§27.1 row are deliberately absent until XFeat (Phase 2) consumes one. `infra/scripts/core.sh image|gate|dev` is
+the only entry point; `docker-bake.hcl` builds `opencv-base` then `core` in one CI invocation with separate GHA
+cache scopes.
+
+OpenCV stays optional on the host: `find_package(OpenCV 5 CONFIG QUIET PATHS /opt/opencv5 NO_DEFAULT_PATH)`, and
+OpenCV-dependent code lives in targets that exist only when it is found (`ariadne_runtime_opencv`,
+`ariadne_identity`, `test_opencv`). `core`, the degradation operator, replay and metrics remain OpenCV-free.
+
+**The build hash identifies a build artifact, not a configuration.** `cv::getBuildInformation()` contains
+`Timestamp:` and `Host:` lines, so its hash (`fnv1a64:<hex>`, via the existing `core::Fnv1a64`) changes on every
+rebuild of the same tag and differs between amd64 and arm64. No golden value of it is ever committed. It is
+measured at run time from the LOADED `libopencv_core`, which is what makes it useful for COOL: the one binary run
+against `/opt/cool` records a different hash than against stock, so every manifest says which OpenCV produced it.
+The Phase 0 gate 4 check is therefore "the hash a manifest records at run time equals the hash baked into the
+image at build time by the same binary" (`core.sh gate`).
+
+**Loader linkage protects Invariant 2.** DT_RPATH is searched before `LD_LIBRARY_PATH`, so a binary carrying
+`RPATH=/opt/opencv5/lib` would ignore the COOL loader switch and benchmark stock OpenCV against itself. The image
+resolves OpenCV through `/etc/ld.so.conf.d` (searched after `LD_LIBRARY_PATH`), builds with `CMAKE_SKIP_RPATH=ON`,
+and fails the build if `readelf -d` finds RPATH or RUNPATH on any installed binary or test. (The stock OpenCV
+libraries themselves carry RUNPATH, which `LD_LIBRARY_PATH` does override.) Open for 0.3: confirm the COOL
+libraries use the same sonames (`libopencv_core.so.500`).
+
+**OpenCV outputs are not cross-machine golden values.** OpenCV compiles several SIMD variants of hot kernels and
+selects one per call from the running CPU (the dev box dispatches up to AVX512_SKX). The manifest gains
+`opencv_cpu_features` (`cv::getCPUFeaturesLine()`) so a cross-machine difference can be attributed. Consequence for
+the thin-run determinism item: OpenCV-stage determinism is defined run-vs-run on the same machine; only the
+OpenCV-free digests (D18/D32) are committed as cross-machine constants.
+
+`image_digest` currently holds the LOCAL image ID (the config digest, `docker image inspect .Id`). After an ECR
+push the registry manifest digest is a different value; when push is wired, manifests must record the registry
+digest, and the two kinds must not be compared.
+
+Also: `.dockerignore` now excludes `*.tfvars`, Terraform state and `.venv`, since the core build context is the repo
+root and `terraform.tfvars` holds the alert email. `opencv-base` still uses an unpinned `FROM ubuntu:24.04`; pinning
+it forces an OpenCV rebuild, so it is deferred to the 0.2 arm64 multi-arch rebuild that needs one anyway.
+
+Verified (amd64, 2026-09-29): the `ci` stage builds and passes **160/160** tests inside the image (the 156
+OpenCV-free tests plus 4 `OpenCvIdentity` tests), so the committed D32 digests also hold on the image's gcc 13.3.
+`core.sh gate`: baked and manifest-recorded hash both `fnv1a64:cf8ea084bb984703`, `CORE_IMAGE_GATE=PASS`. The
+RPATH detector was checked against binaries deliberately linked with RPATH and with RUNPATH (both detected);
+`LD_DEBUG=libs` shows `libopencv_core.so.500` resolved from `/opt/opencv5/lib` via the loader cache. Not yet
+demonstrated: a hash CHANGE under a different OpenCV (needs a second build, e.g. COOL at 0.3). The first image
+build also exposed a latent bug: `run_manifest.hpp` used `uint64_t` without `<cstdint>` and compiled only through
+transitive includes; fixed, and every header under `cpp/` now compiles standalone.

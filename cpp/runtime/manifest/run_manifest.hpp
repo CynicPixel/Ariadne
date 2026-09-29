@@ -17,6 +17,7 @@
 // Emitted as YAML because §28.2 specifies it and because a human reads this
 // far more often than a machine does.
 // ---------------------------------------------------------------------------
+#include <cstdint>
 #include <map>
 #include <ostream>
 #include <sstream>
@@ -42,6 +43,9 @@ struct RunManifest {
     // --- Software identity ------------------------------------------------
     std::string opencv_version = kUnknownField;
     std::string opencv_build_hash = kUnknownField;   // C7
+    /// The CPU features OpenCV's dispatcher saw on this machine; the same
+    /// build can select different SIMD kernels elsewhere (opencv_identity.hpp).
+    std::string opencv_cpu_features = kUnknownField;
     std::string cool_version = kUnknownField;
     std::string cuda_version = kUnknownField;
     std::string compiler = kUnknownField;
@@ -133,6 +137,7 @@ inline std::string ToYaml(const RunManifest& m) {
     out << "\n# Software identity\n";
     detail::Field(out, "opencv_version", m.opencv_version);
     detail::Field(out, "opencv_build_hash", m.opencv_build_hash);
+    detail::Field(out, "opencv_cpu_features", m.opencv_cpu_features);
     detail::Field(out, "cool_version", m.cool_version);
     detail::Field(out, "cuda_version", m.cuda_version);
     detail::Field(out, "compiler", m.compiler);

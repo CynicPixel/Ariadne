@@ -3,3 +3,12 @@ build/
 docs/
 .git/
 **/__pycache__/
+.venv/
+# Never let local secrets or Terraform state into an image layer: the build
+# context is the repo root, and anything sent there can end up in a COPY.
+**/*.tfvars
+**/*.tfstate
+**/*.tfstate.backup
+**/.terraform/
+IDEA.md
+graphify-out/

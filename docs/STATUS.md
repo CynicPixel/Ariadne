@@ -4,7 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-29 (latest) — AWS live: tests-only spin-ups; determinism proven on real Graviton4
+## 2026-09-29 (latest) — `ariadne-core` image; Phase 0 gate 4 closed on amd64
+
+- `infra/docker/core.Dockerfile` (`dev` + `ci` stages) FROM the pinned `opencv-base`; `infra/scripts/core.sh
+  image|gate|dev`; CI job `core-image` via `docker-bake.hcl` (`[UNVERIFIED]` on GitHub). D33.
+- Inside the image: **160/160 tests pass**, including the first OpenCV-linked code (`ariadne_runtime_opencv`,
+  `ariadne_identity`, `test_opencv`). The host build without OpenCV still passes 156/156.
+- **Phase 0 gate 4 PASS (amd64):** the `cv::getBuildInformation()` hash recorded in a run manifest at run time equals
+  the one baked in at build time (`fnv1a64:cf8ea084bb984703`). The manifest also records `opencv_cpu_features`.
+- The COOL loader switch is protected: no RPATH/RUNPATH on anything we build (enforced at build time); OpenCV is
+  resolved through `ld.so.conf.d`.
+- Still open: arm64 image (with 0.2), ECR push by digest, COOL soname check (0.3).
+
+---
+
+## 2026-09-29 — AWS live: tests-only spin-ups; determinism proven on real Graviton4
 
 - Account on the PAID plan with $200 of credits kept (D26, D27). Region **eu-north-1**, the cheapest region
   meeting every need (D28). Minimal network: default VPC plus one egress-only security group (D29).

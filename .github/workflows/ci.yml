@@ -180,3 +180,56 @@ jobs:
                 -I/opt/opencv5/include/opencv5 -L/opt/opencv5/lib \
                 $(ls /opt/opencv5/lib/libopencv_*.so | sed "s|.*/lib|-l|;s|\.so$||")
               LD_LIBRARY_PATH=/opt/opencv5/lib /tmp/smoke'
+
+  core-image:
+    # The only job that compiles and tests the OpenCV-dependent code: the
+    # build-test job above runs on a bare runner without OpenCV, where those
+    # targets are skipped by design. The ci stage runs the FULL ctest suite
+    # inside the image, so the committed determinism digests are also checked
+    # on the image's own toolchain.
+    #
+    # Two bake steps, not one: opencv-base exports its GitHub Actions cache the
+    # moment IT finishes. With a single step, a first run that timed out while
+    # compiling Ariadne would lose the OpenCV cache too, and every later run
+    # would pay the full OpenCV compile again. The cache is evicted after 7
+    # days unused.
+    #
+    # Manual dispatch only until one run has populated the cache: a cold
+    # OpenCV compile on a hosted runner has never been timed, and running it on
+    # every push risks burning Actions minutes on repeated timeouts. Widen the
+    # trigger once a warm run is measured.
+    # [UNVERIFIED] not yet executed on GitHub. Dependency clones are not cached
+    # (BuildKit cache mounts are not exported to the GHA cache), so each run
+    # re-clones the pinned third-party sources.
+    name: ariadne-core image (amd64)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build opencv-base (cached separately)
+        uses: docker/bake-action@v6
+        with:
+          source: .
+          files: infra/docker/docker-bake.hcl
+          targets: opencv-base
+          set: |
+            opencv-base.cache-from=type=gha,scope=opencv-base
+            opencv-base.cache-to=type=gha,scope=opencv-base,mode=max
+      - name: Build core (ctest runs inside the build)
+        uses: docker/bake-action@v6
+        env:
+          ARIADNE_GIT_COMMIT: ${{ github.sha }}
+          ARIADNE_GIT_DIRTY: "false"
+        with:
+          source: .
+          files: infra/docker/docker-bake.hcl
+          targets: core
+          load: true
+          set: |
+            opencv-base.cache-from=type=gha,scope=opencv-base
+            core.cache-from=type=gha,scope=core
+            core.cache-to=type=gha,scope=core,mode=max
+      - name: OpenCV identity gate
+        run: ARIADNE_CORE_IMAGE=ariadne/core:ci infra/scripts/core.sh gate

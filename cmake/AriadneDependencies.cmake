@@ -93,3 +93,19 @@ if(ARIADNE_BUILD_TESTS)
     GIT_SHALLOW    TRUE)
   FetchContent_MakeAvailable(googletest)
 endif()
+
+# OpenCV 5: the pinned build installed at /opt/opencv5 by opencv-base
+# (C7: one OpenCV, built from the pinned tag, never apt's 4.x). CONFIG mode
+# reads OpenCVConfig.cmake from that install rather than a Find-module guess.
+# The version constraint `5` makes an accidentally-found OpenCV 4 a miss, not a
+# silent downgrade.
+if(ARIADNE_REQUIRE_OPENCV)
+  find_package(OpenCV 5 CONFIG REQUIRED PATHS /opt/opencv5 NO_DEFAULT_PATH)
+else()
+  find_package(OpenCV 5 CONFIG QUIET PATHS /opt/opencv5 NO_DEFAULT_PATH)
+endif()
+if(OpenCV_FOUND)
+  message(STATUS "Ariadne: OpenCV ${OpenCV_VERSION} from ${OpenCV_DIR}")
+else()
+  message(STATUS "Ariadne: OpenCV 5 not found; OpenCV-dependent targets are skipped")
+endif()
