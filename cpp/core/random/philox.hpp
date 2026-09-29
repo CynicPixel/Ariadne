@@ -18,8 +18,10 @@
 // The (seed, frame_id, pixel_block) keying that §5.6 specifies maps directly
 // onto the key/counter split below.
 // ---------------------------------------------------------------------------
+#include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 
 namespace ariadne::core {
 
@@ -103,26 +105,63 @@ inline double UniformFromBits64(uint64_t bits) {
 /// "advance the engine" semantics that could couple two call sites together.
 class PhiloxStream {
 public:
+    /// Largest addressable site: the counter reserves 48 bits for it.
+    static constexpr uint64_t kMaxSite  = (uint64_t(1) << 48) - 1;
+    /// Largest refill block index: 16 bits, so 262144 words per site.
+    static constexpr uint64_t kMaxBlock = 0xFFFFull;
+
+
     /// `seed` is the run seed, `frame_id` the frame, `site` a per-frame index
     /// (typically a pixel-block id). Together they name a unique, reproducible
     /// stream -- exactly the (seed, frame_id, pixel-block) keying of §5.6.
+    ///
+    /// DOMAIN: `site` must be < 2^48 (see kMaxSite). Philox4x32's counter is
+    /// 128 bits and must hold frame_id, site AND the refill block index, so
+    /// one of the three has to be bounded. frame_id keeps all 64 bits because
+    /// kFixedPatternFrameId deliberately uses the all-ones sentinel; block
+    /// takes 16 bits; site takes the remaining 48. The map from
+    /// (frame_id, site, block) to the counter is then INJECTIVE, which is what
+    /// makes the no-collision property structural rather than probable.
     PhiloxStream(uint64_t seed, uint64_t frame_id, uint64_t site) {
+        // The assert is caller hygiene ONLY -- it is compiled out under NDEBUG,
+        // which this project's Release build defines. The masking below is what
+        // actually makes the behaviour defined, in every build: `site` IS a
+        // 48-bit identifier, and passing more bits is a documented truncation
+        // rather than an aliasing surprise. Callers holding a 64-bit id must
+        // map it in with SiteFromHash64() rather than relying on truncation.
+        assert(site <= kMaxSite && "site exceeds the 48-bit stream domain");
+        site &= kMaxSite;
         key_.v[0] = static_cast<uint32_t>(seed & 0xFFFFFFFFu);
         key_.v[1] = static_cast<uint32_t>(seed >> 32);
         ctr_.v[0] = static_cast<uint32_t>(frame_id & 0xFFFFFFFFu);
         ctr_.v[1] = static_cast<uint32_t>(frame_id >> 32);
         ctr_.v[2] = static_cast<uint32_t>(site & 0xFFFFFFFFu);
-        ctr_.v[3] = static_cast<uint32_t>(site >> 32);
+        // Low 16 bits of v[3] carry site's high half; the top 16 are reserved
+        // for the block index, which Refill() writes. Nothing overlaps.
+        ctr_.v[3] = static_cast<uint32_t>((site >> 32) & 0xFFFFu);
         Refill();
     }
 
     /// Next 32 random bits.
+    ///
+    /// A site may draw up to 4 * 2^16 = 262144 words. Beyond that the block
+    /// index would wrap into another site's stream, so it is an assert rather
+    /// than a silent wrap: a wrapped stream reuses numbers, which is exactly
+    /// the failure this class exists to prevent.
     uint32_t NextBits32() {
         if (used_ == 4) {
-            // Advance the counter's high word rather than re-keying, so a
-            // single site can draw an unlimited number of values without ever
-            // colliding with a neighbouring site's stream.
             ++block_;
+            // NOT an assert. Wrapping past kMaxBlock would alias back onto
+            // block 0 and silently REUSE this site's numbers -- the exact
+            // failure this class exists to prevent, and invisible in the
+            // output. A determinism substrate that quietly repeats itself is
+            // worse than one that stops, so this is checked in every build.
+            // Cost is one comparison per four draws.
+            if (block_ > kMaxBlock) {
+                throw std::logic_error(
+                    "PhiloxStream: site exhausted after 262144 words; draw "
+                    "from a new site rather than wrapping the block index");
+            }
             Refill();
         }
         return buffer_.v[used_++];
@@ -145,9 +184,15 @@ public:
 private:
     void Refill() {
         Counter4x32 c = ctr_;
-        // Mix the block index into a word the caller does not control, so that
-        // successive refills for one site are independent.
-        c.v[3] ^= static_cast<uint32_t>(block_);
+        // block_ is bounded by the check in NextBits32(), so this shift cannot
+        // collide with the site bits below it.
+
+        // PARTITION, not XOR-fold. The previous version did
+        // `c.v[3] ^= block_`, which let (site=0, block=1) produce byte-for-byte
+        // the same stream as (site=2^32, block=0) -- the counter words were
+        // identical, so the "never collides" claim was false. Writing block
+        // into its own reserved bit-field keeps the mapping injective.
+        c.v[3] |= static_cast<uint32_t>(block_) << 16;
         buffer_ = Philox4x32_10(c, key_);
         used_ = 0;
     }
@@ -158,5 +203,21 @@ private:
     uint64_t block_ = 0;
     int used_ = 0;
 };
+
+/// Map an arbitrary 64-bit identifier into PhiloxStream's 48-bit site domain.
+///
+/// Phase 1+ ids (keyframe, landmark, submap) are naturally 64-bit hashes, and
+/// passing one straight in would truncate to its low 48 bits -- so two ids
+/// differing only above bit 47 would share a stream. This mixes all 64 bits
+/// down first (splitmix64 finalizer) so every input bit affects the result.
+/// Collisions are then birthday-bounded at ~2^-48 per pair rather than
+/// systematic.
+inline uint64_t SiteFromHash64(uint64_t id) {
+    uint64_t z = id;
+    z ^= z >> 30; z *= 0xBF58476D1CE4E5B9ull;
+    z ^= z >> 27; z *= 0x94D049BB133111EBull;
+    z ^= z >> 31;
+    return z & PhiloxStream::kMaxSite;
+}
 
 }  // namespace ariadne::core

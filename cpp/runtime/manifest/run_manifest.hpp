@@ -50,6 +50,10 @@ struct RunManifest {
     // --- Experiment -------------------------------------------------------
     std::string scene = kUnknownField;
     uint64_t seed = 0;
+    // 0 is a legitimate seed, so the value alone cannot distinguish "seeded
+    // with 0" from "nobody recorded the seed". The flag makes the difference
+    // explicit; MissingRequiredFields treats an unset flag as unrecorded.
+    bool seed_recorded = false;
     int agent_count = 0;
     /// Which regime produced this run. §5.9 requires every figure to declare
     /// it, because replayed runs are bit-deterministic and live closed-loop
@@ -183,6 +187,28 @@ inline std::vector<std::string> MissingRequiredFields(const RunManifest& m) {
     require("scene", m.scene);
     require("feature_engine", m.feature_engine);
     require("loop_backend", m.loop_backend);
+
+    // §5.6: degradation parameters are named configs REFERENCED BY MANIFESTS.
+    // Without this field a run cannot be re-created, which is the entire point
+    // of the manifest, so it is required rather than merely serialized.
+    require("degradation_config", m.degradation_config);
+    // NOT `require(...)`: execution_mode defaults to "replay", so a presence
+    // check can never fire and would read as a guarantee while checking
+    // nothing. §5.9 makes the DISTINCTION load-bearing -- replayed runs are
+    // bit-deterministic, live ones are not and must be reported over seeds --
+    // so what matters is that the value is one of the two known modes.
+    if (m.execution_mode != "replay" && m.execution_mode != "live") {
+        missing.emplace_back("execution_mode(must be 'replay' or 'live')");
+    }
+    if (!m.seed_recorded) missing.emplace_back("seed");
+
+    // The determinism digests exist "so a result produced by drifted math is
+    // identifiable after the fact". A manifest that omits them cannot support
+    // that claim, so omitting them makes the run unpublishable.
+    require("det_math_digest", m.det_math_digest);
+    require("philox_digest", m.philox_digest);
+    require("degradation_digest", m.degradation_digest);
+
     // A dirty tree means git_commit does not identify what actually ran.
     if (m.git_dirty) missing.emplace_back("git_dirty(tree was modified)");
     return missing;

@@ -11,9 +11,14 @@
 //
 // Wire accounting:
 //   payload_bytes = serialized FlatBuffer size
-//   wire_bytes    = kFrameHeaderBytes
+//   framed_bytes  = kFrameHeaderBytes
 //                   + transmitted payload (compressed where applicable)
-//                   + kDatagramOverheadBytes
+//   wire_bytes    = framed_bytes
+//                   + kDatagramOverheadBytes * DatagramCount(framed_bytes)
+//
+// Framing is charged PER DATAGRAM, matching arch §15.7's wording ("28 B
+// emulated UDP/IP header per datagram"). Anything over the 1472 B datagram
+// payload fragments and pays the header again.
 //
 // Compression covers MATCH_RESPONSE and POSE_EDGE (§15.7's classes 4-5) plus
 // POSE_GRAPH, which §15.7 leaves uncompressed. See DECISIONS.md D14: pose
@@ -47,6 +52,27 @@ using MessageClass = wire::MessageClass;
 /// flattering, exactly as §15.7 requires. Small messages are dominated by it,
 /// which is itself a result worth showing.
 inline constexpr uint64_t kDatagramOverheadBytes = 28;
+
+/// Path MTU assumed for the emulated link (standard Ethernet). A message
+/// larger than one datagram's payload is fragmented and each fragment carries
+/// its own 20+8 B header, so framing is charged PER DATAGRAM, not per message.
+///
+/// This matters because §15.7's byte table feeds a hard <=15% prediction-error
+/// gate in Phase 3, and the classes that exceed the MTU are exactly the large
+/// ones the spectral policy has to price: an uncompressed 21 KB pose graph is
+/// ~15 datagrams (420 B of framing), not one (28 B). Charging once per message
+/// would understate framing precisely where the table is load-bearing.
+inline constexpr uint64_t kPathMtuBytes = 1500;
+inline constexpr uint64_t kDatagramPayloadBytes =
+    kPathMtuBytes - kDatagramOverheadBytes;   // 1472
+
+/// Number of datagrams needed to carry `on_wire` bytes of framed payload.
+/// A zero-length message still costs one datagram.
+inline constexpr uint64_t DatagramCount(uint64_t on_wire) {
+    return on_wire == 0 ? 1
+                        : (on_wire + kDatagramPayloadBytes - 1) /
+                              kDatagramPayloadBytes;
+}
 
 /// Ariadne frame header, carried UNCOMPRESSED ahead of every payload:
 ///   [0]    message class
@@ -489,8 +515,9 @@ private:
         msg.bytes.insert(msg.bytes.end(), body.begin(), body.end());
 
         msg.record.transmitted_bytes = body.size();
+        const uint64_t framed = kFrameHeaderBytes + body.size();
         msg.record.wire_bytes =
-            kFrameHeaderBytes + body.size() + kDatagramOverheadBytes;
+            framed + kDatagramOverheadBytes * DatagramCount(framed);
         return msg;
     }
 

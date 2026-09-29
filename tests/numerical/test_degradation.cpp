@@ -356,6 +356,6 @@ TEST(Degradation, GoldenDigestForAFixedConfiguration) {
         digest ^= v;
         digest *= 1099511628211ull;
     }
-    EXPECT_EQ(digest, 12016663175328231476ull)
+    EXPECT_EQ(digest, 8535765251477677907ull)
         << "degradation output changed; re-record deliberately or investigate";
 }

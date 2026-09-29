@@ -146,6 +146,7 @@ public:
         event.fields = std::move(fields);
         event.state_hash = ChainHash(event);
         state_hash_ = event.state_hash;
+        chain_ = event.state_hash;
         if (sink_ != nullptr) (*sink_) << ToJson(event) << "\n";
         return event;
     }
@@ -183,8 +184,19 @@ private:
     /// FNV-1a over the previous hash and this event's identifying content. The
     /// chain means a divergence at event N changes every hash from N onward,
     /// so the FIRST mismatch localizes the divergence exactly.
+    /// FNV-1a offset basis, used as the chain's seed value.
+    static constexpr uint64_t kFnvOffsetBasis = 1469598103934665603ull;
+
     uint64_t ChainHash(const Event& event) const {
-        uint64_t hash = state_hash_ != 0 ? state_hash_ : 1469598103934665603ull;
+        // `chain_` is seeded at construction and always carried forward. The
+        // previous version wrote `state_hash_ != 0 ? state_hash_ : basis`,
+        // which used zero as a sentinel for "no previous event" -- so a chain
+        // value that legitimately came out zero would silently RESTART the
+        // chain, and two different histories could converge onto the same
+        // hash. The whole diagnostic value of the chain is that it localizes
+        // where two runs diverged, which that would quietly break. Same bug
+        // shape as treating seed==0 as "unset" in the run manifest.
+        uint64_t hash = chain_;
         auto absorb_u64 = [&hash](uint64_t value) {
             for (int i = 0; i < 8; ++i) {
                 hash ^= (value >> (i * 8)) & 0xFFull;
@@ -211,7 +223,8 @@ private:
     std::string run_id_;
     std::ostream* sink_ = nullptr;
     uint64_t next_sequence_ = 0;
-    uint64_t state_hash_ = 0;
+    uint64_t state_hash_ = 0;              // 0 until the first event is logged
+    uint64_t chain_ = kFnvOffsetBasis;     // never a sentinel; always carried
 };
 
 }  // namespace ariadne::runtime

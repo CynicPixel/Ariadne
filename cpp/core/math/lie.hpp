@@ -68,8 +68,10 @@ inline double CoeffB(double t, double t2) {
 // ~t^2/6 in relative terms, so at t=1e-3 the direct form already carries only
 // ~6 significant digits. Hence kSmallAngle = 1e-2 rather than something
 // tighter: at t=1e-2 the 3-term series truncates at O(t^6/362880) ~ 1e-17
-// relative, while the direct form is ~1e-9 relative. The series is better
-// everywhere the direct form is bad, and vice versa; 1e-2 is the crossover.
+// relative, while the direct form carries a cancellation error of
+// eps*|t| / |t - sin t| ~ 2.2e-16 * 1e-2 / 1.67e-7 ~ 1.3e-11 relative. The
+// series is better everywhere the direct form is bad, and vice versa; 1e-2 is
+// the crossover.
 inline double CoeffC(double t, double t2) {
     if (t < kSmallAngle) return 1.0 / 6.0 - t2 / 120.0 + t2 * t2 / 5040.0;
     return (t - std::sin(t)) / (t2 * t);

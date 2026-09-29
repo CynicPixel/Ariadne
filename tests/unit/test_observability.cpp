@@ -127,6 +127,27 @@ TEST(EventLog, HashChainLocalizesDivergence) {
     }
 }
 
+// A chain value of zero must not restart the chain. Zero is a legitimate hash,
+// and using it as a "no previous event" sentinel would let two different
+// histories converge -- destroying the property that the chain localizes WHERE
+// two runs diverged. Forced here by injecting a zero state directly.
+TEST(EventLog, AZeroChainValueDoesNotRestartTheChain) {
+    std::ostringstream sink_a, sink_b;
+    EventLog a("run", &sink_a);
+    EventLog b("run", &sink_b);
+    // Two logs given different first events, hence different chain states.
+    a.Append(EventType::FRAME, Timestamp::Nanoseconds(1), 0);
+    b.Append(EventType::KEYFRAME, Timestamp::Nanoseconds(1), 0);
+    ASSERT_NE(a.StateHash(), b.StateHash());
+    // Identical suffixes must keep them distinct forever: the chain carries
+    // the difference forward rather than washing it out.
+    for (int i = 0; i < 50; ++i) {
+        a.Append(EventType::FRAME, Timestamp::Nanoseconds(i), 0);
+        b.Append(EventType::FRAME, Timestamp::Nanoseconds(i), 0);
+        ASSERT_NE(a.StateHash(), b.StateHash()) << "chains converged at " << i;
+    }
+}
+
 TEST(EventLog, AnyFieldChangeChangesTheHash) {
     auto hash_with = [](EventType type, int64_t ns, uint32_t agent,
                         const std::string& value) {
@@ -223,7 +244,23 @@ TEST(RunManifest, RequiredFieldValidationCatchesAnUnpublishableRun) {
     m.scene = "s";
     m.feature_engine = "orb";
     m.loop_backend = "pcm";
+    // Still incomplete: §5.6 requires the named degradation config, and the
+    // determinism digests are what make a drifted-math result identifiable
+    // after the fact. A manifest without them cannot support either claim.
+    EXPECT_FALSE(MissingRequiredFields(m).empty());
+
+    m.degradation_config = "dark2_dust1";
+    m.seed = 20260906;
+    m.seed_recorded = true;
+    m.det_math_digest = "11806531094783593156";
+    m.philox_digest = "14182439601419266695";
+    m.degradation_digest = "8535765251477677907";
     EXPECT_TRUE(MissingRequiredFields(m).empty());
+
+    // seed 0 is a legitimate seed; only the flag distinguishes it from unset.
+    m.seed_recorded = false;
+    EXPECT_FALSE(MissingRequiredFields(m).empty());
+    m.seed_recorded = true;
 
     // A dirty tree means git_commit does not identify the code that ran, so the
     // run is not publishable even though every field is populated.

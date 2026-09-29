@@ -90,7 +90,10 @@ inline int RoundToInt(double x) {
 inline double DetExp(double x) {
     if (x != x) return x;                                        // NaN
     if (x > 709.782712893384) return std::numeric_limits<double>::infinity();
-    if (x < -745.133219101941) return 0.0;                       // underflow
+    // -745.1332191019412 is the argument below which e^x rounds to zero. The
+    // smallest subnormal 2^-1074 is still reachable ABOVE it, which is why the
+    // scaling below has to handle k < -1022 rather than bailing out early.
+    if (x < -745.1332191019412) return 0.0;                      // underflow
     if (x == 0.0) return 1.0;
 
     const int k = RoundToInt(x * kInvLn2);
@@ -115,6 +118,16 @@ inline double DetExp(double x) {
     poly = poly * r + 1.0;                            // 1/1!
     poly = poly * r + 1.0;                            // 1/0!
 
+    // TRAP: `Exp2Int(k)` saturates to inf for k > 1023 and to 0 for k < -1074,
+    // but k reaches 1024 for x >= ~709.44 and -1075 for x <= ~-745.13 -- both
+    // INSIDE the guard above, where the true result is finite and non-zero.
+    // A single-step scale therefore returned inf (resp. 0) for a band of
+    // perfectly representable results. Split the scaling so neither factor
+    // leaves the normal range: poly is in [1/sqrt(2), sqrt(2)], so
+    // poly * 2^1023 <= ~1.27e308 cannot overflow, and the residual 2^(k-1023)
+    // is a small power of two.
+    if (k > 1023) return (poly * Exp2Int(1023)) * Exp2Int(k - 1023);
+    if (k < -1022) return (poly * Exp2Int(-1022)) * Exp2Int(k + 1022);
     return poly * Exp2Int(k);
 }
 

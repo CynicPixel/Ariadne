@@ -65,6 +65,35 @@ TEST(DetMath, ExpMatchesLibmAcrossRange) {
     EXPECT_LT(worst, kTol) << "worst relative error " << worst << " at x=" << worst_at;
 }
 
+// REGRESSION. The sweep above stops at +-700, and the bug lived entirely
+// OUTSIDE it: the range reduction produces k=1024 for x >= ~709.44 and k=-1075
+// for x <= ~-745.13, and Exp2Int saturates to inf / 0 at those k. DetExp
+// therefore returned inf (resp. 0) for a whole band of representable results,
+// inside its own declared domain, with every test green. Scaling is now split
+// so neither factor leaves the normal range.
+TEST(DetMath, ExpIsFiniteAndAccurateAtTheOverflowBoundary) {
+    for (double x = 708.0; x <= 709.782712893384; x += 0.0007) {
+        const double got = DetExp(x);
+        ASSERT_TRUE(std::isfinite(got)) << "DetExp overflowed early at x=" << x;
+        EXPECT_LT(RelError(got, std::exp(x)), kTol) << "at x=" << x;
+    }
+    // Just past the guard, infinity is the correct answer.
+    EXPECT_TRUE(std::isinf(DetExp(709.9)));
+}
+
+TEST(DetMath, ExpReachesTheSmallestSubnormalBeforeUnderflowing) {
+    for (double x = -745.1332191019411; x <= -744.0; x += 0.0007) {
+        const double got = DetExp(x);
+        ASSERT_GT(got, 0.0) << "DetExp underflowed early at x=" << x;
+        EXPECT_LT(RelError(got, std::exp(x)), kTol) << "at x=" << x;
+    }
+    // The smallest subnormal must be reachable, not rounded away to zero.
+    EXPECT_EQ(DetExp(-745.13), std::exp(-745.13));
+    EXPECT_GT(DetExp(-745.13), 0.0);
+    // Below the guard, zero is the correct answer.
+    EXPECT_EQ(DetExp(-746.0), 0.0);
+}
+
 // The values D actually uses: exp(-lambda) for Poisson, exp(-beta*depth) for
 // dust transmission. Both live in a narrow negative range, so it is worth
 // pinning accuracy there specifically.
@@ -167,14 +196,19 @@ TEST(DetMath, DigestOverFixedGridIsStable) {
     for (int i = 1; i <= 4000; ++i) {
         absorb(DetLog(static_cast<double>(i) * 0.125));
     }
+    // Boundary coverage, mirroring check_determinism.sh. The grid above spans
+    // only |x| <= 500 and was therefore byte-identical across a real DetExp
+    // overflow bug; a digest that never evaluates the boundary cannot guard it.
+    for (int i = 0; i <= 400; ++i) absorb(DetExp(708.0 + i * 0.00445));
+    for (int i = 0; i <= 400; ++i) absorb(DetExp(-745.1332191019411 + i * 0.0028));
 
-    // Recorded 2026-09-06 from this implementation, gcc 13.3.0 / x86-64
+    // Recorded 2026-09-08 from this implementation, gcc 13.3.0 / x86-64
     // (the value is an OUTPUT of the code, not a specification of it).
     // If this fails after a deliberate change to det_math.hpp, re-record it and
     // re-derive any affected golden digests. If it fails WITHOUT such a change
     // -- on another compiler or architecture -- the cross-platform guarantee is
     // broken; investigate before shipping, because every named degradation
     // config that has already produced published results is then suspect.
-    EXPECT_EQ(digest, 8409701359450404215ull)
+    EXPECT_EQ(digest, 11806531094783593156ull)
         << "det_math digest changed -- see comment above";
 }

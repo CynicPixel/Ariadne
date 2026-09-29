@@ -83,21 +83,37 @@ jobs:
       # The determinism gate proper: compares against the digests recorded in
       # the script, across gcc and clang at three optimization levels.
       - name: Determinism gate
-        run: ./infra/scripts/check_determinism.sh | tee determinism-${{ matrix.arch }}.txt
+        # NOT `script | tee file`. GitHub's default shell is `bash -e {0}`
+        # WITHOUT pipefail, so a pipeline exits with tee's status and a
+        # DETERMINISM=FAIL would have been swallowed -- the gate would go green
+        # on exactly the failure it exists to catch. Redirect, then replay the
+        # log, then exit with the script's own status.
+        run: |
+          ./infra/scripts/check_determinism.sh > determinism-${{ matrix.arch }}.txt 2>&1
+          status=$?
+          cat determinism-${{ matrix.arch }}.txt
+          exit $status
 
       - name: Upload digests
+        # always(), because the artifact is most valuable precisely when the
+        # step above failed.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: determinism-${{ matrix.arch }}
           path: determinism-${{ matrix.arch }}.txt
 
   cross-arch-determinism:
-    # THE JOB THAT MATTERS. Each architecture already checked itself against the
-    # recorded digests; this proves the two agree with EACH OTHER, which is the
-    # property that lets a result produced on Graviton be compared against one
-    # produced on a dev box. Without it, "bit-identical across machines" is an
-    # assertion rather than a test.
+    # A SECOND, INDEPENDENT COMPARISON -- not the primary gate, and the comment
+    # here used to overstate it. Each architecture already asserts against the
+    # committed constants, so if both per-arch steps passed they necessarily
+    # agree with each other and this job cannot fail. What it adds is a direct
+    # amd64-vs-arm64 diff that does not route through those constants, so a
+    # mistake in how the constants are compared shows up here instead of
+    # hiding. It runs even when a per-arch gate failed, which is the case where
+    # seeing the two digest sets side by side is actually informative.
     name: cross-architecture bit-identity
+    if: always()
     needs: build-test
     runs-on: ubuntu-24.04
     steps:
@@ -111,8 +127,17 @@ jobs:
           set -euo pipefail
           extract() {
             # Pull the three digests from a run log, sorted so ordering
-            # differences cannot cause a false mismatch.
-            grep -oE '(det|philox|degrade)=[0-9]+' "$1" | sort -u
+            # differences cannot cause a false mismatch. The script prints this
+            # line on both its PASS and FAIL paths, so two failing runs can
+            # still be compared -- an empty match here means the log itself is
+            # malformed and is treated as an error rather than as agreement.
+            local out
+            out="$(grep -oE '(det|philox|degrade)=[0-9]+' "$1" | sort -u)"
+            if [ -z "$out" ]; then
+              echo "no digest lines found in $1" >&2
+              return 1
+            fi
+            printf '%s\n' "$out"
           }
           amd64="$(extract determinism-amd64/determinism-amd64.txt)"
           arm64="$(extract determinism-arm64/determinism-arm64.txt)"

@@ -75,6 +75,11 @@ inline double SampleNormal(PhiloxStream& stream, double mean, double stddev) {
 /// rather than being buried.
 inline constexpr double kPoissonExactMaxLambda = 30.0;
 
+/// Hardest threshold the exact branch will honour. Above ~50 the Knuth loop
+/// approaches its iteration cap and would truncate; the Gaussian approximation
+/// is already accurate well below this, so nothing is lost by clamping.
+inline constexpr double kPoissonExactHardMax = 50.0;
+
 /// Poisson sample with mean `lambda`.
 ///
 /// Exact (Knuth) below the threshold, Gaussian-approximated above it. Both
@@ -84,6 +89,15 @@ inline int64_t SamplePoisson(PhiloxStream& stream, double lambda,
                              double exact_max_lambda = kPoissonExactMaxLambda) {
     if (!(lambda > 0.0)) return 0;          // also catches NaN
 
+    // The exact branch's iteration cap (below) would silently truncate a large
+    // count into a plausible-looking but fabricated one, so the threshold is
+    // clamped here rather than trusted. ValidateDegradation rejects configs
+    // above kPoissonExactHardMax as well; this is the second line of defence
+    // for callers that do not come through a config.
+    if (exact_max_lambda > kPoissonExactHardMax) {
+        exact_max_lambda = kPoissonExactHardMax;
+    }
+
     if (lambda < exact_max_lambda) {
         // Knuth: multiply uniforms until the product drops below e^-lambda.
         // Exact for the Poisson distribution. e^-lambda is representable down
@@ -91,8 +105,10 @@ inline int64_t SamplePoisson(PhiloxStream& stream, double lambda,
         const double target = DetExp(-lambda);
         double product = 1.0;
         int64_t k = 0;
-        // The loop is bounded in practice at ~lambda + O(sqrt(lambda)); the
-        // hard cap prevents an unbounded loop if target underflows to zero.
+        // The loop runs ~lambda + O(sqrt(lambda)) times. Given the clamp above
+        // (lambda < 50) and target = e^-lambda > 1e-22, reaching 10000 is
+        // impossible short of a broken RNG, so the cap is a guard against an
+        // unbounded loop rather than a routine truncation.
         while (k < 10000) {
             product *= stream.NextUniform();
             if (product <= target) break;
@@ -118,9 +134,15 @@ inline double LatticeNoise(uint64_t seed, uint64_t frame_id, int64_t ix,
     // Fold the 2D cell index into one site id. The multipliers are large odd
     // constants; their only job is to keep distinct (ix, iy) pairs from
     // colliding for the ranges an image uses.
-    const uint64_t site = static_cast<uint64_t>(ix) * 0x9E3779B97F4A7C15ull ^
-                          static_cast<uint64_t>(iy) * 0xC2B2AE3D27D4EB4Full ^
-                          salt * 0x165667B19E3779F9ull;
+    // Mixed into PhiloxStream's 48-bit site domain rather than truncated, so
+    // the hash's high bits still affect the result. Among the ~10^3-10^4 cells
+    // one image touches, the birthday collision probability in 2^48 is ~1e-11,
+    // and a collision would only mean two lattice cells sharing a value -- not
+    // a correlated stream.
+    const uint64_t site = SiteFromHash64(
+        static_cast<uint64_t>(ix) * 0x9E3779B97F4A7C15ull ^
+        static_cast<uint64_t>(iy) * 0xC2B2AE3D27D4EB4Full ^
+        salt * 0x165667B19E3779F9ull);
     return PhiloxStream(seed, frame_id, site).NextUniform();
 }
 

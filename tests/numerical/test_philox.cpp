@@ -11,6 +11,7 @@
 
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -147,6 +148,72 @@ TEST(Philox, LongDrawFromOneSiteStaysDistinct) {
     EXPECT_GT(values.size(), 3990u);
 }
 
+// REGRESSION for a FALSE GUARANTEE. Refill() used to fold the block index in
+// with `ctr.v[3] ^= block`, while the constructor put site's high word in the
+// same place. (site=0, block=1) and (site=2^32, block=0) therefore produced an
+// identical counter and byte-for-byte identical output -- even though the
+// comment claimed a site could draw "without ever colliding with a
+// neighbouring site's stream". The words are now partitioned, so the map from
+// (frame_id, site, block) to the counter is injective and the guarantee holds
+// by construction.
+TEST(Philox, BlockAdvanceCannotCollideWithAnotherSite) {
+    PhiloxStream a(1, 0, 0);
+    for (int i = 0; i < 4; ++i) a.NextBits32();     // exhaust block 0
+    const uint32_t from_block_1 = a.NextBits32();
+
+    PhiloxStream b(1, 0, uint64_t(1) << 32);
+    const uint32_t from_site_2_32 = b.NextBits32();
+
+    EXPECT_NE(from_block_1, from_site_2_32)
+        << "the exact pair that collided before the counter was partitioned";
+}
+
+// RELEASE-BUILD ENFORCEMENT. The bounds were originally plain asserts, which
+// this project's Release build (-O3 -DNDEBUG) compiles out -- so in the binary
+// that would run on Graviton, site=2^48 aliased onto site=0 and block 65536
+// wrapped onto block 0, silently reusing a stream. Both are now enforced by
+// code that survives NDEBUG. These tests run in the Release configuration,
+// which is exactly where the old asserts were absent.
+TEST(Philox, SiteTruncationIsDefinedNotAliasingByAccident) {
+    // Out-of-domain sites are masked, which is DOCUMENTED behaviour: site is a
+    // 48-bit identifier. The point is that it is defined and testable, not
+    // that it is a surprise.
+    PhiloxStream a(1, 0, 0);
+    PhiloxStream b(1, 0, uint64_t(1) << 48);
+    EXPECT_EQ(a.NextBits32(), b.NextBits32());
+
+    // Callers holding a 64-bit id must map it in, and then the high bits DO
+    // matter -- which is the property truncation alone would not give.
+    EXPECT_NE(SiteFromHash64(0), SiteFromHash64(uint64_t(1) << 48));
+    EXPECT_LE(SiteFromHash64(~uint64_t(0)), PhiloxStream::kMaxSite);
+}
+
+TEST(Philox, ExhaustingASiteThrowsRatherThanReusingItsStream) {
+    PhiloxStream s(1, 0, 7);
+    // 4 words per block, kMaxBlock+1 legal blocks.
+    const uint64_t legal = 4 * (PhiloxStream::kMaxBlock + 1);
+    for (uint64_t i = 0; i < legal; ++i) s.NextBits32();
+    // The next draw would wrap block back onto 0 and repeat this site's
+    // numbers. Silent repetition is the one outcome that must not happen.
+    EXPECT_THROW(s.NextBits32(), std::logic_error);
+}
+
+// The general property the pair above is one instance of: no two (site, block)
+// pairs may ever produce the same word, for any site whose high half is small
+// enough that the old XOR could reach it.
+TEST(Philox, SiteAndBlockOccupyDisjointCounterFields) {
+    std::set<uint32_t> seen;
+    for (uint64_t hi = 0; hi < 8; ++hi) {
+        PhiloxStream s(99, 3, (hi << 32) | 5ull);
+        for (int block = 0; block < 8; ++block) {
+            // One word per block, then skip to the next block.
+            seen.insert(s.NextBits32());
+            for (int i = 0; i < 3; ++i) s.NextBits32();
+        }
+    }
+    EXPECT_EQ(seen.size(), 64u) << "some (site, block) pairs share a stream";
+}
+
 // --- Distributional sanity ------------------------------------------------
 // Not a substitute for a test suite like TestU01; enough to catch a broken
 // bit-extraction or scaling step.
@@ -189,16 +256,32 @@ TEST(Philox, BitsToUniformConversionsAreExact) {
 // Committed digest, mirroring infra/scripts/check_determinism.sh. Philox is
 // integer-only, so this must hold on every platform and every optimization
 // level -- including under -ffast-math, which cannot touch integer arithmetic.
-// Recorded 2026-09-06; verified identical under gcc 13.3.0 and clang 18.1.3
+// Recorded 2026-09-08; verified identical under gcc 13.3.0 and clang 18.1.3
 // at -O0/-O2/-O3.
 TEST(Philox, DigestOverFixedGridIsStable) {
     uint64_t digest = 1469598103934665603ull;
-    for (uint64_t site = 0; site < 20000; ++site) {
-        const uint64_t bits = PhiloxStream(20260906ull, 17ull, site).NextBits64();
+    auto absorb = [&digest](uint64_t bits) {
         for (int byte = 0; byte < 8; ++byte) {
             digest ^= (bits >> (byte * 8)) & 0xFFull;
             digest *= 1099511628211ull;
         }
+    };
+    for (uint64_t site = 0; site < 20000; ++site) {
+        absorb(PhiloxStream(20260906ull, 17ull, site).NextBits64());
     }
-    EXPECT_EQ(digest, 215287054852263674ull);
+    // Sites with a non-zero high half, and a draw deep enough to advance the
+    // block index. The loop above does neither, so it stayed byte-identical
+    // across the counter repartition that fixed a real stream collision.
+    for (uint64_t hi = 0; hi < 64; ++hi) {
+        absorb(PhiloxStream(20260906ull, 17ull, (hi << 32) | 0x1234ull).NextBits64());
+    }
+    // The ends of the declared domain, per D18.
+    absorb(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite).NextBits64());
+    absorb(PhiloxStream(20260906ull, 17ull, PhiloxStream::kMaxSite - 1).NextBits64());
+    PhiloxStream deep(20260906ull, 17ull, 99ull);
+    for (uint64_t i = 0; i < 2 * (PhiloxStream::kMaxBlock + 1); ++i) {
+        absorb(deep.NextBits64());
+    }
+
+    EXPECT_EQ(digest, 14182439601419266695ull);
 }

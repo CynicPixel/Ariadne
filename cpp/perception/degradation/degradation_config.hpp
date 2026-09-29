@@ -63,6 +63,24 @@ inline void ValidateDegradation(const NamedDegradation& d) {
     if (p.enable_dust && p.dust_beta <= 0.0) {
         fail("enable_dust is true but dust_beta is 0, which applies no dust");
     }
+    // A zero frequency maps every pixel onto lattice cell 0, so the dust field
+    // becomes a spatially uniform constant while still LOOKING like a field in
+    // the config. Silent uniformity is exactly the class of error the strict
+    // loader exists to prevent.
+    if (p.dust_field_frequency <= 0.0) {
+        fail("dust_field_frequency must be > 0; zero collapses the field to a"
+             " single lattice cell and makes the dust spatially uniform");
+    }
+    // SamplePoisson's exact branch is Knuth's, whose loop runs O(lambda) times
+    // and is hard-capped at 10000 iterations. Raising this threshold past the
+    // cap would make bright pixels return exactly 10000 photons -- a plausible
+    // image built on fabricated statistics. The Gaussian approximation is
+    // already accurate by lambda=30, so there is no reason to exceed 50 and
+    // every reason to keep the cap unreachable.
+    if (p.poisson_exact_max_lambda <= 0.0 || p.poisson_exact_max_lambda > 50.0) {
+        fail("poisson_exact_max_lambda must be in (0, 50]; beyond that Knuth's"
+             " loop hits its iteration cap and silently truncates the count");
+    }
 }
 
 /// Parse a degradation config. Every key is read explicitly and the config is

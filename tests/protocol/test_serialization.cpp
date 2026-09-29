@@ -204,14 +204,45 @@ TEST(Serialization, WireBytesIncludeDatagramFraming) {
     const WireCodec codec;
     const auto msg = codec.EncodePoseGraph(MakeGraph(10, 1), 1, 2,
                                            Timestamp::Nanoseconds(1), 1);
-    EXPECT_EQ(msg.bytes.size(), kFrameHeaderBytes + msg.record.transmitted_bytes);
-    EXPECT_EQ(msg.record.wire_bytes, kFrameHeaderBytes +
-                                         msg.record.transmitted_bytes +
-                                         kDatagramOverheadBytes);
+    const uint64_t framed = kFrameHeaderBytes + msg.record.transmitted_bytes;
+    EXPECT_EQ(msg.bytes.size(), framed);
+    EXPECT_EQ(msg.record.wire_bytes,
+              framed + kDatagramOverheadBytes * DatagramCount(framed));
+    // This one fits in a single datagram, so the old per-message arithmetic
+    // happens to agree here. The multi-datagram case below is where they part.
+    EXPECT_LE(framed, kDatagramPayloadBytes);
     // Framing is always charged on top of what is transmitted. Note this is
     // NOT the same as wire > payload: with POSE_GRAPH compression (D14) the
     // wire form is routinely far smaller than the uncompressed payload.
     EXPECT_GT(msg.record.wire_bytes, msg.record.transmitted_bytes);
+}
+
+// §15.7 charges "28 B emulated UDP/IP header PER DATAGRAM". A message larger
+// than one datagram's payload fragments, and each fragment carries its own
+// header. Charging once per message understated framing on exactly the large
+// classes the Phase 3 <=15% prediction gate has to price.
+TEST(Serialization, LargeMessagesAreChargedFramingPerDatagram) {
+    const WireCodec codec;
+    const auto msg = codec.EncodePoseGraph(MakeGraph(200, 40), 1, 2,
+                                           Timestamp::Nanoseconds(1), 1);
+    const uint64_t framed = kFrameHeaderBytes + msg.record.transmitted_bytes;
+    ASSERT_GT(framed, kDatagramPayloadBytes) << "test needs a multi-MTU message";
+
+    const uint64_t datagrams = DatagramCount(framed);
+    EXPECT_GT(datagrams, 1u);
+    EXPECT_EQ(msg.record.wire_bytes,
+              framed + kDatagramOverheadBytes * datagrams);
+    // Strictly more than the old per-message arithmetic would have charged.
+    EXPECT_GT(msg.record.wire_bytes, framed + kDatagramOverheadBytes);
+}
+
+TEST(Serialization, DatagramCountRoundsUpAndNeverReturnsZero) {
+    EXPECT_EQ(DatagramCount(0), 1u);            // an empty message still costs one
+    EXPECT_EQ(DatagramCount(1), 1u);
+    EXPECT_EQ(DatagramCount(kDatagramPayloadBytes), 1u);
+    EXPECT_EQ(DatagramCount(kDatagramPayloadBytes + 1), 2u);
+    EXPECT_EQ(DatagramCount(2 * kDatagramPayloadBytes), 2u);
+    EXPECT_EQ(DatagramCount(2 * kDatagramPayloadBytes + 1), 3u);
 }
 
 // The compression policy is stated once in IsCompressedClass and asserted here
