@@ -829,6 +829,9 @@ headers: `features.hpp` (ORB), `video/tracking.hpp` (`buildOpticalFlowPyramid`, 
   `perception_config` (§7.3: manifest fields, not constants). The OpenCV tests load that shipped file rather than
   struct defaults, so the tests exercise what runs.
 
+**Approved 2026-09-29:** the §9.6 `CV_16S` disparity and the §7.1 `Detect`/`DetectAndCompute` split; both are
+mirrored into the architecture doc.
+
 **Hazard found: SGBM aliases surfaces nearer than its search range into phantom FAR depth.** A textured plane at
 0.20 m (true disparity 320, beyond the 255 searched) still yields "valid" pixels: 1.38% of the image at uniqueness
 10 and speckle window 100. The reported depths spread from 0.3 m to past 3 m rather than clustering at the range
@@ -846,7 +849,9 @@ What does separate them was measured rather than assumed (probe over planes at 1
   `stereo.support_*`) passes > 90% of true depth and none of the aliases (tested).
 
 Hand-off rule, testable: **1.8's occupancy placeholder carves free space only along rays whose depth is in
-`DenseSupportMask`.** Unsupported valid depth may mark occupancy but never free space. `[ASSUMPTION]` These numbers
+`DenseSupportMask`.** Unsupported valid depth may mark occupancy but never free space. **Superseded in part by
+D35:** on real EuRoC texture the gate catches 87% of aliases, not all of them, so 1.8 must also choose between
+"stereo never carves free space" and a near-field pass. `[ASSUMPTION]` These numbers
 come from synthetic random-texture planes. Real scenes have genuinely sparse true depth (low texture, occlusion
 edges), where the gate discards true depth, which errs in the safe direction. They must be re-measured on EuRoC,
 and Phase 2's WLS confidence plus a near-field check (e.g. a reduced-resolution pass whose effective range covers
@@ -860,3 +865,68 @@ clustered corners); later frames reach about 1035.
 
 Not yet done for 1.4 (Invariant 5, datasets before simulator): a EuRoC sequence through rectification
 (`stereoRectify` / `initUndistortRectifyMap` / `remap`) and this front-end.
+
+## 2026-09-30 — D35: EuRoC adapter, rectification, and the 1.4 real-sequence run
+
+**Source and licence.** EuRoC MAV (Burri et al., IJRR 2016), DOI 10.3929/ethz-b-000690084. The old ASL page now
+redirects to ethz-asl.github.io, whose EuRoC page points to the ETH Research Collection. That collection's HTML
+frontend returns HTTP 500 or 429, but its DSpace REST API works (`/server/api/pid/find?id=hdl:20.500.11850/690084`
+-> bundles -> bitstreams). It lists one zip per environment: `machine_hall.zip` is 12.7 GB and holds each MH
+sequence as a ROS bag plus an ASL-format zip. **Licence: "In Copyright - Non-Commercial Use Permitted"** (dc.rights,
+rightsstatements.org InC-NC 1.0). The competition licenses every *submitted* material to OpenCV and AWS "for any
+lawful commercial or noncommercial purpose" (`opencv-ai-competition-2026.md` line 209); data only referenced is
+not covered (line 210); third-party-terms violations disqualify (line 222). Therefore **no EuRoC pixels in any
+submitted material** (report figures, demo video, S3/ECR artifacts). Derived metrics are treated as facts that may
+be reported, `[ASSUMPTION]` pending the maintainer's confirmation. The data lives only in `.cache/` (gitignored and
+dockerignored; `spinup.sh` snapshots via `git ls-files --exclude-standard`, so it never uploads).
+
+**Fetch** (`infra/scripts/fetch_euroc.py`, stdlib only). The server honours HTTP Range. The script reads the outer
+zip's central directory (2 requests), downloads exactly the member's bytes in one streaming ranged GET (1.57 GB
+deflated for MH_01 instead of 12.7 GB), checks the central-directory CRC-32, and writes a provenance file with
+the sha256 (`5f4ecbc5...` for MH_01). It retries with backoff on 429/5xx and resumes stored members. That sha256
+goes into the manifest's `bag_checksum`.
+
+**Reader** (`runtime/datasets/euroc.hpp`, OpenCV-free): strict `sensor.yaml` parsing (pinhole + radial-tangential
+only, rigid `T_BS` checked, OpenCV's `%YAML:1.0` directive tolerated although MH_01's files do not carry it), a
+strictly increasing `data.csv` index, and stereo pairing by EXACT timestamp, never by row. **Frame convention
+pinned by test**: composing the Kalibr `T_BS` values reproduces ORB-SLAM3's independently published
+`Stereo.T_c1_c2` to 1e-6, and the `stereoRectify` input `T_right_left` has t.x = -0.110 m.
+
+**Rectifier** (`perception/stereo/stereo_rectifier.*`), in the idiom of ORB-SLAM3 (`precomputeRectificationMaps`)
+and Kimera-VIO (`StereoCamera`): `stereoRectify(..., STEREO_ZERO_DISPARITY, alpha = 0)`, then
+`initUndistortRectifyMap` straight to `CV_16SC2` fixed-point maps, then `remap`. `alpha = 0` follows Kimera-VIO (the
+default -1 leaves black borders that create invalid keypoints, opencv/opencv#7240). `CALIB_ZERO_DISPARITY` is
+deprecated in OpenCV 5 in favour of `STEREO_ZERO_DISPARITY`. The rectifier refuses a non-horizontal result or a
+negative baseline (the inverted-extrinsic failure). Synthetic geometric test: 3D points projected through a raw,
+distorted, toed-in rig land on one rectified row within 1e-3 px, with depth from disparity within 1e-4 relative.
+The negative control, a 1-degree pitch error, produces > 5 px. `remap` output is bit-identical across thread counts.
+
+**`configs/perception/euroc.yaml`** is a DATASET config: 96 disparities (Z_min 0.505 m at the rectified
+fB = 436.2 x 0.1101 m; 13% blind columns), 400 target tracks (VINS-Fusion ~150, OpenVINS ~200 at 752x480), and
+`required_min_range_m` 0.60. The mission's 0.30 m requirement stays in `placeholder.yaml`.
+
+**MH_01_easy, all 3682 frames** (`ariadne_euroc_frontend`; stereo, alias and row checks on every 10th frame, i.e.
+369 keyframes; 8 OpenCV threads, amd64):
+- Pairing: 3682 pairs, 0 unmatched on either side.
+- Rectification: sub-pixel LK left->right with a 0.5 px reverse check gives **median |dy| 0.135 px** (p90 0.68 px)
+  over 96742 points. The controls must fail it and do: raw pair 13.1 px, 1-degree pitch error 8.1 px (f*theta
+  ~ 7.6 px). ORB mutual matches give median 0 at their ~1 px resolution (integer FAST positions) and 96% positive
+  disparity.
+- Tracker: 377 tracks/frame mean (p10 333); 0 DEGRADED frames. Rejections over 1.39 M attempted:
+  forward-backward 35.0k, LK lost 9.4k, epipolar 8.8k, crowding 33.7k, border 0.8k.
+- Stereo: valid 70.4% of pixels, dense-supported 62.3%.
+- **Aliasing on real texture** (pseudo-truth = 288-disparity SGBM, counted only where its own support gate keeps
+  it; SGBM judging SGBM, so this is an estimate, not ground truth): 0.70% of pseudo-truth pixels are aliases.
+  They are **episodic, not diffuse**: max 26% in one keyframe, and 43 of 369 keyframes above 1%, i.e. genuinely near
+  surfaces. **The gate catches 87%**, leaving a residual of 0.09% of pixels (synthetic planes: 100%). Gate cost on
+  agreeing depth: 0.14% in the interior, 0.24% within 15 px of edges. That cost is measured only on densely
+  supported pixels, so its cost on sparse true depth remains unmeasured.
+- Timing: rectify 1.4 ms/pair, tracking 22.9 ms/frame (p95 40 ms), SGBM 31.6 ms/keyframe at 752x480x96.
+
+**Consequence for 1.8 (decision deferred to 1.8, recorded now):** stereo either never carves free space in the
+placeholder, or a near-field pass is added (e.g. half-resolution SGBM at the same 96 disparities covers the blind
+zone at ~1/4 the cost), with any carving gated by it.
+
+Also: the run manifest now records `compiler`/`architecture` (shared `build_identity.hpp`), `imu_mode: none` (the
+default `attitude_only` would claim an inertial estimator ran), `loop_backend: none`, ISO `created_utc`, and the
+exact command in `extra.command` (§36). `core.sh euroc` reproduces the run with provenance.

@@ -4,7 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-09-29 (latest) — 1.4 placeholder perception: components built, EuRoC run pending
+## 2026-09-30 (latest) — 1.4 complete on EuRoC MH_01_easy
+
+- EuRoC fetched by a ranged single-member download (1.57 GB of a 12.7 GB archive), CRC and sha256 verified.
+  Licence InC-NC: no EuRoC pixels in submitted material (D35).
+- Rectifier (alpha 0, fixed-point maps) verified synthetically (1e-3 px) and on real data: median row error
+  0.135 px vs 13.1 px raw and 8.1 px for a 1-degree error.
+- Full sequence, 3682 frames: 377 tracks/frame, 0 DEGRADED, 22.9 ms/frame tracking, 31.6 ms/keyframe SGBM.
+- Near-range aliasing on real texture is episodic (worst keyframe 26%); the density gate catches 87%. 1.8 must pick
+  "no stereo free-space carving" or a near-field pass.
+- Tests: image 186/186, host 166/166. Evidence run: re-run `core.sh euroc` from a clean tree after committing.
+
+---
+
+## 2026-09-29 — 1.4 placeholder perception: components built, EuRoC run pending
 
 - ORB engine with §7.3 grid selection, pyramidal-LK tracker with forward-backward and epipolar rejection, SGBM
   depth to the §9.6 contract, §9.4 range validator. D34.
@@ -12,7 +25,8 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - Deterministic across OpenCV thread counts and global RNG state (verified bit-for-bit).
 - **Hazard found and bounded:** SGBM reports phantom FAR depths (0.3 m to >3 m) for surfaces nearer than Z_min.
   Speckle window 200 cuts them ~10-30x; a measured dense-support gate (`DenseSupportMask`) rejects all survivors.
-  Rule for 1.8: carve free space only through supported depth. Synthetic numbers; re-measure on EuRoC.
+  Rule for 1.8: carve free space only through supported depth. Synthetic numbers; on EuRoC the gate catches 87%
+  (D35).
 - Open for 1.4: EuRoC adapter + rectification + a real-sequence run (Invariant 5).
 
 ---

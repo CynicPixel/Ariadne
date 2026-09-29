@@ -7,10 +7,12 @@
 #include "perception/features/orb_engine.hpp"
 #include "perception/opencv/image_adapter.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
+#include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
 
 #include <gtest/gtest.h>
 #include <opencv2/core/utility.hpp>
+#include <opencv2/geometry.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -332,6 +334,118 @@ TEST(PerceptionCv, SgbmNearRangeBoundary) {
         << "an aliased near-range depth passed the dense-support gate";
 }
 
+// --- Rectification (§9.2) ---------------------------------------------------
+
+namespace {
+
+/// A distorted, slightly toed-in rig resembling EuRoC's (752x480, radtan,
+/// B = 0.11 m), with the right camera rotated by `pitch` and 0.6 deg in yaw.
+RawStereoCalibration SyntheticRawRig(double pitch = 0.004) {
+    RawStereoCalibration c;
+    c.left = {752, 480, 458.0, 457.0, 367.0, 248.0, {-0.28, 0.074, 0.0002, 0.00002}};
+    c.right = {752, 480, 457.5, 456.0, 380.0, 255.0, {-0.283, 0.0745, -0.0001, -0.00003}};
+    c.T_right_left.R = core::SO3Exp(core::Vec3(pitch, 0.01, 0.002));
+    c.T_right_left.t = core::Vec3(-0.110, 0.0002, -0.0009);
+    return c;
+}
+
+cv::Mat CvMat3(const core::Mat3& m) {
+    cv::Mat out(3, 3, CV_64F);
+    for (int r = 0; r < 3; ++r)
+        for (int c = 0; c < 3; ++c) out.at<double>(r, c) = m(r, c);
+    return out;
+}
+
+}  // namespace
+
+// The whole rectification chain, checked geometrically without any image:
+// project 3D points through the RAW distorted cameras, map the raw pixels into
+// rectified coordinates with the rectifier's R_i and P_i, and require (a) the
+// same row in both images and (b) disparity = f B / Z.
+TEST(PerceptionCv, RectificationPutsCorrespondencesOnOneRowWithMetricDisparity) {
+    const RawStereoCalibration raw = SyntheticRawRig();
+    const StereoRectifier rect(raw);
+    const RectifiedStereoRig& rig = rect.Rig();
+    EXPECT_NEAR(rig.baseline_m, raw.T_right_left.t.norm(), 1e-9);
+    EXPECT_NEAR(rect.P2().at<double>(1, 3), 0.0, 1e-9);
+
+    auto K = [](const PinholeRadtan& c) -> cv::Mat {
+        return (cv::Mat_<double>(3, 3) << c.fu, 0, c.cu, 0, c.fv, c.cv, 0, 0, 1);
+    };
+    auto D = [](const PinholeRadtan& c) -> cv::Mat {
+        return (cv::Mat_<double>(1, 4) << c.dist[0], c.dist[1], c.dist[2], c.dist[3]);
+    };
+    std::vector<cv::Point3d> pts;
+    core::PhiloxStream s(21, 0, 0);
+    auto u = [&s] { return (s.NextBits32() >> 8) * (1.0 / 16777216.0); };
+    for (int i = 0; i < 300; ++i) {
+        const double z = 1.0 + 7.0 * u();
+        pts.emplace_back((u() - 0.5) * 0.8 * z, (u() - 0.5) * 0.5 * z, z);   // inside both views
+    }
+    std::vector<cv::Point2d> raw_l, raw_r;
+    cv::Mat rvec;
+    cv::Rodrigues(CvMat3(raw.T_right_left.R), rvec);
+    const cv::Mat tvec = (cv::Mat_<double>(3, 1) << raw.T_right_left.t.x(), raw.T_right_left.t.y(),
+                          raw.T_right_left.t.z());
+    const cv::Mat zero3 = cv::Mat::zeros(3, 1, CV_64F);
+    cv::projectPoints(pts, zero3, zero3, K(raw.left),
+                      D(raw.left), raw_l);
+    cv::projectPoints(pts, rvec, tvec, K(raw.right), D(raw.right), raw_r);
+
+    std::vector<cv::Point2d> rl, rr;
+    cv::undistortPoints(raw_l, rl, K(raw.left), D(raw.left), rect.R1(), rect.P1());
+    cv::undistortPoints(raw_r, rr, K(raw.right), D(raw.right), rect.R2(), rect.P2());
+    double worst_dy = 0.0, worst_depth_rel = 0.0;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        worst_dy = std::max(worst_dy, std::abs(rl[i].y - rr[i].y));
+        // Depth along the RECTIFIED left optical axis: rotate the point by R1.
+        const cv::Mat p = rect.R1() * (cv::Mat_<double>(3, 1) << pts[i].x, pts[i].y, pts[i].z);
+        const double z_rect = p.at<double>(2);
+        const double z_from_d = rig.fx * rig.baseline_m / (rl[i].x - rr[i].x);
+        worst_depth_rel = std::max(worst_depth_rel, std::abs(z_from_d - z_rect) / z_rect);
+    }
+    // undistortPoints inverts the distortion iteratively; 1e-3 px is well
+    // below any pixel-level effect and far below a wrong-transform error.
+    EXPECT_LT(worst_dy, 1e-3);
+    EXPECT_LT(worst_depth_rel, 1e-4);
+}
+
+// Negative control for the check above: the same measurement against a rig
+// whose rotation is wrong by 1 deg of pitch must fail it. Otherwise the check
+// could not have caught anything.
+TEST(PerceptionCv, RectificationCheckDetectsAWrongCalibration) {
+    const RawStereoCalibration truth = SyntheticRawRig();
+    RawStereoCalibration wrong = truth;
+    wrong.T_right_left.R = core::SO3Exp(core::Vec3(0.004 + 0.01745, 0.01, 0.002));
+    const StereoRectifier rect(wrong);
+    auto K = [](const PinholeRadtan& c) -> cv::Mat {
+        return (cv::Mat_<double>(3, 3) << c.fu, 0, c.cu, 0, c.fv, c.cv, 0, 0, 1);
+    };
+    auto D = [](const PinholeRadtan& c) -> cv::Mat {
+        return (cv::Mat_<double>(1, 4) << c.dist[0], c.dist[1], c.dist[2], c.dist[3]);
+    };
+    std::vector<cv::Point3d> pts{{0.2, 0.1, 3.0}, {-0.5, -0.2, 2.0}, {0.1, 0.3, 5.0}};
+    std::vector<cv::Point2d> raw_l, raw_r, rl, rr;
+    cv::Mat rvec;
+    cv::Rodrigues(CvMat3(truth.T_right_left.R), rvec);   // the TRUE rig produced the pixels
+    const cv::Mat tvec = (cv::Mat_<double>(3, 1) << -0.110, 0.0002, -0.0009);
+    const cv::Mat zero3 = cv::Mat::zeros(3, 1, CV_64F);
+    cv::projectPoints(pts, zero3, zero3, K(truth.left),
+                      D(truth.left), raw_l);
+    cv::projectPoints(pts, rvec, tvec, K(truth.right), D(truth.right), raw_r);
+    cv::undistortPoints(raw_l, rl, K(truth.left), D(truth.left), rect.R1(), rect.P1());
+    cv::undistortPoints(raw_r, rr, K(truth.right), D(truth.right), rect.R2(), rect.P2());
+    for (size_t i = 0; i < pts.size(); ++i) EXPECT_GT(std::abs(rl[i].y - rr[i].y), 5.0);
+}
+
+// A transform in the wrong direction (right->left instead of left->right)
+// yields a negative baseline; the rectifier refuses it.
+TEST(PerceptionCv, RectifierRejectsAnInvertedExtrinsic) {
+    RawStereoCalibration c = SyntheticRawRig();
+    c.T_right_left = c.T_right_left.inverse();
+    EXPECT_THROW(StereoRectifier{c}, std::invalid_argument);
+}
+
 // --- Determinism ----------------------------------------------------------------
 
 // Same inputs, same outputs, bit for bit: across repeated runs, across
@@ -343,7 +457,10 @@ TEST(PerceptionCv, OutputsIndependentOfThreadCountAndGlobalRng) {
         std::vector<cv::Point2f> pts;
         cv::Mat disparity;
         cv::Mat desc;
+        cv::Mat rectified;
     };
+    const StereoRectifier rectifier(SyntheticRawRig());
+    const cv::Mat raw752 = Texture(12, 752, 480);
     auto run = [&](int threads) {
         cv::setNumThreads(threads);
         for (int i = 0; i < 17; ++i) cv::theRNG().next();
@@ -352,8 +469,10 @@ TEST(PerceptionCv, OutputsIndependentOfThreadCountAndGlobalRng) {
         KltTracker tracker(Placeholder().tracker, orb);
         tracker.Process(f0, 0, 99);
         const TrackedFrame t = tracker.Process(f1, 1, 99);
+        cv::Mat rl, rr;
+        rectifier.Rectify(raw752, raw752, rl, rr);
         return Run{t.ids, t.points, SgbmStereo(Placeholder().stereo, Rig()).Compute(f0, right).disparity,
-                   orb.DetectAndCompute(f0, cv::Mat()).descriptors};
+                   orb.DetectAndCompute(f0, cv::Mat()).descriptors, rl};
     };
     const int default_threads = cv::getNumThreads();
     const Run ref = run(1);
@@ -366,6 +485,8 @@ TEST(PerceptionCv, OutputsIndependentOfThreadCountAndGlobalRng) {
         EXPECT_EQ(cv::norm(r.disparity, ref.disparity, cv::NORM_INF), 0.0)
             << "SGBM differs at threads=" << threads;
         EXPECT_EQ(cv::norm(r.desc, ref.desc, cv::NORM_INF), 0.0) << "ORB differs at threads=" << threads;
+        EXPECT_EQ(cv::norm(r.rectified, ref.rectified, cv::NORM_INF), 0.0)
+            << "remap differs at threads=" << threads;
     }
     cv::setNumThreads(default_threads);
 }

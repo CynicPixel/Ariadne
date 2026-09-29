@@ -27,7 +27,8 @@ add_executable(test_unit
   unit/test_observability.cpp
   unit/test_config.cpp
   unit/test_metrics.cpp
-  unit/test_perception_config.cpp)
+  unit/test_perception_config.cpp
+  unit/test_euroc.cpp)
 target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception GTest::gtest_main)
 # Tests read the shipped configs from the source tree.
 target_compile_definitions(test_unit PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

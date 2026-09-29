@@ -16,6 +16,7 @@
 // through ARIADNE_* environment variables. An unset variable stays UNRECORDED
 // in the manifest instead of being guessed.
 // ---------------------------------------------------------------------------
+#include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
 #include "runtime/manifest/opencv_identity.hpp"
 #include "runtime/manifest/run_manifest.hpp"
@@ -45,27 +46,6 @@ std::string UtcNow() {
     return buf;
 }
 
-// Compile-time facts: these describe the binary, so the compiler knows them.
-std::string Compiler() {
-#if defined(__clang__)
-    return std::string("clang ") + __clang_version__;
-#elif defined(__GNUC__)
-    return std::string("gcc ") + __VERSION__;
-#else
-    return ariadne::runtime::kUnknownField;
-#endif
-}
-
-std::string Architecture() {
-#if defined(__aarch64__)
-    return "arm64";
-#elif defined(__x86_64__)
-    return "amd64";
-#else
-    return ariadne::runtime::kUnknownField;
-#endif
-}
-
 int WriteManifest(const char* path) {
     RunManifest m;
     m.created_utc = UtcNow();
@@ -73,8 +53,7 @@ int WriteManifest(const char* path) {
     m.git_commit = EnvOr("ARIADNE_GIT_COMMIT", ariadne::runtime::kUnknownField);
     m.git_dirty = EnvOr("ARIADNE_GIT_DIRTY", "false") == "true";
     m.image_digest = EnvOr("ARIADNE_IMAGE_DIGEST", ariadne::runtime::kUnknownField);
-    m.compiler = Compiler();
-    m.architecture = Architecture();
+    ariadne::runtime::RecordBuildIdentity(m);
     ariadne::runtime::RecordOpenCvIdentity(m);
     ariadne::runtime::RecordDeterminismDigests(m);
 

@@ -24,4 +24,9 @@ if(OpenCV_FOUND)
   # COMPONENT so the image installs only our binaries, not the install rules
   # that FetchContent dependencies (GoogleTest, yaml-cpp) register.
   install(TARGETS ariadne_identity RUNTIME DESTINATION bin COMPONENT ariadne)
+
+  add_executable(ariadne_euroc_frontend tools/ariadne_euroc_frontend.cpp)
+  target_link_libraries(ariadne_euroc_frontend PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_euroc_frontend RUNTIME DESTINATION bin COMPONENT ariadne)
 endif()

@@ -10,6 +10,11 @@
 #   infra/scripts/core.sh dev [cmd]    dev stage, repo bind-mounted at /work;
 #                                      default cmd configures + builds + tests
 #                                      into build/docker/
+#   infra/scripts/core.sh euroc [SEQ]  run the 1.4 front-end over a fetched
+#                                      EuRoC sequence (default MH_01_easy) and
+#                                      write manifest + results under
+#                                      evaluation/runs/phase1/euroc_frontend/
+#                                      (fetch first: infra/scripts/fetch_euroc.py)
 #
 # Docker is the only host dependency.
 # ---------------------------------------------------------------------------
@@ -20,13 +25,21 @@ IMAGE="${ARIADNE_CORE_IMAGE:-ariadne/core:dev}"
 DEV_IMAGE="${ARIADNE_CORE_DEV_IMAGE:-ariadne/core-dev:dev}"
 JOBS="${ARIADNE_BUILD_JOBS:-4}"
 
+# Untracked files count: they are copied into the build context too. Paths
+# that .dockerignore keeps out of the context (docs/, IDEA.md, graphify-out/)
+# cannot change the image, so they are excluded here; keep the two lists in step.
+git_dirty() {
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out')" ]; then
+    echo true
+  else
+    echo false
+  fi
+}
+
 cmd_image() {
-  local commit dirty=false
+  local commit dirty
   commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  # Untracked files count: they are copied into the build context too. Paths
-  # that .dockerignore keeps out of the context (docs/, IDEA.md, graphify-out/) cannot change
-  # the image, so they are excluded here; keep the two lists in step.
-  [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out')" ] && dirty=true
+  dirty="$(git_dirty)"
   DOCKER_BUILDKIT=1 docker build -f "$REPO_ROOT/infra/docker/core.Dockerfile" \
     --target ci --build-arg ARIADNE_GIT_COMMIT="$commit" \
     --build-arg ARIADNE_GIT_DIRTY="$dirty" --build-arg BUILD_JOBS="$JOBS" \
@@ -72,9 +85,24 @@ cmd_dev() {
     -e CCACHE_DIR=/work/.cache/ccache-docker "$DEV_IMAGE" "$@"
 }
 
+cmd_euroc() {
+  local seq="${1:-MH_01_easy}" commit dirty
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  dirty="$(git_dirty)"
+  [ -d "$REPO_ROOT/.cache/datasets/euroc/$seq/mav0" ] \
+    || { echo "missing $seq; run infra/scripts/fetch_euroc.py $seq" >&2; exit 1; }
+  cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_euroc_frontend --parallel $JOBS >/dev/null \
+    && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty \
+       /work/build/docker/cpp/runtime/ariadne_euroc_frontend \
+       --sequence /work/.cache/datasets/euroc/$seq \
+       --config /work/configs/perception/euroc.yaml \
+       --out /work/evaluation/runs/phase1/euroc_frontend --stereo-every 10"
+}
+
 case "${1:-}" in
   image) shift; cmd_image "$@" ;;
   gate)  shift; cmd_gate "$@" ;;
   dev)   shift; cmd_dev "$@" ;;
-  *) sed -n '2,16p' "$0"; exit 2 ;;
+  euroc) shift; cmd_euroc "$@" ;;
+  *) sed -n '2,21p' "$0"; exit 2 ;;
 esac
