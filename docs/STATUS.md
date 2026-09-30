@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen
+
+Procedural room-maze worlds (D37, `docs/design/SIM_1.1-1.3_WORLDGEN.md`): floorplan, exact 2D GT, textured quad
+geometry, props, ChArUco boards, lights, S-curve yaw+pitch scripts with an analytic IMU, closure-opportunity and
+separation gates, four presets, 100 tests green in the sim image, golden digests pinned. Smoke results §4g–§4j:
+kinematic pose writes work physics-free, render time = pose time (depth camera), gz IMU is blind under
+kinematic motion, OBJ UV convention verified, relative `<include>` fails, two full rigs in a real scene run at
+RTF ~0.17 and ~84 MB/sim-s. Next: ROS-free CDR decoder, mover plugin + synthesized IMU + agent SDF + mission
+composer, first real bag, §6 calibration-recovery test. To re-run from a clean commit: census + accept sweeps.
+
 ## 2026-09-30 (latest) — 1.5 placeholder stereo VO: MH_01 ATE 0.126 m (0.16% of path), evo-verified
 
 - Conventions pinned by tests: FD Jacobians (near-zero depth, wide FOV, right camera); Monte Carlo NEES 5.93 over 2000 trials (~6);

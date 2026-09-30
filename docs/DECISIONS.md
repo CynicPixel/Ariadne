@@ -997,3 +997,49 @@ composed covariance is 1.01 (< 22.46). A blackout frame with no tracks is flagge
 pose, forces a keyframe with an uninformative edge, and tracking resumes within 3 frames. `MatchLeftToRight` is the
 single stereo LK implementation (the frontend tool calls it with the row gate off) and has its own unit test. Every
 shipped config is load-tested on the host. The EuRoC ground-truth copy is written under the gitignored `raw/`.
+
+## 2026-09-30 — D37: procedural room-maze worlds (1.1–1.3 worldgen) and their deviations from arch §5.3/§5.5
+
+Design: `docs/design/SIM_1.1-1.3_WORLDGEN.md` (the source of this entry). Code: `python/dataset_tools/worldgen/`
+(numpy + pyyaml only; runs in the pinned ariadne-sim image via `infra/scripts/worldgen.sh`), presets
+`configs/worldgen/{maze_short,maze_medium,maze_long,ci_tiny}.yaml`, ChArUco assets
+`simulator/assets/charuco/` from `cpp/runtime/tools/ariadne_charuco_assets.cpp`. 100 worldgen tests pass in the
+image, including two pinned golden scene-directory digests (GENERATOR_VERSION 1).
+
+**What a scene is.** A seeded maze of 6 m lattice cells (Wilson uniform spanning tree) with 2–4 rooms, dead-end
+stubs, two entrances with vestibules, and a target room whose ρ_responder geodesic from the primary entrance lies
+in the preset's length band (short 10–20 m, medium 20–30 m, long 30–45 m, set from a 1000-seed census run on a
+dirty tree before props and routes existed; to be re-run from the clean commit). Every
+entrance is made 2-edge-connected to the target by a fundamental-cycle cover (so loop routes exist by
+construction), and agent-only narrow passages (0.55–0.70 m) are placed off those cycles so ρ_agent and
+ρ_responder routes genuinely differ (Invariant 4). Identity: (GENERATOR_VERSION, seed, preset digest, attempt).
+
+**Consensus-aware scripting.** Scripted routes use the least-length edge-disjoint route pair per entrance
+(min-cost flow); under the default `cross` template each return leg is edge-disjoint from the other agent's
+outbound leg, so no head-on corridor meetings. Agents survey the target and both entrance rooms with 360° spins
+at per-agent offsets. A scene is accepted only with ≥ 3 inter-agent same-heading, line-of-sight closure
+opportunities in ≥ 2 rooms (~400–850 in 3 rooms on the seeds inspected), and only if a start delay keeps the agents ≥ 1.0 m
+apart throughout.
+
+**Deviations from the arch text.** Items 1–6 were in the design draft the maintainer told me to implement ("continue with the implementation", 2026-09-30). Items 7–9 arose during implementation and are **pending the maintainer's confirmation**:
+1. IMU is synthesized by the kinematic mover from the trajectory's closed-form derivatives; IMU noise and bias
+   random walk are a seeded consumption-time operator, not SDF `<imu><noise>` (§5.3). Forced by SMOKE §4g: gz's
+   IMU reports (0, 0, 9.8) and zero rate on a pose-written body. One IMU config file serves the noise operator
+   and the estimator (§10.2's "same numbers" holds).
+2. 1.1 uses the generator; the plan's hand-authored two-room + corridor scene is the `ci_tiny` preset.
+3. Phase 1 textures are rich and unique per surface, not §5.5's low-texture concrete; `appearance.tau` is the
+   dial toward it (Phase 5), `appearance.repetition` the I7 aliasing dial (refused until 3.5).
+4. Phase 1 GT is 2D (exact for extruded plans): occupancy, exact ESDF, traversability at both ρ, geodesics.
+5. GT pose is published by the mover (exact), not gz's pose-publisher.
+6. Surfaces are in-house OBJ quads, not trimesh meshes (§5.5 stage 3).
+7. Scene worlds inline the scene model (SMOKE §4i: sdformat14 does not resolve relative `<include>`).
+8. Phase 1 agent models carry no visual geometry: agents are invisible to each other (a stated simplification;
+   a visible peer is a dynamic-object problem for later phases). Separation is enforced in the scripts.
+9. Motion primitives are S-curves (C² velocity, continuous jerk) with yaw+pitch, not minimum-jerk; the rig
+   pitches during the calibration dance (views rotated about one axis only are a degenerate Zhang set).
+
+Withdrawn: GT depth at 640×360 (SMOKE §4j: saves ~1 % of compressed bytes).
+
+**Measured sizing (SMOKE §4j, one scene):** ~84 MB per sim-second for two agents, RTF ~0.17 on the 8-core
+llvmpipe host; missions 2–7 min per agent on the seeds inspected (the accept sweep records the distribution).
+**Open:** how the `ci_tiny` bag (~16 GB) reaches nightly CI.
