@@ -1,0 +1,70 @@
+rosbag2_bagfile_information:
+  version: 9
+  storage_identifier: mcap
+  duration:
+    nanoseconds: 2000000005
+  starting_time:
+    nanoseconds_since_epoch: 1000000000
+  message_count: 18
+  topics_with_message_count:
+    - topic_metadata:
+        name: /clock
+        type: rosgraph_msgs/msg/Clock
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+    - topic_metadata:
+        name: /ariadne/agent_0/imu
+        type: sensor_msgs/msg/Imu
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+    - topic_metadata:
+        name: /ariadne/agent_0/gt_pose
+        type: geometry_msgs/msg/PoseStamped
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+    - topic_metadata:
+        name: /ariadne/agent_0/left/camera_info
+        type: sensor_msgs/msg/CameraInfo
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+    - topic_metadata:
+        name: /tf_static
+        type: tf2_msgs/msg/TFMessage
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+    - topic_metadata:
+        name: /ariadne/agent_0/left/image_raw
+        type: sensor_msgs/msg/Image
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 3
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - tiny_bag_0.mcap
+  files:
+    - path: tiny_bag_0.mcap
+      starting_time:
+        nanoseconds_since_epoch: 1000000000
+      duration:
+        nanoseconds: 2000000005
+      message_count: 36
+  custom_data: ~
+  ros_distro: jazzy

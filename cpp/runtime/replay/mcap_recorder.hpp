@@ -122,7 +122,11 @@ public:
         auto problem_handler = [&on_problem](const mcap::Status& status) {
             if (on_problem) on_problem(status);
         };
-        auto view = reader_.readMessages(problem_handler);
+        // Explicit: the SDK's default is FILE order. Identical for bags this class
+        // writes (sequential), but the documented contract is log-time order.
+        mcap::ReadMessageOptions options;
+        options.readOrder = mcap::ReadMessageOptions::ReadOrder::LogTimeOrder;
+        auto view = reader_.readMessages(problem_handler, options);
         for (const auto& item : view) {
             std::vector<uint8_t> frame(
                 reinterpret_cast<const uint8_t*>(item.message.data),

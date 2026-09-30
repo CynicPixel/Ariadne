@@ -10,9 +10,11 @@ add_executable(test_numerical
   numerical/test_degradation.cpp
   numerical/test_pinhole.cpp
   numerical/test_ba.cpp
-  numerical/test_pose_graph.cpp)
+  numerical/test_pose_graph.cpp
+  numerical/test_scripted.cpp)
 target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
-  GTest::gtest_main)
+  yaml-cpp::yaml-cpp GTest::gtest_main)
+target_compile_definitions(test_numerical PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 gtest_discover_tests(test_numerical)
 
 add_executable(test_protocol
@@ -32,7 +34,8 @@ add_executable(test_unit
   unit/test_config.cpp
   unit/test_metrics.cpp
   unit/test_perception_config.cpp
-  unit/test_euroc.cpp)
+  unit/test_euroc.cpp
+  unit/test_ros_cdr.cpp)
 target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception ariadne::slam GTest::gtest_main)
 # Tests read the shipped configs from the source tree.
 target_compile_definitions(test_unit PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

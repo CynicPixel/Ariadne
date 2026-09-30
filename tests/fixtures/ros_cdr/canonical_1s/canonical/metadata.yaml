@@ -1,0 +1,54 @@
+rosbag2_bagfile_information:
+  version: 9
+  storage_identifier: mcap
+  duration:
+    nanoseconds: 1000000000
+  starting_time:
+    nanoseconds_since_epoch: 0
+  message_count: 804
+  topics_with_message_count:
+    - topic_metadata:
+        name: /ariadne/agent_1/gt/pose
+        type: geometry_msgs/msg/PoseStamped
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 201
+    - topic_metadata:
+        name: /ariadne/agent_1/imu
+        type: sensor_msgs/msg/Imu
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 201
+    - topic_metadata:
+        name: /ariadne/agent_0/gt/pose
+        type: geometry_msgs/msg/PoseStamped
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 201
+    - topic_metadata:
+        name: /ariadne/agent_0/imu
+        type: sensor_msgs/msg/Imu
+        serialization_format: cdr
+        offered_qos_profiles:
+          []
+        type_description_hash: ""
+      message_count: 201
+  compression_format: ""
+  compression_mode: ""
+  relative_file_paths:
+    - canonical_0.mcap
+  files:
+    - path: canonical_0.mcap
+      starting_time:
+        nanoseconds_since_epoch: 0
+      duration:
+        nanoseconds: 1000000000
+      message_count: 1608
+  custom_data: ~
+  ros_distro: jazzy
