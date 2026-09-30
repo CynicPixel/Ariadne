@@ -336,3 +336,56 @@ not yet a decision.
 **Also observed:** PBR `<albedo_map>` loads under llvmpipe, but gz's `<box>` maps the full texture onto every
 face regardless of face aspect, so long thin faces and large floors are visibly stretched/streaked. Textured
 geometry needs explicit UVs (meshes), not primitive boxes.
+
+## 4h. OBJ quad texture mapping `[IMAGE-VERIFIED]` 2026-09-30
+
+`simulator/smoke/obj_uv_probe/run_obj_probe.py` (sim image, llvmpipe). Two 2.0x1.5 m quads written by
+`python/dataset_tools/worldgen/mesh.py` at 3 m from a 1280x720, HFOV 90° camera, one wound towards the camera
+and one away, with a 512x384 texture (R = column gradient, G = 255 at the top row, B = 64 px checker), loaded
+through **relative** `meshes/…` and `textures/…` URIs.
+
+| Check | Result |
+|---|---|
+| u direction | red 9.2 at left edge → 239.0 at right edge, corr > 0.99: u runs left→right seen from the front |
+| v direction (V-flip) | green 238.1 at top → 14.6 at bottom: image row 0 is v = 1, **no flip** |
+| aspect | checker cells 53.5 × 53.5 px (expected 640·0.25/3 = 53.3): square, no stretch |
+| back face | region of the away-facing quad: mean 0.0 (background): **back faces are culled** |
+| URIs | relative mesh and albedo URIs resolve against the SDF file's directory |
+
+**Consequence:** the quad convention in `mesh.py` (p0 = bottom-left seen from the front, CCW triangles,
+UV (0,0) at p0) is what gz renders. Walls are single-sided quads facing into free space.
+
+## 4i. Scene model inclusion and first procedural-scene render `[IMAGE-VERIFIED]` 2026-09-30
+
+**`<include>` does not resolve relative paths in sdformat14.** A world in the scene directory with
+`<include><uri>model.sdf</uri></include>` was resolved against sdformat's own share directory
+(`.../share/sdformat14/1.11/model.sdf`, the schema file) and failed. Tested forms, errors reported by
+`gz sim` for each: `./model.sdf` 5, `.` 2, `./` 2, `file://model.sdf` 5,
+`model://<scene-dir>` with `GZ_SIM_RESOURCE_PATH=<parent>` **0**. **Consequence:** generated worlds *inline*
+the scene `<model>` and live in the scene directory, where mesh/texture URIs relative to the SDF file resolve
+(§4h). `model.sdf` remains for `model://` use with the resource path set.
+
+**First render of a generated scene** (`maze_medium`, seed 0: 68 wall quads, 33 floor + 33 ceiling tiles,
+20 prop faces, 9 point lights, 34 Mpx of albedo), via `simulator/smoke/scene_render/run_scene_render.py`
+from three GT poses: 0 gz errors; frame means 70–97, std 25–31 (grey levels), black pixels ≤ 0.9 %. Walls
+face into free space, back faces are culled, textures carry the §3 layers at the expected scale.
+Close walls are visibly magnified, the documented 256 px/m trade-off. Render
+throughput with the full light count is measured with the agent rig in step 6, not here.
+
+## 4j. Two full rigs in a real generated scene: RTF and bytes `[IMAGE-VERIFIED]` 2026-09-30
+
+`simulator/smoke/kinematic_probe/run_scene_rtf.py`, scene `maze_medium` seed 0 (9 point lights, 34 Mpx of
+albedo textures, 154 textured quads), two rigs (stereo 1280x720 R8G8B8 + depth, all 20 Hz) circling in two
+rooms, 20.0 sim-s, recorded with `ros2 bag record -s mcap --storage-preset-profile zstd_fast`, llvmpipe.
+
+| Depth resolution | RTF (incl. ~15 s startup) | MCAP MB per sim-s | Raw MB/s per depth topic | Frames |
+|---|---|---|---|---|
+| 1280x720 | 0.150 | 84.7 | 73.9 | 401/401 on all 6 topics |
+| 640x360 | 0.168 | 83.5 | 18.5 | 401/401 on all 6 topics |
+
+**Consequences.** (1) Quartering the depth pixels saves ~1 % of the *compressed* bytes: float depth of planar
+walls compresses extremely well, and the bytes are dominated by the richly textured RGB (4 x 55.4 MB/s raw,
+~3x under zstd). The design's "depth at 640x360" sizing deviation is therefore **withdrawn**: GT depth stays at
+the colour resolution. (2) Honest sizing: ~84 MB per sim-second for two agents, RTF ~0.17 on this 8-core host.
+A 5-minute two-agent mission is ~25 GB and ~30 wall-minutes on llvmpipe. No frame drops; the renderer slows
+the sim rather than dropping, as in §4f.

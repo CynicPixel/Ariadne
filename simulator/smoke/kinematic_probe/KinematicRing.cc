@@ -19,7 +19,7 @@ class KinematicRing : public System, public ISystemConfigure, public ISystemPreU
  public:
   void Configure(const Entity &, const std::shared_ptr<const sdf::Element> &sdf,
                  EntityComponentManager &, EventManager &) override {
-    name_ = sdf->Get<std::string>("model_name"); y0_ = sdf->Get<double>("y0"); speed_ = sdf->Get<double>("speed");
+    name_ = sdf->Get<std::string>("model_name"); y0_ = sdf->Get<double>("y0"); x0_ = sdf->HasElement("x0") ? sdf->Get<double>("x0") : 0.0; z_ = sdf->HasElement("z") ? sdf->Get<double>("z") : 1.0; radius_ = sdf->HasElement("radius") ? sdf->Get<double>("radius") : 1.5; speed_ = sdf->Get<double>("speed");
   }
   void PreUpdate(const UpdateInfo &info, EntityComponentManager &ecm) override {
     if (model_ == kNullEntity) {
@@ -29,15 +29,15 @@ class KinematicRing : public System, public ISystemConfigure, public ISystemPreU
     const double t = std::chrono::duration<double>(info.simTime).count();
     // Phase A: toward the wall along +x at 5 m/s; phase B: lateral along +y at 5 m/s.
     // Circle of radius 1.5 m around room centre, yaw tangent.
-    const double th = speed_ * t / 1.5;
-    math::Pose3d p(1.5 * std::cos(th), y0_ + 1.5 * std::sin(th), 1.0, 0, 0, th + 1.5707963);
+    const double th = speed_ * t / radius_;
+    math::Pose3d p(x0_ + radius_ * std::cos(th), y0_ + radius_ * std::sin(th), z_, 0, 0, th + 1.5707963);
     auto *c = ecm.Component<components::Pose>(model_);
     if (!c) { ecm.CreateComponent(model_, components::Pose(p)); return; }
     *c = components::Pose(p);
     ecm.SetChanged(model_, components::Pose::typeId, ComponentState::PeriodicChange);
   }
  private:
-  std::string name_; double y0_ = 0, speed_ = 0.5;
+  std::string name_; double y0_ = 0, x0_ = 0, z_ = 1.0, radius_ = 1.5, speed_ = 0.5;
   Entity model_ = kNullEntity;
 };
 GZ_ADD_PLUGIN(KinematicRing, System, ISystemConfigure, ISystemPreUpdate)
