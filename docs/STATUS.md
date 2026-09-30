@@ -4,6 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-01 — 1.1–1.3: mover, recording, canonical IMU/GT (D38, D39); full-mission bag not yet clean
+
+- ROS-free CDR decoder + rosbag reader (D38); kinematic mover plugin running `scripted.hpp`; mission composer
+  and rig; `sim_record` with strict verification.
+- Deep queues did not make the 200 Hz path lossless (one IMU sample lost in a 199 s mission), so IMU and GT
+  pose now come from `ariadne_canonical_streams` (D39): same parser and sampler as the plugin, own CDR encoder
+  (rclcpp leaves padding uninitialised), byte-reproducible, content digest pinned by `worldgen.sh simtest`.
+  Live streams are a bit-exact cross-check: 159,199 + 159,200 samples over two full runs, 0 mismatches.
+- The fresh full run lost one camera frame and failed strict, correctly. Transport loss is measured on
+  `/clock` (rosbag2's counter matches the bag exactly); the layer of the IMU/image drops is unknown (those
+  runs predate log capture). Open: attribute with logged runs, then size image queues / recorder cache.
+  Every run so far is from a dirty tree: none is evidence yet.
+- Tests: core image 234/234, worldgen 102/102, simtest 2/2.
+
 ## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen
 
 Procedural room-maze worlds (D37, `docs/design/SIM_1.1-1.3_WORLDGEN.md`): floorplan, exact 2D GT, textured quad

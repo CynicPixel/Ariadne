@@ -1043,3 +1043,88 @@ Withdrawn: GT depth at 640×360 (SMOKE §4j: saves ~1 % of compressed bytes).
 **Measured sizing (SMOKE §4j, one scene):** ~84 MB per sim-second for two agents, RTF ~0.17 on the 8-core
 llvmpipe host; missions 2–7 min per agent on the seeds inspected (the accept sweep records the distribution).
 **Open:** how the `ci_tiny` bag (~16 GB) reaches nightly CI.
+
+## 2026-10-01 — D38: ROS-free bag reading, the kinematic mover, and verified recording (1.1–1.3)
+
+**ROS-free CDR decoding** (`cpp/runtime/replay/ros_cdr.{hpp,cpp}`, `rosbag_reader.hpp`): XCDR1 decoding of exactly
+the recorded types (Image, CameraInfo, Imu, PoseStamped, TFMessage, Clock) into Ariadne's own structs, over the
+Foxglove MCAP SDK (zstd chunks). Bounds-checked; every truncation of every fixture throws. Fixtures are bytes
+produced by `rclpy.serialize_message` and a `rosbag2_py`-written zstd MCAP. Closes D25's design gap.
+`McapRecordReader` now requests LOG-TIME order explicitly (the SDK default is file order); the Phase 0 replay
+gate is unchanged (226/226 image, 199/199 host).
+
+**Kinematic mover** (`simulator/plugins/kinematic_mover/`): a gz-sim system on each agent model, no Physics.
+The trajectory math is `cpp/core/trajectory/scripted.hpp` — one dependency-free implementation that the core
+suite checks against the Python generator's golden samples (808 samples incl. pitched ones, 1e-9) and the
+plugin compiles. The script arrives as `<segment>` elements in the mission SDF (exact float repr), is validated
+for continuity and against the scene ESDF (collision envelope, 10 ms sampling) at start-up, and a rotation
+self-check pins gz's Euler convention; any failure aborts the run. The IMU message's orientation field is
+identity and documented as unmeasured (an IMU does not measure attitude; GT stays out of perception).
+
+**Mission composer** (`python/dataset_tools/worldgen/mission.py`) + rig config `configs/sim/rig_stereo_v1.yaml`:
+the mission world inlines the scene and adds per-agent body link (IMU frame), stereo cameras, a GT depth camera
+co-located with the left camera, an inert spot lamp, and the mover; the manifest carries T_B_C to the optical
+frames and nominal intrinsics (the recorded camera_info and the §6 recovery are authoritative).
+
+**Recording** (`infra/scripts/sim_record.{sh,py}`): bridge from the generated YAML, latched `/tf_static` with the
+rig extrinsics, `ros2 bag record -s mcap --storage-preset-profile zstd_fast --use-sim-time`, then a STRICT
+verification of the bag it wrote (every expected message present, period-exact gaps, stereo pairing 1.0, GT pose
+and IMU equal to the script at their stamps) and `recording.json` with sha256, versions and identity. Deep queues
+on the 200 Hz streams after SMOKE §4k found a stall-induced drop.
+
+## 2026-10-01 — D39: canonical IMU / GT-pose streams written from the scripts; the live ones become a cross-check
+
+**Accepted by the maintainer 2026-10-01** ("yes go ahead, make sure it is deterministically correct").
+
+**Problem.** Deep queues (D38) did not make the live 200 Hz path lossless: the full `ci_tiny` mission (199 s)
+lost one of 39,800 agent-1 IMU samples (t = 174.435 s) between gz-transport and the bag, while every sample that
+arrived equalled the analytic value exactly (SMOKE §4k/§4l). The loss rate rises with agents (message rate and
+host load both grow), and a missing IMU sample corrupts preintegration.
+
+**Decision.** The recording's IMU and GT pose come from `ariadne_canonical_streams`
+(`simulator/plugins/tools/canonical_streams.cc`), which evaluates the mission SDF's scripts offline and writes
+them as their own rosbag2 MCAP bag, `RECDIR/canonical/`. The rendered bag moves to `RECDIR/sensors/` and keeps
+the live IMU/GT as a cross-check.
+
+- **Same code, same numbers.** The parser and the per-tick sampler (`MoverScript.hh`: `ParseMoverConfig`,
+  `SampleAt`) are shared by the plugin and the tool; both targets compile with `-ffp-contract=off` so no FMA
+  contraction can differ between inlining contexts (GCC fuses by default where the ISA has FMA, e.g. aarch64).
+- **Stamp grid** t_k = k·period for k = 0..⌊T/period⌋. The plugin publishes k ≥ 1 (its first PreUpdate is one
+  step in); k = 0 is added so GT brackets the first camera frame (stamped 2 ms). log time = header stamp.
+- **Own CDR encoder** (`cpp/runtime/replay/ros_cdr_writer.hpp`), not rclcpp: Fast-CDR skips alignment padding
+  without writing it, so rclcpp output carried heap garbage (observed "at" in the 2 pad bytes after
+  "agent_0/base_link") and two runs of the tool differed. With zeroed padding every message is decoded back
+  by the runtime decoder and compared bit-for-bit (a -0.0 stays -0.0) before writing.
+- **What "reproducible" means, scoped.** (a) *Container bytes*: identical run-to-run in the same image and
+  arch — checked on every recording (generated twice, compared) and the recording aborts before gz if not.
+  (b) *Content*: `canonical_content_sha256` = sha256 over (topic, stamp, payload) in (stamp, topic) order,
+  independent of rosbag2/MCAP/zstd versions; pinned for ci_tiny seed 0 / 8 s by
+  `python/tests/sim/test_canonical_streams.py` (`worldgen.sh simtest`), so a one-bit change anywhere in the
+  trajectory code, encoder, composer or routes fails in ~15 s instead of on the next render. (c) *Across images
+  or arches* (libm, codegen) the content may move in the last bits; the guard there is the ≤ 1e-9 agreement
+  with the independent Python evaluator, not bit equality. The manifest pins the inputs: mission SDF sha256,
+  `end_ns`, tool binary sha256 (built from `git_commit` in `image_id`).
+- **Verification** (`infra/scripts/sim_record.py`): canonical — exact grid, log time = stamp, values = the
+  independent Python evaluator (≤ 1e-9), regenerated a second time and compared byte-for-byte; live IMU/GT —
+  every sample bit-identical to canonical (bytes, else decoded fields as IEEE bit patterns), no off-grid or
+  duplicate stamps, losses counted (`live_gaps`, with stamps) and fatal only below 99 % coverage; cameras and
+  infos — unchanged STRICT (a frame cannot be regenerated; remedy = re-record). The world's `<max_step_size>`
+  is asserted to be the 1 ms the recorder counts in. The C++ `RosbagReader` reads a committed 1 s canonical bag
+  ROS-free (`test_ros_cdr`), and the encoder reproduces live bridge bytes including padding.
+- **Honesty.** Manifest `streams.canonical.source` = "analytic IMU/GT from script [DESIGN] … not sensor output".
+  gz never measured this IMU; the mover already computed it analytically (OpenVINS-simulator pattern); noise,
+  bias and jitter stay a seeded consumption-time operator (D37).
+- **Replay rule.** IMU + GT from `canonical/`, everything else from `sensors/`, merged by header stamp (ties:
+  topic name), not log time (sensor log times are receive times). Implemented with the 1.4/1.5 sim consumer.
+- **Cost.** 5.1 MB of canonical MCAP against 12.6 GB of sensors for the 199 s mission (0.04 %).
+
+**Consequences / open.** Live closed-loop and demo runs have no canonical file: the estimator must bridge a
+missing IMU sample (integrate across the gap, log it) — Phase 2 requirement. The §4g "frame stamped t shows the
+pose at t" measurement that the canonical GT relies on was made at 2 agents on llvmpipe; re-check it whenever
+the agent count grows. `live_gaps` per run is the trend line. The bridge and recorder logs are now kept
+(`RECDIR/logs/`) and their loss reports parsed into the manifest; transport loss is measured on `/clock`
+(SMOKE §4l: 27 on an 8 s run, matching the bag exactly). The first fresh full recording under D39 then lost
+one **camera frame** (agent 1 right, 3980/3981) and failed strict — the remaining exposure, since frames
+cannot be regenerated. Its layer (DDS transport, recorder cache, gz → bridge) is unknown: that run predates
+log capture. Open: attribute with logged runs, then size image queues / recorder cache; until then the
+remedy is re-record.

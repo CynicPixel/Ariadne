@@ -1,6 +1,6 @@
 # Design — Phase 1.1–1.3: procedural room-maze worlds, kinematic mover, MCAP recording
 
-Status: **worldgen implemented and frozen (GENERATOR_VERSION 1); mover, CDR decoder and recording to follow**
+Status: **worldgen implemented and frozen (GENERATOR_VERSION 1); mover, CDR decoder and recorder implemented (D38); full-mission evidence pending**
 (2026-09-30). Implements arch §5.3–§5.5, §5.8, §5.9 and plan items 1.1–1.3. Deviations from the arch text are
 listed in §8 and recorded as DECISIONS D37.
 
@@ -207,6 +207,19 @@ Zero camera–IMU offset is *claimed only after* §6 re-checks render timing on 
 **GT pose** from the mover at 200 Hz (exact), plus static camera extrinsics. **Bridge** (§5.4): one
 `parameter_bridge` YAML under `/ariadne/agent_<k>/…`, `/clock`, `use_sim_time:=true`.
 
+**Canonical IMU / GT streams (D39).** The live 200 Hz streams cross gz-transport → bridge → recorder and can
+lose a sample under load (§4k/§4l), which no replay can repair. Both are exact functions of the scripts, so the
+recording's IMU and GT pose come from `ariadne_canonical_streams` (`simulator/plugins/tools/`): it parses the
+mission SDF with the plugin's own parser and samples with the plugin's own `SampleAt` (`MoverScript.hh`, both
+targets `-ffp-contract=off`), on the grid t_k = k·period, k = 0..⌊T/period⌋ (the plugin publishes k ≥ 1; k = 0
+brackets the first camera frame at 2 ms). Messages are encoded by `runtime/replay/ros_cdr_writer.hpp` with
+zeroed CDR padding (rclcpp leaves padding uninitialised), each round-tripped through the runtime decoder
+bit-exactly before writing. Reproducibility is scoped in D39: container bytes identical run-to-run in one
+image (checked on every recording), content digest pinned by `worldgen.sh simtest`, and across images/arches
+only the ≤ 1e-9 Python agreement is claimed. The live streams stay
+in the sensor bag as a cross-check. This is "analytic IMU/GT from script" [DESIGN], never presented as sensor
+output; realism (noise, bias, jitter) is the consumption-time operator's job.
+
 ---
 
 ## 6. 1.1 acceptance test — calibration recovery, not self-consistency
@@ -230,6 +243,19 @@ missions are 2–7 min per agent (`maze_short` ~2–4, `maze_long` ~4–7 incl. 
 **Runs from the bag** needs a ROS-free reader: a minimal CDR decoder in `cpp/runtime/replay/` for exactly
 `sensor_msgs/Image`, `CameraInfo`, `Imu`, `geometry_msgs/PoseStamped`, `tf2_msgs/TFMessage` (XCDR1 LE), over the
 existing Foxglove MCAP SDK. Sim bags stay standard rosbag2. This closes D25's gap and gates §6 as well.
+
+**Recording layout (D39)**: `RECDIR/sensors/` (rosbag2: rendered topics + live IMU/GT cross-check),
+`RECDIR/canonical/` (rosbag2: IMU + GT pose, offline, source of truth for those topics), `RECDIR/recording.json`.
+Verification: canonical — exact stamp grid, log time = stamp, values = the Python evaluator (≤ 1e-9); cameras /
+infos — strict (a frame cannot be regenerated: count, period, monotone, stereo pairing 1.0; remedy = re-record);
+live IMU/GT — every sample bit-identical to canonical at its stamp (fields compared as IEEE bit patterns), no
+off-grid or duplicate stamps; lost live samples are counted (`live_gaps`, the load-vs-drop trend as agent count
+grows) and fail only if coverage < 99 %. **Replay rule**: IMU and GT from `canonical/`, the rest from
+`sensors/`, merged by header stamp (ties: topic name), not by log time — sensor log times are receive times.
+The merge lands with the 1.4/1.5 sim consumer. Live (closed-loop/demo) runs have no canonical file: the
+estimator must bridge a missing IMU sample (integrate across the gap, log it) — a Phase 2 requirement.
+The §4g "frame stamped t shows pose t" result the canonical GT relies on was measured at 2 agents on llvmpipe;
+re-check it whenever the agent count grows.
 
 **Nightly CI — open.** `ci_tiny` missions are ~200 s (agent 0 with the dance) and ~60 s: ~16 GB, too large for
 GitHub caches and too slow to render on a hosted runner nightly. Options to decide when the thin run is wired:
@@ -261,9 +287,11 @@ Withdrawn: "GT depth at 640×360" (§4j showed it saves ~1 % of compressed bytes
 ## 9. Build order and status
 
 1. ✅ OBJ UV probe (§4h). 2. ✅ Floorplan generator, census, bands, golden. 3. ✅ Textures, GT, props, boards,
-routes, gate. 4. ⏳ ROS-free CDR decoder. 5. ⏳ Mover plugin + synthesized IMU + agent SDF + mission composer +
-bridge YAML (golden Python↔C++ samples). 6. ⏳ First real bag (`ci_tiny`, one full preset): RTF, bytes, §6
-calibration recovery, texture gate. 7. ⏳ MCAP evidence run with manifest; 1.4/1.5 consume it.
+routes, gate. 4. ✅ ROS-free CDR decoder + rosbag reader (D38). 5. ✅ Mover plugin + synthesized IMU + agent SDF +
+mission composer + bridge YAML; golden Python↔C++ samples; recorded GT/IMU equal the script exactly (§4k).
+5b. ✅ Canonical IMU/GT streams + CDR encoder + two-bag recording layout and verifier (D39, §4l).
+6. ⏳ First full bags (`ci_tiny`, one full preset): RTF, bytes, §6 calibration recovery, texture gate.
+7. ⏳ MCAP evidence run with manifest; 1.4/1.5 consume it.
 Evidence to re-run from a clean commit: census + accept sweeps for all presets.
 
 ---
