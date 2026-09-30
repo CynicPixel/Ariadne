@@ -5,6 +5,9 @@
 #   infra/scripts/worldgen.sh test
 #       worldgen unit tests (pytest inside the image: the numpy/pyyaml that
 #       generate the worlds are the ones tested)
+#   infra/scripts/worldgen.sh simtest
+#       sim-side tests with ROS sourced: builds the plugin + canonical-stream
+#       tool and pins the canonical IMU/GT streams of ci_tiny seed 0 (D39)
 #   infra/scripts/worldgen.sh census PRESET [SEEDS=0:1000]
 #   infra/scripts/worldgen.sh accept PRESET [SEEDS=0:1000]
 #       seed sweeps -> evaluation/runs/phase1/worldgen_<cmd>/<preset>-<UTC>/
@@ -50,6 +53,11 @@ case "${1:-}" in
   test)
     run -m pytest -q -p no:cacheprovider python/tests/worldgen
     ;;
+  simtest)
+    docker run --rm --init -v "$REPO_ROOT":/work -w /work -e PYTHONPATH=/work/python \
+      --entrypoint bash "$IMAGE" -lc \
+      "source /opt/ros/jazzy/setup.bash && python3 -m pytest -q -p no:cacheprovider python/tests/sim"
+    ;;
   census|accept)
     cmd="$1"; preset="${2:?preset name}"; seeds="${3:-0:1000}"
     path="$(preset_path "$preset")"      # assignment: a failed lookup stops the script
@@ -68,7 +76,8 @@ case "${1:-}" in
     preset="${2:?preset name}"; seed="${3:?seed}"
     out="${4:-build/worldgen/scenes/${preset}_${seed}}"
     path="$(preset_path "$preset")"
-    run -m dataset_tools.worldgen generate --preset "$path" --seed "$seed" --out "$out"
+    run -m dataset_tools.worldgen generate --preset "$path" --seed "$seed" --out "$out" \
+      --rig "${ARIADNE_RIG:-configs/sim/rig_stereo_v1.yaml}"
     echo "wrote $out"
     ;;
   *)
