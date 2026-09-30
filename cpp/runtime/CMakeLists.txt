@@ -34,4 +34,9 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_euroc_vo PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_euroc_vo RUNTIME DESTINATION bin COMPONENT ariadne)
+
+  # ChArUco boards for the generated scenes' entrance rooms (worldgen design §3/§6).
+  add_executable(ariadne_charuco_assets tools/ariadne_charuco_assets.cpp)
+  target_link_libraries(ariadne_charuco_assets PRIVATE opencv_core opencv_objdetect opencv_imgcodecs)
+  install(TARGETS ariadne_charuco_assets RUNTIME DESTINATION bin COMPONENT ariadne)
 endif()

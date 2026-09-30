@@ -1,0 +1,17 @@
+{
+ "generator": "cpp/runtime/tools/ariadne_charuco_assets.cpp",
+ "opencv": "5.0.0",
+ "dictionary": "DICT_5X5_250",
+ "squares_xy": [7, 5],
+ "square_m": 0.08,
+ "marker_m": 0.06,
+ "margin_squares": 1,
+ "px_per_square": 80,
+ "image_wh": [720, 560],
+ "legacy_pattern": false,
+ "markers_per_board": 17,
+ "boards": [
+  {"index": 0, "file": "board_0.pgm", "first_id": 0, "last_id": 16},
+  {"index": 1, "file": "board_1.pgm", "first_id": 17, "last_id": 33}
+ ]
+}
