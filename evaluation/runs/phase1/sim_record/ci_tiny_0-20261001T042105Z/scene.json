@@ -1,0 +1,1415 @@
+{
+ "attempt": 0,
+ "charuco_boards": [
+  {
+   "agent": 0,
+   "asset": "board_0.pgm",
+   "dictionary": "DICT_5X5_250",
+   "first_id": 0,
+   "last_id": 16,
+   "marker_m": 0.06,
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "room": [
+    0,
+    0
+   ],
+   "square_m": 0.08,
+   "squares_corners_world_tl_tr_br_bl": [
+    [
+     5.498,
+     1.955,
+     1.2
+    ],
+    [
+     5.498,
+     1.395,
+     1.2
+    ],
+    [
+     5.498,
+     1.395,
+     0.8
+    ],
+    [
+     5.498,
+     1.955,
+     0.8
+    ]
+   ],
+   "squares_xy": [
+    7,
+    5
+   ],
+   "wall": "E"
+  },
+  {
+   "agent": 1,
+   "asset": "board_1.pgm",
+   "dictionary": "DICT_5X5_250",
+   "first_id": 17,
+   "last_id": 33,
+   "marker_m": 0.06,
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "room": [
+    1,
+    0
+   ],
+   "square_m": 0.08,
+   "squares_corners_world_tl_tr_br_bl": [
+    [
+     9.255,
+     1.602,
+     1.2
+    ],
+    [
+     8.695,
+     1.602,
+     1.2
+    ],
+    [
+     8.695,
+     1.602,
+     0.8
+    ],
+    [
+     9.255,
+     1.602,
+     0.8
+    ]
+   ],
+   "squares_xy": [
+    7,
+    5
+   ],
+   "wall": "S"
+  }
+ ],
+ "clearance": {
+  "rho_agent_m": 0.2,
+  "rho_responder_m": 0.4
+ },
+ "entrances": [
+  {
+   "agent": 0,
+   "room": [
+    0,
+    0
+   ],
+   "side": "W",
+   "start_xy_m": [
+    -1.9000000000000001,
+    3.0
+   ],
+   "start_yaw_deg": 0,
+   "width_m": 1.35
+  },
+  {
+   "agent": 1,
+   "room": [
+    1,
+    0
+   ],
+   "side": "N",
+   "start_xy_m": [
+    9.0,
+    7.9
+   ],
+   "start_yaw_deg": 270,
+   "width_m": 1.05
+  }
+ ],
+ "esdf": {
+  "cap_m": 4.0,
+  "cell_m": 0.05,
+  "cols": 320,
+  "dtype": "float32 little-endian, row-major",
+  "file": "esdf_f32.bin",
+  "layout": "row r, col c covers [ox+c, ox+c+1) x [oy+r, oy+r+1) cells; row 0 is SOUTH",
+  "meaning": "metres from the cell centre to the nearest obstacle (negative inside obstacles); navigable = structure minus props",
+  "origin_m": [
+   -3.5,
+   -0.5
+  ],
+  "rows": 200
+ },
+ "frame": "world metres; origin = lattice SW corner; x east, y north, z up",
+ "generator_version": 1,
+ "grid": {
+  "cell_m": 0.05,
+  "origin_units": [
+   -70,
+   -10
+  ],
+  "shape_rows_cols": [
+   200,
+   320
+  ]
+ },
+ "lengths_m": {
+  "0": {
+   "agent_m": 11.207106781186548,
+   "responder_m": 11.207106781186551
+  },
+  "1": {
+   "agent_m": 4.441421356237309,
+   "responder_m": 4.441421356237309
+  }
+ },
+ "lights": [
+  {
+   "name": "room_0_0",
+   "xyz_m": [
+    3.125,
+    2.95,
+    2.45
+   ]
+  },
+  {
+   "name": "room_1_0",
+   "xyz_m": [
+    9.125,
+    3.5250000000000004,
+    2.45
+   ]
+  }
+ ],
+ "preset": {
+  "digest": "c79dd57418377fb054176f89de0ba0dc820b9fc59d4ce454345e7f6c7840ac58",
+  "name": "ci_tiny",
+  "values": {
+   "appearance": {
+    "floor_px_per_m": 128,
+    "repetition": 0.0,
+    "tau": 1.0,
+    "wall_px_per_m": 256
+   },
+   "clearance": {
+    "rho_agent_m": 0.2,
+    "rho_responder_m": 0.4
+   },
+   "corridors": {
+    "narrow_count": 0,
+    "narrow_width_m": [
+     0.55,
+     0.7
+    ],
+    "width_m": [
+     1.0,
+     1.4
+    ]
+   },
+   "entrances": {
+    "count": 2,
+    "vestibule_m": 2.5
+   },
+   "lattice": {
+    "cell_m": 6.0,
+    "nx": 2,
+    "ny": 1
+   },
+   "lighting": {
+    "ambient": 0.35,
+    "light_diffuse": 0.8,
+    "light_range_m": 12.0,
+    "zone_lights": 1
+   },
+   "motion": {
+    "a_max_mps2": 0.4,
+    "alpha_max_radps2": 0.6,
+    "altitude_jitter_m": 0.2,
+    "altitude_m": 1.0,
+    "focal_px": 640.0,
+    "frame_dt_s": 0.05,
+    "hold_end_s": 1.0,
+    "hold_start_s": 2.0,
+    "lk_budget_px": 30.0,
+    "omega_max_radps": 0.44,
+    "v_cap_mps": 0.6
+   },
+   "name": "ci_tiny",
+   "props": {
+    "depth_m": [
+     0.4,
+     0.8
+    ],
+    "height_m": [
+     0.4,
+     1.8
+    ],
+    "keepout_center_m": 1.3,
+    "keepout_mouth_m": 0.6,
+    "per_room": [
+     1,
+     2
+    ],
+    "size_along_m": [
+     0.4,
+     1.2
+    ]
+   },
+   "rooms": {
+    "center_margin_m": 0.3,
+    "count": [
+     2,
+     2
+    ],
+    "size_m": [
+     3.5,
+     5.0
+    ]
+   },
+   "routes": {
+    "calib_keepout_depth_m": 2.3,
+    "calib_lateral_m": 0.5,
+    "calib_pass_halfspan_m": 1.0,
+    "calib_pass_speeds_mps": [
+     0.2,
+     0.5
+    ],
+    "calib_standoffs_m": [
+     1.3,
+     1.9
+    ],
+    "calib_tilt_pitch_deg": 12.0,
+    "calib_tilt_yaw_deg": 15.0,
+    "calibration": 1,
+    "keyframe_step_deg": 15.0,
+    "keyframe_step_m": 0.5,
+    "max_start_delay_s": 60.0,
+    "min_agent_separation_m": 1.0,
+    "min_inter_pairs": 3,
+    "min_inter_rooms": 1,
+    "min_intra_pairs": 0,
+    "overlap_radius_m": 1.5,
+    "overlap_yaw_deg": 30.0,
+    "revisit_min_dt_s": 30.0,
+    "start_delay_step_s": 5.0,
+    "survey_offset_m": 0.5,
+    "surveys": "target",
+    "template": "return"
+   },
+   "search": {
+    "max_attempts": 50
+   },
+   "structure": {
+    "grid_m": 0.05,
+    "wall_height_m": [
+     2.6,
+     3.0
+    ]
+   },
+   "target": {
+    "allow_entrance_room": 1,
+    "path_length_m": [
+     4.0,
+     16.0
+    ]
+   },
+   "topology": {
+    "cover_edges_max": 1,
+    "dead_end_stubs": 0,
+    "extra_edges": 0,
+    "route_cycle": 0
+   }
+  }
+ },
+ "props": [
+  {
+   "height_m": 0.848,
+   "rect_m": [
+    0.75,
+    0.9500000000000001,
+    1.2000000000000002,
+    1.75
+   ],
+   "room": [
+    0,
+    0
+   ]
+  },
+  {
+   "height_m": 1.295,
+   "rect_m": [
+    6.75,
+    4.55,
+    7.550000000000001,
+    5.1000000000000005
+   ],
+   "room": [
+    1,
+    0
+   ]
+  }
+ ],
+ "rejections": {},
+ "routes": {
+  "agent_visuals": "none (Phase 1: agents are invisible to each other; D37)",
+  "duration_s": {
+   "0": 197.442,
+   "1": 57.399
+  },
+  "min_agent_separation_m": 4.5043,
+  "overlap": {
+   "inter_pairs": 286,
+   "inter_rooms": [
+    [
+     1,
+     0
+    ]
+   ],
+   "inter_zones": 1,
+   "intra_pairs": [
+    320,
+    0
+   ],
+   "keyframes": [
+    153,
+    54
+   ]
+  },
+  "segments": {
+   "0": 45,
+   "1": 8
+  },
+  "start_delays_s": [
+   0.0,
+   0.0
+  ],
+  "template": "return"
+ },
+ "scene_id": "aadffb8df5790ca0",
+ "seed": 0,
+ "surfaces": [
+  {
+   "kind": "wall",
+   "name": "wall_000000",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "583232eb0487398f274927b2b00c65d5ff51e8238f0270d7ab6f0e9af4c92e68",
+   "sid": 16777216,
+   "size_m": [
+    4.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    1216
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000001",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "b89a0609005fd1983beb0cab218d96877912fff303f13b7a11c4f3533daf60d0",
+   "sid": 16777217,
+   "size_m": [
+    4.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    1216
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000002",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "903004755e0657ca4e84db2eb1a525308d1fa97d621a797447f2a4803d701264",
+   "sid": 16777218,
+   "size_m": [
+    3.25,
+    2.75
+   ],
+   "size_px": [
+    704,
+    832
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000003",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "69b3147c05636b1f185836689a9a95e829d200cc4790fc68dd784472d4102f99",
+   "sid": 16777219,
+   "size_m": [
+    1.25,
+    2.75
+   ],
+   "size_px": [
+    704,
+    320
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000004",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "cdd0cd8f0214061fb888c58deb34ae058351dd4ad3d269fa1fbcf1d43861b945",
+   "sid": 16777220,
+   "size_m": [
+    1.25,
+    2.75
+   ],
+   "size_px": [
+    704,
+    320
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000005",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "274cb7d1e312a8054d8c69c732a94ea2e2b0bf693f861545ca8aa85af532f374",
+   "sid": 16777221,
+   "size_m": [
+    3.25,
+    2.75
+   ],
+   "size_px": [
+    704,
+    832
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000006",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "6e05c561a32bcf07814599a12857d382e3632fc657da0e9f1335d005f75ca454",
+   "sid": 16777222,
+   "size_m": [
+    4.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    1216
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000007",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "9af904d63ce29ba4395b48707ca6018f6ce88c5310e257eb13668d024633ab56",
+   "sid": 16777223,
+   "size_m": [
+    1.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    448
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000008",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "0d3173af59a6b1562318c5d1caaafa1eefa15346810bde21b970407a662b9b79",
+   "sid": 16777224,
+   "size_m": [
+    1.95,
+    2.75
+   ],
+   "size_px": [
+    704,
+    499
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000009",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "1cc04594db9c0245576c07fcc162ac488caee67d284562ccfcff9a503904e8d5",
+   "sid": 16777225,
+   "size_m": [
+    1.05,
+    2.75
+   ],
+   "size_px": [
+    704,
+    269
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000a",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "35d3757e1ab5a05792bb9a314ee85b3595095cff7730779ef43738c11e4f8d99",
+   "sid": 16777226,
+   "size_m": [
+    1.35,
+    2.75
+   ],
+   "size_px": [
+    704,
+    346
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000b",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "b4f7bc74dfd7a7d1023bfa142ec39602f735d4528fad3180dbc9e8ba5ba1c42a",
+   "sid": 16777227,
+   "size_m": [
+    1.85,
+    2.75
+   ],
+   "size_px": [
+    704,
+    474
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000c",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "2e5c35a72e9cd14072008efdb86f4b8d2e32d41a02e708c732482f620bb62a82",
+   "sid": 16777228,
+   "size_m": [
+    1.7,
+    2.75
+   ],
+   "size_px": [
+    704,
+    435
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000d",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "5897ce6baf04416b39e248a7c6a7446945698f216cc88e4320ca6adbf79bb0e8",
+   "sid": 16777229,
+   "size_m": [
+    0.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    192
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000e",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "136908943ea0002dad05762afcfa1807b808dfe1a488abddc33f4b25940eca45",
+   "sid": 16777230,
+   "size_m": [
+    1.8,
+    2.75
+   ],
+   "size_px": [
+    704,
+    461
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000f",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "0766244fd38b3ce8a4ee7fd06e358f9a40b0eb258b12eb1b50713ec8835a8f34",
+   "sid": 16777231,
+   "size_m": [
+    3.05,
+    2.75
+   ],
+   "size_px": [
+    704,
+    781
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000010",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "b1f2b05ffaca091425c5a97f647245a400a91ea2cba53b766131af8575c60d39",
+   "sid": 16777232,
+   "size_m": [
+    1.85,
+    2.75
+   ],
+   "size_px": [
+    704,
+    474
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000011",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "923cd7e2d8291d25f96f6989dc59527a819324b26922ec8d46d8bce58ecfcba8",
+   "sid": 16777233,
+   "size_m": [
+    1.75,
+    2.75
+   ],
+   "size_px": [
+    704,
+    448
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000012",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "86bad802d5977a9b1a2bc2cf4c5b7734c4a2e9d70d6b2081950a8b1192aea029",
+   "sid": 16777234,
+   "size_m": [
+    3.05,
+    2.75
+   ],
+   "size_px": [
+    704,
+    781
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000013",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "5c3434ea00d64abfea320d4d498566cc359244dac1b7dabd8f21b939ce27a601",
+   "sid": 16777235,
+   "size_m": [
+    3.85,
+    2.75
+   ],
+   "size_px": [
+    704,
+    986
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000000",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "9f818789eee23cb5e4b6ca175e8b3b20518f055fb130de0d79980053c895a01f",
+   "sid": 33554432,
+   "size_m": [
+    4.75,
+    4.9
+   ],
+   "size_px": [
+    627,
+    608
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000001",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "e95e0292973e5758608ff32b412b044731d1c44d8a315a4dc33614cd49bd3f4b",
+   "sid": 33554433,
+   "size_m": [
+    4.75,
+    3.85
+   ],
+   "size_px": [
+    493,
+    608
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000002",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "b00d29f661e250970235885245cef7b6093e1296bb6aa68ce30316685fc1929e",
+   "sid": 33554434,
+   "size_m": [
+    3.25,
+    1.35
+   ],
+   "size_px": [
+    173,
+    416
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000003",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "7162460d19d409a7812bc4c47000b2e7860a6a4f37639f75db54660f92d70e92",
+   "sid": 33554435,
+   "size_m": [
+    1.25,
+    1.3
+   ],
+   "size_px": [
+    166,
+    160
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000004",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "ae25ab8f1f2f9a2ce9a4b2664833e6c23499c54acc214f60826d7c34d4e224a4",
+   "sid": 33554436,
+   "size_m": [
+    1.05,
+    3.05
+   ],
+   "size_px": [
+    390,
+    134
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000000",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "38a7070c6781d870ea29effda0f64c59648fc4336444ef0102878ec6bc3a3a4f",
+   "sid": 50331648,
+   "size_m": [
+    4.75,
+    4.9
+   ],
+   "size_px": [
+    627,
+    608
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000001",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "5172da59a6a1a5bcffeafad6a2334c2117370284e396c17ffbf9442ad7de0266",
+   "sid": 50331649,
+   "size_m": [
+    4.75,
+    3.85
+   ],
+   "size_px": [
+    493,
+    608
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000002",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "c36d41f6d965fde020b9581b1e69cf6faafc3b92e84c92aa82f029c01c15a4cb",
+   "sid": 50331650,
+   "size_m": [
+    3.25,
+    1.35
+   ],
+   "size_px": [
+    173,
+    416
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000003",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "db83134e21b6896786a094965f582d5d064c4b74a0d02bf5811d96316349c668",
+   "sid": 50331651,
+   "size_m": [
+    1.25,
+    1.3
+   ],
+   "size_px": [
+    166,
+    160
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000004",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "e4a2380666ff0bbe3a6dcbb077c0fb2cb43405d623cc11f664a6013b9fbecbcc",
+   "sid": 50331652,
+   "size_m": [
+    1.05,
+    3.05
+   ],
+   "size_px": [
+    390,
+    134
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000000",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "e9107f4fc00e9e1f8183452afc41a9b1b57ae49ad90b084ad758df35aacfa57a",
+   "sid": 67108864,
+   "size_m": [
+    0.45,
+    0.848
+   ],
+   "size_px": [
+    217,
+    115
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000001",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "b33a3014570d72615f21f3c3adf8c4ab11b56c4dac58642b7733700bfe5f3065",
+   "sid": 67108865,
+   "size_m": [
+    0.45,
+    0.848
+   ],
+   "size_px": [
+    217,
+    115
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000002",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "0120dd830c3565052b3f748b43eb7b2309a37f23a43c6c356f117503a8228b4c",
+   "sid": 67108866,
+   "size_m": [
+    0.8,
+    0.848
+   ],
+   "size_px": [
+    217,
+    205
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000003",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "8f86f5e74c2053e1241a35e5c4ac0fa57d4e521f1937c0e08a06753d07e3f528",
+   "sid": 67108867,
+   "size_m": [
+    0.8,
+    0.848
+   ],
+   "size_px": [
+    217,
+    205
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000004",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "e3cb01c8a39a4b4b29de3388f90557dbc7325c9f3246267cd8b7f358f3845c7b",
+   "sid": 67108868,
+   "size_m": [
+    0.45,
+    0.8
+   ],
+   "size_px": [
+    205,
+    115
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000010",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "05cd83b2ad1dd8474ecdf94134cfc763ab29722236a54b9b232f850db1f4dd49",
+   "sid": 67108880,
+   "size_m": [
+    0.8,
+    1.295
+   ],
+   "size_px": [
+    332,
+    205
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000011",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "26121ea35414e0c60d87d161acf9107fefdc573c35a0332590012a3ffc5ec38e",
+   "sid": 67108881,
+   "size_m": [
+    0.8,
+    1.295
+   ],
+   "size_px": [
+    332,
+    205
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000012",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "dce598fd807d01417571377b0bd26e239d209bce18a3c41177d069f429bb1433",
+   "sid": 67108882,
+   "size_m": [
+    0.55,
+    1.295
+   ],
+   "size_px": [
+    332,
+    141
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000013",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "58fcd055ed1d64f68e80875c99012da248de51003c4aa6671cfe40a0d23e0690",
+   "sid": 67108883,
+   "size_m": [
+    0.55,
+    1.295
+   ],
+   "size_px": [
+    332,
+    141
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000014",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "cc2dc5ac929182cb494032bfef75c99c75830fd4b30d05f2ed9948baf6843879",
+   "sid": 67108884,
+   "size_m": [
+    0.8,
+    0.55
+   ],
+   "size_px": [
+    141,
+    205
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "board",
+   "name": "board_000000",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "847e162821e78f2e5ca70a304146f2020d3e306245a25221e63adc28027e1c66",
+   "sid": 83886080,
+   "size_m": [
+    0.72,
+    0.56
+   ],
+   "size_px": [
+    560,
+    720
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "board",
+   "name": "board_000001",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "18e85c33a45a5540116c04eccba1bdf6247f53c96d4459ee9d1b8dbd551625f5",
+   "sid": 83886081,
+   "size_m": [
+    0.72,
+    0.56
+   ],
+   "size_px": [
+    560,
+    720
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  }
+ ],
+ "target_xy_m": [
+  9.125,
+  3.5250000000000004
+ ],
+ "topology": {
+  "cells": [
+   [
+    [
+     0,
+     0
+    ],
+    "room"
+   ],
+   [
+    [
+     1,
+     0
+    ],
+    "room"
+   ]
+  ],
+  "passages": [
+   {
+    "a": [
+     0,
+     0
+    ],
+    "b": [
+     1,
+     0
+    ],
+    "braid": false,
+    "narrow": false,
+    "width_m": 1.3
+   }
+  ],
+  "rooms": {
+   "0,0": [
+    0.75,
+    0.5,
+    5.5,
+    5.4
+   ],
+   "1,0": [
+    6.75,
+    1.6,
+    11.5,
+    5.45
+   ]
+  },
+  "stubs": [],
+  "target_room": [
+   1,
+   0
+  ]
+ },
+ "wall_height_m": 2.75
+}
