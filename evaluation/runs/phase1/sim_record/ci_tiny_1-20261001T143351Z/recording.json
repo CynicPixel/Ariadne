@@ -1,0 +1,525 @@
+{
+ "command": "infra/scripts/sim_record.py --scene evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw/scene --out evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw/rec",
+ "end_ns": 205000000000,
+ "generator_version": 1,
+ "git_commit": "5de3f7061411ab763b75c1c628ba81e1a1d5f65e",
+ "git_dirty": "false",
+ "image_id": "sha256:8b780f52cb9a1d48c142e176e1690dc5373f238feb606bb6e869aba933df33d9",
+ "mission": "default",
+ "preset": "ci_tiny",
+ "preset_digest": "c79dd57418377fb054176f89de0ba0dc820b9fc59d4ce454345e7f6c7840ac58",
+ "render_mode": "mesa-llvmpipe",
+ "replay_rule": "IMU + GT pose + /tf_static from canonical/, everything else from sensors/; merge by header stamp (ties: topic name). Since D40 log time == header stamp in both bags, so a log-time merge gives the same order",
+ "result": {
+  "canonical": {
+   "/ariadne/agent_0/gt/pose": {
+    "bytes": 3772092,
+    "count": 41001
+   },
+   "/ariadne/agent_0/imu": {
+    "bytes": 13612332,
+    "count": 41001
+   },
+   "/ariadne/agent_1/gt/pose": {
+    "bytes": 3772092,
+    "count": 41001
+   },
+   "/ariadne/agent_1/imu": {
+    "bytes": 13612332,
+    "count": 41001
+   },
+   "/tf_static": {
+    "bytes": 484,
+    "count": 1
+   }
+  },
+  "canonical_content_sha256": "53e71a8e6322a76cc8389ee5669a379317fcc6d00d4d7509c504aef7b95c06ca",
+  "canonical_reproducible": true,
+  "canonical_summary": {
+   "agents": 2,
+   "last_ns": 205000000000,
+   "period_ns": 5000000,
+   "samples_per_topic": 41001,
+   "static_transforms": 4
+  },
+  "canonical_vs_python": {
+   "gt_pose": {
+    "n": 82002,
+    "worst_abs": 4.440892098500626e-16
+   },
+   "imu": {
+    "n": 82002,
+    "worst_abs": 0.0
+   }
+  },
+  "clock": {
+   "count": 205001,
+   "missing_steps": 0
+  },
+  "failures": [],
+  "gz_errors": [],
+  "gz_returncode": 0,
+  "gz_warnings_allowed": {
+   "OBJLoader\\.cc:\\d+\\] Missing material for shape\\[(wall|prop|floor|ceiling|board)_[0-9a-f]+\\]": 39,
+   "Ogre2Camera::SetVisibilityMask: Mask bits c0000000 are set but will be ignored": 4
+  },
+  "live_cross_check": {
+   "/ariadne/agent_0/gt/pose": {
+    "bytes": 3772000,
+    "bytes_identical": 41000,
+    "compared": 41000,
+    "coverage": 1.0,
+    "duplicates": 0,
+    "expected_live": 41000,
+    "fields_bit_identical": 41000,
+    "live": 41000,
+    "live_gaps": 0,
+    "mismatched": 0,
+    "missing_stamps_ns": [],
+    "off_grid": 0
+   },
+   "/ariadne/agent_0/imu": {
+    "bytes": 13612000,
+    "bytes_identical": 41000,
+    "compared": 41000,
+    "coverage": 1.0,
+    "duplicates": 0,
+    "expected_live": 41000,
+    "fields_bit_identical": 41000,
+    "live": 41000,
+    "live_gaps": 0,
+    "mismatched": 0,
+    "missing_stamps_ns": [],
+    "off_grid": 0
+   },
+   "/ariadne/agent_1/gt/pose": {
+    "bytes": 3772000,
+    "bytes_identical": 41000,
+    "compared": 41000,
+    "coverage": 1.0,
+    "duplicates": 0,
+    "expected_live": 41000,
+    "fields_bit_identical": 41000,
+    "live": 41000,
+    "live_gaps": 0,
+    "mismatched": 0,
+    "missing_stamps_ns": [],
+    "off_grid": 0
+   },
+   "/ariadne/agent_1/imu": {
+    "bytes": 13612000,
+    "bytes_identical": 41000,
+    "compared": 41000,
+    "coverage": 1.0,
+    "duplicates": 0,
+    "expected_live": 41000,
+    "fields_bit_identical": 41000,
+    "live": 41000,
+    "live_gaps": 0,
+    "mismatched": 0,
+    "missing_stamps_ns": [],
+    "off_grid": 0
+   }
+  },
+  "loss_accounting": {},
+  "max_backlog_mb": 4096,
+  "mover_log": [],
+  "passed": true,
+  "recorder_report": {
+   "aborted": false,
+   "end_ns": 205000000000,
+   "error_count": 0,
+   "errors": [],
+   "max_backlog_bytes": 4294967296,
+   "peak_backlog_bytes": 47021535,
+   "tool": "ariadne_gz_recorder",
+   "topics": {
+    "/ariadne/agent_0/depth/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_0/depth/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_0/gt/pose": {
+     "count": 41000,
+     "duplicates": 0,
+     "first_ns": 5000000,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 5000000
+    },
+    "/ariadne/agent_0/imu": {
+     "count": 41000,
+     "duplicates": 0,
+     "first_ns": 5000000,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 5000000
+    },
+    "/ariadne/agent_0/left/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_0/left/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_0/right/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_0/right/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/depth/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/depth/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/gt/pose": {
+     "count": 41000,
+     "duplicates": 0,
+     "first_ns": 5000000,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 5000000
+    },
+    "/ariadne/agent_1/imu": {
+     "count": 41000,
+     "duplicates": 0,
+     "first_ns": 5000000,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 5000000
+    },
+    "/ariadne/agent_1/left/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/left/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/right/camera_info": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/ariadne/agent_1/right/image_raw": {
+     "count": 4101,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 0,
+     "period_ns": 50000000
+    },
+    "/clock": {
+     "count": 205001,
+     "duplicates": 0,
+     "first_ns": 0,
+     "gaps": [],
+     "irregular": 0,
+     "last_ns": 205000000000,
+     "late_start": false,
+     "lost": 0,
+     "out_of_order": 0,
+     "paused_repeats": 300,
+     "period_ns": 1000000
+    }
+   },
+   "wall_s": 961.918,
+   "written": 418213
+  },
+  "recorder_returncode": 0,
+  "rtf": 0.2132,
+  "sim_seconds": 205.0,
+  "topics": {
+   "/ariadne/agent_0/depth/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_0/depth/image_raw": {
+    "bytes": 15118205268,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_0/left/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_0/left/image_raw": {
+    "bytes": 11338723668,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true,
+    "stereo_pairing": 1.0
+   },
+   "/ariadne/agent_0/right/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_0/right/image_raw": {
+    "bytes": 11338723668,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_1/depth/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_1/depth/image_raw": {
+    "bytes": 15118205268,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_1/left/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_1/left/image_raw": {
+    "bytes": 11338723668,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true,
+    "stereo_pairing": 1.0
+   },
+   "/ariadne/agent_1/right/camera_info": {
+    "bytes": 1529673,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   },
+   "/ariadne/agent_1/right/image_raw": {
+    "bytes": 11338723668,
+    "count": 4101,
+    "expected": 4101,
+    "max_gap_ms": 50.0,
+    "monotone": true
+   }
+  },
+  "wall_seconds_gz": 961.63,
+  "wall_seconds_total": 1117.3
+ },
+ "rig": "rig_stereo_v1",
+ "scene_id": "5d02793f1189ee65",
+ "seed": 1,
+ "sim_versions": [
+  "libegl-mesa0=25.2.8-0ubuntu0.24.04.2",
+  "libglvnd0=1.7.0-1build1",
+  "ros-jazzy-gz-cmake-vendor=0.0.12-1noble.20260618.173318",
+  "ros-jazzy-gz-common-vendor=0.0.10-1noble.20260905.033536",
+  "ros-jazzy-gz-dartsim-vendor=0.0.3-1noble.20260225.232143",
+  "ros-jazzy-gz-fuel-tools-vendor=0.0.6-1noble.20260905.065120",
+  "ros-jazzy-gz-gui-vendor=0.0.5-1noble.20260905.071619",
+  "ros-jazzy-gz-math-vendor=0.0.11-1noble.20260905.031649",
+  "ros-jazzy-gz-msgs-vendor=0.0.8-1noble.20260905.033532",
+  "ros-jazzy-gz-ogre-next-vendor=0.0.5-1noble.20260225.232146",
+  "ros-jazzy-gz-physics-vendor=0.0.9-1noble.20260905.065116",
+  "ros-jazzy-gz-plugin-vendor=0.0.5-1noble.20260820.145930",
+  "ros-jazzy-gz-rendering-vendor=0.0.7-1noble.20260905.065113",
+  "ros-jazzy-gz-sensors-vendor=0.0.6-1noble.20260905.071631",
+  "ros-jazzy-gz-sim-vendor=0.0.13-1noble.20260905.073557",
+  "ros-jazzy-gz-tools-vendor=0.0.8-1noble.20260820.143431",
+  "ros-jazzy-gz-transport-vendor=0.0.9-1noble.20260905.065154",
+  "ros-jazzy-gz-utils-vendor=0.0.5-1noble.20260618.173807",
+  "ros-jazzy-ros-gz-bridge=1.0.24-1noble.20260905.070149",
+  "ros-jazzy-ros-gz-interfaces=1.0.24-1noble.20260902.041547",
+  "ros-jazzy-ros-gz-sim=1.0.24-1noble.20260905.085151",
+  "ros-jazzy-rosbag2-storage-mcap=0.26.11-1noble.20260903.070458",
+  "ros-jazzy-sdformat-vendor=0.0.14-1noble.20260905.033543",
+  "ros_snapshot=2026-09-11"
+ ],
+ "streams": {
+  "canonical": {
+   "content_sha256": "53e71a8e6322a76cc8389ee5669a379317fcc6d00d4d7509c504aef7b95c06ca",
+   "dir": "canonical",
+   "files": {
+    "canonical_0.mcap": {
+     "bytes": 5307604,
+     "sha256": "5979a7dd6c0466f0c4ba95506ecaa3e278828f0915a3ff2a9099a44b6a80d49a"
+    },
+    "metadata.yaml": {
+     "bytes": 2091,
+     "sha256": "c95586cebc1132dbddaec4454aa3d23f6db6470ffa66aed263cd2cac55347390"
+    }
+   },
+   "inputs": {
+    "end_ns": 205000000000,
+    "mission_sdf": "mission_default.sdf",
+    "mission_sdf_sha256": "0133e548ff12b6a1fa74d62247a13aadc554c9babf4d8555f87ad88b0f4db14c",
+    "tool_sha256": "579b24b26706c4755533c6bdc63824b5d5d283657a102e153acba075ad51175a"
+   },
+   "reproducibility": "container bytes: re-generated and compared in the same image on every recording; across images/arches the content digest may move only by libm/codegen, guarded by the <= 1e-9 Python check",
+   "source": "analytic IMU/GT from script [DESIGN] (D39): ariadne_canonical_streams evaluating the mission SDF's KinematicMover scripts; not sensor output. Source of truth for the IMU and GT-pose topics."
+  },
+  "sensors": {
+   "dir": "sensors",
+   "files": {
+    "metadata.yaml": {
+     "bytes": 4616,
+     "sha256": "b03cf2c58dca7e058cac6b3fa55a99d976b7b04035dfe8ce61922c15eea55887"
+    },
+    "sensors_0.mcap": {
+     "bytes": 12815452947,
+     "sha256": "d8af88bb17e8fe704426c7ab94eb04ca14cd1e4a03a2b6297023cd2db17be826"
+    }
+   },
+   "source": "gz render -> ros_gz_bridge -> ros2 bag record; its IMU/GT topics are the live cross-check only"
+  }
+ },
+ "time_utc": "2026-10-01T14:52:40Z",
+ "tool": "infra/scripts/sim_record.py"
+}

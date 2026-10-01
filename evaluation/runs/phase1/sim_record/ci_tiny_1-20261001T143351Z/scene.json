@@ -1,0 +1,1333 @@
+{
+ "attempt": 0,
+ "charuco_boards": [
+  {
+   "agent": 0,
+   "asset": "board_0.pgm",
+   "dictionary": "DICT_5X5_250",
+   "first_id": 0,
+   "last_id": 16,
+   "marker_m": 0.06,
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "room": [
+    0,
+    0
+   ],
+   "square_m": 0.08,
+   "squares_corners_world_tl_tr_br_bl": [
+    [
+     3.255,
+     1.102,
+     1.2
+    ],
+    [
+     2.695,
+     1.102,
+     1.2
+    ],
+    [
+     2.695,
+     1.102,
+     0.8
+    ],
+    [
+     3.255,
+     1.102,
+     0.8
+    ]
+   ],
+   "squares_xy": [
+    7,
+    5
+   ],
+   "wall": "S"
+  },
+  {
+   "agent": 1,
+   "asset": "board_1.pgm",
+   "dictionary": "DICT_5X5_250",
+   "first_id": 17,
+   "last_id": 33,
+   "marker_m": 0.06,
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "room": [
+    1,
+    0
+   ],
+   "square_m": 0.08,
+   "squares_corners_world_tl_tr_br_bl": [
+    [
+     8.695,
+     5.498,
+     1.2
+    ],
+    [
+     9.255,
+     5.498,
+     1.2
+    ],
+    [
+     9.255,
+     5.498,
+     0.8
+    ],
+    [
+     8.695,
+     5.498,
+     0.8
+    ]
+   ],
+   "squares_xy": [
+    7,
+    5
+   ],
+   "wall": "N"
+  }
+ ],
+ "clearance": {
+  "rho_agent_m": 0.2,
+  "rho_responder_m": 0.4
+ },
+ "entrances": [
+  {
+   "agent": 0,
+   "room": [
+    0,
+    0
+   ],
+   "side": "N",
+   "start_xy_m": [
+    3.0,
+    7.9
+   ],
+   "start_yaw_deg": 270,
+   "width_m": 1.1
+  },
+  {
+   "agent": 1,
+   "room": [
+    1,
+    0
+   ],
+   "side": "S",
+   "start_xy_m": [
+    9.0,
+    -1.9000000000000001
+   ],
+   "start_yaw_deg": 90,
+   "width_m": 1.25
+  }
+ ],
+ "esdf": {
+  "cap_m": 4.0,
+  "cell_m": 0.05,
+  "cols": 235,
+  "dtype": "float32 little-endian, row-major",
+  "file": "esdf_f32.bin",
+  "layout": "row r, col c covers [ox+c, ox+c+1) x [oy+r, oy+r+1) cells; row 0 is SOUTH",
+  "meaning": "metres from the cell centre to the nearest obstacle (negative inside obstacles); navigable = structure minus props",
+  "origin_m": [
+   0.45,
+   -3.5
+  ],
+  "rows": 260
+ },
+ "frame": "world metres; origin = lattice SW corner; x east, y north, z up",
+ "generator_version": 1,
+ "grid": {
+  "cell_m": 0.05,
+  "origin_units": [
+   9,
+   -70
+  ],
+  "shape_rows_cols": [
+   260,
+   235
+  ]
+ },
+ "lengths_m": {
+  "0": {
+   "agent_m": 9.452691193458113,
+   "responder_m": 9.628427124746185
+  },
+  "1": {
+   "agent_m": 4.94142135623731,
+   "responder_m": 4.94142135623731
+  }
+ },
+ "lights": [
+  {
+   "name": "room_0_0",
+   "xyz_m": [
+    3.3000000000000003,
+    3.1750000000000003,
+    2.6500000000000004
+   ]
+  },
+  {
+   "name": "room_1_0",
+   "xyz_m": [
+    8.925,
+    3.0,
+    2.6500000000000004
+   ]
+  }
+ ],
+ "preset": {
+  "digest": "c79dd57418377fb054176f89de0ba0dc820b9fc59d4ce454345e7f6c7840ac58",
+  "name": "ci_tiny",
+  "values": {
+   "appearance": {
+    "floor_px_per_m": 128,
+    "repetition": 0.0,
+    "tau": 1.0,
+    "wall_px_per_m": 256
+   },
+   "clearance": {
+    "rho_agent_m": 0.2,
+    "rho_responder_m": 0.4
+   },
+   "corridors": {
+    "narrow_count": 0,
+    "narrow_width_m": [
+     0.55,
+     0.7
+    ],
+    "width_m": [
+     1.0,
+     1.4
+    ]
+   },
+   "entrances": {
+    "count": 2,
+    "vestibule_m": 2.5
+   },
+   "lattice": {
+    "cell_m": 6.0,
+    "nx": 2,
+    "ny": 1
+   },
+   "lighting": {
+    "ambient": 0.35,
+    "light_diffuse": 0.8,
+    "light_range_m": 12.0,
+    "zone_lights": 1
+   },
+   "motion": {
+    "a_max_mps2": 0.4,
+    "alpha_max_radps2": 0.6,
+    "altitude_jitter_m": 0.2,
+    "altitude_m": 1.0,
+    "focal_px": 640.0,
+    "frame_dt_s": 0.05,
+    "hold_end_s": 1.0,
+    "hold_start_s": 2.0,
+    "lk_budget_px": 30.0,
+    "omega_max_radps": 0.44,
+    "v_cap_mps": 0.6
+   },
+   "name": "ci_tiny",
+   "props": {
+    "depth_m": [
+     0.4,
+     0.8
+    ],
+    "height_m": [
+     0.4,
+     1.8
+    ],
+    "keepout_center_m": 1.3,
+    "keepout_mouth_m": 0.6,
+    "per_room": [
+     1,
+     2
+    ],
+    "size_along_m": [
+     0.4,
+     1.2
+    ]
+   },
+   "rooms": {
+    "center_margin_m": 0.3,
+    "count": [
+     2,
+     2
+    ],
+    "size_m": [
+     3.5,
+     5.0
+    ]
+   },
+   "routes": {
+    "calib_keepout_depth_m": 2.3,
+    "calib_lateral_m": 0.5,
+    "calib_pass_halfspan_m": 1.0,
+    "calib_pass_speeds_mps": [
+     0.2,
+     0.5
+    ],
+    "calib_standoffs_m": [
+     1.3,
+     1.9
+    ],
+    "calib_tilt_pitch_deg": 12.0,
+    "calib_tilt_yaw_deg": 15.0,
+    "calibration": 1,
+    "keyframe_step_deg": 15.0,
+    "keyframe_step_m": 0.5,
+    "max_start_delay_s": 60.0,
+    "min_agent_separation_m": 1.0,
+    "min_inter_pairs": 3,
+    "min_inter_rooms": 1,
+    "min_intra_pairs": 0,
+    "overlap_radius_m": 1.5,
+    "overlap_yaw_deg": 30.0,
+    "revisit_min_dt_s": 30.0,
+    "start_delay_step_s": 5.0,
+    "survey_offset_m": 0.5,
+    "surveys": "target",
+    "template": "return"
+   },
+   "search": {
+    "max_attempts": 50
+   },
+   "structure": {
+    "grid_m": 0.05,
+    "wall_height_m": [
+     2.6,
+     3.0
+    ]
+   },
+   "target": {
+    "allow_entrance_room": 1,
+    "path_length_m": [
+     4.0,
+     16.0
+    ]
+   },
+   "topology": {
+    "cover_edges_max": 1,
+    "dead_end_stubs": 0,
+    "extra_edges": 0,
+    "route_cycle": 0
+   }
+  }
+ },
+ "props": [
+  {
+   "height_m": 1.627,
+   "rect_m": [
+    10.15,
+    4.800000000000001,
+    10.65,
+    5.5
+   ],
+   "room": [
+    1,
+    0
+   ]
+  }
+ ],
+ "rejections": {},
+ "routes": {
+  "agent_visuals": "none (Phase 1: agents are invisible to each other; D37)",
+  "duration_s": {
+   "0": 203.826,
+   "1": 55.572
+  },
+  "min_agent_separation_m": 4.8011,
+  "overlap": {
+   "inter_pairs": 278,
+   "inter_rooms": [
+    [
+     1,
+     0
+    ]
+   ],
+   "inter_zones": 1,
+   "intra_pairs": [
+    376,
+    0
+   ],
+   "keyframes": [
+    154,
+    53
+   ]
+  },
+  "segments": {
+   "0": 46,
+   "1": 8
+  },
+  "start_delays_s": [
+   0.0,
+   0.0
+  ],
+  "template": "return"
+ },
+ "scene_id": "5d02793f1189ee65",
+ "seed": 1,
+ "surfaces": [
+  {
+   "kind": "wall",
+   "name": "wall_000000",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "dd6fb5116cae668c083a42e90f167a2b0e8aedd966abba4bbe0f1e24bb54da86",
+   "sid": 16777216,
+   "size_m": [
+    1.25,
+    2.95
+   ],
+   "size_px": [
+    755,
+    320
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000001",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "5671130a62572de5af80fc488b32d9fe61954f3e68237f17075dd873e6a86c15",
+   "sid": 16777217,
+   "size_m": [
+    1.75,
+    2.95
+   ],
+   "size_px": [
+    755,
+    448
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000002",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "003f3a993b43a73f4f652288f8f9f712396f3e8fe597d1b4547d6e161fae92d6",
+   "sid": 16777218,
+   "size_m": [
+    1.55,
+    2.95
+   ],
+   "size_px": [
+    755,
+    397
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000003",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "33ac9c180f957f748d1118b6e709303112909ca3d3401f4354322f3227520c81",
+   "sid": 16777219,
+   "size_m": [
+    3.7,
+    2.95
+   ],
+   "size_px": [
+    755,
+    947
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000004",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "61d2c61f8af91666c0b5f0beb8ee93ce4f0d5790d903a63f7bd8a0069b48f1a8",
+   "sid": 16777220,
+   "size_m": [
+    1.5,
+    2.95
+   ],
+   "size_px": [
+    755,
+    384
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000005",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "1dd21564d9235af8d7d33db591b82840a1be51f21352e18491b30d66a54ce482",
+   "sid": 16777221,
+   "size_m": [
+    1.5,
+    2.95
+   ],
+   "size_px": [
+    755,
+    384
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000006",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "00bb209a4df537fea5c3daf669796cfc968a8c67f01fa87399e59498b0fef77f",
+   "sid": 16777222,
+   "size_m": [
+    1.0,
+    2.95
+   ],
+   "size_px": [
+    755,
+    256
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000007",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "3c7802bdc65de9971867a6fb16a5ddcfc74ecb522bacb01e64c7c9e152a1d719",
+   "sid": 16777223,
+   "size_m": [
+    1.6,
+    2.95
+   ],
+   "size_px": [
+    755,
+    410
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000008",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "b98fa044cf8d296d8dd5697acb2f0d62b5ace5815fd6fe6b3f792055c7083450",
+   "sid": 16777224,
+   "size_m": [
+    4.55,
+    2.95
+   ],
+   "size_px": [
+    755,
+    1165
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000009",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "e36b3352f43d4bcf942cc5a9f3ca6ea737122e5a9c738259c4d19091e0525877",
+   "sid": 16777225,
+   "size_m": [
+    1.1,
+    2.95
+   ],
+   "size_px": [
+    755,
+    282
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000a",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "e8ff22417df383d2d1780250e3832c86dc6e8308e0e7d0b41a4974a003fe34fd",
+   "sid": 16777226,
+   "size_m": [
+    4.15,
+    2.95
+   ],
+   "size_px": [
+    755,
+    1062
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000b",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "26db52d193c5a432b0aa500fa05de58b829de98b874d0cd2c08ff5f2ab145089",
+   "sid": 16777227,
+   "size_m": [
+    3.25,
+    2.95
+   ],
+   "size_px": [
+    755,
+    832
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000c",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "bc72f9fd02aecf9b5062a56bd9ac7aa24e61d809f3c6425e3f4cecc34acfcff3",
+   "sid": 16777228,
+   "size_m": [
+    2.0,
+    2.95
+   ],
+   "size_px": [
+    755,
+    512
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000d",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "38bb82732d81c76237fa4f67bdffcdbfd22f2a49a568e6ef9b1391b7634be799",
+   "sid": 16777229,
+   "size_m": [
+    1.95,
+    2.95
+   ],
+   "size_px": [
+    755,
+    499
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000e",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "4c2cce9882d85e12e91a1f0cb5e1957e81dc454272bd9ca0a152df38e17d5bde",
+   "sid": 16777230,
+   "size_m": [
+    3.0,
+    2.95
+   ],
+   "size_px": [
+    755,
+    768
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_00000f",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "6d2d741630771906d2b542f656087042596a3ef79b9a20753bb718c8adafd735",
+   "sid": 16777231,
+   "size_m": [
+    3.25,
+    2.95
+   ],
+   "size_px": [
+    755,
+    832
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000010",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "57d90973bb6e4c8cb2f64407761bfebe2fb4c98c50b6dc1e486aa539cb6881b2",
+   "sid": 16777232,
+   "size_m": [
+    1.4,
+    2.95
+   ],
+   "size_px": [
+    755,
+    358
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000011",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "45a062b02c0ab431130383abaae0a8edee93eb2d26b4445426033da3f3ce669b",
+   "sid": 16777233,
+   "size_m": [
+    1.7,
+    2.95
+   ],
+   "size_px": [
+    755,
+    435
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000012",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "f81836ddc8f775a78d5051641ecc253661dbed4ac85215d2fefd907cab503ee5",
+   "sid": 16777234,
+   "size_m": [
+    3.0,
+    2.95
+   ],
+   "size_px": [
+    755,
+    768
+   ],
+   "zone": [
+    "vestibule",
+    3298534883329
+   ]
+  },
+  {
+   "kind": "wall",
+   "name": "wall_000013",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "f2948d43981cfeb90c80f15269d3f5233d7aa3ee09902d57ff2e6417fc4d8dd4",
+   "sid": 16777235,
+   "size_m": [
+    5.0,
+    2.95
+   ],
+   "size_px": [
+    755,
+    1280
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000000",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "028c00dfd85c8d367251d05316873dc4d427a166e485d75257533e892d6a3a52",
+   "sid": 33554432,
+   "size_m": [
+    1.25,
+    8.0
+   ],
+   "size_px": [
+    1024,
+    160
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000001",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "c57d3b72fee30db6ba960269f726b5ca735358715e60f79d60f330df9bad03c8",
+   "sid": 33554433,
+   "size_m": [
+    1.75,
+    5.0
+   ],
+   "size_px": [
+    640,
+    224
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000002",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "25c1be3e8587309b952844a805ebabb115bff6ba50916729c96abd28e4c983fe",
+   "sid": 33554434,
+   "size_m": [
+    1.55,
+    5.0
+   ],
+   "size_px": [
+    640,
+    198
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000003",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "7077538c2ac7eb963653da508eb0623e3c94edaee4f19e1251170071917d3adc",
+   "sid": 33554435,
+   "size_m": [
+    3.7,
+    4.15
+   ],
+   "size_px": [
+    531,
+    474
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000004",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "a6f71b16bd8306eb2995cf5d4cbb8c58c9cb0240a5414aed818b51f7184b59c0",
+   "sid": 33554436,
+   "size_m": [
+    1.5,
+    1.05
+   ],
+   "size_px": [
+    134,
+    192
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "floor",
+   "name": "floor_000005",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "488b5387e7b4f73f1ba32c72fdbd9c3e45c2287e788ea7ee21f4bc99a0b6653b",
+   "sid": 33554437,
+   "size_m": [
+    1.1,
+    3.25
+   ],
+   "size_px": [
+    416,
+    141
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000000",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "9110995aaa2a3c8be94997ab1462a28b59303807337efc5f5c2c44494dfb0a1f",
+   "sid": 50331648,
+   "size_m": [
+    1.25,
+    8.0
+   ],
+   "size_px": [
+    1024,
+    160
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000001",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "0890b66b1651570b0ae2509dd2c4f2baf1de38985449ce587d477b6a903d54a2",
+   "sid": 50331649,
+   "size_m": [
+    1.75,
+    5.0
+   ],
+   "size_px": [
+    640,
+    224
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000002",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "9de07d02632802cc7261600c74d0739d86a65cfbee156c504e0727c45b5b1d3e",
+   "sid": 50331650,
+   "size_m": [
+    1.55,
+    5.0
+   ],
+   "size_px": [
+    640,
+    198
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000003",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "05d0c7fc8f9070cbe490741a7116c56a8d72180200c6a7fc47ef25fdfb6ee02a",
+   "sid": 50331651,
+   "size_m": [
+    3.7,
+    4.15
+   ],
+   "size_px": [
+    531,
+    474
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000004",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "18c074508f759492b921592cac23b8de9ee421a9594bfc002931aac179b7819f",
+   "sid": 50331652,
+   "size_m": [
+    1.5,
+    1.05
+   ],
+   "size_px": [
+    134,
+    192
+   ],
+   "zone": [
+    "passage",
+    2199023256576
+   ]
+  },
+  {
+   "kind": "ceiling",
+   "name": "ceiling_000005",
+   "normal": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "pixel_sha256": "b67b55bbdd369399c0977ddeed9e022d0965364258a852d4d81d15937feeaf4c",
+   "sid": 50331653,
+   "size_m": [
+    1.1,
+    3.25
+   ],
+   "size_px": [
+    416,
+    141
+   ],
+   "zone": [
+    "vestibule",
+    3298534883328
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000000",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "7d64d97d8b62adfc5da020b44663958dd6ccd79f633cf53bc821810b33d6defe",
+   "sid": 67108864,
+   "size_m": [
+    0.5,
+    1.627
+   ],
+   "size_px": [
+    417,
+    128
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000001",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "7befb29c17aba303e6fe4e6ed26e3b913cbc291ae5ad105b3e3e353bd3c8778e",
+   "sid": 67108865,
+   "size_m": [
+    0.5,
+    1.627
+   ],
+   "size_px": [
+    417,
+    128
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000002",
+   "normal": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "f112685ac3c0571b98bec53bb653ac929470d187bcc925883a37e5462023c742",
+   "sid": 67108866,
+   "size_m": [
+    0.7,
+    1.627
+   ],
+   "size_px": [
+    417,
+    179
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000003",
+   "normal": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "pixel_sha256": "29602af6578a519ecb59f6132ad127de3737bcae42cc15433bed8addbea3192a",
+   "sid": 67108867,
+   "size_m": [
+    0.7,
+    1.627
+   ],
+   "size_px": [
+    417,
+    179
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "prop",
+   "name": "prop_000004",
+   "normal": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "pixel_sha256": "00fdd7bae09207c135678da3738f80615e8b64d573d74b6afa9f7c6350c1cd69",
+   "sid": 67108868,
+   "size_m": [
+    0.5,
+    0.7
+   ],
+   "size_px": [
+    179,
+    128
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  },
+  {
+   "kind": "board",
+   "name": "board_000000",
+   "normal": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "pixel_sha256": "847e162821e78f2e5ca70a304146f2020d3e306245a25221e63adc28027e1c66",
+   "sid": 83886080,
+   "size_m": [
+    0.72,
+    0.56
+   ],
+   "size_px": [
+    560,
+    720
+   ],
+   "zone": [
+    "room",
+    1099511627776
+   ]
+  },
+  {
+   "kind": "board",
+   "name": "board_000001",
+   "normal": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "pixel_sha256": "18e85c33a45a5540116c04eccba1bdf6247f53c96d4459ee9d1b8dbd551625f5",
+   "sid": 83886081,
+   "size_m": [
+    0.72,
+    0.56
+   ],
+   "size_px": [
+    560,
+    720
+   ],
+   "zone": [
+    "room",
+    1099512676352
+   ]
+  }
+ ],
+ "target_xy_m": [
+  8.925,
+  3.0250000000000004
+ ],
+ "topology": {
+  "cells": [
+   [
+    [
+     0,
+     0
+    ],
+    "room"
+   ],
+   [
+    [
+     1,
+     0
+    ],
+    "room"
+   ]
+  ],
+  "passages": [
+   {
+    "a": [
+     0,
+     0
+    ],
+    "b": [
+     1,
+     0
+    ],
+    "braid": false,
+    "narrow": false,
+    "width_m": 1.05
+   }
+  ],
+  "rooms": {
+   "0,0": [
+    1.4500000000000002,
+    1.1,
+    5.15,
+    5.25
+   ],
+   "1,0": [
+    6.65,
+    0.5,
+    11.200000000000001,
+    5.5
+   ]
+  },
+  "stubs": [],
+  "target_room": [
+   1,
+   0
+  ]
+ },
+ "wall_height_m": 2.95
+}

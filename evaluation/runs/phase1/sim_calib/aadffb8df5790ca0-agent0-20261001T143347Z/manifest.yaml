@@ -1,0 +1,50 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: aadffb8df5790ca0-agent0-20261001T143347Z
+created_utc: "2026-10-01T14:33:50Z"
+git_commit: 5de3f7061411ab763b75c1c628ba81e1a1d5f65e
+git_dirty: false
+image_digest: "sha256:cb04a460c93b8702808bf4d082c5e8fd9492989310d9e1a2c4c07ccc9f39d97c"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: aadffb8df5790ca0
+seed: 0
+agent_count: 2
+execution_mode: replay
+bag_checksum: "sha256:2139973242be9ed1713c40348f08a0dce0ff2827e6719b99e24ef6f40301ea61"
+
+# Configuration
+camera_config: rig_stereo_v1
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: UNRECORDED
+degradation_config: none
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: charuco
+place_recognition: UNRECORDED
+loop_backend: none
+reconstruction_backend: UNRECORDED
+imu_mode: none
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+final_state_hash: UNRECORDED
+
+# Additional
+canonical_content_sha256: a4a56220c254346c2cf9885222ea429d195f72a209e0ae91ff582b196f0ea2b4
+command: /work/build/docker/cpp/runtime/ariadne_sim_calib --rec /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/rec --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene --out /work/evaluation/runs/phase1/sim_calib
+recording_git_commit: 0f7b0e4d36b154370c5c57833094c801c6604832

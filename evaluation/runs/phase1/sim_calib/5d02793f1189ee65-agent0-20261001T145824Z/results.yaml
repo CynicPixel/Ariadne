@@ -1,0 +1,47 @@
+# ariadne_sim_calib results (design SIM_1.1-1.3 §6). Generated; do not hand-edit.
+# Measurements only: pass thresholds are set from the first measurement and recorded separately.
+scene_id: 5d02793f1189ee65
+agent: 0
+board: {first_id: 0, last_id: 16, frame_self_check: "ok", frame_self_check_worst_px: 1.490116153e-05}
+truth: {model: read_time_lens_D41, fx: 680, fy: 680, cx: 639.5, cy: 359.5, k1: -0.05, k2: 0.01, p1: 0.0005, p2: -0.0002, k3: 0, lens_map_min_margin_px: 3.373003}
+gt_missing_for_detections: 0
+cameras:
+  left:
+    frames_decoded: 1644
+    frames_detected: 1020
+    camera_info: {width: 1280, height: 720, fx: 640, fy: 639.9999619, cx: 640, cy: 360, model: "plumb_bob", d: [0, 0, 0, 0, 0]}
+    camera_info_vs_render: {dcx: 0.5, dcy: 0.5}  # camera_info describes the RENDER in gz's W/2 convention (SMOKE 4n)
+    A_gt_reprojection_px:  # detected corner - GT projection through the TRUTH model
+      cruise:0.20: {n: 4139, rms: 0.07077368364, p95: 0.1310345783, max: 0.2528523506, mean_du: -0.002391346727, mean_dv: -0.003722425211}
+      cruise:0.50: {n: 2412, rms: 0.07624270576, p95: 0.1352922568, max: 0.2526483852, mean_du: -0.003452223915, mean_dv: -0.002784967466}
+      look: {n: 12112, rms: 0.08186397355, p95: 0.1590180893, max: 0.4518317657, mean_du: -0.001546678162, mean_dv: 0.0004560586101}
+      move: {n: 348, rms: 0.08554511277, p95: 0.157343333, max: 0.2779356254, mean_du: -0.004850737746, mean_dv: -0.007275055949}
+      view: {n: 1414, rms: 0.09051433778, p95: 0.1764519236, max: 0.3181650921, mean_du: -0.006607658255, mean_dv: 0.003544378953}
+    A_apparent_radial_distortion: {k1: -7.444937095e-05, k2: 7.093895398e-05, max_r_norm: 0.9004346282}  # least squares on radial residual
+    A_time_offset_s: 5.65970342e-06  # residual = delta * image velocity over moving corners (> 20 px/s); + = image shows a later pose
+    B_free_calibration: {views: 80, points: 1641, rms_px: 0.06931756699, rms_px_pinhole_only: 0.1329265293, fx: 681.2598829, fy: 681.255009, cx: 639.4283941, cy: 359.8573032, k1: -0.04888223312, k2: 0.009042738759, p1: 0.0006156058679, p2: -0.0001287171639,
+      std: {fx: 0.6665596593, fy: 0.6395083215, cx: 0.4769363888, cy: 0.4409336274, k1: 0.0006320171542, k2: 0.0004276475901, p1: 0.0001368121199, p2: 0.0001531733992},
+      z_vs_truth: {fx: 1.890127668, fy: 1.96245924, cx: -0.1501371125, cy: 0.8103332253, k1: 1.76857047, k2: -2.238434783, p1: 0.8449972703, p2: 0.4653734688}}  # (recovered - truth) / std
+    B_diagnostic_radial_held_at_truth: {rms_px: 0.06938060595, fx: 680.8003997, fy: 680.8001522, cx: 639.3785431, cy: 359.8712329}
+  right:
+    frames_decoded: 1644
+    frames_detected: 1028
+    camera_info: {width: 1280, height: 720, fx: 640, fy: 639.9999619, cx: 640, cy: 360, model: "plumb_bob", d: [0, 0, 0, 0, 0]}
+    camera_info_vs_render: {dcx: 0.5, dcy: 0.5}  # camera_info describes the RENDER in gz's W/2 convention (SMOKE 4n)
+    A_gt_reprojection_px:  # detected corner - GT projection through the TRUTH model
+      cruise:0.20: {n: 4121, rms: 0.07051216351, p95: 0.1296942502, max: 0.2528523506, mean_du: -0.001702432866, mean_dv: -0.003686285944}
+      cruise:0.50: {n: 2376, rms: 0.07426986172, p95: 0.1345922906, max: 0.2212230872, mean_du: -0.001414838221, mean_dv: -0.001931033724}
+      look: {n: 11948, rms: 0.08162988929, p95: 0.1584892313, max: 0.4648639146, mean_du: 0.001245412726, mean_dv: 0.0006494487754}
+      move: {n: 465, rms: 0.08921486075, p95: 0.1637710468, max: 0.3968965522, mean_du: -0.002435844293, mean_dv: -0.003743469776}
+      view: {n: 1394, rms: 0.08611648759, p95: 0.1686718015, max: 0.3724647331, mean_du: 0.01434355312, mean_dv: 0.003437575271}
+    A_apparent_radial_distortion: {k1: -8.597497097e-05, k2: 0.0001190630624, max_r_norm: 0.8915000636}  # least squares on radial residual
+    A_time_offset_s: 4.950290161e-06  # residual = delta * image velocity over moving corners (> 20 px/s); + = image shows a later pose
+    B_free_calibration: {views: 80, points: 1610, rms_px: 0.0705723743, rms_px_pinhole_only: 0.1399872883, fx: 681.4974159, fy: 681.313446, cx: 640.0939806, cy: 360.4896094, k1: -0.05107953354, k2: 0.01119383925, p1: 0.000735430086, p2: -5.905131724e-05,
+      std: {fx: 0.7051599347, fy: 0.6724217821, cx: 0.5034861491, cy: 0.4529817727, k1: 0.0006555383499, k2: 0.0004737583129, p1: 0.0001365690102, p2: 0.0001624474768},
+      z_vs_truth: {fx: 2.12351239, fy: 1.953306729, cx: 1.17973571, cy: 2.184656071, k1: -1.646789294, k2: 2.519933088, p1: 1.723890988, p2: 0.8676569532}}  # (recovered - truth) / std
+    B_diagnostic_radial_held_at_truth: {rms_px: 0.07065794953, fx: 681.6384016, fy: 681.4572686, cx: 640.1943789, cy: 360.4366001}
+C_stereo: {intrinsics: B_free_calibration, pairs: 80, rms_px: 0.07881086772, T_est: [-0.1005110005, -4.811045577e-05, -0.0001808971561], T_tf_static: [-0.1, 0, 0], t_err_m: 0.0005442057954, rot_err_deg: 0.06213884434,
+  with_truth_intrinsics: {rms_px: 0.0727070315, T_est: [-0.0999512199, 7.073452377e-05, 3.625103542e-05], t_err_m: 9.325775375e-05, rot_err_deg: 0.003283095056}}
+D_pnp_vs_gt_left: {intrinsics: truth, frames: 1001, rot_err_deg: {mean: 0.2633773361, p95: 1.160650315, max: 2.419328836}, t_err_m: {mean: 0.00128274391, p95: 0.004291162599, max: 0.01461077861}, flipped_180: 0}
+verdict: PASS
+failures: []

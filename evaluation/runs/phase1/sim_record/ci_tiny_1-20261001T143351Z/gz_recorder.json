@@ -1,0 +1,23 @@
+{
+ "tool": "ariadne_gz_recorder", "end_ns": 205000000000, "written": 418213, "peak_backlog_bytes": 47021535, "max_backlog_bytes": 4294967296, "aborted": false, "wall_s": 961.918, "error_count": 0,
+ "errors": [],
+ "topics": {
+  "/clock": {"count": 205001, "first_ns": 0, "last_ns": 205000000000, "period_ns": 1000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 300, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/left/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/left/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/right/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/right/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/imu": {"count": 41000, "first_ns": 5000000, "last_ns": 205000000000, "period_ns": 5000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/gt/pose": {"count": 41000, "first_ns": 5000000, "last_ns": 205000000000, "period_ns": 5000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/depth/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_0/depth/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/left/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/left/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/right/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/right/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/imu": {"count": 41000, "first_ns": 5000000, "last_ns": 205000000000, "period_ns": 5000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/gt/pose": {"count": 41000, "first_ns": 5000000, "last_ns": 205000000000, "period_ns": 5000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/depth/image_raw": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []},
+  "/ariadne/agent_1/depth/camera_info": {"count": 4101, "first_ns": 0, "last_ns": 205000000000, "period_ns": 50000000, "lost": 0, "irregular": 0, "duplicates": 0, "out_of_order": 0, "paused_repeats": 0, "late_start": false, "gaps": []}
+ }
+}
