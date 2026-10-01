@@ -244,14 +244,22 @@ missions are 2–7 min per agent (`maze_short` ~2–4, `maze_long` ~4–7 incl. 
 `sensor_msgs/Image`, `CameraInfo`, `Imu`, `geometry_msgs/PoseStamped`, `tf2_msgs/TFMessage` (XCDR1 LE), over the
 existing Foxglove MCAP SDK. Sim bags stay standard rosbag2. This closes D25's gap and gates §6 as well.
 
-**Recording layout (D39)**: `RECDIR/sensors/` (rosbag2: rendered topics + live IMU/GT cross-check),
-`RECDIR/canonical/` (rosbag2: IMU + GT pose, offline, source of truth for those topics), `RECDIR/recording.json`.
+**Recording path (D40)**: not `ros2 bag record` via the bridge — every loss in three logged full runs was on
+that DDS link (SMOKE §4l). `ariadne_gz_recorder` subscribes to gz-transport directly, converts with
+ros_gz_bridge's own `convert_gz_to_ros`, writes synchronously through `rosbag2_cpp`, and fails loudly on any
+stamp gap, duplicate, late start, incomplete end or backlog overflow (D40). The world starts paused until the
+recorder has discovered every publisher. The bridge remains for live runs.
+
+**Recording layout (D39, D40)**: `RECDIR/sensors/` (rosbag2: rendered topics + live IMU/GT cross-check, log
+time = stamp), `RECDIR/canonical/` (rosbag2: IMU + GT pose + `/tf_static`, offline, source of truth for those
+topics), `RECDIR/logs/` (gz, recorder log + JSON report), `RECDIR/recording.json`.
 Verification: canonical — exact stamp grid, log time = stamp, values = the Python evaluator (≤ 1e-9); cameras /
 infos — strict (a frame cannot be regenerated: count, period, monotone, stereo pairing 1.0; remedy = re-record);
 live IMU/GT — every sample bit-identical to canonical at its stamp (fields compared as IEEE bit patterns), no
-off-grid or duplicate stamps; lost live samples are counted (`live_gaps`, the load-vs-drop trend as agent count
-grows) and fail only if coverage < 99 %. **Replay rule**: IMU and GT from `canonical/`, the rest from
-`sensors/`, merged by header stamp (ties: topic name), not by log time — sensor log times are receive times.
+off-grid or duplicate stamps; lost live samples are counted (`live_gaps`) and, since D40, any loss is also a
+recorder error that fails the run; `/clock` strict; `/tf_static` equal to the manifest's extrinsics.
+**Replay rule**: IMU, GT and `/tf_static` from `canonical/`, the rest from `sensors/`, merged by header stamp
+(ties: topic name); since D40 log time = header stamp in both bags, so log-time order agrees.
 The merge lands with the 1.4/1.5 sim consumer. Live (closed-loop/demo) runs have no canonical file: the
 estimator must bridge a missing IMU sample (integrate across the gap, log it) — a Phase 2 requirement.
 The §4g "frame stamped t shows pose t" result the canonical GT relies on was measured at 2 agents on llvmpipe;
@@ -290,6 +298,7 @@ Withdrawn: "GT depth at 640×360" (§4j showed it saves ~1 % of compressed bytes
 routes, gate. 4. ✅ ROS-free CDR decoder + rosbag reader (D38). 5. ✅ Mover plugin + synthesized IMU + agent SDF +
 mission composer + bridge YAML; golden Python↔C++ samples; recorded GT/IMU equal the script exactly (§4k).
 5b. ✅ Canonical IMU/GT streams + CDR encoder + two-bag recording layout and verifier (D39, §4l).
+5c. ✅ Loss attribution (DDS link), direct gz-transport recorder with loud failures, `/tf_static` in canonical (D40).
 6. ⏳ First full bags (`ci_tiny`, one full preset): RTF, bytes, §6 calibration recovery, texture gate.
 7. ⏳ MCAP evidence run with manifest; 1.4/1.5 consume it.
 Evidence to re-run from a clean commit: census + accept sweeps for all presets.

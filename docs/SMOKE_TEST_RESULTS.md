@@ -444,4 +444,46 @@ driving `ci_tiny` seed 0 (two agents, stereo + depth + IMU + GT pose) through `i
   per run: (expected − in bag) = recorder transport-lost + recorder cache-lost + silent residual.
   For scale, the fresh full run's `/clock` misses 1,150 of ~199,000 steps (re-verified; that run has no logs).
   Its canonical content digest `06054e72…` equals that of the older 199 s bag's canonical.
+- **Attribution: every loss is on the recorder's DDS subscription.** Three full runs at unchanged settings,
+  recorder at debug level (it names the topic of each transport loss; `[rcl]` traces filtered), RTF 0.230–0.231.
+  Per run, expected − in bag = recorder transport-lost + residual, and the residual is **0 on every topic**; no
+  cache-overflow lines. So gz-transport → bridge and rosbag2's cache lost nothing.
 
+  | run | non-clock losses (topic: n) | `/clock` lost |
+  |---|---|---|
+  | 1 | a0 left 1, a0 right 1, a1 left 1, a1 right 3, a1 gt/pose 1 | 1,014 |
+  | 2 | a1 depth 2, a1 right 1 | 1,058 |
+  | 3 | a0 depth 2, a0 gt/pose 1, a1 left 1 | 1,078 |
+
+  Losses are isolated single samples minutes apart, not a stall burst. Every topic has one publisher, all
+  reliable (bag metadata; DDS discovery does not carry history depth, so the depth in effect is not visible
+  there). GT pose was lost twice with bridge `publisher_queue` and recorder depth both 1000 (5 s at 200 Hz),
+  so depth alone is not a guarantee `[ASSUMPTION: consistent with reliable keep-last eviction after dropped
+  datagrams on a CPU-saturated host with rmem_default 208 KB; Fast DDS repair timing not yet read]`.
+  Debug logging may raise the rate (these runs lost more than earlier info-level runs).
+  Both remedies are available in the installed build: `libros_gz_bridge.so` exports
+  `convert_gz_to_ros<Image|CameraInfo>` (a direct gz-transport → rosbag2 writer can reuse the bridge's
+  conversions), and the bridge honours `qos_overrides.*` parameters (keep-all is configurable).
+
+## 4m. Direct gz-transport recorder (D40): first clean full-mission recordings `[IMAGE-VERIFIED]` 2026-10-01
+
+`ariadne_gz_recorder` replaces ros_gz_bridge + `ros2 bag record` in the recording path (D40).
+
+- **Paused start is real and observable.** With the world started paused, gz republishes `/clock` = 0 (~1,100
+  messages in 8 s of discovery wait, ~1,250 in a full run); the recorder's first version flagged them as
+  duplicates. They are now counted as `paused_repeats` and not written; any other repeat is still an error.
+  Camera frames now start at t = 0 (they started at 2 ms with `-r`), still 161/161 per 8 s.
+- **Failure modes fire.** 13 tests drive the real binary with a fake gz publisher: clean stream written
+  exactly (log time = stamp); gap → "LOST 1 message(s)", exit 1; duplicate, out-of-order, irregular interval,
+  late start, only the t = 0 message missing (first stamp checked exactly), stamp 0 after start, incomplete on
+  interrupt → exit 1; backlog cap → ABORT, exit 1; no
+  publisher, unsupported type pair → exit 2.
+- **Two full `ci_tiny` missions (199 sim-s), both PASSED strict verification.** Per run: recorder 0 errors,
+  405,973 messages written; all 6 image/depth topics 3,981/3,981 and stereo pairing 1.0; `/clock` 199,001/199,001
+  (0 missing steps); live IMU and GT pose 4 × 39,800, all byte-identical to canonical, `live_gaps` 0; canonical
+  reproducible, content digest identical across the runs (`a4a56220…`). RTF 0.243 / 0.241 (bridge path:
+  0.21–0.23); peak recorder backlog 150 / 38 MB against a 4 GiB cap; 12.62 GB each. Against the bridge path's
+  3–9 non-clock losses per full run (§4l), two clean runs are strong evidence (≈1 % by chance at a mean of 5).
+- **Open: render determinism.** The two sensor bags differ as files (sha256, and 26 KB in size); chunk
+  layout follows arrival order, so this says nothing yet about pixels. A per-topic content comparison is
+  needed before claiming identical renders across runs. Both runs from a dirty tree: not evidence yet.

@@ -1128,3 +1128,40 @@ one **camera frame** (agent 1 right, 3980/3981) and failed strict — the remain
 cannot be regenerated. Its layer (DDS transport, recorder cache, gz → bridge) is unknown: that run predates
 log capture. Open: attribute with logged runs, then size image queues / recorder cache; until then the
 remedy is re-record.
+
+## 2026-10-01 — D40: the sim recorder reads gz-transport directly; no bridge or DDS in the recording path
+
+**Accepted by the maintainer 2026-10-01** ("go with A, but with loud failures"). Deviates from design §7 /
+arch §5.9's `ros2 bag record` via `ros_gz_bridge`; the bridge stays for live (closed-loop, demo) runs.
+
+**Why.** Three logged full recordings (SMOKE §4l) put every lost message on the DDS link between the bridge
+and `ros2 bag record`: per topic, expected − in bag = the recorder's own transport-lost count, residual 0; no
+cache drops; isolated single losses, including GT pose with queues 1000 deep on both sides. Depth is not a
+guarantee, and frames cannot be regenerated.
+
+**What.** `ariadne_gz_recorder` (`simulator/plugins/tools/gz_recorder.cc`) subscribes to the mission's gz
+topics (the bridge YAML's GZ→ROS set), converts with `ros_gz_bridge::convert_gz_to_ros` from the installed
+`libros_gz_bridge.so` (the bytes the bridge would publish; ROS CDR serialized into zero-filled buffers), and
+writes `RECDIR/sensors/` through `rosbag2_cpp` with `max_cache_size = 0` (synchronous; no cache drop path),
+log time = header stamp. gz-transport's ZeroMQ high-water marks are 0 (unbounded) on both ends
+(`GZ_TRANSPORT_{RCV,SND}HWM`; default 1000 drops silently). The world starts paused and is unpaused only
+after the recorder has discovered every publisher. `/tf_static` moves into `canonical/`, built from the SDF
+camera sensor poses (identity rotation asserted) and checked against the mission manifest's extrinsics.
+
+**Loud.** Every way a message can go missing is an error printed when it happens, counted in
+`logs/gz_recorder.json`, and a non-zero exit that fails the recording: a stamp interval that is a multiple
+of the period (k−1 LOST), any other irregular interval, duplicate, out-of-order, a first stamp other than the
+expected one (start missed; 0 for rendered topics and `/clock` with the paused start, one period for the
+mover's IMU/pose, as measured), a topic not reaching floor(end/period)·period (incomplete), the writer backlog
+exceeding its cap (default 4 GiB: ABORT rather than drop), no publisher discovered (exit 2), an unsupported
+type pair (exit 2). Sole exception, from measurement: a paused world republishes `/clock` = 0, so repeats
+of stamp 0 before a topic's first non-zero stamp are counted as `paused_repeats` and not written.
+`/clock` becomes strict in the verifier (one message per 1 ms step). Each failure mode is exercised against
+the real binary by `python/tests/sim/test_gz_recorder.py` (13 tests, fake gz publisher). Log time = header
+stamp in the sensor bag too (it was the recorder's receive time), so both bags merge in stamp order.
+Not logged by the recorder: running out of memory (the ZeroMQ queues are now unbounded); it still surfaces
+as a non-zero exit of gz or the recorder, which fails the run. Recordings made before D40 (no recorder report,
+no canonical `/tf_static`) no longer pass `--verify-only`; they are superseded, not migrated.
+
+**Confirmed** (SMOKE §4m): two full `ci_tiny` missions recorded through it both PASSED strict verification
+with 0 recorder errors and every message present, where the bridge path lost 3–9 non-clock messages per run.

@@ -4,7 +4,7 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-10-01 — 1.1–1.3: mover, recording, canonical IMU/GT (D38, D39); full-mission bag not yet clean
+## 2026-10-01 — 1.1–1.3: mover, recording, canonical IMU/GT, direct gz recorder (D38–D40); full missions clean
 
 - ROS-free CDR decoder + rosbag reader (D38); kinematic mover plugin running `scripted.hpp`; mission composer
   and rig; `sim_record` with strict verification.
@@ -12,11 +12,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   pose now come from `ariadne_canonical_streams` (D39): same parser and sampler as the plugin, own CDR encoder
   (rclcpp leaves padding uninitialised), byte-reproducible, content digest pinned by `worldgen.sh simtest`.
   Live streams are a bit-exact cross-check: 159,199 + 159,200 samples over two full runs, 0 mismatches.
-- The fresh full run lost one camera frame and failed strict, correctly. Transport loss is measured on
-  `/clock` (rosbag2's counter matches the bag exactly); the layer of the IMU/image drops is unknown (those
-  runs predate log capture). Open: attribute with logged runs, then size image queues / recorder cache.
-  Every run so far is from a dirty tree: none is evidence yet.
-- Tests: core image 234/234, worldgen 102/102, simtest 2/2.
+- Three logged full runs put every loss on the bridge → `ros2 bag record` DDS link (residual 0 elsewhere,
+  queues 1000 deep not enough). D40: `ariadne_gz_recorder` reads gz-transport directly, converts with the
+  bridge's own functions, writes synchronously, fails loudly on any gap/duplicate/late start/incomplete end/
+  backlog overflow; world starts paused until every publisher is discovered; `/tf_static` now canonical.
+- Two full `ci_tiny` missions PASSED strict verification: 0 recorder errors, every frame and `/clock` step
+  present, live IMU/GT byte-identical to canonical. Open: render determinism across runs (files differ;
+  content not yet compared). All runs from a dirty tree: re-run from a clean commit for evidence.
+- Tests: core image 235/235, worldgen 102/102, simtest 14/14.
 
 ## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen
 
