@@ -1,0 +1,157 @@
+{
+ "R_B_optical_rows": [
+  [
+   0.0,
+   0.0,
+   1.0
+  ],
+  [
+   -1.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   -1.0,
+   0.0
+  ]
+ ],
+ "agents": [
+  {
+   "agent": 0,
+   "frame_id": "agent_0/base_link",
+   "script_duration_s": 197.4416365482066,
+   "start_delay_s": 0.0,
+   "topics": {
+    "depth_image": "/ariadne/agent_0/depth/image_raw",
+    "depth_info": "/ariadne/agent_0/depth/camera_info",
+    "gt_pose": "/ariadne/agent_0/gt/pose",
+    "imu": "/ariadne/agent_0/imu",
+    "left_image": "/ariadne/agent_0/left/image_raw",
+    "left_info": "/ariadne/agent_0/left/camera_info",
+    "right_image": "/ariadne/agent_0/right/image_raw",
+    "right_info": "/ariadne/agent_0/right/camera_info"
+   }
+  },
+  {
+   "agent": 1,
+   "frame_id": "agent_1/base_link",
+   "script_duration_s": 57.39856799220555,
+   "start_delay_s": 0.0,
+   "topics": {
+    "depth_image": "/ariadne/agent_1/depth/image_raw",
+    "depth_info": "/ariadne/agent_1/depth/camera_info",
+    "gt_pose": "/ariadne/agent_1/gt/pose",
+    "imu": "/ariadne/agent_1/imu",
+    "left_image": "/ariadne/agent_1/left/image_raw",
+    "left_info": "/ariadne/agent_1/left/camera_info",
+    "right_image": "/ariadne/agent_1/right/image_raw",
+    "right_info": "/ariadne/agent_1/right/camera_info"
+   }
+  }
+ ],
+ "bridge_file": "bridge_default.yaml",
+ "camera_info_convention": "gz camera_info states cx = W/2, cy = H/2; the pixel-centre truth is (W-1)/2, (H-1)/2 (SMOKE 4n). Its D is [0]*5: the render is pinhole.",
+ "depth": "32FC1 metres, pinhole, co-located with the left camera, no distortion; GT only",
+ "duration_s": 197.4416365482066,
+ "frames": {
+  "body": "agent_<k>/base_link = IMU frame: x forward, y left, z up",
+  "optical": "x right, y down, z forward (ROS optical)",
+  "world": "world (scene frame: origin lattice SW corner, x east, y north, z up)"
+ },
+ "gravity_mps2": 9.80665,
+ "imu": {
+  "noise": "none (clean); consumption-time operator, D37",
+  "orientation_field": "identity, NOT measured: consumers must ignore it",
+  "period_ns": 5000000
+ },
+ "intrinsics_nominal": {
+  "cx_nominal": 640.0,
+  "cy_nominal": 360.0,
+  "fx": 640.0000000000001,
+  "fy": 640.0000000000001,
+  "note": "nominal from hfov; the gz camera_info on the bag and the \u00a76 recovery are authoritative"
+ },
+ "lens": {
+  "applied": "read time, perception/degradation/lens.hpp (D41)",
+  "cx": 639.5,
+  "cy": 359.5,
+  "fx": 680.0,
+  "fy": 680.0,
+  "k1": -0.05,
+  "k2": 0.01,
+  "k3": 0.0,
+  "model": "plumb_bob",
+  "p1": 0.0005,
+  "p2": -0.0002
+ },
+ "mission": "default",
+ "render_intrinsics_pixel_centre": {
+  "cx": 639.5,
+  "cy": 359.5,
+  "fx": 640.0000000000001,
+  "fy": 640.0000000000001
+ },
+ "rig": {
+  "camera": {
+   "far_m": 60.0,
+   "height": 720,
+   "hfov_deg": 90.0,
+   "near_m": 0.05,
+   "rate_hz": 20,
+   "width": 1280
+  },
+  "depth": {
+   "enabled": 1
+  },
+  "imu": {
+   "period_ns": 5000000
+  },
+  "lamp": {
+   "in_body_m": [
+    0.05,
+    0.0,
+    0.04
+   ],
+   "inner_deg": 25.0,
+   "intensity": 0.0,
+   "outer_deg": 40.0
+  },
+  "left_camera_in_body_m": [
+   0.03,
+   0.05,
+   0.02
+  ],
+  "lens": {
+   "cx": 639.5,
+   "cy": 359.5,
+   "fx": 680.0,
+   "fy": 680.0,
+   "k1": -0.05,
+   "k2": 0.01,
+   "k3": 0.0,
+   "model": "plumb_bob",
+   "p1": 0.0005,
+   "p2": -0.0002
+  },
+  "name": "rig_stereo_v1",
+  "stereo": {
+   "baseline_m": 0.1
+  }
+ },
+ "rig_path": "configs/sim/rig_stereo_v1.yaml",
+ "scene_id": "aadffb8df5790ca0",
+ "t_B_camera_m": {
+  "left": [
+   0.03,
+   0.05,
+   0.02
+  ],
+  "right": [
+   0.03,
+   -0.05,
+   0.02
+  ]
+ },
+ "world_file": "mission_default.sdf"
+}
