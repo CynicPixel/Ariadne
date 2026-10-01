@@ -27,7 +27,7 @@ IMAGE="${ARIADNE_SIM_IMAGE:-ariadne/sim:dev}"
 
 # Same exclusions as core.sh: paths that cannot change what runs here.
 git_dirty() {
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out')" ]; then
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ]; then
     echo true
   else
     echo false

@@ -32,10 +32,12 @@ DEV_IMAGE="${ARIADNE_CORE_DEV_IMAGE:-ariadne/core-dev:dev}"
 JOBS="${ARIADNE_BUILD_JOBS:-4}"
 
 # Untracked files count: they are copied into the build context too. Paths
-# that .dockerignore keeps out of the context (docs/, IDEA.md, graphify-out/)
-# cannot change the image, so they are excluded here; keep the two lists in step.
+# that .dockerignore keeps out of the context (docs/, IDEA.md, graphify-out/,
+# evaluation/runs/) cannot change the image, so they are excluded here; keep the
+# two lists in step. evaluation/runs/ holds run OUTPUTS: an evidence run that
+# copies its manifests there must not mark the next run's tree dirty.
 git_dirty() {
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out')" ]; then
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ]; then
     echo true
   else
     echo false

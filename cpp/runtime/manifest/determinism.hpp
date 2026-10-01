@@ -6,6 +6,7 @@
 // whatever the machine actually computed.
 #include "core/determinism/digests.hpp"
 #include "perception/degradation/degradation_digest.hpp"
+#include "perception/degradation/lens_digest.hpp"
 #include "runtime/manifest/run_manifest.hpp"
 
 #include <string>
@@ -16,6 +17,7 @@ inline void RecordDeterminismDigests(RunManifest& m) {
     m.det_math_digest = std::to_string(core::DetMathDigest());
     m.philox_digest = std::to_string(core::PhiloxDigest());
     m.degradation_digest = std::to_string(perception::DegradeDigest());
+    m.lens_digest = std::to_string(perception::LensDigest());
 }
 
 }  // namespace ariadne::runtime

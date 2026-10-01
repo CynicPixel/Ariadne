@@ -256,6 +256,7 @@ TEST(RunManifest, RequiredFieldValidationCatchesAnUnpublishableRun) {
     m.det_math_digest = "11806531094783593156";
     m.philox_digest = "14182439601419266695";
     m.degradation_digest = "8535765251477677907";
+    m.lens_digest = "1253886791886396038";
     EXPECT_TRUE(MissingRequiredFields(m).empty());
 
     // seed 0 is a legitimate seed; only the flag distinguishes it from unset.
@@ -299,6 +300,7 @@ TEST(RunManifest, DeterminismDigestsAreMeasuredNotCopied) {
     EXPECT_EQ(m.det_math_digest, "11806531094783593156");
     EXPECT_EQ(m.philox_digest, "14182439601419266695");
     EXPECT_EQ(m.degradation_digest, "8535765251477677907");
+    EXPECT_EQ(m.lens_digest, "1253886791886396038");
 
     const auto missing = MissingRequiredFields(m);
     for (const auto& f : missing) {

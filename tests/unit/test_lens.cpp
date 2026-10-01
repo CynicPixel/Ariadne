@@ -1,6 +1,7 @@
 // The read-time lens stage (D41) against OpenCV's own projection model (oracle
 // only: perception/degradation stays OpenCV-free).
 #include "perception/degradation/lens.hpp"
+#include "perception/degradation/lens_digest.hpp"
 
 #include <gtest/gtest.h>
 #include <opencv2/core.hpp>
@@ -33,15 +34,6 @@ LensModel RigV1() {
     m.render_cx = 639.5;
     m.render_cy = 359.5;
     return m;
-}
-
-uint64_t Fnv1a(const std::vector<uint8_t>& v) {
-    uint64_t h = 1469598103934665603ull;
-    for (uint8_t b : v) {
-        h ^= b;
-        h *= 1099511628211ull;
-    }
-    return h;
 }
 
 }  // namespace
@@ -140,18 +132,8 @@ TEST(Lens, DepthUsesNearestNeighbour) {
 }
 
 TEST(Lens, OutputIsPinnedByADigest) {
-    // Same bytes on every platform (IEEE double, -ffp-contract=off): this digest is
-    // the cross-architecture check (x86 dev host, Graviton m8g).
-    const LensModel m = RigV1();
-    ImageU8 img(m.width, m.height, 3);
-    for (int y = 0; y < m.height; ++y) {
-        for (int x = 0; x < m.width; ++x) {
-            img.At(x, y, 0) = uint8_t((x * 7 + y * 3) & 255);
-            img.At(x, y, 1) = uint8_t(((x / 16 + y / 16) & 1) * 255);
-            img.At(x, y, 2) = uint8_t((x ^ y) & 255);
-        }
-    }
-    const uint64_t got = Fnv1a(ApplyLens(img, BuildLensMap(m)).data);
-    constexpr uint64_t kGolden = 0x161799773c4e9d45ull;   // measured 2026-10-01, x86-64 core image
-    EXPECT_EQ(got, kGolden) << "measured 0x" << std::hex << got;
+    // Same bytes on every platform (IEEE double, -ffp-contract=off). The digest has
+    // ONE implementation (lens_digest.hpp), shared with check_determinism.sh and the
+    // run manifest; its constant is EXPECTED_LENS there.
+    EXPECT_EQ(LensDigest(), 1253886791886396038ull);
 }

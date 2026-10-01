@@ -31,6 +31,8 @@ trap 'rm -rf "$WORK"' EXIT
 EXPECTED_DET_MATH="11806531094783593156"
 EXPECTED_PHILOX="14182439601419266695"
 EXPECTED_DEGRADE="8535765251477677907"
+# Added 2026-10-01 (D41): the read-time lens operator; same on g++/clang++ -O0..-O3.
+EXPECTED_LENS="1253886791886396038"
 
 cat > "$WORK/digest.cpp" <<'CPP'
 // The digest computations live in exactly one place (core/determinism/
@@ -38,11 +40,13 @@ cat > "$WORK/digest.cpp" <<'CPP'
 // tests and the run-manifest writer, so this script cannot drift from them.
 #include "core/determinism/digests.hpp"
 #include "perception/degradation/degradation_digest.hpp"
+#include "perception/degradation/lens_digest.hpp"
 #include <cstdio>
 int main() {
     std::printf("det_math_digest=%llu\n", (unsigned long long)ariadne::core::DetMathDigest());
     std::printf("philox_digest=%llu\n", (unsigned long long)ariadne::core::PhiloxDigest());
     std::printf("degrade_digest=%llu\n", (unsigned long long)ariadne::perception::DegradeDigest());
+    std::printf("lens_digest=%llu\n", (unsigned long long)ariadne::perception::LensDigest());
     return 0;
 }
 CPP
@@ -62,6 +66,7 @@ for CXX in g++ clang++; do
     det="$(echo "$out" | sed -n 's/^det_math_digest=//p')"
     phi="$(echo "$out" | sed -n 's/^philox_digest=//p')"
     deg="$(echo "$out" | sed -n 's/^degrade_digest=//p')"
+    len="$(echo "$out" | sed -n 's/^lens_digest=//p')"
     ran=$((ran + 1))
 
     # The digest line is printed on BOTH paths, in one fixed machine-readable
@@ -71,16 +76,17 @@ for CXX in g++ clang++; do
     # on an empty match instead of reporting the mismatch.
     verdict=PASS
     if [ "$det" != "$EXPECTED_DET_MATH" ] || [ "$phi" != "$EXPECTED_PHILOX" ] \
-       || [ "$deg" != "$EXPECTED_DEGRADE" ]; then
+       || [ "$deg" != "$EXPECTED_DEGRADE" ] || [ "$len" != "$EXPECTED_LENS" ]; then
       verdict=FAIL
       status=1
     fi
-    printf '  %-4s  %-9s %-4s  det=%s philox=%s degrade=%s\n' \
-           "$verdict" "$CXX" "$OPT" "$det" "$phi" "$deg"
+    printf '  %-4s  %-9s %-4s  det=%s philox=%s degrade=%s lens=%s\n' \
+           "$verdict" "$CXX" "$OPT" "$det" "$phi" "$deg" "$len"
     if [ "$verdict" = FAIL ]; then
       [ "$det" = "$EXPECTED_DET_MATH" ] || printf '        det_math got %s want %s\n' "$det" "$EXPECTED_DET_MATH"
       [ "$phi" = "$EXPECTED_PHILOX" ]   || printf '        philox   got %s want %s\n' "$phi" "$EXPECTED_PHILOX"
       [ "$deg" = "$EXPECTED_DEGRADE" ]  || printf '        degrade  got %s want %s\n' "$deg" "$EXPECTED_DEGRADE"
+      [ "$len" = "$EXPECTED_LENS" ]     || printf '        lens     got %s want %s\n' "$len" "$EXPECTED_LENS"
     fi
   done
 done

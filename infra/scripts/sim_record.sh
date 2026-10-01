@@ -17,7 +17,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${ARIADNE_SIM_IMAGE:-ariadne/sim:dev}"
 scene="${1:?scene dir}"; out="${2:?output recording dir}"; shift 2
 dirty=false
-[ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out')" ] && dirty=true
+[ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ] && dirty=true
 render=(-e ARIADNE_RENDER_MODE=mesa-llvmpipe -e LIBGL_ALWAYS_SOFTWARE=1 -e GALLIUM_DRIVER=llvmpipe)
 if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
   render=(--gpus all -e ARIADNE_RENDER_MODE=nvidia-egl)

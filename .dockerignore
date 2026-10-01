@@ -12,3 +12,6 @@ docs/
 **/.terraform/
 IDEA.md
 graphify-out/
+# Run outputs (evidence manifests and their gitignored raw/ data, e.g. 12 GB sim
+# bags) never belong in an image, and must not bloat the build context.
+evaluation/runs/
