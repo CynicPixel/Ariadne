@@ -46,7 +46,8 @@ if(OpenCV_FOUND)
   add_executable(test_opencv
     unit/test_opencv_identity.cpp
     unit/test_perception_cv.cpp
-    unit/test_stereo_vo.cpp)
+    unit/test_stereo_vo.cpp
+    unit/test_lens.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

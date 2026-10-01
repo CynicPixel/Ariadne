@@ -33,20 +33,62 @@ class MissionError(ValueError):
 
 def load_rig(path: str) -> dict:
     rig = yaml.safe_load(open(path))
-    need = {"name", "camera", "stereo", "left_camera_in_body_m", "depth", "imu", "lamp"}
+    need = {"name", "camera", "stereo", "left_camera_in_body_m", "depth", "imu", "lamp", "lens"}
     missing = need - set(rig)
     extra = set(rig) - need
     if missing or extra:
         raise MissionError(f"rig: missing {sorted(missing)} unknown {sorted(extra)}")
     cam = rig["camera"]
-    for k in ("width", "height", "hfov_deg", "rate_hz", "near_m", "far_m", "distortion"):
+    for k in ("width", "height", "hfov_deg", "rate_hz", "near_m", "far_m"):
         if k not in cam:
             raise MissionError(f"rig.camera.{k} missing")
+    if "distortion" in cam:
+        raise MissionError("rig.camera.distortion: the render is pinhole (ogre2 ignores it, SMOKE 4n); "
+                           "put the lens under rig.lens, applied at read time (D41)")
+    check_lens(rig)
     if not 10.0 < cam["hfov_deg"] < 170.0 or cam["rate_hz"] <= 0 or rig["stereo"]["baseline_m"] <= 0:
         raise MissionError("rig: hfov in (10, 170) deg, rate > 0, baseline > 0")
     if 1_000_000_000 % rig["imu"]["period_ns"] != 0:
         raise MissionError("rig.imu.period_ns must divide one second")
     return rig
+
+
+LENS_KEYS = ("model", "fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2", "k3")
+
+
+def render_intrinsics(rig: dict) -> dict:
+    """The pinhole render in the pixel-centre convention (SMOKE §4n measured it)."""
+    c = rig["camera"]
+    fx = (c["width"] / 2.0) / math.tan(math.radians(c["hfov_deg"]) / 2.0)
+    return {"fx": fx, "fy": fx, "cx": (c["width"] - 1) / 2.0, "cy": (c["height"] - 1) / 2.0}
+
+
+def check_lens(rig: dict) -> None:
+    """The read-time lens must be well formed and sample only inside the render, the
+    same border test perception/degradation/lens.hpp's BuildLensMap applies (fail at
+    composition time, not after a render)."""
+    lens = rig["lens"]
+    if set(lens) != set(LENS_KEYS) or lens["model"] != "plumb_bob":
+        raise MissionError(f"rig.lens needs exactly {LENS_KEYS} with model plumb_bob")
+    if not (lens["fx"] > 0 and lens["fy"] > 0):
+        raise MissionError("rig.lens focal lengths must be > 0")
+    import numpy as np
+    c, r = rig["camera"], render_intrinsics(rig)
+    W, H = c["width"], c["height"]
+    u = np.concatenate([np.arange(W), np.arange(W), np.zeros(H), np.full(H, W - 1)]).astype(float)
+    v = np.concatenate([np.zeros(W), np.full(W, H - 1), np.arange(H), np.arange(H)]).astype(float)
+    xd, yd = (u - lens["cx"]) / lens["fx"], (v - lens["cy"]) / lens["fy"]
+    x, y = xd.copy(), yd.copy()
+    k1, k2, k3, p1, p2 = (lens[k] for k in ("k1", "k2", "k3", "p1", "p2"))
+    for _ in range(30):                      # the operator's fixed-point inverse
+        r2 = x * x + y * y
+        rad = 1 + r2 * (k1 + r2 * (k2 + r2 * k3))
+        x = (xd - (2 * p1 * x * y + p2 * (r2 + 2 * x * x))) / rad
+        y = (yd - (p1 * (r2 + 2 * y * y) + 2 * p2 * x * y)) / rad
+    su, sv = r["fx"] * x + r["cx"], r["fy"] * y + r["cy"]
+    if not (np.isfinite(su).all() and su.min() >= 0 and sv.min() >= 0 and su.max() <= W - 1 and sv.max() <= H - 1):
+        raise MissionError(f"rig.lens samples outside the {W}x{H} render (u {su.min():.2f}..{su.max():.2f}, "
+                           f"v {sv.min():.2f}..{sv.max():.2f}): raise lens fx/fy")
 
 
 def _f(x: float) -> str:
@@ -76,10 +118,7 @@ def topics(k: int) -> dict:
 
 def _camera(name, pose, rig, topic, info_topic, depth=False) -> str:
     c = rig["camera"]
-    d = c["distortion"]
-    dist = "" if depth else (
-        f"<distortion><k1>{_f(d['k1'])}</k1><k2>{_f(d['k2'])}</k2><k3>{_f(d['k3'])}</k3>"
-        f"<p1>{_f(d['p1'])}</p1><p2>{_f(d['p2'])}</p2><center>0.5 0.5</center></distortion>")
+    dist = ""   # pinhole render; the lens is a read-time operator (D41)
     kind, fmt = ("depth_camera", "R_FLOAT32") if depth else ("camera", "R8G8B8")
     x, y, z = pose
     return (f'        <sensor name="{name}" type="{kind}"><pose>{_f(x)} {_f(y)} {_f(z)} 0 0 0</pose>'
@@ -193,6 +232,10 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default") -
         "t_B_camera_m": cams,
         "depth": "32FC1 metres, pinhole, co-located with the left camera, no distortion; GT only" if depth else None,
         "intrinsics_nominal": intrinsics(rig),
+        "render_intrinsics_pixel_centre": render_intrinsics(rig),
+        "camera_info_convention": "gz camera_info states cx = W/2, cy = H/2; the pixel-centre truth is "
+                                  "(W-1)/2, (H-1)/2 (SMOKE 4n). Its D is [0]*5: the render is pinhole.",
+        "lens": dict(rig["lens"], applied="read time, perception/degradation/lens.hpp (D41)"),
         "agents": [{"agent": k, "topics": topics(k), "frame_id": f"agent_{k}/base_link",
                     "script_duration_s": s.duration, "start_delay_s": scene.start_delays_s[k]
                     if k < len(scene.start_delays_s) else 0.0}

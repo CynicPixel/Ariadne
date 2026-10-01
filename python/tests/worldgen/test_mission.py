@@ -38,6 +38,9 @@ def test_mission_world_bridge_and_manifest(tmp_path):
     js = json.load(open(tmp_path / "mission_default.json"))
     assert js["scene_id"] == s.scene_id and js["duration_s"] == m["duration_s"]
     assert abs(js["intrinsics_nominal"]["fx"] - 640.0) < 1e-9
+    assert js["render_intrinsics_pixel_centre"]["cx"] == 639.5 and js["render_intrinsics_pixel_centre"]["cy"] == 359.5
+    assert js["lens"]["fx"] == 680.0 and js["lens"]["k1"] == -0.05
+    assert not list(world.iter("distortion"))                           # pinhole render (D41)
 
 
 def test_rig_validation(tmp_path):
@@ -50,3 +53,30 @@ def test_rig_validation(tmp_path):
         raise AssertionError("expected MissionError")
     except ValueError:
         pass
+
+
+def _write(tmp_path, rig):
+    p = tmp_path / "rig.yaml"
+    p.write_text(yaml.safe_dump(rig))
+    return str(p)
+
+
+def test_lens_must_stay_inside_the_render(tmp_path):
+    rig = yaml.safe_load(open(RIG))
+    load_rig(_write(tmp_path, rig))                                      # the shipped rig is valid
+    rig["lens"]["fx"] = rig["lens"]["fy"] = 670.0                       # minimum is 674.05 (barrel)
+    try:
+        load_rig(_write(tmp_path, rig))
+        raise AssertionError("expected MissionError")
+    except ValueError as e:
+        assert "outside" in str(e)
+
+
+def test_sdf_distortion_is_refused(tmp_path):
+    rig = yaml.safe_load(open(RIG))
+    rig["camera"]["distortion"] = {"k1": -0.05, "k2": 0.0, "k3": 0.0, "p1": 0.0, "p2": 0.0}
+    try:
+        load_rig(_write(tmp_path, rig))
+        raise AssertionError("expected MissionError")
+    except ValueError as e:
+        assert "pinhole" in str(e)

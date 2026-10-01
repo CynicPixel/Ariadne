@@ -15,6 +15,9 @@
 #                                      write manifest + results under
 #                                      evaluation/runs/phase1/euroc_frontend/
 #                                      (fetch first: infra/scripts/fetch_euroc.py)
+#   infra/scripts/core.sh sim-calib REC SCENE  the 1.1 acceptance test (design §6)
+#                                      over a sim recording; results + manifest into
+#                                      evaluation/runs/phase1/sim_calib/; exit 1 on FAIL
 #   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
 #                                      sequence, scored against ground truth,
 #                                      into evaluation/runs/phase1/euroc_vo/
@@ -84,8 +87,10 @@ cmd_dev() {
       && ctest --test-dir /work/build/docker --output-on-failure --parallel $JOBS"
   fi
   # ccache lives under the repo's gitignored .cache/ so it survives containers.
+  # The image id reaches every run manifest (it was UNRECORDED before 2026-10-01).
   exec docker run --rm "${tty[@]}" -v "$REPO_ROOT":/work \
-    -e CCACHE_DIR=/work/.cache/ccache-docker "$DEV_IMAGE" "$@"
+    -e CCACHE_DIR=/work/.cache/ccache-docker \
+    -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$DEV_IMAGE" --format '{{.Id}}')" "$DEV_IMAGE" "$@"
 }
 
 cmd_euroc() {
@@ -117,11 +122,22 @@ cmd_euroc_vo() {
        --out /work/evaluation/runs/phase1/euroc_vo"
 }
 
+cmd_sim_calib() {
+  local rec="${1:?recording dir}" scene="${2:?scene dir}" commit dirty
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  dirty="$(git_dirty)"
+  cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_sim_calib --parallel $JOBS >/dev/null \
+    && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty ARIADNE_SOURCE_DIR=/work \
+       /work/build/docker/cpp/runtime/ariadne_sim_calib --rec /work/$rec --scene /work/$scene \
+       --out /work/evaluation/runs/phase1/sim_calib"
+}
+
 case "${1:-}" in
   image) shift; cmd_image "$@" ;;
   gate)  shift; cmd_gate "$@" ;;
   dev)   shift; cmd_dev "$@" ;;
   euroc) shift; cmd_euroc "$@" ;;
   euroc-vo) shift; cmd_euroc_vo "$@" ;;
-  *) sed -n '2,24p' "$0"; exit 2 ;;
+  sim-calib) shift; cmd_sim_calib "$@" ;;
+  *) sed -n '2,27p' "$0"; exit 2 ;;
 esac

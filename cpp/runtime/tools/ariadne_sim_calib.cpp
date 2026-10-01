@@ -4,7 +4,19 @@
 // convention against ground truth, so that a failure points at its cause.
 //
 //   ariadne_sim_calib --rec RECDIR --scene SCENEDIR --out OUTROOT [--agent 0]
-//                     [--mission default] [--max-calib-views 80]
+//                     [--mission default] [--max-calib-views 80] [--lens auto|on|off]
+//                     [--thresholds configs/sim/acceptance_s6.yaml]
+//
+// VERDICT: every check is compared with the thresholds file (set from the first
+// measurement, SMOKE §4n); results.yaml records each failure and the exit code is
+// 1 on FAIL. Thresholds assume the lens truth (the mission's rig.lens); with
+// --lens off the verdict is skipped (a diagnostic run of the raw render).
+//
+// THE TRUTH MODEL. With the read-time lens on (default when the mission has one,
+// D41) every frame is passed through perception/degradation/lens.hpp first and
+// the truth is the lens camera (rig.lens: K and Brown D). With --lens off the
+// truth is the raw render: pinhole, K in the pixel-centre convention
+// (cx = (W-1)/2), which camera_info states half a pixel off (SMOKE §4n).
 //
 // Reads the two-bag recording ROS-free (D39/D40): sensors/ for the images and
 // camera_info, canonical/ for GT pose and /tf_static. Only frames inside the
@@ -13,10 +25,9 @@
 //  A. GT REPROJECTION (no calibration involved). Every detected ChArUco corner
 //     is compared with the projection of its world position (scene.json board
 //     corners) through the GT camera pose (canonical pose at the image stamp
-//     composed with /tf_static) and camera_info's K, distortion OFF. Residual
-//     vs normalized radius exposes distortion (with k1 = -0.05 it would grow to
-//     tens of pixels at the corners); its mean exposes the principal point; its
-//     correlation with image motion exposes a render/pose time offset.
+//     composed with /tf_static) and the TRUTH model. A radial trend in the
+//     residual exposes unmodelled distortion; its mean, a principal point error;
+//     its correlation with image motion, a render/pose time offset.
 //  B. FREE CALIBRATION per camera (k1, k2, p1, p2 free, k3 fixed): recovered K
 //     and D with standard deviations, the radius the corners reached, and the
 //     RMS of a pinhole-only calibration for comparison.
@@ -27,10 +38,12 @@
 //  E. BOARD FRAME self-check on the asset texture itself: detected corners on
 //     the PGM must sit where getChessboardCorners() says (x right, y down).
 //
-// Writes OUTROOT/<scene_id>-<UTC>/{results.yaml, manifest.yaml, corners.csv}.
+// Writes OUTROOT/<scene_id>-agent<k>-<UTC>/{results.yaml, manifest.yaml, raw/corners.csv}
+// (raw/ is gitignored: the per-corner table is large and regenerable).
 // Reports measurements; pass thresholds are set from the first measurement
 // (design §6) and recorded separately, never tuned silently here.
 // ---------------------------------------------------------------------------
+#include "perception/degradation/lens.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
 #include "runtime/manifest/opencv_identity.hpp"
@@ -50,6 +63,8 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <array>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -76,6 +91,29 @@ struct Args {
     std::string rec, scene, out, mission = "default";
     int agent = 0;
     int max_views = 80;
+    std::string lens = "auto";
+    std::string thresholds;   // default: <source>/configs/sim/acceptance_s6.yaml
+};
+
+/// The camera model the frames are judged against (see THE TRUTH MODEL).
+struct Truth {
+    double fx = 0, fy = 0, cx = 0, cy = 0;
+    std::array<double, 5> d{};   // k1 k2 p1 p2 k3 (OpenCV order)
+    bool lens = false;
+    ariadne::perception::LensModel model;
+    cv::Matx33d K() const { return {fx, 0, cx, 0, fy, cy, 0, 0, 1}; }
+    cv::Mat D() const { return cv::Mat(cv::Matx<double, 1, 5>(d[0], d[1], d[2], d[3], d[4])); }
+    /// Pixel of a camera-frame point (z > 0).
+    cv::Point2d Project(const Eigen::Vector3d& pc) const {
+        double x = pc.x() / pc.z(), y = pc.y() / pc.z();
+        if (lens) {
+            double xd, yd;
+            ariadne::perception::LensDistort(model, x, y, xd, yd);
+            x = xd;
+            y = yd;
+        }
+        return {fx * x + cx, fy * y + cy};
+    }
 };
 
 std::string UtcNow(const char* fmt) {
@@ -229,6 +267,8 @@ int main(int argc, char** argv) {
             else if (k == "--agent") a.agent = std::stoi(v);
             else if (k == "--mission") a.mission = v;
             else if (k == "--max-calib-views") a.max_views = std::stoi(v);
+            else if (k == "--lens") a.lens = v;
+            else if (k == "--thresholds") a.thresholds = v;
             else throw std::invalid_argument("unknown argument " + k);
         }
         if (a.rec.empty() || a.scene.empty() || a.out.empty()) {
@@ -247,6 +287,48 @@ int main(int argc, char** argv) {
         const std::string t_left = topics["left_image"].as<std::string>(), t_right = topics["right_image"].as<std::string>();
         const std::string t_linfo = topics["left_info"].as<std::string>(), t_rinfo = topics["right_info"].as<std::string>();
         const std::string t_pose = topics["gt_pose"].as<std::string>();
+
+        // --- the truth model ------------------------------------------------------
+        if (a.lens != "auto" && a.lens != "on" && a.lens != "off") throw std::invalid_argument("--lens auto|on|off");
+        const bool has_lens = bool(mission["lens"]);
+        if (a.lens == "on" && !has_lens) throw std::runtime_error("--lens on but the mission has no rig.lens");
+        Truth truth;
+        truth.lens = a.lens == "on" || (a.lens == "auto" && has_lens);
+        const int W = mission["rig"]["camera"]["width"].as<int>(), H = mission["rig"]["camera"]["height"].as<int>();
+        const double f_render = mission["intrinsics_nominal"]["fx"].as<double>();
+        ariadne::perception::LensMap lens_map;
+        if (truth.lens) {
+            const auto L = mission["lens"];
+            auto& lm = truth.model;
+            lm.width = W;
+            lm.height = H;
+            lm.fx = L["fx"].as<double>();
+            lm.fy = L["fy"].as<double>();
+            lm.cx = L["cx"].as<double>();
+            lm.cy = L["cy"].as<double>();
+            lm.k1 = L["k1"].as<double>();
+            lm.k2 = L["k2"].as<double>();
+            lm.p1 = L["p1"].as<double>();
+            lm.p2 = L["p2"].as<double>();
+            lm.k3 = L["k3"].as<double>();
+            const auto Rn = mission["render_intrinsics_pixel_centre"];
+            lm.render_fx = Rn["fx"].as<double>();
+            lm.render_fy = Rn["fy"].as<double>();
+            lm.render_cx = Rn["cx"].as<double>();
+            lm.render_cy = Rn["cy"].as<double>();
+            lens_map = ariadne::perception::BuildLensMap(lm);
+            truth.fx = lm.fx;
+            truth.fy = lm.fy;
+            truth.cx = lm.cx;
+            truth.cy = lm.cy;
+            truth.d = {lm.k1, lm.k2, lm.p1, lm.p2, lm.k3};
+        } else {
+            truth.fx = truth.fy = f_render;
+            truth.cx = (W - 1) / 2.0;
+            truth.cy = (H - 1) / 2.0;
+        }
+        std::printf("truth model: %s fx %.3f cx %.2f cy %.2f k1 %.4f\n",
+                    truth.lens ? "lens (read-time, D41)" : "raw pinhole render", truth.fx, truth.cx, truth.cy, truth.d[0]);
 
         // --- calibration windows from the script --------------------------------
         std::vector<Window> windows;
@@ -340,7 +422,16 @@ int main(int argc, char** argv) {
                 const auto im = cdr::DecodeImage(m.data, m.size);
                 cdr::ValidateImage(im);
                 if (im.encoding != "rgb8") throw std::runtime_error("expected rgb8, got " + im.encoding);
-                const cv::Mat rgb(int(im.height), int(im.width), CV_8UC3, const_cast<uint8_t*>(im.data.data()), im.step);
+                cv::Mat rgb(int(im.height), int(im.width), CV_8UC3, const_cast<uint8_t*>(im.data.data()), im.step);
+                ariadne::core::ImageU8 lensed;
+                if (truth.lens) {          // the camera the estimator sees: RGB through the lens, then gray
+                    ariadne::core::ImageU8 clean(int(im.width), int(im.height), 3);
+                    for (uint32_t r = 0; r < im.height; ++r) {
+                        std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
+                    }
+                    lensed = ariadne::perception::ApplyLens(clean, lens_map);
+                    rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, lensed.data.data());
+                }
                 cv::Mat gray;
                 cv::cvtColor(rgb, gray, cv::COLOR_RGB2GRAY);
                 img_size = gray.size();
@@ -364,23 +455,23 @@ int main(int argc, char** argv) {
         const fs::path run_dir = fs::path(a.out) / (scene["scene_id"].as<std::string>() + "-agent" +
                                                     std::to_string(a.agent) + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
         fs::create_directories(run_dir);
-        csv.open(run_dir / "corners.csv");
+        fs::create_directories(run_dir / "raw");      // gitignored: ~40k rows per run
+        csv.open(run_dir / "raw" / "corners.csv");
         csv << "camera,stamp_ns,tag,id,u_det,v_det,u_gt,v_gt,r_norm,du_dt,dv_dt\n";
         struct Agg {
-            Stats res, res_x, res_y, res_pc;   // res_pc: under the pixel-centre principal point (cx-0.5, cy-0.5)
+            Stats res, res_x, res_y;           // detected - truth projection
         };
         std::map<std::string, std::map<std::string, Agg>> byKind;     // cam -> kind -> residual stats
         std::map<std::string, std::vector<std::array<double, 2>>> radial;   // cam -> (r_norm, radial residual px)
         std::map<std::string, std::array<double, 2>> timing_num_den;        // cam -> sum(res.v), sum(v.v)
         std::map<std::string, double> max_r;
-        auto Project = [&](const CameraInfoK& K, const Pose& T_C_W, const Vec3& pw, bool& front) {
+        auto Project = [&](const Pose& T_C_W, const Vec3& pw, bool& front) {
             const Vec3 pc = T_C_W * pw;
             front = pc.z() > 0.05;
-            return cv::Point2d(K.fx * pc.x() / pc.z() + K.cx, K.fy * pc.y() / pc.z() + K.cy);
+            return front ? truth.Project(pc) : cv::Point2d(0, 0);
         };
         int missing_gt = 0;
         for (const std::string cam : {"left", "right"}) {
-            const CameraInfoK& K = info[cam];
             for (const auto& d : dets[cam]) {
                 const auto it = gt.find(d.ns);
                 if (it == gt.end()) {
@@ -394,12 +485,12 @@ int main(int argc, char** argv) {
                     const cv::Point3f o = board.obj[d.ids[i]];
                     const Vec3 pw = board.T_W_board * Vec3(o.x, o.y, o.z);
                     bool f1, f2;
-                    const cv::Point2d g = Project(K, T_C_W, pw, f1);
-                    const cv::Point2d g2 = Project(K, T_C_W2, pw, f2);
+                    const cv::Point2d g = Project(T_C_W, pw, f1);
+                    const cv::Point2d g2 = Project(T_C_W2, pw, f2);
                     if (!f1) continue;
                     const double du = d.px[i].x - g.x, dv = d.px[i].y - g.y;
                     const double vu = (g2.x - g.x) / 0.005, vv = (g2.y - g.y) / 0.005;   // px/s
-                    const double xn = (d.px[i].x - K.cx) / K.fx, yn = (d.px[i].y - K.cy) / K.fy;
+                    const double xn = (d.px[i].x - truth.cx) / truth.fx, yn = (d.px[i].y - truth.cy) / truth.fy;
                     const double r = std::hypot(xn, yn);
                     max_r[cam] = std::max(max_r[cam], r);
                     const std::string kind = Kind(d.tag);
@@ -407,7 +498,6 @@ int main(int argc, char** argv) {
                     ag2.res.add(std::hypot(du, dv));
                     ag2.res_x.add(du);
                     ag2.res_y.add(dv);
-                    ag2.res_pc.add(std::hypot(du + 0.5, dv + 0.5));
                     if (r > 1e-6) radial[cam].push_back({r, (du * xn + dv * yn) / r});
                     if (std::hypot(vu, vv) > 20.0) {        // moving corners: residual ~ delta * velocity
                         timing_num_den[cam][0] += du * vu + dv * vv;
@@ -426,8 +516,8 @@ int main(int argc, char** argv) {
             Eigen::VectorXd b(v.size());
             for (size_t i = 0; i < v.size(); ++i) {
                 const double r = v[i][0];
-                A(i, 0) = info[cam].fx * r * r * r;
-                A(i, 1) = info[cam].fx * r * r * r * r * r;
+                A(i, 0) = truth.fx * r * r * r;
+                A(i, 1) = truth.fx * r * r * r * r * r;
                 b(i) = v[i][1];
             }
             const Eigen::Vector2d k = A.colPivHouseholderQr().solve(b);
@@ -437,7 +527,8 @@ int main(int argc, char** argv) {
         // --- B: free calibration per camera --------------------------------------
         struct Calib {
             cv::Mat K, D, stdI;
-            double rms = 0, rms_pinhole = 0;
+            cv::Mat K_fixed_radial;          // diagnostic: k1, k2, k3 held at truth
+            double rms = 0, rms_pinhole = 0, rms_fixed_radial = 0;
             int views = 0, points = 0;
         };
         std::map<std::string, Calib> calib;
@@ -471,6 +562,14 @@ int main(int argc, char** argv) {
             c.rms_pinhole = cv::calibrateCamera(objs, imgs, img_size, K0, D0, rv, tv,
                                                 cv::CALIB_FIX_K1 | cv::CALIB_FIX_K2 | cv::CALIB_FIX_K3 |
                                                     cv::CALIB_ZERO_TANGENT_DIST);
+            // Diagnostic for the focal bias: start at the truth and hold the radial terms
+            // there. If fx then lands on the truth, the free calibration's fx error is the
+            // fx-radial correlation of this view geometry, not the pixels.
+            c.K_fixed_radial = cv::Mat(truth.K()).clone();
+            cv::Mat Dfix = truth.D().clone();
+            c.rms_fixed_radial = cv::calibrateCamera(objs, imgs, img_size, c.K_fixed_radial, Dfix, rv, tv,
+                                                     cv::CALIB_USE_INTRINSIC_GUESS | cv::CALIB_FIX_K1 |
+                                                         cv::CALIB_FIX_K2 | cv::CALIB_FIX_K3);
         }
 
         // --- C: stereo --------------------------------------------------------------
@@ -506,15 +605,10 @@ int main(int argc, char** argv) {
         cv::Mat Rs, Ts, Es, Fs;
         const double stereo_rms = cv::stereoCalibrate(sobj, sl, sr, calib["left"].K, calib["left"].D, calib["right"].K,
                                                       calib["right"].D, img_size, Rs, Ts, Es, Fs, cv::CALIB_FIX_INTRINSIC);
-        // The same pairs with the hypothesised TRUE intrinsics (camera_info K moved to the
-        // pixel-centre convention, no distortion): separates calibration noise from the extrinsic.
-        auto TrueK = [&](const std::string& cam) {
-            const CameraInfoK& K = info[cam];
-            return cv::Mat(cv::Matx33d(K.fx, 0, K.cx - 0.5, 0, K.fy, K.cy - 0.5, 0, 0, 1));
-        };
+        // The same pairs with the TRUTH intrinsics: separates calibration noise from the extrinsic.
         cv::Mat Rt, Tt, Et, Ft;
-        const cv::Mat Kl = TrueK("left"), Kr = TrueK("right"), Z = cv::Mat::zeros(1, 5, CV_64F);
-        const double stereo_rms_true = cv::stereoCalibrate(sobj, sl, sr, Kl, Z, Kr, Z, img_size, Rt, Tt, Et, Ft,
+        const cv::Mat Kt(truth.K()), Dt = truth.D();
+        const double stereo_rms_true = cv::stereoCalibrate(sobj, sl, sr, Kt, Dt, Kt, Dt, img_size, Rt, Tt, Et, Ft,
                                                            cv::CALIB_FIX_INTRINSIC);
         const Pose T_r_l = T_B_cam["right"].inverse() * T_B_cam["left"];   // p_right = T_r_l p_left
         Mat3 Rse;
@@ -532,7 +626,7 @@ int main(int argc, char** argv) {
         const double stereo_true_rot_err_deg = RotAngle(Rte * T_r_l.R.transpose()) * 180.0 / M_PI;
         const double stereo_true_t_err_m = (Tte - T_r_l.t).norm();
 
-        // --- D: PnP vs GT per frame (left camera, pixel-centre K, no distortion) ----
+        // --- D: PnP vs GT per frame (left camera, truth K and D) -----------------
         Stats pnp_rot_deg, pnp_t_m;
         int flipped = 0;
         for (const auto& d : dets["left"]) {
@@ -540,9 +634,7 @@ int main(int argc, char** argv) {
             if (it == gt.end() || d.ids.size() < 10) continue;
             cv::Mat o, im, rvec, tvec;
             board.board.matchImagePoints(d.px, d.ids, o, im);
-            const CameraInfoK& K = info["left"];
-            const cv::Mat Km(cv::Matx33d(K.fx, 0, K.cx - 0.5, 0, K.fy, K.cy - 0.5, 0, 0, 1));   // pixel-centre K
-            if (!cv::solvePnP(o, im, Km, cv::noArray(), rvec, tvec, false, cv::SOLVEPNP_IPPE)) continue;
+            if (!cv::solvePnP(o, im, cv::Mat(truth.K()), truth.D(), rvec, tvec, false, cv::SOLVEPNP_IPPE)) continue;
             cv::Mat Rm;
             cv::Rodrigues(rvec, Rm);
             Pose est;
@@ -558,6 +650,56 @@ int main(int argc, char** argv) {
             if (std::abs(ang - M_PI) < 0.05) ++flipped;
         }
 
+        // --- verdict --------------------------------------------------------------
+        std::vector<std::string> fails;
+        const bool judged = truth.lens;
+        if (judged) {
+            const std::string tpath = a.thresholds.empty() ? repo + "/configs/sim/acceptance_s6.yaml" : a.thresholds;
+            const YAML::Node th = YAML::LoadFile(tpath);
+            auto Fail = [&](const std::string& what, double got, double lim) {
+                char b[256];
+                std::snprintf(b, sizeof b, "%s: %.6g exceeds %.6g", what.c_str(), got, lim);
+                fails.emplace_back(b);
+            };
+            if (frame_check != "ok") fails.push_back("E board frame: " + frame_check);
+            if (missing_gt) Fail("gt_missing_for_detections", missing_gt, 0);
+            const auto ta = th["a_gt_reprojection"], tb = th["b_free_calibration"];
+            for (const std::string cam : {"left", "right"}) {
+                if (double(dets[cam].size()) < th["min_frames_detected"].as<double>()) {
+                    fails.push_back(cam + ": " + std::to_string(dets[cam].size()) + " frames detected < " +
+                                    th["min_frames_detected"].as<std::string>());
+                }
+                for (const auto& [kind, g] : byKind[cam]) {
+                    const std::string w = cam + " A " + kind;
+                    if (g.res.rms() > ta["rms_px"].as<double>()) Fail(w + " rms_px", g.res.rms(), ta["rms_px"].as<double>());
+                    const double m = std::max(std::abs(g.res_x.mean()), std::abs(g.res_y.mean()));
+                    if (m > ta["abs_mean_px"].as<double>()) Fail(w + " |mean| px", m, ta["abs_mean_px"].as<double>());
+                }
+                if (std::abs(apparent_k[cam][0]) > ta["abs_apparent_k1"].as<double>()) {
+                    Fail(cam + " A apparent k1", std::abs(apparent_k[cam][0]), ta["abs_apparent_k1"].as<double>());
+                }
+                const auto& tn = timing_num_den[cam];
+                const double dt = tn[1] > 0 ? std::abs(tn[0] / tn[1]) : 1e9;
+                if (dt > ta["abs_time_offset_s"].as<double>()) Fail(cam + " A |time offset| s", dt, ta["abs_time_offset_s"].as<double>());
+                const Calib& c = calib[cam];
+                const double rf = std::max(std::abs(c.K.at<double>(0, 0) / truth.fx - 1), std::abs(c.K.at<double>(1, 1) / truth.fy - 1));
+                if (rf > tb["rel_focal"].as<double>()) Fail(cam + " B rel focal", rf, tb["rel_focal"].as<double>());
+                const double pp = std::max(std::abs(c.K.at<double>(0, 2) - truth.cx), std::abs(c.K.at<double>(1, 2) - truth.cy));
+                if (pp > tb["abs_principal_point_px"].as<double>()) Fail(cam + " B principal point px", pp, tb["abs_principal_point_px"].as<double>());
+                if (std::abs(c.D.at<double>(0) - truth.d[0]) > tb["abs_k1"].as<double>()) Fail(cam + " B k1", std::abs(c.D.at<double>(0) - truth.d[0]), tb["abs_k1"].as<double>());
+                if (std::abs(c.D.at<double>(1) - truth.d[1]) > tb["abs_k2"].as<double>()) Fail(cam + " B k2", std::abs(c.D.at<double>(1) - truth.d[1]), tb["abs_k2"].as<double>());
+                if (c.rms > tb["rms_px"].as<double>()) Fail(cam + " B rms px", c.rms, tb["rms_px"].as<double>());
+            }
+            const auto tc = th["c_stereo_truth_intrinsics"], td = th["d_pnp_vs_gt"];
+            if (stereo_true_t_err_m > tc["t_err_m"].as<double>()) Fail("C stereo t_err_m", stereo_true_t_err_m, tc["t_err_m"].as<double>());
+            if (stereo_true_rot_err_deg > tc["rot_err_deg"].as<double>()) Fail("C stereo rot_err_deg", stereo_true_rot_err_deg, tc["rot_err_deg"].as<double>());
+            if (!(pnp_rot_deg.mean() <= td["mean_rot_err_deg"].as<double>())) Fail("D PnP mean rot deg", pnp_rot_deg.mean(), td["mean_rot_err_deg"].as<double>());
+            if (!(pnp_t_m.mean() <= td["mean_t_err_m"].as<double>())) Fail("D PnP mean t m", pnp_t_m.mean(), td["mean_t_err_m"].as<double>());
+            if (flipped) Fail("D PnP 180-degree flips", flipped, 0);
+            std::printf("thresholds %s: %s\n", th["name"].as<std::string>().c_str(), fails.empty() ? "PASS" : "FAIL");
+            for (const auto& f : fails) std::printf("  FAIL %s\n", f.c_str());
+        }
+
         // --- results ------------------------------------------------------------
         std::ofstream res(run_dir / "results.yaml");
         res.precision(10);
@@ -566,12 +708,12 @@ int main(int argc, char** argv) {
             << "scene_id: " << scene["scene_id"].as<std::string>() << "\nagent: " << a.agent << "\n"
             << "board: {first_id: " << board.first_id << ", last_id: " << board.last_id
             << ", frame_self_check: \"" << frame_check << "\", frame_self_check_worst_px: " << frame_check_px << "}\n"
-            << "rig_sdf: {fx_nominal: " << mission["intrinsics_nominal"]["fx"].as<double>()
-            << ", distortion: {k1: " << mission["rig"]["camera"]["distortion"]["k1"].as<double>()
-            << ", k2: " << mission["rig"]["camera"]["distortion"]["k2"].as<double>()
-            << ", k3: " << mission["rig"]["camera"]["distortion"]["k3"].as<double>()
-            << ", p1: " << mission["rig"]["camera"]["distortion"]["p1"].as<double>()
-            << ", p2: " << mission["rig"]["camera"]["distortion"]["p2"].as<double>() << "}}\n"
+            << "truth: {model: " << (truth.lens ? "read_time_lens_D41" : "raw_pinhole_render_pixel_centre")
+            << ", fx: " << truth.fx << ", fy: " << truth.fy << ", cx: " << truth.cx << ", cy: " << truth.cy
+            << ", k1: " << truth.d[0] << ", k2: " << truth.d[1] << ", p1: " << truth.d[2] << ", p2: " << truth.d[3]
+            << ", k3: " << truth.d[4]
+            << (truth.lens ? ", lens_map_min_margin_px: " + std::to_string(lens_map.min_margin_px) : std::string())
+            << "}\n"
             << "gt_missing_for_detections: " << missing_gt << "\ncameras:\n";
         for (const std::string cam : {"left", "right"}) {
             const CameraInfoK& K = info[cam];
@@ -581,13 +723,14 @@ int main(int argc, char** argv) {
                 << ", fx: " << K.fx << ", fy: " << K.fy << ", cx: " << K.cx << ", cy: " << K.cy << ", model: \""
                 << K.model << "\", d: [";
             for (size_t i = 0; i < K.d.size(); ++i) res << (i ? ", " : "") << K.d[i];
-            res << "]}\n    A_gt_reprojection_px:  # detected corner - GT projection (camera_info K, NO distortion)\n";
+            res << "]}\n    camera_info_vs_render: {dcx: " << K.cx - (truth.lens ? truth.model.render_cx : truth.cx)
+                << ", dcy: " << K.cy - (truth.lens ? truth.model.render_cy : truth.cy)
+                << "}  # camera_info describes the RENDER in gz's W/2 convention (SMOKE 4n)\n"
+                << "    A_gt_reprojection_px:  # detected corner - GT projection through the TRUTH model\n";
             for (const auto& [kind, g] : byKind[cam]) {
                 res << "      " << kind << ": {n: " << g.res.v.size() << ", rms: " << g.res.rms() << ", p95: "
                     << g.res.pct(0.95) << ", max: " << g.res.max() << ", mean_du: " << g.res_x.mean()
-                    << ", mean_dv: " << g.res_y.mean() << ", rms_pixel_centre_k: " << g.res_pc.rms()
-                    << ", p95_pixel_centre_k: " << g.res_pc.pct(0.95) << ", max_pixel_centre_k: " << g.res_pc.max()
-                    << "}\n";
+                    << ", mean_dv: " << g.res_y.mean() << "}\n";
             }
             const auto& tn = timing_num_den[cam];
             res << "    A_apparent_radial_distortion: {k1: " << apparent_k[cam][0] << ", k2: " << apparent_k[cam][1]
@@ -601,18 +744,33 @@ int main(int argc, char** argv) {
                 << ", p2: " << c.D.at<double>(3) << ",\n      std: {fx: " << c.stdI.at<double>(0) << ", fy: "
                 << c.stdI.at<double>(1) << ", cx: " << c.stdI.at<double>(2) << ", cy: " << c.stdI.at<double>(3)
                 << ", k1: " << c.stdI.at<double>(4) << ", k2: " << c.stdI.at<double>(5) << ", p1: "
-                << c.stdI.at<double>(6) << ", p2: " << c.stdI.at<double>(7) << "}}\n";
+                << c.stdI.at<double>(6) << ", p2: " << c.stdI.at<double>(7) << "},\n      z_vs_truth: {";
+            const double tv[8] = {truth.fx, truth.fy, truth.cx, truth.cy, truth.d[0], truth.d[1], truth.d[2], truth.d[3]};
+            const double ev[8] = {c.K.at<double>(0, 0), c.K.at<double>(1, 1), c.K.at<double>(0, 2), c.K.at<double>(1, 2),
+                                  c.D.at<double>(0), c.D.at<double>(1), c.D.at<double>(2), c.D.at<double>(3)};
+            const char* nm[8] = {"fx", "fy", "cx", "cy", "k1", "k2", "p1", "p2"};
+            for (int i = 0; i < 8; ++i) res << (i ? ", " : "") << nm[i] << ": " << (ev[i] - tv[i]) / c.stdI.at<double>(i);
+            res << "}}  # (recovered - truth) / std\n"
+                << "    B_diagnostic_radial_held_at_truth: {rms_px: " << c.rms_fixed_radial
+                << ", fx: " << c.K_fixed_radial.at<double>(0, 0) << ", fy: " << c.K_fixed_radial.at<double>(1, 1)
+                << ", cx: " << c.K_fixed_radial.at<double>(0, 2) << ", cy: " << c.K_fixed_radial.at<double>(1, 2)
+                << "}\n";
         }
         res << "C_stereo: {intrinsics: B_free_calibration, pairs: " << sobj.size() << ", rms_px: " << stereo_rms << ", T_est: [" << Tse.x() << ", "
             << Tse.y() << ", " << Tse.z() << "], T_tf_static: [" << T_r_l.t.x() << ", " << T_r_l.t.y() << ", "
             << T_r_l.t.z() << "], t_err_m: " << stereo_t_err_m << ", rot_err_deg: " << stereo_rot_err_deg
-            << ",\n  with_pixel_centre_k_no_distortion: {rms_px: " << stereo_rms_true << ", T_est: [" << Tte.x() << ", "
+            << ",\n  with_truth_intrinsics: {rms_px: " << stereo_rms_true << ", T_est: [" << Tte.x() << ", "
             << Tte.y() << ", " << Tte.z() << "], t_err_m: " << stereo_true_t_err_m << ", rot_err_deg: "
             << stereo_true_rot_err_deg << "}}\n"
-            << "D_pnp_vs_gt_left: {k: pixel_centre_no_distortion, frames: " << pnp_rot_deg.v.size() << ", rot_err_deg: {mean: " << pnp_rot_deg.mean()
+            << "D_pnp_vs_gt_left: {intrinsics: truth, frames: " << pnp_rot_deg.v.size() << ", rot_err_deg: {mean: " << pnp_rot_deg.mean()
             << ", p95: " << pnp_rot_deg.pct(0.95) << ", max: " << pnp_rot_deg.max() << "}, t_err_m: {mean: "
             << pnp_t_m.mean() << ", p95: " << pnp_t_m.pct(0.95) << ", max: " << pnp_t_m.max()
-            << "}, flipped_180: " << flipped << "}\n";
+            << "}, flipped_180: " << flipped << "}\n"
+            << "verdict: " << (!judged ? "NOT_JUDGED  # --lens off: diagnostic run of the raw render"
+                                       : (fails.empty() ? "PASS" : "FAIL")) << "\nfailures:";
+        if (fails.empty()) res << " []";
+        for (const auto& f : fails) res << "\n  - \"" << f << "\"";
+        res << "\n";
         res.close();
 
         ariadne::runtime::RunManifest m;
@@ -650,7 +808,7 @@ int main(int argc, char** argv) {
         m.extra["command"] = cmd;
         std::ofstream(run_dir / "manifest.yaml") << ariadne::runtime::ToYaml(m);
         std::printf("results written to %s\n", run_dir.c_str());
-        return 0;
+        return judged && !fails.empty() ? 1 : 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_sim_calib: %s\n", e.what());
         return 1;

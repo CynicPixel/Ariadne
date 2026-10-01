@@ -8,9 +8,26 @@ camera:
   rate_hz: 20
   near_m: 0.05
   far_m: 60.0
-  # Mild plumb-bob (arch §5.3: the undistort path must be exercised). gz order
-  # k1 k2 k3 p1 p2; the §6 calibration-recovery test checks what gz renders.
-  distortion: {k1: -0.05, k2: 0.01, k3: 0.0, p1: 0.0005, p2: -0.0002}
+  # The RENDER is an exact pinhole: gz Harmonic's ogre2 ignores SDF lens distortion
+  # (SMOKE §4n), so the SDF carries none and camera_info is honest about it. In the
+  # pixel-centre convention the render's principal point is ((W-1)/2, (H-1)/2); gz's
+  # camera_info states (W/2, H/2) (its continuous convention, measured +0.5 px, §4n).
+# The camera the ESTIMATOR sees (D41): the Brown-Conrady lens applied at READ time by
+# perception/degradation/lens.hpp to the pinhole render (arch §5.3: the undistort path
+# is exercised, with exactly known coefficients). Pixel-centre convention, OpenCV
+# coefficient order. fx must exceed the render's for barrel distortion to stay inside
+# the render: the minimum for these coefficients is 674.05 px; 680 leaves >= 3 px.
+lens:
+  model: plumb_bob
+  fx: 680.0
+  fy: 680.0
+  cx: 639.5
+  cy: 359.5
+  k1: -0.05
+  k2: 0.01
+  p1: 0.0005
+  p2: -0.0002
+  k3: 0.0
 stereo:
   baseline_m: 0.10
 # Body frame = IMU frame: x forward, y left, z up. The left camera's optical
