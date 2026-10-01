@@ -1216,4 +1216,10 @@ exercised with exactly known coefficients. (B) pinhole only in sim; EuRoC (real 
   (GENERATOR_VERSION bump), so it is a deliberate later change; the same 6 % applies to SGBM disparity ranges in
   the 1.4/1.5 sim config. (2) The lens digest is pinned only by an x86 unit-test golden; add it to
   `RecordDeterminismDigests` (D32) before any Graviton/COOL run so manifests and the Arm gate check it.
+  DONE 2026-10-01: `perception/degradation/lens_digest.hpp` (map bits + output bytes, all coefficients
+  non-zero), manifest field `lens_digest` (required), `check_determinism.sh` EXPECTED_LENS
+  1253886791886396038 (g++/clang++, -O0..-O3).
+- **Evidence status:** the D41-rig recording `ci_tiny_0-20261001T133914Z` (clean) is the 1.3 evidence. §6 on it
+  reproduces the dev run exactly (renders reproducible), so it does not break the threshold circularity; the
+  independent §6 test is ci_tiny seed 1 (other rooms, other board pose).
 

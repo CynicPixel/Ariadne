@@ -25,8 +25,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   render/pose time offset ≈ 0. gz warnings are now a recording gate.
 - D41 (option A): pinhole render + read-time Brown lens (`lens.hpp`, fx 680). §6 with the lens passes thresholds
   derived from the same dev run (circular until the evidence run; GT reprojection 0.07-0.09 px, k1 recovered
-  -0.0506 vs -0.05) and fails a 5 mm board error. Next: a D41-rig recording (replaces the pre-D41 one as 1.3
-  evidence) and the §6 evidence run on it, both from a clean commit.
+  -0.0506 vs -0.05) and fails a 5 mm board error. D41-rig 1.3 evidence recording PASSED from clean commit
+  0f7b0e4. §6 on it reproduced the dev run to every digit (renders reproducible) — so the independent §6 test
+  is ci_tiny seed 1, next. Lens digest added to manifests and the determinism gate.
 - Tests: core image 242/242, worldgen 104/104, simtest 19/19.
 
 ## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen

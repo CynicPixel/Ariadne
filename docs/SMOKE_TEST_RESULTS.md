@@ -527,4 +527,16 @@ calib-window frames per camera, ~1,040 with a board detected; dev run, uncommitt
   The same run with the board moved 5 mm in scene.json FAILS (A residual 2.1-2.3 px).
 - **The D41 rig records cleanly through the warning gate** (8 s: no distortion warning; only the two
   allowlisted kinds).
+- **D41-rig evidence recording, clean commit 0f7b0e4** (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z`):
+  strict PASS, RTF 0.243, no unallowed gz warning, 0 recorder errors, camera_info D = [0, 0, 0, 0, 0].
+- **Renders are reproducible across recordings (on the frames §6 reads).** §6 on this recording reproduced the
+  dev run on an earlier, independent recording of the same scene to every printed digit (e.g. left fx
+  681.7801654, stereo T_x -0.0999075673): the ~1,644 calib-window frames per camera produced identical ChArUco
+  detections. Not yet a whole-bag pixel comparison. Consequence: the evidence run is NOT an independent test of
+  thresholds derived from the dev run (identical inputs); the independent test is another seed.
+- **False dirty flag.** That §6 run recorded `git_dirty: true` at a clean commit: the recording step had copied
+  its manifests into `evaluation/runs/`, which the dirty check counted. Run outputs are now excluded from the
+  dirty check (`core.sh`, `worldgen.sh`, `sim_record.sh`) and from the Docker build context (`.dockerignore`,
+  which also stops `core.sh image` from sending ~25 GB of raw evidence bags as build context). The run was
+  discarded and is redone from the next commit.
 
