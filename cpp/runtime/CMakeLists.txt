@@ -36,6 +36,13 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_euroc_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # The 1.1 acceptance test: rig recovery from a sim recording (design SIM_1.1-1.3 §6).
+  add_executable(ariadne_sim_calib tools/ariadne_sim_calib.cpp)
+  target_link_libraries(ariadne_sim_calib PRIVATE
+    ariadne::runtime_opencv opencv_core opencv_imgproc opencv_imgcodecs opencv_objdetect opencv_calib opencv_geometry
+    yaml-cpp::yaml-cpp)
+  install(TARGETS ariadne_sim_calib RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # ChArUco boards for the generated scenes' entrance rooms (worldgen design §3/§6).
   add_executable(ariadne_charuco_assets tools/ariadne_charuco_assets.cpp)
   target_link_libraries(ariadne_charuco_assets PRIVATE opencv_core opencv_objdetect opencv_imgcodecs)

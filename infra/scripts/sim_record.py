@@ -37,6 +37,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import signal
 import struct
@@ -52,6 +53,16 @@ CANONICAL_TOOL = os.path.join(PLUGIN_DIR, "ariadne_canonical_streams")
 RECORDER_TOOL = os.path.join(PLUGIN_DIR, "ariadne_gz_recorder")
 STEP_NS = 1_000_000                 # the mission worlds' <physics max_step_size> (1 ms), asserted per world
 LIVE_COVERAGE_MIN = 0.99            # below this the live cross-check is too thin to count
+# gz runs at warning level (-v 2) and EVERY warning/error fails the recording unless
+# it is listed here with the reason it is harmless. A rig parameter gz silently
+# ignored (SMOKE §4n: lens distortion under ogre2) must never pass unnoticed again.
+GZ_WARNING_ALLOWLIST = {
+    r"OBJLoader\.cc:\d+\] Missing material for shape\[(wall|prop|floor|ceiling|board)_[0-9a-f]+\]":
+        "worldgen OBJs carry no .mtl; the SDF <material> supplies the texture (renders verified, SMOKE 4h/4j)",
+    r"Ogre2Camera::SetVisibilityMask: Mask bits c0000000 are set but will be ignored":
+        "gz-sensors' default all-ones visibility mask touches ogre2's reserved bits; no scene uses visibility flags",
+}
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def log(m):
@@ -217,7 +228,7 @@ def main():
                                 env=env, start_new_session=True, stdout=subprocess.PIPE, stderr=rec_err, text=True)
         # The world starts PAUSED (no -r): nothing is published until the recorder
         # has discovered every publisher and says CONNECTED.
-        gzp = subprocess.Popen(["gz", "sim", "-s", "--headless-rendering", "--iterations", str(iterations), world],
+        gzp = subprocess.Popen(["gz", "sim", "-s", "-v", "2", "--headless-rendering", "--iterations", str(iterations), world],
                                env=env, start_new_session=True, stdout=gz_log, stderr=subprocess.STDOUT)
         line = recp.stdout.readline().strip()
         if line != "CONNECTED":
@@ -251,7 +262,7 @@ def main():
         rec_err.close()
         gz_log.close()
     gz_text = open(os.path.join(logs, "gz.log"), errors="replace").read().splitlines()
-    gz_errors = [l for l in gz_text if "[Err]" in l or "rror" in l][:10]
+    gz_errors, gz_allowed = gz_diagnostics(gz_text)
     mover_lines = [l for l in gz_text if "KinematicMover" in l][:10]
     rep = read_recorder_report(rec)
     for e in (rep or {}).get("errors", [])[:20]:
@@ -259,7 +270,8 @@ def main():
     result = verify(rec, mission, scene_dir, sim_s)
     result["recorder_report"] = rep
     result["loss_accounting"] = loss_accounting(result, rep)
-    result.update({"gz_returncode": gz_rc, "gz_errors": gz_errors, "mover_log": mover_lines,
+    result.update({"gz_returncode": gz_rc, "gz_errors": gz_errors, "gz_warnings_allowed": gz_allowed,
+                   "mover_log": mover_lines,
                    "recorder_returncode": rec_rc, "sim_seconds": sim_s, "wall_seconds_gz": round(wall, 2),
                    "canonical_summary": summary, "canonical_reproducible": reproducible,
                    "max_backlog_mb": args.max_backlog_mb,
@@ -273,6 +285,22 @@ def main():
     for t, a in result["loss_accounting"].items():
         log(f"loss accounting {t}: {a}")
     return 0 if result["passed"] else 1
+
+
+def gz_diagnostics(lines):
+    """(failures, allowed counts): every [Wrn]/[Err] line of the gz log, classified."""
+    failures, allowed = [], {}
+    for raw in lines:
+        l = ANSI.sub("", raw).strip()
+        if "[Err]" not in l and "[Wrn]" not in l:
+            continue
+        reason = next((pat for pat in GZ_WARNING_ALLOWLIST if "[Wrn]" in l and re.search(pat, l)), None)
+        if reason is None:
+            if l not in failures:
+                failures.append(l)
+        else:
+            allowed[reason] = allowed.get(reason, 0) + 1
+    return failures[:20], allowed
 
 
 def read_recorder_report(rec):
