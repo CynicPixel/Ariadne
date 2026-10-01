@@ -22,8 +22,12 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - 1.3 evidence recording from clean commit 9cdb7eb PASSED (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`).
 - §6 calibration recovery (SMOKE §4n): renders are an exact pinhole to ~0.06 px; lens distortion is NOT rendered
   under ogre2 while camera_info claims it; camera_info cx/cy are +0.5 px off the pixel-centre convention;
-  render/pose time offset ≈ 0. gz warnings are now a recording gate. Rig decision pending (D41).
-- Tests: core image 235/235, worldgen 102/102, simtest 19/19.
+  render/pose time offset ≈ 0. gz warnings are now a recording gate.
+- D41 (option A): pinhole render + read-time Brown lens (`lens.hpp`, fx 680). §6 with the lens passes thresholds
+  derived from the same dev run (circular until the evidence run; GT reprojection 0.07-0.09 px, k1 recovered
+  -0.0506 vs -0.05) and fails a 5 mm board error. Next: a D41-rig recording (replaces the pre-D41 one as 1.3
+  evidence) and the §6 evidence run on it, both from a clean commit.
+- Tests: core image 242/242, worldgen 104/104, simtest 19/19.
 
 ## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen
 

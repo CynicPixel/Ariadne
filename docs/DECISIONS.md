@@ -1166,7 +1166,7 @@ no canonical `/tf_static`) no longer pass `--verify-only`; they are superseded, 
 **Confirmed** (SMOKE §4m): two full `ci_tiny` missions recorded through it both PASSED strict verification
 with 0 recorder errors and every message present, where the bridge path lost 3–9 non-clock messages per run.
 
-## 2026-10-01 — D41 (PENDING the maintainer): lens distortion in the simulated rig
+## 2026-10-01 — D41: lens distortion in the simulated rig is a read-time operator (option A)
 
 **Finding (SMOKE §4n).** Under gz Harmonic's ogre2 renderer the SDF `<distortion>` is ignored (no
 `DistortionPass` in ogre2) while `camera_info` still advertises the coefficients; the rendered camera is an
@@ -1183,4 +1183,37 @@ convention documented and corrected in the adapter), and Brown distortion applie
 operator (`cv::remap` with the forward model), consistent with D37's degradation-at-read; the undistort path is
 exercised with exactly known coefficients. (B) pinhole only in sim; EuRoC (real radtan) exercises undistort.
 (C) the Ogre1 backend — not verified to render headless on EGL here; not recommended.
+
+**Accepted by the maintainer 2026-10-01 ("go with a"). As built:**
+- **Render:** `configs/sim/rig_stereo_v1.yaml` has no `camera.distortion` (the composer refuses one, naming
+  this decision); the SDF carries no `<distortion>`, so gz has nothing to ignore and `camera_info` D is zero.
+  The render truth is pinhole fx = fy = 640, cx = 639.5, cy = 359.5 (pixel-centre); the mission manifest
+  records it as `render_intrinsics_pixel_centre` and states gz's W/2 camera_info convention.
+- **Lens:** `rig.lens` (plumb_bob, fx = fy = 680, cx = 639.5, cy = 359.5, k1 -0.05, k2 0.01, p1 0.0005,
+  p2 -0.0002, k3 0) is applied at read time by `cpp/perception/degradation/lens.hpp`: per output pixel, invert
+  Brown-Conrady (fixed-point, 30 iterations, verified to 1e-12) and sample the render bilinearly; depth is
+  resampled nearest-neighbour. OpenCV-free, IEEE double with `-ffp-contract=off`, pinned by a digest. Optics
+  precede the sensor stages of `Degrade()`.
+- **Why fx 680, not 640:** with barrel distortion the inverted ray lies outside x_d, so a lens with the render's
+  focal length would sample beyond the render (black corners). The minimum for these coefficients is 674.05;
+  680 leaves >= 3.37 px. Both `BuildLensMap` and the composer refuse a lens that samples outside the render.
+- **Verified** (`tests/unit/test_lens.cpp`, SMOKE §4n): the model equals `cv::projectPoints` to < 1e-9 px;
+  identity and linear-image exactness; refusal of fx 670. §6 on a full recording with the lens on: GT
+  reprojection through the lens model 0.07-0.09 px RMS, no radial trend; OpenCV's free calibration recovers
+  k1 -0.0506, k2 0.0104 (truth -0.05, 0.01) and fx within 0.4 %; stereo with the truth intrinsics within
+  0.09 mm. §6 now has a verdict (`configs/sim/acceptance_s6.yaml`) and exits 1 on FAIL. That PASS is CIRCULAR:
+  the thresholds were derived from the same dev run; the first independent test is the evidence run on a fresh
+  D41-rig recording. Demonstrated FAIL: a 5 mm board misplacement (every A check). The other failure modes are
+  argued from magnitude, not demonstrated. The free calibration's fx bias (+0.2-0.4 %) persists with k1/k2/k3
+  held at truth `[ASSUMPTION: fx-distance ambiguity of near-frontal planar views]`.
+- **Consumers** take the camera model from `rig.lens` (via the mission manifest), never from `camera_info`.
+  Nothing applies the lens yet outside §6: the 1.4/1.5 sim adapter must run `ApplyLens` then `Degrade`.
+- **Evidence:** the committed recording `ci_tiny_0-20261001T042105Z` used the pre-D41 rig (camera_info D false);
+  it stays evidence for the lossless recording path only. The upcoming D41-rig recording replaces it as the
+  1.3 evidence and is the input of the §6 evidence run.
+- **Open, recorded:** (1) the route speed budget uses `focal_px: 640` (worldgen presets); the estimator's camera
+  is now 680, ~6 % more pixel motion at the image centre than planned — changing it moves the worldgen goldens
+  (GENERATOR_VERSION bump), so it is a deliberate later change; the same 6 % applies to SGBM disparity ranges in
+  the 1.4/1.5 sim config. (2) The lens digest is pinned only by an x86 unit-test golden; add it to
+  `RecordDeterminismDigests` (D32) before any Graviton/COOL run so manifests and the Arm gate check it.
 

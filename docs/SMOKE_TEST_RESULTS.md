@@ -515,4 +515,16 @@ calib-window frames per camera, ~1,040 with a board detected; dev run, uncommitt
 - **gz warnings are now a gate.** gz runs at `-v 2` and every `[Wrn]`/`[Err]` fails a recording unless it is on
   `GZ_WARNING_ALLOWLIST` with its reason (OBJ files without .mtl; ogre2's reserved visibility bits). With the
   current rig every recording therefore fails on the distortion warning until the rig decision (D41) lands.
+- **D41 lens operator, end to end** (same recording, frames passed through `lens.hpp` before detection; truth =
+  rig.lens): GT reprojection RMS 0.072-0.093 px per segment, |mean| <= 0.016 px, apparent residual k1 ~1e-4,
+  time offset ~1 µs. Free calibration (80 views): k1 -0.0506 / -0.0506, k2 0.0104 / 0.0113, fx 681.8 / 682.6
+  (truth 680), rms 0.070 px vs 0.126 px pinhole-only. With 400 views fx stays +1.3 / +1.8 px while the formal σ
+  shrinks (z up to 6), and with k1/k2/k3 held at truth fx is still 682.1 / 682.6: a systematic calibration bias,
+  not fx-radial coupling and not the pixels (check A, through the GT poses, is exact) `[ASSUMPTION: fx-distance
+  ambiguity of near-frontal planar views]` — so §6 judges B by tolerance, not σ. Stereo with the
+  truth intrinsics: 0.094 mm, 0.0036°. Verdict PASS against `configs/sim/acceptance_s6.yaml` — circular: the
+  thresholds came from this run; the evidence run on a fresh D41-rig recording is the first independent test.
+  The same run with the board moved 5 mm in scene.json FAILS (A residual 2.1-2.3 px).
+- **The D41 rig records cleanly through the warning gate** (8 s: no distortion warning; only the two
+  allowlisted kinds).
 

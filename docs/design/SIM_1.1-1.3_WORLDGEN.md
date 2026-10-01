@@ -199,6 +199,10 @@ segment's stored (D, Ta, vc) — it never re-plans — and re-checks the collisi
 `esdf_f32.bin`. Python↔C++ agreement is tested on golden samples with a 1e-9 tolerance (libm differs in last
 bits).
 
+**Lens (D41).** The render is a pinhole (ogre2 ignores SDF distortion, §4n). The camera the estimator sees is
+`rig.lens`, a Brown-Conrady model applied at read time by `perception/degradation/lens.hpp` before the sensor
+stages; its focal length (680) exceeds the render's (640) so barrel distortion never samples outside the render.
+
 **IMU — synthesized, not gz's** (gz's is blind under kinematic motion, §4g): clean ω_B and f_B at 200 Hz from the
 §4.2 closed forms at the same `simTime`, header-stamped explicitly. Noise and bias random walk are a seeded
 consumption-time operator reading the same `configs/sensors/imu_*.yaml` the estimator reads (D37).
@@ -306,9 +310,10 @@ mission composer + bridge YAML; golden Python↔C++ samples; recorded GT/IMU equ
 5b. ✅ Canonical IMU/GT streams + CDR encoder + two-bag recording layout and verifier (D39, §4l).
 5c. ✅ Loss attribution (DDS link), direct gz-transport recorder with loud failures, `/tf_static` in canonical (D40).
 6. ✅ 1.3 evidence recording from a clean commit (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`).
-6b. ✅ §6 tool + first measurement (§4n); ⏳ rig distortion decision (D41), then the §6 evidence run.
+6b. ✅ §6 tool + first measurement (§4n); ✅ D41: pinhole render + read-time lens operator; §6 verdict with
+thresholds (`configs/sim/acceptance_s6.yaml`). ⏳ D41-rig evidence recording + §6 evidence run (clean commit).
 7. ⏳ A full bag of one larger preset (RTF, bytes), the texture gate, and 1.4/1.5 consuming the sim bag
-(pixel-centre K, no camera_info D until D41).
+(camera model from `rig.lens`, never from camera_info).
 Evidence to re-run from a clean commit: census + accept sweeps for all presets.
 
 ---
