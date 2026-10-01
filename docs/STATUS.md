@@ -19,7 +19,11 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - Two full `ci_tiny` missions PASSED strict verification: 0 recorder errors, every frame and `/clock` step
   present, live IMU/GT byte-identical to canonical. Open: render determinism across runs (files differ;
   content not yet compared). All runs from a dirty tree: re-run from a clean commit for evidence.
-- Tests: core image 235/235, worldgen 102/102, simtest 14/14.
+- 1.3 evidence recording from clean commit 9cdb7eb PASSED (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`).
+- §6 calibration recovery (SMOKE §4n): renders are an exact pinhole to ~0.06 px; lens distortion is NOT rendered
+  under ogre2 while camera_info claims it; camera_info cx/cy are +0.5 px off the pixel-centre convention;
+  render/pose time offset ≈ 0. gz warnings are now a recording gate. Rig decision pending (D41).
+- Tests: core image 235/235, worldgen 102/102, simtest 19/19.
 
 ## 2026-09-30 — 1.1–1.3: worldgen implemented and frozen
 

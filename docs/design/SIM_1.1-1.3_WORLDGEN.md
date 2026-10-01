@@ -230,6 +230,12 @@ GT pose composed with the explicit, tested gz-link (+X forward) → optical (+Z 
 recorded world corners. The constant-speed passes expose a render/pose time offset δ as a PnP-vs-GT residual
 ≈ v·δ growing with speed; the run is under full two-agent load. Thresholds are set from the first measurement.
 
+**Built** (`cpp/runtime/tools/ariadne_sim_calib.cpp`, SMOKE §4n): A GT reprojection without calibration (radial
+trend → distortion, mean → principal point, correlation with image velocity → time offset), B free calibration
+with standard deviations and a pinhole-only RMS, C stereo (free and with the hypothesised true K), D PnP vs GT
+with a 180°-flip check, E board-frame self-check on the asset. First measurement: renders are an exact pinhole
+(0.06 px), distortion is not rendered under ogre2 (D41 pending), camera_info cx/cy are +0.5 px, δ ≈ 0.
+
 ---
 
 ## 7. Recording (1.3), sizing, CI
@@ -299,8 +305,10 @@ routes, gate. 4. ✅ ROS-free CDR decoder + rosbag reader (D38). 5. ✅ Mover pl
 mission composer + bridge YAML; golden Python↔C++ samples; recorded GT/IMU equal the script exactly (§4k).
 5b. ✅ Canonical IMU/GT streams + CDR encoder + two-bag recording layout and verifier (D39, §4l).
 5c. ✅ Loss attribution (DDS link), direct gz-transport recorder with loud failures, `/tf_static` in canonical (D40).
-6. ⏳ First full bags (`ci_tiny`, one full preset): RTF, bytes, §6 calibration recovery, texture gate.
-7. ⏳ MCAP evidence run with manifest; 1.4/1.5 consume it.
+6. ✅ 1.3 evidence recording from a clean commit (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`).
+6b. ✅ §6 tool + first measurement (§4n); ⏳ rig distortion decision (D41), then the §6 evidence run.
+7. ⏳ A full bag of one larger preset (RTF, bytes), the texture gate, and 1.4/1.5 consuming the sim bag
+(pixel-centre K, no camera_info D until D41).
 Evidence to re-run from a clean commit: census + accept sweeps for all presets.
 
 ---

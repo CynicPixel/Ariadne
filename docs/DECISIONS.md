@@ -1165,3 +1165,22 @@ no canonical `/tf_static`) no longer pass `--verify-only`; they are superseded, 
 
 **Confirmed** (SMOKE §4m): two full `ci_tiny` missions recorded through it both PASSED strict verification
 with 0 recorder errors and every message present, where the bridge path lost 3–9 non-clock messages per run.
+
+## 2026-10-01 — D41 (PENDING the maintainer): lens distortion in the simulated rig
+
+**Finding (SMOKE §4n).** Under gz Harmonic's ogre2 renderer the SDF `<distortion>` is ignored (no
+`DistortionPass` in ogre2) while `camera_info` still advertises the coefficients; the rendered camera is an
+exact pinhole. `camera_info` also states cx = W/2 where the pixel-centre convention needs (W-1)/2. Arch §5.3
+asks for a mild plumb-bob so the undistort path is exercised.
+
+**Until decided:** the recorder's gz-warning gate fails every recording with non-zero rig distortion; the
+1.4/1.5 sim adapter must not take D (nor cx, cy) from `camera_info` — the truth is pinhole fx = fy = 640,
+cx = 639.5, cy = 359.5. The 1.3 evidence recording (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`)
+predates the gate: it is valid evidence for the lossless recording path; its camera_info D is false.
+
+**Options.** (A, recommended) zero distortion in the SDF so camera_info is honest about the pixels (cx
+convention documented and corrected in the adapter), and Brown distortion applied as a seeded consumption-time
+operator (`cv::remap` with the forward model), consistent with D37's degradation-at-read; the undistort path is
+exercised with exactly known coefficients. (B) pinhole only in sim; EuRoC (real radtan) exercises undistort.
+(C) the Ogre1 backend — not verified to render headless on EGL here; not recommended.
+

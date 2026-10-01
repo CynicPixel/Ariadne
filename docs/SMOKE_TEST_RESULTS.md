@@ -487,3 +487,32 @@ driving `ci_tiny` seed 0 (two agents, stereo + depth + IMU + GT pose) through `i
 - **Open: render determinism.** The two sensor bags differ as files (sha256, and 26 KB in size); chunk
   layout follows arrival order, so this says nothing yet about pixels. A per-topic content comparison is
   needed before claiming identical renders across runs. Both runs from a dirty tree: not evidence yet.
+
+## 4n. §6 calibration recovery: what gz actually renders `[IMAGE-VERIFIED]` 2026-10-01
+
+`cpp/runtime/tools/ariadne_sim_calib.cpp` on a full `ci_tiny` recording (agent 0's ChArUco dance: 1,644
+calib-window frames per camera, ~1,040 with a board detected; dev run, uncommitted tool). All five checks:
+
+- **Lens distortion is NOT rendered (ogre2).** gz-rendering 8 has a `DistortionPass` only in the Ogre1 backend;
+  under ogre2 gz-sensors logs "ImageBrownDistortionModel is not supported in ogre2" (seen once per camera with
+  `-v 2`; invisible at the default verbosity) and renders a pure pinhole image — while `camera_info` still
+  advertises `plumb_bob` [-0.05, 0.01, 0.0005, -0.0002, 0] from the SDF. Measured: the GT-reprojection residual
+  has no radial trend (apparent k1 = -0.002 / +0.0006 with corners out to normalized radius 0.94, where the SDF's
+  k1 would give ~23 px); a free calibration recovers k1 = 0.0001 ± 0.0007 and its RMS equals the pinhole-only
+  RMS (0.054 px). **The recorded camera_info D is false; no consumer may use it.**
+- **camera_info's principal point is half a pixel off the OpenCV/ROS convention.** gz writes cx = W/2 = 640,
+  cy = 360; the GT residual mean is (-0.50, -0.50) px in every segment, both cameras. With cx = 639.5,
+  cy = 359.5 (pixel-centre convention) and no distortion, the GT reprojection RMS drops from 0.72 px to
+  0.058-0.067 px (p95 0.08-0.12 px): the renderer is an exact pinhole fx = fy = 640 to ~0.06 px.
+- **Timing re-confirmed under the paused start** (§4g was measured with `-r`): fitting residual = δ · image
+  velocity over moving corners gives δ = -7 µs (left) / +47 µs (right); a frame stamped t shows the pose at t.
+- **Stereo extrinsic**: with the pixel-centre K and no distortion, stereoCalibrate recovers T = (-0.100002,
+  0.000011, -0.000049) m vs /tf_static (-0.1, 0, 0): 0.05 mm, 0.0004°. (With each camera's own free
+  calibration, fx ± 0.5 px, the error is 2 mm — calibration noise, not the rig.)
+- **Board frame**: the asset texture's corners sit exactly where getChessboardCorners() puts them (x right, y
+  down; worst 1.5e-5 px); PnP vs GT over 1,025 frames has no 180° flips (rotation error mean 0.22°, translation
+  mean 1.0 mm — planar-PnP noise).
+- **gz warnings are now a gate.** gz runs at `-v 2` and every `[Wrn]`/`[Err]` fails a recording unless it is on
+  `GZ_WARNING_ALLOWLIST` with its reason (OBJ files without .mtl; ogre2's reserved visibility bits). With the
+  current rig every recording therefore fails on the distortion warning until the rig decision (D41) lands.
+
