@@ -1,7 +1,7 @@
 """Frozen canonical IMU / GT-pose streams (DECISIONS D39).
 
-The canonical bag of a recording is a pure function of (mission SDF, end time, the
-trajectory code). This pins it: ci_tiny seed 0 with the v1 rig, 8 s, must give
+The canonical bag of a recording (IMU, GT pose, and since D40 /tf_static) is a pure
+function of (mission SDF, end time, the trajectory code). This pins it: ci_tiny seed 0 with the v1 rig, 8 s, must give
 exactly GOLDEN_CONTENT (container-independent digest over topic, stamp, payload),
 be byte-reproducible, and equal the independent Python evaluator (<= 1e-9).
 
@@ -29,7 +29,8 @@ from dataset_tools.worldgen.params import load_preset  # noqa: E402
 from dataset_tools.worldgen.scene import generate  # noqa: E402
 
 END_NS = 8_000_000_000
-GOLDEN_CONTENT = "fc11e8760f9a84201becfb8fe2432497d335904a63efbb7700417d44a6339a74"  # measured 2026-10-01
+GOLDEN_CONTENT = "58def8ae0c8b535d6846bd9bf0d3dfe254fadef7b6c6546c3cfa2e0d842e88b4"  # 2026-10-01, with /tf_static (D40)
+GOLDEN_CONTENT_NO_TF = "fc11e8760f9a84201becfb8fe2432497d335904a63efbb7700417d44a6339a74"  # IMU+GT only (D39)
 
 
 @pytest.fixture(scope="module")
@@ -50,7 +51,7 @@ def test_canonical_streams_golden(scene, tmp_path):
     summary = S.write_canonical(world, END_NS, out)
     period = mission["imu"]["period_ns"]
     assert summary == {"agents": 2, "period_ns": period, "samples_per_topic": END_NS // period + 1,
-                       "last_ns": END_NS}
+                       "last_ns": END_NS, "static_transforms": 4}
 
     can = S.read_bag(out, keep_bytes=lambda t: True)
     grid = [k * period for k in range(END_NS // period + 1)]
@@ -61,6 +62,8 @@ def test_canonical_streams_golden(scene, tmp_path):
     assert S.canonical_reproducible(world, END_NS, out)
     got = S.content_digest(can)
     assert got == GOLDEN_CONTENT, f"canonical streams changed: measured {got}"
+    can.pop("/tf_static")
+    assert S.content_digest(can) == GOLDEN_CONTENT_NO_TF   # adding the static TF changed nothing else
 
 
 def test_content_digest_sees_one_flipped_bit(scene, tmp_path):

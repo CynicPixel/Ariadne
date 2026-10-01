@@ -1,6 +1,8 @@
 // ---------------------------------------------------------------------------
 // ariadne_canonical_streams: writes the CANONICAL IMU and GT-pose streams of a
-// mission as their own rosbag2 MCAP bag (DECISIONS D39, design SIM_1.1-1.3 §7).
+// mission, and its /tf_static, as their own rosbag2 MCAP bag (DECISIONS D39, D40;
+// design SIM_1.1-1.3 §7). The static TF comes from the camera sensor poses in the
+// same SDF gz renders with (D40: no ROS node publishes it any more).
 //
 //   ariadne_canonical_streams --world mission_default.sdf --end-ns N --out DIR
 //
@@ -33,9 +35,12 @@
 #include <rclcpp/serialized_message.hpp>
 #include <rosbag2_cpp/writer.hpp>
 #include <rosbag2_storage/storage_options.hpp>
+#include <rclcpp/qos.hpp>
+#include <sdf/Link.hh>
 #include <sdf/Model.hh>
 #include <sdf/Plugin.hh>
 #include <sdf/Root.hh>
+#include <sdf/Sensor.hh>
 #include <sdf/World.hh>
 
 #include <cstdint>
@@ -76,31 +81,6 @@ Args ParseArgs(int argc, char** argv) {
         throw std::invalid_argument("usage: ariadne_canonical_streams --world SDF --end-ns N --out DIR");
     }
     return a;
-}
-
-/// Every KinematicMover in the world, in model order, parsed exactly as gz-sim
-/// hands the <plugin> to Configure (sdf::Plugin::ToElement()).
-std::vector<MoverConfig> LoadMovers(const std::string& world_path) {
-    sdf::Root root;
-    const sdf::Errors errors = root.Load(world_path);
-    if (!errors.empty()) {
-        std::string msg = "cannot load " + world_path + ":";
-        for (const auto& e : errors) msg += "\n  " + e.Message();
-        throw std::runtime_error(msg);
-    }
-    if (root.WorldCount() != 1) throw std::runtime_error("expected exactly one <world>");
-    const sdf::World* w = root.WorldByIndex(0);
-    std::vector<MoverConfig> movers;
-    for (uint64_t i = 0; i < w->ModelCount(); ++i) {
-        for (const sdf::Plugin& p : w->ModelByIndex(i)->Plugins()) {
-            if (p.Name() == kPluginName) movers.push_back(ariadne::sim::ParseMoverConfig(p.ToElement()));
-        }
-    }
-    if (movers.empty()) throw std::runtime_error("no " + std::string(kPluginName) + " in " + world_path);
-    for (size_t i = 1; i < movers.size(); ++i) {
-        if (movers[i].period_ns != movers[0].period_ns) throw std::runtime_error("agents disagree on imu_period_ns");
-    }
-    return movers;
 }
 
 cdr::Header MakeHeader(const MoverConfig& c, int64_t ns) {
@@ -173,13 +153,88 @@ void Write(rosbag2_cpp::Writer& w, const std::vector<uint8_t>& bytes, const std:
     w.write(msg, topic, type, ns, ns);   // recv (MCAP logTime) = send (publishTime) = stamp
 }
 
+struct Mission {
+    std::vector<MoverConfig> movers;
+    std::vector<cdr::TransformStamped> static_tf;   // body -> <cam>_optical, every agent
+};
+
+/// gz camera link frame (+x forward, image right = -y, down = -z) -> ROS optical
+/// (x right, y down, z forward): R_B_optical columns (-y_B, -z_B, +x_B), i.e. the
+/// quaternion (x, y, z, w) = (-0.5, 0.5, -0.5, 0.5). Valid because every camera
+/// sensor's <pose> rotation is identity, which LoadMission asserts.
+constexpr double kQOptical[4] = {-0.5, 0.5, -0.5, 0.5};
+
+/// Every KinematicMover in the world, in model order, parsed exactly as gz-sim
+/// hands the <plugin> to Configure (sdf::Plugin::ToElement()); and the static TF
+/// of each mover's model, read from the camera sensor poses gz renders with.
+Mission LoadMission(const std::string& world_path) {
+    sdf::Root root;
+    const sdf::Errors errors = root.Load(world_path);
+    if (!errors.empty()) {
+        std::string msg = "cannot load " + world_path + ":";
+        for (const auto& e : errors) msg += "\n  " + e.Message();
+        throw std::runtime_error(msg);
+    }
+    if (root.WorldCount() != 1) throw std::runtime_error("expected exactly one <world>");
+    const sdf::World* w = root.WorldByIndex(0);
+    Mission out;
+    for (uint64_t i = 0; i < w->ModelCount(); ++i) {
+        const sdf::Model* model = w->ModelByIndex(i);
+        for (const sdf::Plugin& p : model->Plugins()) {
+            if (p.Name() != kPluginName) continue;
+            out.movers.push_back(ariadne::sim::ParseMoverConfig(p.ToElement()));
+            const MoverConfig& c = out.movers.back();
+            const sdf::Link* link = model->LinkByName("base_link");
+            if (link == nullptr) throw std::runtime_error(model->Name() + ": no base_link");
+            const std::string base = "base_link";
+            if (c.frame_id.size() < base.size() || c.frame_id.compare(c.frame_id.size() - base.size(), base.size(), base)) {
+                throw std::runtime_error("frame_id '" + c.frame_id + "' does not end in base_link");
+            }
+            for (const std::string cam : {"left", "right"}) {
+                const sdf::Sensor* sensor = link->SensorByName(cam);
+                if (sensor == nullptr) throw std::runtime_error(model->Name() + ": no '" + cam + "' sensor");
+                if (!sensor->PoseRelativeTo().empty()) throw std::runtime_error(cam + ": pose not relative to its link");
+                const auto pose = sensor->RawPose();
+                const auto& r = pose.Rot();
+                if (std::abs(r.W() - 1.0) > 1e-15 || r.X() != 0.0 || r.Y() != 0.0 || r.Z() != 0.0) {
+                    throw std::runtime_error(model->Name() + "/" + cam + ": camera pose rotation is not identity");
+                }
+                cdr::TransformStamped t;          // stamp 0: static
+                t.header.frame_id = c.frame_id;
+                t.child_frame_id = c.frame_id.substr(0, c.frame_id.size() - base.size()) + cam + "_optical";
+                t.translation = {pose.Pos().X(), pose.Pos().Y(), pose.Pos().Z()};
+                t.rotation = {kQOptical[0], kQOptical[1], kQOptical[2], kQOptical[3]};
+                out.static_tf.push_back(t);
+            }
+        }
+    }
+    if (out.movers.empty()) throw std::runtime_error("no " + std::string(kPluginName) + " in " + world_path);
+    for (size_t i = 1; i < out.movers.size(); ++i) {
+        if (out.movers[i].period_ns != out.movers[0].period_ns) throw std::runtime_error("agents disagree on imu_period_ns");
+    }
+    return out;
+}
+
+std::vector<uint8_t> Encode(const std::vector<cdr::TransformStamped>& v) {
+    std::vector<uint8_t> b = cdr::EncodeTfMessage(v);
+    const auto d = cdr::DecodeTfMessage(b.data(), b.size());
+    bool same = d.size() == v.size();
+    for (size_t i = 0; same && i < v.size(); ++i) {
+        same = Same(d[i].header, v[i].header) && d[i].child_frame_id == v[i].child_frame_id &&
+               Same(d[i].translation, v[i].translation) && Same(d[i].rotation, v[i].rotation);
+    }
+    if (!same) throw std::runtime_error("TFMessage CDR round trip is not bit-exact");
+    return b;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
         const Args a = ParseArgs(argc, argv);
         if (std::filesystem::exists(a.out)) throw std::runtime_error(a.out + " exists; refusing to overwrite");
-        const std::vector<MoverConfig> movers = LoadMovers(a.world);
+        const Mission mission = LoadMission(a.world);
+        const std::vector<MoverConfig>& movers = mission.movers;
         const int64_t period = movers[0].period_ns;
 
         rosbag2_storage::StorageOptions so;
@@ -188,6 +243,16 @@ int main(int argc, char** argv) {
         so.storage_preset_profile = "zstd_fast";   // same container settings as the sensor bag
         rosbag2_cpp::Writer writer;
         writer.open(so, {"cdr", "cdr"});
+
+        // /tf_static first, at stamp 0, offered as latched (reliable, transient-local,
+        // depth 1) so `ros2 bag play` republishes it the way tf2 expects.
+        rosbag2_storage::TopicMetadata tf_topic;
+        tf_topic.name = "/tf_static";
+        tf_topic.type = "tf2_msgs/msg/TFMessage";
+        tf_topic.serialization_format = "cdr";
+        tf_topic.offered_qos_profiles = {rclcpp::QoS(1).reliable().transient_local()};
+        writer.create_topic(tf_topic);
+        Write(writer, Encode(mission.static_tf), tf_topic.name, tf_topic.type, 0);
 
         int64_t n = 0;
         for (int64_t k = 0; k * period <= a.end_ns; ++k) {
@@ -200,9 +265,10 @@ int main(int argc, char** argv) {
             ++n;
         }
         writer.close();
-        std::printf("{\"agents\": %zu, \"period_ns\": %lld, \"samples_per_topic\": %lld, \"last_ns\": %lld}\n",
+        std::printf("{\"agents\": %zu, \"period_ns\": %lld, \"samples_per_topic\": %lld, \"last_ns\": %lld, "
+                    "\"static_transforms\": %zu}\n",
                     movers.size(), static_cast<long long>(period), static_cast<long long>(n),
-                    static_cast<long long>((n - 1) * period));
+                    static_cast<long long>((n - 1) * period), mission.static_tf.size());
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ariadne_canonical_streams: " << e.what() << "\n";

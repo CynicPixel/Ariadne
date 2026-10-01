@@ -19,6 +19,10 @@ find_package(sdformat14 REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
+find_package(ros_gz_bridge REQUIRED)
+find_package(rosgraph_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 # The plugin and the canonical-stream writer evaluate the same inline trajectory
 # code (MoverScript.hh) and must produce bit-identical doubles (D39). With
@@ -42,5 +46,14 @@ target_compile_options(ariadne_canonical_streams PRIVATE ${ARIADNE_SIM_FLAGS})
 target_link_libraries(ariadne_canonical_streams PRIVATE
   sdformat14::sdformat14 rclcpp::rclcpp rosbag2_cpp::rosbag2_cpp rosbag2_storage::rosbag2_storage)
 
+# The sim recorder (D40): gz-transport -> rosbag2 with no DDS hop, converting with
+# ros_gz_bridge's own installed convert_gz_to_ros (same bytes the bridge publishes).
+add_executable(ariadne_gz_recorder tools/gz_recorder.cc)
+target_compile_options(ariadne_gz_recorder PRIVATE ${ARIADNE_SIM_FLAGS})
+target_link_libraries(ariadne_gz_recorder PRIVATE
+  ros_gz_bridge::ros_gz_bridge gz-transport13::gz-transport13 gz-msgs10::gz-msgs10
+  rclcpp::rclcpp rosbag2_cpp::rosbag2_cpp rosbag2_storage::rosbag2_storage
+  ${rosgraph_msgs_TARGETS} ${sensor_msgs_TARGETS} ${geometry_msgs_TARGETS})
+
 install(TARGETS ariadne_kinematic_mover LIBRARY DESTINATION lib)
-install(TARGETS ariadne_canonical_streams RUNTIME DESTINATION bin)
+install(TARGETS ariadne_canonical_streams ariadne_gz_recorder RUNTIME DESTINATION bin)

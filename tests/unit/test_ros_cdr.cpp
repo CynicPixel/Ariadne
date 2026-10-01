@@ -241,6 +241,38 @@ TEST(RosCdrWriter, PaddingIsZeroForEveryFrameIdLengthAndRoundTripsBitExact) {
     }
 }
 
+TEST(RosCdrWriter, TfMessageRoundTripsWithZeroPadding) {
+    std::vector<TransformStamped> v(3);
+    const char* children[] = {"agent_0/left_optical", "agent_0/right_optical", "x"};
+    for (size_t i = 0; i < v.size(); ++i) {
+        v[i].header.frame_id = "agent_0/base_link";
+        v[i].child_frame_id = children[i];
+        v[i].translation = {0.03, 0.05 - 0.1 * double(i), -0.0};
+        v[i].rotation = {-0.5, 0.5, -0.5, 0.5};
+    }
+    const auto b = EncodeTfMessage(v);
+    const auto d = DecodeTfMessage(b.data(), b.size());
+    ASSERT_EQ(d.size(), 3u);
+    for (size_t i = 0; i < 3; ++i) {
+        EXPECT_EQ(d[i].header.frame_id, v[i].header.frame_id);
+        EXPECT_EQ(d[i].child_frame_id, v[i].child_frame_id);
+        EXPECT_EQ(std::memcmp(&d[i].translation, &v[i].translation, sizeof(Vector3)), 0);
+        EXPECT_EQ(std::memcmp(&d[i].rotation, &v[i].rotation, sizeof(Quaternion)), 0);
+    }
+    EXPECT_EQ(EncodeTfMessage(d), b);
+    // rclpy's own bytes: byte-exact wherever its padding happened to be zero; the
+    // decoded content always survives a re-encode.
+    const auto f = Decode(DecodeTfMessage, fx::kTf);
+    const auto fb = EncodeTfMessage(f);
+    ASSERT_EQ(fb.size(), fx::kTf.size());
+    const auto f2 = DecodeTfMessage(fb.data(), fb.size());
+    ASSERT_EQ(f2.size(), f.size());
+    for (size_t i = 0; i < f.size(); ++i) {
+        EXPECT_EQ(f2[i].child_frame_id, f[i].child_frame_id);
+        EXPECT_EQ(f2[i].rotation.w, f[i].rotation.w);
+    }
+}
+
 TEST(RosCdrWriter, RejectsEmbeddedNul) {
     Imu m;
     m.header.frame_id = std::string("a\0b", 3);
@@ -297,7 +329,7 @@ TEST(RosbagReader, TopicFilterAndMissingFile) {
     EXPECT_THROW(missing.Open("/nonexistent.mcap"), std::runtime_error);
 }
 
-// --- a canonical-stream bag (D39), written by ariadne_canonical_streams ---------
+// --- a canonical-stream bag (D39, /tf_static D40), written by ariadne_canonical_streams
 // tests/fixtures/ros_cdr/canonical_1s/: ci_tiny seed 0, v1 rig, 1 s. Regenerate with
 //   build/sim-plugins/ariadne_canonical_streams --world <scene>/mission_default.sdf \
 //     --end-ns 1000000000 --out tests/fixtures/ros_cdr/canonical_1s/canonical
@@ -311,10 +343,12 @@ TEST(RosbagReader, ReadsTheCanonicalStreamBagRosFree) {
         {"/ariadne/agent_0/imu", "sensor_msgs/msg/Imu"},
         {"/ariadne/agent_0/gt/pose", "geometry_msgs/msg/PoseStamped"},
         {"/ariadne/agent_1/imu", "sensor_msgs/msg/Imu"},
-        {"/ariadne/agent_1/gt/pose", "geometry_msgs/msg/PoseStamped"}};
+        {"/ariadne/agent_1/gt/pose", "geometry_msgs/msg/PoseStamped"},
+        {"/tf_static", "tf2_msgs/msg/TFMessage"}};
     EXPECT_EQ(bag.topics(), want);
     constexpr int64_t kPeriod = 5000000, kSamples = 201;   // k = 0..200 over 1 s
-    EXPECT_EQ(bag.message_count(), uint64_t(4 * kSamples));
+    EXPECT_EQ(bag.message_count(), uint64_t(4 * kSamples + 1));
+    int tf_seen = 0;
 
     std::map<std::string, int64_t> next;                   // next expected stamp per topic
     uint64_t last_log = 0;
@@ -322,8 +356,21 @@ TEST(RosbagReader, ReadsTheCanonicalStreamBagRosFree) {
         EXPECT_GE(m.log_time_ns, last_log);
         last_log = m.log_time_ns;
         const std::string topic(m.topic);
-        const std::string frame = topic.substr(9, 7) + "/base_link";   // "/ariadne/agent_k/..."
         const std::vector<uint8_t> bytes(m.data, m.data + m.size);
+        if (topic == "/tf_static") {                       // one latched message at t = 0 (D40)
+            ++tf_seen;
+            EXPECT_EQ(m.log_time_ns, 0u);
+            const auto tf = DecodeTfMessage(m.data, m.size);
+            ASSERT_EQ(tf.size(), 4u);                     // 2 agents x {left, right}
+            EXPECT_EQ(tf[0].header.frame_id, "agent_0/base_link");
+            EXPECT_EQ(tf[0].child_frame_id, "agent_0/left_optical");
+            EXPECT_EQ(tf[1].child_frame_id, "agent_0/right_optical");
+            EXPECT_EQ(tf[0].rotation.x, -0.5);
+            EXPECT_EQ(tf[0].rotation.w, 0.5);
+            EXPECT_EQ(EncodeTfMessage(tf), bytes);
+            return;
+        }
+        const std::string frame = topic.substr(9, 7) + "/base_link";   // "/ariadne/agent_k/..."
         Header h;
         if (m.type == "sensor_msgs/msg/Imu") {
             const Imu d = DecodeImu(m.data, m.size);
@@ -344,6 +391,7 @@ TEST(RosbagReader, ReadsTheCanonicalStreamBagRosFree) {
         EXPECT_EQ(m.publish_time_ns, m.log_time_ns);
         next[topic] += kPeriod;
     });
-    EXPECT_EQ(n, size_t(4 * kSamples));
+    EXPECT_EQ(n, size_t(4 * kSamples + 1));
+    EXPECT_EQ(tf_seen, 1);
     for (const auto& [topic, stamp] : next) EXPECT_EQ(stamp, kSamples * kPeriod) << topic;
 }

@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// ROS-free ENCODING of the two message types Ariadne writes itself: the canonical
-// IMU and GT-pose streams of a simulated recording (DECISIONS D39). The inverse
+// ROS-free ENCODING of the message types Ariadne writes itself into the canonical
+// bag of a simulated recording: IMU, GT pose (D39) and the static TF (D40). The inverse
 // of ros_cdr.hpp's decoders, same XCDR1 layout (little-endian encapsulation
 // 0x00 0x01 0x00 0x00, primitives aligned to their own size from the first byte
 // after the header, strings as uint32 length-with-NUL + bytes + NUL).
@@ -114,6 +114,20 @@ inline std::vector<uint8_t> EncodePoseStamped(const PoseStamped& m) {
     detail::WriteHeader(w, m.header);
     detail::WriteVector3(w, m.position);          // geometry_msgs/Point has the same layout
     detail::WriteQuaternion(w, m.orientation);
+    return w.bytes();
+}
+
+/// tf2_msgs/msg/TFMessage (a sequence of geometry_msgs/TransformStamped)
+inline std::vector<uint8_t> EncodeTfMessage(const std::vector<TransformStamped>& v) {
+    detail::RequireLittleEndianHost();
+    CdrWriter w;
+    w.Write<uint32_t>(uint32_t(v.size()));
+    for (const auto& t : v) {
+        detail::WriteHeader(w, t.header);
+        w.WriteString(t.child_frame_id);
+        detail::WriteVector3(w, t.translation);   // geometry_msgs/Transform: translation, rotation
+        detail::WriteQuaternion(w, t.rotation);
+    }
     return w.bytes();
 }
 

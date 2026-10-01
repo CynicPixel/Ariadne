@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
-"""Record a generated mission and verify it (plan 1.3, arch §5.9, DECISIONS D39).
+"""Record a generated mission and verify it (plan 1.3, arch §5.9, DECISIONS D39, D40).
 
 Runs INSIDE the ariadne-sim image (see infra/scripts/sim_record.sh), repo at /work:
     python3 infra/scripts/sim_record.py --scene DIR [--mission default] --out RECDIR
         [--seconds S]   (default: the whole mission + 1 s)
     python3 infra/scripts/sim_record.py --scene DIR --out RECDIR --seconds S --verify-only
 
-A recording directory holds two rosbag2 MCAP bags and a manifest:
-  RECDIR/canonical/   IMU + GT pose of every agent, written OFFLINE from the mission's
-                      scripts by ariadne_canonical_streams (same code as the mover
-                      plugin) on the exact stamp grid k*period, k = 0..floor(S/period).
-                      Complete and byte-reproducible by construction: the SOURCE OF
-                      TRUTH for these topics. Tagged "analytic IMU/GT from script".
-  RECDIR/sensors/     everything gz rendered, via ros_gz_bridge + ros2 bag record:
-                      stereo images, depth, camera_info, /clock, /tf_static, and the
-                      plugin's LIVE IMU/GT pose (kept only as a cross-check).
+A recording directory holds two rosbag2 MCAP bags, logs and a manifest:
+  RECDIR/canonical/   IMU + GT pose of every agent on the exact stamp grid k*period,
+                      k = 0..floor(S/period), and /tf_static (from the SDF camera
+                      poses), written OFFLINE by ariadne_canonical_streams (same code
+                      as the mover plugin). Complete and byte-reproducible by
+                      construction: the SOURCE OF TRUTH for these topics. Tagged
+                      "analytic IMU/GT from script".
+  RECDIR/sensors/     everything gz rendered, recorded by ariadne_gz_recorder straight
+                      from gz-transport (no bridge, no DDS; D40): stereo images, depth,
+                      camera_info, /clock, and the plugin's LIVE IMU/GT pose (a
+                      cross-check). log time = header stamp.
+  RECDIR/logs/        gz.log, gz_recorder.log (every loss printed as it happens),
+                      gz_recorder.json (per-topic counts, gaps, backlog).
   RECDIR/recording.json
 
-Steps: build the plugin + tool; write canonical/ (twice, to prove reproducibility)
-BEFORE the long gz run; record sensors/; VERIFY:
+Steps: build the plugin + tools; write canonical/ (twice, to prove reproducibility)
+BEFORE the long gz run; start the recorder, start gz PAUSED, unpause only when the
+recorder has discovered every publisher; record; VERIFY:
+  recorder   exit 0 and zero errors (stamp continuity per topic, start and end
+             reached, backlog never over its cap) — LOUD: any loss fails the run
   canonical  exact stamp grid, log time == stamp, values == the independent Python
-             evaluator (<= 1e-9)
-  sensors    cameras/infos STRICT (count, period, monotone, stereo pairing 1.0);
-             every live IMU/pose sample byte-identical to canonical at its stamp
-             (any mismatch or off-grid stamp FAILS); live samples lost in transport
-             are COUNTED and reported (live_gaps), not fatal, unless the cross-check
-             covers < 99% of the stream.
+             evaluator (<= 1e-9), /tf_static == the mission manifest's extrinsics
+  sensors    cameras/infos and /clock STRICT (count, period, monotone, stereo
+             pairing 1.0); every live IMU/pose sample bit-identical to canonical at
+             its stamp (any mismatch or off-grid stamp FAILS); live_gaps reported.
 """
 import argparse
 import hashlib
@@ -44,6 +49,7 @@ sys.path.insert(0, "/work/python")
 
 PLUGIN_DIR = "/work/build/sim-plugins"
 CANONICAL_TOOL = os.path.join(PLUGIN_DIR, "ariadne_canonical_streams")
+RECORDER_TOOL = os.path.join(PLUGIN_DIR, "ariadne_gz_recorder")
 STEP_NS = 1_000_000                 # the mission worlds' <physics max_step_size> (1 ms), asserted per world
 LIVE_COVERAGE_MIN = 0.99            # below this the live cross-check is too thin to count
 
@@ -103,35 +109,36 @@ def canonical_reproducible(world, end_ns, reference_dir):
         return dir_digests(again) == dir_digests(reference_dir)
 
 
-def static_tf_node(mission):
-    """A child process publishing /tf_static (transient-local) for every agent."""
-    code = r'''
-import json, sys, time, rclpy
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from geometry_msgs.msg import TransformStamped
-from tf2_msgs.msg import TFMessage
-m = json.load(open(sys.argv[1]))
-rclpy.init()
-node = rclpy.create_node("ariadne_static_tf")
-qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL, reliability=ReliabilityPolicy.RELIABLE)
-pub = node.create_publisher(TFMessage, "/tf_static", qos)
-# R_B_optical = rows [[0,0,1],[-1,0,0],[0,-1,0]] -> quaternion (x,y,z,w) = (-0.5, 0.5, -0.5, 0.5)
-msg = TFMessage()
-for a in m["agents"]:
-    body = a["frame_id"]
-    for cam, t in m["t_B_camera_m"].items():
-        ts = TransformStamped()
-        ts.header.frame_id = body
-        ts.child_frame_id = body.replace("base_link", cam + "_optical")
-        ts.transform.translation.x, ts.transform.translation.y, ts.transform.translation.z = t
-        ts.transform.rotation.x, ts.transform.rotation.y, ts.transform.rotation.z, ts.transform.rotation.w = -0.5, 0.5, -0.5, 0.5
-        msg.transforms.append(ts)
-pub.publish(msg)
-while rclpy.ok():
-    rclpy.spin_once(node, timeout_sec=0.5)
-'''
-    return subprocess.Popen([sys.executable, "-c", code, mission], start_new_session=True,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def recorder_topics(mission, bridge_entries):
+    """--topic specs for ariadne_gz_recorder: every GZ->ROS entry of the mission's
+    bridge YAML (the same topic set the live bridge serves) with its period."""
+    cam_period = int(round(1e9 / mission["rig"]["camera"]["rate_hz"]))
+    imu_period = mission["imu"]["period_ns"]
+    out = []
+    for e in bridge_entries:
+        if e["direction"] != "GZ_TO_ROS":
+            raise SystemExit(f"bridge entry {e['ros_topic_name']}: only GZ_TO_ROS is recordable")
+        t = e["ros_topic_name"]
+        # (period, first stamp) as measured with a paused start (SMOKE §4m): rendered
+        # topics and /clock start at t = 0; the mover publishes from its first step.
+        if t == "/clock":
+            period, first = STEP_NS, 0
+        elif t.endswith("/imu") or t.endswith("/gt/pose"):
+            period, first = imu_period, imu_period
+        elif t.endswith("/image_raw") or t.endswith("/camera_info"):
+            period, first = cam_period, 0
+        else:
+            raise SystemExit(f"no period known for {t}")
+        out.append(f"{t},{e['gz_topic_name']},{e['gz_type_name']},{e['ros_type_name']},{period},{first}")
+    return out
+
+
+def world_name(world):
+    import xml.etree.ElementTree as ET
+    ws = list(ET.parse(world).getroot().iter("world"))
+    if len(ws) != 1:
+        raise SystemExit(f"{world}: expected one <world>")
+    return ws[0].get("name")
 
 
 def main():
@@ -140,8 +147,8 @@ def main():
     ap.add_argument("--mission", default="default")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seconds", type=float, default=None)
-    ap.add_argument("--max-cache-mb", type=int, default=100,
-                    help="ros2 bag record --max-cache-size per buffer (double-buffered); rosbag2 drops what overflows")
+    ap.add_argument("--max-backlog-mb", type=int, default=4096,
+                    help="recorder queue cap; exceeding it ABORTS the recording (never drops)")
     ap.add_argument("--verify-only", action="store_true",
                     help="re-verify an existing RECDIR (sensors/ + canonical/) without recording")
     args = ap.parse_args()
@@ -163,18 +170,21 @@ def main():
             write_canonical(world, end_ns, canonical)
         result = verify(rec, mission, scene_dir, sim_s)
         result["canonical_reproducible"] = canonical_reproducible(world, end_ns, canonical)
-        result["passed"] = result["passed"] and result["canonical_reproducible"]
+        result["recorder_report"] = read_recorder_report(rec)
+        result["loss_accounting"] = loss_accounting(result, result["recorder_report"])
+        result["passed"] = (result["passed"] and result["canonical_reproducible"]
+                            and recorder_clean(result["recorder_report"]))
         result["verify_only"] = True
-        result["loss_reports"] = read_loss_reports(rec)
         write_manifest(rec, mission, scene_dir, result, args, end_ns)
-        log("PASSED" if result["passed"] else "FAILED: " + "; ".join(result["failures"] or ["canonical"]))
+        log("PASSED" if result["passed"] else "FAILED: " + "; ".join(result["failures"] or ["canonical/recorder"]))
         log_live_gaps(result)
         return 0 if result["passed"] else 1
 
     if os.path.exists(rec):
         raise SystemExit(f"{rec} exists; refusing to overwrite a recording")
     os.makedirs(rec)
-    # Canonical streams first: cheap, and a script the plugin would reject fails here.
+    # Canonical streams (+ /tf_static) first: cheap, and a script the plugin would
+    # reject fails here.
     summary = write_canonical(world, end_ns, canonical)
     log(f"canonical: {summary}")
     reproducible = canonical_reproducible(world, end_ns, canonical)
@@ -183,88 +193,118 @@ def main():
         shutil.rmtree(rec)   # nothing was recorded; leave no directory that blocks a retry
         raise SystemExit("canonical streams are not reproducible; refusing to spend a render on them")
     import yaml
-    bridge_cfg = os.path.join(scene_dir, mission["bridge_file"])
-    topics = [e["ros_topic_name"] for e in yaml.safe_load(open(bridge_cfg))] + ["/tf_static"]
+    entries = yaml.safe_load(open(os.path.join(scene_dir, mission["bridge_file"])))
+    specs = recorder_topics(mission, entries)
 
-    env = dict(os.environ, GZ_SIM_SYSTEM_PLUGIN_PATH=PLUGIN_DIR)
-    procs = []
-    # Every helper's output is KEPT: rosbag2 reports its own losses there ("Cache
-    # buffers lost messages per topic" on close; "Messages lost on transport layer").
+    # gz-transport's ZeroMQ queues unbounded on both ends (0 = no high-water mark):
+    # a full ZMQ queue drops SILENTLY; the recorder's own queue is the only bounded
+    # one, and it aborts loudly instead of dropping.
+    env = dict(os.environ, GZ_SIM_SYSTEM_PLUGIN_PATH=PLUGIN_DIR, GZ_TRANSPORT_RCVHWM="0", GZ_TRANSPORT_SNDHWM="0")
     logs = os.path.join(rec, "logs")
     os.makedirs(logs)
-    logf = {k: open(os.path.join(logs, f"{k}.log"), "w") for k in ("bridge", "recorder")}
+    report = os.path.join(logs, "gz_recorder.json")
+    rec_err = open(os.path.join(logs, "gz_recorder.log"), "w")
+    gz_log = open(os.path.join(logs, "gz.log"), "w")
+    recp = gzp = None
     t_wall0 = time.monotonic()
+    wall = float("nan")
+    gz_rc = None
+    rec_rc = None
     try:
-        procs.append(subprocess.Popen(["ros2", "run", "ros_gz_bridge", "parameter_bridge", "--ros-args",
-                                       "-p", f"config_file:={bridge_cfg}", "-p", "use_sim_time:=true"],
-                                      start_new_session=True, stdout=logf["bridge"], stderr=subprocess.STDOUT))
-        procs.append(static_tf_node(mfile))
-        # Reliable, deep queues for the 200 Hz live streams (they are the cross-check
-        # now, but a thin cross-check is a failed one: see LIVE_COVERAGE_MIN).
-        qos_path = os.path.join("/tmp", "ariadne_record_qos.yaml")
-        deep = {t: {"history": "keep_last", "depth": 1000, "reliability": "reliable", "durability": "volatile"}
-                for t in topics if t.endswith("/imu") or t.endswith("/gt/pose")}
-        with open(qos_path, "w") as f:
-            yaml.safe_dump(deep, f)
-        procs.append(subprocess.Popen(["ros2", "bag", "record", "-s", "mcap", "--storage-preset-profile", "zstd_fast",
-                                       "--use-sim-time", "--qos-profile-overrides-path", qos_path,
-                                       "--max-cache-size", str(args.max_cache_mb * 1024 * 1024), "-o", sensors,
-                                       *topics],
-                                      start_new_session=True, stdout=logf["recorder"], stderr=subprocess.STDOUT))
-        time.sleep(6)   # discovery: bridge and recorder subscribed before the first step
-        log(f"gz: {iterations} steps ({sim_s:.1f} sim-s), world {mission['world_file']}")
+        recp = subprocess.Popen([RECORDER_TOOL, "--out", sensors, "--end-ns", str(end_ns), "--report", report,
+                                 "--max-backlog-mb", str(args.max_backlog_mb),
+                                 *[x for sp in specs for x in ("--topic", sp)]],
+                                env=env, start_new_session=True, stdout=subprocess.PIPE, stderr=rec_err, text=True)
+        # The world starts PAUSED (no -r): nothing is published until the recorder
+        # has discovered every publisher and says CONNECTED.
+        gzp = subprocess.Popen(["gz", "sim", "-s", "--headless-rendering", "--iterations", str(iterations), world],
+                               env=env, start_new_session=True, stdout=gz_log, stderr=subprocess.STDOUT)
+        line = recp.stdout.readline().strip()
+        if line != "CONNECTED":
+            raise SystemExit(f"recorder did not connect (said {line!r}); see {rec_err.name}")
+        log(f"recorder connected to {len(specs)} topics; unpausing {iterations} steps ({sim_s:.1f} sim-s)")
+        r = subprocess.run(["gz", "service", "-s", f"/world/{world_name(world)}/control", "--reqtype",
+                            "gz.msgs.WorldControl", "--reptype", "gz.msgs.Boolean", "--timeout", "10000",
+                            "--req", "pause: false"], env=env, capture_output=True, text=True)
+        if r.returncode != 0 or "data: true" not in r.stdout:
+            raise SystemExit(f"unpause failed: {r.stdout.strip()} {r.stderr.strip()}")
         t0 = time.monotonic()
-        gz = subprocess.run(["gz", "sim", "-s", "-r", "--headless-rendering", "--iterations", str(iterations), world],
-                            env=env, capture_output=True, text=True, timeout=6 * 3600)
+        gz_rc = gzp.wait(timeout=6 * 3600)
         wall = time.monotonic() - t0
-        log(f"gz exited {gz.returncode} after {wall:.1f} wall-s (RTF {sim_s / wall:.3f})")
-        time.sleep(10)  # drain the recorder queue
+        log(f"gz exited {gz_rc} after {wall:.1f} wall-s (RTF {sim_s / wall:.3f})")
+        try:   # the recorder exits by itself once every topic reached its last stamp
+            rec_rc = recp.wait(timeout=1800)
+        except subprocess.TimeoutExpired:
+            log("recorder did not finish within 1800 s of gz exiting; stopping it (it will report what is missing)")
+            os.killpg(recp.pid, signal.SIGINT)
+            rec_rc = recp.wait(timeout=600)
+        tail = recp.stdout.read().strip()
+        log(f"recorder exited {rec_rc} ({tail})")
     finally:
-        for p in procs:
-            if p.poll() is None:
+        for p in (gzp, recp):
+            if p is not None and p.poll() is None:
                 os.killpg(p.pid, signal.SIGINT)
-        for p in procs:
-            try:
-                p.wait(timeout=120)
-            except subprocess.TimeoutExpired:
-                os.killpg(p.pid, signal.SIGKILL)
-        for f in logf.values():
-            f.close()
-    loss_reports = read_loss_reports(rec)
-    gz_errors = [l for l in gz.stderr.splitlines() if "[Err]" in l or "rror" in l][:10]
-    mover_lines = [l for l in gz.stdout.splitlines() + gz.stderr.splitlines() if "KinematicMover" in l][:10]
+                try:
+                    p.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    os.killpg(p.pid, signal.SIGKILL)
+        rec_err.close()
+        gz_log.close()
+    gz_text = open(os.path.join(logs, "gz.log"), errors="replace").read().splitlines()
+    gz_errors = [l for l in gz_text if "[Err]" in l or "rror" in l][:10]
+    mover_lines = [l for l in gz_text if "KinematicMover" in l][:10]
+    rep = read_recorder_report(rec)
+    for e in (rep or {}).get("errors", [])[:20]:
+        log(f"RECORDER ERROR: {e}")
     result = verify(rec, mission, scene_dir, sim_s)
-    result.update({"gz_returncode": gz.returncode, "gz_errors": gz_errors, "mover_log": mover_lines,
-                   "sim_seconds": sim_s, "wall_seconds_gz": round(wall, 2), "canonical_summary": summary,
-                   "canonical_reproducible": reproducible, "max_cache_mb": args.max_cache_mb,
-                   "loss_reports": loss_reports,
+    result["recorder_report"] = rep
+    result["loss_accounting"] = loss_accounting(result, rep)
+    result.update({"gz_returncode": gz_rc, "gz_errors": gz_errors, "mover_log": mover_lines,
+                   "recorder_returncode": rec_rc, "sim_seconds": sim_s, "wall_seconds_gz": round(wall, 2),
+                   "canonical_summary": summary, "canonical_reproducible": reproducible,
+                   "max_backlog_mb": args.max_backlog_mb,
                    "rtf": round(sim_s / wall, 4), "wall_seconds_total": round(time.monotonic() - t_wall0, 1)})
-    result["passed"] = result["passed"] and gz.returncode == 0 and not gz_errors and reproducible
+    result["passed"] = (result["passed"] and gz_rc == 0 and not gz_errors and reproducible
+                        and rec_rc == 0 and recorder_clean(rep))
     write_manifest(rec, mission, scene_dir, result, args, end_ns)
-    log("PASSED" if result["passed"] else "FAILED: " + "; ".join(result["failures"] or gz_errors or ["gz/canonical"]))
+    reasons = result["failures"] + gz_errors + ([] if rec_rc == 0 else [f"recorder exit {rec_rc}"])
+    log("PASSED" if result["passed"] else "FAILED: " + "; ".join(reasons or ["gz/canonical/recorder"]))
     log_live_gaps(result)
-    for k, lines in loss_reports.items():
-        for l in lines[:5]:
-            log(f"{k} reports: {l}")
+    for t, a in result["loss_accounting"].items():
+        log(f"loss accounting {t}: {a}")
     return 0 if result["passed"] else 1
 
 
-def read_loss_reports(rec):
-    """Lines in which the bridge / recorder report lost or dropped messages."""
-    out = {}
-    for k in ("bridge", "recorder"):
-        path = os.path.join(rec, "logs", f"{k}.log")
-        if os.path.exists(path):
-            out[k] = [l.strip() for l in open(path, errors="replace")
-                      if "lost" in l.lower() or "dropp" in l.lower()][:50]
-    return out
+def read_recorder_report(rec):
+    path = os.path.join(rec, "logs", "gz_recorder.json")
+    return json.load(open(path)) if os.path.exists(path) else None
+
+
+def recorder_clean(rep):
+    return bool(rep) and rep["error_count"] == 0 and not rep["aborted"]
+
+
+def loss_accounting(result, rep):
+    """Per topic with anything missing from the bag: what the recorder itself saw as
+    lost (stamp gaps) vs the residual. With the gz recorder every loss must be seen:
+    a non-zero residual means a message vanished after the recorder accepted it."""
+    missing = {}
+    for t, g in result["topics"].items():
+        if "count" in g:
+            missing[t] = g["expected"] - g["count"]
+    for t, g in result["live_cross_check"].items():
+        missing[t] = g["live_gaps"]
+    missing["/clock"] = result["clock"]["missing_steps"]
+    seen = {t: v["lost"] for t, v in ((rep or {}).get("topics") or {}).items()}
+    return {t: {"missing": m, "recorder_saw_lost": seen.get(t, 0), "residual": m - seen.get(t, 0)}
+            for t, m in sorted(missing.items()) if m or seen.get(t)}
 
 
 def log_live_gaps(result):
     for t, g in sorted(result["live_cross_check"].items()):
         if g["live_gaps"]:
-            log(f"note: live {t} lost {g['live_gaps']} sample(s) in transport at {g['missing_stamps_ns'][:5]} ns "
-                "(canonical is complete; reported, not fatal)")
+            log(f"LOST: live {t} is missing {g['live_gaps']} sample(s) at {g['missing_stamps_ns'][:5]} ns "
+                "(canonical is complete, but a loss in the recording path fails the run: D40)")
 
 
 def cdr_stamp_ns(data):
@@ -311,6 +351,32 @@ def read_bag(uri, keep_bytes=lambda topic: False):
     return out
 
 
+def check_static_tf(e, mission):
+    """/tf_static (written by the canonical tool from the SDF sensor poses) against the
+    mission manifest's extrinsics (written by the Python composer): two independent
+    sources must agree exactly."""
+    from rclpy.serialization import deserialize_message
+    from tf2_msgs.msg import TFMessage
+    if e is None:
+        return ["canonical /tf_static: missing"]
+    if e["stamps"] != [0] or e["log_ns"] != [0]:
+        return [f"canonical /tf_static: expected one message at t=0, got stamps {e['stamps'][:5]}"]
+    got = {(t.header.frame_id, t.child_frame_id): t.transform for t in deserialize_message(e["raw"][0], TFMessage).transforms}
+    want = {}
+    for a in mission["agents"]:
+        body = a["frame_id"]
+        for cam, xyz in mission["t_B_camera_m"].items():
+            want[(body, body.replace("base_link", cam + "_optical"))] = xyz
+    if set(got) != set(want):
+        return [f"canonical /tf_static frames {sorted(got)} != {sorted(want)}"]
+    bad = []
+    for k, tr in got.items():
+        t, q = tr.translation, tr.rotation
+        if [t.x, t.y, t.z] != list(map(float, want[k])) or (q.x, q.y, q.z, q.w) != (-0.5, 0.5, -0.5, 0.5):
+            bad.append(f"canonical /tf_static {k}: {t} {q}")
+    return bad
+
+
 def check_canonical(can, mission, scene_dir, grid, checks):
     """canonical/: every agent's IMU and GT topics on exactly `grid`, log time == stamp,
     frame_id right, and values equal to the INDEPENDENT Python evaluator (<= 1e-9).
@@ -321,9 +387,10 @@ def check_canonical(can, mission, scene_dir, grid, checks):
     from dataset_tools.worldgen.motion import Profile
 
     failures = []
-    expected = {a["topics"][k] for a in mission["agents"] for k in ("imu", "gt_pose")}
+    expected = {a["topics"][k] for a in mission["agents"] for k in ("imu", "gt_pose")} | {"/tf_static"}
     if set(can) != expected:
         failures.append(f"canonical topics {sorted(can)} != {sorted(expected)}")
+    failures += check_static_tf(can.get("/tf_static"), mission)
     checks_pose, checks_imu = [0, 0.0], [0, 0.0]   # count, worst abs error vs Python
     for a in mission["agents"]:
         js = json.load(open(os.path.join(scene_dir, "routes", f"agent_{a['agent']}.json")))
@@ -456,14 +523,17 @@ def verify(rec, mission, scene_dir, sim_s):
         per_topic.setdefault(T["left_image"], {})["stereo_pairing"] = pairing
         if pairing < 1.0:
             failures.append(f"agent {a['agent']}: stereo pairing {pairing:.4f} < 1")
-    if not live.get("/tf_static", {}).get("stamps"):
-        failures.append("/tf_static not recorded")
     clock = live.get("/clock", {}).get("stamps", [])
     if not clock:
         failures.append("/clock not recorded")
-    # /clock is not consumed by replay (header stamps are); its transport losses are
-    # reported (they explain rosbag2's "lost on the transport layer" count), not fatal.
+    # /clock is not consumed by replay (header stamps are), but it is the densest
+    # stream: a complete /clock is the strongest evidence the recording path is lossless.
     clock_gaps = sum((b - a_) // STEP_NS - 1 for a_, b in zip(clock, clock[1:]) if b - a_ > STEP_NS)
+    # STRICT since D40 (the recorder reads gz directly): one message per step, 0..end.
+    want_clock = list(range(0, end_ns + 1, STEP_NS))
+    if clock != want_clock:
+        failures.append(f"/clock: {len(clock)} stamps, {clock_gaps} missing steps; want every {STEP_NS} ns "
+                        f"from 0 to {end_ns} ({len(want_clock)})")
     return {"passed": not failures, "failures": failures, "topics": per_topic,
             "canonical": {t: {"count": len(can[t]["stamps"]), "bytes": can[t]["bytes"]} for t in sorted(can)},
             "canonical_content_sha256": content_digest(can),
@@ -509,8 +579,9 @@ def write_manifest(rec, mission, scene_dir, result, args, end_ns):
                            "files": dir_digests(os.path.join(rec, "canonical"))},
              "sensors": {"dir": "sensors", "source": "gz render -> ros_gz_bridge -> ros2 bag record; its IMU/GT "
                          "topics are the live cross-check only", "files": dir_digests(os.path.join(rec, "sensors"))}},
-         "replay_rule": "IMU + GT pose from canonical/, everything else from sensors/; merge by header stamp "
-                        "(ties: topic name), not by log time (sensor log times are receive times)",
+         "replay_rule": "IMU + GT pose + /tf_static from canonical/, everything else from sensors/; merge by "
+                        "header stamp (ties: topic name). Since D40 log time == header stamp in both bags, so a "
+                        "log-time merge gives the same order",
          "sim_versions": versions, "result": result}
     with open(os.path.join(rec, "recording.json"), "w") as f:
         json.dump(m, f, indent=1, sort_keys=True)

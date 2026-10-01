@@ -5,7 +5,7 @@ rosbag2_bagfile_information:
     nanoseconds: 1000000000
   starting_time:
     nanoseconds_since_epoch: 0
-  message_count: 804
+  message_count: 805
   topics_with_message_count:
     - topic_metadata:
         name: /ariadne/agent_1/gt/pose
@@ -39,6 +39,28 @@ rosbag2_bagfile_information:
           []
         type_description_hash: ""
       message_count: 201
+    - topic_metadata:
+        name: /tf_static
+        type: tf2_msgs/msg/TFMessage
+        serialization_format: cdr
+        offered_qos_profiles:
+          - history: keep_last
+            depth: 1
+            reliability: reliable
+            durability: transient_local
+            deadline:
+              sec: 0
+              nsec: 0
+            lifespan:
+              sec: 0
+              nsec: 0
+            liveliness: system_default
+            liveliness_lease_duration:
+              sec: 0
+              nsec: 0
+            avoid_ros_namespace_conventions: false
+        type_description_hash: ""
+      message_count: 1
   compression_format: ""
   compression_mode: ""
   relative_file_paths:
@@ -49,6 +71,6 @@ rosbag2_bagfile_information:
         nanoseconds_since_epoch: 0
       duration:
         nanoseconds: 1000000000
-      message_count: 1608
+      message_count: 1610
   custom_data: ~
   ros_distro: jazzy
