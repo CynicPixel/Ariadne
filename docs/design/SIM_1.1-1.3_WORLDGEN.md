@@ -311,7 +311,8 @@ mission composer + bridge YAML; golden Python↔C++ samples; recorded GT/IMU equ
 5c. ✅ Loss attribution (DDS link), direct gz-transport recorder with loud failures, `/tf_static` in canonical (D40).
 6. ✅ 1.3 evidence recording from a clean commit (`evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T042105Z`).
 6b. ✅ §6 tool + first measurement (§4n); ✅ D41: pinhole render + read-time lens operator; §6 verdict with
-thresholds (`configs/sim/acceptance_s6.yaml`). ⏳ D41-rig evidence recording + §6 evidence run (clean commit).
+thresholds (`configs/sim/acceptance_s6.yaml`). ✅ D41-rig 1.3 evidence recording; §6 evidence PASS on seed 0 and on
+the independent seed 1 (`evaluation/runs/phase1/sim_calib/`).
 7. ⏳ A full bag of one larger preset (RTF, bytes), the texture gate, and 1.4/1.5 consuming the sim bag
 (camera model from `rig.lens`, never from camera_info).
 Evidence to re-run from a clean commit: census + accept sweeps for all presets.

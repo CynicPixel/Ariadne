@@ -539,4 +539,11 @@ calib-window frames per camera, ~1,040 with a board detected; dev run, uncommitt
   dirty check (`core.sh`, `worldgen.sh`, `sim_record.sh`) and from the Docker build context (`.dockerignore`,
   which also stops `core.sh image` from sending ~25 GB of raw evidence bags as build context). The run was
   discarded and is redone from the next commit.
+- **§6 evidence runs, clean commit 5de3f70** (`evaluation/runs/phase1/sim_calib/`): seed 0 on the 1.3 evidence
+  recording PASS (identical to the dev run); **ci_tiny seed 1, the independent test** (new scene 5d02793f…,
+  recorded clean: strict PASS, RTF 0.213) PASS with margin on every check — A RMS <= 0.091 px (limit 0.25),
+  |mean| <= 0.014 px (0.05), time offset ~6 µs (0.5 ms); B fx +0.19 / +0.22 % (1 %), k1 -0.0489 / -0.0511
+  (±0.003); C 0.093 mm, 0.003°; D 0.26°, 1.3 mm, no flips. The free-calibration fx bias recurs with the same
+  sign (+1.3 / +1.5 px) and, with the radial terms held at truth, is 680.8 here vs 682.1 on seed 0: it varies
+  with the view geometry, consistent with the fx-distance `[ASSUMPTION]`.
 
