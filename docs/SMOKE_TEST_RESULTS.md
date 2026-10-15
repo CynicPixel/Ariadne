@@ -547,3 +547,32 @@ calib-window frames per camera, ~1,040 with a board detected; dev run, uncommitt
   sign (+1.3 / +1.5 px) and, with the radial terms held at truth, is 680.8 here vs 682.1 on seed 0: it varies
   with the view geometry, consistent with the fx-distance `[ASSUMPTION]`.
 
+
+## 4o. gsplat without a GPU (1.7): what runs on CPU `[SMOKE-TEST]` 2026-10-15
+
+Context: no NVIDIA GPU on the dev box (Intel Iris Xe only); AWS G/VT quotas are 0 in eu-north-1, us-east-1,
+us-west-2, eu-west-1 and eu-central-1, and every SageMaker g4dn/g5/g6 quota checked is 0 (re-requests filed
+2026-10-15, `docs/aws_quota_appeal.md`). Throwaway image: python:3.12-slim + torch 2.5.1+cpu + gsplat 1.4.0
+(`--no-deps`) + jaxtyping/rich/numpy/ninja.
+
+- `import gsplat` works on CPU-only torch; `gsplat.cuda._torch_impl` exposes pure-torch `_quat_scale_to_covar_preci`,
+  `_fully_fused_projection`, `_isect_tiles`, `_isect_offset_encode` — these ran on CPU (2000 Gaussians, 320x240).
+- **`_torch_impl._rasterize_to_pixels` does NOT run on CPU:** it calls `_wrapper.rasterize_to_indices_in_range`, a
+  CUDA kernel (`AttributeError: 'NoneType' object has no attribute 'rasterize_to_indices_in_range'`), and its
+  compositing (`accumulate`) needs the separate `nerfacc` package. So gsplat cannot produce a pixel without CUDA.
+- The forward compositing rules, transcribed from `cuda/csrc/rasterize_to_pixels_fwd.cu` (gsplat 1.4.0), for a CPU
+  stand-in that must later match the CUDA kernel: per tile, Gaussians front to back by depth (the `_isect_tiles`
+  order); pixel centre (x + 0.5, y + 0.5); σ = ½(a·dx² + c·dy²) + b·dx·dy with conic (a, b, c);
+  α = min(0.999, opacity·exp(−σ)); skip if σ < 0 or α < 1/255; stop (exclusive) when T·(1 − α) ≤ 1e-4;
+  colour += c·α·T; T ← T·(1 − α); background added as T·bg.
+- Consequence (D44, maintainer's decision 2026-10-15): no CPU rasterizer is written; the render runs with gsplat on
+  CUDA off-AWS (Kaggle) until the AWS G/VT quota lands. These transcribed rules stay as the reference for any later
+  parity check.
+- **Remote CUDA path, Kaggle `[SMOKE-TEST]` PASS (2026-10-15):** `infra/scripts/kaggle.sh smoke` → kernel
+  `suvojit42/ariadne-recon-smoke-gpu` (private): Python 3.13.15, torch 2.11.0+cu128, **Tesla T4**; gsplat 1.4.0 has
+  no prebuilt wheel for pt211/cu128, so it installed from PyPI source and **JIT-compiled its CUDA extension on the
+  first `rasterization` call: 767 s** for a 1000-Gaussian 320×240 render (the render itself is milliseconds).
+  Every fresh kernel session pays this compile. Three failures before it, all environmental: (1) Kaggle CLI 2.x
+  ignores `enable_gpu` unless the accelerator is named (`--accelerator NvidiaTeslaT4` / `machine_shape`); (2)–(3)
+  an account without phone verification silently runs a GPU-requested kernel on the CPU image
+  (`gcr.io/kaggle-images/python`, torch `+cpu`, no `nvidia-smi`, GPU quota used 0.00 h) with no API error.

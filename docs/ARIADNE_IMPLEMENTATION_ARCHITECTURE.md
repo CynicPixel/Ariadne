@@ -2996,6 +2996,11 @@ gsplat training runs on the g5/g6 node (§26). Target budget from the feasibilit
 run on a `g5.xlarge` spot instance. The service checkpoints submaps to S3 so the console can stream `.ply` /
 `.splat` exports (§29).
 
+> **Interim deviation (D44, 2026-10-15):** the account's GPU quota is 0 in every region checked (re-requests
+> escalated by AWS). Until it lands, the gsplat render step runs on Kaggle (CUDA) through the same service code,
+> fed a small render package; everything before it (spool, fusion, initialization) runs locally on CPU. Manifests
+> record `splat_backend`. The realtime demo still requires a live GPU, so this deviation does not cover the demo.
+
 ---
 
 ## 18.3 Gaussian state

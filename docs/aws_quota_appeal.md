@@ -1,6 +1,15 @@
 # Appeal text: EC2 G/VT quotas (cases 179069316400187 and 179069316600303)
 
-BOTH requests were denied on 2026-09-29 with "ramp up gradually":
+**2026-10-15 re-file.** The 2026-09-29 cases auto-closed on 2026-10-09 (no reply from us within 10 days). New
+CLI requests filed 2026-10-15, both 4 vCPU in eu-north-1, status PENDING:
+- spot "All G and VT Spot Instance Requests": request id `2ea5cdb12c3a4f848341f75c88fd9bc5eeqrJ1OG`
+- on-demand "Running On-Demand G and VT instances": request id `7e1e3706c4ed48f1a6104034571eb296gs50z3DA`
+AWS opens a support case per request; reply on each case with the text below (CLI requests carry no
+justification). The "History" paragraph is still accurate as written (one 67 s Graviton4 spot run, per
+`build/runs/ledger.csv`); add that the deadline is now 11 days away (26 October 2026) and that the final
+simulation and reconstruction runs need the GPU.
+
+Original 2026-09-29 requests, both denied with "ramp up gradually":
 - 179069316400187: "All G and VT Spot Instance Requests" -> 4
 - 179069316600303: "Running On-Demand G and VT instances" -> 4
 

@@ -1319,3 +1319,25 @@ of the 25 correct edges (h_over_e 0.19–0.71, planarity 0.00041–0.167; ranks 
 has a higher h/E). In a room maze most matches lie on one wall, so correct edges are near-planar too: neither
 scalar can gate this. Cause `[UNVERIFIED]`; the Phase 3 answer is consistency (PCM against odometry and the other
 edges), not a per-edge threshold.
+
+
+## 2026-10-15 — D44: gsplat runs off-AWS (Kaggle) until the GPU quota lands; no CPU rasterizer
+
+**Facts.** No NVIDIA GPU on the dev box. AWS GPU quota is 0 for EC2 G/VT (on-demand and spot) in eu-north-1,
+us-east-1, us-west-2, eu-west-1 and eu-central-1, and for every SageMaker g4dn/g5/g6 training/processing/notebook/
+Studio quota checked (eu-north-1, us-east-1). The 2026-09-29 cases auto-closed unanswered; re-filed 2026-10-15
+(spot case 179205877700888, on-demand case 179205877900026, 4 vCPU each); AWS escalated both to an internal team the
+same day. gsplat 1.4.0 cannot rasterize without CUDA: even `_torch_impl._rasterize_to_pixels` calls a CUDA kernel and
+needs `nerfacc` (SMOKE §4o).
+
+**Decision (maintainer).** Delegate the gsplat render to Kaggle for now. Kaggle rather than Colab because it has a
+CLI (`kaggle datasets` / `kaggle kernels push|status|output`), so the run is scripted and its environment
+recorded. This deviates from the locked compute placement ("gsplat on AWS g5/g6", arch §18.2) and is **interim**;
+arch §18.2 carries the note. The maintainer also stated that **the demo needs realtime rendering**, so a live GPU
+(AWS once the quota lands) stays on the critical path and the quota cases stay open.
+
+**Consequences.** No Ariadne-written CPU rasterizer (it would be throwaway once any GPU exists). The C++→Python
+boundary is the spool (design RECON_1.7); validation, fusion, initialization and geometry metrics run locally on
+CPU and deterministically; only a small render package goes to Kaggle. Manifests record
+`splat_backend: gsplat_cuda@kaggle` (later `@aws`) with the remote torch/CUDA/gsplat versions and GPU name. Remote
+renders are compared by tolerance, not bytes.

@@ -4,6 +4,26 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-15 — 1.7 placeholder reconstruction: spool → fused cloud → gsplat init → Kaggle T4 render (D44)
+
+- **GPU:** every AWS GPU quota is 0 (EC2 G/VT in 5 regions, SageMaker); G/VT re-filed (cases 179205877700888 spot,
+  179205877900026 on-demand, escalated by AWS). Maintainer decision D44: gsplat renders on Kaggle until then; the
+  realtime demo still needs a live GPU. gsplat cannot rasterize on CPU at all (SMOKE §4o).
+- **Boundary (§18.2):** `ariadne_sim_collab --spool` writes the KeyframeBundle spool (rectified RGB, fp16 depth + SGBM
+  σ, insertion-time poses + graph version, explicit not-modeled fields); Python service in a pinned CPU image:
+  validate → fuse → init (transcribed from gsplat v1.4.0 simple_trainer) → geometry metrics → 15 MB render package →
+  `kaggle.sh render` (private dataset + T4 kernel) → local PSNR/SSIM + remote LPIPS.
+- **Dev run, ci_tiny seed 0:** 577 keyframes + 39 held-out frames (215 MB spool in `build/`); 1.08 M voxels at 2 cm,
+  capped to 300k Gaussians. Fused cloud vs GT meshes: accuracy **21 mm** mean / 18 mm median, completeness **0.66**
+  (≤ 5 cm, whole maze), Chamfer 0.126 m. Held-out renders of the UNTRAINED initialization: PSNR **17.5 dB**,
+  SSIM **0.718**, LPIPS **0.68**; visually pose-aligned (doorway, board, floor marks in place), blurry (the 300k cap
+  inflates kNN scales), ceiling black (no keyframe depth on it). Local stages byte-identical across runs.
+- **Kaggle path:** T4, torch 2.11.0+cu128, gsplat 1.4.0 from PyPI source, JIT CUDA compile ~12.5 min per fresh
+  session (no prebuilt wheel for pt211/cu128). Found on the way: CLI 2.x needs the accelerator named; an account
+  without phone verification silently runs GPU kernels on CPU.
+- Regressions: EuRoC `22d3a40d…`, 1.6 CSVs and both `sim_vo` estimates byte-identical; 251/251 C++ + 6 Python tests.
+- Next: clean-commit evidence (spool → prepare → render → score), then 1.8.
+
 ## 2026-10-15 — 1.6 placeholder collaboration: 20/20 exchanged edges correct; 1 false accept in the negative probe (D43)
 
 - `ariadne_sim_collab` (`core.sh sim-collab`): broker = agent 0; mean-bit ORB descriptors → cosine top-1 →
