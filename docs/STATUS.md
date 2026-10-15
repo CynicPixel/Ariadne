@@ -4,6 +4,15 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-15 — 1.4/1.5 run from the sim recording (D42)
+
+- `StereoSource` (EuRoC, sim + read-time lens) and a shared `stereo_vo_runner.hpp`; EuRoC MH_01 reproduces
+  byte-identically through the refactor. Sim configs `sim_v1` (240 disparities: Z_min 0.281 m, §9.4).
+- Evidence, clean commit 869b946 (`evaluation/runs/phase1/sim_vo/`), ci_tiny seed 0: agent 0 ATE 9.9 mm over
+  31.9 m (0.03 %, calibration spins/tilts included, 0 lost); agent 1 ATE 4.4 mm over 10.7 m (0.04 %, 1 lost
+  frame, not yet investigated). Identical to the dev runs. Sensor degradation after the lens: Phase 5.
+- Next: 1.6 placeholder collaboration (`docs/design/COLLAB_1.6.md`).
+
 ## 2026-10-01 — 1.1–1.3: mover, recording, canonical IMU/GT, direct gz recorder (D38–D40); full missions clean
 
 - ROS-free CDR decoder + rosbag reader (D38); kinematic mover plugin running `scripted.hpp`; mission composer
