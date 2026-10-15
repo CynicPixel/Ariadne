@@ -22,7 +22,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   session (no prebuilt wheel for pt211/cu128). Found on the way: CLI 2.x needs the accelerator named; an account
   without phone verification silently runs GPU kernels on CPU.
 - Regressions: EuRoC `22d3a40d…`, 1.6 CSVs and both `sim_vo` estimates byte-identical; 251/251 C++ + 6 Python tests.
-- Next: clean-commit evidence (spool → prepare → render → score), then 1.8.
+- **Evidence, clean commit c9f17c1** (`evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z`, spool's
+  1.6 run in `sim_collab/` beside it): every manifest `git_dirty: false`; fused cloud, render package, the Kaggle T4
+  renders and every score reproduce the dev run byte for byte. Large outputs stay in `build/`, sha256 recorded.
+- **Viewer:** `recon.sh viewer` writes a self-contained WebGL page (embedded `.splat`, both agents' estimated paths,
+  world frame; gaussian-splats-3d 0.4.7 + three 0.172.0). Published privately; the maintainer confirmed both
+  paths match the scripted routes.
+- Next: 1.8 (placeholder mission layer).
 
 ## 2026-10-15 — 1.6 placeholder collaboration: 20/20 exchanged edges correct; 1 false accept in the negative probe (D43)
 
