@@ -1341,3 +1341,56 @@ boundary is the spool (design RECON_1.7); validation, fusion, initialization and
 CPU and deterministically; only a small render package goes to Kaggle. Manifests record
 `splat_backend: gsplat_cuda@kaggle` (later `@aws`) with the remote torch/CUDA/gsplat versions and GPU name. Remote
 renders are compared by tolerance, not bytes.
+
+
+## 2026-10-15 — D45: 1.8 placeholder mission layer — OctoMap-model occupancy, nearest frontier, egress at ρ_responder
+
+**What.** `ariadne_mission` (design `docs/design/MISSION_1.8.md`) consumes the 1.7 spool and the mission briefing
+and, in replay, integrates keyframe depth into a 0.05 m voxel grid (OctoMap sensor model, Hornung et al. 2013:
+log-odds hit 0.7 / miss 0.4, clamp [0.12, 0.97], fixed-point; rays walked with Amanatides & Woo 1987), collapses a
+standing-body z band into a 2D tri-state, and every 5 s computes frontiers (Yamauchi 1997), a nearest-frontier
+decision per agent (JSONL trace, `mode: replay, executed: false`), the **egress route at ρ_responder** and the
+**agent route at ρ_agent** (A*, octile, worldgen's corner rule). `python/analysis/mission_eval.py` scores against
+`scene_gt.npz` (evaluation only).
+
+**Choices (each fixed before measuring).**
+1. *ρ discipline:* the plan's wording ("A* route to exit at ρ_agent") is superseded by invariant 4 / arch §20.5:
+   the egress product is at ρ_responder (0.40 m); the ρ_agent route is reported beside it, labelled.
+2. *Clearance convention = GT's* (cell centre to blocked-square edge, ≥ ρ − 1e-9), ported exactly; egress clearance
+   counts unknown as blocked ("observed, not merely not contradicted"), agent clearance counts occupied only.
+3. *World anchor:* agent 0's briefed entry pose × the rig's body←camera extrinsic (`[ASSUMPTION]` a team knows
+   where it entered; R1 ≈ I on the ideal rig). Agent 1's entry pose is NOT used: it enters W only through the
+   verified 1.6 loop, at t_merge = the later of the two matched keyframes (`[ASSUMPTION]`: that edge was picked
+   with hindsight). The evaluator's oracle: agent 0's first 10 s through this anchor vs GT.
+4. *Depth gates from the noise model:* σ_Z = 0.00745 Z² m (σ_d 0.5 px, f 671.5, B 0.1) → σ ≤ 0.06 m ⇒ Z ≤ 2.84 m, so
+   wall hits land within ~1 cell and the 1.05 m entrance's 2.5-cell slack at ρ_responder survives; free carving
+   stops 2σ short of each surface.
+
+**Measured (dev, ci_tiny seed 0, the 1.7 evidence spool).** Frame anchors (first 10 s vs GT): agent 0 5.0 mm /
+0.07°, agent 1 (own entry pose, solo run) 6.2 mm; agent 1 placed through the 1.6 merge: 3.0 cm / 0.47° (the merge's
+accuracy). Merged map vs GT: coverage 0.93, free precision 0.97, occupied precision 0.71. Three runs (first-valid
+times are replan instants: the route appeared within the preceding 5 s):
+
+| run | first valid egress route | final exit, length (GT geodesic) | coverage |
+|---|---|---|---|
+| agent 0 alone | 195 s | west, 11.26 m (11.21) | 0.89 |
+| agent 1 alone (its own entry anchor) | **55 s** | north, 4.44 m (4.44) | 0.43 |
+| merged (agent 1 joins at t_merge 138 s) | 140 s | north, 4.44 m (4.44) | **0.93** |
+
+Every route is valid on every cell against GT `trav_responder`. **Reading:** the target is in agent 1's room, so
+agent 1 alone has a valid route at 55 s; the merge brings it into the shared (broker) map only at 140 s, because
+the one verified inter-agent loop arrives at 138 s. What collaboration adds here is the joint map (coverage 0.93 vs
+0.89 / 0.43) and, for agent 0, the shorter exit 55 s before its own exit leg would have found any. The 85 s of
+merge latency is a measured cost of a single late loop: the Phase 3 case for earlier, prioritized exchange.
+Deterministic: trace, routes and maps byte-identical across runs. 257/257 C++ tests (7 new planning tests).
+
+**What the numbers do not show (open items).**
+1. Occupied precision 0.71 is a convention effect, measured: of the 783 map-occupied, GT-free cells, 726 (93 %)
+   are exactly one cell from GT structure, 56 two cells, 1 three, none further. Walls are thin planes on cell
+   boundaries, so their hits land in the last GT-free cell. It costs clearance along walls (the north entrance's
+   traversable band is 5 cells at ρ_responder) but blocked no route here.
+2. Stray "free" cells beyond the walls: rays slipping past the thin wall meshes into space GT counts as structure.
+   Disconnected from every route; costs ~3 % free precision.
+3. The policy is logged, not executed (replay follows the scripts): there is no exploration-efficiency number yet;
+   that needs closed-loop live runs. Nearest frontier is the baseline for the owed Domain 3 survey (FUEL, TARE, FAR).
+4. One scene, one seed. The egress timing depends on where the scripts face; seed 1 is the next check.

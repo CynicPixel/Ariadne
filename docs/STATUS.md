@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-15 — 1.8 placeholder mission layer: valid egress routes; the merge is 85 s late (D45)
+
+- `ariadne_mission` over the 1.7 spool: OctoMap-model voxel occupancy (exact Amanatides–Woo rays), 2D standing-body
+  slab, Yamauchi nearest-frontier decisions (JSONL, replay / not executed), A* egress route at ρ_responder 0.40 m
+  and agent route at ρ_agent 0.20 m, GT-convention clearance. Evaluator `python/analysis/mission_eval.py`.
+- Dev, ci_tiny seed 0: frame anchor 5 mm / 0.07°; coverage 0.93, free precision 0.97, occupied precision 0.71.
+  First valid egress route: agent 0 alone 195 s (west, 11.26 m), **agent 1 alone 55 s** (north, 4.44 m), **merged
+  140 s** (north, 4.44 m = GT geodesic; agent 1 joins at 138 s). All routes valid on every cell vs GT. The merge's
+  value here is the joint map (coverage 0.93 vs 0.89 / 0.43); its single late loop costs 85 s (Phase 3 case).
+  Agent 1 placed through the loop: 3.0 cm / 0.47°. Occupied precision 0.71 = wall-plane convention (93 % of false
+  cells exactly 1 cell from GT structure). Deterministic; 257/257 C++ + 7 Python tests.
+- Viewer page now draws the egress route. Literature basis recorded in the design (OctoMap, Amanatides–Woo,
+  Yamauchi; FUEL/TARE/FAR as the Phase 4 path; the Domain 3 survey is still owed).
+- Next: clean-commit evidence, then 1.9 (evaluation harness v1).
+
 ## 2026-10-15 — 1.7 placeholder reconstruction: spool → fused cloud → gsplat init → Kaggle T4 render (D44)
 
 - **GPU:** every AWS GPU quota is 0 (EC2 G/VT in 5 regions, SageMaker); G/VT re-filed (cases 179205877700888 spot,
