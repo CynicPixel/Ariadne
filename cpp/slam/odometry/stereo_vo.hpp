@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <stdexcept>
 #include <vector>
 
 namespace ariadne::slam {
@@ -100,6 +101,13 @@ public:
 
     const PoseGraph& graph() const { return graph_; }
     size_t landmark_count() const { return landmarks_.size(); }
+    /// The landmarks observed at keyframe `kf` (§4.2 landmark_ids), ascending; throws for an unknown keyframe.
+    std::vector<uint64_t> KeyframeLandmarks(uint64_t kf) const {
+        if (kf >= keyframes_.size()) throw std::out_of_range("StereoVo::KeyframeLandmarks: unknown keyframe");
+        std::vector<uint64_t> ids;
+        for (const auto& [id, obs] : keyframes_[kf].obs) ids.push_back(id);
+        return ids;
+    }
 
 private:
     struct Landmark {

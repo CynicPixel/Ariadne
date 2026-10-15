@@ -1,0 +1,72 @@
+# Phase 1 exit gate (design PHASE1_GATE). Read by python/analysis/phase1_gate.py.
+#
+# determinism: the gate run is compared, file by file, with the committed per-item evidence, which was
+# produced by SEPARATE runs from DIFFERENT clean commits (1.6 2ed0a49 / 1.7 c9f17c1 / 1.8 60763bf / 1.9 4f0e187).
+# A file is "identical" byte for byte, or "identical except" the lines matching its named exclusions. Every
+# exclusion is listed here with its reason; nothing is excluded silently. A file the gate run has that the
+# reference lacks (e.g. ledger.csv, contracts.yaml, snapshots/, which postdate the evidence) is reported as
+# "new", not compared.
+name: phase1_gate_v1
+reference_root: evaluation/runs/phase1
+reference:
+  sim_collab: sim_collab/aadffb8df5790ca0-20261015T114028Z
+  sim_collab_faults: sim_collab/aadffb8df5790ca0-faults-20261015T083420Z
+  recon: recon/aadffb8df5790ca0-20261015T114028Z
+  mission: mission/aadffb8df5790ca0-20261015T173514Z
+  mission_agent0: mission/aadffb8df5790ca0-agent0only-20261015T173524Z
+  mission_agent1: mission/aadffb8df5790ca0-agent1only-20261015T173527Z
+  report: report/aadffb8df5790ca0-20261015T114028Z
+
+# Line exclusions are per file below: {re: Python regex matched at the line start, why: one of these reasons}.
+reasons:
+  run_identity: run id / timestamps / commit / image / paths of THIS run -- identity, not results
+  timing: wall-clock measurements, not deterministic by nature
+
+compare:
+  sim_collab:
+    - {file: candidates.csv}
+    - {file: negative_probe.csv}
+    - {file: results.yaml}
+    - {file: recon_eval.yaml, exclude: [{re: '^\s*spool: ', why: run_identity}]}
+  sim_collab_faults:
+    - {file: candidates.csv}
+    - {file: negative_probe.csv}
+    - {file: results.yaml}
+  recon:
+    - {file: spool.yaml, exclude: [{re: '^run_id: ', why: run_identity}]}
+    - {file: render_package.json, exclude: [{re: '^\s*"run_id": ', why: run_identity}]}
+    - {file: prepare.yaml, exclude: [{re: '^\s*run_id: ', why: run_identity},
+        {re: '^spool_sha256: ', why: run_identity}, # sha of spool.yaml, which embeds run_id (compared above)
+        {re: '^\s*command: ', why: run_identity}, {re: '^\s+(--|/work/)', why: run_identity}]}
+    - {file: score.yaml, exclude: [{re: '^\s*install_s: ', why: timing}, {re: '^remote_render_s: ', why: timing},
+        {re: '^\s*command: ', why: run_identity}, {re: '^\s+(--|/work/)', why: run_identity}]}
+  mission:
+    - {file: results.yaml, exclude: [{re: '^replan_ms_mean: ', why: timing}]}
+    - {file: trace.jsonl}
+    - {file: routes.jsonl}
+    - {file: slab.png}
+    - {file: support.png}
+    - {file: map_vs_gt.png}
+    - {file: eval.yaml, exclude: [{re: '^\s*git_commit: ', why: run_identity}, {re: '^\s*git_dirty: ', why: run_identity},
+        {re: '^\s*command: ', why: run_identity}, {re: '^\s+(--|/work/)', why: run_identity}]}
+  mission_agent0:
+    - {file: results.yaml, exclude: [{re: '^replan_ms_mean: ', why: timing}]}
+    - {file: trace.jsonl}
+    - {file: routes.jsonl}
+    - {file: eval.yaml, exclude: [{re: '^\s*git_commit: ', why: run_identity}, {re: '^\s*git_dirty: ', why: run_identity},
+        {re: '^\s*command: ', why: run_identity}, {re: '^\s+(--|/work/)', why: run_identity}]}
+  mission_agent1:
+    - {file: results.yaml, exclude: [{re: '^replan_ms_mean: ', why: timing}]}
+    - {file: trace.jsonl}
+    - {file: routes.jsonl}
+    - {file: eval.yaml, exclude: [{re: '^\s*git_commit: ', why: run_identity}, {re: '^\s*git_dirty: ', why: run_identity},
+        {re: '^\s*command: ', why: run_identity}, {re: '^\s+(--|/work/)', why: run_identity}]}
+  report:
+    - {file: report.yaml, exclude: [{re: '^\s*(collab_run|recon_run|mission_run): ', why: run_identity}]}   # inputs_clean IS compared
+    - {file: oracle.yaml}
+    - {file: registry.yaml}
+    - {file: report_check.txt}
+    - {file: figures/bytes.json}
+
+# Large outputs: sha256 in the gate's recon checksums vs the reference recon's checksums.sha256 (by file name).
+checksums: [fused_cloud_O0.ply, render_package.npz, renders.npz]

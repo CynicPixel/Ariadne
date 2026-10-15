@@ -97,6 +97,35 @@ struct LedgerLog {
     uint64_t seq = 0;
 };
 
+/// contracts.yaml (Phase 1 exit gate, design PHASE1_GATE): every §4/§18.2 record counted at each hop it
+/// crosses in this run. Counted, never asserted from the code's shape: a zero means the hop did not happen.
+struct ContractCounts {
+    uint64_t frames[2] = {0, 0};                 // §4.1 StereoFrame delivered to the VO (via on_frame)
+    uint64_t keyframes[2] = {0, 0};              // §4.2 Keyframe records received by the exchange
+    uint64_t keyframes_complete[2] = {0, 0};     // ... with every Phase-1 field filled (see Missing)
+    // Per field, how many records lack it. pose_cov is zero BY DEFINITION on the gauge keyframe (id 0: the
+    // absolute covariance is relative to it), so that one is counted separately, not as missing.
+    std::map<std::string, uint64_t> missing[2];
+    uint64_t gauge_zero_cov[2] = {0, 0};
+    uint64_t bundles[2] = {0, 0};                // §18.2 KeyframeBundle records built
+    uint64_t bundles_spooled[2] = {0, 0};        // ... written across the C++ -> Python boundary (after stride)
+    uint64_t edges_encoded = 0;                  // §4.3 LoopEdgeValue serialized (POSE_EDGE)
+    uint64_t edges_decoded_identical = 0;        // ... decoded by agent 1, every field equal to what was sent
+    bool merge_edge_received = false;            // the merge's edge is one agent 1 actually received
+};
+
+bool SameEdge(const core::LoopEdgeValue& a, const core::LoopEdgeValue& b) {
+    const auto pv = [](const core::PoseValue& x, const core::PoseValue& y) {
+        return x.qw == y.qw && x.qx == y.qx && x.qy == y.qy && x.qz == y.qz && x.tx == y.tx && x.ty == y.ty && x.tz == y.tz;
+    };
+    return a.agent_a == b.agent_a && a.keyframe_a == b.keyframe_a && a.agent_b == b.agent_b &&
+           a.keyframe_b == b.keyframe_b && pv(a.measurement, b.measurement) && a.information == b.information &&
+           a.frame_a.agent == b.frame_a.agent && a.frame_a.epoch == b.frame_a.epoch &&
+           a.frame_b.agent == b.frame_b.agent && a.frame_b.epoch == b.frame_b.epoch && a.status == b.status &&
+           a.inlier_count == b.inlier_count && a.retrieval_score == b.retrieval_score && a.pcm_score == b.pcm_score &&
+           a.gnc_weight == b.gnc_weight && a.degeneracy_flag == b.degeneracy_flag;
+}
+
 /// The simulated link: serialize, count, optionally misbehave, decode, inbox.
 class Link {
 public:
@@ -199,8 +228,9 @@ int main(int argc, char** argv) {
             spool = std::make_unique<reconstruction::KeyframeSpool>(fs::path(spool_dir) / run_dir.filename(), p);
         }
 
-        // --- both agents: VO in replay, keyframe features via the hook -----------
+        // --- both agents: VO in replay; the §4.2 / §18.2 records arrive through the hook ----
         AgentRun runs[2];
+        ContractCounts cc_count;
         const cv::Ptr<cv::ORB> orb = cv::ORB::create(cc.orb_features);
         for (uint32_t k = 0; k < 2; ++k) {
             runtime::SimSource src(rec, scene, int(k));
@@ -209,43 +239,66 @@ int main(int argc, char** argv) {
             a.out = (run_dir / "raw").string();
             a.tool = "ariadne_sim_collab/agent" + std::to_string(k);
             a.on_body_pose = [&, k](int64_t t, const core::SE3& T) { runs[k].est_body.push_back({t, T}); };
-            if (spool) {
-                a.on_frame = [&, k](const tools::FrameView& fv) {
-                    if (fv.is_keyframe || !spool->WantHeldout(fv.frame_id) || runs[k].kfs.empty()) return;
-                    const KeyframeFeatures& any = runs[k].kfs.front();   // intrinsics are fixed per rig
-                    const cv::Mat rgb = fv.left_rect_rgb();
-                    spool->AddHeldout(k, fv.frame_id, fv.t_ns, fv.T_O_C,
-                                      spool->Camera(any.camera[0], any.camera[1], any.camera[2], any.camera[3],
-                                                    rgb.cols, rgb.rows),
-                                      rgb);
-                };
-            }
+            a.on_frame = [&, k](const tools::FrameView& fv) {
+                ++cc_count.frames[k];
+                if (!spool || fv.is_keyframe || !spool->WantHeldout(fv.frame_id) || runs[k].kfs.empty()) return;
+                const KeyframeFeatures& any = runs[k].kfs.front();   // intrinsics are fixed per rig
+                const cv::Mat rgb = fv.left_rect_rgb();
+                spool->AddHeldout(k, fv.frame_id, fv.t_ns, fv.T_O_C,
+                                  spool->Camera(any.camera[0], any.camera[1], any.camera[2], any.camera[3],
+                                                rgb.cols, rgb.rows),
+                                  rgb);
+            };
             a.on_keyframe = [&, k](const tools::KeyframeView& kv) {
-                std::vector<cv::KeyPoint> kps;
-                cv::Mat desc;
-                orb->detectAndCompute(kv.left_rect, cv::noArray(), kps, desc);
+                const runtime::KeyframeBundle& b = kv.bundle;
+                if (kv.keyframe.agent != k || b.agent != k || b.kf_id != kv.keyframe.id) {
+                    throw std::logic_error("collab: keyframe records disagree on identity");
+                }
+                ++cc_count.keyframes[k];
+                ++cc_count.bundles[k];
+                // The 1.6 consumer completes the §4.2 record with what it extracts: ORB keypoints +
+                // descriptors and the mean-bit global descriptor; the wire features derive from it.
+                runtime::Keyframe kf = kv.keyframe;
+                orb->detectAndCompute(kv.left_rect, cv::noArray(), kf.keypoints, kf.descriptors);
+                const cv::Mat z = runtime::MaskedDepth32(b.depth, b.mask);
                 KeyframeFeatures f;
                 f.agent = k;
-                f.id = kv.frame_id;
-                f.t_ns = kv.t_ns;
-                f.T_O_C = kv.T_O_C;
-                f.camera = {float(kv.fx), float(kv.fy), float(kv.cx), float(kv.cy), float(kv.baseline_m)};
-                f.descriptors.assign(desc.data, desc.data + desc.total());
-                for (const auto& kp : kps) {
+                f.id = kf.frame_id;
+                f.t_ns = kf.t_ns;
+                f.T_O_C = kf.T_world_cam;
+                f.camera = {float(b.K.fx), float(b.K.fy), float(b.K.cx), float(b.K.cy), float(kv.baseline_m)};
+                f.descriptors.assign(kf.descriptors.data, kf.descriptors.data + kf.descriptors.total());
+                for (const auto& kp : kf.keypoints) {
                     f.keypoints.push_back(kp.pt.x);
                     f.keypoints.push_back(kp.pt.y);
                     const int x = cvRound(kp.pt.x), y = cvRound(kp.pt.y);
-                    const float z = kv.depth_z.at<float>(std::clamp(y, 0, kv.depth_z.rows - 1),
-                                                         std::clamp(x, 0, kv.depth_z.cols - 1));
-                    f.points3d.push_back(std::isfinite(z) ? float((kp.pt.x - kv.cx) / kv.fx * z) : NAN);
-                    f.points3d.push_back(std::isfinite(z) ? float((kp.pt.y - kv.cy) / kv.fy * z) : NAN);
-                    f.points3d.push_back(z);
+                    const float zz = z.at<float>(std::clamp(y, 0, z.rows - 1), std::clamp(x, 0, z.cols - 1));
+                    f.points3d.push_back(std::isfinite(zz) ? float((kp.pt.x - b.K.cx) / b.K.fx * zz) : NAN);
+                    f.points3d.push_back(std::isfinite(zz) ? float((kp.pt.y - b.K.cy) / b.K.fy * zz) : NAN);
+                    f.points3d.push_back(zz);
                 }
-                f.global = collaboration::MeanBitDescriptor(f.descriptors);
+                kf.global_descriptor = collaboration::MeanBitDescriptor(f.descriptors);
+                f.global = kf.global_descriptor;
+                {
+                    const bool gauge = kf.id == 0 && kf.pose_cov.isZero();
+                    cc_count.gauge_zero_cov[k] += gauge;
+                    const std::pair<const char*, bool> have[] = {
+                        {"pose_cov", gauge || !kf.pose_cov.isZero()}, {"depth", !kf.depth.Z.empty()},
+                        {"landmark_ids", !kf.landmark_ids.empty()}, {"keypoints", !kf.keypoints.empty()},
+                        {"descriptors", !kf.descriptors.empty()}, {"global_descriptor", !kf.global_descriptor.empty()}};
+                    bool all = true;
+                    for (const auto& [name, ok] : have) {
+                        cc_count.missing[k][name] += !ok;
+                        all = all && ok;
+                    }
+                    cc_count.keyframes_complete[k] += all;
+                }
                 if (spool) {
-                    spool->AddKeyframe(k, kv.frame_id, kv.t_ns, kv.graph_version, kv.T_O_C,
-                                       spool->Camera(kv.fx, kv.fy, kv.cx, kv.cy, kv.left_rect.cols, kv.left_rect.rows),
-                                       kv.baseline_m, kv.left_rect_rgb, kv.depth_z, kv.sigma_z);
+                    const size_t before = spool->size();
+                    spool->AddKeyframe(b.agent, kf.frame_id, kf.t_ns, b.frame_id_of_pose, b.T_WiC,
+                                       spool->Camera(b.K.fx, b.K.fy, b.K.cx, b.K.cy, b.rgb.cols, b.rgb.rows),
+                                       kv.baseline_m, b.rgb, z, runtime::MaskedDepth32(b.depth_sigma, b.mask));
+                    cc_count.bundles_spooled[k] += spool->size() - before;
                 }
                 runs[k].T_B_C = kv.T_B_C;
                 runs[k].kfs.push_back(std::move(f));
@@ -340,6 +393,7 @@ int main(int argc, char** argv) {
         };
         std::map<uint64_t, Outcome> outcomes;
         size_t edges_received = 0;
+        std::map<std::pair<uint64_t, uint64_t>, core::LoopEdgeValue> edges_out, edges_in;   // by (kf_a, kf_b)
         // Agent 1's receive side: every delivery is dispatched by payload; nothing is
         // silently dropped (a POSE_EDGE may arrive in the same flush as a request).
         auto agent1_receive = [&](const core::DecodedMessage& m) {
@@ -352,6 +406,7 @@ int main(int argc, char** argv) {
                                request_causal.at(size_t(m.match_request.request_id)));
             } else if (m.has_edge) {
                 ++edges_received;
+                edges_in.emplace(std::make_pair(m.edge.keyframe_a, m.edge.keyframe_b), m.edge);
             } else {
                 throw std::runtime_error("agent1: unexpected message class");
             }
@@ -384,6 +439,8 @@ int main(int argc, char** argv) {
                 e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
                 e.inlier_count = uint32_t(o.v.pnp_inliers);
                 e.retrieval_score = float(cm.score);
+                edges_out.emplace(std::make_pair(e.keyframe_a, e.keyframe_b), e);
+                ++cc_count.edges_encoded;
                 to_agent1.Send(codec.EncodeLoopEdge(e, 0, 1, core::Timestamp{o.b->t_ns},
                                                     seq0.Next(1, MessageClass::POSE_EDGE)),
                                request_causal.at(size_t(rank)));
@@ -444,6 +501,17 @@ int main(int argc, char** argv) {
             throw std::runtime_error("link: " + std::to_string(edges_sent) + " edges sent, " +
                                      std::to_string(edges_received) + " received");
         }
+        // §4.3 end to end: every edge agent 1 decoded is field-for-field the edge the broker encoded.
+        if (edges_in.size() != edges_out.size()) throw std::runtime_error("link: distinct edges sent != received");
+        for (const auto& [key, e] : edges_out) {
+            const auto it = edges_in.find(key);
+            if (it == edges_in.end() || !SameEdge(e, it->second)) {
+                throw std::runtime_error("link: POSE_EDGE " + std::to_string(key.first) + "<-" +
+                                         std::to_string(key.second) + " decoded differently from what was sent");
+            }
+            ++cc_count.edges_decoded_identical;
+        }
+        cc_count.merge_edge_received = merge_a && edges_in.count({merge_a->id, merge_b->id});
 
         // --- negative probe (evaluation only: no wire, no ledger, no edge, no merge) ---
         // Every exchanged pair was a real overlap, so the exchange alone never shows the
@@ -563,6 +631,46 @@ int main(int argc, char** argv) {
         }
         res << "  total_wire_bytes: " << ledger.Total() << "\n";
         res.close();
+
+        // contracts.yaml (Phase 1 exit gate): counted at each hop; the declared-unset fields are the ones the
+        // records' headers name (keyframe_records.hpp, stereo_source.hpp), never defaulted in this run.
+        {
+            int classes_used = 0;
+            for (MessageClass cls : {MessageClass::GLOBAL_DESCRIPTOR, MessageClass::MATCH_REQUEST,
+                                     MessageClass::MATCH_RESPONSE, MessageClass::POSE_EDGE}) {
+                classes_used += ledger.CountForClass(cls) > 0;
+            }
+            std::ofstream c(run_dir / "contracts.yaml");
+            c << "# §4 / §18.2 data contracts exercised by this run (design PHASE1_GATE). Generated; do not hand-edit.\n";
+            for (uint32_t k = 0; k < 2; ++k) {
+                c << "agent" << k << ":\n"
+                  << "  frame_4_1: {delivered: " << cc_count.frames[k] << "}\n"
+                  << "  keyframe_4_2: {records: " << cc_count.keyframes[k]
+                  << ", complete: " << cc_count.keyframes_complete[k]
+                  << ", gauge_zero_cov: " << cc_count.gauge_zero_cov[k] << ", missing: {";
+                bool first = true;
+                for (const auto& [name, n] : cc_count.missing[k]) {
+                    c << (first ? "" : ", ") << name << ": " << n;
+                    first = false;
+                }
+                c << "}}\n"
+                  << "  keyframe_bundle_18_2: {built: " << cc_count.bundles[k]
+                  << ", spooled: " << cc_count.bundles_spooled[k] << "}\n";
+            }
+            c << "loop_edge_4_3: {encoded: " << cc_count.edges_encoded
+              << ", decoded_identical: " << cc_count.edges_decoded_identical
+              << ", merge_edge_received: " << (cc_count.merge_edge_received ? "true" : "false") << "}\n"
+              << "byte_record_4_4: {ledger_rows: " << ledger_log.seq << ", classes_used: " << classes_used
+              << ", total_wire_bytes: " << ledger.Total() << "}\n"
+              << "unset_by_design:\n"
+              << "  frame_4_1: [imu_window, photo, illumination, gt]\n"
+              << "  keyframe_4_2: [velocity_world, bias_gyro, bias_accel, gravity_dir, preint_from_prev, local_cloud, "
+                 "motion_cost, energy_cost, timestamp_age, uncertainty]\n"
+              << "  keyframe_bundle_18_2: [exposure_state, lamp_state]\n"
+              << "  loop_edge_4_3: [pcm_score, gnc_weight, degeneracy_flag]   # carried at defaults until Phase 3\n"
+              << "  message_class_4_4: [HEARTBEAT, LOCAL_DESCRIPTOR, POSE_GRAPH, SUBMAP_SUMMARY, SUBMAP_PATCH, "
+                 "TASK_BID, TASK_CONSENSUS, HUMAN_REQUEST, ACK]   # no Phase 1 producer\n";
+        }
 
         runtime::RunManifest m;
         m.run_id = run_dir.filename().string();

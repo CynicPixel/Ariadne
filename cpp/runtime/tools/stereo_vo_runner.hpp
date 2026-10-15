@@ -18,6 +18,7 @@
 #include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
+#include "runtime/agent/keyframe_records.hpp"
 #include "runtime/datasets/stereo_source.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
@@ -81,20 +82,16 @@ inline core::Mat3 ToEigen3(const cv::Mat& m) {
 }  // namespace detail
 using namespace detail;
 
-/// What a keyframe hook sees (1.6 collaboration): the rectified left image, the
-/// SGBM depth with unsupported pixels set to NaN, the keyframe pose of the
-/// rectified left camera in this agent's odometry frame, and the rectified rig.
+/// What a keyframe hook sees (1.6 collaboration, 1.7 spool): the canonical records, built here, once, by the
+/// producer: the §4.2 Keyframe (pose of the rectified left camera in this agent's odometry frame, its absolute
+/// covariance, SGBM depth, observed landmarks) and the §18.2 KeyframeBundle exported at the graph's current
+/// version. Plus what only a feature extractor needs: the rectified gray image and the rectified rig.
 struct KeyframeView {
-    uint64_t frame_id = 0;
-    int64_t t_ns = 0;
-    cv::Mat left_rect;   // 8-bit gray
-    cv::Mat left_rect_rgb;   // 8-bit RGB through the same rectification; empty if the source has no colour
-    cv::Mat depth_z;     // CV_32F metres, NaN = unsupported
-    cv::Mat sigma_z;     // CV_32F metres, SGBM depth sigma, NaN where depth_z is NaN
-    uint64_t graph_version = 0;   // VO pose-graph version after this keyframe's insertion (the pose's version)
-    core::SE3 T_O_C;
-    core::SE3 T_B_C;     // body <- rectified left camera
-    double fx = 0, fy = 0, cx = 0, cy = 0, baseline_m = 0;
+    runtime::Keyframe keyframe;
+    runtime::KeyframeBundle bundle;
+    cv::Mat left_rect;       // 8-bit gray (the bundle carries the RGB)
+    core::SE3 T_B_C;         // body <- rectified left camera
+    double baseline_m = 0;
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -136,7 +133,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const OrbEngine orb(pcfg.features);
     KltTracker tracker(pcfg.tracker, orb);
     const SgbmStereo sgbm(pcfg.stereo, rr);
-    slam::StereoVo vo(scfg, rig, args.seed);
+    slam::StereoVo vo(scfg, rig, args.seed, source.Agent());
 
     const std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
     const int n_planned = args.frames > 0 ? std::min<int>(args.frames, static_cast<int>(source.FrameCount()))
@@ -154,6 +151,9 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     int i = 0;
     const int n = static_cast<int>(source.ForEachFrame(static_cast<size_t>(std::max(args.frames, 0)),
                                                        [&](const runtime::StereoFrame& frame) {
+        if (frame.agent != source.Agent() || frame.id != static_cast<uint64_t>(i)) {
+            throw std::logic_error("stereo source: frame identity out of sequence at " + std::to_string(i));
+        }
         cv::Mat l, r;
         rectifier.Rectify(frame.left, frame.right, l, r);
 
@@ -208,22 +208,25 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             }
             T_W_C = vo.graph().nodes().rbegin()->second.T_W_C;
             if (args.on_keyframe) {
+                const slam::PoseNode& node = vo.graph().nodes().at(kr.keyframe_id);
+                if (node.agent != frame.agent || node.T_W_C.t != T_W_C.t) {
+                    throw std::logic_error("keyframe hook: graph node does not match the keyframe just added");
+                }
                 KeyframeView kv;
-                kv.frame_id = vf.frame_id;
-                kv.t_ns = vf.t_ns;
+                runtime::Keyframe& kf = kv.keyframe;
+                kf.id = kr.keyframe_id;
+                kf.frame_id = frame.id;
+                kf.agent = frame.agent;
+                kf.t_ns = frame.t_ns;
+                kf.T_world_cam = node.T_W_C;
+                kf.pose_cov = node.covariance;
+                kf.depth = depth;
+                kf.landmark_ids = vo.KeyframeLandmarks(kr.keyframe_id);
+                cv::Mat rgb = l;
+                if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
+                kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
                 kv.left_rect = l;
-                kv.depth_z = z32.clone();
-                kv.depth_z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
-                kv.sigma_z = s32.clone();
-                kv.sigma_z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
-                kv.graph_version = vo.graph().version();
-                if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, kv.left_rect_rgb);
-                kv.T_O_C = T_W_C;
                 kv.T_B_C = T_B_Crect;
-                kv.fx = rr.fx;
-                kv.fy = rr.fy;
-                kv.cx = rr.cx;
-                kv.cy = rr.cy;
                 kv.baseline_m = rr.baseline_m;
                 args.on_keyframe(kv);
             }

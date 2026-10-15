@@ -43,7 +43,14 @@
 
 namespace ariadne::runtime {
 
+/// §4.1 Frame, the subset Phase 1 produces. Not modeled yet, and left absent rather than defaulted:
+///   imu_window    (§10; every Phase 1 run is imu_mode none)
+///   photo, illumination  (§6.5 exposure / lamp state, Phase 5)
+///   gt            ground truth never rides on the estimator's frame; sources expose it separately
+///                 (GroundTruth()) for scoring only.
 struct StereoFrame {
+    uint32_t agent = 0;    // the source's agent (EuRoC: 0)
+    uint64_t id = 0;       // 0-based index in this source's time-ordered stream
     int64_t t_ns = 0;
     cv::Mat left, right;   // raw 8-bit gray
     cv::Mat left_rgb;      // raw 8-bit RGB of the left camera (same pixels as `left`); empty if the source has none
@@ -60,6 +67,7 @@ public:
     virtual core::SE3 T_B_C0() const = 0;         // body <- raw left camera
     virtual std::vector<TimedPose> GroundTruth() const = 0;   // T_W_B, time-sorted
     virtual size_t FrameCount() const = 0;
+    virtual uint32_t Agent() const = 0;           // stamped on every StereoFrame
     /// Calls on_frame for the first max_frames pairs (all if 0), in time order.
     virtual size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) = 0;
 };
@@ -90,10 +98,13 @@ public:
     core::SE3 T_B_C0() const override { return cam0_.T_B_C; }
     std::vector<TimedPose> GroundTruth() const override { return gt_; }
     size_t FrameCount() const override { return pairs_.t_ns.size(); }
+    uint32_t Agent() const override { return 0; }
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         const size_t n = max_frames ? std::min(max_frames, FrameCount()) : FrameCount();
         for (size_t i = 0; i < n; ++i) {
             StereoFrame f;
+            f.agent = 0;
+            f.id = i;
             f.t_ns = pairs_.t_ns[i];
             f.left = cv::imread((mav_ / "cam0/data" / pairs_.left[i]).string(), cv::IMREAD_GRAYSCALE);
             f.right = cv::imread((mav_ / "cam1/data" / pairs_.right[i]).string(), cv::IMREAD_GRAYSCALE);
@@ -216,6 +227,7 @@ public:
     core::SE3 T_B_C0() const override { return T_B_left_; }
     std::vector<TimedPose> GroundTruth() const override { return gt_; }
     size_t FrameCount() const override { return frames_; }
+    uint32_t Agent() const override { return uint32_t(agent_); }
 
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         struct Stop {};
@@ -251,6 +263,8 @@ public:
                 last_emitted = t;
                 StereoFrame done = std::move(f);
                 pending.erase(t);
+                done.agent = uint32_t(agent_);
+                done.id = n;
                 on_frame(done);
                 if (++n == max_frames) throw Stop{};
             }, {t_left_, t_right_});

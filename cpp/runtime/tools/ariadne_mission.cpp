@@ -67,7 +67,9 @@ core::SE3 RowMajorPose(const YAML::Node& n) {
     return T;
 }
 
-struct Keyframe {
+/// One keyframe entry as read back from the 1.7 spool (the on-disk form of a §18.2 KeyframeBundle); NOT the
+/// §4.2 runtime::Keyframe.
+struct SpooledKeyframe {
     int agent;
     uint64_t kf_id;
     int64_t t_ns;
@@ -196,11 +198,11 @@ int main(int argc, char** argv) {
         if (sp["schema_version"].as<int>() != 1) throw std::runtime_error("spool: schema_version != 1");
         const bool merge_ok = sp["merge"]["ok"].as<bool>();
         const core::SE3 T_O0_O1 = RowMajorPose(sp["merge"]["T_O0_O1"]);
-        std::vector<Keyframe> kfs;
+        std::vector<SpooledKeyframe> kfs;
         std::map<std::pair<int, uint64_t>, int64_t> t_of;
         for (const auto& b : sp["bundles"]) {
             if (b["role"].as<std::string>() != "keyframe") continue;
-            Keyframe k;
+            SpooledKeyframe k;
             k.agent = b["agent"].as<int>();
             k.kf_id = b["kf_id"].as<uint64_t>();
             k.t_ns = b["t_ns"].as<int64_t>();
@@ -215,7 +217,7 @@ int main(int argc, char** argv) {
             t_of[{k.agent, k.kf_id}] = k.t_ns;
             kfs.push_back(k);
         }
-        std::sort(kfs.begin(), kfs.end(), [](const Keyframe& a, const Keyframe& b) {
+        std::sort(kfs.begin(), kfs.end(), [](const SpooledKeyframe& a, const SpooledKeyframe& b) {
             return std::tie(a.t_ns, a.agent, a.kf_id) < std::tie(b.t_ns, b.agent, b.kf_id);
         });
         // t_merge: the later of the two keyframes of the 1.6 merge edge ([ASSUMPTION]: found then).
@@ -242,13 +244,13 @@ int main(int argc, char** argv) {
         trace.precision(6);
         routes.precision(6);
         std::map<int, core::Vec3> agent_pos;   // latest integrated camera position per agent (world)
-        std::vector<Keyframe> held;            // agent 1 before the merge
+        std::vector<SpooledKeyframe> held;            // agent 1 before the merge
         size_t integrated[2] = {0, 0}, rays = 0;
         double first_valid_s = -1, first_agent_route_s = -1;
         int replans = 0;
         double replan_ms_total = 0;
 
-        auto Integrate = [&](const Keyframe& k) {
+        auto Integrate = [&](const SpooledKeyframe& k) {
             const core::SE3 T_W_C = T_W_Oa * (k.agent == anchor_agent ? k.T_O_C : T_O0_O1 * k.T_O_C);
             const cv::Mat Z = ReadHalf(k.stem.string() + "_depth.png", k.w, k.h);
             const cv::Mat S = ReadHalf(k.stem.string() + "_sigma.png", k.w, k.h);
