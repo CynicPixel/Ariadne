@@ -90,13 +90,26 @@ core::PoseValue ToPoseValue(const core::SE3& T) {
     return {float(q.w()), float(q.x()), float(q.y()), float(q.z()), float(T.t.x()), float(T.t.y()), float(T.t.z())};
 }
 
+/// ledger.csv (design CONSOLE_1.10): one row per message the ByteLedger counted, with the wire stamp
+/// (a keyframe time, NOT causal) and the causal send time the console replays on.
+struct LedgerLog {
+    std::ofstream csv;
+    uint64_t seq = 0;
+};
+
 /// The simulated link: serialize, count, optionally misbehave, decode, inbox.
 class Link {
 public:
-    Link(const core::WireCodec& codec, core::ByteLedger& ledger, bool faults)
-        : codec_(codec), ledger_(ledger), faults_(faults) {}
-    void Send(const core::SerializedMessage& m) {
-        { core::ByteRecord r = m.record; ledger_.Record(r); }
+    Link(const core::WireCodec& codec, core::ByteLedger& ledger, bool faults, LedgerLog& log)
+        : codec_(codec), ledger_(ledger), faults_(faults), log_(log) {}
+    void Send(const core::SerializedMessage& m, int64_t causal_ns) {
+        {
+            core::ByteRecord r = m.record;
+            ledger_.Record(r);
+            log_.csv << log_.seq++ << "," << wire::EnumNameMessageClass(r.type) << "," << r.sender << "," << r.receiver
+                     << "," << r.payload_bytes << "," << r.transmitted_bytes << "," << r.wire_bytes << ","
+                     << r.compressed << "," << r.t.ns << "," << causal_ns << "\n";
+        }
         q_.push_back(m.bytes);
         if (faults_ && ++sent_ % 5 == 0) q_.push_back(m.bytes);   // duplicate
     }
@@ -137,6 +150,7 @@ private:
     const core::WireCodec& codec_;
     core::ByteLedger& ledger_;
     bool faults_;
+    LedgerLog& log_;
     uint64_t sent_ = 0, flushed_ = 0;
     std::deque<std::vector<uint8_t>> q_, held_;
 };
@@ -245,7 +259,12 @@ int main(int argc, char** argv) {
         core::ByteLedger ledger;
         collaboration::Inbox broker_in, agent1_in;
         collaboration::SequenceCounter seq0, seq1;
-        Link to_broker(codec, ledger, faults), to_agent1(codec, ledger, faults);
+        LedgerLog ledger_log;
+        ledger_log.csv.open(run_dir / "ledger.csv");
+        ledger_log.csv << "seq,class,sender,receiver,payload_bytes,transmitted_bytes,wire_bytes,compressed,"
+                          "wire_stamp_ns,causal_ns\n";
+        Link to_broker(codec, ledger, faults, ledger_log), to_agent1(codec, ledger, faults, ledger_log);
+        std::vector<int64_t> request_causal;   // by rank: later of the two keyframes (the 1.8 t_merge rule)
         using core::MessageClass;
         std::map<uint64_t, const KeyframeFeatures*> kf1;
         for (const auto& f : runs[1].kfs) kf1[f.id] = &f;
@@ -253,7 +272,8 @@ int main(int argc, char** argv) {
         for (const auto& f : runs[1].kfs) {
             core::GlobalDescriptorValue g{f.id, f.t_ns, f.global, float(f.keypoints.size() / 2)};
             to_broker.Send(codec.EncodeGlobalDescriptor(g, 1, 0, core::Timestamp{f.t_ns},
-                                                        seq1.Next(0, MessageClass::GLOBAL_DESCRIPTOR)));
+                                                        seq1.Next(0, MessageClass::GLOBAL_DESCRIPTOR)),
+                           f.t_ns);
         }
         struct Candidate {
             double score;
@@ -328,7 +348,8 @@ int main(int argc, char** argv) {
                 core::FeatureResponseValue fr{m.match_request.request_id, f.id, f.keypoints, f.descriptors, f.points3d,
                                               f.camera};
                 to_broker.Send(codec.EncodeFeatureResponse(fr, 1, 0, core::Timestamp{f.t_ns},
-                                                           seq1.Next(0, MessageClass::MATCH_RESPONSE)));
+                                                           seq1.Next(0, MessageClass::MATCH_RESPONSE)),
+                               request_causal.at(size_t(m.match_request.request_id)));
             } else if (m.has_edge) {
                 ++edges_received;
             } else {
@@ -364,15 +385,18 @@ int main(int argc, char** argv) {
                 e.inlier_count = uint32_t(o.v.pnp_inliers);
                 e.retrieval_score = float(cm.score);
                 to_agent1.Send(codec.EncodeLoopEdge(e, 0, 1, core::Timestamp{o.b->t_ns},
-                                                    seq0.Next(1, MessageClass::POSE_EDGE)));
+                                                    seq0.Next(1, MessageClass::POSE_EDGE)),
+                               request_causal.at(size_t(rank)));
             }
             outcomes.emplace(rank, std::move(o));
         };
+        for (const Candidate& c : cands) request_causal.push_back(std::max(c.a->t_ns, kf1.at(c.b)->t_ns));
         for (size_t r = 0; r < cands.size(); ++r) {
             const Candidate& c = cands[r];
             core::MatchRequestValue req{r, c.a->id, c.b, 0};
             to_agent1.Send(codec.EncodeMatchRequest(req, 0, 1, core::Timestamp{c.a->t_ns},
-                                                    seq0.Next(1, MessageClass::MATCH_REQUEST)));
+                                                    seq0.Next(1, MessageClass::MATCH_REQUEST)),
+                           request_causal[r]);
             for (const auto& m : to_agent1.Flush(agent1_in)) agent1_receive(m);
             for (const auto& m : to_broker.Flush(broker_in)) broker_receive(m);
         }

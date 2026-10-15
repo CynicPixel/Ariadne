@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
         fs::create_directories(out);
         const fs::path run_dir = fs::path(out) / (scene_id + (agents == "merged" ? "-" : "-agent" + agents + "only-") +
                                                   UtcNow("%Y%m%dT%H%M%SZ"));
-        fs::create_directories(run_dir);
+        fs::create_directories(run_dir / "snapshots");
         std::ofstream trace(run_dir / "trace.jsonl"), routes(run_dir / "routes.jsonl");
         trace.precision(6);
         routes.precision(6);
@@ -282,6 +282,9 @@ int main(int argc, char** argv) {
             const cv::Mat trav_r = planning::Traversable(free, clr_egress, cfg.rho_r);
             const cv::Mat trav_a = planning::Traversable(free, clr_agent, cfg.rho_a);
             const cv::Mat support = grid.SlabSupport(z0, z1, slab);
+            // Console snapshot (design CONSOLE_1.10): the 2D tri-state map at this replan.
+            cv::imwrite((run_dir / "snapshots" / ("slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png")).string(),
+                        slab);
 
             auto Route = [&](const char* kind, const cv::Mat& trav, double rho) {
                 const planning::GridPath p = planning::AStar(trav, target, exits);

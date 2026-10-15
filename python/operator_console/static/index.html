@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ariadne Console</title>
+<style>
+  /* Layout: status strip on top; the top-down map left, byte gauges and the incident timeline right; stacks on phones. */
+  :root {
+    --bg: #eef0ec; --panel: #fbfbf9; --ink: #1c1f1d; --muted: #66706a; --rule: #d9ddd6;
+    --unknown: #3a3f3c; --free: #e9ece6; --occupied: #121413;
+    --agent0: #2a78d6; --agent1: #eb6834; --route: #c2410c; --route-agent: #0f766e; --exit: #2f855a; --target: #c53030;
+    --ok: #2f855a; --warn: #b7791f;
+    --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141716; --panel: #1c201e; --ink: #e7ebe8; --muted: #9aa49e; --rule: #2e3431;
+      --unknown: #262a28; --free: #c9cec8; --occupied: #050606; --agent0: #3987e5; --agent1: #d95926;
+      --route: #f08a4b; --route-agent: #2dd4bf; color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+  .strip { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; padding: 10px max(16px, env(safe-area-inset-left));
+    border-bottom: 1px solid var(--rule); background: var(--panel); position: sticky; top: 0; z-index: 2; }
+  .strip h1 { font-size: 1rem; margin: 0; letter-spacing: .02em; }
+  .strip .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .pill { font-family: var(--mono); font-size: .75rem; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .pill.ok { color: var(--ok); } .pill.wait { color: var(--muted); }
+  .note { color: var(--muted); font-size: .75rem; }
+  main { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: 16px;
+    padding: 16px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; min-width: 0; }
+  h2 { font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 4px; background: var(--unknown); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .75rem; color: var(--muted); margin-top: 8px; }
+  .sw { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  .gauge { display: grid; grid-template-columns: 8.5rem 1fr auto; gap: 8px; align-items: center; font-size: .8rem; margin: 6px 0; }
+  .gauge code { font-family: var(--mono); font-size: .72rem; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 8px; background: var(--rule); border-radius: 4px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--agent0); border-radius: 4px; width: 0; transition: width .2s; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  ol.timeline { list-style: none; padding: 0; margin: 0; max-height: 46vh; overflow-y: auto; font-size: .8rem; }
+  ol.timeline li { display: grid; grid-template-columns: 4.2rem 1fr; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--rule); }
+  ol.timeline li .t { font-family: var(--mono); color: var(--muted); }
+  ol.timeline li.decision { color: var(--muted); }
+  ol.timeline li.merge, ol.timeline li.route { font-weight: 600; }
+  .controls { display: flex; gap: 8px; align-items: center; }
+  select, button { font: inherit; font-size: .8rem; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--agent0); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="strip" role="status">
+  <h1>Ariadne console · stub</h1>
+  <span>mission time <span class="v" id="t">0.0</span> s</span>
+  <span id="merged" class="pill wait">agent 1 not merged</span>
+  <span id="route" class="pill wait">no valid egress route</span>
+  <span class="note" id="source">replay</span>
+  <span class="controls"><label for="speed" class="note">speed</label>
+    <select id="speed"><option value="5">5×</option><option value="10" selected>10×</option><option value="20">20×</option></select>
+    <button id="restart" type="button">Restart</button></span>
+</div>
+<main>
+  <section>
+    <h2>Top-down map</h2>
+    <canvas id="map" width="960" height="600" aria-label="Top-down occupancy map with agents and routes"></canvas>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--free)"></span>observed free</span>
+      <span><span class="sw" style="background:var(--occupied); outline:1px solid var(--rule)"></span>occupied</span>
+      <span><span class="sw" style="background:var(--unknown); outline:1px solid var(--rule)"></span>unknown</span>
+      <span><span class="sw" style="background:var(--agent0)"></span>agent 0</span>
+      <span><span class="sw" style="background:var(--agent1)"></span>agent 1</span>
+      <span><span class="sw" style="background:var(--route)"></span>egress route (0.40 m)</span>
+      <span><span class="sw" style="background:var(--route-agent)"></span>agent route (0.20 m)</span>
+    </div>
+  </section>
+  <div style="display:grid; gap:16px; align-content:start; min-width:0">
+    <section>
+      <h2>Bytes on the wire</h2>
+      <div id="gauges"></div>
+      <div class="gauge"><span>rate (last 1 s)</span><span></span><span class="num" id="rate">0 B/s</span></div>
+    </section>
+    <section>
+      <h2>Incident timeline</h2>
+      <ol class="timeline" id="timeline"></ol>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let meta, ws, slab = null, frameCache = null, trails = {0: [], 1: []}, maxBytes = {};
+const canvas = $("map"), ctx = canvas.getContext("2d");
+
+function w2c(x, y) {   // world metres -> canvas pixels (north up)
+  const g = meta.grid, s = canvas.width / g.cols;
+  return [(x - g.origin_m[0]) / g.cell_m * s, canvas.height - (y - g.origin_m[1]) / g.cell_m * s];
+}
+
+async function loadSlab(i) {
+  const img = new Image();
+  await new Promise((ok, bad) => { img.onload = ok; img.onerror = () => bad(new Error(`map ${i} failed to load`)); img.src = `/api/map/${i}.png`; });
+  const off = document.createElement("canvas");
+  off.width = img.width; off.height = img.height;
+  const o = off.getContext("2d", {willReadFrequently: true});
+  o.drawImage(img, 0, 0);
+  const d = o.getImageData(0, 0, img.width, img.height);
+  const col = [css("--unknown"), css("--free"), css("--occupied")].map((h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16)));
+  for (let p = 0; p < d.data.length; p += 4) {
+    const c = col[Math.min(d.data[p], 2)];
+    d.data[p] = c[0]; d.data[p + 1] = c[1]; d.data[p + 2] = c[2]; d.data[p + 3] = 255;
+  }
+  o.putImageData(d, 0, 0);
+  slab = off;
+}
+
+function draw(f) {
+  ctx.fillStyle = css("--unknown");
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (slab) {   // row 0 = south: flip vertically
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.translate(0, canvas.height); ctx.scale(1, -1);
+    ctx.drawImage(slab, 0, 0, canvas.width, canvas.height); ctx.restore();
+  }
+  const line = (pts, color, width) => {
+    if (!pts || pts.length < 2) return;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round"; ctx.beginPath();
+    pts.forEach(([x, y], i) => { const [u, v] = w2c(x, y); i ? ctx.lineTo(u, v) : ctx.moveTo(u, v); });
+    ctx.stroke();
+  };
+  line(f.route.agent, css("--route-agent"), 2);
+  line(f.route.egress, css("--route"), 5);
+  const dot = (x, y, r, color) => { const [u, v] = w2c(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.fill(); };
+  meta.exits_xy.forEach(([x, y]) => dot(x, y, 7, css("--exit")));
+  dot(meta.target_xy[0], meta.target_xy[1], 7, css("--target"));
+  for (const a of f.agents) {
+    if (a.x === null) continue;
+    const tr = trails[a.id];
+    if (!tr.length || Math.hypot(tr[tr.length - 1][0] - a.x, tr[tr.length - 1][1] - a.y) > 0.05) tr.push([a.x, a.y]);
+    const color = css(a.id ? "--agent1" : "--agent0");
+    line(tr, color, 1.5);
+    const [u, v] = w2c(a.x, a.y);
+    ctx.save(); ctx.translate(u, v); ctx.rotate(-a.yaw); ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+}
+
+function gauges(f) {
+  const box = $("gauges");
+  if (!box.childElementCount) {
+    for (const c of [...meta.classes, "total"]) {
+      box.insertAdjacentHTML("beforeend", `<div class="gauge"><code>${c}</code><span class="bar"><i id="b-${c}"></i></span><span class="num" id="n-${c}">0</span></div>`);
+    }
+  }
+  const top = Math.max(1, f.bytes.total);
+  for (const [c, v] of Object.entries(f.bytes)) {
+    $(`b-${c}`).style.width = `${(100 * v / top).toFixed(1)}%`;
+    $(`n-${c}`).textContent = `${(v / 1000).toLocaleString(undefined, {maximumFractionDigits: 1})} kB`;
+  }
+  $("rate").textContent = `${(f.rate_Bps / 1000).toFixed(1)} kB/s`;
+}
+
+function timeline(f) {
+  for (const e of f.events) {
+    $("timeline").insertAdjacentHTML("beforeend", `<li class="${e.kind}"><span class="t">${e.t_s.toFixed(1)} s</span><span>${e.text}</span></li>`);
+    $("timeline").lastElementChild.scrollIntoView({block: "nearest"});
+  }
+}
+
+async function onFrame(f) {
+  if (f.end) { $("source").textContent = "replay finished"; return; }
+  $("t").textContent = f.t_s.toFixed(1);
+  const merged = f.agents.find((a) => a.id === 1).merged;
+  $("merged").textContent = merged ? "agent 1 merged" : "agent 1 not merged"; $("merged").className = `pill ${merged ? "ok" : "wait"}`;
+  $("route").textContent = f.route.egress ? "valid egress route" : "no valid egress route"; $("route").className = `pill ${f.route.egress ? "ok" : "wait"}`;
+  if (f.map_version !== null && f.map_version !== frameCache) {
+    frameCache = f.map_version;
+    try { await loadSlab(f.map_version); } catch (e) { $("source").textContent = `map error: ${e.message}`; }
+  }
+  for (const step of [draw, gauges, timeline]) {
+    try { step(f); } catch (e) { $("source").textContent = `${step.name} error: ${e.message}`; }
+  }
+}
+
+async function start() {
+  if (ws) ws.close();
+  trails = {0: [], 1: []}; frameCache = null; slab = null; $("timeline").innerHTML = "";
+  meta = meta || await (await fetch("/api/meta")).json();
+  canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
+  $("source").textContent = `replay · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry?speed=${$("speed").value}`);
+  const queue = [];
+  let busy = false;
+  ws.onmessage = async (m) => { queue.push(JSON.parse(m.data)); if (busy) return; busy = true; while (queue.length) await onFrame(queue.shift()); busy = false; };
+}
+$("restart").addEventListener("click", start);
+$("speed").addEventListener("change", start);
+const at = new URLSearchParams(location.search).get("at");   // static view of one mission time (no WebSocket)
+if (at !== null) {
+  (async () => {
+    meta = await (await fetch("/api/meta")).json();
+    canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
+    $("source").textContent = `static view · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+    for (let t = 0; t <= Number(at); t += 2) {   // build the trails as the live view would
+      const f = await (await fetch(`/api/frame?t=${t}`)).json();
+      for (const a of f.agents) if (a.x !== null) trails[a.id].push([a.x, a.y]);
+    }
+    const f = await (await fetch(`/api/frame?t=${at}`)).json();
+    await onFrame(f);
+  })();
+} else {
+  start();
+}
+</script>
+</body>
+</html>
