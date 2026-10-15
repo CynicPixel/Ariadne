@@ -4,6 +4,23 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-15 — 1.6 placeholder collaboration: 20/20 exchanged edges correct; 1 false accept in the negative probe (D43)
+
+- `ariadne_sim_collab` (`core.sh sim-collab`): broker = agent 0; mean-bit ORB descriptors → cosine top-1 →
+  MATCH_REQUEST/RESPONSE → `findEssentialMat` gate + PnP SE(3) → POSE_EDGE, all through `WireCodec` +
+  `ByteLedger` + idempotent inbox. 248/248 core tests (4 protocol + 2 verifier tests new); EuRoC byte-identical.
+- Dev runs, ci_tiny seed 0: 20 candidates (cap), 20 verified, 20/20 within 5 cm / 1° of GT (max 3.3 cm / 0.57°),
+  17 in the 30° opportunity cone; merged two-agent ATE 9.8 mm; 1.27 MB total, MATCH_RESPONSE 76 %.
+  Fault injection (duplicates + held-back reorders, exercised on both links): outputs identical.
+- Negative probe (20 hardest non-opportunity pairs, outside the exchange): 14 rejected (all 12 different-place
+  pairs among them), 5 correct overlaps, **1 false accept** (near pair, 1.10 m / 51.6° error; likely a planar
+  ChArUco view, `[UNVERIFIED]`, diagnosed by new non-gating columns). Not gated in 1.6: Phase 3 degeneracy gate.
+- Found and fixed before any evidence run: 19 of 20 POSE_EDGEs were delivered and silently dropped by a receive loop
+  that only looked for match requests; now every delivery is dispatched or fails the run.
+- Open (D43): retrieval threshold inert (top-1 cosine 0.88–1.0), proxy information ≈ 5σ overconfident, candidate
+  clustering (agent 1 parks ~70 % of its run, ~57.5 s to 199 s — explains its constant VO track count).
+- Next: clean-commit evidence into `evaluation/runs/phase1/sim_collab/`, then 1.7.
+
 ## 2026-10-15 — 1.4/1.5 run from the sim recording (D42)
 
 - `StereoSource` (EuRoC, sim + read-time lens) and a shared `stereo_vo_runner.hpp`; EuRoC MH_01 reproduces

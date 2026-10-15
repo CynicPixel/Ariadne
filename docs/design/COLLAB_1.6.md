@@ -44,6 +44,18 @@ duplicates acknowledged and dropped — the Phase 1 exit's protocol test injects
   ((T_W_BA T_B_C)^-1 (T_W_BB T_B_C)).
 - Merged two-agent ATE in one frame (one alignment for both agents).
 - Bytes and message counts per class from the `ByteLedger` (the §15.7 table's first real numbers).
+- Edge correctness separately from the cone: an edge is correct within `edge_correct_t_m` / `_r_deg` of GT
+  (the cone labels retrieval opportunities, it does not judge an edge).
+- Retrieval over all queries (before threshold and cap): queries with any GT opportunity, top-1 true count, top-1
+  score min/median/max.
+
+## Fault injection (`--inject-faults 1`)
+
+Duplicate every 5th send; hold every 3rd delivery back so it arrives after the next flush's newer messages (a
+same-class sequence gap the inbox must buffer); drain at the end. Outputs are built from a rank-keyed outcome map
+after the exchange (merge = best-ranked verified edge, CSV by rank), so they cannot depend on arrival order. The
+run fails unless both inboxes saw duplicates and buffered reorders; acceptance is `candidates.csv` byte-identical
+and `results.yaml` identical except `inject_faults` / `protocol`. Results: D43.
 
 ## Code layout
 

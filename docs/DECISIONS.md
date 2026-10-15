@@ -1244,3 +1244,67 @@ coefficients) and any stereo pair that completes out of order (a missing frame).
 §9.4 stereo guard refused the EuRoC disparity range on this rig (Z_min 0.71 m at rectified f 671.5, B 0.1);
 240 disparities give Z_min 0.281 m, meeting the 0.30 m mission requirement (the sim is the mission geometry,
 unlike a dataset), at the cost of 19 % blinded columns and ~0.28 s SGBM per keyframe at 720p.
+
+
+## 2026-10-15 — D43: 1.6 placeholder collaboration — one broker, verified SE(3) edges, bytes from day one
+
+**What.** `ariadne_sim_collab` (design `docs/design/COLLAB_1.6.md`) runs both agents' 1.4/1.5 VO in replay from one
+sim recording and then the two-stage exchange of arch §15.1 with placeholder internals: agent 1 sends a
+GLOBAL_DESCRIPTOR per keyframe (256-D mean-bit ORB, `collaboration/retrieval/mean_bit_descriptor.hpp`) to the broker
+(agent 0, lowest AgentId); the broker takes cosine top-1 per query, keeps up to `max_candidates`, sends
+MATCH_REQUEST; agent 1 answers MATCH_RESPONSE (ORB keypoints + descriptors + stereo 3D points + camera); the broker
+verifies (`collaboration/broker/edge_verifier.hpp`: ratio test → `findEssentialMat` RANSAC gate → `solvePnPRansac`
+for the metric SE(3) edge, RANSAC seeded by rank) and sends POSE_EDGE (`LoopEdge` table, status GEOMETRY_VERIFIED).
+Merge: T_O0_O1 from the best-ranked verified edge; both trajectories scored in one frame. Every message goes through
+`WireCodec` (three new `wire.fbs` tables appended to `Envelope`, decode validates array lengths) and `ByteLedger`,
+and through the idempotent `collaboration/protocol/inbox.hpp` (per-(sender, class) sequence, out-of-order buffer,
+duplicates dropped). The VO runner gained `on_keyframe` / `on_body_pose` hooks (called only when set).
+
+**Choices.** The essential matrix is the plan's geometric gate but has no scale, so the edge is PnP of agent 1's
+stereo 3D points against agent 0's pixels (SE(3), locked decision; never Sim3). Edge information is a `[PROXY]`
+diagonal (σt 2 cm, σr 0.01 rad at 30 PnP inliers, ∝ 1/√inliers). Outputs are built from a rank-keyed outcome map
+after the exchange, so they cannot depend on arrival order; any unexpected message class, lost edge, undrained link
+or leftover inbox message fails the run. GT is evaluation-only (opportunity labels, edge error), never fed back.
+
+**Fault injection** (`--inject-faults 1`): duplicate every 5th send, hold every 3rd delivery back past the next
+flush's messages, drain at the end; the run fails unless both inboxes saw duplicates AND buffered reorders. The
+first version (adjacent swaps) mostly swapped messages of different classes, which the per-class inbox never had
+to reorder; replaced before any result was taken.
+
+**Measured (dev runs, ci_tiny seed 0, `collab_v1`).** 327 + 250 keyframes. 20 candidates (the cap), 20 verified,
+**20/20 edges within 5 cm / 1° of GT** (max 3.3 cm / 0.57°); 17 inside the 30° opportunity cone, the other 3 are
+correct edges at 33–48° view angle (the cone is worldgen's guarantee, not a correctness test; gates were NOT
+tightened to exclude them). Merged two-agent ATE 9.8 mm (one alignment, 7962 poses). Bytes (§15.7 first numbers):
+GLOBAL_DESCRIPTOR 250 × 1170 B = 292 KB; MATCH_REQUEST 20 × 137 B; MATCH_RESPONSE 20 × 48.6 KB = 971 KB (76 % of
+1.27 MB); POSE_EDGE 20 × 207 B. Core suite 248/248 (4 protocol + 2 verifier-diagnostic tests new); EuRoC MH_01
+estimate reproduces byte-identically (22d3a40d…). Fault run: broker 54 duplicates / 4 buffered, agent 1 8 / 8, `candidates.csv`
+byte-identical and `results.yaml` identical except `inject_faults`/`protocol`; both runs' VO trajectories
+byte-identical to the committed `sim_vo` evidence (the hooks do not perturb VO).
+
+**What the numbers do not show (open items).**
+1. Retrieval is weak and the threshold is inert: over all 250 queries the top-1 cosine spans 0.884–0.996
+   (median 0.893), so `retrieval_threshold: 0.5` passes everything and the cap selects (effectively top-20 by
+   score). 71 queries have a GT opportunity; top-1 is a true opportunity for 51 (72 %). EigenPlaces + λ₂
+   prioritization replace this in Phase 3; the threshold is not re-tuned to look meaningful.
+2. The proxy information is overconfident: rank 4 (333 inliers, σt ≈ 0.6 cm) is off by 3.3 cm ≈ 5σ, rotation
+   ≈ 3σ. Harmless for the 1.6 merge; PCM/GNC (Phase 3) need a real edge covariance.
+3. Candidates cluster: agent 1 parks for ~70 % of its run (GT, 200 Hz: stationary at (9.0, 7.9) from ~57.5 s to
+   the end at 199 s; camera 20 Hz, hence its constant 159 VO tracks), so many of its keyframes view one place.
+   Vertex-cover / dedup is Phase 3.
+4. MATCH_RESPONSE dominates bytes; 1000 ORB features with float32 3D points per request. Budgeting is Phase 3.
+5. `edge_correct_t_m`/`_r_deg` (5 cm / 1°) were set after the first run, to separate correctness from the cone.
+6. **The verifier accepts a wrong edge** (negative probe, below). Not gated in 1.6: the exchanged edges are all
+   correct, the degeneracy gate → PCM → GNC is the locked Phase 3 design, and any threshold picked now would be
+   fit to one negative (`min_essential_inlier_ratio` 0.57–0.67 would reject it and keep all 25 correct edges;
+   `collab_v1` is NOT changed). This exact pair becomes a Phase 3 regression case.
+
+**Negative probe** (evaluation only; no wire, bytes, edges or merge): the verifier is fed the 20 highest-scoring
+top-1 pairs that are NOT opportunities (`negative_probe.csv`); a false accept is a verified edge that is not correct
+vs GT. Dev run: **14 rejected** — including all 12 pairs at different places (4.9–7.7 m apart; 7 at the essential
+gate, 5 for too few matches) plus 2 near pairs (too few matches / 3D points) — **5 accepted, all correct** (out-of-cone overlaps), **1 false
+accept**: agent 0 frame 3372 vs agent 1 frame 382, 0.48 m apart at 54.5° view angle, 289 matches / 162 essential /
+129 PnP inliers, edge error 1.10 m / 51.6°. So the gate rejects appearance-only matches between different places
+and fails on a near pair. A yaw-only bearing check suggests both cameras face ChArUco board 1 (room (1,0), wall S)
+from ~1.3–1.4 m, i.e. a planar target where PnP has a flip ambiguity — `[UNVERIFIED]`: the diagnostics
+`h_over_e` (homography / essential inliers on the same matches) and `planarity` (λmin/λmax of the PnP inliers'
+3D covariance), recorded for every verified pair from the evidence run on, test it.
