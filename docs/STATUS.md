@@ -17,7 +17,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   cells exactly 1 cell from GT structure). Deterministic; 257/257 C++ + 7 Python tests.
 - Viewer page now draws the egress route. Literature basis recorded in the design (OctoMap, Amanatides–Woo,
   Yamauchi; FUEL/TARE/FAR as the Phase 4 path; the Domain 3 survey is still owed).
-- Next: clean-commit evidence, then 1.9 (evaluation harness v1).
+- **Evidence, clean commit 60763bf** (`evaluation/runs/phase1/mission/`, three runs + `eval.yaml` + `map_vs_gt.png`):
+  byte-identical to the dev runs; the manifest's spool sha256 matches the 1.7 evidence checksum.
+- Next: 1.9 (evaluation harness v1).
 
 ## 2026-10-15 — 1.7 placeholder reconstruction: spool → fused cloud → gsplat init → Kaggle T4 render (D44)
 
