@@ -18,6 +18,9 @@
 #   infra/scripts/core.sh sim-calib REC SCENE  the 1.1 acceptance test (design §6)
 #                                      over a sim recording; results + manifest into
 #                                      evaluation/runs/phase1/sim_calib/; exit 1 on FAIL
+#   infra/scripts/core.sh sim-vo REC SCENE [AGENT]  the same 1.4+1.5 pipeline over one
+#                                      agent of a sim recording (configs sim_v1), into
+#                                      evaluation/runs/phase1/sim_vo/
 #   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
 #                                      sequence, scored against ground truth,
 #                                      into evaluation/runs/phase1/euroc_vo/
@@ -134,6 +137,17 @@ cmd_sim_calib() {
        --out /work/evaluation/runs/phase1/sim_calib"
 }
 
+cmd_sim_vo() {
+  local rec="${1:?recording dir}" scene="${2:?scene dir}" agent="${3:-0}" commit dirty
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  dirty="$(git_dirty)"
+  cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_sim_vo --parallel $JOBS >/dev/null \
+    && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty \
+       /work/build/docker/cpp/runtime/ariadne_sim_vo --rec /work/$rec --scene /work/$scene --agent $agent \
+       --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v1.yaml \
+       --out /work/evaluation/runs/phase1/sim_vo"
+}
+
 case "${1:-}" in
   image) shift; cmd_image "$@" ;;
   gate)  shift; cmd_gate "$@" ;;
@@ -141,5 +155,6 @@ case "${1:-}" in
   euroc) shift; cmd_euroc "$@" ;;
   euroc-vo) shift; cmd_euroc_vo "$@" ;;
   sim-calib) shift; cmd_sim_calib "$@" ;;
-  *) sed -n '2,27p' "$0"; exit 2 ;;
+  sim-vo) shift; cmd_sim_vo "$@" ;;
+  *) sed -n '2,30p' "$0"; exit 2 ;;
 esac
