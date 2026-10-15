@@ -1,0 +1,18 @@
+stage: score
+git_commit: c9f17c11bf406d65c47d68d8b7dd59ac6f01c69d
+git_dirty: 'false'
+image_id: sha256:ac7d351bf93b04ccb6956f6355017af8e072ea784edb907fb243ba6f6fbe883d
+splat_backend: gsplat_cuda@kaggle
+remote_env:
+  python: 3.13.15
+  torch: 2.11.0+cu128
+  cuda: '12.8'
+  cuda_available: true
+  gpu: Tesla T4
+  gsplat_install: pypi source (JIT CUDA build)
+  gsplat: 1.4.0
+  install_s: 10.4
+package_sha256: 9ec2f67287fbea37754b0ccfb2827ac090d11c39e11aef06731ef2a99b6452ef
+renders_sha256: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+command: /work/python/reconstruction/ariadne_recon/cli.py score --out /work/build/recon_ev
+  --remote /work/build/kaggle_render_ev

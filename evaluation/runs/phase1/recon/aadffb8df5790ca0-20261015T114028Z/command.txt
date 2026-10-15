@@ -1,0 +1,8 @@
+# 1.7 evidence chain (clean commit c9f17c1), run in this order:
+R=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
+infra/scripts/core.sh sim-collab $R/rec $R/scene 0 1          # spool -> build/spool/aadffb8df5790ca0-20261015T114028Z, eval record -> evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z
+infra/scripts/recon.sh prepare build/spool/aadffb8df5790ca0-20261015T114028Z $R/scene evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/recon_eval.yaml build/recon_ev
+infra/scripts/kaggle.sh render build/recon_ev/package build/kaggle_render_ev
+infra/scripts/recon.sh score build/recon_ev build/kaggle_render_ev
+# Large outputs stay in build/ (spool 215 MB, renders 91 MB, package 15 MB, cloud 4.3 MB); their sha256 are in checksums.sha256.
+# Reproduced the dev run byte-for-byte: fused cloud, render package, GPU renders and every score.
