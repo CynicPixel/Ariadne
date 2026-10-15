@@ -1424,3 +1424,34 @@ validity 1.0. Harness output byte-identical across reruns (except the analysis i
 
 **Open.** Single run chain, single seed: no intervals, no cross-run calibration plot, no §31 matrix yet; outputs YAML
 not parquet. `time_to_first_usable_map_s` is defined as the first agent-ρ route `[ASSUMPTION]`.
+
+
+## 2026-10-16 — D47: 1.10 operator console stub — replayed telemetry over WebSocket, causal message times
+
+**What.** `python/operator_console/` (FastAPI + a Canvas 2D page, pinned `infra/docker/console.Dockerfile`,
+`infra/scripts/console.sh check|serve`): a committed run chain replayed as telemetry frames at 5 Hz over
+`/ws/telemetry` (agents from ESTIMATED poses through the mission's world anchor, agent 1 only once merged; cumulative
+wire bytes per class + rate; the latest map snapshot and routes; incident events), REST `/api/meta`, `/api/map/<i>.png`,
+`/api/frame?t=` (a static frame with all events so far: screenshots and thumbnails). Design `CONSOLE_1.10.md`.
+
+**Producers gained time-resolved outputs, with identity proven.** `ariadne_sim_collab` writes `ledger.csv` (one row per
+message the ByteLedger counted) and `ariadne_mission` writes a map snapshot per replan. A full dev rerun of the 1.6/1.7
+chain is byte-identical to the committed evidence (candidates, probe, results, both VO estimates, and the render
+package npz `9ec2f672…`, so the 1.7 Kaggle render stays valid); the mission rerun is identical to the 1.8 evidence.
+
+**Causal message time (a correction, not a choice).** Wire stamps are keyframe times and are not causal: a match
+request carries agent 0's keyframe (~138 s), its response and edge agent 1's (~20 s), so a stamp-keyed console would
+show edges before the requests that triggered them. The ledger therefore also records a causal send time —
+descriptor = its keyframe; request = the later of the two keyframes; response = request; edge = response — the rule
+1.8 uses for t_merge. Wire stamps are unchanged, so encoded bytes and the 1.6 evidence are identical.
+`[ASSUMPTION]` zero processing and link latency.
+
+**Checks (`console.sh check`, PASS on the dev chain).** Ledger totals = results.yaml (310 messages, 1,270,717 B, per
+class bytes and counts); the console's merge event = the mission's t_merge_s (137.95 s) and its first-valid-route event
+= 140 s (one time base); no edge before its request, the first edge not after the merge; frames byte-identical across
+builds. Visual check by headless screenshot at 150 s: map, both agents, egress route, gauges, timeline. Frontier
+decisions appear only when the choice changes, labelled "logged decision · replay · not executed" (invariant 3).
+
+**Not in 1.10.** 3D splat view in the console (the separate 1.7 viewer page exists), approvals (§23), raw vs restored
+feeds, live hosting (Phase 8), budget gauges against a policy budget (Phase 3). A claude.ai artifact cannot reach a
+localhost WebSocket, so the console is served locally (`127.0.0.1`, ssh tunnel from elsewhere).

@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-16 — 1.10 operator console stub: replayed telemetry, top-down map, byte gauges, incident timeline (D47)
+
+- `infra/scripts/console.sh serve CHAIN` → http://127.0.0.1:8080: WebSocket telemetry at 5 Hz from a committed run chain
+  (estimated agents, merge, map snapshots, egress/agent routes, cumulative bytes + rate, incident timeline);
+  `?at=<s>` gives a static frame. `console.sh check`: ledger = results.yaml, merge event = t_merge (137.95 s), first
+  route = 140 s, causal order, deterministic frames — PASS.
+- New producer outputs (`ledger.csv` with causal send times; per-replan map snapshots) leave every committed 1.6–1.8
+  output byte-identical, including the render package (the 1.7 Kaggle render stays valid).
+- Next: the Phase 1 exit gate (one clean replay chain end to end + protocol tests).
+
 ## 2026-10-15 — 1.9 evaluation harness v1: all 27 §30.2 metrics, gate PASS, evo agrees (D46)
 
 - `infra/scripts/report.sh` over a run chain → `report.yaml` (27 metrics + definitions), `oracle.yaml`, `inputs.yaml`
