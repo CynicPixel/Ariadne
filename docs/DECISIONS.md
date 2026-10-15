@@ -1224,3 +1224,23 @@ exercised with exactly known coefficients. (B) pinhole only in sim; EuRoC (real 
   independent §6 test is ci_tiny seed 1 (other rooms, other board pose) — PASSED with margin on every check
   (SMOKE §4n). Thresholds `s6_v1` stand.
 
+
+## 2026-10-15 — D42: 1.4/1.5 run from a sim recording through one StereoSource interface
+
+**What.** `cpp/runtime/datasets/stereo_source.hpp` defines `StereoSource` (raw calibration, T_B_C0, GT body poses,
+time-ordered RAW gray stereo pairs) with two implementations: `EurocSource` and `SimSource`. The 1.4 + 1.5 loop and
+its scoring moved verbatim from `ariadne_euroc_vo.cpp` into `cpp/runtime/tools/stereo_vo_runner.hpp`
+(`RunStereoVo`); `ariadne_euroc_vo` and the new `ariadne_sim_vo` only bind a source. **Regression:** the EuRoC
+MH_01 trajectory reproduces byte-identically (estimate sha256 22d3a40d…; results.yaml identical except timing).
+
+**SimSource** reads one agent of a two-bag recording ROS-free: frames from `sensors/` through the read-time lens
+(D41) then RGB→gray; calibration from `rig.lens` (both cameras) and `T_right_left` from the canonical
+`/tf_static`; GT from the canonical pose at each image stamp (images sit on the 5 ms grid, so association is
+exact). It never reads camera_info. It refuses a pre-D41 mission, k3 != 0 (PinholeRadtan carries four
+coefficients) and any stereo pair that completes out of order (a missing frame). Not yet: the sensor stages of
+`Degrade()` after the lens (Phase 5; needs GT depth and a named config); manifests say degradation "none".
+
+**Configs `sim_v1`** (perception, slam): euroc.yaml with only resolution/geometry-dependent values changed. The
+§9.4 stereo guard refused the EuRoC disparity range on this rig (Z_min 0.71 m at rectified f 671.5, B 0.1);
+240 disparities give Z_min 0.281 m, meeting the 0.30 m mission requirement (the sim is the mission geometry,
+unlike a dataset), at the cost of 19 % blinded columns and ~0.28 s SGBM per keyframe at 720p.
