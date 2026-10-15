@@ -1,0 +1,7 @@
+# 1.9 evidence (clean commit 4f0e187) over the committed Phase 1 evidence chain:
+E=evaluation/runs/phase1
+infra/scripts/report.sh $E/sim_collab/aadffb8df5790ca0-20261015T114028Z $E/recon/aadffb8df5790ca0-20261015T114028Z \
+  $E/mission/aadffb8df5790ca0-20261015T173514Z $E/sim_record/ci_tiny_0-20261001T133914Z/raw/scene \
+  $E/report/aadffb8df5790ca0-20261015T114028Z \
+  $E/mission/aadffb8df5790ca0-agent0only-20261015T173524Z $E/mission/aadffb8df5790ca0-agent1only-20261015T173527Z
+# exit 0: gates, oracles and the §30.2 check passed. Outputs identical to the dev run (report, oracle, figures).

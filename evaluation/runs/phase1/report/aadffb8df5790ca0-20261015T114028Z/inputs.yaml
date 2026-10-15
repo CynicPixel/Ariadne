@@ -1,0 +1,49 @@
+files:
+  evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/manifest.yaml: efa664fde747a4f52bac51ba6692dcde857b89fe7b984595ba263bcc6ad39c85
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/manifest_prepare.yaml: da47b29576514cf7d3ca563c7f445c999c7b59f121089c42a74d4c68487c65b7
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/manifest_score.yaml: a0c1e3be25bd4763c7e0230560ba17ea7616633afea2c6e9e8960a0f5805d0b5
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/manifest.yaml: f9582dabc8c62aeaf7a14178e23a2194c26fa8568a41724cb7776d2dbd0b9ccf
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/manifest.yaml: 386d7fa62d104b369516269a65cae02ee1b31ed162a8d12c219c8ff012b5f151
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/manifest.yaml: b7da99ebe8290b16e30a00653677cfe04014823342008ef7a85a40a0c967d184
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/results.yaml: b0556858b1f67682842f16987e2240d07821d6da80896dea8bbd005b024e6234
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/spool.yaml: 92f437ae08cd471de5c468ba561f804e1dba1ec107a53c4d121f96fe218b263e
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent0-20261015T114705Z/estimate_body.tum
+  : 3a09dfefd7ad9fab4deee1177cd67445614a460efbadd36ad6720382bbcac130
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent0-20261015T114705Z/raw/groundtruth_body.tum
+  : fa3017a9fcd277f3e93eb42c6d691a620d602c5d976c201ab90216a58631ed8a
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent0-20261015T114705Z/results.yaml
+  : cdb496a1ec44837141f66192f7516524976f0fe569eeddaa15983f52bd1f4ed4
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent1-20261015T115312Z/estimate_body.tum
+  : ac71b623b0d36a4cb67cb3bde656a3b977c9d58b60edb5a1382a8b09e3fc898e
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent1-20261015T115312Z/raw/groundtruth_body.tum
+  : 448f083fdb4f1ad487b85043435f0567b122e55c943e4f2fd570860d1377d60b
+  ? evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/raw/aadffb8df5790ca0-agent1-20261015T115312Z/results.yaml
+  : fa5a692133d1d468e087e59ac7ab4f216713420fe6533aa95117a79deb0dc6f7
+  evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/results.yaml: e7e86a4d9fea1828c69fa51cfdeaeb3ea87666edba07220d3a33ae039f113bc0
+  evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/candidates.csv: ff6122dbaddfb101a0a51a5348f6c8a285876338412b5802892cede3b5b4c945
+  evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/negative_probe.csv: ccf9124e5ef5d84d415576ec1e9dcf686c2d130209939482be249665962f7db6
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/prepare.yaml: 8c773a1a4fcc70ea2c27b235daec88966c7cd8dd5f0427e0f0ec86deb50eda77
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/score.yaml: d38cb84f78d69768b61cffae5f104905c015fe21a6ccff260772e75c7bdac5af
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/eval.yaml: 6d1dda2db73559426dad783837a0c7392c9c9af5fb557fd5b8201fad503f0282
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/slab.png: 9268472d139955e00c2ee0029fd6222c612a95a4c78ebab095621fce05a7dcae
+  evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene/scene.json: 1adde514a1e35e158c25080cfb449e906879fc6fcd32c0fb3e5066d83d1565a7
+  evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene/scene_gt.npz: e8fe384ada9f3c756f2e2a3c65f4675db3ad32a87c13ab4d2418e136660806aa
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/routes.jsonl: 0b1bc8ed008a954546c4ec3bae96ad997c1a3b6eb4f96f90c616fbc826a5cfd3
+  evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/registry.in.yaml: 0bdc47a0cc23e73dd3634b1148ecece9a5a5fd02ac922a822be55377272ae6d3
+input_manifests_git_dirty:
+  evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/manifest.yaml: 'false'
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/manifest_prepare.yaml: 'false'
+  evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/manifest_score.yaml: 'false'
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/manifest.yaml: 'false'
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/manifest.yaml: 'false'
+  evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/manifest.yaml: 'false'
+harness:
+  git_commit: 4f0e187ccd99563a62fe53781f72fd985039b303
+  git_dirty: 'false'
+  image_id: sha256:f18905a9686ea36028a07e2b04e5e760af422c1d664a07eb7d2fccf9909f289e
+  command: /work/python/analysis/report.py compute --collab-run evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z
+    --recon-run evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z --mission-run
+    evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z --scene evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+    --registry evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/registry.in.yaml
+    --out evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z --mission-compare
+    evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z
