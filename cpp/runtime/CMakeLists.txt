@@ -48,6 +48,11 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_sim_collab RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # 1.9 the §30.2 report gate (design HARNESS_1.9): registry dump + MissingMetrics/UnknownMetrics.
+  add_executable(ariadne_report_check tools/ariadne_report_check.cpp)
+  target_link_libraries(ariadne_report_check PRIVATE ariadne::runtime_opencv)
+  install(TARGETS ariadne_report_check RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # 1.8 placeholder mission layer over a 1.7 spool (design MISSION_1.8).
   add_executable(ariadne_mission tools/ariadne_mission.cpp)
   target_link_libraries(ariadne_mission PRIVATE ariadne::runtime_opencv opencv_imgcodecs opencv_imgproc)
