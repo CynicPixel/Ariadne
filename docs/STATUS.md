@@ -4,6 +4,15 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-15 — 1.9 evaluation harness v1: all 27 §30.2 metrics, gate PASS, evo agrees (D46)
+
+- `infra/scripts/report.sh` over a run chain → `report.yaml` (27 metrics + definitions), `oracle.yaml`, `inputs.yaml`
+  (sha256 of every input), `report_check.txt` (the C++ D31 gate), `report.html` (figures, definitions, provenance).
+- Dev on the committed 1.6–1.8 evidence: **gate PASS** (0 missing, 0 unknown); per-agent results, the 1.6 merged ATE
+  and **evo 1.31.1 APE + RPE** all agree (≤ 1.5e-11 relative; the first RPE oracle). ATE 9.76 mm, RPE 0.86 mm / 1 s,
+  closure precision 0.962, false closure rate 0, completeness 0.66, coverage 0.93, 1.27 MB, egress 140 s.
+- Next: clean-commit evidence + publish the report page, then 1.10 (console stub) and the Phase 1 exit gate.
+
 ## 2026-10-15 — 1.8 placeholder mission layer: valid egress routes; the merge is 85 s late (D45)
 
 - `ariadne_mission` over the 1.7 spool: OctoMap-model voxel occupancy (exact Amanatides–Woo rays), 2D standing-body

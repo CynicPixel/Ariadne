@@ -1394,3 +1394,33 @@ Deterministic: trace, routes and maps byte-identical across runs. 257/257 C++ te
 3. The policy is logged, not executed (replay follows the scripts): there is no exploration-efficiency number yet;
    that needs closed-loop live runs. Nearest frontier is the baseline for the owed Domain 3 survey (FUEL, TARE, FAR).
 4. One scene, one seed. The egress timing depends on where the scripts face; seed 1 is the next check.
+
+
+## 2026-10-15 — D46: 1.9 evaluation harness v1 — every §30.2 metric, gated by the C++ registry, cross-checked by evo
+
+**What.** `infra/scripts/report.sh` over one Phase 1 run chain (sim_collab → recon → mission): the C++ tool
+`ariadne_report_check` dumps the D31 registry (single source of truth) and later gates the report with
+`MissingMetrics` / `UnknownMetrics`; `python/analysis/report.py compute` (pinned analysis image, evo 1.31.1)
+computes the 27 metrics with the definitions in `docs/design/HARNESS_1.9.md`, checks the gates (all input manifests
+clean, the mission's and the spool's T_O0_O1 identical) and three oracles; `render` draws the figures and a
+self-contained `report.html` (figures embedded, every number beside its definition, inputs with sha256).
+
+**Choices.** (1) RPE pairing = the C++ `rpe_1s` pairing, (i, i+20) for every i, which is evo with
+`all_pairs=True, delta_unit=frames`; evo's default (non-overlapping pairs) would differ. (2) Closure metrics use
+denominators the harness cannot inflate: precision over everything ACCEPTED (25/26, the probe's false accept stays
+visible), false-closure rate over the edges that reached the map (0/20). (3) Distance travelled from GT (VO jitter while
+agent 1 is parked would inflate the estimate; both reported). (4) Calibration and energy are `[PROXY]`, labelled on the
+page. (5) evo sees agent 1's timestamps offset by 10⁶ s: both agents share the sim clock and evo associates by time.
+(6) Rotation angles via atan2: arccos lost ~1e-6 relative at mrad level and failed the first evo comparison.
+
+**Measured (dev, the committed 1.6–1.8 evidence chain).** All 27 metrics emit a number: **gate PASS**. Oracles:
+per-agent ATE/RPE equal the C++ results; merged ATE 0.0097643 m over 7962 poses = 1.6; evo APE translation and
+rotation and RPE translation and rotation agree to ≤ 4.5e-14 relative (APE rotation 1.5e-11) over 7962 / 7922
+samples. This is the **first
+RPE oracle** (1.5's evo run never captured RPE). Headline values: ATE 9.76 mm / 0.26°, RPE (1 s) 0.86 mm / 0.018°,
+inter-agent edge RMSE 12.0 mm, closure precision 0.962, false closure rate 0, Chamfer 0.126 m, completeness 0.66,
+coverage 0.93, PSNR 17.5 dB (untrained init), 1.27 MB total (2.2 kB/keyframe), first valid egress 140 s, route
+validity 1.0. Harness output byte-identical across reruns (except the analysis image id recorded in inputs.yaml).
+
+**Open.** Single run chain, single seed: no intervals, no cross-run calibration plot, no §31 matrix yet; outputs YAML
+not parquet. `time_to_first_usable_map_s` is defined as the first agent-ρ route `[ASSUMPTION]`.
