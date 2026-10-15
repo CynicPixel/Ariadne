@@ -124,10 +124,16 @@ def main(argv=None) -> int:
     v = sub.add_parser("viewer")
     for k in ("--out", "--run", "--spool", "--page"):
         v.add_argument(k, required=True)
+    v.add_argument("--mission")   # a 1.8 mission run: draw its final egress route
+    v.add_argument("--scene")
     a = ap.parse_args(argv)
     if a.cmd == "viewer":
         from . import viewer
-        print(viewer.build(Path(a.out), Path(a.run), Path(a.spool), Path(a.page)))
+        if a.mission and not a.scene:
+            raise ValueError("--mission needs --scene (the planner grid)")
+        print(viewer.build(Path(a.out), Path(a.run), Path(a.spool), Path(a.page),
+                           mission_run=Path(a.mission) if a.mission else None,
+                           scene_dir=Path(a.scene) if a.scene else None))
         return 0
     res = prepare(a) if a.cmd == "prepare" else score(a)
     print(yaml.safe_dump({k: v for k, v in res.items() if k not in ("per_view", "command")}, sort_keys=False))

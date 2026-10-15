@@ -50,7 +50,8 @@ if(OpenCV_FOUND)
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
     unit/test_edge_verifier.cpp
-    unit/test_keyframe_spool.cpp)
+    unit/test_keyframe_spool.cpp
+    unit/test_planning.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

@@ -6,7 +6,8 @@
 #   infra/scripts/recon.sh test                         python unit tests
 #   infra/scripts/recon.sh prepare SPOOL SCENE EVALREC OUT   fuse + init + geometry + render package
 #   infra/scripts/recon.sh score OUT REMOTE             PSNR/SSIM (+ remote LPIPS) from remote renders
-#   infra/scripts/recon.sh viewer OUT RUN SPOOL PAGE    self-contained WebGL splat page (embedded .splat + paths)
+#   infra/scripts/recon.sh viewer OUT RUN SPOOL PAGE [MISSION SCENE]  WebGL splat page (+ 1.8 egress route)
+#   infra/scripts/recon.sh mission-eval RUN SCENE COLLAB_RUN [SOLO_RUN...]  1.8 mission run vs scene GT
 #
 # Paths are repo-relative. The remote render between prepare and score:
 #   infra/scripts/kaggle.sh render OUT/package REMOTE
@@ -32,6 +33,13 @@ case "${1:-}" in
       --eval-record "/work/${4:?recon_eval.yaml}" --config /work/configs/recon/recon_v1.yaml --out "/work/${5:?out}" ;;
   score) run python -m ariadne_recon.cli score --out "/work/${2:?out}" --remote "/work/${3:?remote dir}" ;;
   viewer) run python -m ariadne_recon.cli viewer --out "/work/${2:?out}" --run "/work/${3:?sim_collab run}" \
-      --spool "/work/${4:?spool}" --page "/work/${5:?page.html}" ;;
-  *) sed -n '2,14p' "$0"; exit 2 ;;
+      --spool "/work/${4:?spool}" --page "/work/${5:?page.html}" ${6:+--mission "/work/$6" --scene "/work/${7:?scene for the route grid}"} ;;
+  mission-eval)
+    run_dir="${2:?mission run}" scene="${3:?scene}" collab="${4:?sim_collab run}"; shift 4
+    compare=(); for c in "$@"; do compare+=("/work/$c"); done
+    docker run --rm -u "$(id -u):$(id -g)" -v "$REPO_ROOT:/work" -w /work -e PYTHONPATH=/work/python \
+      -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" -e ARIADNE_GIT_DIRTY="$dirty" "$IMAGE" \
+      python -m analysis.mission_eval --run "/work/$run_dir" --scene "/work/$scene" --collab-run "/work/$collab" \
+      --config /work/configs/mission/mission_v1.yaml ${compare:+--compare "${compare[@]}"} ;;
+  *) sed -n '2,15p' "$0"; exit 2 ;;
 esac

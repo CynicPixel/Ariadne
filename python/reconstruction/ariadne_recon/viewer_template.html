@@ -12,6 +12,7 @@
     --rule: rgba(147, 161, 174, 0.22);
     --agent0: #f0a54a;        /* amber: agent 0 (broker) */
     --agent1: #5cc3d9;        /* teal: agent 1 */
+    --route: #f2f2ee;         /* chalk white: the egress route at rho_responder (1.8) */
     --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     color-scheme: dark;
@@ -70,6 +71,7 @@
   <div class="legend">
     <span class="key"><span class="swatch" style="background: var(--agent0)"></span>agent 0 path (broker)</span>
     <span class="key"><span class="swatch" style="background: var(--agent1)"></span>agent 1 path</span>
+    <span class="key" id="route-key" hidden><span class="swatch" style="background: var(--route)"></span>egress route (0.40 m clearance)</span>
   </div>
   <p class="hint">Drag to orbit · right-drag to pan · scroll to zoom. World frame, z up, metres.</p>
   <button class="toggle" id="toggle" type="button" aria-expanded="true">Hide details</button>
@@ -97,9 +99,12 @@
   const css = getComputedStyle(document.documentElement);
   const scene = new THREE.Scene();
   const paths = JSON.parse(document.getElementById("paths-data").textContent);
+  const tokens = { agent0: "--agent0", agent1: "--agent1", egress: "--route" };
+  if (paths.egress && paths.egress.length) document.getElementById("route-key").hidden = false;
   for (const [agent, pts] of Object.entries(paths)) {
+    if (!pts.length) continue;
     const g = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(pts.flat(), 3));
-    const color = new THREE.Color(css.getPropertyValue(agent === "agent0" ? "--agent0" : "--agent1").trim());
+    const color = new THREE.Color(css.getPropertyValue(tokens[agent]).trim());
     scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color })));
   }
 

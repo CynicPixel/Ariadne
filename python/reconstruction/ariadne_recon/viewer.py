@@ -72,7 +72,20 @@ def tum_positions(path: Path) -> np.ndarray:
     return np.array([[float(v) for v in r[1:4]] for r in rows])
 
 
-def build(prep_dir: Path, run_dir: Path, spool_dir: Path, out: Path, path_stride: int = 10) -> dict:
+def egress_route_world(mission_run: Path, scene_dir: Path, z_m: float = 0.05) -> list:
+    """The final egress route (1.8) as world points just above the floor: cell centres of the
+    planner grid (scene.json `esdf` block: origin, cell; row 0 = south)."""
+    routes = [json.loads(l) for l in (mission_run / "routes.jsonl").read_text().splitlines()]
+    final = next(r for r in routes if r["kind"] == "egress" and r["final"])
+    if not final["found"]:
+        return []
+    e = json.loads((scene_dir / "scene.json").read_text())["esdf"]
+    (ox, oy), g = e["origin_m"], e["cell_m"]
+    return [[round(ox + (c + 0.5) * g, 3), round(oy + (r + 0.5) * g, 3), z_m] for r, c in final["cells"]]
+
+
+def build(prep_dir: Path, run_dir: Path, spool_dir: Path, out: Path, path_stride: int = 10,
+          mission_run: Path | None = None, scene_dir: Path | None = None) -> dict:
     pkg = dict(np.load(prep_dir / "package" / "render_package.npz"))
     prep = yaml.safe_load((prep_dir / "prepare.yaml").read_text())
     score_path = prep_dir / "score.yaml"
@@ -86,6 +99,8 @@ def build(prep_dir: Path, run_dir: Path, spool_dir: Path, out: Path, path_stride
         tum = next((run_dir / "raw").glob(f"*-{agent}-*/estimate_body.tum"))
         p = tum_positions(tum)[::path_stride]
         paths[agent] = np.round(p @ T[:3, :3].T + T[:3, 3], 3).tolist()
+    if mission_run is not None:
+        paths["egress"] = egress_route_world(mission_run, scene_dir)
 
     pos = np.frombuffer(splat, dtype=[("p", "<f4", 3), ("x", "u1", 20)])["p"]
     lo, hi = np.percentile(pos, 2, axis=0), np.percentile(pos, 98, axis=0)

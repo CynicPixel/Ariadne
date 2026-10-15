@@ -1,0 +1,21 @@
+# 1.8 placeholder mission layer (design MISSION_1.8). Every value fixed before the first measurement.
+name: mission_v1
+grid:                           # x/y origin, cell and extent come from the briefing (scene.json `esdf` block)
+  z_max_m: 3.0                  # layers 0..z_max (walls are 2.75 m)
+carving:
+  pixel_stride: 4               # every 4th pixel of the 640x360 spool depth: ~14k rays per keyframe
+  # sigma_Z = Z^2 sigma_d / (f B) = 0.00745 Z^2 m (sigma_d 0.5 px, f 671.5 px, B 0.1 m: perception sim_v1).
+  max_sigma_m: 0.06             # => Z <= 2.84 m: a wall hit lands within ~1 cell (0.05 m) at 1 sigma, so the
+  max_depth_m: 2.84             #    1.05 m entrance's 2.5-cell slack at rho_responder is not eaten by smearing
+  surface_margin_k: 2.0         # free carving stops 2 sigma short of the surface (no wall erosion)
+slab:
+  z_band_m: [0.15, 1.90]        # a standing body; excludes floor hits (z ~ 0) and the unseen upper walls
+clearance:                      # must equal scene.json `clearance` (checked at run time)
+  rho_agent_m: 0.20
+  rho_responder_m: 0.40
+frontier:
+  min_cells: 8                  # ~2 rho_agent / cell: ignore pinholes left by the ray stride
+replan_period_s: 5.0            # map -> frontiers -> policy -> routes every 5 s of mission time
+evaluation:                     # evaluation only (python/analysis/mission_eval.py)
+  anchor_window_s: 10.0         # agent 0's first 10 s through the briefing anchor vs GT
+  anchor_max_err_m: 0.01

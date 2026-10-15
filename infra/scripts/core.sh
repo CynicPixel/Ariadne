@@ -26,6 +26,8 @@
 #                                      evaluation/runs/phase1/sim_collab/; FAULTS=1
 #                                      duplicates/reorders messages (results must match);
 #                                      SPOOL=1 also writes the 1.7 recon spool to build/spool/
+#   infra/scripts/core.sh mission SPOOL SCENE  1.8 mission layer over a spool: merged, agent 0 alone and
+#                                      agent 1 alone (the comparison), into evaluation/runs/phase1/mission/
 #   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
 #                                      sequence, scored against ground truth,
 #                                      into evaluation/runs/phase1/euroc_vo/
@@ -166,6 +168,19 @@ cmd_sim_collab() {
        --out /work/evaluation/runs/phase1/sim_collab"
 }
 
+cmd_mission() {
+  local spool="${1:?spool dir}" scene="${2:?scene dir}" commit dirty
+  commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  dirty="$(git_dirty)"
+  local sha
+  sha="$(sha256sum "$REPO_ROOT/$spool/spool.yaml" | cut -d' ' -f1)"
+  cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_mission --parallel $JOBS >/dev/null \
+    && for ag in merged 0 1; do ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty ARIADNE_SPOOL_SHA256=$sha \
+       /work/build/docker/cpp/runtime/ariadne_mission --spool /work/$spool --scene /work/$scene \
+       --config /work/configs/mission/mission_v1.yaml --out /work/evaluation/runs/phase1/mission --agents \$ag \
+       || exit 1; done"
+}
+
 case "${1:-}" in
   image) shift; cmd_image "$@" ;;
   gate)  shift; cmd_gate "$@" ;;
@@ -175,5 +190,6 @@ case "${1:-}" in
   sim-calib) shift; cmd_sim_calib "$@" ;;
   sim-vo) shift; cmd_sim_vo "$@" ;;
   sim-collab) shift; cmd_sim_collab "$@" ;;
-  *) sed -n '2,34p' "$0"; exit 2 ;;
+  mission) shift; cmd_mission "$@" ;;
+  *) sed -n '2,36p' "$0"; exit 2 ;;
 esac
