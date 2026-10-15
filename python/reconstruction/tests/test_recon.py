@@ -110,3 +110,25 @@ def test_image_metrics():
     assert image_metrics.psnr(a, a) == float("inf")
     assert image_metrics.psnr(a, np.clip(a + 0.1, 0, 2)) == pytest.approx(20.0, abs=1e-9)
     assert image_metrics.ssim(a, rng.random((40, 50, 3))) < 0.1
+
+
+def test_splat_encoding_matches_the_viewer_format():
+    """32-byte rows: position f32x3, linear scale f32x3, RGBA u8, quaternion wxyz u8 (q*128+128)."""
+    from ariadne_recon.gaussians import Gaussians
+    from ariadne_recon.viewer import quat_mul, rot_to_quat_wxyz, to_splat
+    g = init_from_points(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1.0]]), np.full((4, 3), 255, np.uint8),
+                         0.5, seed=0)
+    g = Gaussians(g.means, np.tile([1, 0, 0, 0], (4, 1)).astype(np.float32), np.zeros((4, 3), np.float32),
+                  g.opacities, g.sh0, g.shN)
+    T = np.eye(4)
+    T[:3, 3] = [10, 20, 30]
+    rec = np.frombuffer(to_splat({k: getattr(g, k) for k in ("means", "quats", "scales", "opacities", "sh0")}, T),
+                        dtype=[("p", "<f4", 3), ("s", "<f4", 3), ("c", "u1", 4), ("r", "u1", 4)])
+    assert rec.itemsize == 32 and len(rec) == 4
+    assert np.allclose(rec["p"][1], [11, 20, 30]) and np.allclose(rec["s"], 1.0)      # exp(0) = 1
+    assert tuple(rec["c"][0]) == (255, 255, 255, 128)                                  # sigmoid(logit .5)
+    assert tuple(rec["r"][0]) == (255, 128, 128, 128)                                  # identity, clamped w
+    Rz = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1.0]])                                # 90 deg about z
+    q = rot_to_quat_wxyz(Rz)
+    assert np.allclose(q, [np.sqrt(0.5), 0, 0, np.sqrt(0.5)])
+    assert np.allclose(quat_mul(q, np.array([[1.0, 0, 0, 0]]))[0], q)

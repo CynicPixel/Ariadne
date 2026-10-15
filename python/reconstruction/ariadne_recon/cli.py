@@ -5,6 +5,8 @@
       validate spool -> fuse -> init Gaussians -> geometry metrics -> render package (local, CPU)
   python -m ariadne_recon.cli score --out OUT --remote DIR
       PSNR / SSIM from the remote renders (+ the remote LPIPS) -> results.yaml
+  python -m ariadne_recon.cli viewer --out OUT --run RUN --spool SPOOL --page PAGE.html
+      self-contained WebGL page: the Gaussians as an embedded .splat + both agents' paths (world frame)
 
 Every output directory gets the inputs' identities (spool.yaml sha256, config,
 seed, command) so a result can be traced back to its spool and package.
@@ -119,7 +121,14 @@ def main(argv=None) -> int:
     s = sub.add_parser("score")
     s.add_argument("--out", required=True)
     s.add_argument("--remote", required=True)
+    v = sub.add_parser("viewer")
+    for k in ("--out", "--run", "--spool", "--page"):
+        v.add_argument(k, required=True)
     a = ap.parse_args(argv)
+    if a.cmd == "viewer":
+        from . import viewer
+        print(viewer.build(Path(a.out), Path(a.run), Path(a.spool), Path(a.page)))
+        return 0
     res = prepare(a) if a.cmd == "prepare" else score(a)
     print(yaml.safe_dump({k: v for k, v in res.items() if k not in ("per_view", "command")}, sort_keys=False))
     return 0

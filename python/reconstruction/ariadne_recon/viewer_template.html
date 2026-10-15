@@ -1,0 +1,131 @@
+<title>Ariadne Maze Splat</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one full-height 3D viewport; a compact survey card floats over its lower-left corner. */
+  :root {
+    --ground: #10151b;        /* night-blue slate: the maze reads as lit model on a dark field */
+    --panel: rgba(20, 27, 35, 0.86);
+    --ink: #e4e9ee;
+    --muted: #93a1ae;
+    --rule: rgba(147, 161, 174, 0.22);
+    --agent0: #f0a54a;        /* amber: agent 0 (broker) */
+    --agent1: #5cc3d9;        /* teal: agent 1 */
+    --display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--ground); color: var(--ink); font-family: var(--mono); overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+  .card {
+    position: fixed;
+    left: max(16px, env(safe-area-inset-left, 0px));
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: min(340px, calc(100% - 32px));
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: grid;
+    gap: 10px;
+    backdrop-filter: blur(6px);
+  }
+  h1 { margin: 0; font: 600 1.35rem/1.1 var(--display); letter-spacing: 0.01em; text-wrap: balance; }
+  .sub { margin: 0; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-size: 0.74rem; }
+  dt { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.64rem; align-self: center; }
+  dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.72rem; border-top: 1px solid var(--rule); padding-top: 9px; }
+  .key { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 18px; height: 3px; border-radius: 2px; }
+  .hint { color: var(--muted); font-size: 0.66rem; }
+  .status {
+    position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+    font-size: 0.72rem; color: var(--muted); background: var(--panel); border: 1px solid var(--rule);
+    border-radius: 4px; padding: 5px 9px;
+  }
+  .toggle { font: inherit; font-size: 0.7rem; color: var(--ink); background: transparent; border: 1px solid var(--rule);
+    border-radius: 4px; padding: 3px 8px; cursor: pointer; justify-self: start; }
+  .toggle:focus-visible { outline: 2px solid var(--agent1); outline-offset: 2px; }
+  .card.collapsed dl, .card.collapsed .sub, .card.collapsed .legend, .card.collapsed .hint { display: none; }
+</style>
+
+<div id="stage" aria-label="3D Gaussian splat of the maze"></div>
+<div class="status" id="status" role="status">Loading splat…</div>
+<section class="card" id="card">
+  <h1>Ariadne maze · scene __SCENE__</h1>
+  <p class="sub">The untrained initialization: one Gaussian per point of the fused stereo cloud from both agents,
+    merged through the verified inter-agent loop. Training (Phase 6) sharpens it.</p>
+  <dl>
+    <dt>Gaussians</dt><dd>__GAUSSIANS__</dd>
+    <dt>Keyframes</dt><dd>__KEYFRAMES__</dd>
+    <dt>Cloud accuracy</dt><dd>__ACCURACY__ mm mean</dd>
+    <dt>Completeness ≤ 5 cm</dt><dd>__COMPLETENESS__</dd>
+    <dt>Held-out PSNR</dt><dd>__PSNR__ dB</dd>
+    <dt>Source run</dt><dd>__RUN__</dd>
+  </dl>
+  <div class="legend">
+    <span class="key"><span class="swatch" style="background: var(--agent0)"></span>agent 0 path (broker)</span>
+    <span class="key"><span class="swatch" style="background: var(--agent1)"></span>agent 1 path</span>
+  </div>
+  <p class="hint">Drag to orbit · right-drag to pan · scroll to zoom. World frame, z up, metres.</p>
+  <button class="toggle" id="toggle" type="button" aria-expanded="true">Hide details</button>
+</section>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.module.js" } }
+</script>
+<script id="splat-data" type="application/octet-stream">__SPLAT_B64__</script>
+<script id="paths-data" type="application/json">__PATHS_JSON__</script>
+<script type="module">
+  import * as THREE from "three";
+  import * as GS from "https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js";
+
+  const status = document.getElementById("status");
+  const card = document.getElementById("card");
+  const toggle = document.getElementById("toggle");
+  toggle.addEventListener("click", () => {
+    const collapsed = card.classList.toggle("collapsed");
+    toggle.textContent = collapsed ? "Show details" : "Hide details";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+  });
+
+  const view = __VIEW_JSON__;
+  const css = getComputedStyle(document.documentElement);
+  const scene = new THREE.Scene();
+  const paths = JSON.parse(document.getElementById("paths-data").textContent);
+  for (const [agent, pts] of Object.entries(paths)) {
+    const g = new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(pts.flat(), 3));
+    const color = new THREE.Color(css.getPropertyValue(agent === "agent0" ? "--agent0" : "--agent1").trim());
+    scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color })));
+  }
+
+  try {
+    const b64 = document.getElementById("splat-data").textContent.trim();
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const viewer = new GS.Viewer({
+      rootElement: document.getElementById("stage"),
+      threeScene: scene,
+      cameraUp: [0, 0, 1],
+      initialCameraPosition: view.camera,
+      initialCameraLookAt: view.target,
+      sharedMemoryForWorkers: false,   // no cross-origin isolation in the viewer frame
+      gpuAcceleratedSort: false,
+      selfDrivenMode: true,
+      useBuiltInControls: true,
+      sphericalHarmonicsDegree: 0,
+    });
+    const arr = GS.SplatParser.parseStandardSplatToUncompressedSplatArray(bytes.buffer);
+    const buffer = GS.SplatBufferGenerator.getStandardGenerator(1, 0).generateFromUncompressedSplatArray(arr);
+    await viewer.addSplatBuffers([buffer], [{ splatAlphaRemovalThreshold: 1 }], true, false, false, false, false);
+    viewer.start();
+    status.textContent = `${view.count.toLocaleString()} Gaussians`;
+  } catch (e) {
+    status.textContent = "The splat failed to load: " + (e && e.message ? e.message : e);
+  }
+</script>

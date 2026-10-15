@@ -6,6 +6,7 @@
 #   infra/scripts/recon.sh test                         python unit tests
 #   infra/scripts/recon.sh prepare SPOOL SCENE EVALREC OUT   fuse + init + geometry + render package
 #   infra/scripts/recon.sh score OUT REMOTE             PSNR/SSIM (+ remote LPIPS) from remote renders
+#   infra/scripts/recon.sh viewer OUT RUN SPOOL PAGE    self-contained WebGL splat page (embedded .splat + paths)
 #
 # Paths are repo-relative. The remote render between prepare and score:
 #   infra/scripts/kaggle.sh render OUT/package REMOTE
@@ -30,5 +31,7 @@ case "${1:-}" in
     run python -m ariadne_recon.cli prepare --spool "/work/${2:?spool}" --scene "/work/${3:?scene}" \
       --eval-record "/work/${4:?recon_eval.yaml}" --config /work/configs/recon/recon_v1.yaml --out "/work/${5:?out}" ;;
   score) run python -m ariadne_recon.cli score --out "/work/${2:?out}" --remote "/work/${3:?remote dir}" ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  viewer) run python -m ariadne_recon.cli viewer --out "/work/${2:?out}" --run "/work/${3:?sim_collab run}" \
+      --spool "/work/${4:?spool}" --page "/work/${5:?page.html}" ;;
+  *) sed -n '2,14p' "$0"; exit 2 ;;
 esac
