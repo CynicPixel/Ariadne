@@ -88,10 +88,23 @@ struct KeyframeView {
     uint64_t frame_id = 0;
     int64_t t_ns = 0;
     cv::Mat left_rect;   // 8-bit gray
+    cv::Mat left_rect_rgb;   // 8-bit RGB through the same rectification; empty if the source has no colour
     cv::Mat depth_z;     // CV_32F metres, NaN = unsupported
+    cv::Mat sigma_z;     // CV_32F metres, SGBM depth sigma, NaN where depth_z is NaN
+    uint64_t graph_version = 0;   // VO pose-graph version after this keyframe's insertion (the pose's version)
     core::SE3 T_O_C;
     core::SE3 T_B_C;     // body <- rectified left camera
     double fx = 0, fy = 0, cx = 0, cy = 0, baseline_m = 0;
+};
+
+/// Every frame (optional hook): the estimated rectified-left camera pose and a
+/// lazy rectified-RGB getter (only frames that ask pay for the remap).
+struct FrameView {
+    uint64_t frame_id = 0;
+    int64_t t_ns = 0;
+    bool is_keyframe = false;
+    core::SE3 T_O_C;
+    std::function<cv::Mat()> left_rect_rgb;   // empty Mat if the source has no colour
 };
 
 struct StereoVoArgs {
@@ -101,6 +114,7 @@ struct StereoVoArgs {
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
     std::function<void(const KeyframeView&)> on_keyframe;   // optional; never changes the run
     std::function<void(int64_t, const core::SE3&)> on_body_pose;   // every frame's T_O_B; optional
+    std::function<void(const FrameView&)> on_frame;                 // every frame; optional; never changes the run
 };
 
 /// The 1.4 + 1.5 pipeline over any StereoSource: rectify -> LK tracker ->
@@ -200,6 +214,10 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 kv.left_rect = l;
                 kv.depth_z = z32.clone();
                 kv.depth_z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
+                kv.sigma_z = s32.clone();
+                kv.sigma_z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
+                kv.graph_version = vo.graph().version();
+                if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, kv.left_rect_rgb);
                 kv.T_O_C = T_W_C;
                 kv.T_B_C = T_B_Crect;
                 kv.fx = rr.fx;
@@ -212,6 +230,19 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         }
         est_body.push_back({vf.t_ns, T_W_C * T_B_Crect.inverse()});
         if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
+        if (args.on_frame) {
+            FrameView fv;
+            fv.frame_id = vf.frame_id;
+            fv.t_ns = vf.t_ns;
+            fv.is_keyframe = tr.need_keyframe;
+            fv.T_O_C = T_W_C;
+            fv.left_rect_rgb = [&]() {
+                cv::Mat o;
+                if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, o);
+                return o;
+            };
+            args.on_frame(fv);
+        }
         if (i % 500 == 0) std::printf("  frame %d: tracks %zu, status %d, keyframes %d\n", i, tf.ids.size(),
                                       static_cast<int>(tr.status), keyframes);
         ++i;

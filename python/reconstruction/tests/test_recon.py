@@ -1,0 +1,112 @@
+"""Unit tests for the 1.7 reconstruction service's local stages (design RECON_1.7).
+
+Synthetic spools in the C++ writer's exact format (spool.yaml + RGB/fp16 PNGs):
+a fronto-parallel plane seen by two agents whose odometry frames differ by a known
+T_O0_O1, so every stage has an exact expected answer.
+"""
+import numpy as np
+import cv2
+import pytest
+import yaml
+
+from ariadne_recon import fuse, geometry_eval, image_metrics
+from ariadne_recon.gaussians import SH_C0, init_from_points
+from ariadne_recon.spool import SpoolError, load
+
+W, H, F = 64, 48, 50.0
+K = [F, F, (W - 1) / 2, (H - 1) / 2]
+
+
+def row_major(T):
+    return [float(x) for x in T[:3, :].ravel()]
+
+
+def write_half(path, a):
+    cv2.imwrite(str(path), a.astype(np.float16).view(np.uint16))
+
+
+def make_spool(tmp, T_O0_O1=np.eye(4), z=2.0, drop=None):
+    """Agent 0 at the origin, agent 1's camera at its own origin; both see the plane Z = z."""
+    bundles = []
+    for agent in (0, 1):
+        (tmp / f"agent{agent}").mkdir(exist_ok=True)
+        stem = f"agent{agent}/kf_{agent}"
+        rgb = np.full((H, W, 3), (200, 100, 50), np.uint8)
+        cv2.imwrite(str(tmp / f"{stem}_rgb.png"), cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
+        Z = np.full((H, W), z, np.float32)
+        Z[0, 0] = np.nan
+        write_half(tmp / f"{stem}_depth.png", Z)
+        write_half(tmp / f"{stem}_sigma.png", np.full((H, W), 0.01, np.float32))
+        e = {"role": "keyframe", "agent": agent, "kf_id": agent, "t_ns": agent, "frame_id_of_pose": 1,
+             "T_WiC": row_major(np.eye(4)), "K": K, "width": W, "height": H, "baseline_m": 0.1, "files": stem,
+             "rgb_kind": "raw_radiance", "exposure_state": "not_modeled", "lamp_state": "inert", "mask": "none"}
+        if drop:
+            e.pop(drop)
+        bundles.append(e)
+    y = {"schema_version": 1, "run_id": "r", "scene_id": "s",
+         "merge": {"ok": True, "T_O0_O1": row_major(T_O0_O1), "edge": "e"}, "bundles": bundles}
+    (tmp / "spool.yaml").write_text(yaml.safe_dump(y))
+    return tmp
+
+
+def test_missing_field_is_an_error(tmp_path):
+    with pytest.raises(SpoolError, match="lamp_state"):
+        load(make_spool(tmp_path, drop="lamp_state"))
+
+
+def test_depth_roundtrip_and_rgb_order(tmp_path):
+    sp = load(make_spool(tmp_path))
+    Z, S = sp.keyframes()[0].depth()
+    assert np.isnan(Z[0, 0]) and Z[1, 1] == np.float32(2.0) and abs(S[1, 1] - 0.01) < 1e-5
+    assert tuple(sp.keyframes()[0].rgb()[0, 0]) == (200, 100, 50)
+
+
+def test_fuse_applies_merge_and_voxelizes(tmp_path):
+    T = np.eye(4)
+    T[:3, 3] = [5.0, 0.0, 0.0]          # agent 1's odometry origin is 5 m along x in O0
+    sp = load(make_spool(tmp_path, T_O0_O1=T))
+    c = fuse.fuse(sp, fuse.FuseParams(voxel_m=0.01, max_depth_m=6, max_sigma_m=0.05, max_points=10 ** 6))
+    assert np.allclose(c.xyz[:, 2], 2.0, atol=1e-3)                 # the plane, in O0
+    a1 = c.xyz[c.source == 1]
+    assert len(a1) and a1[:, 0].min() > 5.0 - 1.3                  # agent 1's points shifted by 5 m
+    assert c.stats["pixels_with_depth"] == 2 * (W * H - 1)          # NaN pixel excluded
+    coarse = fuse.fuse(sp, fuse.FuseParams(voxel_m=0.5, max_depth_m=6, max_sigma_m=0.05, max_points=10 ** 6))
+    assert len(coarse.xyz) < len(c.xyz)
+    with pytest.raises(SpoolError, match="no depth survived"):
+        fuse.fuse(sp, fuse.FuseParams(voxel_m=0.01, max_depth_m=1.0, max_sigma_m=0.05, max_points=10 ** 6))
+
+
+def test_gaussian_init_matches_simple_trainer_conventions():
+    s = 0.1
+    g = np.stack(np.meshgrid(np.arange(10), np.arange(10), indexing="ij"), -1).reshape(-1, 2) * s
+    xyz = np.c_[g, np.zeros(len(g))]
+    rgb = np.full((len(xyz), 3), 255, np.uint8)
+    a = init_from_points(xyz, rgb, 0.1, seed=3)
+    interior = (np.abs(xyz[:, :2] - 0.45) < 0.35).all(axis=1)       # 4 neighbours at distance s
+    assert np.allclose(a.scales[interior], np.log(s), atol=1e-6)
+    assert np.allclose(a.opacities, np.log(0.1 / 0.9))
+    assert np.allclose(a.sh0, 0.5 / SH_C0)
+    b = init_from_points(xyz, rgb, 0.1, seed=3)
+    assert np.array_equal(a.quats, b.quats)                          # seeded: reproducible
+    with pytest.raises(ValueError):
+        init_from_points(np.zeros((5, 3)), rgb[:5], 0.1, seed=0)     # coincident points
+
+
+def test_geometry_metrics_on_exact_surface():
+    tri = np.array([[[0, 0, 0], [1, 0, 0], [1, 1, 0]], [[0, 0, 0], [1, 1, 0], [0, 1, 0]]], float)
+    gt = geometry_eval.sample_surface(tri, 0.02, seed=0)
+    assert len(gt) >= 2500 and np.all(gt[:, 2] == 0) and gt[:, :2].min() >= 0 and gt[:, :2].max() <= 1
+    r = geometry_eval.evaluate(gt, gt, tau=0.01)
+    assert r["accuracy_m"] == 0 and r["completeness"] == 1
+    half = gt[gt[:, 0] < 0.5] + [0, 0, 0.05]
+    r2 = geometry_eval.evaluate(half, gt, tau=0.06)
+    assert abs(r2["accuracy_m"] - 0.05) < 1e-9 and 0.4 < r2["completeness"] < 0.6
+
+
+def test_image_metrics():
+    rng = np.random.default_rng(0)
+    a = rng.random((40, 50, 3))
+    assert image_metrics.ssim(a, a) == pytest.approx(1.0)
+    assert image_metrics.psnr(a, a) == float("inf")
+    assert image_metrics.psnr(a, np.clip(a + 0.1, 0, 2)) == pytest.approx(20.0, abs=1e-9)
+    assert image_metrics.ssim(a, rng.random((40, 50, 3))) < 0.1

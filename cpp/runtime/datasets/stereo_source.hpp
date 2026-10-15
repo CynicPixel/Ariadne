@@ -46,6 +46,7 @@ namespace ariadne::runtime {
 struct StereoFrame {
     int64_t t_ns = 0;
     cv::Mat left, right;   // raw 8-bit gray
+    cv::Mat left_rgb;      // raw 8-bit RGB of the left camera (same pixels as `left`); empty if the source has none
 };
 
 class StereoSource {
@@ -240,6 +241,7 @@ public:
                 StereoFrame& f = pending[t];
                 f.t_ns = t;
                 (left ? f.left : f.right) = gray;
+                if (left) f.left_rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
                 if (f.left.empty() || f.right.empty()) return;
                 // Complete pair: it must be the oldest pending stamp, or a frame went missing.
                 if (pending.begin()->first != t || t <= last_emitted) {

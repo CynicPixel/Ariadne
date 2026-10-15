@@ -21,10 +21,11 @@
 #   infra/scripts/core.sh sim-vo REC SCENE [AGENT]  the same 1.4+1.5 pipeline over one
 #                                      agent of a sim recording (configs sim_v1), into
 #                                      evaluation/runs/phase1/sim_vo/
-#   infra/scripts/core.sh sim-collab REC SCENE [FAULTS]  1.6 placeholder collaboration
+#   infra/scripts/core.sh sim-collab REC SCENE [FAULTS] [SPOOL]  1.6 placeholder collaboration
 #                                      (both agents, broker = agent 0, collab_v1) into
 #                                      evaluation/runs/phase1/sim_collab/; FAULTS=1
-#                                      duplicates/reorders messages (results must match)
+#                                      duplicates/reorders messages (results must match);
+#                                      SPOOL=1 also writes the 1.7 recon spool to build/spool/
 #   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
 #                                      sequence, scored against ground truth,
 #                                      into evaluation/runs/phase1/euroc_vo/
@@ -153,14 +154,15 @@ cmd_sim_vo() {
 }
 
 cmd_sim_collab() {
-  local rec="${1:?recording dir}" scene="${2:?scene dir}" faults="${3:-0}" commit dirty
+  local rec="${1:?recording dir}" scene="${2:?scene dir}" faults="${3:-0}" spool="${4:-0}" commit dirty spool_args=""
+  [ "$spool" = 1 ] && spool_args="--spool /work/build/spool --recon-config /work/configs/recon/recon_v1.yaml"
   commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
   dirty="$(git_dirty)"
   cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_sim_collab --parallel $JOBS >/dev/null \
     && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty \
        /work/build/docker/cpp/runtime/ariadne_sim_collab --rec /work/$rec --scene /work/$scene \
        --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v1.yaml \
-       --collab-config /work/configs/collab/collab_v1.yaml --inject-faults $faults \
+       --collab-config /work/configs/collab/collab_v1.yaml --inject-faults $faults $spool_args \
        --out /work/evaluation/runs/phase1/sim_collab"
 }
 
@@ -173,5 +175,5 @@ case "${1:-}" in
   sim-calib) shift; cmd_sim_calib "$@" ;;
   sim-vo) shift; cmd_sim_vo "$@" ;;
   sim-collab) shift; cmd_sim_collab "$@" ;;
-  *) sed -n '2,33p' "$0"; exit 2 ;;
+  *) sed -n '2,34p' "$0"; exit 2 ;;
 esac

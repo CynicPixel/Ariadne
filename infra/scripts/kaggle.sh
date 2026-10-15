@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# The remote (CUDA) render step on Kaggle (D44, design RECON_1.7): the Kaggle
+# CLI runs in a pinned container; the token comes from the host's ~/.kaggle
+# (access_token, or a legacy kaggle.json), mounted read-only. Nothing is
+# installed on the host.
+#
+#   infra/scripts/kaggle.sh whoami                 check the token, print the user
+#   infra/scripts/kaggle.sh smoke OUT              [SMOKE-TEST]: install gsplat on a Kaggle
+#                                                  GPU, render 1000 random Gaussians, pull
+#                                                  remote.json (versions, install mode) to OUT
+#   infra/scripts/kaggle.sh render PKG_DIR OUT     upload a render package as a private
+#                                                  dataset, run the render kernel on a GPU,
+#                                                  pull renders.npz + remote.json to OUT
+#
+# Everything on Kaggle is PRIVATE (dataset and kernels). Kernels time out after
+# KAGGLE_TIMEOUT_MIN (default 60) of polling; a failed kernel's log is pulled too.
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IMAGE=ariadne-kaggle:2.2.4
+BASE=python@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4db6d462c84e51f
+WORK="$REPO_ROOT/build/kaggle"
+TIMEOUT_MIN="${KAGGLE_TIMEOUT_MIN:-60}"
+# CLI 2.x ignores enable_gpu alone: the accelerator must be named (kagglesdk: NvidiaTeslaT4 | NvidiaTeslaP100).
+ACCEL="${KAGGLE_ACCELERATOR:-NvidiaTeslaT4}"
+
+die() { echo "kaggle.sh: $*" >&2; exit 1; }
+[ -f "$HOME/.kaggle/access_token" ] || [ -f "$HOME/.kaggle/kaggle.json" ] \
+  || die "no ~/.kaggle/access_token or kaggle.json (kaggle.com -> Settings -> API -> Create New Token)"
+
+image() {
+  docker image inspect "$IMAGE" >/dev/null 2>&1 && return
+  printf 'FROM %s\nRUN pip install --no-cache-dir --root-user-action=ignore kaggle==2.2.4\n' "$BASE" \
+    | docker build -q -t "$IMAGE" - >/dev/null
+}
+kg() {   # kaggle CLI as the invoking user; repo build dir mounted at /w
+  docker run --rm -u "$(id -u):$(id -g)" -e HOME=/home/u -e KAGGLE_CONFIG_DIR=/home/u/.kaggle \
+    -v "$HOME/.kaggle:/home/u/.kaggle:ro" -v "$WORK:/w" -w /w "$IMAGE" kaggle "$@"
+}
+user() {   # the CLI resolves the account from the token
+  local u
+  u="$(kg config view 2>/dev/null | sed -n 's/^- username: //p')"
+  [ -n "$u" ] && [ "$u" != None ] || die "token does not resolve to a Kaggle user"
+  echo "$u"
+}
+
+push_and_wait() {   # $1 kernel dir (under $WORK), $2 slug, $3 OUT
+  local dir="$1" slug="$2" out="$3" u st i
+  u="$(user)"
+  kg kernels push -p "/w/$dir" --accelerator "$ACCEL"
+  for ((i = 0; i < TIMEOUT_MIN * 2; i++)); do
+    sleep 30
+    st="$(kg kernels status "$u/$slug" 2>&1 | tail -1)"
+    echo "  $(date -u +%H:%M:%S) $st"
+    case "$st" in
+      *[Cc][Oo][Mm][Pp][Ll][Ee][Tt][Ee]*) break ;;
+      *[Ee][Rr][Rr][Oo][Rr]*|*[Cc][Aa][Nn][Cc][Ee][Ll]*) kg kernels output "$u/$slug" -p "/w/$dir/out" || true
+                                          die "kernel $slug failed; log in $WORK/$dir/out" ;;
+    esac
+  done
+  case "$st" in *[Cc][Oo][Mm][Pp][Ll][Ee][Tt][Ee]*) ;; *) die "kernel $slug timed out after ${TIMEOUT_MIN} min";; esac
+  mkdir -p "$WORK/$dir/out"
+  kg kernels output "$u/$slug" -p "/w/$dir/out"
+  mkdir -p "$out"
+  cp "$WORK/$dir/out/"*.json "$out/"
+  if ls "$WORK/$dir/out/"*.npz >/dev/null 2>&1; then cp "$WORK/$dir/out/"*.npz "$out/"; fi
+  echo "pulled to $out"
+}
+
+kernel_dir() {   # $1 name, $2 slug, $3 dataset id or "", $4 prelude line
+  local d="$WORK/$1" u
+  u="$(user)"
+  rm -rf "$d"; mkdir -p "$d"
+  { echo "$4"; cat "$REPO_ROOT/python/reconstruction/kaggle/render_kernel.py"; } > "$d/kernel.py"
+  python3 - "$d" "$u/$2" "$2" "$3" <<'EOF'
+import json, sys
+d, kid, title, ds = sys.argv[1:5]
+json.dump({"id": kid, "title": title, "code_file": "kernel.py", "language": "python", "kernel_type": "script",
+           "is_private": True, "enable_gpu": True, "enable_internet": True, "machine_shape": "NvidiaTeslaT4",
+           "dataset_sources": [ds] if ds else [], "competition_sources": [], "kernel_sources": []},
+          open(f"{d}/kernel-metadata.json", "w"), indent=2)
+EOF
+}
+
+mkdir -p "$WORK"
+image
+case "${1:-}" in
+  whoami) kg config view; echo "user: $(user)" ;;
+  smoke)
+    out="${2:?OUT dir}"
+    kernel_dir smoke ariadne-recon-smoke-gpu "" "import os; os.environ['SMOKE'] = '1'"
+    push_and_wait smoke ariadne-recon-smoke-gpu "$out" ;;
+  render)
+    pkg="${2:?render package dir}"; out="${3:?OUT dir}"
+    u="$(user)"; ds="$u/ariadne-render-pkg"
+    rm -rf "$WORK/pkg"; mkdir -p "$WORK/pkg"
+    cp "$pkg/render_package.npz" "$pkg/render_package.json" "$WORK/pkg/"
+    printf '{"title": "ariadne-render-pkg", "id": "%s", "licenses": [{"name": "CC0-1.0"}]}\n' "$ds" \
+      > "$WORK/pkg/dataset-metadata.json"
+    if kg datasets status "$ds" >/dev/null 2>&1; then
+      kg datasets version -p /w/pkg -m "package $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["sha256"][:12])' "$pkg/render_package.json")"
+    else
+      kg datasets create -p /w/pkg
+    fi
+    for ((i = 0; i < 40; i++)); do
+      st="$(kg datasets status "$ds" 2>&1 | tail -1)"; echo "  dataset: $st"
+      case "$st" in *ready*) break ;; esac; sleep 15
+    done
+    case "$st" in *ready*) ;; *) die "dataset $ds not ready" ;; esac
+    kernel_dir render ariadne-recon-render-gpu "$ds" "# Ariadne 1.7 render kernel (generated by infra/scripts/kaggle.sh)"
+    push_and_wait render ariadne-recon-render-gpu "$out" ;;
+  *) sed -n '2,17p' "$0"; exit 2 ;;
+esac

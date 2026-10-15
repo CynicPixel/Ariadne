@@ -20,6 +20,7 @@
 #include "collaboration/broker/edge_verifier.hpp"
 #include "collaboration/protocol/inbox.hpp"
 #include "collaboration/retrieval/mean_bit_descriptor.hpp"
+#include "reconstruction/spool/keyframe_spool.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
 
 #include <opencv2/features2d.hpp>
@@ -29,6 +30,7 @@
 #include <cstdio>
 #include <deque>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -146,6 +148,7 @@ int main(int argc, char** argv) {
         tools::StereoVoArgs va;
         std::string rec, scene, collab_path, out;
         bool faults = false;
+        std::string spool_dir, recon_path;   // 1.7: optional reconstruction spool (design RECON_1.7)
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
             if (i + 1 >= argc) throw std::invalid_argument("missing value for " + k);
@@ -158,16 +161,29 @@ int main(int argc, char** argv) {
             else if (k == "--out") out = v;
             else if (k == "--seed") va.seed = std::stoull(v);
             else if (k == "--inject-faults") faults = v == "1";
+            else if (k == "--spool") spool_dir = v;
+            else if (k == "--recon-config") recon_path = v;
             else throw std::invalid_argument("unknown argument " + k);
         }
         if (rec.empty() || scene.empty() || collab_path.empty() || out.empty() || va.perception_config.empty()) {
             throw std::invalid_argument("usage: ariadne_sim_collab --rec R --scene S --perception-config P "
-                                        "--slam-config S --collab-config C --out DIR [--inject-faults 1]");
+                                        "--slam-config S --collab-config C --out DIR [--inject-faults 1] "
+                                        "[--spool DIR --recon-config Y]");
         }
+        if (spool_dir.empty() != recon_path.empty()) throw std::invalid_argument("--spool needs --recon-config");
         const CollabConfig cc = LoadCollab(collab_path);
         const std::string scene_id = YAML::LoadFile(scene + "/scene.json")["scene_id"].as<std::string>();
         const fs::path run_dir = fs::path(out) / (scene_id + (faults ? "-faults-" : "-") + tools::UtcNow("%Y%m%dT%H%M%SZ"));
         fs::create_directories(run_dir / "raw");
+        std::unique_ptr<reconstruction::KeyframeSpool> spool;
+        if (!spool_dir.empty()) {
+            const YAML::Node sp = YAML::LoadFile(recon_path)["spool"];
+            reconstruction::SpoolParams p;
+            p.scale = sp["scale"].as<double>();
+            p.keyframe_stride = sp["keyframe_stride"].as<int>();
+            p.heldout_stride = sp["heldout_stride"].as<int>();
+            spool = std::make_unique<reconstruction::KeyframeSpool>(fs::path(spool_dir) / run_dir.filename(), p);
+        }
 
         // --- both agents: VO in replay, keyframe features via the hook -----------
         AgentRun runs[2];
@@ -179,6 +195,17 @@ int main(int argc, char** argv) {
             a.out = (run_dir / "raw").string();
             a.tool = "ariadne_sim_collab/agent" + std::to_string(k);
             a.on_body_pose = [&, k](int64_t t, const core::SE3& T) { runs[k].est_body.push_back({t, T}); };
+            if (spool) {
+                a.on_frame = [&, k](const tools::FrameView& fv) {
+                    if (fv.is_keyframe || !spool->WantHeldout(fv.frame_id) || runs[k].kfs.empty()) return;
+                    const KeyframeFeatures& any = runs[k].kfs.front();   // intrinsics are fixed per rig
+                    const cv::Mat rgb = fv.left_rect_rgb();
+                    spool->AddHeldout(k, fv.frame_id, fv.t_ns, fv.T_O_C,
+                                      spool->Camera(any.camera[0], any.camera[1], any.camera[2], any.camera[3],
+                                                    rgb.cols, rgb.rows),
+                                      rgb);
+                };
+            }
             a.on_keyframe = [&, k](const tools::KeyframeView& kv) {
                 std::vector<cv::KeyPoint> kps;
                 cv::Mat desc;
@@ -201,6 +228,11 @@ int main(int argc, char** argv) {
                     f.points3d.push_back(z);
                 }
                 f.global = collaboration::MeanBitDescriptor(f.descriptors);
+                if (spool) {
+                    spool->AddKeyframe(k, kv.frame_id, kv.t_ns, kv.graph_version, kv.T_O_C,
+                                       spool->Camera(kv.fx, kv.fy, kv.cx, kv.cy, kv.left_rect.cols, kv.left_rect.rows),
+                                       kv.baseline_m, kv.left_rect_rgb, kv.depth_z, kv.sigma_z);
+                }
                 runs[k].T_B_C = kv.T_B_C;
                 runs[k].kfs.push_back(std::move(f));
             };
@@ -436,8 +468,9 @@ int main(int argc, char** argv) {
         // --- merge with the best verified edge; score both agents in one frame ------
         std::vector<core::TrajectorySample> e_all, g_all;
         double merged_rmse = NAN;
+        core::SE3 T_O0_O1;
         if (merge_a) {
-            const core::SE3 T_O0_O1 = merge_a->T_O_C * merge_T_A_B * merge_b->T_O_C.inverse();
+            T_O0_O1 = merge_a->T_O_C * merge_T_A_B * merge_b->T_O_C.inverse();
             for (uint32_t k = 0; k < 2; ++k) {
                 for (const auto& p : runs[k].est_body) {
                     const auto it = runs[k].gt.find(p.t_ns);
@@ -447,6 +480,29 @@ int main(int argc, char** argv) {
                 }
             }
             merged_rmse = runtime::ComputeATE(e_all, g_all).rmse;
+        }
+        if (spool) {
+            const std::string edge = merge_a ? "agent0 kf " + std::to_string(merge_a->id) + " <- agent1 kf " +
+                                                   std::to_string(merge_b->id) + " (best-ranked verified, 1.6)"
+                                             : "none";
+            spool->Finish(run_dir.filename().string(), scene_id, merge_a != nullptr, T_O0_O1, edge);
+            // Evaluation-only record (NOT in the spool): the one SE(3) alignment of the merged
+            // trajectory to GT, i.e. T_W_O0, so the fused cloud can be compared with GT meshes.
+            const auto al = runtime::AlignTrajectories(e_all, g_all, false);
+            if (!al.valid) throw std::runtime_error("spool: no valid GT alignment for the evaluation record");
+            YAML::Emitter y;
+            y.SetDoublePrecision(17);
+            std::vector<double> T;
+            for (int i = 0; i < 3; ++i) {
+                for (int j = 0; j < 3; ++j) T.push_back(al.transform.R(i, j));
+                T.push_back(al.transform.t(i));
+            }
+            y << YAML::BeginMap << YAML::Key << "T_W_O0" << YAML::Value << YAML::Flow << T << YAML::Key << "source"
+              << YAML::Value << "Umeyama SE(3) of the merged two-agent trajectory onto GT (evaluation only)"
+              << YAML::Key << "spool" << YAML::Value << (fs::path(spool_dir) / run_dir.filename()).string()
+              << YAML::Key << "spool_entries" << YAML::Value << spool->size() << YAML::EndMap;
+            std::ofstream(run_dir / "recon_eval.yaml") << "# Evaluation-only record for 1.7. Generated.\n" << y.c_str()
+                                                       << "\n";
         }
         double et_max = 0, er_max = 0;
         for (const auto& [t, r] : edge_err) et_max = std::max(et_max, t), er_max = std::max(er_max, r);

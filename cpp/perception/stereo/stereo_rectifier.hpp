@@ -49,6 +49,10 @@ public:
     void Rectify(const cv::Mat& left, const cv::Mat& right, cv::Mat& left_out,
                  cv::Mat& right_out) const;
 
+    /// Rectify a left image only, with the same maps (e.g. the colour frame
+    /// the reconstruction service needs alongside the gray VO input).
+    void RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const;
+
     /// Rectification outputs, for tests and the manifest.
     const cv::Mat& R1() const { return R1_; }
     const cv::Mat& R2() const { return R2_; }

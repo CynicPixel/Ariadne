@@ -1,0 +1,16 @@
+# 1.7 placeholder reconstruction (design RECON_1.7). Set before the first measurement.
+name: recon_v1
+spool:                          # C++ side (ariadne_sim_collab --spool)
+  scale: 0.5                    # 1280x720 -> 640x360: spool volume and render cost; K scaled with it
+  keyframe_stride: 1            # every keyframe
+  heldout_stride: 200           # one held-out (non-keyframe) frame per 200 frames per agent: render targets
+service:                        # Python side (python/reconstruction)
+  voxel_m: 0.02                 # fused-cloud voxel grid (one point per voxel, first-come by bundle order)
+  max_gaussians: 300000         # cap after voxelization (deterministic stride subsample if exceeded)
+  max_depth_m: 6.0              # back-project only depth <= this (SGBM sigma grows with Z^2)
+  max_sigma_m: 0.05             # and only sigma_Z <= this
+  init_opacity: 0.1             # gsplat simple_trainer default (logit applied there)
+  train_steps: 0                # 1.7 renders the initialization; training is Phase 6
+evaluation:                     # evaluation only: GT never enters the spool or the service
+  gt_sample_m: 0.02             # GT mesh surfaces sampled uniformly by area at this spacing
+  completeness_tau_m: 0.05      # a GT sample is covered if a cloud point is within this
