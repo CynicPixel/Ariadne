@@ -1455,3 +1455,39 @@ decisions appear only when the choice changes, labelled "logged decision · repl
 **Not in 1.10.** 3D splat view in the console (the separate 1.7 viewer page exists), approvals (§23), raw vs restored
 feeds, live hosting (Phase 8), budget gauges against a policy budget (Phase 3). A claude.ai artifact cannot reach a
 localhost WebSocket, so the console is served locally (`127.0.0.1`, ssh tunnel from elsewhere).
+
+## 2026-10-16 — D48: Phase 1 exit gate — one replay command, the §4 contracts wired and counted, determinism vs evidence
+
+**What.** `infra/scripts/phase1.sh` replays the recorded bag through every Phase 1 stage from one commit, into one
+directory (`evaluation/runs/phase1/exit_gate/<scene>-<UTC>/`; large outputs in `build/phase1_gate/`, sha256
+committed): build + full ctest, the protocol tests, 1.6 clean + fault-injected runs concurrently, fault identity,
+1.7 prepare → fresh Kaggle render → score, 1.8 mission ×3 + eval, 1.9 report, 1.10 console check. Then
+`python/analysis/phase1_gate.py` (config `configs/benchmark/phase1_gate.yaml`) writes `gate.yaml` and one verdict.
+Design `PHASE1_GATE.md`.
+
+**The §4 contracts were not exercised before (a correction).** `runtime::Keyframe` (§4.2) and `KeyframeBundle` (§18.2)
+were defined, but no run built them: the VO hook passed loose fields, and `ariadne_mission` declared its own `Keyframe`.
+Now `RunStereoVo` builds both at each keyframe. The Keyframe holds the graph node pose, its absolute covariance, SGBM
+depth and the observed landmarks (`StereoVo::KeyframeLandmarks`); the Bundle is built by `BuildKeyframeBundle` at the
+graph's version. The 1.6 exchange completes the Keyframe with ORB and the mean-bit descriptor, and derives its wire
+features from it; the spool writes the Bundle. `StereoFrame` (§4.1) gains `agent` and `id`, asserted in sequence.
+Agent 1 now checks every decoded POSE_EDGE field for field against the encoded one, and checks that the merge's edge
+was received. The merge itself still comes from the broker's double-precision verifier output: the broker owns the
+global estimate. Integrating received edges into agent 1's graph is Phase 3, and merging from the float32 wire copy
+would change results. `sim_collab` writes `contracts.yaml` with the per-hop counts, the per-field gaps, and the
+declared-unset fields. Every output stays byte-identical: the EuRoC MH_01 estimate and results, and the 1.6 CSVs,
+results and both estimates, all match. The gate re-proves this against all committed evidence.
+
+**Determinism means agreement with independent runs, with named exclusions only.** The gate compares its outputs
+file by file with the 1.6–1.9 evidence, which came from four other commits and processes. Exclusions are per-file
+line regexes, and each must carry a reason, `run_identity` or `timing`; the checker refuses one without a reason.
+The dev run's 12 differing files were all run ids, paths, commit, the spool.yaml hash (it embeds the run id), or
+wall clock. `report.yaml`'s `inputs_clean` stays compared on purpose, so a dirty run cannot pass.
+
+**Dev result (dirty tree, 2026-10-15).** Every I1, contract, stage and determinism check passes, except
+`inputs_clean` (expected on a dirty tree). The **fresh Kaggle render is sha256-identical to the 1.7 render** (`cc3a2498…`):
+gsplat rasterization is deterministic across T4 sessions for this package. Gauge note: keyframe 0's absolute covariance
+is zero by definition (the gauge), counted as `gauge_zero_cov`, not as missing.
+
+**Not gate items, reported.** §37.7 round trips for message classes with no schema yet, the ≤15% byte prediction
+and stale-epoch rejection (Phase 3). Nightly CI of the thin run is open: it needs the 12 GB bag and a GPU.

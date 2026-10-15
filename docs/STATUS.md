@@ -4,6 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-16 — Phase 1 exit gate: one replay command, §4 contracts wired + counted (D48)
+
+- `infra/scripts/phase1.sh` runs the whole thin chain from the bag in one go (about 40 min; Kaggle render included),
+  then `analysis.phase1_gate` → `gate.yaml` + `VERDICT`. It checks: the I1 condition, every §4 contract counted per hop
+  (`contracts.yaml`), ctest + protocol tests + fault identity + §30.2 + console, and determinism against the committed
+  1.6–1.9 evidence (named exclusions only).
+- Correction: §4.2 `Keyframe` and §18.2 `KeyframeBundle` were not used by any run; they are now built by the VO hook
+  and consumed by the exchange and the spool, with outputs byte-identical (EuRoC regression included).
+- Dev run: everything PASS except `inputs_clean` (dirty tree, by design). The fresh Kaggle render is sha256-identical to
+  the 1.7 render.
+- Next: the evidence run from a clean commit. Open: nightly CI of the thin run (where and which subset).
+
 ## 2026-10-16 — 1.10 operator console stub: replayed telemetry, top-down map, byte gauges, incident timeline (D47)
 
 - `infra/scripts/console.sh serve CHAIN` → http://127.0.0.1:8080: WebSocket telemetry at 5 Hz from a committed run chain
