@@ -97,6 +97,34 @@ table Heartbeat {
 
 /// Every message on the wire is an Envelope. One root type means one
 /// serialization boundary, which is what makes byte accounting honest.
+/// §15.2 global descriptor (1.6 placeholder: mean-pooled ORB bits, 256 floats).
+table GlobalDescriptor {
+  keyframe_id:ulong;
+  stamp_ns:long;
+  descriptor:[float];
+  quality:float;
+}
+
+/// §15.2 candidate request: the broker asks for one keyframe's local features.
+table MatchRequest {
+  request_id:ulong;
+  query_keyframe:ulong;       // the requester's keyframe
+  candidate_keyframe:ulong;   // the receiver's keyframe whose features are wanted
+  feature_type:ubyte;         // 0 = ORB-256
+}
+
+/// §15.2 feature response: keypoints (x,y pairs), descriptors (32 B each), the
+/// sender's 3D points in its rectified-left camera frame (x,y,z triples, NaN =
+/// no depth), and camera metadata (fx, fy, cx, cy, baseline_m).
+table FeatureResponse {
+  request_id:ulong;
+  keyframe_id:ulong;
+  keypoints:[float];
+  descriptors:[ubyte];
+  points3d:[float];
+  camera:[float];
+}
+
 table Envelope {
   cls:MessageClass;
   sender:uint;
@@ -106,6 +134,10 @@ table Envelope {
   heartbeat:Heartbeat;
   pose_graph:PoseGraph;
   edge:LoopEdge;
+  // Appended (1.6): new fields go last so earlier encodings stay readable.
+  global_descriptor:GlobalDescriptor;
+  match_request:MatchRequest;
+  feature_response:FeatureResponse;
 }
 
 root_type Envelope;

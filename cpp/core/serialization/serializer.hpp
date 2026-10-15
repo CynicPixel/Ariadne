@@ -231,6 +231,26 @@ struct PoseGraphValue {
     FrameTag anchor;
 };
 
+struct GlobalDescriptorValue {
+    uint64_t keyframe_id = 0;
+    int64_t stamp_ns = 0;
+    std::vector<float> descriptor;
+    float quality = 0.0f;
+};
+
+struct MatchRequestValue {
+    uint64_t request_id = 0, query_keyframe = 0, candidate_keyframe = 0;
+    uint8_t feature_type = 0;
+};
+
+struct FeatureResponseValue {
+    uint64_t request_id = 0, keyframe_id = 0;
+    std::vector<float> keypoints;     // x0 y0 x1 y1 ...
+    std::vector<uint8_t> descriptors; // 32 bytes per keypoint
+    std::vector<float> points3d;      // x y z per keypoint, NaN = no depth
+    std::vector<float> camera;        // fx fy cx cy baseline_m
+};
+
 struct DecodedMessage {
     MessageClass cls = MessageClass::HEARTBEAT;
     AgentId sender = 0;
@@ -241,6 +261,12 @@ struct DecodedMessage {
     PoseGraphValue pose_graph;
     bool has_edge = false;
     LoopEdgeValue edge;
+    bool has_global_descriptor = false;
+    GlobalDescriptorValue global_descriptor;
+    bool has_match_request = false;
+    MatchRequestValue match_request;
+    bool has_feature_response = false;
+    FeatureResponseValue feature_response;
 };
 
 namespace detail {
@@ -343,6 +369,36 @@ public:
         return Finalize(fbb, MessageClass::POSE_EDGE, sender, receiver, t);
     }
 
+    SerializedMessage EncodeGlobalDescriptor(const GlobalDescriptorValue& g, AgentId sender, AgentId receiver,
+                                             Timestamp t, uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(1024 + 4 * g.descriptor.size());
+        const auto d = fbb.CreateVector(g.descriptor);
+        const auto off = wire::CreateGlobalDescriptor(fbb, g.keyframe_id, g.stamp_ns, d, g.quality);
+        return FinishEnvelope(fbb, MessageClass::GLOBAL_DESCRIPTOR, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_global_descriptor(off); });
+    }
+
+    SerializedMessage EncodeMatchRequest(const MatchRequestValue& r, AgentId sender, AgentId receiver,
+                                         Timestamp t, uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(128);
+        const auto off = wire::CreateMatchRequest(fbb, r.request_id, r.query_keyframe, r.candidate_keyframe,
+                                                  r.feature_type);
+        return FinishEnvelope(fbb, MessageClass::MATCH_REQUEST, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_match_request(off); });
+    }
+
+    SerializedMessage EncodeFeatureResponse(const FeatureResponseValue& f, AgentId sender, AgentId receiver,
+                                            Timestamp t, uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(1024 + f.descriptors.size() + 4 * (f.keypoints.size() + f.points3d.size()));
+        const auto kp = fbb.CreateVector(f.keypoints);
+        const auto de = fbb.CreateVector(f.descriptors);
+        const auto p3 = fbb.CreateVector(f.points3d);
+        const auto ca = fbb.CreateVector(f.camera);
+        const auto off = wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca);
+        return FinishEnvelope(fbb, MessageClass::MATCH_RESPONSE, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_feature_response(off); });
+    }
+
     /// Decode. The message class comes from the frame header, so no
     /// out-of-band knowledge is required. Returns kOk only when the message is
     /// well formed AND every pose carries a frame tag (§15.5).
@@ -416,10 +472,54 @@ public:
             const Status s = ReadEdge(e, &out->edge);
             if (s != Status::kOk) return s;
         }
+        out->has_global_descriptor = out->has_match_request = out->has_feature_response = false;
+        if (const auto* g = env->global_descriptor()) {
+            if (!g->descriptor()) return Status::kMalformed;
+            out->has_global_descriptor = true;
+            auto& v = out->global_descriptor;
+            v.keyframe_id = g->keyframe_id();
+            v.stamp_ns = g->stamp_ns();
+            v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
+            v.quality = g->quality();
+        }
+        if (const auto* r = env->match_request()) {
+            out->has_match_request = true;
+            out->match_request = {r->request_id(), r->query_keyframe(), r->candidate_keyframe(), r->feature_type()};
+        }
+        if (const auto* f = env->feature_response()) {
+            if (!f->keypoints() || !f->descriptors() || !f->points3d() || !f->camera()) return Status::kMalformed;
+            const size_t n = f->keypoints()->size() / 2;
+            if (f->keypoints()->size() % 2 || f->descriptors()->size() != 32 * n || f->points3d()->size() != 3 * n ||
+                f->camera()->size() != 5) {
+                return Status::kMalformed;
+            }
+            out->has_feature_response = true;
+            auto& v = out->feature_response;
+            v.request_id = f->request_id();
+            v.keyframe_id = f->keyframe_id();
+            v.keypoints.assign(f->keypoints()->begin(), f->keypoints()->end());
+            v.descriptors.assign(f->descriptors()->begin(), f->descriptors()->end());
+            v.points3d.assign(f->points3d()->begin(), f->points3d()->end());
+            v.camera.assign(f->camera()->begin(), f->camera()->end());
+        }
         return Status::kOk;
     }
 
 private:
+    template <typename AddPayload>
+    SerializedMessage FinishEnvelope(flatbuffers::FlatBufferBuilder& fbb, MessageClass cls, AgentId sender,
+                                     AgentId receiver, Timestamp t, uint64_t sequence, AddPayload add) const {
+        wire::EnvelopeBuilder eb(fbb);
+        eb.add_cls(cls);
+        eb.add_sender(sender);
+        eb.add_receiver(receiver);
+        eb.add_stamp_ns(t.ns);
+        eb.add_sequence(sequence);
+        add(eb);
+        fbb.Finish(eb.Finish());
+        return Finalize(fbb, cls, sender, receiver, t);
+    }
+
     static flatbuffers::Offset<wire::LoopEdge> BuildEdge(
         flatbuffers::FlatBufferBuilder& fbb, const LoopEdgeValue& e) {
         const auto info = fbb.CreateVector(e.information);

@@ -38,6 +38,8 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -79,11 +81,26 @@ inline core::Mat3 ToEigen3(const cv::Mat& m) {
 }  // namespace detail
 using namespace detail;
 
+/// What a keyframe hook sees (1.6 collaboration): the rectified left image, the
+/// SGBM depth with unsupported pixels set to NaN, the keyframe pose of the
+/// rectified left camera in this agent's odometry frame, and the rectified rig.
+struct KeyframeView {
+    uint64_t frame_id = 0;
+    int64_t t_ns = 0;
+    cv::Mat left_rect;   // 8-bit gray
+    cv::Mat depth_z;     // CV_32F metres, NaN = unsupported
+    core::SE3 T_O_C;
+    core::SE3 T_B_C;     // body <- rectified left camera
+    double fx = 0, fy = 0, cx = 0, cy = 0, baseline_m = 0;
+};
+
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
+    std::function<void(const KeyframeView&)> on_keyframe;   // optional; never changes the run
+    std::function<void(int64_t, const core::SE3&)> on_body_pose;   // every frame's T_O_B; optional
 };
 
 /// The 1.4 + 1.5 pipeline over any StereoSource: rectify -> LK tracker ->
@@ -176,8 +193,25 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 ba_cost_ratio_sum += kr.ba_final_cost / std::max(kr.ba_initial_cost, 1e-12);
             }
             T_W_C = vo.graph().nodes().rbegin()->second.T_W_C;
+            if (args.on_keyframe) {
+                KeyframeView kv;
+                kv.frame_id = vf.frame_id;
+                kv.t_ns = vf.t_ns;
+                kv.left_rect = l;
+                kv.depth_z = z32.clone();
+                kv.depth_z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
+                kv.T_O_C = T_W_C;
+                kv.T_B_C = T_B_Crect;
+                kv.fx = rr.fx;
+                kv.fy = rr.fy;
+                kv.cx = rr.cx;
+                kv.cy = rr.cy;
+                kv.baseline_m = rr.baseline_m;
+                args.on_keyframe(kv);
+            }
         }
         est_body.push_back({vf.t_ns, T_W_C * T_B_Crect.inverse()});
+        if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
         if (i % 500 == 0) std::printf("  frame %d: tracks %zu, status %d, keyframes %d\n", i, tf.ids.size(),
                                       static_cast<int>(tr.status), keyframes);
         ++i;

@@ -1,0 +1,21 @@
+# 1.6 placeholder collaboration (design COLLAB_1.6). Starting values, set before
+# the first measurement; results.yaml reports what each gate did.
+name: collab_v1
+orb_features: 1000              # per keyframe, left rectified image
+retrieval_threshold: 0.5        # cosine of mean-bit descriptors (placeholder)
+max_candidates: 20              # feature requests the broker may make
+verify:
+  ratio: 0.8                    # Lowe ratio test, Hamming
+  min_matches: 40
+  essential_threshold_px: 1.0   # findEssentialMat RANSAC (the geometric gate)
+  min_essential_inliers: 30
+  min_essential_inlier_ratio: 0.4
+  pnp_reprojection_px: 2.0      # solvePnPRansac on the other agent's stereo 3D points
+  min_pnp_inliers: 25
+gt_max_distance_m: 1.5          # a TRUE opportunity: worldgen's closure gate (design SIM §4.4)
+gt_max_angle_deg: 30.0
+edge_correct_t_m: 0.05          # evaluation only: an edge is CORRECT within 5 cm / 1 deg of GT.
+edge_correct_r_deg: 1.0         #   Set after the first run (2026-10-15), to separate edge correctness
+                                #   from the opportunity cone above (3 verified edges fell outside 30 deg).
+negative_probe: 20              # evaluation only: verify the 20 best-scoring NON-opportunity top-1 pairs outside
+                                #   the exchange (no bytes, no edges); a false accept = verified but not correct

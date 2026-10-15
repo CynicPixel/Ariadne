@@ -42,6 +42,12 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_sim_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # 1.6 placeholder collaboration over a sim recording (design COLLAB_1.6).
+  add_executable(ariadne_sim_collab tools/ariadne_sim_collab.cpp)
+  target_link_libraries(ariadne_sim_collab PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
+  install(TARGETS ariadne_sim_collab RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # The 1.1 acceptance test: rig recovery from a sim recording (design SIM_1.1-1.3 §6).
   add_executable(ariadne_sim_calib tools/ariadne_sim_calib.cpp)
   target_link_libraries(ariadne_sim_calib PRIVATE
