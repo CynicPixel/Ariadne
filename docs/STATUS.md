@@ -13,13 +13,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   17 in the 30° opportunity cone; merged two-agent ATE 9.8 mm; 1.27 MB total, MATCH_RESPONSE 76 %.
   Fault injection (duplicates + held-back reorders, exercised on both links): outputs identical.
 - Negative probe (20 hardest non-opportunity pairs, outside the exchange): 14 rejected (all 12 different-place
-  pairs among them), 5 correct overlaps, **1 false accept** (near pair, 1.10 m / 51.6° error; likely a planar
-  ChArUco view, `[UNVERIFIED]`, diagnosed by new non-gating columns). Not gated in 1.6: Phase 3 degeneracy gate.
+  pairs among them), 5 correct overlaps, **1 false accept** (near pair, 1.10 m / 51.6° error). Planarity and
+  h/E diagnostics do NOT separate it from the 25 correct edges (maze walls make correct edges near-planar too);
+  cause `[UNVERIFIED]`. Not gated in 1.6: Phase 3 PCM/GNC; the pair is a Phase 3 regression case.
+- Evidence, clean commit 2ed0a49 (`evaluation/runs/phase1/sim_collab/`): no-fault + fault runs, identity check
+  VERDICT PASS; identical to the dev runs.
 - Found and fixed before any evidence run: 19 of 20 POSE_EDGEs were delivered and silently dropped by a receive loop
   that only looked for match requests; now every delivery is dispatched or fails the run.
 - Open (D43): retrieval threshold inert (top-1 cosine 0.88–1.0), proxy information ≈ 5σ overconfident, candidate
   clustering (agent 1 parks ~70 % of its run, ~57.5 s to 199 s — explains its constant VO track count).
-- Next: clean-commit evidence into `evaluation/runs/phase1/sim_collab/`, then 1.7.
+- Next: 1.7.
 
 ## 2026-10-15 — 1.4/1.5 run from the sim recording (D42)
 

@@ -1271,7 +1271,14 @@ flush's messages, drain at the end; the run fails unless both inboxes saw duplic
 first version (adjacent swaps) mostly swapped messages of different classes, which the per-class inbox never had
 to reorder; replaced before any result was taken.
 
-**Measured (dev runs, ci_tiny seed 0, `collab_v1`).** 327 + 250 keyframes. 20 candidates (the cap), 20 verified,
+**Evidence** (clean commit 2ed0a49, `git_dirty: false`): `evaluation/runs/phase1/sim_collab/`
+`aadffb8df5790ca0-20261015T083420Z` (no faults) and `aadffb8df5790ca0-faults-20261015T083420Z`;
+`infra/scripts/check_collab_fault_identity.sh` → `fault_identity.txt` **VERDICT PASS** (CSVs byte-identical,
+results.yaml identical except inject_faults/protocol, both agents' estimates sha-identical, faults exercised:
+broker 54 dup / 4 buffered, agent 1 8 / 8). Every pre-diagnostic column and results.yaml are identical to the
+dev runs (the diagnostics do not change the verifier).
+
+**Measured (ci_tiny seed 0, `collab_v1`; evidence = dev runs).** 327 + 250 keyframes. 20 candidates (the cap), 20 verified,
 **20/20 edges within 5 cm / 1° of GT** (max 3.3 cm / 0.57°); 17 inside the 30° opportunity cone, the other 3 are
 correct edges at 33–48° view angle (the cone is worldgen's guarantee, not a correctness test; gates were NOT
 tightened to exclude them). Merged two-agent ATE 9.8 mm (one alignment, 7962 poses). Bytes (§15.7 first numbers):
@@ -1305,6 +1312,10 @@ gate, 5 for too few matches) plus 2 near pairs (too few matches / 3D points) —
 accept**: agent 0 frame 3372 vs agent 1 frame 382, 0.48 m apart at 54.5° view angle, 289 matches / 162 essential /
 129 PnP inliers, edge error 1.10 m / 51.6°. So the gate rejects appearance-only matches between different places
 and fails on a near pair. A yaw-only bearing check suggests both cameras face ChArUco board 1 (room (1,0), wall S)
-from ~1.3–1.4 m, i.e. a planar target where PnP has a flip ambiguity — `[UNVERIFIED]`: the diagnostics
-`h_over_e` (homography / essential inliers on the same matches) and `planarity` (λmin/λmax of the PnP inliers'
-3D covariance), recorded for every verified pair from the evidence run on, test it.
+from ~1.3–1.4 m (a planar target, where PnP has a flip ambiguity). **Tested and NOT confirmed as a separable
+cause:** the non-gating diagnostics `h_over_e` (homography / essential inliers on the same matches) and
+`planarity` (λmin/λmax of the PnP inliers' 3D covariance) put the false accept (0.611, 0.00104) INSIDE the range
+of the 25 correct edges (h_over_e 0.19–0.71, planarity 0.00041–0.167; ranks 1, 2 and 4 are more planar, rank 6
+has a higher h/E). In a room maze most matches lie on one wall, so correct edges are near-planar too: neither
+scalar can gate this. Cause `[UNVERIFIED]`; the Phase 3 answer is consistency (PCM against odometry and the other
+edges), not a per-edge threshold.
