@@ -1,0 +1,9 @@
+# 1.8 evidence (clean commit 60763bf), from the 1.7 evidence spool (spool.yaml sha256 92f437ae..., see
+# evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/checksums.sha256):
+S=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+C=evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z
+infra/scripts/core.sh mission build/spool/aadffb8df5790ca0-20261015T114028Z $S      # merged, agent 0 alone, agent 1 alone
+infra/scripts/recon.sh mission-eval <agent0only run> $S $C
+infra/scripts/recon.sh mission-eval <agent1only run> $S $C
+infra/scripts/recon.sh mission-eval <merged run> $S $C <agent0only run> <agent1only run>
+# All three runs are byte-identical to the dev runs (trace, routes, slab, support, results minus timing).
