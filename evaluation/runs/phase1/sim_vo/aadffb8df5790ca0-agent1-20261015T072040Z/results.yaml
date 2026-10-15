@@ -1,0 +1,13 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: aadffb8df5790ca0-agent1
+frames: 3981
+associated_poses: 3981  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 10.6716
+ate_se3: {rmse_m: 0.00437853, mean_m: 0.00224351, max_m: 0.022457, rotation_rmse_rad: 0.00260347}
+ate_rmse_percent_of_path: 0.0410298
+sim3_scale: 1.00027  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.000616581, rotation_rmse_rad: 0.000244252}
+vo: {lost_frames: 1, keyframes: 250, ba_runs: 249, ba_mean_cost_ratio: 0.673113, landmarks_alive_at_end: 134, graph_edges: 249, graph_version: 499}
+stereo_match_valid_fraction: 0.708194
+triangulation: {candidates: 19247, created: 8976, no_stereo: 8917, nonpositive_disparity: 0, depth_range: 1324, reprojection: 0, sgbm_inconsistent: 30, uncertain: 0}
+timing_ms: {track_mean: 20.4317, vo_track_mean: 2.57111, keyframe_mean: 156.156, opencv_threads: 8}
