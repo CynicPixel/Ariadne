@@ -1,0 +1,490 @@
+# Phase 1 exit gate (design PHASE1_GATE). Generated; do not hand-edit.
+gate: phase1_gate_v1
+run: aadffb8df5790ca0-20261016T052930Z
+verdict: PASS
+checks:
+- group: i1
+  check: two agents explore (keyframes per agent)
+  ok: true
+  detail:
+    agent0: 327
+    agent1: 250
+- group: i1
+  check: each agent builds a local map alone (coverage of the GT free space)
+  ok: true
+  detail:
+    agent0_alone: 0.8935520984443
+    agent1_alone: 0.4320944424991246
+- group: i1
+  check: merge via >= 1 verified inter-agent closure
+  ok: true
+  detail:
+    edges_sent: 20
+    edges_correct_vs_gt: 20
+    merged_ate_rmse_m: 0.0097643
+- group: i1
+  check: a splat is rendered (remote GPU renders scored on held-out views)
+  ok: true
+  detail:
+    views: 39
+    psnr_db: 17.51245088706249
+    ssim: 0.7181015790776808
+    lpips: 0.6807997899177747
+    renders_sha256: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+- group: i1
+  check: an exit route is produced, valid against GT at rho_responder
+  ok: true
+  detail:
+    t_merge_s: 137.95
+    first_valid_route_s: 140
+    final_length_m: 4.44142
+    gt_geodesic_m: 4.4414215087890625
+    exit: 1
+- group: i1
+  check: 'one run: every stage''s manifest records the same commit'
+  ok: true
+  detail:
+    sim_collab/aadffb8df5790ca0-20261016T052947Z/manifest.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    sim_collab/aadffb8df5790ca0-faults-20261016T052947Z/manifest.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    recon/aadffb8df5790ca0-20261016T052947Z/manifest_prepare.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    recon/aadffb8df5790ca0-20261016T052947Z/manifest_score.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    mission/aadffb8df5790ca0-20261016T060500Z/manifest.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    mission/aadffb8df5790ca0-agent0only-20261016T060504Z/manifest.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+    mission/aadffb8df5790ca0-agent1only-20261016T060507Z/manifest.yaml: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+- group: contracts
+  check: §4.1 Frame delivered (agent 0)
+  ok: true
+  detail:
+    delivered: 3981
+- group: contracts
+  check: §4.2 Keyframe records complete (agent 0)
+  ok: true
+  detail:
+    records: 327
+    complete: 327
+    gauge_zero_cov: 1
+    missing:
+      depth: 0
+      descriptors: 0
+      global_descriptor: 0
+      keypoints: 0
+      landmark_ids: 0
+      pose_cov: 0
+- group: contracts
+  check: §18.2 KeyframeBundle built + spooled (agent 0)
+  ok: true
+  detail:
+    built: 327
+    spooled: 327
+- group: contracts
+  check: §4.1 Frame delivered (agent 1)
+  ok: true
+  detail:
+    delivered: 3981
+- group: contracts
+  check: §4.2 Keyframe records complete (agent 1)
+  ok: true
+  detail:
+    records: 250
+    complete: 250
+    gauge_zero_cov: 1
+    missing:
+      depth: 0
+      descriptors: 0
+      global_descriptor: 0
+      keypoints: 0
+      landmark_ids: 0
+      pose_cov: 0
+- group: contracts
+  check: §18.2 KeyframeBundle built + spooled (agent 1)
+  ok: true
+  detail:
+    built: 250
+    spooled: 250
+- group: contracts
+  check: §4.3 LoopEdge encoded -> decoded identical -> merge edge received
+  ok: true
+  detail:
+    encoded: 20
+    decoded_identical: 20
+    merge_edge_received: true
+- group: contracts
+  check: '§4.4 ByteRecord: one ledger row per message, totals agree'
+  ok: true
+  detail:
+    ledger_rows: 310
+    classes_used: 4
+    total_wire_bytes: 1270717
+- group: contracts
+  check: unset-by-design fields declared
+  ok: true
+  detail:
+    frame_4_1:
+    - imu_window
+    - photo
+    - illumination
+    - gt
+    keyframe_4_2:
+    - velocity_world
+    - bias_gyro
+    - bias_accel
+    - gravity_dir
+    - preint_from_prev
+    - local_cloud
+    - motion_cost
+    - energy_cost
+    - timestamp_age
+    - uncertainty
+    keyframe_bundle_18_2:
+    - exposure_state
+    - lamp_state
+    loop_edge_4_3:
+    - pcm_score
+    - gnc_weight
+    - degeneracy_flag
+    message_class_4_4:
+    - HEARTBEAT
+    - LOCAL_DESCRIPTOR
+    - POSE_GRAPH
+    - SUBMAP_SUMMARY
+    - SUBMAP_PATCH
+    - TASK_BID
+    - TASK_CONSENSUS
+    - HUMAN_REQUEST
+    - ACK
+- group: stages
+  check: full ctest
+  ok: true
+  detail: 100% tests passed, 0 tests failed out of 257
+- group: stages
+  check: protocol tests (CollabProtocol.*, Serialization.*)
+  ok: true
+  detail: 100% tests passed, 0 tests failed out of 18
+- group: stages
+  check: duplicate/out-of-order injection is idempotent (fault identity)
+  ok: true
+  detail:
+  - 'fault run protocol: {broker_duplicates: 54, broker_buffered: 4, agent1_duplicates: 8, agent1_buffered: 8, undelivered:
+    0}'
+  - VERDICT PASS
+- group: stages
+  check: every §30.2 metric emits a number (report check)
+  ok: true
+  detail: VERDICT PASS (every §30.2 metric emits a number)
+- group: stages
+  check: console chain check
+  ok: true
+  detail: VERDICT PASS
+- group: determinism
+  check: sim_collab/candidates.csv
+  ok: true
+  detail: identical
+- group: determinism
+  check: sim_collab/negative_probe.csv
+  ok: true
+  detail: identical
+- group: determinism
+  check: sim_collab/results.yaml
+  ok: true
+  detail: identical
+- group: determinism
+  check: sim_collab/recon_eval.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: sim_collab_faults/candidates.csv
+  ok: true
+  detail: identical
+- group: determinism
+  check: sim_collab_faults/negative_probe.csv
+  ok: true
+  detail: identical
+- group: determinism
+  check: sim_collab_faults/results.yaml
+  ok: true
+  detail: identical
+- group: determinism
+  check: recon/spool.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: recon/render_package.json
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: recon/prepare.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: recon/score.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission/results.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission/trace.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission/routes.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission/slab.png
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission/support.png
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission/map_vs_gt.png
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission/eval.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission_agent0/results.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission_agent0/trace.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission_agent0/routes.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission_agent0/eval.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission_agent1/results.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: mission_agent1/trace.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission_agent1/routes.jsonl
+  ok: true
+  detail: identical
+- group: determinism
+  check: mission_agent1/eval.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: report/report.yaml
+  ok: true
+  detail: identical_except
+- group: determinism
+  check: report/oracle.yaml
+  ok: true
+  detail: identical
+- group: determinism
+  check: report/registry.yaml
+  ok: true
+  detail: identical
+- group: determinism
+  check: report/report_check.txt
+  ok: true
+  detail: identical
+- group: determinism
+  check: report/figures/bytes.json
+  ok: true
+  detail: identical
+- group: determinism
+  check: recon/fused_cloud_O0.ply sha256
+  ok: true
+  detail: 51231809c5b09e600570b8ddae621d0325666693704e08a208419d02e4203b85
+- group: determinism
+  check: recon/render_package.npz sha256
+  ok: true
+  detail: 9ec2f67287fbea37754b0ccfb2827ac090d11c39e11aef06731ef2a99b6452ef
+- group: determinism
+  check: recon/renders.npz sha256
+  ok: true
+  detail: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+determinism:
+  sim_collab/candidates.csv:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/candidates.csv
+  sim_collab/negative_probe.csv:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/negative_probe.csv
+  sim_collab/results.yaml:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/results.yaml
+  sim_collab/recon_eval.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*spool: '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/recon_eval.yaml
+  sim_collab/(new, not compared):
+  - contracts.yaml
+  - ledger.csv
+  sim_collab_faults/candidates.csv:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/candidates.csv
+  sim_collab_faults/negative_probe.csv:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/negative_probe.csv
+  sim_collab_faults/results.yaml:
+    status: identical
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/results.yaml
+  sim_collab_faults/(new, not compared):
+  - contracts.yaml
+  - ledger.csv
+  recon/spool.yaml:
+    status: identical_except
+    excluded:
+    - '^run_id: '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/spool.yaml
+  recon/render_package.json:
+    status: identical_except
+    excluded:
+    - '^\s*"run_id": '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/render_package.json
+  recon/prepare.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*run_id: '
+    - '^spool_sha256: '
+    - '^\s*command: '
+    - ^\s+(--|/work/)
+    lines_excluded: 7
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/prepare.yaml
+  recon/score.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*install_s: '
+    - '^remote_render_s: '
+    - '^\s*command: '
+    - ^\s+(--|/work/)
+    lines_excluded: 4
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/score.yaml
+  mission/results.yaml:
+    status: identical_except
+    excluded:
+    - '^replan_ms_mean: '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/results.yaml
+  mission/trace.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/trace.jsonl
+  mission/routes.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/routes.jsonl
+  mission/slab.png:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/slab.png
+  mission/support.png:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/support.png
+  mission/map_vs_gt.png:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/map_vs_gt.png
+  mission/eval.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*git_commit: '
+    - '^\s*git_dirty: '
+    - '^\s*command: '
+    - ^\s+(--|/work/)
+    lines_excluded: 7
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/eval.yaml
+  mission/(new, not compared):
+  - snapshots
+  mission_agent0/results.yaml:
+    status: identical_except
+    excluded:
+    - '^replan_ms_mean: '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/results.yaml
+  mission_agent0/trace.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/trace.jsonl
+  mission_agent0/routes.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/routes.jsonl
+  mission_agent0/eval.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*git_commit: '
+    - '^\s*git_dirty: '
+    - '^\s*command: '
+    - ^\s+(--|/work/)
+    lines_excluded: 6
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/eval.yaml
+  mission_agent0/(new, not compared):
+  - snapshots
+  mission_agent1/results.yaml:
+    status: identical_except
+    excluded:
+    - '^replan_ms_mean: '
+    lines_excluded: 1
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/results.yaml
+  mission_agent1/trace.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/trace.jsonl
+  mission_agent1/routes.jsonl:
+    status: identical
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/routes.jsonl
+  mission_agent1/eval.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*git_commit: '
+    - '^\s*git_dirty: '
+    - '^\s*command: '
+    - ^\s+(--|/work/)
+    lines_excluded: 6
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/eval.yaml
+  mission_agent1/(new, not compared):
+  - snapshots
+  report/report.yaml:
+    status: identical_except
+    excluded:
+    - '^\s*(collab_run|recon_run|mission_run): '
+    lines_excluded: 3
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/report.yaml
+  report/oracle.yaml:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/oracle.yaml
+  report/registry.yaml:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/registry.yaml
+  report/report_check.txt:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/report_check.txt
+  report/figures/bytes.json:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/figures/bytes.json
+  recon/fused_cloud_O0.ply (sha256):
+    status: identical
+    gate: 51231809c5b09e600570b8ddae621d0325666693704e08a208419d02e4203b85
+    reference: 51231809c5b09e600570b8ddae621d0325666693704e08a208419d02e4203b85
+  recon/render_package.npz (sha256):
+    status: identical
+    gate: 9ec2f67287fbea37754b0ccfb2827ac090d11c39e11aef06731ef2a99b6452ef
+    reference: 9ec2f67287fbea37754b0ccfb2827ac090d11c39e11aef06731ef2a99b6452ef
+  recon/renders.npz (sha256):
+    status: identical
+    gate: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+    reference: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+chain:
+  sim_collab: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/sim_collab/aadffb8df5790ca0-20261016T052947Z
+  sim_collab_faults: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/sim_collab/aadffb8df5790ca0-faults-20261016T052947Z
+  recon: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/recon/aadffb8df5790ca0-20261016T052947Z
+  mission: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-20261016T060500Z
+  mission_agent0: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-agent0only-20261016T060504Z
+  mission_agent1: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-agent1only-20261016T060507Z
+  report: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/report/aadffb8df5790ca0-20261016T052947Z

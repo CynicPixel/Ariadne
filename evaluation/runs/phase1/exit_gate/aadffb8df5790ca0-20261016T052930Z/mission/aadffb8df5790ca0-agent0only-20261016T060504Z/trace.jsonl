@@ -1,0 +1,80 @@
+{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,49],"frontier_clusters":2,"rejected_small":13,"result":"go","frontier_xy_m":[-1.42095,3.09797],"frontier_cells":37,"path_m":0.474264}
+{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":10,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[71,106],"frontier_clusters":4,"rejected_small":17,"result":"go","frontier_xy_m":[3.60322,2.83688],"frontier_cells":202,"path_m":1.11924}
+{"t_s":10,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":15,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,130],"frontier_clusters":6,"rejected_small":18,"result":"go","frontier_xy_m":[3.19906,4.32972],"frontier_cells":106,"path_m":1.27071}
+{"t_s":15,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":20,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[56,151],"frontier_clusters":5,"rejected_small":21,"result":"go","frontier_xy_m":[2.46618,1.21765],"frontier_cells":68,"path_m":1.66421}
+{"t_s":20,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":25,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[54,154],"frontier_clusters":5,"rejected_small":21,"result":"go","frontier_xy_m":[2.46618,1.21765],"frontier_cells":68,"path_m":1.62635}
+{"t_s":25,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":30,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[54,154],"frontier_clusters":5,"rejected_small":21,"result":"go","frontier_xy_m":[2.46618,1.21765],"frontier_cells":68,"path_m":1.62635}
+{"t_s":30,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":35,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[52,154],"frontier_clusters":5,"rejected_small":23,"result":"go","frontier_xy_m":[2.03068,1.45227],"frontier_cells":44,"path_m":1.91777}
+{"t_s":35,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":40,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[32,154],"frontier_clusters":5,"rejected_small":23,"result":"go","frontier_xy_m":[2.03068,1.45227],"frontier_cells":44,"path_m":1.44497}
+{"t_s":40,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":45,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,154],"frontier_clusters":5,"rejected_small":24,"result":"go","frontier_xy_m":[2.03068,1.45227],"frontier_cells":44,"path_m":1.4864}
+{"t_s":45,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":50,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,154],"frontier_clusters":5,"rejected_small":25,"result":"go","frontier_xy_m":[2.03068,1.45227],"frontier_cells":44,"path_m":1.4864}
+{"t_s":50,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":55,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,153],"frontier_clusters":6,"rejected_small":25,"result":"go","frontier_xy_m":[2.03068,1.45227],"frontier_cells":44,"path_m":1.4364}
+{"t_s":55,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":60,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[33,152],"frontier_clusters":7,"rejected_small":26,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.36569}
+{"t_s":60,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":65,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[43,140],"frontier_clusters":7,"rejected_small":25,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.06066}
+{"t_s":65,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":70,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,142],"frontier_clusters":7,"rejected_small":25,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.18137}
+{"t_s":70,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":75,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,142],"frontier_clusters":7,"rejected_small":25,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.18137}
+{"t_s":75,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":80,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,141],"frontier_clusters":7,"rejected_small":25,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.13137}
+{"t_s":80,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":85,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[54,144],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.60563}
+{"t_s":85,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":90,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[63,148],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":2.05061}
+{"t_s":90,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":95,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[49,148],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.55563}
+{"t_s":95,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":100,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[29,148],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.08284}
+{"t_s":100,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":105,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[47,148],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.51421}
+{"t_s":105,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":110,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[63,147],"frontier_clusters":8,"rejected_small":24,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":2.0299}
+{"t_s":110,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":115,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[61,146],"frontier_clusters":7,"rejected_small":25,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.90919}
+{"t_s":115,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":120,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,128],"frontier_clusters":7,"rejected_small":23,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.8435}
+{"t_s":120,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":125,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,129],"frontier_clusters":7,"rejected_small":22,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":1.91421}
+{"t_s":125,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":130,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,134],"frontier_clusters":7,"rejected_small":22,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":2.01777}
+{"t_s":130,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":135,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,188],"frontier_clusters":8,"rejected_small":30,"result":"go","frontier_xy_m":[7.275,1.96974],"frontier_cells":19,"path_m":1.79853}
+{"t_s":135,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":140,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,248],"frontier_clusters":8,"rejected_small":34,"result":"go","frontier_xy_m":[9.25,4.29545],"frontier_cells":110,"path_m":1.22071}
+{"t_s":140,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":145,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[78,259],"frontier_clusters":8,"rejected_small":34,"result":"go","frontier_xy_m":[9.2328,4.30206],"frontier_cells":109,"path_m":0.941421}
+{"t_s":145,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":150,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[77,257],"frontier_clusters":12,"rejected_small":35,"result":"go","frontier_xy_m":[7.22333,4.11833],"frontier_cells":30,"path_m":2.08995}
+{"t_s":150,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":155,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[76,259],"frontier_clusters":7,"rejected_small":38,"result":"go","frontier_xy_m":[9.20969,6.37602],"frontier_cells":49,"path_m":2.82426}
+{"t_s":155,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":160,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[78,259],"frontier_clusters":7,"rejected_small":40,"result":"go","frontier_xy_m":[9.20969,6.37602],"frontier_cells":49,"path_m":2.72426}
+{"t_s":160,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":165,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,250],"frontier_clusters":7,"rejected_small":39,"result":"go","frontier_xy_m":[9.20969,6.37602],"frontier_cells":49,"path_m":3.14497}
+{"t_s":165,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":170,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[68,249],"frontier_clusters":7,"rejected_small":39,"result":"go","frontier_xy_m":[9.20969,6.37602],"frontier_cells":49,"path_m":3.26569}
+{"t_s":170,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":175,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[68,229],"frontier_clusters":7,"rejected_small":39,"result":"go","frontier_xy_m":[9.20969,6.37602],"frontier_cells":49,"path_m":3.6799}
+{"t_s":175,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":180,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,172],"frontier_clusters":7,"rejected_small":42,"result":"go","frontier_xy_m":[2.15321,1.28141],"frontier_cells":39,"path_m":3.14056}
+{"t_s":180,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":185,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,128],"frontier_clusters":5,"rejected_small":45,"result":"go","frontier_xy_m":[2.11524,1.2628],"frontier_cells":41,"path_m":1.8435}
+{"t_s":185,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":190,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,89],"frontier_clusters":5,"rejected_small":45,"result":"go","frontier_xy_m":[2.11524,1.2628],"frontier_cells":41,"path_m":1.68995}
+{"t_s":190,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":195,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,35],"frontier_clusters":4,"rejected_small":57,"result":"go","frontier_xy_m":[2.11524,1.2628],"frontier_cells":41,"path_m":4.12635}
+{"t_s":195,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}
+{"t_s":198.5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,30],"frontier_clusters":4,"rejected_small":57,"result":"go","frontier_xy_m":[2.11524,1.2628],"frontier_cells":41,"path_m":4.37635}
+{"t_s":198.5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: agent not in this run"}

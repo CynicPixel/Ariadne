@@ -1,0 +1,10 @@
+[05:29:30] 0. build + full ctest
+[05:29:44] 1. sim_collab clean + faults (parallel)
+[05:48:14] 2. recon prepare
+[05:49:51] 2. Kaggle render (remote GPU)
+[06:04:41] 2. recon score
+[06:04:55] 3. mission merged / agent 0 / agent 1
+[06:05:12] 4. report
+[06:05:24] 5. console check
+[06:05:24] 6. gate
+[06:05:25] PASS: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z

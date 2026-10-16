@@ -1,0 +1,53 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: aadffb8df5790ca0-20261016T060500Z
+created_utc: "2026-10-16T06:05:04Z"
+git_commit: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+git_dirty: false
+image_digest: "sha256:e287e7208ef158a5b29cfe17f9bd64649117cb2dfb88611adcb6a1194325a9f5"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim/aadffb8df5790ca0
+seed: 0
+agent_count: 2
+execution_mode: replay
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: mission_v1
+degradation_config: UNRECORDED
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: UNRECORDED
+place_recognition: UNRECORDED
+loop_backend: UNRECORDED
+reconstruction_backend: UNRECORDED
+imu_mode: attitude_only
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+final_state_hash: UNRECORDED
+
+# Additional
+agents: merged
+command: /work/build/docker/cpp/runtime/ariadne_mission --spool /work/build/phase1_gate/aadffb8df5790ca0-20261016T052930Z/spool/aadffb8df5790ca0-20261016T052947Z --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene --config /work/configs/mission/mission_v1.yaml --out /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission --agents merged
+planner: nearest_frontier+astar_placeholder
+spool: /work/build/phase1_gate/aadffb8df5790ca0-20261016T052930Z/spool/aadffb8df5790ca0-20261016T052947Z
+spool_run_id: aadffb8df5790ca0-20261016T052947Z
+spool_sha256: 5fbf0f3cd5487f259d0d33bb6800792ea5ae9a8d8c1889741801505a5683a8fa

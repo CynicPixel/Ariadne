@@ -1,0 +1,17 @@
+# ariadne_sim_collab results (design COLLAB_1.6). Generated; do not hand-edit.
+scene_id: aadffb8df5790ca0
+collab_config: collab_v1
+inject_faults: 0
+keyframes: {agent0: 327, agent1: 250}
+retrieval: {candidates: 20, true_opportunities: 17, verified: 20, verified_true: 17}
+retrieval_all_queries: {queries: 250, with_gt_opportunity: 71, top1_true: 51, top1_score_min: 0.883966, top1_score_median: 0.893311, top1_score_max: 0.995938}
+negative_probe: {probed: 20, rejected: 14, accepted_correct: 5, false_accepts: 1, max_false_t_err_m: 1.09848}
+edges: {sent: 20, received_by_agent1: 20, correct: 20, max_t_err_m: 0.0326042, max_r_err_deg: 0.571559}
+merge: {ok: 1, merged_two_agent_ate_rmse_m: 0.0097643, samples: 7962}
+protocol: {broker_duplicates: 0, broker_buffered: 0, agent1_duplicates: 0, agent1_buffered: 0, undelivered: 0}
+bytes:  # wire bytes per class (ByteLedger, §15.7)
+  GLOBAL_DESCRIPTOR: {messages: 250, wire_bytes: 292460}
+  MATCH_REQUEST: {messages: 20, wire_bytes: 2744}
+  MATCH_RESPONSE: {messages: 20, wire_bytes: 971373}
+  POSE_EDGE: {messages: 20, wire_bytes: 4140}
+  total_wire_bytes: 1270717

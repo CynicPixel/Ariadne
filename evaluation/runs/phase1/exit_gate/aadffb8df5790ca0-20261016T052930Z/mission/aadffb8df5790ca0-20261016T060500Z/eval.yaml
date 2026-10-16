@@ -1,0 +1,80 @@
+# mission_eval (design MISSION_1.8). Generated.
+agents: merged
+anchor:
+  poses: 201
+  max_pos_err_m: 0.00499456414664314
+  max_rot_err_deg: 0.07239776441802703
+  agent: 0
+agent1_via_merge:
+  poses: 201
+  max_pos_err_m: 0.029983481218650247
+  max_rot_err_deg: 0.4698735876927041
+final_egress:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 198.5
+final_agent:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 198.5
+first_valid_egress:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 140
+map:
+  coverage: 0.9295683057375819
+  free_precision: 0.9686213187385979
+  occupied_precision: 0.7064116985376828
+  false_occupied_cells: 783
+  false_occupied_by_distance_cells:
+    1: 726
+    2: 56
+    3: 1
+  false_occupied_beyond_3_cells: 0
+time_to_first_valid_route_s: 140
+replan_period_s: 5.0
+comparison:
+  note: 'first-valid times are replan instants: the route appeared in (t - period,
+    t]'
+  rows:
+  - agents: merged
+    first_valid_route_s: 140
+    final_exit: 1
+    final_length_m: 4.441421356
+    coverage: 0.9295683057375819
+  - agents: '0'
+    first_valid_route_s: 195
+    final_exit: 0
+    final_length_m: 11.25710678
+    coverage: 0.8935520984443
+  - agents: '1'
+    first_valid_route_s: 55
+    final_exit: 1
+    final_length_m: 4.441421356
+    coverage: 0.4320944424991246
+provenance:
+  git_commit: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+  git_dirty: 'false'
+  command: /work/python/analysis/mission_eval.py --run /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-20261016T060500Z
+    --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+    --collab-run /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/sim_collab/aadffb8df5790ca0-20261016T052947Z
+    --config /work/configs/mission/mission_v1.yaml --compare /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-agent0only-20261016T060504Z
+    /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-agent1only-20261016T060507Z

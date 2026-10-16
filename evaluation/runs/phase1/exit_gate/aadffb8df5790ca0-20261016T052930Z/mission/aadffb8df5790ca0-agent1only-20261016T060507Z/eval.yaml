@@ -1,0 +1,65 @@
+# mission_eval (design MISSION_1.8). Generated.
+agents: '1'
+anchor:
+  poses: 201
+  max_pos_err_m: 0.006146230811541166
+  max_rot_err_deg: 0.14783241589454987
+  agent: 1
+final_egress:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 198.5
+final_agent:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 198.5
+first_valid_egress:
+  found: true
+  length_m: 4.44142
+  gt_geodesic_m: 4.4414215087890625
+  length_ratio: 0.9999996602914045
+  valid_fraction: 1.0
+  valid: true
+  support_p5: 1
+  exit: 1
+  t_s: 55
+map:
+  coverage: 0.4320944424991246
+  free_precision: 0.9684942258100684
+  occupied_precision: 0.6388225934765315
+  false_occupied_cells: 454
+  false_occupied_by_distance_cells:
+    1: 422
+    2: 28
+    3: 4
+  false_occupied_beyond_3_cells: 0
+time_to_first_valid_route_s: 55
+replan_period_s: 5.0
+comparison:
+  note: 'first-valid times are replan instants: the route appeared in (t - period,
+    t]'
+  rows:
+  - agents: '1'
+    first_valid_route_s: 55
+    final_exit: 1
+    final_length_m: 4.441421356
+    coverage: 0.4320944424991246
+provenance:
+  git_commit: e10dd8e0d1fc6f9c66ae76a83c8a7f624ff82f0e
+  git_dirty: 'false'
+  command: /work/python/analysis/mission_eval.py --run /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/mission/aadffb8df5790ca0-agent1only-20261016T060507Z
+    --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+    --collab-run /work/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z/sim_collab/aadffb8df5790ca0-20261016T052947Z
+    --config /work/configs/mission/mission_v1.yaml
