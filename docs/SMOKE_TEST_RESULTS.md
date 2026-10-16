@@ -576,3 +576,38 @@ us-west-2, eu-west-1 and eu-central-1, and every SageMaker g4dn/g5/g6 quota chec
   ignores `enable_gpu` unless the accelerator is named (`--accelerator NvidiaTeslaT4` / `machine_shape`); (2)–(3)
   an account without phone verification silently runs a GPU-requested kernel on the CPU image
   (`gcr.io/kaggle-images/python`, torch `+cpu`, no `nvidia-smi`, GPU quota used 0.00 h) with no API error.
+
+## 4p. XFeat on OpenCV 5 primitives (D15): exact against upstream PyTorch, 12–33 ms `[SMOKE-TEST]` 2026-10-16
+
+Gates Phase 2.1. Upstream `verlab/accelerated_features` at commit `e92685f57f8318b18725c5c8c0bd28c7fe188d9a`
+(Apache-2.0), `weights/xfeat.pt` sha256 `0f5187fd…ea10b`. `python/model_tools/xfeat_reference.py`, run in the pinned
+`ariadne-xfeat-ref:1` image (torch 2.5.1+cpu, 1 thread, deterministic algorithms) with `--network none` and the
+upstream checkout mounted read-only, loads the weights with `weights_only=True` (no pickle code runs). It exports
+them to an ATB tensor blob, and runs upstream's OWN `XFeatModel.forward` and `XFeat.detectAndCompute` (top-k 4096,
+threshold 0.05) on a seeded synthetic 640×480 card and on one EuRoC MH_01 cam0 frame centre-cropped to 736×480.
+
+- **The architecture is 25 convolutions** (BasicLayer = conv / BatchNorm(affine=False) / ReLU, so BN folds into the
+  conv at load), a 4×4 average-pool skip, two bilinear upsamplings (`align_corners=False`), an 8×8 space-to-depth
+  unfold into the keypoint head, InstanceNorm on the input, and a sigmoid. Nothing exotic.
+- **Upstream quirks reproduced, not "fixed":** the raw 0..255 input (InstanceNorm makes the scale nearly
+  irrelevant); sampling normalises positions by (W−1, H−1) but samples with `align_corners=False`, so a pixel x lands
+  at x·W_map/(W−1) − 0.5, with zero-padded taps (the last column scores 0); a keypoint at exactly (0,0) gets score
+  −1 (padding marker); `nearest` rounds half to even. Upstream's `argsort` is unstable; ours breaks ties by
+  detection order.
+- **Two engines, both checked** (`tests/unit/test_xfeat_reference.cpp`):
+
+  | engine | 736×480 | 640×480 | max\|Δ\|/max\|ref\| (maps) | keypoints at the same pixel | min descriptor cosine |
+  |---|---|---|---|---|---|
+  | `opencv_dnn_graph`, 8 threads | 15.3 ms | 12.0 ms | ≤ 8.0e-6 | 4096 / 4096 (both inputs) | 1.000000 |
+  | `opencv_dnn_graph`, 1 thread | 32.6 ms | 26.9 ms | (same) | (same) | (same) |
+  | `gemm_reference`, 8 threads | 2873 ms | 2504 ms | ≤ 2.5e-6 | 4096 / 4096 | 1.000000 |
+
+  Host: i5-1135G7. `opencv_dnn_graph` builds the network with the `cv::dnn` graph API (`Net::addLayer`/`connect`:
+  Convolution, ReLU, Pooling, Eltwise, Resize with half-pixel bilinear, Sigmoid). It uses our folded weight tensors,
+  **no ONNX file and no importer**. The unfold is an exact one-hot 8×8 stride-8 convolution. OpenCV 5's dispatched
+  AVX2/AVX-512 convolution kernels run it. `gemm_reference` writes every op out (im2col + `cv::gemm`); without an
+  external BLAS, `cv::gemm` runs at 0.88 GFLOP/s here, so it is the readable reference, not a runtime path.
+- **Consequence:** D15 holds. Ours is the architecture and forward pass, and the weights are upstream's (credited).
+  The catalogue's 16.7 ms figure is matched in the same class: 12–15 ms with 8 threads, 27–33 ms with one. That is
+  keyframe-rate capable, and C8 (no neural net at frame rate) is unchanged. The engine that ran is a manifest field
+  (§7.4).

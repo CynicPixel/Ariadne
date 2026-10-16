@@ -901,6 +901,17 @@ inner WLS                    →  certifiable solve (§7.4)  λ_min(S) printed p
 ```
 Each layer independently justifiable; each has a verified permissive reference implementation.
 
+**Additions, 2026-10-16 (Phase 2 literature pass, `docs/design/POSE_GRAPH_2.md` §6):**
+- **TACO** (arXiv 2606.29851, 2026): an online test-and-check robust PGO. Incremental Probabilistic Consensus tests each
+  new loop closure, and periodic Switchable-Constraint "sanitization" removes inconsistent ones it admitted. It
+  reports robustness comparable to offline methods at online cost. An ablation candidate next to GNC/PCM.
+- **EGNC schedule** (Int. J. Control Autom. Syst., 2025; the published form of arXiv 2310.06765, above): replaces the
+  heuristic μ ×1.4 with convexity boundary points. An optional schedule against Yang's.
+- **COSMO-Bench** (arXiv 2508.16731, 2025): 24 real collaborative-SLAM pose-graph datasets (LiDAR front end). Real
+  multi-robot graphs with real outliers, for Phase 3 and the 2.5 outlier ramp. Licence to be checked before use.
+- **SE-Sync benchmark graphs** (sphere, torus, garage, cubicle, rim): the standard PGO test set, with published
+  certified optima. The external check on our certificate's sign convention.
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).

@@ -2150,6 +2150,12 @@ Use Levenberg-Marquardt:
 
 with trust/radius-like update logic.
 
+**Update 2026-10-16 (D51, §49 ritual):** the Phase 2 solvers (pose graph, then windowed BA) run on OpenCV 5's
+`cv::detail::LevMarqBase` driver, with Ariadne's residuals, Jacobians and sparse algebra behind its `LevMarqBackend`
+interface. The driver damps with Marquardt's `D = diag(H)` (clamped) and adapts λ by step quality. The schedule below
+remains the Phase 1 two-frame stub's, kept byte-identical. All driver settings are config + manifest fields; design
+`docs/design/POSE_GRAPH_2.md`.
+
 Use Eigen sparse Cholesky internally.
 
 Reference-check with:

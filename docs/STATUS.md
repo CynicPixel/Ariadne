@@ -4,6 +4,31 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-16 — Phase 2 solver cores on OpenCV 5's LM driver: PGO = GTSAM 100/100; windowed BA = OpenCV PnP refine (D51, D52)
+
+- **PGO** (`POSE_GRAPH_2.md`): our residuals, exact Jacobians and sparse LDLT behind `cv::detail::LevMarqBase`. GTSAM
+  4.3 oracle **100/100** (half the graphs with full correlated information; energy ≤ 1.5e-12 relative); gauge exactly
+  6; driver contract pinned; the solve is bit-identical twice; `pgo_digest` is in every manifest. Pre-merge gate now
+  requires the oracle (`models.sh pgo-oracle`). SE-Sync benchmark graphs run as a separate, slow test.
+- **Windowed BA core** (`LOCAL_SLAM_2.3.md`, preflight done: literature, OpenCV, advisor): finite-difference
+  Jacobians including near-zero depth and wide-FOV rays; gauge exactly 6; Schur equals dense; one free pose matches
+  `cv::solvePnPRefineLM` to 1e-9.
+- 2.3 target fixed before measuring: better than the 1.5 placeholder on every sequence, and within the ORB-SLAM3
+  Table II stereo class.
+- EuRoC: 8/11 sequences present; MH_04, V1_02 and V2_02 timed out at ETH (to retry).
+- Next: BA into `StereoVo` (window, §8.3 keyframe score, landmark lifecycle, exit edges), then the EuRoC/sim runs.
+
+## 2026-10-16 — Phase 2 opened: plan fixed, XFeat de-risked (D50)
+
+- `docs/design/PHASE2_PLAN.md`: order (XFeat smoke → sparse PGO → 2.3 windowed BA → 2.4 inertial → 2.5 robust backend
+  → 2.1/2.2 → 2.6), conventions, the EuRoC target fixed from ORB-SLAM3 Table II **before** measuring (per-sequence ≤ the
+  worst of VINS-Fusion/BASALT/Kimera/ORB-SLAM3; average ≤ 0.138 m; full trajectory, SE(3) alignment), and the two docs
+  contradictions settled against the papers (GNC-TLS increases μ; the certificate sign is fixed by a noise-free test).
+- **XFeat on OpenCV 5 (D15/D50, SMOKE §4p):** our forward pass on upstream's weights, exact to ≤ 8e-6 with identical
+  keypoints and descriptors. As a `cv::dnn` graph we assemble ourselves, without ONNX: 12–15 ms per frame.
+- EuRoC: all 11 sequences downloading (ETH, ~1.2 MB/s).
+- Next: the sparse SE(3) pose-graph solver + gauge null-space test + GTSAM oracle.
+
 ## 2026-10-16 — Phase 1 exit gate PASSED (evidence); pre-merge gate replaces nightly CI (D48, D49)
 
 - **Evidence, clean commit e10dd8e** (`evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z`):

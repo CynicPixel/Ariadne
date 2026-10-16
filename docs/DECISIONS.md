@@ -1516,3 +1516,85 @@ from the exit-gate evidence run's render, which predates the cache code.
 
 **Verified.** A pre-merge run on the working tree (commit e10dd8e plus these edits) gave VERDICT PASS, 54/54, in
 19.5 min. From Phase 2 on, each phase's gate compares against its own committed evidence through a new config.
+
+## 2026-10-16 — D50: XFeat runs as a cv::dnn graph WE assemble from upstream's weights; a GEMM reference checks it
+
+**Context.** D15 chose "XFeat on OpenCV 5 primitives, no ONNX". The Phase 2 smoke test (SMOKE §4p) verified it.
+
+**What.** `cpp/perception/features/xfeat/`: `atb.hpp` (a tensor blob, no dependencies) and `xfeat_net.{hpp,cpp}`. The
+weights are upstream's (`verlab/accelerated_features` e92685f, Apache-2.0, credited), exported offline by
+`python/model_tools/xfeat_reference.py` in the pinned `ariadne-xfeat-ref:1` image (`infra/scripts/models.sh xfeat`:
+pinned commit, sha256-checked `.pt`, `--network none`, `weights_only=True`). BatchNorm (affine=False) folds into the
+convolutions at load. Two engines run the same folded tensors:
+- **`opencv_dnn_graph` (runtime):** the network is built layer by layer with `Net::addLayer`/`connect` (Convolution,
+  ReLU, Pooling, Eltwise, Resize, Sigmoid). The 8×8 unfold is an exact one-hot stride-8 convolution. 12–15 ms per
+  640×480/736×480 frame with 8 threads, 27–33 ms with one.
+- **`gemm_reference`:** every op written out (im2col + `cv::gemm`). It is the readable reference, ~2.5–2.9 s because
+  `cv::gemm` without external BLAS runs at 0.88 GFLOP/s.
+
+**Why the graph API and not ONNX.** It keeps D15's claim intact: the architecture and forward pass are ours, OpenCV
+5's dispatched convolution kernels execute it, and no importer coverage risk exists. Why not only the GEMM path: it
+is ~200× slower.
+
+**Acceptance (both engines, `tests/unit/test_xfeat_reference.cpp`, against upstream's own PyTorch outputs):** maps
+≤ 8e-6 relative, 4096/4096 keypoints at the same pixel on both inputs, min descriptor cosine 1.000000. Upstream's
+quirks are reproduced, not fixed, and are listed in SMOKE §4p. The test SKIPS without the export, but FAILS under
+`ARIADNE_REQUIRE_MODELS=1`, which the pre-merge gate now sets. The engine that ran becomes a manifest field when the
+engine is wired into the pipeline (2.1).
+
+## 2026-10-16 — D51: the Phase 2 solvers run on OpenCV 5's `LevMarqBase`; our residuals, Jacobians and sparse algebra behind it
+
+**Context.** Arch §11.6 specifies LM as `(H + λI)δ = −g` with its own λ schedule (λ₀ = 1e-4·max diag H, ×2 on
+reject, ÷3 on accept, 15 iterations). The maintainer asked that Phase 2 use OpenCV natively as far as it honestly
+goes. OpenCV 5 ships `cv::detail::LevMarqBase`, a Ceres-style LM driver over a pluggable `LevMarqBackend`.
+
+**Decision.** The pose-graph solver (and, when 2.3 lands, the windowed BA) implements `LevMarqBackend`; OpenCV's
+driver runs the LM loop. Ours: residuals, exact SE(3) Jacobians (`J_l⁻¹` with Barfoot's Q), block assembly, the
+sparse `SimplicialLDLT` decomposition with a positive-pivot guard, the gauge (the anchor is excluded from the
+parameter vector), and the left `exp` update. Design: `POSE_GRAPH_2.md`.
+
+**This deviates from §11.6, and why that is acceptable.** OpenCV damps with Marquardt's `λ·diag(JᵀJ)` (clamped to
+[1e-6, 1e32]) and adapts λ by step quality, not ×2/÷3. The optimum depends on the cost, not on the damping path, so
+the GTSAM oracle (the §11.6 reference check) is unaffected. Every `Settings` field is set explicitly from config and
+recorded in the manifest. Geodesic acceleration starts OFF and becomes an ablation. The arch doc §11.6 is updated
+(§49 ritual).
+
+**Not changed.** The two-frame BA stub keeps its own §11.6 LM (Phase 1 outputs stay byte-identical).
+`cv::detail::PoseGraph` is NOT used: our pinned OpenCV has no `HAVE_EIGEN`, so its `optimize()` throws. Rebuilding
+OpenCV would change the build hash, breaking the Phase 0 gate and the COOL baseline. Its quaternion-space residual
+also differs from §12.2.
+
+**Risk.** `cv::detail` is an internal namespace; the OpenCV tag is pinned (D7), so it cannot drift under us. The
+contract (energy = ½Σ‖√Ω r‖², `jtb = +Jᵀr`, `solveDecomposed` solves `(JᵀJ+D)x = −right`) was read from
+`levmarq.cpp` and OpenCV's own `PoseGraphLevMarqBackend`. A one-step linear test pins it.
+
+## 2026-10-16 — D52: the Phase 2 solver cores, verified: PGO agrees with GTSAM 100/100; windowed BA matches OpenCV's PnP refine
+
+**PGO** (`POSE_GRAPH_2.md`):
+- exact `J_l⁻¹`, verified against its definition at every angle class;
+- gauge null space exactly 6, "the same ξ on every node";
+- OpenCV `LevMarqBase` driver with the contract pinned by a one-step linear test;
+- **GTSAM 4.3 oracle 100/100**, half the graphs with full correlated information: energy ≤ 1.5e-12 relative, poses
+  ≤ 1e-6 absolute (99) or ≤ 1e-6 Mahalanobis² (all).
+
+Deviations recorded in the design:
+- dead-reckoning shared init, because GTSAM's `InitializePose3` threw on one case [UNVERIFIED, open for 2.5];
+- the anisotropic-noise generator bug, which drove both solvers to different local minima (an initialisation test,
+  not a solver test);
+- the scale-invariant pose criterion.
+
+`pgo_digest` is required in every manifest; it is same-architecture only, because the SE(3) maths uses libm.
+After a solve, node covariances are the marginals at the optimum, or NaN by explicit choice, never stale.
+
+**Windowed BA core** (`LOCAL_SLAM_2.3.md`):
+- `window_ba.hpp` (OpenCV-free): left-perturbation `T_W_C`, Huber/IRLS assembly, Schur elimination after damping;
+  the guard refuses non-PD systems;
+- `window_ba_levmarq` on OpenCV's driver;
+- Jacobians match finite differences, including 0.05 m depth and |x/z| up to 2.5 (exit-gate item);
+- gauge exactly 6, with landmark rows `[I, −[X]×]`;
+- the gradient is exactly the robust cost's; Schur equals the dense solve;
+- **one free pose agrees with `cv::solvePnPRefineLM` to 1.3e-9 m / 2.8e-9 rad**;
+- the camera covariance equals the dense-inverse block.
+
+**Not yet:** BA integration into `StereoVo` (window, keyframe score, lifecycle, exit edges) and the EuRoC/sim runs
+against the targets fixed in `LOCAL_SLAM_2.3.md` §8.
