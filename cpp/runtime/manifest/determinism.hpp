@@ -7,6 +7,7 @@
 #include "core/determinism/digests.hpp"
 #include "perception/degradation/degradation_digest.hpp"
 #include "perception/degradation/lens_digest.hpp"
+#include "slam/pose_graph/pgo_digest.hpp"
 #include "runtime/manifest/run_manifest.hpp"
 
 #include <string>
@@ -18,6 +19,7 @@ inline void RecordDeterminismDigests(RunManifest& m) {
     m.philox_digest = std::to_string(core::PhiloxDigest());
     m.degradation_digest = std::to_string(perception::DegradeDigest());
     m.lens_digest = std::to_string(perception::LensDigest());
+    m.pgo_digest = std::to_string(slam::PgoAssemblyDigest());
 }
 
 }  // namespace ariadne::runtime

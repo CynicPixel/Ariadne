@@ -257,6 +257,9 @@ TEST(RunManifest, RequiredFieldValidationCatchesAnUnpublishableRun) {
     m.philox_digest = "14182439601419266695";
     m.degradation_digest = "8535765251477677907";
     m.lens_digest = "1253886791886396038";
+    // Phase 2: the pose-graph numerics are identifiable too (POSE_GRAPH_2.md §5).
+    EXPECT_FALSE(MissingRequiredFields(m).empty());
+    m.pgo_digest = "1";
     EXPECT_TRUE(MissingRequiredFields(m).empty());
 
     // seed 0 is a legitimate seed; only the flag distinguishes it from unset.

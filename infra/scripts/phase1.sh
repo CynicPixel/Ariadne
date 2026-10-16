@@ -62,8 +62,16 @@ cmd() { echo "$*" >> "$G/command.txt"; }
 
 # --- 0. build + tests ---------------------------------------------------------------------------------------
 log "0. build + full ctest"
-cmd "$S/core.sh dev    # configure, build, full ctest"
-$S/core.sh dev > "$BIG/ctest.log" 2>&1 || { tail -30 "$BIG/ctest.log"; die "build or ctest failed"; }
+# Learned-model acceptance tests must RUN, not skip (SMOKE §4p): the export from infra/scripts/models.sh xfeat.
+[ -f .cache/models/xfeat_ref/xfeat_weights.atb ] || die "no XFeat export (run: infra/scripts/models.sh xfeat)"
+# ...and so must the PGO oracle (Phase 2 exit-gate item): the 100 GTSAM cases from infra/scripts/models.sh pgo-oracle.
+[ "$(ls .cache/oracle/pgo/*.graph 2>/dev/null | wc -l)" -eq 100 ] || die "no PGO oracle cases (run: infra/scripts/models.sh pgo-oracle)"
+cmd "$S/core.sh dev    # configure, build, full ctest, with ARIADNE_REQUIRE_MODELS=1"
+$S/core.sh dev bash -c "cmake -S /work -B /work/build/docker -G Ninja -DARIADNE_REQUIRE_OPENCV=ON -DCMAKE_SKIP_RPATH=ON \
+  -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-docker >/dev/null && cmake --build /work/build/docker --parallel 8 \
+  && ARIADNE_XFEAT_REF=/work/.cache/models/xfeat_ref ARIADNE_PGO_ORACLE=/work/.cache/oracle/pgo ARIADNE_REQUIRE_MODELS=1 \
+     ctest --test-dir /work/build/docker --output-on-failure --parallel 8" > "$BIG/ctest.log" 2>&1 \
+  || { tail -30 "$BIG/ctest.log"; die "build or ctest failed"; }
 grep -E "tests passed|tests failed" "$BIG/ctest.log" > "$G/ctest.txt"
 cmd "$S/core.sh dev ctest -R '^(CollabProtocol|Serialization)\\.'"
 $S/core.sh dev bash -c "ctest --test-dir /work/build/docker -R '^(CollabProtocol|Serialization)\\.' \

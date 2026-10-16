@@ -8,7 +8,7 @@ add_library(ariadne_runtime STATIC
   replay/mcap_impl.cpp
   replay/ros_cdr.cpp)
 target_include_directories(ariadne_runtime PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-target_link_libraries(ariadne_runtime PUBLIC ariadne::core ariadne::perception ariadne_mcap)
+target_link_libraries(ariadne_runtime PUBLIC ariadne::core ariadne::perception ariadne::slam ariadne_mcap)
 add_library(ariadne::runtime ALIAS ariadne_runtime)
 
 # ariadne_runtime_opencv: the runtime pieces that must see OpenCV. A separate

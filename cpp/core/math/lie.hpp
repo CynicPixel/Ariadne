@@ -181,6 +181,54 @@ inline Vec6 SE3Log(const SE3& T) {
     return xi;
 }
 
+/// The Q block of the SE(3) left Jacobian (Barfoot, "State Estimation for Robotics", eq. 7.86b), for [rho; phi]:
+///   Q = 1/2 r + c1 (p r + r p + p r p) + c2 (p p r + r p p - 3 p r p) + c3 (p r p p + p p r p)
+/// with p = Hat(phi), r = Hat(rho), t = |phi| and
+///   c1 = (t - sin t)/t^3,  c2 = (t^2 + 2 cos t - 2)/(2 t^4),  c3 = (2t - 3 sin t + t cos t)/(2 t^5).
+/// c2 and c3 cancel catastrophically for small t (c3's numerator is ~t^5/60 from terms of size t), so below
+/// t = 0.1 they use their Taylor series, derived term by term:
+///   c2 = 1/24 - t^2/720 + t^4/40320,   c3 = 1/120 - t^2/2520 + t^4/120960.
+/// Verified against the definition by finite differences (test_lie.cpp).
+inline Mat3 SE3LeftJacobianQ(const Vec3& rho, const Vec3& phi) {
+    const double t2 = phi.squaredNorm();
+    const double t = std::sqrt(t2);
+    double c2, c3;
+    if (t < 0.1) {
+        c2 = 1.0 / 24.0 - t2 / 720.0 + t2 * t2 / 40320.0;
+        c3 = 1.0 / 120.0 - t2 / 2520.0 + t2 * t2 / 120960.0;
+    } else {
+        c2 = (t2 + 2.0 * std::cos(t) - 2.0) / (2.0 * t2 * t2);
+        c3 = (2.0 * t - 3.0 * std::sin(t) + t * std::cos(t)) / (2.0 * t2 * t2 * t);
+    }
+    const double c1 = CoeffC(t, t2);
+    const Mat3 p = Hat(phi), r = Hat(rho);
+    const Mat3 pr = p * r, rp = r * p, prp = pr * p, pp = p * p;
+    return 0.5 * r + c1 * (pr + rp + prp) + c2 * (pp * r + rp * p - 3.0 * prp) + c3 * (prp * p + p * prp);
+}
+
+/// The 6x6 left Jacobian of SE(3), [[J, Q], [0, J]] for [rho; phi]: Exp(xi + d) ~ Exp(J_l(xi) d) Exp(xi).
+inline Mat6 SE3LeftJacobian6(const Vec6& xi) {
+    const Vec3 rho = xi.head<3>(), phi = xi.tail<3>();
+    const Mat3 J = SE3LeftJacobian(phi);
+    Mat6 out = Mat6::Zero();
+    out.topLeftCorner<3, 3>() = J;
+    out.topRightCorner<3, 3>() = SE3LeftJacobianQ(rho, phi);
+    out.bottomRightCorner<3, 3>() = J;
+    return out;
+}
+
+/// Its inverse, [[J^-1, -J^-1 Q J^-1], [0, J^-1]]: Log(Exp(a) T) ~ Log(T) + J_l^-1(Log T) a. This is the exact
+/// factor the pose-graph Jacobians need; the common approximation I + 1/2 ad(xi) would move the optimum.
+inline Mat6 SE3LeftJacobianInverse(const Vec6& xi) {
+    const Vec3 rho = xi.head<3>(), phi = xi.tail<3>();
+    const Mat3 Ji = SE3LeftJacobian(phi).inverse();
+    Mat6 out = Mat6::Zero();
+    out.topLeftCorner<3, 3>() = Ji;
+    out.topRightCorner<3, 3>() = -Ji * SE3LeftJacobianQ(rho, phi) * Ji;
+    out.bottomRightCorner<3, 3>() = Ji;
+    return out;
+}
+
 /// Adjoint: the operator satisfying  T * exp(xi) * T^-1 == exp(Adj(T) * xi).
 /// This is what lets a perturbation be moved between frames, which is why the
 /// [rho; phi] ordering has to be stated -- the block layout below depends on it.

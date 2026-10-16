@@ -192,3 +192,50 @@ TEST(SE3, NormalizeRemovesAccumulatedDrift) {
     EXPECT_LT((acc.R.transpose() * acc.R - Mat3::Identity()).norm(), 1e-14);
     EXPECT_NEAR(acc.R.determinant(), 1.0, 1e-14);
 }
+
+// --- SE(3) left Jacobian and its inverse (Phase 2 pose graph, POSE_GRAPH_2.md §2) -----------------------------
+// The DEFINITION, by central differences: Log(Exp(a) * Exp(xi)) ~ xi + J_l^-1(xi) a. Cases straddle the series
+// switch at |phi| = 0.1, include tiny and near-pi rotations, and large translations (Q's rho dependence).
+namespace {
+Mat6 NumericLeftJacobianInverse(const Vec6& xi) {
+    const SE3 T = SE3Exp(xi);
+    Mat6 J;
+    const double h = 1e-6;
+    for (int k = 0; k < 6; ++k) {
+        Vec6 a = Vec6::Zero();
+        a(k) = h;
+        J.col(k) = (SE3Log(SE3Exp(a) * T) - SE3Log(SE3Exp(-a) * T)) / (2 * h);
+    }
+    return J;
+}
+}  // namespace
+
+TEST(SE3, LeftJacobianInverseMatchesTheDefinition) {
+    const double angles[] = {0.0, 1e-7, 1e-3, 0.05, 0.0999, 0.1001, 0.5, 1.5, 2.8, 3.05};
+    std::mt19937 g = Rng();
+    std::normal_distribution<double> n(0.0, 1.0);
+    for (double a : angles) {
+        for (int rep = 0; rep < 4; ++rep) {
+            const Vec3 axis = RandomAxis(g);
+            Vec6 xi;
+            xi.head<3>() = Vec3(n(g), n(g), n(g)) *
+                           (rep % 2 ? 5.0 : 0.3);
+            xi.tail<3>() = axis * a;
+            const Mat6 an = SE3LeftJacobianInverse(xi);
+            const Mat6 num = NumericLeftJacobianInverse(xi);
+            EXPECT_LT((an - num).cwiseAbs().maxCoeff(), 2e-6 * std::max(1.0, num.cwiseAbs().maxCoeff()))
+                << "angle " << a << " rep " << rep;
+            EXPECT_LT((SE3LeftJacobian6(xi) * an - Mat6::Identity()).cwiseAbs().maxCoeff(), 1e-10)
+                << "angle " << a;
+        }
+    }
+}
+
+// The series branch and the closed form must agree where they meet.
+TEST(SE3, LeftJacobianQIsContinuousAtTheSeriesSwitch) {
+    const Vec3 rho(0.7, -1.3, 2.1), axis = Vec3(1, 2, -0.5).normalized();
+    const Mat3 below = SE3LeftJacobianQ(rho, axis * (0.1 - 1e-12));
+    const Mat3 above = SE3LeftJacobianQ(rho, axis * (0.1 + 1e-12));
+    // Relative: the closed forms carry ~1e-12 rounding at t = 0.1 (c3's numerator is ~t^5/60 from O(t) terms).
+    EXPECT_LT((below - above).cwiseAbs().maxCoeff(), 1e-11 * above.cwiseAbs().maxCoeff());
+}

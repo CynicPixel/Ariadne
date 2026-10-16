@@ -11,7 +11,9 @@ add_library(ariadne::slam ALIAS ariadne_slam)
 # (solvePnPRansac, triangulatePoints). Exists only when OpenCV was found.
 if(OpenCV_FOUND)
   add_library(ariadne_slam_opencv STATIC
-    odometry/stereo_vo.cpp)
+    odometry/stereo_vo.cpp
+    pose_graph/pgo_levmarq.cpp
+    bundle_adjustment/window_ba_levmarq.cpp)
   target_link_libraries(ariadne_slam_opencv PUBLIC ariadne::slam opencv_core opencv_geometry)
   add_library(ariadne::slam_opencv ALIAS ariadne_slam_opencv)
 endif()

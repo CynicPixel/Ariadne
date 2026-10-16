@@ -92,6 +92,7 @@ struct RunManifest {
     std::string philox_digest = kUnknownField;
     std::string degradation_digest = kUnknownField;
     std::string lens_digest = kUnknownField;          // read-time lens operator (D41)
+    std::string pgo_digest = kUnknownField;           // pose-graph assembly, same-arch only (POSE_GRAPH_2.md §5)
     /// Final state_hash of the event log (§41).
     std::string final_state_hash = kUnknownField;
 
@@ -175,6 +176,7 @@ inline std::string ToYaml(const RunManifest& m) {
     detail::Field(out, "philox_digest", m.philox_digest);
     detail::Field(out, "degradation_digest", m.degradation_digest);
     detail::Field(out, "lens_digest", m.lens_digest);
+    detail::Field(out, "pgo_digest", m.pgo_digest);
     detail::Field(out, "final_state_hash", m.final_state_hash);
 
     if (!m.extra.empty()) {
@@ -221,6 +223,7 @@ inline std::vector<std::string> MissingRequiredFields(const RunManifest& m) {
     require("philox_digest", m.philox_digest);
     require("degradation_digest", m.degradation_digest);
     require("lens_digest", m.lens_digest);
+    require("pgo_digest", m.pgo_digest);
 
     // A dirty tree means git_commit does not identify what actually ran.
     if (m.git_dirty) missing.emplace_back("git_dirty(tree was modified)");
