@@ -62,7 +62,8 @@ def finite(x) -> bool:
         return False
 
 
-def check_i1(g: Gate, C: Path, F: Path, RC: Path, big: Path, M: Path, M0: Path, M1: Path) -> None:
+def check_i1(g: Gate, C: Path, F: Path, RC: Path, big: Path, M: Path, M0: Path, M1: Path,
+             reused: str | None = None) -> None:
     res = ly(C / "results.yaml")
     kf = res["keyframes"]
     g.check("i1", "two agents explore (keyframes per agent)", kf["agent0"] > 0 and kf["agent1"] > 0, kf)
@@ -78,10 +79,12 @@ def check_i1(g: Gate, C: Path, F: Path, RC: Path, big: Path, M: Path, M0: Path, 
              "merged_ate_rmse_m": merge["merged_two_agent_ate_rmse_m"]})
     score = ly(RC / "score.yaml")
     renders = big / "render" / "renders.npz"
-    g.check("i1", "a splat is rendered (remote GPU renders scored on held-out views)",
+    g.check("i1", "a splat is rendered (remote GPU renders scored on held-out views)" if not reused else
+            "a splat render is scored (REUSED, not re-rendered: pre-merge)",
             renders.is_file() and score["views"] > 0 and finite(score["heldout_psnr_db"]),
             {"views": score["views"], "psnr_db": score["heldout_psnr_db"], "ssim": score["heldout_ssim"],
-             "lpips": score["heldout_lpips"], "renders_sha256": sha(renders) if renders.is_file() else None})
+             "lpips": score["heldout_lpips"], "renders_sha256": sha(renders) if renders.is_file() else None,
+             "reused": reused})
     mres, mev = ly(M / "results.yaml"), ly(M / "eval.yaml")
     fe, first = mev["final_egress"], mev["first_valid_egress"]
     g.check("i1", "an exit route is produced, valid against GT at rho_responder",
@@ -225,19 +228,29 @@ def main(argv=None) -> int:
     M0, M1 = one(md, r"[0-9a-f]+-agent0only-\d{8}T\d{6}Z"), one(md, r"[0-9a-f]+-agent1only-\d{8}T\d{6}Z")
     runs = {"sim_collab": C, "sim_collab_faults": F, "recon": RC, "mission": M, "mission_agent0": M0,
             "mission_agent1": M1, "report": RP}
+    mode_lines = (G / "mode.txt").read_text().split("\n") if (G / "mode.txt").is_file() else ["full"]
+    mode = mode_lines[0].strip()
+    if mode not in ("full", "premerge"):
+        raise SystemExit(f"phase1_gate: unknown mode {mode!r}")
+    if mode == "premerge":   # named, mode-only exclusions (config premerge_exclude)
+        for key, extra in cfg.get("premerge_exclude", {}).items():
+            for spec in cfg["compare"][key]:
+                if spec["file"] in extra:
+                    spec["exclude"] = spec.get("exclude", []) + extra[spec["file"]]
     g = Gate()
-    check_i1(g, C, F, RC, big, M, M0, M1)
+    check_i1(g, C, F, RC, big, M, M0, M1, reused="\n".join(mode_lines[1:]).strip() or None)
     check_contracts(g, C)
     check_stages(g, G, C, F, RP)
     det = check_determinism(g, cfg, runs, RC)
-    doc = {"gate": cfg["name"], "run": G.name, "verdict": "PASS" if g.ok else "FAIL",
+    doc = {"gate": cfg["name"], "run": G.name, "mode": mode, "verdict": "PASS" if g.ok else "FAIL",
            "checks": g.rows, "determinism": det,
            "chain": {k: str(v) for k, v in runs.items()}}
     (G / "gate.yaml").write_text("# Phase 1 exit gate (design PHASE1_GATE). Generated; do not hand-edit.\n"
                                  + yaml.dump(doc, Dumper=NoAliases, sort_keys=False, width=120, allow_unicode=True))
     for r in g.rows:
         print(f"{'PASS' if r['ok'] else 'FAIL'}  [{r['group']}] {r['check']}")
-    print("VERDICT", "PASS" if g.ok else "FAIL")
+    print("VERDICT", "PASS" if g.ok else "FAIL",
+          "(pre-merge: render reused, working tree; NOT exit-gate evidence)" if mode == "premerge" else "")
     return 0 if g.ok else 1
 
 

@@ -21,6 +21,12 @@ reference:
 reasons:
   run_identity: run id / timestamps / commit / image / paths of THIS run -- identity, not results
   timing: wall-clock measurements, not deterministic by nature
+  premerge_tree: a pre-merge run checks the uncommitted working tree on purpose (D49); full runs must be clean
+
+# Applied ONLY in pre-merge mode (phase1.sh --premerge), on top of the per-file exclusions below.
+premerge_exclude:
+  report:
+    report.yaml: [{re: '^\s*inputs_clean: ', why: premerge_tree}]
 
 compare:
   sim_collab:
