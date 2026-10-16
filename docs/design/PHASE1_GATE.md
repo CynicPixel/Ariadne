@@ -106,9 +106,31 @@ line per check and `VERDICT PASS|FAIL`; `phase1.sh` exits non-zero on FAIL. Chec
 - **stages**: full ctest, protocol tests, fault identity, §30.2 report check, console check.
 - **determinism**: every compared file identical (or identical except named exclusions), the three large sha256.
 
+## Pre-merge mode (D49)
+
+There is no nightly CI. The thin run is a **local pre-merge gate**. It runs before commit commands are handed over
+for any change that touches the pipeline, and before a plan item is checked off:
+
+```text
+infra/scripts/phase1.sh --premerge        # working tree, ~22 min, no network, out: build/premerge/
+infra/scripts/phase1.sh                   # full: clean commit, fresh Kaggle render, out: the evidence tree
+```
+
+Pre-merge runs the same chain and the same checks with two differences, both named:
+
+- **The render is reused, never faked.** Renders are a deterministic function of the render package. Three Kaggle
+  sessions produced the same `renders.npz` sha256 (`cc3a2498…`). A full run therefore stores its renders in
+  `build/render_cache/<render package sha256>/`. Pre-merge reuses them **only if** its own package is byte-identical.
+  If reconstruction output changed, pre-merge stops and asks for a full run. The splat check is relabelled "REUSED, not
+  re-rendered", and the verdict line says "NOT exit-gate evidence".
+- **The working tree may be dirty.** The one result field that records cleanliness (`report.yaml` `inputs_clean`)
+  is excluded only in this mode, under its own reason `premerge_tree` (config `premerge_exclude`).
+
+From Phase 2 on, placeholder swaps change results by design. Each phase's gate then compares against that phase's own
+committed evidence (a new config), not Phase 1's.
+
 ## Not in the gate
 
-Nightly CI of the thin run (CLAUDE.md §4) needs the 12 GB recording and a GPU render, so it can't run on hosted
-runners as built. Open: which subset runs nightly, and where. The single-loop 85 s cost, the 1.6 probe false accept,
+Nightly CI: replaced by the pre-merge gate above (D49). The single-loop 85 s cost, the 1.6 probe false accept,
 and the inert retrieval threshold are Phase 1 *results*. They are reported in the 1.6–1.9 evidence and handed to
 Phases 2–3; they are not gate failures.

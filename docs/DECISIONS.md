@@ -1491,3 +1491,28 @@ is zero by definition (the gauge), counted as `gauge_zero_cov`, not as missing.
 
 **Not gate items, reported.** §37.7 round trips for message classes with no schema yet, the ≤15% byte prediction
 and stale-epoch rejection (Phase 3). Nightly CI of the thin run is open: it needs the 12 GB bag and a GPU.
+
+## 2026-10-16 — D49: no nightly CI — the thin run is a local pre-merge gate
+
+**Decision (maintainer).** No nightly CI for the end-to-end run: "this is just a hackathon project", and "before we
+check off each feature, we do run e2e once". Nightly infrastructure (a self-hosted runner, the 12 GB recording, a GPU)
+would cost more than it saves before Oct 24. Unit tests alone are not enough: the 257 tests stayed green while §4.2 and
+§18.2 went unused (D48). CLAUDE.md §4 is updated to say this.
+
+**What.** `infra/scripts/phase1.sh --premerge` runs the same chain and checks on the working tree, into
+`build/premerge/`, in ~20 min with no network. It runs before commit commands are handed over for any change that
+touches the pipeline, and before a plan item is checked off. The full run (a clean commit and a fresh Kaggle render)
+runs at phase gates and before submission. The GitHub `ci.yml` (build, test, cross-architecture determinism) is
+unchanged.
+
+**The render is reused, never faked.** Three Kaggle sessions gave the same `renders.npz` (`cc3a2498…`), so renders are a
+deterministic function of the render package. Full runs store them in `build/render_cache/<package sha256>/`.
+Pre-merge reuses them only for a byte-identical package. Otherwise it stops and asks for a full run (that branch was
+tested in isolation). The splat check and the verdict line say "REUSED … NOT exit-gate evidence". The cache was seeded
+from the exit-gate evidence run's render, which predates the cache code.
+
+**One mode-only exclusion.** In pre-merge, `report.yaml`'s `inputs_clean` is excluded, under its own reason
+`premerge_tree`. Full runs still require it to be true.
+
+**Verified.** A pre-merge run on the working tree (commit e10dd8e plus these edits) gave VERDICT PASS, 54/54, in
+19.5 min. From Phase 2 on, each phase's gate compares against its own committed evidence through a new config.

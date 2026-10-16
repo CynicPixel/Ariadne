@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-16 — Phase 1 exit gate PASSED (evidence); pre-merge gate replaces nightly CI (D48, D49)
+
+- **Evidence, clean commit e10dd8e** (`evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261016T052930Z`):
+  **VERDICT PASS, 54/54 checks**, `inputs_clean: true`. Every I1 condition, every §4 contract counted per hop, ctest
+  257/257 + protocol tests, fault identity, §30.2 report check, console check. Every compared file matches the
+  committed 1.6–1.9 evidence, with only run-identity and timing lines excluded. The fresh Kaggle render is sha256-identical to the
+  1.7 render (the third session to give `cc3a2498…`). Wall time 36 min.
+- D49: no nightly CI. `phase1.sh --premerge` (~20 min, working tree, render reused only for a byte-identical package)
+  runs before a pipeline change is handed over and before a plan item is checked off. Tested: PASS 54/54, labelled
+  "NOT exit-gate evidence". CLAUDE.md §4 updated.
+- **Phase 1 is complete.** Carried into Phase 2+: the 1.6 probe false accept (Phase 3 PCM/GNC), the inert retrieval
+  threshold, the overconfident proxy information, the single late loop (85 s), the Domain 3 literature survey, the
+  §37.7 items beyond the gate (Phase 3), and the AWS GPU quota for the live demo.
+- Next: Phase 2 (single-agent estimator to full spec).
+
 ## 2026-10-16 — Phase 1 exit gate: one replay command, §4 contracts wired + counted (D48)
 
 - `infra/scripts/phase1.sh` runs the whole thin chain from the bag in one go (about 40 min; Kaggle render included),

@@ -87,8 +87,10 @@ Follow `docs/ARIADNE_PHASED_PLAN.md`: Phase 0 plumbing/determinism → Phase 1 *
 end-to-end with placeholders behind real interfaces** → Phases 2–7 swap placeholders for
 full-spec components in vertical slices → Phase 8 missions/failure campaign/submission.
 Standing rules: a phase opens only on the previous gate; placeholders are demoted to ablation
-baselines, never deleted; the Phase-1 thin run goes into nightly CI and breaking it is
-stop-the-line; evidence artifacts (decision trace, byte tables, COOL pack, DVE ablations,
+baselines, never deleted; the Phase-1 thin run is a **local pre-merge gate** (D49, no nightly CI):
+`infra/scripts/phase1.sh --premerge` before handing over commits for any pipeline-touching change
+and before checking off a plan item, the full run (fresh GPU render) at phase gates and before
+submission; breaking it is stop-the-line; evidence artifacts (decision trace, byte tables, COOL pack, DVE ablations,
 failure cases) are produced by the phase that builds the capability, never retrofitted.
 Items marked `∥A/∥B/∥C` in a phase are safe for parallel agent sessions; unmarked items are
 critical-path in order.
