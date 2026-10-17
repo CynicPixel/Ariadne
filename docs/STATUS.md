@@ -4,6 +4,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-17 — Two cheap levers closed: scoring protocol and window iterations (D57)
+
+- The committed D56 code reproduces the D56 sweep exactly. The D56 pre-merge passed.
+- ORB-SLAM's keyframe-refined trajectory scoring is now reported: it differs by ≤ 1 mm, so scoring is not the gap.
+- 15 window iterations: no net gain (V1_03 0.56 → 0.96). Kept at 10.
+- The remaining gap is data association (2.1), loop closure (Phase 3), and the IMU (2.4, next here).
+
 ## 2026-10-17 — Lost-frame handling: visual rotation bridge + decaying velocity + tagged segments (D56)
 
 - **Diagnosis:** while lost, the 2-D tracks survive; the landmarks don't. Coasting turned MH_04's 9 cm dark hover

@@ -1778,3 +1778,20 @@ Design and evidence: `docs/design/LOST_FRAMES.md`. It answers `AUDIT_2.3.md` §4
 - Bridged edges keep the uninformative covariance until a NEES check. The measured σ is the input.
 - The worst blur gaps need 2.4's gyro.
 - Limit the bridge to lost frames once it is validated.
+
+## 2026-10-17 — D57: two cheap accuracy levers measured and closed; the window keeps 10 iterations
+
+Run from the committed D56 tree; the shipped `euroc_v2.yaml` reproduced the D56 sweep exactly on all 11 flights.
+
+- **ORB-SLAM's trajectory protocol** (frames re-composed on the final keyframe poses,
+  `System::SaveTrajectoryEuRoC`) is now reported next to the causal score, as `results.yaml` `keyframe_refined`
+  (window backend only, so v1 bytes are unchanged). It differs by ≤ 1 mm on every flight.
+  - The protocol caveat in `LOCAL_SLAM_2.3.md` §10 is closed: scoring is not part of the gap to ORB-SLAM3.
+- **Window max_iterations 15** (§11.6) vs 10:
+  - The share of solves that end at the cap drops from 45–69% to 28–47%.
+  - ATE: MH_01 0.075 → 0.072, MH_03 0.093 → 0.086, V2_01 0.071 → 0.069; but MH_05 0.349 → 0.360 and **V1_03 0.56 →
+    0.96**. Still 9/11 within the published class.
+  - **Kept at 10.** At 15, a third of the solves still hit the cap, so the cap is not what limits them. The likely
+    cause is the termination tolerances (`rel_energy_tolerance` 1e-6) [UNVERIFIED].
+- **What remains of the gap to ORB-SLAM3:** data association (re-association, 2.1), loop closure (Phase 3), the IMU
+  (2.4). It is not the protocol, and not the iteration budget.

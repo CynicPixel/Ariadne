@@ -206,8 +206,8 @@ target of the exit gate belongs to 2.4.
 - `sim_v2.yaml` keeps σ = 1.0: σ is calibrated on EuRoC only, not yet on the sim.
 - Row refinement is applied even when the estimate is not significant (MH_01: a = 0.17 px). A significance threshold
   is a follow-up.
-- The scored trajectory is the causal per-frame one; ORB-SLAM re-composes frames on refined keyframes. This is a
-  protocol caveat on criterion (2).
+- The scored trajectory is the causal per-frame one; ORB-SLAM re-composes frames on refined keyframes. **Closed by
+  D57:** the keyframe-refined score (`results.yaml` `keyframe_refined`) differs by ≤ 1 mm on all 11 flights.
 
 **Result against §8** (after D54; ATE in m):
 

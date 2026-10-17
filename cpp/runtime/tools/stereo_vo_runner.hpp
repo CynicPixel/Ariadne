@@ -145,6 +145,11 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 rr.baseline_m, gt_poses.size());
 
     std::vector<runtime::TimedPose> est_body;
+    // ORB-SLAM's trajectory protocol (System::SaveTrajectoryEuRoC): each frame is stored relative to its reference
+    // keyframe and re-composed at the end from that keyframe's FINAL (window-refined) pose. Window backend only, next
+    // to the causal per-frame score, which stays the primary number (LOCAL_SLAM_2.3 §10 protocol caveat).
+    struct FrameRef { uint64_t kf; core::SE3 T_kf_c; };
+    std::vector<FrameRef> frame_ref;
     std::vector<double> t_track, t_vo, t_kf;
     int lost = 0, keyframes = 0, ba_runs = 0;
     int lost_run = 0;            // consecutive lost frames (diagnostic)
@@ -345,6 +350,12 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
               << tr.anchor_bridge.model << ',' << tr.anchor_bridge.tracks << ',' << tr.anchor_age << ','
               << tr.anchor_drift_deg << '\n';
         est_body.push_back({vf.t_ns, T_W_C * T_B_Crect.inverse()});
+        if (!vo.graph().nodes().empty()) {
+            const slam::PoseNode& ref = vo.graph().nodes().rbegin()->second;
+            frame_ref.push_back({ref.keyframe, ref.T_W_C.inverse() * T_W_C});
+        } else {
+            frame_ref.push_back({~uint64_t(0), T_W_C});
+        }
         if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
         if (args.on_frame) {
             FrameView fv;
@@ -383,6 +394,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const auto rpe = runtime::ComputeRPE(e, g, 1.0, 0.05);
     double gt_length = 0.0;
     for (size_t i = 1; i < g.size(); ++i) gt_length += (g[i].pose.t - g[i - 1].pose.t).norm();
+    runtime::ErrorStats ate_kf, ate_kf_rot;
+    runtime::RelativeError rpe_kf;
+    if (scfg.ba.backend == "window") {
+        std::vector<core::TrajectorySample> ek;
+        for (size_t i = 0; i < est_body.size(); ++i) {
+            if (assoc[i] < 0) continue;
+            const FrameRef& fr = frame_ref[i];
+            const core::SE3 T = fr.kf == ~uint64_t(0) ? fr.T_kf_c : vo.graph().nodes().at(fr.kf).T_W_C * fr.T_kf_c;
+            ek.push_back({core::Timestamp{est_body[i].t_ns}, 0, T * T_B_Crect.inverse()});
+        }
+        ate_kf = runtime::ComputeATE(ek, g);
+        ate_kf_rot = runtime::ComputeATERotation(ek, g);
+        rpe_kf = runtime::ComputeRPE(ek, g, 1.0, 0.05);
+    }
 
     const fs::path run_dir = fs::path(args.out) / (source.RunName() + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
     fs::create_directories(run_dir);
@@ -471,6 +496,9 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << usac_skipped << "}\n";
     }
     if (scfg.ba.backend == "window") {
+        res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
+            << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
+            << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
         res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
             << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed
             << ", chi2_failed_fraction: " << (win_obs ? double(win_chi2_failed) / win_obs : -1.0)
