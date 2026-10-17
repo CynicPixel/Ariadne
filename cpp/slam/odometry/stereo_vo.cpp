@@ -47,8 +47,10 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
     if (frames_tracked_ > 0 && !(frame.t_ns > prev_t_ns_)) {
         throw std::invalid_argument("StereoVo: frame timestamps must increase");
     }
+    prev_frame_ = std::move(last_frame_);
     last_frame_ = frame;
     VoTrackResult res;
+    res.segment = segment_;
 
     if (keyframes_.empty()) {
         // The first frame defines the world: its rectified left camera.
@@ -71,6 +73,25 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
         if (!coasting_) velocity_per_s_ = core::SE3Log(prev2_T_W_C_.inverse() * prev_T_W_C_) /
                                           (1e-9 * double(prev_t_ns_ - prev2_t_ns_));
         predicted = prev_T_W_C_ * core::SE3Exp(velocity_per_s_ * (1e-9 * double(frame.t_ns - prev_t_ns_)));
+    }
+
+    // lost.motion = bridge: the rotation since the previous frame from the 2-D tracks, on EVERY frame -- used only when
+    // PnP fails, but measured always so its error can be checked against ground truth on tracked frames (vo_trace).
+    if (cfg_.lost.motion == "bridge") {
+        std::map<uint64_t, cv::Point2f> before;
+        for (size_t i = 0; i < prev_frame_.track_ids.size(); ++i) before.emplace(prev_frame_.track_ids[i], prev_frame_.points[i]);
+        std::vector<cv::Point2f> p0, p1;
+        for (size_t i = 0; i < frame.track_ids.size(); ++i) {
+            const auto it = before.find(frame.track_ids[i]);
+            if (it == before.end()) continue;
+            p0.push_back(it->second);
+            p1.push_back(frame.points[i]);
+        }
+        RotationBridgeParams bp;
+        bp.threshold_px = cfg_.lost.bridge_threshold_px;
+        bp.min_tracks = cfg_.lost.bridge_min_tracks;
+        bp.model_ratio = cfg_.lost.model_ratio;
+        res.bridge = EstimateFrameRotation(p0, p1, rig_.cam, bp, seed_, frame.frame_id);
     }
 
     std::vector<cv::Point3d> obj;
@@ -131,17 +152,38 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
     if (ok) {
         res.status = VoStatus::kTracking;
     } else {
-        // Never reset the world or drop the frame silently: hold the motion
-        // model, say so, and force a keyframe so new landmarks can be made.
+        // Never reset the world or drop the frame silently: predict, say so (status, source), and let the keyframe
+        // rule below decide whether new landmarks are made here.
         res.status = VoStatus::kLost;
-        res.T_W_C = predicted;
+        if (!coasting_) {                 // loss onset: a new map segment; the bridge's velocity decays from here
+            ++segment_;
+            loss_t0_ns_ = prev_t_ns_;
+        }
+        res.segment = segment_;
+        const bool bridge = cfg_.lost.motion == "bridge";   // before 2 tracked frames the velocity is zero: rotation only
+        if (bridge && !coasting_) {   // the anchor starts at the last measured frame
+            anchor_ = {prev_T_W_C_, prev_frame_.frame_id, {}};
+            for (size_t i = 0; i < prev_frame_.track_ids.size(); ++i)
+                anchor_.points.emplace(prev_frame_.track_ids[i], prev_frame_.points[i]);
+        }
+        res.T_W_C = bridge ? BridgePrediction(frame, res) : predicted;
+        res.source = bridge ? PoseSource::kBridged : PoseSource::kCoasted;
         res.covariance_given_map = UninformativeCovariance();
     }
 
     const int ref = keyframes_.back().tracked_landmarks;
-    res.need_keyframe = !ok || res.pnp_inliers < cfg_.keyframe.ref_ratio * ref ||
-                        res.pnp_inliers < cfg_.keyframe.min_tracked_landmarks ||
-                        1e-9 * double(frame.t_ns - last_kf_t_ns_) >= cfg_.keyframe.max_interval_s;
+    const bool due = 1e-9 * double(frame.t_ns - last_kf_t_ns_) >= cfg_.keyframe.max_interval_s;
+    if (ok || cfg_.lost.reanchor == "every_frame") {
+        // every_frame (1.5): a lost frame is always a keyframe -- in a long dark stretch, one per frame, each at a
+        // predicted pose (MH_04 v2: 206 keyframes in 10 s with 62 landmarks between them).
+        res.need_keyframe = !ok || res.pnp_inliers < cfg_.keyframe.ref_ratio * ref ||
+                            res.pnp_inliers < cfg_.keyframe.min_tracked_landmarks || due;
+    } else {
+        // gated (ORB-SLAM3 makes no keyframe while RECENTLY_LOST): only when it can re-anchor tracking, or at the
+        // time cap that also applies while tracking.
+        res.need_keyframe = due;
+        res.reanchor_probe = !due;
+    }
 
     prev2_T_W_C_ = prev_T_W_C_;
     prev_T_W_C_ = res.T_W_C;
@@ -151,6 +193,123 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
     coasting_ = !ok;
     last_ = res;
     return res;
+}
+
+core::SE3 StereoVo::BridgePrediction(const VoFrame& frame, VoTrackResult& res) {
+    // Translation: the last measured velocity (clamped: a pre-loss speed above lost.max_speed_m_s is itself corrupt,
+    // V2_03 read 4.9 m/s), decaying as exp(-t / tau) from the last measured pose -- in a hover it vanishes instead of
+    // extrapolating (MH_04: 10 s of constant velocity put a 9 cm hover 7.6 m away). The displacement over
+    // [a, b] seconds since loss is v tau (exp(-a/tau) - exp(-b/tau)). The twist is in the camera frame, as in coasting.
+    core::Vec6 v = velocity_per_s_;
+    const double speed = v.head<3>().norm();
+    if (speed > cfg_.lost.max_speed_m_s) v.head<3>() *= cfg_.lost.max_speed_m_s / speed;
+    const double tau = cfg_.lost.velocity_decay_s;
+    const double a = 1e-9 * double(prev_t_ns_ - loss_t0_ns_), b = 1e-9 * double(frame.t_ns - loss_t0_ns_);
+    const double f = tau * (std::exp(-a / tau) - std::exp(-b / tau));
+    core::SE3 T;
+    T.t = prev_T_W_C_.t + prev_T_W_C_.R * (v.head<3>() * f);
+    // Rotation, measured from the tracks: from the anchor (ORB-SLAM's TrackReferenceKeyFrame idea: one two-view
+    // problem whose baseline GROWS through the stretch, instead of chaining frame-to-frame estimates whose noise adds
+    // up -- 0.06 deg per frame at 1-2 cm, measured). When fewer than bridge_min_tracks reach back to the anchor, the
+    // previous frame becomes the anchor. If no model is plausible, the decaying angular velocity.
+    const auto shared = [&](std::vector<cv::Point2f>& p0, std::vector<cv::Point2f>& p1) {
+        p0.clear();
+        p1.clear();
+        for (size_t i = 0; i < frame.track_ids.size(); ++i) {
+            const auto it = anchor_.points.find(frame.track_ids[i]);
+            if (it == anchor_.points.end()) continue;
+            p0.push_back(it->second);
+            p1.push_back(frame.points[i]);
+        }
+    };
+    std::vector<cv::Point2f> p0, p1;
+    shared(p0, p1);
+    if (int(p0.size()) < cfg_.lost.bridge_min_tracks && anchor_.frame_id != prev_frame_.frame_id) {
+        anchor_ = {prev_T_W_C_, prev_frame_.frame_id, {}};
+        for (size_t i = 0; i < prev_frame_.track_ids.size(); ++i)
+            anchor_.points.emplace(prev_frame_.track_ids[i], prev_frame_.points[i]);
+        shared(p0, p1);
+    }
+    RotationBridgeParams bp;
+    bp.threshold_px = cfg_.lost.bridge_threshold_px;
+    bp.min_tracks = cfg_.lost.bridge_min_tracks;
+    bp.model_ratio = cfg_.lost.model_ratio;
+    res.anchor_bridge = EstimateFrameRotation(p0, p1, rig_.cam, bp, seed_, frame.frame_id, BridgeStream::kFromAnchor);
+    res.anchor_age = int(frame.frame_id - anchor_.frame_id);
+    // Diagnostic: the anchor's pose is a snapshot, but window solves may since have refined the previous (keyframe)
+    // pose that the translation integrates from. Their rotational disagreement, when the previous frame was bridged
+    // from this same anchor, measures how stale the snapshot is (trace: anchor_drift_deg).
+    if (last_anchor_.anchor_frame == anchor_.frame_id && last_anchor_.for_frame == prev_frame_.frame_id)
+        res.anchor_drift_deg =
+            core::SO3Log(prev_T_W_C_.R.transpose() * anchor_.T_W_C.R * last_anchor_.R).norm() * 180.0 / M_PI;
+    if (res.anchor_bridge.ok) last_anchor_ = {anchor_.frame_id, frame.frame_id, res.anchor_bridge.R_prev_cur};
+    T.R = res.anchor_bridge.ok ? core::Mat3(anchor_.T_W_C.R * res.anchor_bridge.R_prev_cur)
+                               : core::Mat3(prev_T_W_C_.R * core::SO3Exp(v.tail<3>() * f));
+    return T;
+}
+
+std::vector<std::pair<size_t, core::Vec3>> StereoVo::TriangulateNew(const VoFrame& f, const VoStereo& st,
+                                                                    TriangulationStats& stats) const {
+    const size_t n = f.points.size();
+    if (st.right.size() != n || st.valid.size() != n || st.sgbm_z.size() != n || st.sgbm_sigma.size() != n) {
+        throw std::invalid_argument("StereoVo: stereo arrays must parallel the tracked points");
+    }
+    std::vector<std::pair<size_t, core::Vec3>> made;
+    const double fx = rig_.cam.fx, B = rig_.baseline;
+    std::vector<size_t> cand;
+    std::vector<cv::Point2d> pl, pr;
+    for (size_t i = 0; i < n; ++i) {
+        if (landmarks_.count(f.track_ids[i])) continue;
+        ++stats.candidates;
+        if (!st.valid[i]) { ++stats.no_stereo; continue; }
+        if (!(f.points[i].x - st.right[i].x > 0.0f)) { ++stats.nonpositive_disparity; continue; }
+        cand.push_back(i);
+        pl.emplace_back(f.points[i].x, f.points[i].y);
+        pr.emplace_back(st.right[i].x, st.right[i].y);
+    }
+    if (cand.empty()) return made;
+    // Rectified projection matrices: left K[I|0], right K[I|(-B,0,0)].
+    const cv::Mat P1 = (cv::Mat_<double>(3, 4) << fx, 0, rig_.cam.cx, 0, 0, rig_.cam.fy, rig_.cam.cy, 0, 0, 0, 1, 0);
+    const cv::Mat P2 = (cv::Mat_<double>(3, 4) << fx, 0, rig_.cam.cx, -fx * B, 0, rig_.cam.fy, rig_.cam.cy, 0, 0, 0, 1, 0);
+    cv::Mat X4;
+    cv::triangulatePoints(P1, P2, pl, pr, X4);   // linear DLT, 4xN homogeneous
+    X4.convertTo(X4, CV_64F);
+    for (size_t k = 0; k < cand.size(); ++k) {
+        const size_t i = cand[k];
+        const double w = X4.at<double>(3, static_cast<int>(k));
+        const core::Vec3 Xc(X4.at<double>(0, static_cast<int>(k)) / w, X4.at<double>(1, static_cast<int>(k)) / w,
+                            X4.at<double>(2, static_cast<int>(k)) / w);
+        // No far cap: ORB-SLAM2 (§III-A) classifies points beyond ~40 baselines as "far" and KEEPS them (accurate
+        // rotation, weak translation). Removing our 60-baseline discard took MH_04 from 411 lost frames to 30
+        // (AUDIT_2.3.md). The relative-sigma test below is the depth bound: Z <= max_relative_sigma * fB /
+        // disparity_sigma_px (~9.6 m on EuRoC). Multi-view triangulation of points beyond it is not done here.
+        if (!(Xc.z() >= cfg_.triangulation.min_depth_m)) { ++stats.depth_range; continue; }
+        const core::Vec2 el = core::Project(rig_.cam, Xc) - core::Vec2(pl[k].x, pl[k].y);
+        const core::Vec2 er = core::Project(rig_.cam, Xc - core::Vec3(B, 0, 0)) - core::Vec2(pr[k].x, pr[k].y);
+        if (el.norm() > cfg_.triangulation.max_reprojection_px || er.norm() > cfg_.triangulation.max_reprojection_px) {
+            ++stats.reprojection;
+            continue;
+        }
+        // §9.5 on the triangulated depth.
+        const double sigma_tri = Xc.z() * Xc.z() / (fx * B) * cfg_.triangulation.disparity_sigma_px;
+        if (sigma_tri / Xc.z() > cfg_.triangulation.max_relative_sigma) { ++stats.uncertain; continue; }
+        // §9.6: cross-check against dense SGBM where it is trustworthy.
+        if (std::isfinite(st.sgbm_z[i])) {
+            const double s = std::sqrt(sigma_tri * sigma_tri + double(st.sgbm_sigma[i]) * st.sgbm_sigma[i]);
+            if (std::abs(Xc.z() - st.sgbm_z[i]) > cfg_.triangulation.sgbm_gate_sigma * s) {
+                ++stats.sgbm_inconsistent;
+                continue;
+            }
+        }
+        made.emplace_back(i, Xc);
+    }
+    return made;
+}
+
+bool StereoVo::ShouldReanchor(const VoStereo& st) const {
+    TriangulationStats ignored;
+    const size_t would_make = TriangulateNew(last_frame_, st, ignored).size();
+    return last_.correspondences + int(would_make) >= cfg_.lost.reanchor_min_points;
 }
 
 VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
@@ -163,7 +322,11 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
     KeyframeState kf;
     kf.id = keyframes_.size();
     kf.T_W_C = last_.T_W_C;
+    kf.source = last_.source;
+    kf.segment = last_.segment;
     out.keyframe_id = kf.id;
+    out.source = kf.source;
+    out.segment = kf.segment;
 
     // Landmarks whose track died can never be observed again (no
     // re-association in the placeholder): retire them. In the 2.3 window, a
@@ -180,61 +343,16 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
     }
 
     // --- Triangulate new landmarks (§11.2) ---------------------------------
-    const double fx = rig_.cam.fx, B = rig_.baseline;
-    std::vector<size_t> cand;
-    std::vector<cv::Point2d> pl, pr;
+    const double B = rig_.baseline;
     for (size_t i = 0; i < n; ++i) {
         const uint64_t id = f.track_ids[i];
-        if (landmarks_.count(id)) {
-            kf.obs[id] = {f.points[i], st.right[i], st.valid[i] != 0};
-            continue;
-        }
-        ++out.triangulation.candidates;
-        if (!st.valid[i]) { ++out.triangulation.no_stereo; continue; }
-        if (!(f.points[i].x - st.right[i].x > 0.0f)) { ++out.triangulation.nonpositive_disparity; continue; }
-        cand.push_back(i);
-        pl.emplace_back(f.points[i].x, f.points[i].y);
-        pr.emplace_back(st.right[i].x, st.right[i].y);
+        if (landmarks_.count(id)) kf.obs[id] = {f.points[i], st.right[i], st.valid[i] != 0};
     }
-    if (!cand.empty()) {
-        // Rectified projection matrices: left K[I|0], right K[I|(-B,0,0)].
-        const cv::Mat P1 = (cv::Mat_<double>(3, 4) << fx, 0, rig_.cam.cx, 0, 0, rig_.cam.fy, rig_.cam.cy, 0, 0, 0, 1, 0);
-        const cv::Mat P2 = (cv::Mat_<double>(3, 4) << fx, 0, rig_.cam.cx, -fx * B, 0, rig_.cam.fy, rig_.cam.cy, 0, 0, 0, 1, 0);
-        cv::Mat X4;
-        cv::triangulatePoints(P1, P2, pl, pr, X4);   // linear DLT, 4xN homogeneous
-        X4.convertTo(X4, CV_64F);
-        for (size_t k = 0; k < cand.size(); ++k) {
-            const size_t i = cand[k];
-            const double w = X4.at<double>(3, static_cast<int>(k));
-            const core::Vec3 Xc(X4.at<double>(0, static_cast<int>(k)) / w, X4.at<double>(1, static_cast<int>(k)) / w,
-                                X4.at<double>(2, static_cast<int>(k)) / w);
-            // No far cap: ORB-SLAM2 (§III-A) classifies points beyond ~40 baselines as "far" and KEEPS them (accurate
-            // rotation, weak translation). Removing our 60-baseline discard took MH_04 from 411 lost frames to 30
-            // (AUDIT_2.3.md). The relative-sigma test below is the depth bound: Z <= max_relative_sigma * fB /
-            // disparity_sigma_px (~9.6 m on EuRoC). Multi-view triangulation of points beyond it is not done here.
-            if (!(Xc.z() >= cfg_.triangulation.min_depth_m)) { ++out.triangulation.depth_range; continue; }
-            const core::Vec2 el = core::Project(rig_.cam, Xc) - core::Vec2(pl[k].x, pl[k].y);
-            const core::Vec2 er = core::Project(rig_.cam, Xc - core::Vec3(B, 0, 0)) - core::Vec2(pr[k].x, pr[k].y);
-            if (el.norm() > cfg_.triangulation.max_reprojection_px || er.norm() > cfg_.triangulation.max_reprojection_px) {
-                ++out.triangulation.reprojection;
-                continue;
-            }
-            // §9.5 on the triangulated depth.
-            const double sigma_tri = Xc.z() * Xc.z() / (fx * B) * cfg_.triangulation.disparity_sigma_px;
-            if (sigma_tri / Xc.z() > cfg_.triangulation.max_relative_sigma) { ++out.triangulation.uncertain; continue; }
-            // §9.6: cross-check against dense SGBM where it is trustworthy.
-            if (std::isfinite(st.sgbm_z[i])) {
-                const double s = std::sqrt(sigma_tri * sigma_tri + double(st.sgbm_sigma[i]) * st.sgbm_sigma[i]);
-                if (std::abs(Xc.z() - st.sgbm_z[i]) > cfg_.triangulation.sgbm_gate_sigma * s) {
-                    ++out.triangulation.sgbm_inconsistent;
-                    continue;
-                }
-            }
-            const uint64_t id = f.track_ids[i];
-            landmarks_[id] = {kf.T_W_C * Xc, kf.id};
-            kf.obs[id] = {f.points[i], st.right[i], true};
-            ++out.triangulation.created;
-        }
+    for (const auto& [i, Xc] : TriangulateNew(f, st, out.triangulation)) {
+        const uint64_t id = f.track_ids[i];
+        landmarks_[id] = {kf.T_W_C * Xc, kf.id};
+        kf.obs[id] = {f.points[i], st.right[i], true};
+        ++out.triangulation.created;
     }
     kf.tracked_landmarks = static_cast<int>(kf.obs.size());
     if (window) return AddKeyframeWindow(std::move(kf), out, f.t_ns);

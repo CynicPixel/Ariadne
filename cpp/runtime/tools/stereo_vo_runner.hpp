@@ -148,6 +148,15 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     std::vector<double> t_track, t_vo, t_kf;
     int lost = 0, keyframes = 0, ba_runs = 0;
     int lost_run = 0;            // consecutive lost frames (diagnostic)
+    // Lost-frame handling (LOST_FRAMES.md, D56): written to results.yaml only when the config has a `lost:` section.
+    long lost_bridged = 0, lost_coasted = 0, lost_rot_h = 0, lost_rot_e = 0, lost_rot_none = 0, bridge_retries = 0;
+    long reanchor_probes = 0, reanchor_refused = 0, keyframes_lost = 0;
+    uint32_t vo_segments = 0;   // loss onsets so far (StereoVo's segment counter)
+    // Per-frame trace (vo_trace.csv): what the frontend saw on every frame, so a lost stretch can be explained.
+    std::ostringstream trace;
+    trace << "frame,t_ns,status,tracks,correspondences,pnp_inliers,keyframe,stereo_valid,created,source,segment,"
+             "probe,bridge_model,bridge_tracks,bridge_inliers_h,bridge_inliers_e,bridge_cheiral_e,bridge_disagreement_deg,"
+             "bridge_rx,bridge_ry,bridge_rz,anchor_model,anchor_tracks,anchor_age,anchor_drift_deg\n";
     double last_finite_t = 0.0;
     slam::TriangulationStats tri;
     double ba_cost_ratio_sum = 0.0;
@@ -200,7 +209,22 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         }
         last_finite_t = T_W_C.t.norm();
 
-        if (tr.need_keyframe) {
+        long trace_valid = -1, trace_created = -1;   // keyframes (and re-anchor probes) only
+        bool made_keyframe = false;
+        if (tr.status == slam::VoStatus::kLost) {
+            lost_bridged += tr.source == slam::PoseSource::kBridged;
+            lost_coasted += tr.source == slam::PoseSource::kCoasted;
+            if (tr.source == slam::PoseSource::kBridged) {
+                lost_rot_h += tr.anchor_bridge.ok && tr.anchor_bridge.model == 'H';
+                lost_rot_e += tr.anchor_bridge.ok && tr.anchor_bridge.model == 'E';
+                lost_rot_none += !tr.anchor_bridge.ok;
+            }
+        }
+        bridge_retries += tr.bridge.usac_retries + tr.anchor_bridge.usac_retries;
+        vo_segments = tr.segment;
+        // A lost frame under lost.reanchor = gated is only PROBED: its stereo is computed, and it becomes a keyframe
+        // only if StereoVo::ShouldReanchor says the next frame's PnP would then have enough landmarks.
+        if (tr.need_keyframe || tr.reanchor_probe) {
             t0 = std::chrono::steady_clock::now();
             // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
             // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
@@ -209,7 +233,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
             };
             cv::Mat rs = condition(r);
-            if (pcfg.stereo_match.row_refinement && !row_fix.ok) {
+            if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
                 ++row_attempts;
                 CollectRowSamples(l, rs, tf.points, pcfg.stereo_match, row_samples);
                 const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
@@ -226,7 +250,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 } else {
                     row_last_refusal = est.why;
                 }
-            } else if (pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
+            } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
                 // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
                 row_check = EstimateRowCorrection(l, rs, tf.points, pcfg.stereo_match);
             }
@@ -245,69 +269,88 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
                 st.sgbm_sigma.push_back(ok ? s32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
             }
-            for (uchar v : sm.valid) stereo_valid += v;
-            stereo_total += static_cast<long>(sm.valid.size());
-            const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
-            t_kf.push_back(Ms(t0));
-            ++keyframes;
-            tri.candidates += kr.triangulation.candidates;
-            tri.created += kr.triangulation.created;
-            tri.no_stereo += kr.triangulation.no_stereo;
-            tri.nonpositive_disparity += kr.triangulation.nonpositive_disparity;
-            tri.depth_range += kr.triangulation.depth_range;
-            tri.reprojection += kr.triangulation.reprojection;
-            tri.sgbm_inconsistent += kr.triangulation.sgbm_inconsistent;
-            tri.uncertain += kr.triangulation.uncertain;
-            if (kr.ba_ran) {
-                ++ba_runs;
-                ba_cost_ratio_sum += kr.ba_final_cost / std::max(kr.ba_initial_cost, 1e-12);
-                win_not_found += !kr.ba_found;
-                win_obs += kr.ba_observations;
-                win_invalid_entry += kr.ba_invalid_at_entry;
-                win_chi2_failed += kr.ba_chi2_failed;
-                win_sq += kr.ba_inlier_sq_px;
-                win_dof += kr.ba_inlier_dof;
-                win_ill_after += kr.ba_ill_conditioned_after;
-                win_unobservable_after += kr.ba_unobservable_after;
-                win_degenerate += kr.ba_marginal_degenerate;
-            }
-            win_rejected += kr.ba_rejected;
-            win_culled += kr.ba_culled;
-            win_exit_edges += kr.exit_edge;
-            win_unobservable += kr.ba_unobservable;
-            win_ill += kr.ba_ill_conditioned;
-            T_W_C = vo.graph().nodes().rbegin()->second.T_W_C;
-            if (args.on_keyframe) {
-                const slam::PoseNode& node = vo.graph().nodes().at(kr.keyframe_id);
-                if (node.agent != frame.agent || node.T_W_C.t != T_W_C.t) {
-                    throw std::logic_error("keyframe hook: graph node does not match the keyframe just added");
+            trace_valid = 0;
+            for (uchar v : sm.valid) trace_valid += v;
+            reanchor_probes += !tr.need_keyframe;
+            made_keyframe = tr.need_keyframe || vo.ShouldReanchor(st);
+            reanchor_refused += !made_keyframe;
+            if (made_keyframe) {
+                stereo_valid += trace_valid;
+                stereo_total += static_cast<long>(sm.valid.size());
+                const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
+                t_kf.push_back(Ms(t0));
+                ++keyframes;
+                keyframes_lost += tr.status == slam::VoStatus::kLost;
+                tri.candidates += kr.triangulation.candidates;
+                tri.created += kr.triangulation.created;
+                trace_created = kr.triangulation.created;
+                tri.no_stereo += kr.triangulation.no_stereo;
+                tri.nonpositive_disparity += kr.triangulation.nonpositive_disparity;
+                tri.depth_range += kr.triangulation.depth_range;
+                tri.reprojection += kr.triangulation.reprojection;
+                tri.sgbm_inconsistent += kr.triangulation.sgbm_inconsistent;
+                tri.uncertain += kr.triangulation.uncertain;
+                if (kr.ba_ran) {
+                    ++ba_runs;
+                    ba_cost_ratio_sum += kr.ba_final_cost / std::max(kr.ba_initial_cost, 1e-12);
+                    win_not_found += !kr.ba_found;
+                    win_obs += kr.ba_observations;
+                    win_invalid_entry += kr.ba_invalid_at_entry;
+                    win_chi2_failed += kr.ba_chi2_failed;
+                    win_sq += kr.ba_inlier_sq_px;
+                    win_dof += kr.ba_inlier_dof;
+                    win_ill_after += kr.ba_ill_conditioned_after;
+                    win_unobservable_after += kr.ba_unobservable_after;
+                    win_degenerate += kr.ba_marginal_degenerate;
                 }
-                KeyframeView kv;
-                runtime::Keyframe& kf = kv.keyframe;
-                kf.id = kr.keyframe_id;
-                kf.frame_id = frame.id;
-                kf.agent = frame.agent;
-                kf.t_ns = frame.t_ns;
-                kf.T_world_cam = node.T_W_C;
-                kf.pose_cov = node.covariance;
-                kf.depth = depth;
-                kf.landmark_ids = vo.KeyframeLandmarks(kr.keyframe_id);
-                cv::Mat rgb = l;
-                if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
-                kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
-                kv.left_rect = l;
-                kv.T_B_C = T_B_Crect;
-                kv.baseline_m = rr.baseline_m;
-                args.on_keyframe(kv);
+                win_rejected += kr.ba_rejected;
+                win_culled += kr.ba_culled;
+                win_exit_edges += kr.exit_edge;
+                win_unobservable += kr.ba_unobservable;
+                win_ill += kr.ba_ill_conditioned;
+                T_W_C = vo.graph().nodes().rbegin()->second.T_W_C;
+                if (args.on_keyframe) {
+                    const slam::PoseNode& node = vo.graph().nodes().at(kr.keyframe_id);
+                    if (node.agent != frame.agent || node.T_W_C.t != T_W_C.t) {
+                        throw std::logic_error("keyframe hook: graph node does not match the keyframe just added");
+                    }
+                    KeyframeView kv;
+                    runtime::Keyframe& kf = kv.keyframe;
+                    kf.id = kr.keyframe_id;
+                    kf.frame_id = frame.id;
+                    kf.agent = frame.agent;
+                    kf.t_ns = frame.t_ns;
+                    kf.T_world_cam = node.T_W_C;
+                    kf.pose_cov = node.covariance;
+                    kf.depth = depth;
+                    kf.landmark_ids = vo.KeyframeLandmarks(kr.keyframe_id);
+                kf.pose_source = kr.source;
+                kf.segment = kr.segment;
+                    cv::Mat rgb = l;
+                    if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
+                    kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
+                    kv.left_rect = l;
+                    kv.T_B_C = T_B_Crect;
+                    kv.baseline_m = rr.baseline_m;
+                    args.on_keyframe(kv);
+                }
             }
         }
+        const core::Vec3 brot = core::SO3Log(tr.bridge.R_prev_cur);
+        trace << i << ',' << vf.t_ns << ',' << static_cast<int>(tr.status) << ',' << tf.ids.size() << ','
+              << tr.correspondences << ',' << tr.pnp_inliers << ',' << int(made_keyframe) << ',' << trace_valid << ','
+              << trace_created << ',' << slam::ToString(tr.source) << ',' << tr.segment << ',' << int(tr.reanchor_probe)
+              << ',' << tr.bridge.model << ',' << tr.bridge.tracks << ',' << tr.bridge.inliers_h << ','
+              << tr.bridge.inliers_e << ',' << tr.bridge.cheiral_e << ',' << tr.bridge.disagreement_deg << ',' << brot.x() << ',' << brot.y() << ',' << brot.z() << ','
+              << tr.anchor_bridge.model << ',' << tr.anchor_bridge.tracks << ',' << tr.anchor_age << ','
+              << tr.anchor_drift_deg << '\n';
         est_body.push_back({vf.t_ns, T_W_C * T_B_Crect.inverse()});
         if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
         if (args.on_frame) {
             FrameView fv;
             fv.frame_id = vf.frame_id;
             fv.t_ns = vf.t_ns;
-            fv.is_keyframe = tr.need_keyframe;
+            fv.is_keyframe = made_keyframe;
             fv.T_O_C = T_W_C;
             fv.left_rect_rgb = [&]() {
                 cv::Mat o;
@@ -344,6 +387,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const fs::path run_dir = fs::path(args.out) / (source.RunName() + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
     fs::create_directories(run_dir);
     runtime::WriteTum((run_dir / "estimate_body.tum").string(), est_body);
+    std::ofstream(run_dir / "vo_trace.csv") << trace.str();
     // Ground truth goes under raw/, which .gitignore excludes: for EuRoC it is
     // the dataset's own data (InC-NC, D35), so evidence commits carry our
     // estimate and derived numbers but never a copy of the dataset.
@@ -372,6 +416,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         m.stereo_row_refinement = rf.str();
     }
     m.slam_config = scfg.name;
+    m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = "none";
     m.feature_engine = orb.Name();
     m.loop_backend = "none";
@@ -435,6 +480,13 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << ", landmarks_ill_conditioned: " << win_ill << ", landmarks_ill_conditioned_at_solution: " << win_ill_after
             << ", marginal_degenerate: " << win_degenerate
             << ", inlier_sigma_px: " << (win_dof > 0 ? std::sqrt(win_sq / double(win_dof)) : -1.0) << "}\n";
+    }
+    if (scfg.lost.motion != "coast" || scfg.lost.reanchor != "every_frame") {
+        res << "lost: {motion: " << scfg.lost.motion << ", reanchor: " << scfg.lost.reanchor
+            << ", segments: " << vo_segments << ", bridged_frames: " << lost_bridged << ", coasted_frames: " << lost_coasted
+            << ", bridge_rotation: {H: " << lost_rot_h << ", E: " << lost_rot_e << ", none: " << lost_rot_none
+            << "}, keyframes_while_lost: " << keyframes_lost << ", reanchor_probes: " << reanchor_probes
+            << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
     res.close();
 

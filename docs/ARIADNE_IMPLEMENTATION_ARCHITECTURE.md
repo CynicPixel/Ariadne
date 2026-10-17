@@ -842,6 +842,11 @@ struct Keyframe {
     double timestamp_age;
 
     UncertaintySummary uncertainty;
+
+    // D56: was this pose measured (PnP against the map) or predicted while tracking was lost (bridged / coasted)?
+    // Consumers weight or exclude predicted keyframes by this; segment counts loss onsets.
+    PoseSource pose_source;
+    uint32_t segment;
 };
 ```
 
@@ -1714,6 +1719,14 @@ state = DEGRADED
 ```
 
 and immediately increase the active-perception value of a recovery observation.
+
+> **As built (D56, `docs/design/LOST_FRAMES.md`).** DEGRADED is `VoStatus::kLost`: PnP has failed, and the pose is
+> PREDICTED.
+> - Rotation is measured from the surviving 2-D tracks against an anchor frame: seeded USAC H/E with ORB-SLAM's
+>   score rule.
+> - Translation is the last measured velocity, decaying as exp(−t/τ).
+> - Each frame and keyframe carries `pose_source` (measured / bridged / coasted) and a segment counter (loss onsets).
+> - 2.4's gyro replaces the rotation source. Keyframes are still made while lost: suppressing them raised the losses.
 
 ---
 

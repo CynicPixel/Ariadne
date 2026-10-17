@@ -166,6 +166,27 @@ Rosen, Carlone, Bandeira, Leonard, **IJRR 2019**, [arXiv:1612.07386](https://arx
 
 **iSAM2 — flagged impractical.** Kaess et al., IJRR 2012; GTSAM ([BSD](https://github.com/borglab/gtsam)). Bayes tree + incremental variable reordering + fluid relinearization ≈ months to do correctly. **For Ariadne's scale (a few agents, one building), batch GNC-PGO re-solve on rendezvous is entirely adequate** — which is exactly what Swarm-SLAM concluded. Use GTSAM if you want iSAM2; don't build it.
 
+### 1.3a Tracking loss — what a VO does while it cannot localise (added 2026-10-17, D56)
+
+When PnP fails, the map cannot be used, but the 2-D tracks usually survive. Ariadne measured 40–360 on EuRoC's dark
+and blurred stretches (`docs/design/LOST_FRAMES.md`).
+
+| method | source / licence | what it does | Ariadne |
+|---|---|---|---|
+| **RECENTLY_LOST → LOST, Atlas** | ORB-SLAM3 `Tracking.cc` (⛔ GPL-3.0: read, don't link); Atlas, Elvira et al., IROS 2019 | Stereo: relocalise with DBoW2 for 3 s and make no keyframes; then start a new map (reset below 10 keyframes), merged on revisit. With an IMU: predict from it for 5 s. | No-keyframes-while-lost **tested and rejected** without relocalisation: it raised lost frames (D56). Segments are tagged; merging is Phase 3 place recognition. |
+| **Failure detection → new segment** | VINS-Mono, Qin et al., T-RO 2018 (⛔ GPL-3.0) | Few features, or jumps in pose or bias → re-initialise → a separate pose-graph segment, joined by loop detection. | Segment counter + `pose_source` on every keyframe (D56). |
+| **H / F model selection** | ORB-SLAM, Mur-Artal et al., T-RO 2015 §IV-B | Scores S_M = Σ (Γ − d²/σ²) over χ²-truncated transfer errors; H when S_H / (S_H + S_F) > 0.45. | **Adopted** for the rotation bridge, as published. Counting inliers instead was tried and fails (sub-pixel parallax bias). |
+| **Reference-keyframe tracking** | ORB-SLAM `TrackReferenceKeyFrame` | Tracks against one reference, not frame to frame. | **Adopted:** the bridge measures from an anchor frame, so its error does not accumulate. |
+| **Gap smoothing (RTS backtracking)** | SP-VIO, arXiv 2411.07551 | Smooths the interrupted stretch once tracking returns. | Needs an inertial model: a 2.4 option. |
+| **IMU bridging** | Forster preintegration (arch §10) | A metric prediction over seconds. | 2.4. The bridge's rotation source is the seam the gyro replaces. |
+
+*OpenCV 5:* `geometry::findHomography` / `findEssentialMat` take `UsacParams` (seeded, `isParallel = false`, so
+replays are deterministic), and `recoverPose` takes `distanceThresh`. ⚠️ The default `recoverPose` overload counts
+only points within 50 baselines, i.e. none at 1–2 cm between frames, so it can silently return 0.
+
+**Ariadne's measured result (D56):** MH_04 2.78 → 0.36 m ATE, V2_03 2.12 → 1.27, MH_05 0.56 → 0.35. Lost-frame
+counts do not move; the losses themselves are 2.1 / 2.4 territory.
+
 ### 1.4 ⭐ Swarm-SLAM — the reference system for Ariadne
 
 Lajoie & Beltrame, **IEEE RA-L 2024**, [arXiv:2301.06230](https://arxiv.org/abs/2301.06230), [code (MIT)](https://github.com/MISTLab/Swarm-SLAM).

@@ -58,12 +58,31 @@ struct BaParams {
     double min_gradient_tolerance = 1e-8;
 };
 
+/// Behaviour while tracking is lost (LOST_FRAMES.md, D56). The defaults are the Phase-1 behaviour, so a config
+/// without a `lost:` section is unchanged; a `lost:` section must name every key.
+struct LostParams {
+    // How a lost frame's pose is predicted: "coast" (constant velocity frozen at loss, the 1.5 behaviour) or
+    // "bridge" (rotation measured from the 2-D tracks, H/E model selection; translation from a decaying velocity).
+    std::string motion = "coast";
+    // When a lost frame becomes a keyframe: "every_frame" (the 1.5 behaviour, and v2's) or "gated" (only when it would
+    // let the next frame's PnP succeed, or after keyframe.max_interval_s). gated RAISED lost frames on EuRoC (V2_01
+    // 20 -> 80 coasting, 120 bridged): kept as an ablation, rejected for v2 (D56).
+    std::string reanchor = "every_frame";
+    double bridge_threshold_px = 1.5;   // H / E inlier threshold on the rectified image
+    int bridge_min_tracks = 20;         // tracks shared with the anchor frame needed to try the bridge
+    double model_ratio = 0.45;          // ORB-SLAM (T-RO 2015 §IV-B): H when S_H / (S_H + S_F) > this
+    double velocity_decay_s = 0.5;      // tau of the exponential decay of the pre-loss velocity
+    double max_speed_m_s = 3.0;         // a pre-loss speed above this is itself corrupt: clamp
+    int reanchor_min_points = 30;       // gated: tracked landmarks + new ones >= this (2 x pnp.min_correspondences)
+};
+
 struct SlamConfig {
     std::string name;
     TriangulationParams triangulation;
     PnpParams pnp;
     KeyframeParams keyframe;
     BaParams ba;
+    LostParams lost;
 };
 
 inline void ValidateSlam(const SlamConfig& c) {
@@ -89,6 +108,14 @@ inline void ValidateSlam(const SlamConfig& c) {
     }
     if (!(k.max_interval_s > 0.0)) fail("keyframe max_interval_s must be > 0");
     if (!(c.ba.huber_delta > 0.0) || c.ba.max_iterations < 1 || !(c.ba.sigma_px > 0.0)) fail("bad BA settings");
+    const LostParams& l = c.lost;
+    if (l.motion != "coast" && l.motion != "bridge") fail("lost.motion must be coast or bridge");
+    if (l.reanchor != "every_frame" && l.reanchor != "gated") fail("lost.reanchor must be every_frame or gated");
+    if (!(l.bridge_threshold_px > 0.0) || l.bridge_min_tracks < 8 || !(l.model_ratio > 0.0 && l.model_ratio < 1.0) ||
+        !(l.velocity_decay_s > 0.0) || !(l.max_speed_m_s > 0.0)) {
+        fail("lost: bridge_threshold_px, velocity_decay_s, max_speed_m_s > 0; bridge_min_tracks >= 8; model_ratio in (0, 1)");
+    }
+    if (l.reanchor_min_points < p.min_correspondences) fail("lost.reanchor_min_points must be >= pnp.min_correspondences");
     if (c.ba.backend == "window" &&
         (c.ba.window_size < 2 || !(c.ba.chi2_reject > 0.0) || c.ba.cull_after_keyframes < 1 ||
          c.ba.min_keyframe_observations < 1 || !(c.ba.rel_energy_tolerance > 0.0) ||
@@ -138,6 +165,18 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         throw ConfigError("slam config '" + c.name + "': ba.backend must be two_frame_stub or window");
     }
     b.RequireAllConsumed();
+    if (config.Has("lost")) {
+        StrictConfig l = config.Section("lost");
+        c.lost.motion = l.Require<std::string>("motion");
+        c.lost.reanchor = l.Require<std::string>("reanchor");
+        c.lost.bridge_threshold_px = l.Require<double>("bridge_threshold_px");
+        c.lost.bridge_min_tracks = l.Require<int>("bridge_min_tracks");
+        c.lost.model_ratio = l.Require<double>("model_ratio");
+        c.lost.velocity_decay_s = l.Require<double>("velocity_decay_s");
+        c.lost.max_speed_m_s = l.Require<double>("max_speed_m_s");
+        c.lost.reanchor_min_points = l.Require<int>("reanchor_min_points");
+        l.RequireAllConsumed();
+    }
     config.RequireAllConsumed();
     ValidateSlam(c);
     return c;

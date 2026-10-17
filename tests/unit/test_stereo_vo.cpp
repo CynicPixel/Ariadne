@@ -59,6 +59,8 @@ SE3 TruthPose(int k) {
 
 struct VoRun {
     std::vector<int> k;                  // frame index of each record (frames not fed are absent)
+    std::vector<PoseSource> source;
+    std::vector<uint32_t> segment;
     std::vector<SE3> est, truth;
     std::vector<VoStatus> status;
     std::vector<char> was_keyframe;
@@ -75,9 +77,17 @@ struct VoRun {
 /// `blackout_frame` delivers no tracks at all (lamp failure, lens occlusion), and so do the
 /// `blackout_frames - 1` frames after it. Inside the blackout only every `blackout_stride`-th frame is FED at all
 /// (the others are dropped input: their timestamps never reach the VO).
-VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout_frames = 1, int blackout_stride = 1) {
+/// A dark stretch (LOST_FRAMES.md): from `frame` for `frames` frames the 2-D tracks continue but carry ids no landmark
+/// has (the map's tracks died) and no stereo (too dark for the right image); afterwards the tracks are a FRESH id set
+/// with stereo, as after a real loss with no re-association.
+struct DarkStretch {
+    int frame = -1, frames = 0;
+};
+
+VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout_frames = 1, int blackout_stride = 1,
+            const SlamConfig& cfg = Config(), DarkStretch dark = {}) {
     const std::vector<Vec3> pts = Room(1);
-    StereoVo vo(Config(), kRig, 42);
+    StereoVo vo(cfg, kRig, 42);
     VoRun run;
     for (int k = 0; k < frames; ++k) {
         const bool in_blackout = blackout_frame >= 0 && k >= blackout_frame && k < blackout_frame + blackout_frames;
@@ -92,6 +102,8 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout
         f.frame_id = static_cast<uint64_t>(k);
         f.t_ns = k * 50000000LL;
         VoStereo st;
+        const bool in_dark = dark.frame >= 0 && k >= dark.frame && k < dark.frame + dark.frames;
+        const uint64_t id_base = dark.frame < 0 || k < dark.frame ? 0 : in_dark ? 1000000 : 2000000;
         for (size_t j = 0; j < pts.size(); ++j) {
             if (in_blackout) break;
             const Vec3 Xc = T_C_W * pts[j];
@@ -103,21 +115,24 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout
             l += n;
             r += core::Vec2(core::SampleNormal(noise, 0, 0.3), n.y());   // rectified: same row noise
             if (outlier_every > 0 && j % static_cast<size_t>(outlier_every) == 0 && k > 0) l += core::Vec2(20, -15);
-            f.track_ids.push_back(j);
+            f.track_ids.push_back(id_base + j);
             f.points.emplace_back(float(l.x()), float(l.y()));
             st.right.emplace_back(float(r.x()), float(r.y()));
-            st.valid.push_back(r.x() >= 0 ? 1 : 0);
+            st.valid.push_back(r.x() >= 0 && !in_dark ? 1 : 0);
             st.sgbm_z.push_back(std::numeric_limits<float>::quiet_NaN());
             st.sgbm_sigma.push_back(std::numeric_limits<float>::quiet_NaN());
         }
         const VoTrackResult tr = vo.Track(f);
         run.lost += tr.status == VoStatus::kLost;
         run.status.push_back(tr.status);
-        run.was_keyframe.push_back(tr.need_keyframe);
+        run.source.push_back(tr.source);
+        run.segment.push_back(tr.segment);
+        const bool make_keyframe = tr.need_keyframe || (tr.reanchor_probe && vo.ShouldReanchor(st));
+        run.was_keyframe.push_back(make_keyframe);
         SE3 est = tr.T_W_C;
         // The VO's world is the first camera: express truth the same way.
         const SE3 truth = TruthPose(0).inverse() * T_W_C;
-        if (tr.need_keyframe) {
+        if (make_keyframe) {
             vo.AddKeyframe(st);
             ++run.keyframes;
             const PoseNode& node = vo.graph().nodes().rbegin()->second;
@@ -328,4 +343,182 @@ TEST(StereoVo, CoastingPredictsByElapsedTimeAcrossDroppedFrames) {
         ++checked;
     }
     EXPECT_EQ(checked, length / stride);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Lost-frame handling (LOST_FRAMES.md, D56).
+
+namespace {
+
+SlamConfig LostConfig(const std::string& motion, const std::string& reanchor) {
+    SlamConfig c = Config();
+    c.lost.motion = motion;
+    c.lost.reanchor = reanchor;
+    return c;
+}
+
+double RotationErrorDeg(const SE3& a, const SE3& b) { return core::SO3Log(a.R.transpose() * b.R).norm() * 180.0 / M_PI; }
+
+size_t kTwoViewsCap = 300;
+/// Two views of Room(3) from camera poses T0, T1 (T_W_C), 0.3 px noise: matched pixel lists.
+void TwoViews(const SE3& T0, const SE3& T1, std::vector<cv::Point2f>& p0, std::vector<cv::Point2f>& p1, uint64_t seed) {
+    const std::vector<Vec3> pts = Room(3);
+    core::PhiloxStream noise(seed, 0, 1);
+    for (const Vec3& X : pts) {
+        const Vec3 a = T0.inverse() * X, b = T1.inverse() * X;
+        if (a.z() < 0.6 || b.z() < 0.6) continue;
+        const core::Vec2 u = core::Project(kRig.cam, a), v = core::Project(kRig.cam, b);
+        if (u.x() < 0 || u.x() >= kW || u.y() < 0 || u.y() >= kH || v.x() < 0 || v.x() >= kW || v.y() < 0 || v.y() >= kH)
+            continue;
+        p0.emplace_back(float(u.x() + core::SampleNormal(noise, 0, 0.3)), float(u.y() + core::SampleNormal(noise, 0, 0.3)));
+        p1.emplace_back(float(v.x() + core::SampleNormal(noise, 0, 0.3)), float(v.y() + core::SampleNormal(noise, 0, 0.3)));
+        if (p0.size() == kTwoViewsCap) break;
+    }
+}
+
+}  // namespace
+
+// Pure rotation (a hover): every point moves by the same homography, the essential matrix is degenerate (t = 0), and
+// the bridge must take H and recover the rotation.
+TEST(RotationBridge, PureRotationSelectsTheHomography) {
+    const SE3 T0 = TruthPose(20);
+    SE3 T1 = T0;
+    T1.R = T0.R * core::SO3Exp(Vec3(0.01, -0.03, 0.02));
+    std::vector<cv::Point2f> p0, p1;
+    TwoViews(T0, T1, p0, p1, 5);
+    ASSERT_GE(p0.size(), 100u);
+    const FrameRotation r = EstimateFrameRotation(p0, p1, kRig.cam, RotationBridgeParams{}, 42, 7);
+    ASSERT_TRUE(r.ok) << r.why;
+    EXPECT_EQ(r.model, 'H');
+    EXPECT_LT(RotationErrorDeg(SE3{T0.R.transpose() * T1.R, Vec3::Zero()}, SE3{r.R_prev_cur, Vec3::Zero()}), 0.1);
+}
+
+// Real parallax (0.3 m sideways in a room 1-6 m deep): H no longer explains the near points, E does, and its rotation
+// must be the one taken.
+TEST(RotationBridge, ParallaxSelectsTheEssentialMatrix) {
+    const SE3 T0 = TruthPose(20);
+    SE3 T1 = T0;
+    T1.R = T0.R * core::SO3Exp(Vec3(0.0, 0.05, 0.0));
+    T1.t = T0.t + T0.R * Vec3(0.3, 0.0, 0.1);
+    std::vector<cv::Point2f> p0, p1;
+    TwoViews(T0, T1, p0, p1, 6);
+    const FrameRotation r = EstimateFrameRotation(p0, p1, kRig.cam, RotationBridgeParams{}, 42, 8);
+    ASSERT_TRUE(r.ok) << r.why;
+    EXPECT_EQ(r.model, 'E');
+    EXPECT_GT(r.score_f, r.score_h);
+    EXPECT_LT(RotationErrorDeg(SE3{T0.R.transpose() * T1.R, Vec3::Zero()}, SE3{r.R_prev_cur, Vec3::Zero()}), 0.2);
+}
+
+TEST(RotationBridge, RefusesTooFewTracksAndIsAPureFunction) {
+    const SE3 T0 = TruthPose(20);
+    SE3 T1 = T0;
+    T1.R = T0.R * core::SO3Exp(Vec3(0.0, 0.02, 0.0));
+    std::vector<cv::Point2f> p0, p1;
+    TwoViews(T0, T1, p0, p1, 9);
+    RotationBridgeParams few;
+    few.min_tracks = int(p0.size()) + 1;
+    EXPECT_FALSE(EstimateFrameRotation(p0, p1, kRig.cam, few, 42, 9).ok);
+    const FrameRotation a = EstimateFrameRotation(p0, p1, kRig.cam, RotationBridgeParams{}, 42, 9);
+    cv::setNumThreads(4);
+    const FrameRotation b = EstimateFrameRotation(p0, p1, kRig.cam, RotationBridgeParams{}, 42, 9);
+    ASSERT_TRUE(a.ok && b.ok);
+    EXPECT_EQ(std::memcmp(a.R_prev_cur.data(), b.R_prev_cur.data(), sizeof(double) * 9), 0);
+    EXPECT_EQ(a.inliers_h, b.inliers_h);
+    EXPECT_EQ(a.inliers_e, b.inliers_e);
+}
+
+// The default (no `lost:` section) is the 1.5 behaviour, byte for byte: the blackout test above already pins the
+// coasted pose; here the config defaults themselves.
+TEST(LostFrames, DefaultsAreThePhase1Behaviour) {
+    const SlamConfig c = Config();
+    EXPECT_EQ(c.lost.motion, "coast");
+    EXPECT_EQ(c.lost.reanchor, "every_frame");
+}
+
+// A dark stretch: 2-D tracks survive, landmarks and stereo do not. bridge/gated must (1) report every dark frame as
+// lost and BRIDGED in one new segment, (2) make no keyframe there except at the time cap, (3) keep the rotation
+// measured, (4) re-anchor on the first frame whose stereo can seed PnP, then track.
+TEST(LostFrames, DarkStretchIsBridgedWithoutAKeyframeFloodAndReanchors) {
+    const int dark = 60, len = 30;   // 1.5 s
+    const VoRun r = RunVo(dark + len + 20, 0, -1, 1, 1, LostConfig("bridge", "gated"), {dark, len});
+    int kf_in_dark = 0;
+    for (int k = dark; k < dark + len; ++k) {
+        ASSERT_EQ(r.status[size_t(k)], VoStatus::kLost) << k;
+        EXPECT_EQ(r.source[size_t(k)], PoseSource::kBridged) << k;
+        EXPECT_EQ(r.segment[size_t(k)], 1u) << k;
+        kf_in_dark += r.was_keyframe[size_t(k)];
+    }
+    EXPECT_EQ(r.segment[size_t(dark - 1)], 0u);
+    EXPECT_LE(kf_in_dark, int(std::ceil(len * 0.05 / Config().keyframe.max_interval_s)));
+    // Rotation over the stretch, measured from the tracks (the truth is a smooth S-curve, so the bar is tight).
+    const SE3 est_rel = r.est[size_t(dark - 1)].inverse() * r.est[size_t(dark + len - 1)];
+    const SE3 gt_rel = r.truth[size_t(dark - 1)].inverse() * r.truth[size_t(dark + len - 1)];
+    EXPECT_LT(RotationErrorDeg(est_rel, gt_rel), 0.5);
+    // Re-anchor at the first frame after the stretch (a fresh, stereo-rich track set), tracking right after.
+    EXPECT_TRUE(r.was_keyframe[size_t(dark + len)]);
+    for (int k = dark + len + 1; k < dark + len + 20; ++k) EXPECT_EQ(r.status[size_t(k)], VoStatus::kTracking) << k;
+}
+
+// The 1.5 behaviour on the same stretch, for contrast: a keyframe on every dark frame.
+TEST(LostFrames, EveryFrameReanchorFloodsKeyframes) {
+    const int dark = 60, len = 30;
+    const VoRun r = RunVo(dark + len + 5, 0, -1, 1, 1, LostConfig("coast", "every_frame"), {dark, len});
+    for (int k = dark; k < dark + len; ++k) {
+        EXPECT_EQ(r.source[size_t(k)], PoseSource::kCoasted) << k;
+        EXPECT_TRUE(r.was_keyframe[size_t(k)]) << k;
+    }
+}
+
+// The bridge's translation decays: after many tau without measurements the pose stops moving (a hover is not
+// extrapolated away), unlike constant-velocity coasting.
+TEST(LostFrames, BridgedTranslationDecaysToRest) {
+    const int dark = 60, len = 120;   // 6 s = 12 tau
+    const VoRun r = RunVo(dark + len, 0, -1, 1, 1, LostConfig("bridge", "gated"), {dark, len});
+    const double last_step = (r.est[size_t(dark + len - 1)].t - r.est[size_t(dark + len - 2)].t).norm();
+    const double first_step = (r.est[size_t(dark + 1)].t - r.est[size_t(dark)].t).norm();
+    EXPECT_GT(first_step, 0.0);
+    EXPECT_LT(last_step, 1e-3 * first_step);
+}
+
+// The SHIPPED v2 path (sim_v2.yaml: window backend, bridge, every_frame) through a dark stretch: every dark frame
+// bridged in one new segment, the rotation measured, every dark frame a keyframe (every_frame), and tracking back on
+// the fresh track set right after.
+TEST(LostFrames, ShippedV2DarkStretchIsBridgedAndRecovers) {
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    ASSERT_EQ(v2.ba.backend, "window");
+    ASSERT_EQ(v2.lost.motion, "bridge");
+    ASSERT_EQ(v2.lost.reanchor, "every_frame");
+    const int dark = 60, len = 30;
+    const VoRun r = RunVo(dark + len + 20, 0, -1, 1, 1, v2, {dark, len});
+    for (int k = dark; k < dark + len; ++k) {
+        ASSERT_EQ(r.status[size_t(k)], VoStatus::kLost) << k;
+        EXPECT_EQ(r.source[size_t(k)], PoseSource::kBridged) << k;
+        EXPECT_EQ(r.segment[size_t(k)], 1u) << k;
+        EXPECT_TRUE(r.was_keyframe[size_t(k)]) << k;
+    }
+    const SE3 est_rel = r.est[size_t(dark - 1)].inverse() * r.est[size_t(dark + len - 1)];
+    const SE3 gt_rel = r.truth[size_t(dark - 1)].inverse() * r.truth[size_t(dark + len - 1)];
+    EXPECT_LT(RotationErrorDeg(est_rel, gt_rel), 0.5);
+    for (int k = dark + len + 2; k < dark + len + 20; ++k) EXPECT_EQ(r.status[size_t(k)], VoStatus::kTracking) << k;
+}
+
+// Determinism of the shipped v2 path with the bridge active: OpenCV thread count and global RNG state must not reach
+// the poses (the bridge's USAC is seeded per (seed, frame, site) and single-threaded).
+TEST(LostFrames, ShippedV2BridgeIsDeterministicAcrossThreadsAndGlobalRng) {
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    const int def = cv::getNumThreads();
+    std::vector<VoRun> runs;
+    for (int threads : {1, 2, def}) {
+        cv::setNumThreads(threads);
+        for (int i = 0; i < 13; ++i) cv::theRNG().next();
+        runs.push_back(RunVo(90, 10, -1, 1, 1, v2, {40, 25}));
+    }
+    cv::setNumThreads(def);
+    for (size_t r = 1; r < runs.size(); ++r) {
+        ASSERT_EQ(runs[r].est.size(), runs[0].est.size());
+        for (size_t k = 0; k < runs[0].est.size(); ++k) {
+            ASSERT_EQ(0, std::memcmp(runs[r].est[k].matrix().data(), runs[0].est[k].matrix().data(), 16 * sizeof(double)))
+                << "pose " << k << " differs in run " << r;
+        }
+    }
 }

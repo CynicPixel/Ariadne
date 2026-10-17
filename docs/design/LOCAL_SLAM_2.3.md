@@ -223,5 +223,7 @@ target of the exit gate belongs to 2.4.
 - **Every failure loses ≥ 100 frames.** There, 2.3 is worse than v1, because lost stretches put landmarks at coasted
   poses and the window carries them across 10 keyframes (`AUDIT_2.3.md` §4). The fix is upstream of 2.3: lost-frame
   handling next, then 2.1 / 2.4.
+- **After D56** (lost-frame handling, `LOST_FRAMES.md`): v2 reads MH04 0.364, MH05 0.349, V103 0.562, V203 1.266,
+  and the rest within ±0.03 except V102 0.137. (1) **10/11**; (2) **9/11**.
 - **Before D54** the same table read 4/11 on both criteria. The frontend defects, not the window, were most of the
   gap (AUDIT §1).

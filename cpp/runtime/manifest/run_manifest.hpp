@@ -97,6 +97,8 @@ struct RunManifest {
     /// "off" when disabled by config, "not_estimated: <why>" when it never succeeded. A correction estimated from
     /// the evaluated data itself: disclosed here, not hidden.
     std::string stereo_row_refinement = "not_applicable";
+    /// Lost-frame handling (D56): "<lost.motion>/<lost.reanchor>"; "coast/every_frame" is the 1.5 behaviour.
+    std::string lost_handling = "not_applicable";
     /// Final state_hash of the event log (§41).
     std::string final_state_hash = kUnknownField;
 
@@ -182,6 +184,7 @@ inline std::string ToYaml(const RunManifest& m) {
     detail::Field(out, "lens_digest", m.lens_digest);
     detail::Field(out, "pgo_digest", m.pgo_digest);
     detail::Field(out, "stereo_row_refinement", m.stereo_row_refinement);
+    detail::Field(out, "lost_handling", m.lost_handling);
     detail::Field(out, "final_state_hash", m.final_state_hash);
 
     if (!m.extra.empty()) {

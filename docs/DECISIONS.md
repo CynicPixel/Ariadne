@@ -1736,3 +1736,45 @@ diagnostic build, reverted at once; it is not in any commit.
   It ran on a working tree whose only code change writes a new per-frame `vo_trace.csv` (D56), which no gate
   comparison reads.
 - The old per-item evidence stays committed where it is.
+
+## 2026-10-17 — D56: lost-frame handling — the visual rotation bridge, a decaying velocity, tagged segments
+
+Design and evidence: `docs/design/LOST_FRAMES.md`. It answers `AUDIT_2.3.md` §4.
+
+**Diagnosis** (new per-frame `vo_trace.csv`):
+- In a lost stretch the landmarks fail, but the 2-D tracks survive (40–360).
+- Coasting at a frozen constant velocity turned MH_04's 10 s, 9 cm dark hover into 7.6 m and 117°.
+
+**Decision (v2 configs; v1 unchanged, it stays the 1.5 baseline):**
+- **`lost.motion: bridge`.**
+  - Rotation is MEASURED from the 2-D tracks by seeded USAC H and E (OpenCV 5 `geometry`), selected by ORB-SLAM's
+    published score rule (T-RO 2015 §IV-B).
+  - It is measured from an ANCHOR (the last measured frame, or the last frame 20 tracks reach back to), so there is
+    one two-view estimate per frame, not a chain.
+  - Translation is the last measured velocity, clamped to 3 m/s and decaying as `exp(−t/0.5 s)`.
+- **`lost.reanchor: every_frame`.** The `gated` alternative (ORB-SLAM3's no-keyframes-while-lost) RAISED lost
+  frames (V2_01 20 → 120 bridged) and is rejected: it is kept as an ablation.
+- **Provenance:** `PoseSource {measured, bridged, coasted}` and a segment counter (loss onsets) on every frame and in
+  `runtime::Keyframe` (`pose_source`, `segment`). Also in `results.yaml` `lost:` and manifest `lost_handling`.
+
+**Evidence** (11 EuRoC flights):
+- `coast` / `every_frame` reproduces D54 byte for byte, except wall-clock timing.
+- The bridge: MH_04 2.78 → **0.36** m (rotation 55° → 1.8°), V2_03 2.12 → **1.27**, MH_05 0.56 → **0.35**.
+  - Small costs: V1_03 0.44 → 0.56, attributed to the decay (no decay 0.46, τ 0.2 0.70); V1_02 0.113 → 0.137.
+- **Against `LOCAL_SLAM_2.3.md` §8:** within the published class **9/11** (was 7/11); better than the placeholder
+  **10/11**.
+- **Held-out per-pair accuracy** (frame-to-frame bridge on 25,606 tracked pairs vs ground truth): H median 0.21°,
+  E median 0.036°, p99 ≈ 1.1°; robust σ ≈ (0.09°, 0.09°, 0.04°) per pair.
+- Lost-frame COUNTS barely move (MH_04 278 → 264). This limits the damage of a loss; 2.1 and 2.4 must cut the losses.
+- Cost: VO tracking 9.3 → 12.4 ms per frame (the bridge runs on every frame, for the held-out check).
+
+**Rejected on the way, each by a failing test or a measurement (LOST_FRAMES.md §4):**
+- ORB-SLAM's ratio on inlier counts (blind to sub-pixel parallax; 0.1°/frame H bias, chained).
+- "E unless it disagrees with H by > 5°" (breaks at anchor baselines).
+- ReconstructF's cheirality test: `recoverPose`'s default overload counts only points within 50 baselines, none at
+  1–2 cm/frame. This silently dropped E until `distanceThresh` was passed.
+
+**Open:**
+- Bridged edges keep the uninformative covariance until a NEES check. The measured σ is the input.
+- The worst blur gaps need 2.4's gyro.
+- Limit the bridge to lost frames once it is validated.

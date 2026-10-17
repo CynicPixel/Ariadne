@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-17 — Lost-frame handling: visual rotation bridge + decaying velocity + tagged segments (D56)
+
+- **Diagnosis:** while lost, the 2-D tracks survive; the landmarks don't. Coasting turned MH_04's 9 cm dark hover
+  into 7.6 m / 117°.
+- **Built:** rotation measured from the tracks against an anchor frame (seeded USAC H/E, ORB-SLAM's score rule), a
+  velocity decaying with τ = 0.5 s, and `pose_source` + `segment` on every frame and keyframe record. Also a per-frame
+  `vo_trace.csv`.
+- **EuRoC (v2):** MH_04 2.78 → 0.36 m, V2_03 2.12 → 1.27, MH_05 0.56 → 0.35.
+  - Costs: V1_03 0.44 → 0.56 (the decay), V1_02 0.11 → 0.14.
+  - §8 criterion (2): 9/11 (was 7/11); criterion (1): 10/11.
+- **Held-out:** per-pair bridge rotation on 25,606 tracked pairs: median 0.21° (H) / 0.04° (E).
+- **Rejected:** no-keyframes-while-lost raised the losses.
+- **Tests:** ctest 300/300. v1 / legacy mode is byte-identical to D54 except timing.
+- **Next:** lost-frame COUNTS are unchanged, so 2.1 re-association and 2.4 IMU.
+
 ## 2026-10-17 — Gate re-pinned to the post-D54 clean run; sim change attributed (D55)
 
 - **Full gate from clean 150ce28** (fresh Kaggle render): 22/22 non-determinism checks PASS. The 32 determinism

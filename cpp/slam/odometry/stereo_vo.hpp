@@ -29,6 +29,8 @@
 // keyframes, not a window.
 // ---------------------------------------------------------------------------
 #include "core/geometry/pinhole.hpp"
+#include "slam/odometry/pose_source.hpp"
+#include "slam/odometry/rotation_bridge.hpp"
 #include "slam/pose_graph/pose_graph.hpp"
 #include "slam/slam_config.hpp"
 
@@ -37,6 +39,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <utility>
 #include <stdexcept>
 #include <vector>
 
@@ -62,6 +65,7 @@ struct VoStereo {
     std::vector<float> sgbm_sigma;
 };
 
+/// kLost is arch §8.2's DEGRADED: the pose is predicted, not measured against the map.
 enum class VoStatus { kInitializing, kTracking, kLost };
 
 struct VoTrackResult {
@@ -74,6 +78,15 @@ struct VoTrackResult {
     int correspondences = 0;
     int pnp_inliers = 0;
     bool need_keyframe = false;
+    /// lost.reanchor = gated, frame lost and no keyframe due: give the stereo for this frame to ShouldReanchor(), and
+    /// call AddKeyframe() if it says yes.
+    bool reanchor_probe = false;
+    PoseSource source = PoseSource::kMeasured;
+    uint32_t segment = 0;          // map segment: incremented at every loss onset
+    FrameRotation bridge;          // lost.motion = bridge: this frame's measured rotation (every frame, diagnostic too)
+    FrameRotation anchor_bridge;   // lost + bridge: rotation from the anchor frame (the one used, when ok)
+    int anchor_age = -1;           // frames between the anchor and this one
+    double anchor_drift_deg = -1;  // anchor snapshot vs the (possibly window-refined) previous pose, when comparable
 };
 
 struct TriangulationStats {
@@ -83,6 +96,8 @@ struct TriangulationStats {
 
 struct VoKeyframeResult {
     uint64_t keyframe_id = 0;
+    PoseSource source = PoseSource::kMeasured;   // of the frame it was made from
+    uint32_t segment = 0;
     TriangulationStats triangulation;
     int ba_landmarks = 0;
     int ba_iterations = 0;
@@ -114,6 +129,10 @@ public:
     /// Call after Track() returned need_keyframe, with stereo for that frame.
     VoKeyframeResult AddKeyframe(const VoStereo& stereo);
 
+    /// lost.reanchor = gated: would this lost frame, made a keyframe, give the next frame's PnP enough landmarks
+    /// (tracked landmarks + the ones it would triangulate >= lost.reanchor_min_points)? Changes nothing.
+    bool ShouldReanchor(const VoStereo& stereo) const;
+
     const PoseGraph& graph() const { return graph_; }
     size_t landmark_count() const { return landmarks_.size(); }
     /// The landmarks observed at keyframe `kf` (§4.2 landmark_ids), ascending; throws for an unknown keyframe.
@@ -132,6 +151,8 @@ private:
     struct KeyframeState {
         uint64_t id = 0;
         core::SE3 T_W_C;
+        PoseSource source = PoseSource::kMeasured;
+        uint32_t segment = 0;
         // Observations recorded at this keyframe: landmark -> (left, right, has_right).
         struct Obs { cv::Point2f left, right; bool has_right = false; };
         std::map<uint64_t, Obs> obs;
@@ -142,6 +163,24 @@ private:
     /// graph, and emit the exit edge of the keyframe that leaves the window.
     VoKeyframeResult AddKeyframeWindow(KeyframeState kf, VoKeyframeResult out, int64_t t_ns);
 
+    /// §11.2 stereo triangulation of the frame's tracks that are not landmarks yet, every rejection counted:
+    /// (track index, point in the camera frame). Const: AddKeyframe commits, ShouldReanchor only counts.
+    std::vector<std::pair<size_t, core::Vec3>> TriangulateNew(const VoFrame& f, const VoStereo& st,
+                                                              TriangulationStats& stats) const;
+    /// lost.motion = bridge: the lost frame's pose. Rotation from the ANCHOR -- the last measured frame, or the last
+    /// frame enough tracks reach back to -- so the two-view baseline grows instead of per-frame noise accumulating.
+    core::SE3 BridgePrediction(const VoFrame& frame, VoTrackResult& res);
+    struct BridgeAnchor {
+        core::SE3 T_W_C;
+        uint64_t frame_id = 0;
+        std::map<uint64_t, cv::Point2f> points;
+    };
+    BridgeAnchor anchor_;
+    struct LastAnchorRotation {   // the previous successful anchor estimate (anchor_drift_deg diagnostic)
+        uint64_t anchor_frame = ~uint64_t(0), for_frame = ~uint64_t(0);
+        core::Mat3 R = core::Mat3::Identity();
+    } last_anchor_;
+
     SlamConfig cfg_;
     RectifiedStereo rig_;
     uint64_t seed_;
@@ -150,6 +189,7 @@ private:
     std::vector<KeyframeState> keyframes_;
     PoseGraph graph_;
     VoFrame last_frame_;
+    VoFrame prev_frame_;                              // the frame before last_frame_ (the bridge's first view)
     VoTrackResult last_;
     core::SE3 prev_T_W_C_, prev2_T_W_C_;
     int frames_tracked_ = 0;
@@ -157,6 +197,8 @@ private:
     bool coasting_ = false;                           // the previous frame was lost: keep velocity_per_s_
     int64_t prev_t_ns_ = 0, prev2_t_ns_ = 0;          // timestamps of prev_T_W_C_ / prev2_T_W_C_
     int64_t last_kf_t_ns_ = 0;                        // keyframe.max_interval_s is measured from here
+    uint32_t segment_ = 0;                            // incremented at every loss onset
+    int64_t loss_t0_ns_ = 0;                          // last measured pose's time: the bridge's velocity decays from it
     // Window exit (design §4): the marginal of window[1] from the last solve, in which window[0] was the fixed gauge.
     core::Mat6 pending_exit_cov_ = core::Mat6::Zero();
     bool have_pending_exit_ = false;

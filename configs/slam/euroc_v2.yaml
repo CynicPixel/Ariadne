@@ -35,3 +35,13 @@ ba:
   rel_energy_tolerance: 1.0e-6  # LevMarqBase termination (D51)
   step_norm_tolerance: 1.0e-8
   min_gradient_tolerance: 1.0e-8
+
+lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+  motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
+  reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
+  bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
+  bridge_min_tracks: 20         # tracks shared with the anchor frame needed to try the bridge (else re-anchor on the previous frame)
+  model_ratio: 0.45             # ORB-SLAM (T-RO 2015 §IV-B): H when S_H / (S_H + S_F) > 0.45, else E
+  velocity_decay_s: 0.5         # tau of exp(-t/tau) on the pre-loss velocity, declared before the sweep (D56: 0.2 and no decay reported)
+  max_speed_m_s: 3.0            # clamp a corrupt pre-loss speed (EuRoC MAV < ~2.3 m/s)
+  reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences

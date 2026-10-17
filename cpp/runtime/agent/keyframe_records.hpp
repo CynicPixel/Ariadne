@@ -22,6 +22,7 @@
 // ---------------------------------------------------------------------------
 #include "core/geometry/pinhole.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
+#include "slam/odometry/pose_source.hpp"
 #include "slam/pose_graph/pose_graph.hpp"
 
 #include <opencv2/core.hpp>
@@ -47,6 +48,11 @@ struct Keyframe {
     perception::StereoDepth depth;
     std::vector<uint64_t> landmark_ids;
     std::vector<float> global_descriptor;           // empty until a place-recognition consumer fills it
+    // Tracking provenance (LOST_FRAMES.md, D56; AUDIT_2.3 §4): a keyframe made while tracking was lost has a
+    // PREDICTED pose. Consumers (exchange, reconstruction, planning) weight or exclude it by this, not by guessing
+    // from pose_cov. segment counts loss onsets: keyframes of different segments are joined only by predictions.
+    slam::PoseSource pose_source = slam::PoseSource::kMeasured;
+    uint32_t segment = 0;
 };
 
 struct ExposureState { double exposure_s = 0.0; double gain = 0.0; };
