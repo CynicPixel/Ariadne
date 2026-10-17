@@ -1,0 +1,55 @@
+PASS  [i1] two agents explore (keyframes per agent)
+PASS  [i1] each agent builds a local map alone (coverage of the GT free space)
+PASS  [i1] merge via >= 1 verified inter-agent closure
+PASS  [i1] a splat is rendered (remote GPU renders scored on held-out views)
+PASS  [i1] an exit route is produced, valid against GT at rho_responder
+PASS  [i1] one run: every stage's manifest records the same commit
+PASS  [contracts] §4.1 Frame delivered (agent 0)
+PASS  [contracts] §4.2 Keyframe records complete (agent 0)
+PASS  [contracts] §18.2 KeyframeBundle built + spooled (agent 0)
+PASS  [contracts] §4.1 Frame delivered (agent 1)
+PASS  [contracts] §4.2 Keyframe records complete (agent 1)
+PASS  [contracts] §18.2 KeyframeBundle built + spooled (agent 1)
+PASS  [contracts] §4.3 LoopEdge encoded -> decoded identical -> merge edge received
+PASS  [contracts] §4.4 ByteRecord: one ledger row per message, totals agree
+PASS  [contracts] unset-by-design fields declared
+PASS  [stages] full ctest
+PASS  [stages] protocol tests (CollabProtocol.*, Serialization.*)
+PASS  [stages] duplicate/out-of-order injection is idempotent (fault identity)
+PASS  [stages] every §30.2 metric emits a number (report check)
+PASS  [stages] console chain check
+FAIL  [determinism] sim_collab/candidates.csv
+FAIL  [determinism] sim_collab/negative_probe.csv
+FAIL  [determinism] sim_collab/results.yaml
+FAIL  [determinism] sim_collab/recon_eval.yaml
+FAIL  [determinism] sim_collab_faults/candidates.csv
+FAIL  [determinism] sim_collab_faults/negative_probe.csv
+FAIL  [determinism] sim_collab_faults/results.yaml
+FAIL  [determinism] recon/spool.yaml
+FAIL  [determinism] recon/render_package.json
+FAIL  [determinism] recon/prepare.yaml
+FAIL  [determinism] recon/score.yaml
+FAIL  [determinism] mission/results.yaml
+FAIL  [determinism] mission/trace.jsonl
+FAIL  [determinism] mission/routes.jsonl
+FAIL  [determinism] mission/slab.png
+FAIL  [determinism] mission/support.png
+FAIL  [determinism] mission/map_vs_gt.png
+FAIL  [determinism] mission/eval.yaml
+FAIL  [determinism] mission_agent0/results.yaml
+FAIL  [determinism] mission_agent0/trace.jsonl
+FAIL  [determinism] mission_agent0/routes.jsonl
+FAIL  [determinism] mission_agent0/eval.yaml
+FAIL  [determinism] mission_agent1/results.yaml
+FAIL  [determinism] mission_agent1/trace.jsonl
+FAIL  [determinism] mission_agent1/routes.jsonl
+FAIL  [determinism] mission_agent1/eval.yaml
+FAIL  [determinism] report/report.yaml
+FAIL  [determinism] report/oracle.yaml
+PASS  [determinism] report/registry.yaml
+PASS  [determinism] report/report_check.txt
+FAIL  [determinism] report/figures/bytes.json
+FAIL  [determinism] recon/fused_cloud_O0.ply sha256
+FAIL  [determinism] recon/render_package.npz sha256
+FAIL  [determinism] recon/renders.npz sha256
+VERDICT FAIL 

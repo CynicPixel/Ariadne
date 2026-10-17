@@ -1,21 +1,25 @@
 # Phase 1 exit gate (design PHASE1_GATE). Read by python/analysis/phase1_gate.py.
 #
-# determinism: the gate run is compared, file by file, with the committed per-item evidence, which was
-# produced by SEPARATE runs from DIFFERENT clean commits (1.6 2ed0a49 / 1.7 c9f17c1 / 1.8 60763bf / 1.9 4f0e187).
+# determinism: the gate run is compared, file by file, with committed reference outputs. Until D55 these were the
+# per-item evidence from SEPARATE runs of DIFFERENT clean commits (1.6 2ed0a49 / 1.7 c9f17c1 / 1.8 60763bf /
+# 1.9 4f0e187). D53/D54 change the Phase-1 VO by design, so D55 re-pins every reference to ONE full gate run from
+# clean commit 150ce28 with a fresh Kaggle render (exit_gate/aadffb8df5790ca0-20261017T072201Z; its own verdict was
+# FAIL on exactly these 32 VO-derived comparisons, everything else PASS, digests unchanged). The old evidence stays
+# committed where it is.
 # A file is "identical" byte for byte, or "identical except" the lines matching its named exclusions. Every
 # exclusion is listed here with its reason; nothing is excluded silently. A file the gate run has that the
 # reference lacks (e.g. ledger.csv, contracts.yaml, snapshots/, which postdate the evidence) is reported as
 # "new", not compared.
 name: phase1_gate_v1
 reference_root: evaluation/runs/phase1
-reference:
-  sim_collab: sim_collab/aadffb8df5790ca0-20261015T114028Z
-  sim_collab_faults: sim_collab/aadffb8df5790ca0-faults-20261015T083420Z
-  recon: recon/aadffb8df5790ca0-20261015T114028Z
-  mission: mission/aadffb8df5790ca0-20261015T173514Z
-  mission_agent0: mission/aadffb8df5790ca0-agent0only-20261015T173524Z
-  mission_agent1: mission/aadffb8df5790ca0-agent1only-20261015T173527Z
-  report: report/aadffb8df5790ca0-20261015T114028Z
+reference:   # D55
+  sim_collab: exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-20261017T072237Z
+  sim_collab_faults: exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-faults-20261017T072237Z
+  recon: exit_gate/aadffb8df5790ca0-20261017T072201Z/recon/aadffb8df5790ca0-20261017T072237Z
+  mission: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z
+  mission_agent0: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent0only-20261017T080436Z
+  mission_agent1: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent1only-20261017T080439Z
+  report: exit_gate/aadffb8df5790ca0-20261017T072201Z/report/aadffb8df5790ca0-20261017T072237Z
 
 # Line exclusions are per file below: {re: Python regex matched at the line start, why: one of these reasons}.
 reasons:

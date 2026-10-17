@@ -4,6 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-17 — Gate re-pinned to the post-D54 clean run; sim change attributed (D55)
+
+- **Full gate from clean 150ce28** (fresh Kaggle render): 22/22 non-determinism checks PASS. The 32 determinism
+  diffs are all VO-derived, by design; digests unchanged.
+- **Re-pinned** `phase1_gate.yaml` to that run. A pre-merge against it: **54/54 PASS**. Parallel sessions can now
+  pre-merge.
+- **Sim "regression" attributed:** merged ATE 9.8 → 14.4 mm is ONE loop edge (the 1.6 merge uses the best-ranked
+  edge, and keyframe timing changed which one ranks first).
+  - Per-agent translation improved: 9.9 → 8.4 mm and 4.4 → 4.3 mm.
+  - Per-agent rotation rose 3.2 → 4.9 and 2.6 → 4.6 mrad: partly the far points, otherwise **[UNATTRIBUTED]**.
+    EuRoC rotation did not rise.
+- **Row refinement:** no gate added. V1_01's −0.30 px correction is real; the sim's 0.2 px is harmless.
+- **Next:** lost-frame handling (D56, in progress).
+
 ## 2026-10-17 — 2.3 windowed BA in StereoVo; first full EuRoC sweep; frontend re-baselined (D53, D54)
 
 - **2.3 integrated:** a 10-keyframe window on OpenCV's LM with observability guards, measured σ = 0.46 px, χ²

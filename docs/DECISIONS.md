@@ -1676,3 +1676,63 @@ change **by design**, and the gate is re-pinned from a clean-commit full run.
 - **Lost-frame handling (AUDIT §4):** no keyframes and no new points at a coasted pose, a new map segment on loss,
   and a lost-status field on keyframe records.
 - **2.1** (XFeat + re-association) and **2.4** (IMU bridging), for the losses that remain.
+
+## 2026-10-17 — D55: the gate's determinism references re-pinned to a clean post-D54 run; the sim change attributed
+
+D53/D54 change the Phase-1 VO **by design**. The full gate on the dev tree had 32 determinism failures, all
+VO-derived; the digests (det_math, philox, degradation, lens) were identical. This decision re-pins
+`configs/benchmark/phase1_gate.yaml` to a full run from clean commit 150ce28 with a fresh Kaggle render, and records
+what changed on the sim and why, so the new references do not bake in an unexplained regression.
+
+**The headline sim number got worse, but it measures one loop edge, not the VO.** `merged_two_agent_ate_rmse_m`
+rose from 9.8 to 14.4 mm.
+- The 1.6 placeholder merges the two maps with ONE edge: the best-ranked verified candidate
+  (`ariadne_sim_collab.cpp`, "merge with the best verified edge").
+- The keyframe timing changed, so a different keyframe pair now ranks first. The reference edge was 11.6 mm / 0.19°;
+  the new one is 18.8 mm / 0.33°.
+- In every variant below, the top three verified edges span 10–29 mm and 0.18–0.53°. The merged number is one draw
+  from that spread. The depth-cap variant drew a 10 mm / 0.18° edge and scored 9.1 mm.
+- The real merge is the Phase 3 pose graph over all edges. Until then the merged number is reported **next to** the
+  per-agent numbers, never alone.
+
+**Per-agent attribution** (the same bag, the same build; ATE translation mm / rotation mrad):
+
+| run | agent 0 | agent 1 | merged mm | merge edge |
+|---|---|---|---|---|
+| reference (Phase-1 evidence) | 9.9 / 3.2 | 4.4 / 2.6 | 9.8 | 11.6 mm, 0.19° |
+| D54 (current) | **8.4** / 4.9 | **4.3** / 4.6 | 14.4 | 18.8 mm, 0.33° |
+| row refinement off | 7.6 / 4.3 | 4.6 / 4.2 | 13.3 | 18.1 mm, 0.31° |
+| exposure match off | 8.5 / 4.8 | 4.5 / 2.9 | 15.2 | 21.4 mm, 0.37° |
+| 60-baseline depth cap restored | 10.5 / 4.5 | 5.6 / 3.2 | 9.1 | 10.0 mm, 0.18° |
+
+- **Translation improved** on both agents.
+- **Rotation RMSE rose** by about 50% on both agents: 3.2 → 4.9 and 2.6 → 4.6 mrad.
+  - Restoring the depth cap recovers part of it on agent 1 (3.2 mrad), but costs translation on both agents (10.5,
+    5.6 mm). Far points are kept.
+  - Row refinement and exposure match each move it by less than the agent-to-agent spread.
+  - The rest is **[UNATTRIBUTED]** among the remaining sim-relevant D53/D54 changes: time-based motion and keyframe
+    timing, the live-track culling exemption, the χ² statistics. sim_v1 runs no window BA.
+  - EuRoC does not show it. v2 rotation RMSE held or improved after D54 on every clean flight (e.g. MH_01 59 → 47,
+    V1_03 231 → 177 mrad), and so did v1 (MH_01 77 → 54, MH_02 65 → 39 mrad).
+- **Row refinement on a perfect rig** fits a −0.24 px offset (agent 0) from one 115-match pool. The post-refinement
+  check reads +0.18 px, so that first estimate was mostly scene-dependent LK bias.
+  - On EuRoC the same check confirms the real offsets: V2 at 1.3–1.7 px, and V1_01 at −0.30 px with a residual of
+    0.01 px.
+  - A magnitude gate (e.g. 0.5 px) would wrongly drop V1_01, so none is added.
+  - A residual of ≤ 0.3 px is within the 1 px row gate and is harmless here: sim with refinement off is better on
+    agent 0 and worse on agent 1.
+  - Open: decide from several independent pools instead of the first one to reach `row_min_matches`.
+
+Variant runs: `build/sim_attr/{current,norow,noexp,zcap}`. The depth-cap variant came from a temporary, env-gated
+diagnostic build, reverted at once; it is not in any commit.
+
+**The re-pin.** `configs/benchmark/phase1_gate.yaml` now points every reference at
+`evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z`. That is one full gate run from clean commit
+150ce28 (`git_dirty: false`) with a fresh Kaggle render.
+- Its own verdict against the old references was FAIL on exactly the 32 VO-derived comparisons, and PASS on the
+  other 22: I1, the §4 contracts, every stage.
+- The det_math, philox, degradation and lens digests were unchanged.
+- A pre-merge run against the new references passed **54/54**, render reused (`build/premerge/…-20261017T080657Z`).
+  It ran on a working tree whose only code change writes a new per-frame `vo_trace.csv` (D56), which no gate
+  comparison reads.
+- The old per-item evidence stays committed where it is.

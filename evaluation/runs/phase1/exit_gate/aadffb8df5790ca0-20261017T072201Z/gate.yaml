@@ -1,0 +1,593 @@
+# Phase 1 exit gate (design PHASE1_GATE). Generated; do not hand-edit.
+gate: phase1_gate_v1
+run: aadffb8df5790ca0-20261017T072201Z
+mode: full
+verdict: FAIL
+checks:
+- group: i1
+  check: two agents explore (keyframes per agent)
+  ok: true
+  detail:
+    agent0: 320
+    agent1: 251
+- group: i1
+  check: each agent builds a local map alone (coverage of the GT free space)
+  ok: true
+  detail:
+    agent0_alone: 0.8947526386874093
+    agent1_alone: 0.4300935420939423
+- group: i1
+  check: merge via >= 1 verified inter-agent closure
+  ok: true
+  detail:
+    edges_sent: 19
+    edges_correct_vs_gt: 19
+    merged_ate_rmse_m: 0.0144204
+- group: i1
+  check: a splat is rendered (remote GPU renders scored on held-out views)
+  ok: true
+  detail:
+    views: 37
+    psnr_db: 18.305148661756185
+    ssim: 0.7348870616347045
+    lpips: 0.6669893989691863
+    renders_sha256: 2cffa031b1ac1b5c260475356397645c7a6fc8cf4e9ca120f3722a8e535d25e5
+    reused: null
+- group: i1
+  check: an exit route is produced, valid against GT at rho_responder
+  ok: true
+  detail:
+    t_merge_s: 140
+    first_valid_route_s: 145
+    final_length_m: 4.44142
+    gt_geodesic_m: 4.4414215087890625
+    exit: 1
+- group: i1
+  check: 'one run: every stage''s manifest records the same commit'
+  ok: true
+  detail:
+    sim_collab/aadffb8df5790ca0-20261017T072237Z/manifest.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    sim_collab/aadffb8df5790ca0-faults-20261017T072237Z/manifest.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    recon/aadffb8df5790ca0-20261017T072237Z/manifest_prepare.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    recon/aadffb8df5790ca0-20261017T072237Z/manifest_score.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    mission/aadffb8df5790ca0-20261017T080432Z/manifest.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    mission/aadffb8df5790ca0-agent0only-20261017T080436Z/manifest.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+    mission/aadffb8df5790ca0-agent1only-20261017T080439Z/manifest.yaml: 150ce28ab1a01e28eff24dcec2919656f7230a54
+- group: contracts
+  check: §4.1 Frame delivered (agent 0)
+  ok: true
+  detail:
+    delivered: 3981
+- group: contracts
+  check: §4.2 Keyframe records complete (agent 0)
+  ok: true
+  detail:
+    records: 320
+    complete: 320
+    gauge_zero_cov: 1
+    missing:
+      depth: 0
+      descriptors: 0
+      global_descriptor: 0
+      keypoints: 0
+      landmark_ids: 0
+      pose_cov: 0
+- group: contracts
+  check: §18.2 KeyframeBundle built + spooled (agent 0)
+  ok: true
+  detail:
+    built: 320
+    spooled: 320
+- group: contracts
+  check: §4.1 Frame delivered (agent 1)
+  ok: true
+  detail:
+    delivered: 3981
+- group: contracts
+  check: §4.2 Keyframe records complete (agent 1)
+  ok: true
+  detail:
+    records: 251
+    complete: 251
+    gauge_zero_cov: 1
+    missing:
+      depth: 0
+      descriptors: 0
+      global_descriptor: 0
+      keypoints: 0
+      landmark_ids: 0
+      pose_cov: 0
+- group: contracts
+  check: §18.2 KeyframeBundle built + spooled (agent 1)
+  ok: true
+  detail:
+    built: 251
+    spooled: 251
+- group: contracts
+  check: §4.3 LoopEdge encoded -> decoded identical -> merge edge received
+  ok: true
+  detail:
+    encoded: 19
+    decoded_identical: 19
+    merge_edge_received: true
+- group: contracts
+  check: '§4.4 ByteRecord: one ledger row per message, totals agree'
+  ok: true
+  detail:
+    ledger_rows: 310
+    classes_used: 4
+    total_wire_bytes: 1272765
+- group: contracts
+  check: unset-by-design fields declared
+  ok: true
+  detail:
+    frame_4_1:
+    - imu_window
+    - photo
+    - illumination
+    - gt
+    keyframe_4_2:
+    - velocity_world
+    - bias_gyro
+    - bias_accel
+    - gravity_dir
+    - preint_from_prev
+    - local_cloud
+    - motion_cost
+    - energy_cost
+    - timestamp_age
+    - uncertainty
+    keyframe_bundle_18_2:
+    - exposure_state
+    - lamp_state
+    loop_edge_4_3:
+    - pcm_score
+    - gnc_weight
+    - degeneracy_flag
+    message_class_4_4:
+    - HEARTBEAT
+    - LOCAL_DESCRIPTOR
+    - POSE_GRAPH
+    - SUBMAP_SUMMARY
+    - SUBMAP_PATCH
+    - TASK_BID
+    - TASK_CONSENSUS
+    - HUMAN_REQUEST
+    - ACK
+- group: stages
+  check: full ctest
+  ok: true
+  detail: 100% tests passed, 0 tests failed out of 293
+- group: stages
+  check: protocol tests (CollabProtocol.*, Serialization.*)
+  ok: true
+  detail: 100% tests passed, 0 tests failed out of 18
+- group: stages
+  check: duplicate/out-of-order injection is idempotent (fault identity)
+  ok: true
+  detail:
+  - 'fault run protocol: {broker_duplicates: 54, broker_buffered: 7, agent1_duplicates: 7, agent1_buffered: 4, undelivered:
+    0}'
+  - VERDICT PASS
+- group: stages
+  check: every §30.2 metric emits a number (report check)
+  ok: true
+  detail: VERDICT PASS (every §30.2 metric emits a number)
+- group: stages
+  check: console chain check
+  ok: true
+  detail: VERDICT PASS
+- group: determinism
+  check: sim_collab/candidates.csv
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.995737,2800,424,0.370945,8.2413,1,verified,478,400,263,0.018796,0.329739,1,0.585,0.000687207''
+      != ''0,0.995938,2759,436,0.504096,6.88478,1,verified,504,397,332,0.0115969,0.189925,1,0.602015,0.00576159'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/candidates.csv
+- group: determinism
+  check: sim_collab/negative_probe.csv
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.994154,2765,459,0.315804,35.8764,verified,270,216,181,0.0229226,0.422867,1,0.638889,0.0040087''
+      != ''0,0.993738,2744,461,0.899124,38.3975,verified,270,208,175,0.0203501,0.346125,1,0.475962,0.0519673'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/negative_probe.csv
+- group: determinism
+  check: sim_collab/results.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''keyframes: {agent0: 320, agent1: 251}'' != ''keyframes: {agent0: 327, agent1: 250}'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/results.yaml
+- group: determinism
+  check: sim_collab/recon_eval.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''T_W_O0: [0.0036639739228003787, 0.00027307843391305127, 0.9999932503388522, -1.8683827177692676,
+      -0.9999921436670967, -0.001511589843305768, 0.00366438265332957'' != ''T_W_O0: [0.002019596224085929, 0.0005944463473718958,
+      0.9999977839298604, -1.860947752619654, -0.9999978405213376, -0.0004888858253919613, 0.0020198869554154397'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/recon_eval.yaml
+- group: determinism
+  check: sim_collab_faults/candidates.csv
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.995737,2800,424,0.370945,8.2413,1,verified,478,400,263,0.018796,0.329739,1,0.585,0.000687207''
+      != ''0,0.995938,2759,436,0.504096,6.88478,1,verified,504,397,332,0.0115969,0.189925,1,0.602015,0.00576159'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/candidates.csv
+- group: determinism
+  check: sim_collab_faults/negative_probe.csv
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.994154,2765,459,0.315804,35.8764,verified,270,216,181,0.0229226,0.422867,1,0.638889,0.0040087''
+      != ''0,0.993738,2744,461,0.899124,38.3975,verified,270,208,175,0.0203501,0.346125,1,0.475962,0.0519673'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/negative_probe.csv
+- group: determinism
+  check: sim_collab_faults/results.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''keyframes: {agent0: 320, agent1: 251}'' != ''keyframes: {agent0: 327, agent1: 250}'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/results.yaml
+- group: determinism
+  check: recon/spool.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 12: ''    - -0.008693740576499298'' != ''    - -0.007581281432049544'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/spool.yaml
+- group: determinism
+  check: recon/render_package.json
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  "views": 37,'' != ''  "views": 39,'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/render_package.json
+- group: determinism
+  check: recon/prepare.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 8: ''  edge: agent0 kf 2800 <- agent1 kf 424 (best-ranked verified, 1.6)'' != ''  edge: agent0 kf 2759
+      <- agent1 kf 436 (best-ranked verified, 1.6)'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/prepare.yaml
+- group: determinism
+  check: recon/score.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 3: ''views: 37'' != ''views: 39'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/score.yaml
+- group: determinism
+  check: mission/results.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 320, agent1: 251}'' != ''keyframes_integrated: {agent0: 327, agent1:
+      250}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/results.yaml
+- group: determinism
+  check: mission/trace.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,46],"frontier_clusters":2,"rejected_small":10,"result":"go","''
+      != ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,49],"frontier_clusters":2,"rejected_small":13,"result":"go","'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/trace.jsonl
+- group: determinism
+  check: mission/routes.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 55: ''{"t_s":140,"kind":"egress","rho_m":0.4,"found":false,"length_m":0,"exit":-1,"support_p5":0,"final":false,"cells":[]}''
+      != ''{"t_s":140,"kind":"egress","rho_m":0.4,"found":true,"length_m":4.44142,"exit":1,"support_p5":1,"final":false,"cells":[[80,252],[81,252],[82,252],[83,252],[84,25'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/routes.jsonl
+- group: determinism
+  check: mission/slab.png
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'binary: 2146 vs 2164 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/slab.png
+- group: determinism
+  check: mission/support.png
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'binary: 2979 vs 3091 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/support.png
+- group: determinism
+  check: mission/map_vs_gt.png
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'binary: 35422 vs 35652 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/map_vs_gt.png
+- group: determinism
+  check: mission/eval.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0037933373486300566'' != ''  max_pos_err_m: 0.00499456414664314'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/eval.yaml
+- group: determinism
+  check: mission_agent0/results.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 320, agent1: 0}'' != ''keyframes_integrated: {agent0: 327, agent1:
+      0}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/results.yaml
+- group: determinism
+  check: mission_agent0/trace.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,46],"frontier_clusters":2,"rejected_small":10,"result":"go","''
+      != ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,49],"frontier_clusters":2,"rejected_small":13,"result":"go","'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/trace.jsonl
+- group: determinism
+  check: mission_agent0/routes.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 79: ''{"t_s":198.6,"kind":"egress","rho_m":0.4,"found":true,"length_m":11.2571,"exit":0,"support_p5":1,"final":true,"cells":[[80,252],[80,251],[80,250],[80,249],[80,2''
+      != ''{"t_s":198.5,"kind":"egress","rho_m":0.4,"found":true,"length_m":11.2571,"exit":0,"support_p5":1,"final":true,"cells":[[80,252],[80,251],[80,250],[80,249],[80,2'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/routes.jsonl
+- group: determinism
+  check: mission_agent0/eval.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0037933373486300566'' != ''  max_pos_err_m: 0.00499456414664314'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/eval.yaml
+- group: determinism
+  check: mission_agent1/results.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 0, agent1: 251}'' != ''keyframes_integrated: {agent0: 0, agent1:
+      250}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/results.yaml
+- group: determinism
+  check: mission_agent1/trace.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 2: ''{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[154,250],"frontier_clusters":4,"rejected_small":6,"result":"go",''
+      != ''{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[152,251],"frontier_clusters":2,"rejected_small":6,"result":"go",'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/trace.jsonl
+- group: determinism
+  check: mission_agent1/routes.jsonl
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 20: ''{"t_s":50,"kind":"agent","rho_m":0.2,"found":true,"length_m":4.44142,"exit":1,"support_p5":1,"final":false,"cells":[[80,252],[81,252],[82,252],[83,252],[84,252]''
+      != ''{"t_s":50,"kind":"agent","rho_m":0.2,"found":false,"length_m":0,"exit":-1,"support_p5":0,"final":false,"cells":[]}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/routes.jsonl
+- group: determinism
+  check: mission_agent1/eval.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0047325793164019235'' != ''  max_pos_err_m: 0.006146230811541166'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/eval.yaml
+- group: determinism
+  check: report/report.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  ate_rmse_m: 0.014420441480787539'' != ''  ate_rmse_m: 0.009764295585129536'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/report.yaml
+- group: determinism
+  check: report/oracle.yaml
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 5: ''    - 0.008412822650659575'' != ''    - 0.009858397644225365'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/oracle.yaml
+- group: determinism
+  check: report/registry.yaml
+  ok: true
+  detail: identical
+- group: determinism
+  check: report/report_check.txt
+  ok: true
+  detail: identical
+- group: determinism
+  check: report/figures/bytes.json
+  ok: false
+  detail:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"GLOBAL_DESCRIPTOR": {"messages": 251, "wire_bytes": 293630}, "MATCH_REQUEST": {"messages": 20,
+      "wire_bytes": 2744}, "MATCH_RESPONSE": {"messages": 20, "wire_b'' != ''{"GLOBAL_DESCRIPTOR": {"messages": 250, "wire_bytes":
+      292460}, "MATCH_REQUEST": {"messages": 20, "wire_bytes": 2744}, "MATCH_RESPONSE": {"messages": 20, "wire_b'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/figures/bytes.json
+- group: determinism
+  check: recon/fused_cloud_O0.ply sha256
+  ok: false
+  detail: 44f1ce2930fc1e67018901bf01057e8f224cda32017cc9fa8d5bc2ef84834e2b
+- group: determinism
+  check: recon/render_package.npz sha256
+  ok: false
+  detail: f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a
+- group: determinism
+  check: recon/renders.npz sha256
+  ok: false
+  detail: 2cffa031b1ac1b5c260475356397645c7a6fc8cf4e9ca120f3722a8e535d25e5
+determinism:
+  sim_collab/candidates.csv:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.995737,2800,424,0.370945,8.2413,1,verified,478,400,263,0.018796,0.329739,1,0.585,0.000687207''
+      != ''0,0.995938,2759,436,0.504096,6.88478,1,verified,504,397,332,0.0115969,0.189925,1,0.602015,0.00576159'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/candidates.csv
+  sim_collab/negative_probe.csv:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.994154,2765,459,0.315804,35.8764,verified,270,216,181,0.0229226,0.422867,1,0.638889,0.0040087''
+      != ''0,0.993738,2744,461,0.899124,38.3975,verified,270,208,175,0.0203501,0.346125,1,0.475962,0.0519673'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/negative_probe.csv
+  sim_collab/results.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''keyframes: {agent0: 320, agent1: 251}'' != ''keyframes: {agent0: 327, agent1: 250}'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/results.yaml
+  sim_collab/recon_eval.yaml:
+    status: DIFFERENT
+    first_diff: 'line 2: ''T_W_O0: [0.0036639739228003787, 0.00027307843391305127, 0.9999932503388522, -1.8683827177692676,
+      -0.9999921436670967, -0.001511589843305768, 0.00366438265332957'' != ''T_W_O0: [0.002019596224085929, 0.0005944463473718958,
+      0.9999977839298604, -1.860947752619654, -0.9999978405213376, -0.0004888858253919613, 0.0020198869554154397'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-20261015T114028Z/recon_eval.yaml
+  sim_collab/(new, not compared):
+  - contracts.yaml
+  - ledger.csv
+  sim_collab_faults/candidates.csv:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.995737,2800,424,0.370945,8.2413,1,verified,478,400,263,0.018796,0.329739,1,0.585,0.000687207''
+      != ''0,0.995938,2759,436,0.504096,6.88478,1,verified,504,397,332,0.0115969,0.189925,1,0.602015,0.00576159'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/candidates.csv
+  sim_collab_faults/negative_probe.csv:
+    status: DIFFERENT
+    first_diff: 'line 2: ''0,0.994154,2765,459,0.315804,35.8764,verified,270,216,181,0.0229226,0.422867,1,0.638889,0.0040087''
+      != ''0,0.993738,2744,461,0.899124,38.3975,verified,270,208,175,0.0203501,0.346125,1,0.475962,0.0519673'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/negative_probe.csv
+  sim_collab_faults/results.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''keyframes: {agent0: 320, agent1: 251}'' != ''keyframes: {agent0: 327, agent1: 250}'''
+    reference: evaluation/runs/phase1/sim_collab/aadffb8df5790ca0-faults-20261015T083420Z/results.yaml
+  sim_collab_faults/(new, not compared):
+  - contracts.yaml
+  - ledger.csv
+  recon/spool.yaml:
+    status: DIFFERENT
+    first_diff: 'line 12: ''    - -0.008693740576499298'' != ''    - -0.007581281432049544'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/spool.yaml
+  recon/render_package.json:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  "views": 37,'' != ''  "views": 39,'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/render_package.json
+  recon/prepare.yaml:
+    status: DIFFERENT
+    first_diff: 'line 8: ''  edge: agent0 kf 2800 <- agent1 kf 424 (best-ranked verified, 1.6)'' != ''  edge: agent0 kf 2759
+      <- agent1 kf 436 (best-ranked verified, 1.6)'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/prepare.yaml
+  recon/score.yaml:
+    status: DIFFERENT
+    first_diff: 'line 3: ''views: 37'' != ''views: 39'''
+    reference: evaluation/runs/phase1/recon/aadffb8df5790ca0-20261015T114028Z/score.yaml
+  mission/results.yaml:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 320, agent1: 251}'' != ''keyframes_integrated: {agent0: 327, agent1:
+      250}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/results.yaml
+  mission/trace.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,46],"frontier_clusters":2,"rejected_small":10,"result":"go","''
+      != ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,49],"frontier_clusters":2,"rejected_small":13,"result":"go","'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/trace.jsonl
+  mission/routes.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 55: ''{"t_s":140,"kind":"egress","rho_m":0.4,"found":false,"length_m":0,"exit":-1,"support_p5":0,"final":false,"cells":[]}''
+      != ''{"t_s":140,"kind":"egress","rho_m":0.4,"found":true,"length_m":4.44142,"exit":1,"support_p5":1,"final":false,"cells":[[80,252],[81,252],[82,252],[83,252],[84,25'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/routes.jsonl
+  mission/slab.png:
+    status: DIFFERENT
+    first_diff: 'binary: 2146 vs 2164 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/slab.png
+  mission/support.png:
+    status: DIFFERENT
+    first_diff: 'binary: 2979 vs 3091 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/support.png
+  mission/map_vs_gt.png:
+    status: DIFFERENT
+    first_diff: 'binary: 35422 vs 35652 bytes'
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/map_vs_gt.png
+  mission/eval.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0037933373486300566'' != ''  max_pos_err_m: 0.00499456414664314'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-20261015T173514Z/eval.yaml
+  mission/(new, not compared):
+  - snapshots
+  mission_agent0/results.yaml:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 320, agent1: 0}'' != ''keyframes_integrated: {agent0: 327, agent1:
+      0}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/results.yaml
+  mission_agent0/trace.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,46],"frontier_clusters":2,"rejected_small":10,"result":"go","''
+      != ''{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,49],"frontier_clusters":2,"rejected_small":13,"result":"go","'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/trace.jsonl
+  mission_agent0/routes.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 79: ''{"t_s":198.6,"kind":"egress","rho_m":0.4,"found":true,"length_m":11.2571,"exit":0,"support_p5":1,"final":true,"cells":[[80,252],[80,251],[80,250],[80,249],[80,2''
+      != ''{"t_s":198.5,"kind":"egress","rho_m":0.4,"found":true,"length_m":11.2571,"exit":0,"support_p5":1,"final":true,"cells":[[80,252],[80,251],[80,250],[80,249],[80,2'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/routes.jsonl
+  mission_agent0/eval.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0037933373486300566'' != ''  max_pos_err_m: 0.00499456414664314'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent0only-20261015T173524Z/eval.yaml
+  mission_agent0/(new, not compared):
+  - snapshots
+  mission_agent1/results.yaml:
+    status: DIFFERENT
+    first_diff: 'line 6: ''keyframes_integrated: {agent0: 0, agent1: 251}'' != ''keyframes_integrated: {agent0: 0, agent1:
+      250}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/results.yaml
+  mission_agent1/trace.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 2: ''{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[154,250],"frontier_clusters":4,"rejected_small":6,"result":"go",''
+      != ''{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[152,251],"frontier_clusters":2,"rejected_small":6,"result":"go",'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/trace.jsonl
+  mission_agent1/routes.jsonl:
+    status: DIFFERENT
+    first_diff: 'line 20: ''{"t_s":50,"kind":"agent","rho_m":0.2,"found":true,"length_m":4.44142,"exit":1,"support_p5":1,"final":false,"cells":[[80,252],[81,252],[82,252],[83,252],[84,252]''
+      != ''{"t_s":50,"kind":"agent","rho_m":0.2,"found":false,"length_m":0,"exit":-1,"support_p5":0,"final":false,"cells":[]}'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/routes.jsonl
+  mission_agent1/eval.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  max_pos_err_m: 0.0047325793164019235'' != ''  max_pos_err_m: 0.006146230811541166'''
+    reference: evaluation/runs/phase1/mission/aadffb8df5790ca0-agent1only-20261015T173527Z/eval.yaml
+  mission_agent1/(new, not compared):
+  - snapshots
+  report/report.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''  ate_rmse_m: 0.014420441480787539'' != ''  ate_rmse_m: 0.009764295585129536'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/report.yaml
+  report/oracle.yaml:
+    status: DIFFERENT
+    first_diff: 'line 5: ''    - 0.008412822650659575'' != ''    - 0.009858397644225365'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/oracle.yaml
+  report/registry.yaml:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/registry.yaml
+  report/report_check.txt:
+    status: identical
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/report_check.txt
+  report/figures/bytes.json:
+    status: DIFFERENT
+    first_diff: 'line 1: ''{"GLOBAL_DESCRIPTOR": {"messages": 251, "wire_bytes": 293630}, "MATCH_REQUEST": {"messages": 20,
+      "wire_bytes": 2744}, "MATCH_RESPONSE": {"messages": 20, "wire_b'' != ''{"GLOBAL_DESCRIPTOR": {"messages": 250, "wire_bytes":
+      292460}, "MATCH_REQUEST": {"messages": 20, "wire_bytes": 2744}, "MATCH_RESPONSE": {"messages": 20, "wire_b'''
+    reference: evaluation/runs/phase1/report/aadffb8df5790ca0-20261015T114028Z/figures/bytes.json
+  recon/fused_cloud_O0.ply (sha256):
+    status: DIFFERENT
+    gate: 44f1ce2930fc1e67018901bf01057e8f224cda32017cc9fa8d5bc2ef84834e2b
+    reference: 51231809c5b09e600570b8ddae621d0325666693704e08a208419d02e4203b85
+  recon/render_package.npz (sha256):
+    status: DIFFERENT
+    gate: f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a
+    reference: 9ec2f67287fbea37754b0ccfb2827ac090d11c39e11aef06731ef2a99b6452ef
+  recon/renders.npz (sha256):
+    status: DIFFERENT
+    gate: 2cffa031b1ac1b5c260475356397645c7a6fc8cf4e9ca120f3722a8e535d25e5
+    reference: cc3a249852e981c6b4ed95c322d7cbe5b5ae04525a5c40ebf6a6587278509eb7
+chain:
+  sim_collab: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-20261017T072237Z
+  sim_collab_faults: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-faults-20261017T072237Z
+  recon: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/recon/aadffb8df5790ca0-20261017T072237Z
+  mission: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z
+  mission_agent0: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent0only-20261017T080436Z
+  mission_agent1: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent1only-20261017T080439Z
+  report: evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/report/aadffb8df5790ca0-20261017T072237Z
