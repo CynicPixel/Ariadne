@@ -54,6 +54,8 @@ struct TrackStats {
     int crowded_out = 0;        // within min distance of an older track
     int replenished = 0;        // new tracks started this frame
     bool epipolar_check_ran = false;
+    int usac_defect_retries = 0;       // see EpipolarResult
+    bool usac_defect_skipped = false;
 };
 
 /// The tracker's output for one frame. Parallel arrays, one entry per live
@@ -86,6 +88,8 @@ struct LkPyramid {
 struct EpipolarResult {
     std::vector<uchar> inlier;
     bool ran = false;
+    int usac_defect_retries = 0;       // OpenCV 5.0.0 USAC empty-model throws absorbed by a redraw (SMOKE §4q)
+    bool usac_defect_skipped = false;  // every draw threw: no epipolar check this frame
 };
 EpipolarResult EpipolarInliers(const std::vector<cv::Point2f>& p0,
                                const std::vector<cv::Point2f>& p1,

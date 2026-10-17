@@ -1,6 +1,9 @@
 #include "slam/bundle_adjustment/window_ba_levmarq.hpp"
 
 #include <cmath>
+#include <set>
+#include <sstream>
+#include <string>
 
 namespace ariadne::slam {
 
@@ -65,7 +68,90 @@ private:
     BaSchur schur_;
 };
 
+int InvalidObservations(const BaWindow& w) {
+    int n = 0;
+    for (const auto& o : w.obs)
+        n += !LinearizeObservation(w.cam, w.T_W_C[size_t(o.kf)], w.X.at(o.landmark), o, w.z_floor).valid;
+    return n;
+}
+
+/// Loud-failure text: which block of the undamped system is singular, and what the LM run looked like.
+std::string NotPdDiagnostic(const BaWindow& w, const BaLayout& L, const BaSchur& schur, const WindowBaReport& rep) {
+    std::ostringstream m;
+    m << "SolveWindowBa: information not PD at the solution (found " << rep.found << ", " << rep.iterations
+      << " iterations, " << rep.failed_factorizations << "/" << rep.factorizations << " factorizations failed, E "
+      << rep.initial_energy << " -> " << rep.final_energy << ", " << InvalidObservations(w) << "/" << w.obs.size()
+      << " observations invalid at the solution; ";
+    if (schur.failed_landmark() < 0) {
+        // Per window keyframe: observed landmarks, and how many of them another window keyframe also observes (only
+        // those constrain the pose; a landmark seen by one keyframe moves with it).
+        std::map<uint64_t, std::set<int>> kfs_of;
+        for (const auto& o : w.obs) kfs_of[o.landmark].insert(o.kf);
+        m << "reduced camera system; keyframe: observed/shared landmarks, S block min eigenvalue:";
+        for (int k = 0; k < int(w.T_W_C.size()); ++k) {
+            int seen = 0, shared = 0;
+            for (const auto& [id, ks] : kfs_of)
+                if (ks.count(k)) {
+                    ++seen;
+                    shared += ks.size() > 1;
+                }
+            m << " " << k << (w.fixed[size_t(k)] ? "F" : "") << ":" << seen << "/" << shared;
+            if (L.cam(k) >= 0) {
+                const Eigen::SelfAdjointEigenSolver<Mat6> es(schur.S().block<6, 6>(6 * L.cam(k), 6 * L.cam(k)));
+                m << "," << es.eigenvalues()(0);
+            }
+        }
+        // The null direction of the reduced camera system: which free keyframes move together, and how.
+        const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(schur.S());
+        m << "; S min eigenvalue " << es.eigenvalues()(0) << " (max " << es.eigenvalues()(es.eigenvalues().size() - 1)
+          << "), its eigenvector per free keyframe [rho; phi]:";
+        for (int k = 0; k < int(w.T_W_C.size()); ++k)
+            if (L.cam(k) >= 0) m << " " << k << ":(" << es.eigenvectors().col(0).segment<6>(6 * L.cam(k)).transpose() << ")";
+        m << ")";
+        return m.str();
+    }
+    for (const auto& [id, X] : w.X) {
+        if (L.lm(id) != schur.failed_landmark()) continue;
+        int n = 0, valid = 0;
+        for (const auto& o : w.obs) {
+            if (o.landmark != id) continue;
+            ++n;
+            valid += LinearizeObservation(w.cam, w.T_W_C[size_t(o.kf)], X, o, w.z_floor).valid;
+        }
+        m << "landmark " << id << " at (" << X.transpose() << "): " << valid << "/" << n << " observations valid)";
+    }
+    return m.str();
+}
+
 }  // namespace
+
+bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
+                            std::string* why, const WindowBaReport* solve) {
+    // The undamped system at w (the solution, when called after SolveWindowBa).
+    const BaLayout L(w);
+    BaSystem sys;
+    BaLinearize(w, L, sys);
+    BaSchur schur;
+    cov.clear();
+    if (!schur.Factorize(sys, L)) {
+        if (why) *why = NotPdDiagnostic(w, L, schur, solve ? *solve : WindowBaReport{});
+        return false;
+    }
+    for (int k : keyframes) {
+        const int c = L.cam(k);
+        if (c < 0) throw std::invalid_argument("WindowBaCovariances: covariance requested for a fixed keyframe");
+        cov[k] = schur.CameraCovariance(c);
+    }
+    return true;
+}
+
+std::map<int, Mat6> WindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes,
+                                        const WindowBaReport* solve) {
+    std::map<int, Mat6> cov;
+    std::string why;
+    if (!TryWindowBaCovariances(w, keyframes, cov, &why, solve)) throw std::runtime_error(why);
+    return cov;
+}
 
 WindowBaReport SolveWindowBa(BaWindow& w, const PgoSettings& s, const std::vector<int>& covariance_for) {
     if (s.jacobi_scaling) throw std::invalid_argument("SolveWindowBa: jacobi_scaling is not supported");
@@ -78,19 +164,7 @@ WindowBaReport SolveWindowBa(BaWindow& w, const PgoSettings& s, const std::vecto
     rep.iterations = r.iters;
     w = backend->current();
     rep.final_energy = BaEnergy(w);
-    if (!covariance_for.empty()) {
-        // Undamped system at the solution.
-        const BaLayout& L = backend->layout();
-        BaSystem sys;
-        BaLinearize(w, L, sys);
-        BaSchur schur;
-        if (!schur.Factorize(sys, L)) throw std::runtime_error("SolveWindowBa: information not PD at the solution");
-        for (int k : covariance_for) {
-            const int c = L.cam(k);
-            if (c < 0) throw std::invalid_argument("SolveWindowBa: covariance requested for a fixed keyframe");
-            rep.covariance[k] = schur.CameraCovariance(c);
-        }
-    }
+    if (!covariance_for.empty()) rep.covariance = WindowBaCovariances(w, covariance_for, &rep);
     return rep;
 }
 

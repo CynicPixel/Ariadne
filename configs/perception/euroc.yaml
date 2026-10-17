@@ -55,3 +55,8 @@ stereo_match:                   # keyframe left->right LK correspondence (valida
   max_level: 3
   fb_threshold_px: 0.5
   max_dy_px: 1.0                # rectified pair: a correct match stays on its row
+  row_refinement: true          # fit the residual rectification dy = a+bx+cy at the first keyframes (D54)
+  row_search_px: 4.0            # matches considered for that fit: |dy| <= this
+  row_min_matches: 100
+  row_min_span: 0.5             # matches must span half the image to fit the slopes, else only the offset
+  exposure_match: true          # left/right gain-bias match before stereo LK + SGBM (per-camera auto-exposure)

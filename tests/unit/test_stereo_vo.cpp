@@ -58,6 +58,7 @@ SE3 TruthPose(int k) {
 }
 
 struct VoRun {
+    std::vector<int> k;                  // frame index of each record (frames not fed are absent)
     std::vector<SE3> est, truth;
     std::vector<VoStatus> status;
     std::vector<char> was_keyframe;
@@ -71,12 +72,16 @@ struct VoRun {
 
 /// Feed the VO an ideal tracker's output: track id = point id, 0.3 px noise,
 /// and `outlier_every`-th track corrupted by a 20 px jump. Frame
-/// `blackout_frame` delivers no tracks at all (lamp failure, lens occlusion).
-VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1) {
+/// `blackout_frame` delivers no tracks at all (lamp failure, lens occlusion), and so do the
+/// `blackout_frames - 1` frames after it. Inside the blackout only every `blackout_stride`-th frame is FED at all
+/// (the others are dropped input: their timestamps never reach the VO).
+VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout_frames = 1, int blackout_stride = 1) {
     const std::vector<Vec3> pts = Room(1);
     StereoVo vo(Config(), kRig, 42);
     VoRun run;
     for (int k = 0; k < frames; ++k) {
+        const bool in_blackout = blackout_frame >= 0 && k >= blackout_frame && k < blackout_frame + blackout_frames;
+        if (in_blackout && (k - blackout_frame) % blackout_stride != 0) continue;   // dropped input frame
         // One stream per frame, keyed (seed, frame_id, site) as §5.6 keys all
         // randomness: a single stream for the whole sequence exhausts its
         // 2^18 words (the D18 guard throws, as it should).
@@ -88,7 +93,7 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1) {
         f.t_ns = k * 50000000LL;
         VoStereo st;
         for (size_t j = 0; j < pts.size(); ++j) {
-            if (k == blackout_frame) break;
+            if (in_blackout) break;
             const Vec3 Xc = T_C_W * pts[j];
             if (Xc.z() < 0.6 || Xc.z() > 6.0) continue;
             core::Vec2 l = core::Project(kRig.cam, Xc);
@@ -122,6 +127,7 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1) {
             run.last_node_est = node.T_W_C;
             run.last_node_truth = truth;
         }
+        run.k.push_back(k);
         run.est.push_back(est);
         run.truth.push_back(truth);
     }
@@ -288,4 +294,38 @@ TEST(KeyframeBundle, StampsTheGraphVersionAndCarriesTheNodePose) {
     g.UpdateNode(1, SE3::Identity(), core::Mat6::Identity());
     EXPECT_LT(b.frame_id_of_pose, g.version());
     EXPECT_THROW(runtime::BuildKeyframeBundle(g, 9, kRig.cam, img, d, mask), std::invalid_argument);
+}
+
+// A long blackout coasts on the last MEASURED velocity. Re-deriving the velocity from the model's own extrapolations
+// amplified the rounding error in R's orthonormality ~2.4x per frame: EuRoC MH_04 (48 lost frames) went non-finite.
+TEST(StereoVo, LongBlackoutCoastsOnTheLastMeasuredVelocity) {
+    const int blackout = 40, length = 300;
+    const VoRun r = RunVo(blackout + length, 0, blackout, length);
+    const SE3 v = r.est[blackout - 2].inverse() * r.est[blackout - 1];
+    for (int k = blackout; k < blackout + length; ++k) {
+        const SE3& T = r.est[static_cast<size_t>(k)];
+        ASSERT_EQ(r.status[static_cast<size_t>(k)], VoStatus::kLost) << k;
+        ASSERT_TRUE(T.R.allFinite() && T.t.allFinite()) << k;
+        EXPECT_LT((T.R.transpose() * T.R - core::Mat3::Identity()).cwiseAbs().maxCoeff(), 1e-12) << k;
+        const SE3 step = r.est[static_cast<size_t>(k) - 1].inverse() * T;
+        EXPECT_LT(core::SE3Log(step * v.inverse()).norm(), 1e-9) << k;
+    }
+}
+
+// Dropped input frames while coasting: the prediction follows elapsed TIME. Feeding every 3rd blackout frame, each
+// coasted step must be the measured per-frame motion applied for 3 frame periods: Log(step) = 3 Log(v).
+TEST(StereoVo, CoastingPredictsByElapsedTimeAcrossDroppedFrames) {
+    const int blackout = 40, length = 60, stride = 3;
+    const VoRun r = RunVo(blackout + length, 0, blackout, length, stride);
+    ASSERT_EQ(r.k[size_t(blackout - 1)], blackout - 1);   // everything before the blackout was fed
+    const core::Vec6 v = core::SE3Log(r.est[size_t(blackout - 2)].inverse() * r.est[size_t(blackout - 1)]);
+    int checked = 0;
+    for (size_t i = size_t(blackout); i < r.k.size(); ++i) {
+        ASSERT_EQ(r.status[i], VoStatus::kLost) << r.k[i];
+        const int frames_elapsed = r.k[i] - r.k[i - 1];
+        const core::Vec6 step = core::SE3Log(r.est[i - 1].inverse() * r.est[i]);
+        EXPECT_LT((step - double(frames_elapsed) * v).norm(), 1e-9) << "frame " << r.k[i] << ", " << frames_elapsed;
+        ++checked;
+    }
+    EXPECT_EQ(checked, length / stride);
 }

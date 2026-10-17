@@ -88,6 +88,21 @@ struct VoKeyframeResult {
     int ba_iterations = 0;
     double ba_initial_cost = 0.0, ba_final_cost = 0.0;
     bool ba_ran = false;
+    int ba_window = 0;            // 2.3: keyframes in the solved window
+    int ba_rejected = 0;          // observations dropped by the post-solve chi^2 test
+    int ba_culled = 0;            // landmarks culled (design §5)
+    bool exit_edge = false;       // an ODOMETRY edge was emitted for the keyframe leaving the window
+    bool ba_found = false;        // the LM driver reported convergence
+    int ba_observations = 0;      // observations in the solved window
+    int ba_invalid_at_entry = 0;  // of them, behind / at a camera at the starting estimate
+    int ba_ill_conditioned = 0;        // landmarks left out at entry: own information too weak (window_ba.hpp)
+    int ba_unobservable = 0;           // keyframes held at entry: not tied to a fixed one through covisibility
+    int ba_ill_conditioned_after = 0;  // the same tests at the solution (left out of the marginals)
+    int ba_unobservable_after = 0;
+    int ba_marginal_degenerate = 0;    // the information was singular at the solution: marginals uninformative
+    double ba_inlier_sq_px = 0.0;      // sum |r|^2 over chi^2 inliers at the solution (sigma_px calibration)
+    long ba_inlier_dof = 0;            // their scalar residual count minus the free parameters
+    int ba_chi2_failed = 0;       // residuals above chi2_reject at the solution (vs ~5% expected at chi^2_2(0.95))
 };
 
 class StereoVo {
@@ -112,6 +127,7 @@ public:
 private:
     struct Landmark {
         core::Vec3 X_w;
+        uint64_t born_kf = 0;   // keyframe that created it (2.3 culling)
     };
     struct KeyframeState {
         uint64_t id = 0;
@@ -121,6 +137,10 @@ private:
         std::map<uint64_t, Obs> obs;
         int tracked_landmarks = 0;    // landmarks visible when it was created (ref for the KF rule)
     };
+
+    /// 2.3 windowed BA path (LOCAL_SLAM_2.3.md): solve the last window_size keyframes, reject / cull, update the
+    /// graph, and emit the exit edge of the keyframe that leaves the window.
+    VoKeyframeResult AddKeyframeWindow(KeyframeState kf, VoKeyframeResult out, int64_t t_ns);
 
     SlamConfig cfg_;
     RectifiedStereo rig_;
@@ -133,7 +153,13 @@ private:
     VoTrackResult last_;
     core::SE3 prev_T_W_C_, prev2_T_W_C_;
     int frames_tracked_ = 0;
-    int frames_since_kf_ = 0;
+    core::Vec6 velocity_per_s_ = core::Vec6::Zero();   // last MEASURED twist per second, held while coasting (Track)
+    bool coasting_ = false;                           // the previous frame was lost: keep velocity_per_s_
+    int64_t prev_t_ns_ = 0, prev2_t_ns_ = 0;          // timestamps of prev_T_W_C_ / prev2_T_W_C_
+    int64_t last_kf_t_ns_ = 0;                        // keyframe.max_interval_s is measured from here
+    // Window exit (design §4): the marginal of window[1] from the last solve, in which window[0] was the fixed gauge.
+    core::Mat6 pending_exit_cov_ = core::Mat6::Zero();
+    bool have_pending_exit_ = false;
 };
 
 }  // namespace ariadne::slam

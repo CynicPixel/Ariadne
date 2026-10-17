@@ -41,7 +41,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise) {
         w.X[uint64_t(100 + m)] = X;
         for (int k = 0; k < K; ++k) {
             for (bool right : {false, true}) {
-                BaObservation o;
+                WindowObservation o;
                 o.kf = k;
                 o.landmark = uint64_t(100 + m);
                 o.right = right;
@@ -79,7 +79,7 @@ TEST(WindowBa, JacobiansMatchFiniteDifferences) {
         for (bool right : {false, true}) {
             const SE3 T = RandomPose(g, 0.7, 2.0);
             const Vec3 X = PointSeen(T, Xc + (right ? Vec3(kCam.baseline, 0, 0) : Vec3::Zero()));
-            BaObservation o;
+            WindowObservation o;
             o.right = right;
             o.z = Vec2(600, 300);
             const ObsLinearization l = LinearizeObservation(kCam, T, X, o, 1e-3);
@@ -171,4 +171,90 @@ TEST(WindowBa, GuardRefusesAnUnobservedLandmark) {
     BaLinearize(w, L, s);
     BaSchur schur;
     EXPECT_FALSE(schur.Factorize(s, L));
+}
+
+// §5 landmark guard: the worst-direction std from the landmark's own information against max_relative_sigma x range.
+// Stereo at 3 m (fB = 64 px, sigma 1 px: sigma_Z ~ 0.1 m, 3% of range) passes; at 30 m (~1 of range) it fails; two
+// rays from the SAME camera centre (a hovering duplicate keyframe) are parallel and fail outright.
+TEST(WindowBa, IllConditionedLandmarksAreFound) {
+    BaWindow w;
+    w.cam = kCam;
+    w.T_W_C = {SE3::Identity(), SE3::Identity()};
+    w.fixed = {true, false};
+    const auto observe = [&](uint64_t id, const Vec3& X, int kf, bool right) {
+        WindowObservation o;
+        o.kf = kf;
+        o.landmark = id;
+        o.right = right;
+        Vec3 Xc = w.T_W_C[size_t(kf)].R.transpose() * (X - w.T_W_C[size_t(kf)].t);
+        if (right) Xc.x() -= kCam.baseline;
+        o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx, kCam.fy * Xc.y() / Xc.z() + kCam.cy);
+        w.obs.push_back(o);
+    };
+    w.X[1] = Vec3(0.2, 0.1, 3.0);
+    observe(1, w.X[1], 0, false);
+    observe(1, w.X[1], 0, true);
+    w.X[2] = Vec3(0.2, 0.1, 30.0);
+    observe(2, w.X[2], 0, false);
+    observe(2, w.X[2], 0, true);
+    w.X[3] = Vec3(-0.3, 0.2, 2.0);
+    observe(3, w.X[3], 0, false);
+    observe(3, w.X[3], 1, false);   // keyframe 1 sits on keyframe 0: parallel rays
+    EXPECT_EQ(IllConditionedLandmarks(w, 0.1), (std::set<uint64_t>{2, 3}));
+    RemoveLandmarks(w, {2, 3});
+    EXPECT_EQ(w.X.size(), 1u);
+    EXPECT_EQ(w.obs.size(), 2u);
+}
+
+// §5 anchoring: keyframes {0,1} share 20 landmarks, {2,3} share 20 only with each other -> the second group floats.
+// Its oldest keyframe (2) is fixed and anchors 3; the result is a PD system (the MH_05 / V2_03 failure shapes).
+TEST(WindowBa, AnchorWindowTiesEveryFreeKeyframeToAFixedOne) {
+    std::mt19937 g(6);
+    BaWindow w;
+    w.cam = kCam;
+    for (int k = 0; k < 4; ++k) {
+        Vec6 xi;
+        xi << 0.1 * k, 0, 0, 0, 0, 0;
+        w.T_W_C.push_back(core::SE3Exp(xi));
+        w.fixed.push_back(k == 0);
+    }
+    std::uniform_real_distribution<double> ux(-1.0, 1.0), uz(2.0, 5.0);
+    uint64_t id = 0;
+    for (const auto& pair : {std::pair<int, int>{0, 1}, std::pair<int, int>{2, 3}})
+        for (int m = 0; m < 20; ++m, ++id) {
+            w.X[id] = Vec3(ux(g), ux(g), uz(g));
+            for (int k : {pair.first, pair.second})
+                for (bool right : {false, true}) {   // stereo: metric scale is observed
+                    WindowObservation o;
+                    o.kf = k;
+                    o.landmark = id;
+                    o.right = right;
+                    Vec3 Xc = w.T_W_C[size_t(k)].R.transpose() * (w.X[id] - w.T_W_C[size_t(k)].t);
+                    if (right) Xc.x() -= kCam.baseline;
+                    o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx, kCam.fy * Xc.y() / Xc.z() + kCam.cy);
+                    w.obs.push_back(o);
+                }
+        }
+    {   // before anchoring the unanchored pair makes the information singular
+        const BaLayout L(w);
+        BaSystem s;
+        BaLinearize(w, L, s);
+        BaSchur schur;
+        EXPECT_FALSE(schur.Factorize(s, L));
+    }
+    int newly = -1;
+    const std::vector<int> anchor = AnchorWindow(w, 15, newly);
+    EXPECT_EQ(anchor, (std::vector<int>{0, 0, 2, 2}));
+    EXPECT_EQ(newly, 1);
+    EXPECT_EQ(w.fixed, (std::vector<bool>{true, false, true, false}));
+    const BaLayout L(w);
+    BaSystem s;
+    BaLinearize(w, L, s);
+    BaSchur schur;
+    EXPECT_TRUE(schur.Factorize(s, L));
+
+    // A fully covisible window gains no new gauge.
+    BaWindow full = MakeWindow(g, 5, 40, 0.0);
+    EXPECT_EQ(AnchorWindow(full, 15, newly), (std::vector<int>{0, 0, 0, 0, 0}));
+    EXPECT_EQ(newly, 0);
 }

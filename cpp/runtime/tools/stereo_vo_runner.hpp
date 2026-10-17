@@ -33,7 +33,10 @@
 #include <yaml-cpp/yaml.h>
 
 #include <chrono>
+#include <algorithm>
 #include <cmath>
+#include <sstream>
+#include <stdexcept>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -121,7 +124,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const PerceptionConfig pcfg = LoadPerception(args.perception_config);
     const slam::SlamConfig scfg = slam::LoadSlam(args.slam_config);
 
-    const StereoRectifier rectifier(source.Calibration(), 0.0);
+    StereoRectifier rectifier(source.Calibration(), 0.0);   // not const: the right map takes the row refinement
     const RectifiedStereoRig& rr = rectifier.Rig();
     const core::RectifiedStereo rig{{rr.fx, rr.fy, rr.cx, rr.cy}, rr.baseline_m};
     const core::SE3 T_B_Crect = runtime::BodyFromRectifiedLeft(source.T_B_C0(), ToEigen3(rectifier.R1()));
@@ -144,9 +147,22 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     std::vector<runtime::TimedPose> est_body;
     std::vector<double> t_track, t_vo, t_kf;
     int lost = 0, keyframes = 0, ba_runs = 0;
+    int lost_run = 0;            // consecutive lost frames (diagnostic)
+    double last_finite_t = 0.0;
     slam::TriangulationStats tri;
     double ba_cost_ratio_sum = 0.0;
+    // 2.3 window backend only (results.yaml keeps the v1 bytes): solve outcomes and the post-solve hygiene.
+    long win_not_found = 0, win_obs = 0, win_invalid_entry = 0, win_chi2_failed = 0, win_rejected = 0,
+         win_culled = 0, win_exit_edges = 0, win_unobservable = 0, win_ill = 0, win_ill_after = 0,
+         win_unobservable_after = 0, win_dof = 0, win_degenerate = 0;
+    double win_sq = 0.0;
     long stereo_valid = 0, stereo_total = 0;
+    long usac_retries = 0, usac_skipped = 0;
+    // Online row refinement (D54): estimated at keyframes until it succeeds, then frozen and disclosed.
+    perception::RowCorrection row_fix, row_check;   // row_check: re-estimated AFTER the refinement (acceptance: ~0)
+    perception::RowSamples row_samples;              // pooled over keyframes until the fit succeeds
+    int row_attempts = 0, row_keyframe = -1;
+    std::string row_last_refusal = "never attempted";   // OpenCV 5.0.0 USAC defect (SMOKE §4q); written only when non-zero
 
     int i = 0;
     const int n = static_cast<int>(source.ForEachFrame(static_cast<size_t>(std::max(args.frames, 0)),
@@ -160,6 +176,8 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         auto t0 = std::chrono::steady_clock::now();
         const TrackedFrame tf = tracker.Process(l, static_cast<uint64_t>(i), args.seed);
         t_track.push_back(Ms(t0));
+        usac_retries += tf.stats.usac_defect_retries;
+        usac_skipped += tf.stats.usac_defect_skipped;
 
         slam::VoFrame vf;
         vf.frame_id = static_cast<uint64_t>(i);
@@ -170,12 +188,50 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         const slam::VoTrackResult tr = vo.Track(vf);
         t_vo.push_back(Ms(t0));
         lost += tr.status == slam::VoStatus::kLost;
+        lost_run = tr.status == slam::VoStatus::kLost ? lost_run + 1 : 0;
         core::SE3 T_W_C = tr.T_W_C;
+        if (!T_W_C.R.allFinite() || !T_W_C.t.allFinite()) {
+            // A non-finite pose poisons every later prediction and turns the score into NaN: stop here, loudly.
+            throw std::runtime_error("stereo VO: non-finite pose at frame " + std::to_string(i) + " (status " +
+                                     std::to_string(static_cast<int>(tr.status)) + ", correspondences " +
+                                     std::to_string(tr.correspondences) + ", lost for " + std::to_string(lost_run) +
+                                     " frames, last finite |t| " + std::to_string(last_finite_t) + " m, tracks " +
+                                     std::to_string(tf.ids.size()) + ", keyframes " + std::to_string(keyframes) + ")");
+        }
+        last_finite_t = T_W_C.t.norm();
 
         if (tr.need_keyframe) {
             t0 = std::chrono::steady_clock::now();
-            const StereoMatches sm = MatchLeftToRight(l, r, tf.points, pcfg.stereo_match);
-            const StereoDepth depth = sgbm.Compute(l, r);
+            // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
+            // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
+            // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
+            const auto condition = [&](const cv::Mat& right) {
+                return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
+            };
+            cv::Mat rs = condition(r);
+            if (pcfg.stereo_match.row_refinement && !row_fix.ok) {
+                ++row_attempts;
+                CollectRowSamples(l, rs, tf.points, pcfg.stereo_match, row_samples);
+                const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
+                if (est.ok) {
+                    row_fix = est;
+                    row_keyframe = keyframes;
+                    rectifier.RefineRightRows(est.a, est.b, est.c);
+                    cv::Mat l_again;
+                    rectifier.Rectify(frame.left, frame.right, l_again, r);
+                    rs = condition(r);
+                    std::printf("  stereo row refinement at keyframe %d: dy = %+.3f %+.5f x %+.5f y px (%d matches, "
+                                "MAD %.3f px%s)\n", keyframes, est.a, est.b, est.c, est.matches, est.mad_px,
+                                est.slopes_fitted ? "" : ", offset only");
+                } else {
+                    row_last_refusal = est.why;
+                }
+            } else if (pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
+                // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
+                row_check = EstimateRowCorrection(l, rs, tf.points, pcfg.stereo_match);
+            }
+            const StereoMatches sm = MatchLeftToRight(l, rs, tf.points, pcfg.stereo_match);
+            const StereoDepth depth = sgbm.Compute(l, rs);
             const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
             cv::Mat z32, s32;
             depth.Z.convertTo(z32, CV_32F);
@@ -205,7 +261,21 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             if (kr.ba_ran) {
                 ++ba_runs;
                 ba_cost_ratio_sum += kr.ba_final_cost / std::max(kr.ba_initial_cost, 1e-12);
+                win_not_found += !kr.ba_found;
+                win_obs += kr.ba_observations;
+                win_invalid_entry += kr.ba_invalid_at_entry;
+                win_chi2_failed += kr.ba_chi2_failed;
+                win_sq += kr.ba_inlier_sq_px;
+                win_dof += kr.ba_inlier_dof;
+                win_ill_after += kr.ba_ill_conditioned_after;
+                win_unobservable_after += kr.ba_unobservable_after;
+                win_degenerate += kr.ba_marginal_degenerate;
             }
+            win_rejected += kr.ba_rejected;
+            win_culled += kr.ba_culled;
+            win_exit_edges += kr.exit_edge;
+            win_unobservable += kr.ba_unobservable;
+            win_ill += kr.ba_ill_conditioned;
             T_W_C = vo.graph().nodes().rbegin()->second.T_W_C;
             if (args.on_keyframe) {
                 const slam::PoseNode& node = vo.graph().nodes().at(kr.keyframe_id);
@@ -261,9 +331,13 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                      gt_poses[static_cast<size_t>(assoc[i])].T});
     }
     const auto ate = runtime::ComputeATE(e, g);
+    if (!std::isfinite(ate.rmse)) {
+        throw std::runtime_error("stereo VO: non-finite ATE over " + std::to_string(e.size()) + " associated poses");
+    }
     const auto ate_rot = runtime::ComputeATERotation(e, g);
     const auto sim3 = runtime::AlignTrajectories(e, g, true);
-    const auto rpe = runtime::ComputeRPE(e, g, 20);   // 20 frames = 1 s at 20 Hz
+    // 1 s by timestamp, not 20 samples: a stream with dropped frames (EuRoC V2_03) would otherwise stretch the window.
+    const auto rpe = runtime::ComputeRPE(e, g, 1.0, 0.05);
     double gt_length = 0.0;
     for (size_t i = 1; i < g.size(); ++i) gt_length += (g[i].pose.t - g[i - 1].pose.t).norm();
 
@@ -289,6 +363,14 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     m.agent_count = 1;
     m.execution_mode = "replay";
     m.perception_config = pcfg.name;
+    {
+        std::ostringstream rf;
+        if (!pcfg.stereo_match.row_refinement) rf << "off";
+        else if (!row_fix.ok) rf << "not_estimated: " << row_last_refusal;
+        else rf << "a=" << row_fix.a << " b=" << row_fix.b << " c=" << row_fix.c << " matches=" << row_fix.matches
+                << " keyframe=" << row_keyframe;
+        m.stereo_row_refinement = rf.str();
+    }
     m.slam_config = scfg.name;
     m.degradation_config = "none";
     m.feature_engine = orb.Name();
@@ -327,6 +409,33 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         << ", sgbm_inconsistent: " << tri.sgbm_inconsistent << ", uncertain: " << tri.uncertain << "}\n"
         << "timing_ms: {track_mean: " << Mean(t_track) << ", vo_track_mean: " << Mean(t_vo)
         << ", keyframe_mean: " << Mean(t_kf) << ", opencv_threads: " << cv::getNumThreads() << "}\n";
+    res << "stereo_row_refinement: {enabled: " << (pcfg.stereo_match.row_refinement ? "true" : "false")
+        << ", applied: " << (row_fix.ok ? "true" : "false") << ", a_px: " << row_fix.a << ", b: " << row_fix.b
+        << ", c: " << row_fix.c << ", matches: " << row_fix.matches << ", mad_px: " << row_fix.mad_px
+        << ", slopes_fitted: " << (row_fix.slopes_fitted ? "true" : "false") << ", keyframe: " << row_keyframe
+        << ", attempts: " << row_attempts << ", residual_after: {measured: " << (row_check.ok ? "true" : "false")
+        << ", a_px: " << row_check.a << ", b: " << row_check.b << ", c: " << row_check.c
+        << ", max_abs_dy_px: "
+        << std::max({std::abs(row_check.a), std::abs(row_check.a + row_check.b * (rr.width - 1)),
+                     std::abs(row_check.a + row_check.c * (rr.height - 1)),
+                     std::abs(row_check.a + row_check.b * (rr.width - 1) + row_check.c * (rr.height - 1))})
+        << ", matches: " << row_check.matches << "}}\n"
+        << "stereo_exposure_match: " << (pcfg.stereo_match.exposure_match ? "true" : "false") << "\n";
+    if (usac_retries > 0 || usac_skipped > 0) {
+        res << "tracker_opencv_usac_defect: {redraws: " << usac_retries << ", epipolar_check_skipped_frames: "
+            << usac_skipped << "}\n";
+    }
+    if (scfg.ba.backend == "window") {
+        res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
+            << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed
+            << ", chi2_failed_fraction: " << (win_obs ? double(win_chi2_failed) / win_obs : -1.0)
+            << ", keyframe_observations_rejected: " << win_rejected
+            << ", culled: " << win_culled << ", exit_edges: " << win_exit_edges
+            << ", keyframes_held: " << win_unobservable << ", keyframes_held_at_solution: " << win_unobservable_after
+            << ", landmarks_ill_conditioned: " << win_ill << ", landmarks_ill_conditioned_at_solution: " << win_ill_after
+            << ", marginal_degenerate: " << win_degenerate
+            << ", inlier_sigma_px: " << (win_dof > 0 ? std::sqrt(win_sq / double(win_dof)) : -1.0) << "}\n";
+    }
     res.close();
 
     const auto missing = runtime::MissingRequiredFields(m);

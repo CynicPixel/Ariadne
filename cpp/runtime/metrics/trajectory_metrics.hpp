@@ -191,4 +191,32 @@ inline RelativeError ComputeRPE(const std::vector<TrajectorySample>& est,
     return out;
 }
 
+/// RPE over a fixed TIME interval: each sample i is paired with the sample whose timestamp is nearest t_i + delta_s,
+/// and the pair is skipped when that nearest sample is more than tol_s away. The index form above assumes a constant
+/// frame rate; a stream with dropped frames (EuRoC V2_03: 414 gaps of 100 ms) stretches its window.
+inline RelativeError ComputeRPE(const std::vector<TrajectorySample>& est,
+                                const std::vector<TrajectorySample>& gt, double delta_s, double tol_s) {
+    RelativeError out;
+    if (est.size() != gt.size() || est.size() < 2 || !(delta_s > 0.0) || !(tol_s >= 0.0)) return out;
+    std::vector<double> trans, rot;
+    size_t j = 0;
+    for (size_t i = 0; i < est.size(); ++i) {
+        const double target = est[i].t.toSeconds() + delta_s;
+        if (j <= i) j = i + 1;
+        while (j + 1 < est.size() &&
+               std::abs(est[j + 1].t.toSeconds() - target) <= std::abs(est[j].t.toSeconds() - target)) {
+            ++j;
+        }
+        if (j >= est.size() || std::abs(est[j].t.toSeconds() - target) > tol_s) continue;
+        const SE3 est_rel = est[i].pose.inverse() * est[j].pose;
+        const SE3 gt_rel = gt[i].pose.inverse() * gt[j].pose;
+        const SE3 error = gt_rel.inverse() * est_rel;
+        trans.push_back(error.t.norm());
+        rot.push_back(core::SO3Log(error.R).norm());
+    }
+    out.translation = Summarize(std::move(trans));
+    out.rotation = Summarize(std::move(rot));
+    return out;
+}
+
 }  // namespace ariadne::runtime

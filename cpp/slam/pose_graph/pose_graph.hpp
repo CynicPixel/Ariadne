@@ -26,6 +26,7 @@
 #include <cstdint>
 #include <map>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace ariadne::slam {
@@ -95,6 +96,19 @@ public:
         }
         if (e.type == EdgeType::kOdometry && e.gnc_weight != 1.0) {
             throw std::invalid_argument("PoseGraph: ODOMETRY edges always carry GNC weight 1 (§12.1)");
+        }
+        // The cost is 1/2 r^T I r: an information that is not symmetric PSD makes it unbounded below and the normal
+        // equations indefinite (the SE-Sync cubicle / rim files carry such matrices, POSE_GRAPH_2.md §5). Refuse it
+        // here, where it enters, rather than as a failed factorisation far downstream.
+        const double scale = e.information.cwiseAbs().maxCoeff();
+        if (!e.information.allFinite() || !(scale > 0.0) ||
+            (e.information - e.information.transpose()).cwiseAbs().maxCoeff() > 1e-9 * scale) {
+            throw std::invalid_argument("PoseGraph: edge information must be finite, non-zero and symmetric");
+        }
+        const double lmin = Eigen::SelfAdjointEigenSolver<Mat6>(e.information, Eigen::EigenvaluesOnly).eigenvalues()(0);
+        if (lmin < -1e-12 * scale) {
+            throw std::invalid_argument("PoseGraph: edge information is not positive semidefinite (min eigenvalue " +
+                                        std::to_string(lmin) + ")");
         }
         edges_.push_back(e);
         ++version_;

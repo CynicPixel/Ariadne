@@ -3,9 +3,11 @@
 #include "core/random/philox.hpp"
 #include "core/uncertainty/covariance.hpp"
 #include "slam/bundle_adjustment/reprojection_lm.hpp"
+#include "slam/bundle_adjustment/window_ba_levmarq.hpp"
 
 #include <opencv2/geometry.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <set>
 
@@ -42,8 +44,10 @@ StereoVo::StereoVo(const SlamConfig& config, const RectifiedStereo& rig, uint64_
 
 VoTrackResult StereoVo::Track(const VoFrame& frame) {
     if (frame.track_ids.size() != frame.points.size()) throw std::invalid_argument("StereoVo: ids/points size");
+    if (frames_tracked_ > 0 && !(frame.t_ns > prev_t_ns_)) {
+        throw std::invalid_argument("StereoVo: frame timestamps must increase");
+    }
     last_frame_ = frame;
-    ++frames_since_kf_;
     VoTrackResult res;
 
     if (keyframes_.empty()) {
@@ -55,9 +59,19 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
         return res;
     }
 
-    // Constant-velocity prediction, used as the fallback when PnP fails.
-    const core::SE3 predicted =
-        frames_tracked_ >= 2 ? prev_T_W_C_ * (prev2_T_W_C_.inverse() * prev_T_W_C_) : prev_T_W_C_;
+    // Constant-velocity prediction, used as the fallback when PnP fails. The velocity is the last MEASURED one, a
+    // twist per SECOND, frozen while coasting:
+    //  - per second, not per frame: a stream that drops frames (EuRoC V2_03: 414 gaps of 100 ms; Phase 5 degradation)
+    //    must predict by elapsed time;
+    //  - frozen: re-deriving it from the model's own extrapolations (R_n = R_{n-1} R_{n-2}^T R_{n-1}) amplified the
+    //    rounding error in orthonormality ~2.4x per frame, and MH_04 went non-finite after ~40 lost frames. Exp of a
+    //    twist is a rotation by construction.
+    core::SE3 predicted = prev_T_W_C_;
+    if (frames_tracked_ >= 2) {
+        if (!coasting_) velocity_per_s_ = core::SE3Log(prev2_T_W_C_.inverse() * prev_T_W_C_) /
+                                          (1e-9 * double(prev_t_ns_ - prev2_t_ns_));
+        predicted = prev_T_W_C_ * core::SE3Exp(velocity_per_s_ * (1e-9 * double(frame.t_ns - prev_t_ns_)));
+    }
 
     std::vector<cv::Point3d> obj;
     std::vector<cv::Point2d> img;
@@ -127,11 +141,14 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
     const int ref = keyframes_.back().tracked_landmarks;
     res.need_keyframe = !ok || res.pnp_inliers < cfg_.keyframe.ref_ratio * ref ||
                         res.pnp_inliers < cfg_.keyframe.min_tracked_landmarks ||
-                        frames_since_kf_ >= cfg_.keyframe.max_frames_between;
+                        1e-9 * double(frame.t_ns - last_kf_t_ns_) >= cfg_.keyframe.max_interval_s;
 
     prev2_T_W_C_ = prev_T_W_C_;
     prev_T_W_C_ = res.T_W_C;
+    prev2_t_ns_ = prev_t_ns_;
+    prev_t_ns_ = frame.t_ns;
     ++frames_tracked_;
+    coasting_ = !ok;
     last_ = res;
     return res;
 }
@@ -149,8 +166,15 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
     out.keyframe_id = kf.id;
 
     // Landmarks whose track died can never be observed again (no
-    // re-association in the placeholder): retire them.
+    // re-association in the placeholder): retire them. In the 2.3 window, a
+    // dead-track landmark stays while an in-window keyframe still observes it.
     std::set<uint64_t> alive(f.track_ids.begin(), f.track_ids.end());
+    const bool window = cfg_.ba.backend == "window";
+    if (window) {
+        const size_t keep = size_t(std::max(cfg_.ba.window_size - 1, 0));
+        for (size_t k = keyframes_.size() > keep ? keyframes_.size() - keep : 0; k < keyframes_.size(); ++k)
+            for (const auto& [id, o] : keyframes_[k].obs) alive.insert(id);
+    }
     for (auto it = landmarks_.begin(); it != landmarks_.end();) {
         it = alive.count(it->first) ? std::next(it) : landmarks_.erase(it);
     }
@@ -179,13 +203,16 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
         cv::Mat X4;
         cv::triangulatePoints(P1, P2, pl, pr, X4);   // linear DLT, 4xN homogeneous
         X4.convertTo(X4, CV_64F);
-        const double z_max = cfg_.triangulation.max_depth_baselines * B;
         for (size_t k = 0; k < cand.size(); ++k) {
             const size_t i = cand[k];
             const double w = X4.at<double>(3, static_cast<int>(k));
             const core::Vec3 Xc(X4.at<double>(0, static_cast<int>(k)) / w, X4.at<double>(1, static_cast<int>(k)) / w,
                                 X4.at<double>(2, static_cast<int>(k)) / w);
-            if (!(Xc.z() >= cfg_.triangulation.min_depth_m && Xc.z() <= z_max)) { ++out.triangulation.depth_range; continue; }
+            // No far cap: ORB-SLAM2 (§III-A) classifies points beyond ~40 baselines as "far" and KEEPS them (accurate
+            // rotation, weak translation). Removing our 60-baseline discard took MH_04 from 411 lost frames to 30
+            // (AUDIT_2.3.md). The relative-sigma test below is the depth bound: Z <= max_relative_sigma * fB /
+            // disparity_sigma_px (~9.6 m on EuRoC). Multi-view triangulation of points beyond it is not done here.
+            if (!(Xc.z() >= cfg_.triangulation.min_depth_m)) { ++out.triangulation.depth_range; continue; }
             const core::Vec2 el = core::Project(rig_.cam, Xc) - core::Vec2(pl[k].x, pl[k].y);
             const core::Vec2 er = core::Project(rig_.cam, Xc - core::Vec3(B, 0, 0)) - core::Vec2(pr[k].x, pr[k].y);
             if (el.norm() > cfg_.triangulation.max_reprojection_px || er.norm() > cfg_.triangulation.max_reprojection_px) {
@@ -204,12 +231,13 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
                 }
             }
             const uint64_t id = f.track_ids[i];
-            landmarks_[id] = {kf.T_W_C * Xc};
+            landmarks_[id] = {kf.T_W_C * Xc, kf.id};
             kf.obs[id] = {f.points[i], st.right[i], true};
             ++out.triangulation.created;
         }
     }
     kf.tracked_landmarks = static_cast<int>(kf.obs.size());
+    if (window) return AddKeyframeWindow(std::move(kf), out, f.t_ns);
 
     // --- Two-frame BA stub: previous keyframe fixed (gauge) -----------------
     core::Mat6 cov_wc = last_.status == VoStatus::kTracking ? last_.covariance_given_map : UninformativeCovariance();
@@ -285,7 +313,184 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
     keyframes_.push_back(std::move(kf));
     last_.T_W_C = keyframes_.back().T_W_C;
     prev_T_W_C_ = last_.T_W_C;   // later predictions start from the BA-refined pose
-    frames_since_kf_ = 0;
+    last_kf_t_ns_ = f.t_ns;
+    return out;
+}
+
+// --- 2.3 windowed BA (LOCAL_SLAM_2.3.md) --------------------------------------------------------------------------
+VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult out, int64_t t_ns) {
+    const size_t N = size_t(cfg_.ba.window_size);
+    // The keyframe leaving the window (it was window[0] of the previous solve, the gauge): freeze its exit edge to
+    // its successor from that solve's marginal of window[1] (design §4: with k fixed, the marginal of k+1 IS the
+    // relative uncertainty), transported to Z's left tangent.
+    if (keyframes_.size() >= N && have_pending_exit_) {
+        const KeyframeState& a = keyframes_[keyframes_.size() - N];
+        const KeyframeState& b = keyframes_[keyframes_.size() - N + 1];
+        const core::Mat6 cov_z = core::NearestPSD(core::ChangeFrame(a.T_W_C.inverse(), pending_exit_cov_), 1e-12);
+        graph_.AddEdge(OdometryEdge(a.id, b.id, a.T_W_C.inverse() * b.T_W_C, cov_z));
+        out.exit_edge = true;
+    }
+    have_pending_exit_ = false;
+    keyframes_.push_back(std::move(kf));
+    const size_t K = std::min(N, keyframes_.size());
+    const size_t first = keyframes_.size() - K;
+
+    PoseNode node;
+    node.keyframe = keyframes_.back().id;
+    node.agent = agent_;
+    node.t_ns = t_ns;
+    node.T_W_C = keyframes_.back().T_W_C;
+    node.covariance = keyframes_.size() == 1 ? core::Mat6::Zero() : UninformativeCovariance();
+    graph_.AddNode(node);
+
+    if (K >= 2) {
+        BaWindow w;
+        w.cam = {rig_.cam.fx, rig_.cam.fy, rig_.cam.cx, rig_.cam.cy, rig_.baseline};
+        w.huber_delta = cfg_.ba.huber_delta;
+        for (size_t k = first; k < keyframes_.size(); ++k) {
+            w.T_W_C.push_back(keyframes_[k].T_W_C);
+            w.fixed.push_back(k == first);
+        }
+        // Landmarks with >= 2 observations (rays) in the window; every observation of them.
+        std::map<uint64_t, int> rays;
+        for (size_t k = first; k < keyframes_.size(); ++k)
+            for (const auto& [id, o] : keyframes_[k].obs)
+                if (landmarks_.count(id)) rays[id] += 1 + int(o.has_right);
+        for (const auto& [id, n] : rays) {
+            if (n < 2) continue;
+            w.X[id] = landmarks_.at(id).X_w;
+        }
+        for (size_t k = first; k < keyframes_.size(); ++k)
+            for (const auto& [id, o] : keyframes_[k].obs) {
+                if (!w.X.count(id)) continue;
+                WindowObservation b;
+                b.kf = int(k - first);
+                b.landmark = id;
+                b.sigma = cfg_.ba.sigma_px;
+                b.z = Vec2(o.left.x, o.left.y);
+                w.obs.push_back(b);
+                if (o.has_right) {
+                    b.right = true;
+                    b.z = Vec2(o.right.x, o.right.y);
+                    w.obs.push_back(b);
+                }
+            }
+        // Observability guards (design §5, window_ba.hpp): drop landmarks too ill-conditioned to locate (near-parallel
+        // rays: hover, lost tracking), then tie every free keyframe to a fixed one through covisibility (>=
+        // pnp.min_correspondences shared landmarks, the 1.5 stub's rule); an untied group's oldest keyframe is held.
+        const double rel = cfg_.triangulation.max_relative_sigma;
+        const std::set<uint64_t> ill = IllConditionedLandmarks(w, rel);
+        RemoveLandmarks(w, ill);
+        out.ba_ill_conditioned = int(ill.size());
+        int held = 0;
+        AnchorWindow(w, cfg_.pnp.min_correspondences, held);
+        out.ba_unobservable = held;
+        out.ba_landmarks = int(w.X.size());
+        out.ba_window = int(K);
+        out.ba_observations = int(w.obs.size());
+        for (const auto& o : w.obs)
+            out.ba_invalid_at_entry +=
+                !LinearizeObservation(w.cam, w.T_W_C[size_t(o.kf)], w.X.at(o.landmark), o, w.z_floor).valid;
+        const bool any_free = std::find(w.fixed.begin(), w.fixed.end(), false) != w.fixed.end();
+        if (any_free && out.ba_landmarks >= cfg_.pnp.min_correspondences) {
+            PgoSettings ls;
+            ls.name = cfg_.name + ".ba";
+            ls.max_iterations = cfg_.ba.max_iterations;
+            ls.rel_energy_delta_tolerance = cfg_.ba.rel_energy_tolerance;
+            ls.step_norm_tolerance = cfg_.ba.step_norm_tolerance;
+            ls.min_gradient_tolerance = cfg_.ba.min_gradient_tolerance;
+            ls.recompute_covariance = false;
+            const WindowBaReport rep = SolveWindowBa(w, ls);
+            out.ba_ran = true;
+            out.ba_found = rep.found;
+            out.ba_iterations = rep.iterations;
+            out.ba_initial_cost = rep.initial_energy;
+            out.ba_final_cost = rep.final_energy;
+            // The guards again at the solution (the solve moved poses and points): a landmark that became
+            // ill-conditioned keeps its previous map position and is left out of the marginals; anchoring is redone
+            // on what remains, so the marginals come from a system that is PD by construction.
+            BaWindow wc = w;
+            const std::set<uint64_t> ill_after = IllConditionedLandmarks(wc, rel);
+            RemoveLandmarks(wc, ill_after);
+            out.ba_ill_conditioned_after = int(ill_after.size());
+            int held_after = 0;
+            const std::vector<int> anchor = AnchorWindow(wc, cfg_.pnp.min_correspondences, held_after);
+            out.ba_unobservable_after = held_after;
+            std::vector<int> want;
+            for (int k : {1, int(K) - 1})
+                if (!wc.fixed[size_t(k)] && std::find(want.begin(), want.end(), k) == want.end()) want.push_back(k);
+            // A joint degeneracy (V1_03: a common scale of two keyframes' translations) leaves the information
+            // singular even after the guards: the honest output is "no information" for this solve -- the marginals
+            // become uninformative below -- and it is counted (results.yaml ba_window.marginal_degenerate).
+            std::map<int, core::Mat6> marg;
+            if (!want.empty() && !TryWindowBaCovariances(wc, want, marg, nullptr, &rep)) ++out.ba_marginal_degenerate;
+            for (size_t k = first; k < keyframes_.size(); ++k) {
+                keyframes_[k].T_W_C = w.T_W_C[k - first];
+                if (k + 1 < keyframes_.size() && k != first)
+                    graph_.UpdateNode(keyframes_[k].id, keyframes_[k].T_W_C, graph_.nodes().at(keyframes_[k].id).covariance);
+            }
+            for (const auto& [id, X] : w.X)
+                if (!ill_after.count(id)) landmarks_.at(id).X_w = X;
+            // Post-solve rejection (design §5): an observation whose whitened residual^2 > chi^2_2(0.95) is dropped.
+            // The inliers also feed the sigma_px calibration (§5): sigma^2 = sum |r|^2 / (m - p), m scalar residuals,
+            // p free parameters -- post-fit residuals have lost p degrees of freedom (a median would read low).
+            const double c2 = cfg_.ba.chi2_reject;
+            for (const auto& o : w.obs) {
+                const ObsLinearization l =
+                    LinearizeObservation(w.cam, w.T_W_C[size_t(o.kf)], w.X.at(o.landmark), o, w.z_floor);
+                const double s2 = l.valid ? l.r.squaredNorm() / (o.sigma * o.sigma) : 1e300;
+                if (s2 <= c2) {
+                    out.ba_inlier_sq_px += l.r.squaredNorm();
+                    out.ba_inlier_dof += 2;
+                    continue;
+                }
+                ++out.ba_chi2_failed;
+                auto& obs = keyframes_[first + size_t(o.kf)].obs;
+                if (obs.erase(o.landmark)) ++out.ba_rejected;
+            }
+            const BaLayout L(w);
+            out.ba_inlier_dof -= L.dim();
+            // Covariance: node = its anchor's absolute + the marginal relative to the fixed keyframes (a left
+            // perturbation of the anchor moves the poses tied to it by the same left perturbation; correlations
+            // ignored, design §4). A keyframe held in this solve gets nothing from it: uninformative.
+            const int newest = int(K) - 1;
+            const auto mn = marg.find(newest);
+            const core::Mat6 cov_new =
+                mn == marg.end()
+                    ? UninformativeCovariance()
+                    : core::NearestPSD(graph_.nodes().at(keyframes_[first + size_t(anchor[size_t(newest)])].id).covariance +
+                                           mn->second,
+                                       1e-12);
+            graph_.UpdateNode(keyframes_.back().id, keyframes_.back().T_W_C, cov_new);
+            // The exit edge window[0] -> window[1]: the marginal of window[1] is the RELATIVE uncertainty only when
+            // window[0] is what it hangs from; otherwise this solve says nothing about that edge.
+            const auto m1 = marg.find(1);
+            pending_exit_cov_ = m1 != marg.end() && anchor[1] == 0 ? m1->second : UninformativeCovariance();
+            have_pending_exit_ = true;
+        }
+    }
+    // Culling (ORB-SLAM VI-B adapted, design §5). Test 1, "found in > 25% of the frames where predicted visible": a
+    // landmark whose LK track is alive in this frame is being found, so it is never culled (culling it cut PnP's
+    // correspondences and, on V2_02, doubled the lost frames). Test 2: after cull_after_keyframes keyframes, a
+    // landmark must be observed from >= min_keyframe_observations in-window keyframes.
+    const uint64_t newest = keyframes_.back().id;
+    const std::set<uint64_t> tracked_now(last_frame_.track_ids.begin(), last_frame_.track_ids.end());
+    std::map<uint64_t, int> seen;
+    for (size_t k = first; k < keyframes_.size(); ++k)
+        for (const auto& [id, o] : keyframes_[k].obs) ++seen[id];
+    for (auto it = landmarks_.begin(); it != landmarks_.end();) {
+        const bool old_enough = newest >= it->second.born_kf + uint64_t(cfg_.ba.cull_after_keyframes);
+        if (old_enough && !tracked_now.count(it->first) && seen[it->first] < cfg_.ba.min_keyframe_observations) {
+            for (size_t k = first; k < keyframes_.size(); ++k) keyframes_[k].obs.erase(it->first);
+            it = landmarks_.erase(it);
+            ++out.ba_culled;
+        } else {
+            ++it;
+        }
+    }
+    last_.T_W_C = keyframes_.back().T_W_C;
+    prev_T_W_C_ = last_.T_W_C;
+    last_kf_t_ns_ = t_ns;
     return out;
 }
 

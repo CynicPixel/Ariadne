@@ -1,0 +1,38 @@
+# 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
+# Placeholder SLAM for the simulated rig: euroc.yaml with the depth floor of sim_v1.
+# Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
+name: sim_v2
+
+triangulation:
+  min_depth_m: 0.29             # configs/perception/sim_v1.yaml: Z_min 0.281 m
+  max_reprojection_px: 2.0
+  sgbm_gate_sigma: 3.0          # §9.6: inconsistent if |Z_tri - Z_sgbm| > 3 sigma
+  disparity_sigma_px: 0.5       # §9.3
+  max_relative_sigma: 0.1       # sigma_Z / Z
+
+pnp:
+  ransac_threshold_px: 2.0
+  confidence: 0.999
+  max_iterations: 200
+  min_correspondences: 15
+  min_inliers: 12
+  huber_delta: 2.0              # §11.3 1.5-2.5
+  sigma_px: 1.0
+
+keyframe:
+  ref_ratio: 0.75               # ORB-SLAM3 thRefRatio
+  min_tracked_landmarks: 50
+  max_interval_s: 1.0           # a keyframe at least every second (time, not frames)
+
+ba:
+  huber_delta: 2.0
+  max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
+  sigma_px: 1.0
+  backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
+  window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
+  chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
+  cull_after_keyframes: 2       # ORB-SLAM VI-B (adapted to stereo, design §5)
+  min_keyframe_observations: 2
+  rel_energy_tolerance: 1.0e-6  # LevMarqBase termination (D51)
+  step_norm_tolerance: 1.0e-8
+  min_gradient_tolerance: 1.0e-8

@@ -24,4 +24,16 @@ struct WindowBaReport {
 /// Optimise `w` in place. `covariance_for`: keyframe indices whose marginals are wanted (free ones only).
 WindowBaReport SolveWindowBa(BaWindow& w, const PgoSettings& s, const std::vector<int>& covariance_for = {});
 
+/// Marginals (left tangent of T_W_C) of the given FREE keyframes from the undamped information at `w`. Throws, with
+/// the singular block named, when that information is not PD -- the caller's observability guards (window_ba.hpp)
+/// are meant to make that impossible. `solve`, when given, adds the LM run to the diagnostic.
+std::map<int, Mat6> WindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes,
+                                        const WindowBaReport* solve = nullptr);
+
+/// The same, without throwing: false (and `why`, the singular block named) when the information is not PD. For a
+/// caller that can say "no information" honestly -- a JOINT degeneracy the per-landmark and covisibility guards cannot
+/// see (EuRoC V1_03: the null vector is a common scale of two keyframes' translations, with far / right-less landmarks).
+bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
+                            std::string* why = nullptr, const WindowBaReport* solve = nullptr);
+
 }  // namespace ariadne::slam

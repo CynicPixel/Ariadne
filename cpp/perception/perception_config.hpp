@@ -108,6 +108,14 @@ struct StereoMatchParams {
     int max_level = 3;
     double fb_threshold_px = 0.5;
     double max_dy_px = 1.0;           // rectified: a correct match stays on its row
+    // Online row refinement (AUDIT_2.3.md, D54): at the first keyframes, fit the residual dy = a + b x + c y of the
+    // rectification from round-trip-consistent matches with |dy| <= row_search_px, and fold it into the right map.
+    bool row_refinement = true;
+    double row_search_px = 4.0;
+    int row_min_matches = 100;
+    double row_min_span = 0.5;        // fraction of the image the matches must span to fit the slopes b, c
+    // Left/right gain-bias match before stereo LK and SGBM (EuRoC per-camera auto-exposure).
+    bool exposure_match = true;
 };
 
 struct PerceptionConfig {
@@ -203,6 +211,10 @@ inline void ValidatePerception(const PerceptionConfig& c) {
         !(sm.max_dy_px > 0.0)) {
         fail("stereo_match: odd win_size >= 3, max_level >= 0, positive thresholds");
     }
+    if (!(sm.row_search_px > sm.max_dy_px) || sm.row_min_matches < 3 ||
+        !(sm.row_min_span > 0.0 && sm.row_min_span <= 1.0)) {
+        fail("stereo_match: row_search_px > max_dy_px, row_min_matches >= 3, row_min_span in (0, 1]");
+    }
 
     const StereoParams& s = c.stereo;
     // SGBM's own contract: the range is a positive multiple of 16 and the
@@ -296,6 +308,11 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
         m.max_level = ms.Optional<int>("max_level", m.max_level);
         m.fb_threshold_px = ms.Optional<double>("fb_threshold_px", m.fb_threshold_px);
         m.max_dy_px = ms.Optional<double>("max_dy_px", m.max_dy_px);
+        m.row_refinement = ms.Require<bool>("row_refinement");
+        m.row_search_px = ms.Require<double>("row_search_px");
+        m.row_min_matches = ms.Require<int>("row_min_matches");
+        m.row_min_span = ms.Require<double>("row_min_span");
+        m.exposure_match = ms.Require<bool>("exposure_match");
         ms.RequireAllConsumed();
     }
 

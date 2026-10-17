@@ -58,7 +58,7 @@ struct BaCamera {
     double fx = 0, fy = 0, cx = 0, cy = 0, baseline = 0;
 };
 
-struct BaObservation {
+struct WindowObservation {
     int kf = 0;            // index into the window's keyframes
     uint64_t landmark = 0;
     Vec2 z;                // rectified pixel
@@ -72,7 +72,7 @@ struct BaWindow {
     std::vector<bool> fixed;         // fixed[k]: not a variable (the gauge is fixed[0])
     std::map<uint64_t, Vec3> X;      // landmarks
     std::set<uint64_t> fixed_landmarks;   // not variables (motion-only refinement; the PnP oracle)
-    std::vector<BaObservation> obs;
+    std::vector<WindowObservation> obs;
     double huber_delta = 2.0;
     double z_floor = 1e-3;           // m: behind / at the camera
 };
@@ -86,7 +86,7 @@ struct ObsLinearization {
 
 /// Residual and Jacobians of one observation at the given pose and point.
 inline ObsLinearization LinearizeObservation(const BaCamera& cam, const SE3& T_W_C, const Vec3& X,
-                                             const BaObservation& o, double z_floor) {
+                                             const WindowObservation& o, double z_floor) {
     ObsLinearization l;
     const Mat3 Rt = T_W_C.R.transpose();
     Vec3 Xc = Rt * (X - T_W_C.t);
@@ -112,6 +112,99 @@ inline void Huber(double s, double delta, double& cost, double& weight) {
         cost = delta * (s - 0.5 * delta);
         weight = delta / s;
     }
+}
+
+// --- Observability guards (LOCAL_SLAM_2.3.md §5) -----------------------------------------------------------------
+// A ray count is not observability. Two failure modes seen on EuRoC (MH_02, MH_04, MH_05, V1_03, V2_0x):
+//   1. a landmark whose rays are near-parallel (hover, lost tracking): its own 3x3 information is singular;
+//   2. a keyframe, or a group of keyframes, not tied to a fixed keyframe through shared landmarks: the window has
+//      a free gauge (a landmark seen from one keyframe moves with it and constrains nothing).
+
+/// Landmarks whose own UNWEIGHTED information sum J_l^T J_l / sigma^2 (poses held) gives a worst-direction standard
+/// deviation 1/sqrt(lambda_min) above `max_relative_sigma` x range (range = distance to the nearest observing camera)
+/// -- the §9.5 triangulation test (sigma_Z / Z), generalised to N rays. A landmark with an invalid ray fails too.
+inline std::set<uint64_t> IllConditionedLandmarks(const BaWindow& w, double max_relative_sigma) {
+    std::map<uint64_t, Mat3> info;
+    std::map<uint64_t, double> range;
+    std::set<uint64_t> ill;
+    for (const auto& o : w.obs) {
+        const Vec3& X = w.X.at(o.landmark);
+        const SE3& T = w.T_W_C[size_t(o.kf)];
+        const ObsLinearization l = LinearizeObservation(w.cam, T, X, o, w.z_floor);
+        if (!l.valid) {
+            ill.insert(o.landmark);
+            continue;
+        }
+        auto it = info.try_emplace(o.landmark, Mat3::Zero()).first;
+        it->second += l.Jl.transpose() * l.Jl / (o.sigma * o.sigma);
+        auto r = range.try_emplace(o.landmark, std::numeric_limits<double>::infinity()).first;
+        r->second = std::min(r->second, (X - T.t).norm());
+    }
+    for (const auto& [id, I] : info) {
+        const double lmin = Eigen::SelfAdjointEigenSolver<Mat3>(I, Eigen::EigenvaluesOnly).eigenvalues()(0);
+        if (!(lmin > 0.0) || 1.0 / std::sqrt(lmin) > max_relative_sigma * range.at(id)) ill.insert(id);
+    }
+    return ill;
+}
+
+/// Remove landmarks and every observation of them.
+inline void RemoveLandmarks(BaWindow& w, const std::set<uint64_t>& ids) {
+    if (ids.empty()) return;
+    for (uint64_t id : ids) {
+        w.X.erase(id);
+        w.fixed_landmarks.erase(id);
+    }
+    w.obs.erase(std::remove_if(w.obs.begin(), w.obs.end(),
+                               [&](const WindowObservation& o) { return ids.count(o.landmark) > 0; }),
+                w.obs.end());
+}
+
+/// Tie every free keyframe to a fixed one. Two keyframes are covisible when at least `min_shared` landmarks are
+/// observed by both; a breadth-first search from the fixed keyframes (ascending index, so the result is
+/// deterministic) labels each reached keyframe with the fixed keyframe it hangs from. In every component the search
+/// does not reach, the OLDEST keyframe is fixed (its own anchor) and the search continues from it. Returns the
+/// anchor index of each keyframe; `newly_fixed` counts the keyframes fixed here.
+inline std::vector<int> AnchorWindow(BaWindow& w, int min_shared, int& newly_fixed) {
+    const int K = int(w.T_W_C.size());
+    std::vector<std::set<uint64_t>> seen(static_cast<size_t>(K));
+    for (const auto& o : w.obs) seen[size_t(o.kf)].insert(o.landmark);
+    std::vector<std::vector<int>> adj(static_cast<size_t>(K));
+    for (int a = 0; a < K; ++a)
+        for (int b = a + 1; b < K; ++b) {
+            int shared = 0;
+            for (uint64_t id : seen[size_t(a)]) shared += seen[size_t(b)].count(id) > 0;
+            if (shared >= min_shared) {
+                adj[size_t(a)].push_back(b);
+                adj[size_t(b)].push_back(a);
+            }
+        }
+    std::vector<int> anchor(static_cast<size_t>(K), -1);
+    std::vector<int> queue;
+    const auto search = [&]() {
+        for (size_t q = 0; q < queue.size(); ++q)
+            for (int b : adj[size_t(queue[q])])
+                if (anchor[size_t(b)] < 0 && !w.fixed[size_t(b)]) {
+                    anchor[size_t(b)] = anchor[size_t(queue[q])];
+                    queue.push_back(b);
+                }
+        queue.clear();
+    };
+    for (int k = 0; k < K; ++k)
+        if (w.fixed[size_t(k)]) {
+            anchor[size_t(k)] = k;
+            queue.push_back(k);
+        }
+    search();
+    newly_fixed = 0;
+    for (int k = 0; k < K; ++k)
+        if (anchor[size_t(k)] < 0) {
+            w.fixed[size_t(k)] = true;
+            anchor[size_t(k)] = k;
+            ++newly_fixed;
+            queue.push_back(k);
+            search();
+        }
+    return anchor;
 }
 
 /// The parameter layout: free cameras (6 each, window order), then landmarks (3 each, ascending id).
@@ -216,10 +309,14 @@ class BaSchur {
 public:
     bool Factorize(const BaSystem& s, const BaLayout& L) {
         ok_ = false;
+        failed_landmark_ = -1;
         Hll_inv_.assign(size_t(L.n_lms()), Mat3::Zero());
         for (int l = 0; l < L.n_lms(); ++l) {
             const Eigen::LDLT<Mat3> ld(s.Hll[size_t(l)]);
-            if (ld.info() != Eigen::Success || !(ld.vectorD().array() > 0.0).all()) return false;
+            if (ld.info() != Eigen::Success || !(ld.vectorD().array() > 0.0).all()) {
+                failed_landmark_ = l;
+                return false;
+            }
             Hll_inv_[size_t(l)] = ld.solve(Mat3::Identity());
         }
         S_ = s.Hcc;
@@ -269,9 +366,13 @@ public:
     }
 
     const Eigen::MatrixXd& S() const { return S_; }
+    /// After a failed Factorize: the layout index of the landmark block that was not PD, or -1 (the reduced camera
+    /// system was not PD).
+    int failed_landmark() const { return failed_landmark_; }
 
 private:
     bool ok_ = false;
+    int failed_landmark_ = -1;
     std::vector<Mat3> Hll_inv_;
     Eigen::MatrixXd S_;
     Eigen::LDLT<Eigen::MatrixXd> ldlt_;

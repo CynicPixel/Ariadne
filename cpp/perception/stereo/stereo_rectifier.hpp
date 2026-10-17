@@ -53,6 +53,17 @@ public:
     /// the reconstruction service needs alongside the gray VO input).
     void RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const;
 
+    /// Fold a measured residual misalignment dy = a + b x + c y (right image pixels; EstimateRowCorrection) into the
+    /// RIGHT map only: its new camera matrix becomes A * P2(:, 0:3) with A = [1 0 0; -b 1-c -a; 0 0 1], so a right
+    /// pixel (x, y) moves to (x, y - (a + b x + c y)). P2, Q and Rig() are untouched: the ideal rig model still holds,
+    /// it is the images that now satisfy it. Replaces any earlier refinement (it is always relative to the
+    /// calibration's own map).
+    void RefineRightRows(double a, double b, double c);
+    /// The refinement in force (all zero until RefineRightRows).
+    double row_a() const { return row_a_; }
+    double row_b() const { return row_b_; }
+    double row_c() const { return row_c_; }
+
     /// Rectification outputs, for tests and the manifest.
     const cv::Mat& R1() const { return R1_; }
     const cv::Mat& R2() const { return R2_; }
@@ -63,7 +74,9 @@ private:
     RectifiedStereoRig rig_;
     cv::Size size_;
     cv::Mat R1_, R2_, P1_, P2_, Q_;
+    cv::Mat K2_, D2_;   // kept to rebuild the right map (RefineRightRows)
     cv::Mat map_left_[2], map_right_[2];
+    double row_a_ = 0.0, row_b_ = 0.0, row_c_ = 0.0;
 };
 
 }  // namespace ariadne::perception

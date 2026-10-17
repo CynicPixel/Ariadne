@@ -8,6 +8,7 @@
 #include <opencv2/geometry.hpp>
 
 #include <random>
+#include <string>
 
 using namespace ariadne;
 using namespace ariadne::slam;
@@ -36,7 +37,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise, bool right_
                 Vec3 Xc = w.T_W_C[size_t(k)].R.transpose() * (X - w.T_W_C[size_t(k)].t);
                 if (right) Xc.x() -= kCam.baseline;
                 if (Xc.z() < 0.2) continue;
-                BaObservation o;
+                WindowObservation o;
                 o.kf = k;
                 o.landmark = uint64_t(m);
                 o.right = right;
@@ -146,4 +147,21 @@ TEST(WindowBaLevMarq, CameraCovarianceIsTheDenseInverseBlock) {
         const Mat6 ref = Hinv.block<6, 6>(6 * c, 6 * c);
         EXPECT_LT((rep.covariance.at(k) - ref).cwiseAbs().maxCoeff(), 1e-8 * ref.cwiseAbs().maxCoeff()) << k;
     }
+}
+
+// A singular undamped information is reported, not hidden: WindowBaCovariances throws with the block named, and the
+// non-throwing variant returns false with the same diagnostic (the VO then records an uninformative marginal).
+TEST(WindowBaLevMarq, SingularInformationIsReportedByBothCovariancePaths) {
+    std::mt19937 g(4);
+    BaWindow w = MakeWindow(g, 4, 40, 0.0);
+    std::fill(w.fixed.begin(), w.fixed.end(), false);   // no gauge: six null directions
+    std::map<int, Mat6> cov;
+    std::string why;
+    EXPECT_FALSE(TryWindowBaCovariances(w, {1}, cov, &why));
+    EXPECT_NE(why.find("not PD"), std::string::npos) << why;
+    EXPECT_TRUE(cov.empty());
+    EXPECT_THROW(WindowBaCovariances(w, {1}), std::runtime_error);
+    w.fixed[0] = true;
+    EXPECT_TRUE(TryWindowBaCovariances(w, {1, 3}, cov));
+    EXPECT_EQ(cov.size(), 2u);
 }

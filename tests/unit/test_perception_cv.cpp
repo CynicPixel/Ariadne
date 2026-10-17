@@ -15,12 +15,14 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/geometry.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/video/tracking.hpp>
 
 #include <algorithm>
 #include <climits>
 #include <cmath>
 #include <cstring>
 #include <set>
+#include <cstdlib>
 #include <string>
 
 using namespace ariadne;
@@ -520,4 +522,182 @@ TEST(PerceptionCv, OutputsIndependentOfThreadCountAndGlobalRng) {
             << "remap differs at threads=" << threads;
     }
     cv::setNumThreads(default_threads);
+}
+
+// SMOKE §4q: OpenCV 5.0.0's USAC findFundamentalMat throws CV_Assert(!model.empty()) on some inputs. Replays the captured
+// EuRoC V1_01_easy frame-1009 input (.cache/fixtures/usac/, EuRoC-derived, so not in the repo; skipped without it):
+//  1. the defect itself, at the draw the tracker made -- if an OpenCV upgrade fixes it, this fails and §4q is revisited;
+//  2. EpipolarInliers absorbs it with a redraw from the same Philox stream and still runs the check.
+TEST(KltTracker, UsacEmptyModelDefectIsAbsorbedByARedraw) {
+    const char* path = std::getenv("ARIADNE_USAC_FIXTURE");
+    if (!path) GTEST_SKIP() << "set ARIADNE_USAC_FIXTURE (.cache/fixtures/usac/V1_01_easy_frame1009.yml)";
+    cv::FileStorage fs(path, cv::FileStorage::READ);
+    ASSERT_TRUE(fs.isOpened()) << path;
+    std::vector<cv::Point2f> p0, p1;
+    int rng = 0, seed = 0, frame = 0;
+    fs["p0"] >> p0;
+    fs["p1"] >> p1;
+    fs["rng"] >> rng;
+    fs["seed"] >> seed;
+    fs["frame"] >> frame;
+    const TrackerParams params =
+        LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc.yaml").tracker;
+    cv::UsacParams u;
+    u.threshold = params.f_ransac_threshold_px;
+    u.confidence = params.f_confidence;
+    u.maxIterations = params.f_max_iterations;
+    u.isParallel = false;
+    u.randomGeneratorState = rng;
+    std::vector<uchar> mask;
+    try {
+        cv::findFundamentalMat(p0, p1, mask, u);
+        ADD_FAILURE() << "the OpenCV USAC defect no longer reproduces: revisit SMOKE §4q and the redraw";
+    } catch (const cv::Exception& e) {
+        EXPECT_EQ(e.code, cv::Error::StsAssert);
+        EXPECT_NE(e.err.find("!model.empty()"), std::string::npos) << e.err;
+    }
+    const EpipolarResult r = EpipolarInliers(p0, p1, params, uint64_t(seed), uint64_t(frame));
+    EXPECT_GE(r.usac_defect_retries, 1);
+    EXPECT_FALSE(r.usac_defect_skipped);
+    EXPECT_TRUE(r.ran);
+    EXPECT_EQ(r.inlier.size(), p0.size());
+}
+
+// --- Online row refinement (AUDIT_2.3.md, D54) -------------------------------------------------------------------
+
+namespace {
+
+/// A rectified pair with a known residual misalignment: a left point (x_r + d, y_r - dy(x_r, y_r)) appears in the
+/// right image at (x_r, y_r), with dy = a + b x_r + c y_r in RIGHT pixel coordinates (EstimateRowCorrection's model).
+cv::Mat RightWithRowError(const cv::Mat& left, double d, double a, double b, double c) {
+    cv::Mat mx(left.size(), CV_32F), my(left.size(), CV_32F);
+    for (int y = 0; y < left.rows; ++y)
+        for (int x = 0; x < left.cols; ++x) {
+            mx.at<float>(y, x) = float(x + d);
+            my.at<float>(y, x) = float(y - (a + b * x + c * y));
+        }
+    cv::Mat right;
+    cv::remap(left, right, mx, my, cv::INTER_LINEAR, cv::BORDER_REFLECT_101);
+    return right;
+}
+
+std::vector<cv::Point2f> Grid(int w, int h) {
+    std::vector<cv::Point2f> pts;
+    for (int y = 30; y < h - 30; y += 20)
+        for (int x = 60; x < w - 30; x += 20) pts.emplace_back(float(x), float(y));
+    return pts;
+}
+
+}  // namespace
+
+// The estimator recovers an injected offset + slope with the documented sign (dy = y_right - y_left, right pixel
+// coordinates), and reads ~0 on an aligned pair: the "correct rig" control.
+TEST(StereoRowRefinement, EstimatorRecoversAKnownResidualAndZeroOnAnAlignedPair) {
+    const cv::Mat left = Texture(41, 752, 480);
+    StereoMatchParams p = LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc.yaml").stereo_match;
+    const std::vector<cv::Point2f> pts = Grid(752, 480);
+    const double a = -1.30, b = 0.23 / 752.0, c = -1.10 / 480.0;   // the V2_01 shape (AUDIT_2.3.md §1)
+    const RowCorrection est = EstimateRowCorrection(left, RightWithRowError(left, 12.5, a, b, c), pts, p);
+    ASSERT_TRUE(est.ok) << est.why;
+    EXPECT_TRUE(est.slopes_fitted);
+    EXPECT_NEAR(est.a, a, 0.02);
+    EXPECT_NEAR(est.b * 752.0, b * 752.0, 0.02);   // compared as the change across the image, in px
+    EXPECT_NEAR(est.c * 480.0, c * 480.0, 0.02);
+    // The strict matcher rejects most of these rows before refinement...
+    const StereoMatches before = MatchLeftToRight(left, RightWithRowError(left, 12.5, a, b, c), pts, p);
+    EXPECT_GT(before.row_rejected, int(pts.size()) / 2);
+
+    const RowCorrection zero = EstimateRowCorrection(left, RightWithRowError(left, 12.5, 0, 0, 0), pts, p);
+    ASSERT_TRUE(zero.ok) << zero.why;
+    EXPECT_LT(std::abs(zero.a) + std::abs(zero.b * 752.0) + std::abs(zero.c * 480.0), 0.02);
+}
+
+// Refusals are loud: too few matches, or a model that would exceed the search bound somewhere in the image.
+TEST(StereoRowRefinement, EstimatorRefusesWhatItCannotTrust) {
+    const cv::Mat left = Texture(42, 752, 480);
+    StereoMatchParams p = LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc.yaml").stereo_match;
+    const RowCorrection few = EstimateRowCorrection(left, RightWithRowError(left, 10.0, 0.5, 0, 0),
+                                                    {cv::Point2f(100, 100), cv::Point2f(200, 200)}, p);
+    EXPECT_FALSE(few.ok);
+    EXPECT_NE(few.why.find("row_min_matches"), std::string::npos) << few.why;
+    // dy runs from 0 at the top to 6 px at the bottom: inside the 4 px search bound only in the upper part, and the
+    // fitted model then predicts > 4 px at the bottom corners -> refused.
+    const RowCorrection steep = EstimateRowCorrection(left, RightWithRowError(left, 10.0, 0.0, 0.0, 6.0 / 480.0),
+                                                      Grid(752, 480), p);
+    EXPECT_FALSE(steep.ok);
+    EXPECT_FALSE(steep.why.empty());
+}
+
+// RefineRightRows moves right-image content by exactly -dy: a right pixel (x, y) lands at (x, y - (a + b x + c y)).
+// Measured with LK between the right image rectified before and after (the same raw image), so the sign of the fold
+// into the camera matrix is tested on real maps, not on algebra.
+TEST(StereoRowRefinement, RefineRightRowsMovesTheRightImageByMinusDy) {
+    const RawStereoCalibration raw = SyntheticRawRig();
+    StereoRectifier rect(raw);
+    const cv::Mat raw_left = Texture(43, 752, 480, 2.0), raw_right = Texture(44, 752, 480, 2.0);
+    cv::Mat l0, r0, l1, r1;
+    rect.Rectify(raw_left, raw_right, l0, r0);
+    const double a = 1.4, b = -0.3 / 752.0, c = 1.2 / 480.0;
+    rect.RefineRightRows(a, b, c);
+    EXPECT_EQ(rect.row_a(), a);
+    EXPECT_NEAR(rect.P2().at<double>(1, 3), 0.0, 1e-9);   // the ideal rig model is untouched
+    rect.Rectify(raw_left, raw_right, l1, r1);
+    EXPECT_EQ(cv::norm(l0, l1, cv::NORM_INF), 0.0);       // left map untouched
+    const std::vector<cv::Point2f> pts = Grid(752, 480);
+    std::vector<cv::Point2f> moved = pts;
+    std::vector<uchar> st;
+    std::vector<float> err;
+    cv::calcOpticalFlowPyrLK(r0, r1, pts, moved, st, err, cv::Size(21, 21), 3,
+                             cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 50, 0.001),
+                             cv::OPTFLOW_USE_INITIAL_FLOW);
+    int checked = 0;
+    double worst = 0.0;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        if (!st[i]) continue;
+        const double dy = a + b * pts[i].x + c * pts[i].y;
+        worst = std::max(worst, std::abs((moved[i].y - pts[i].y) - (-dy)) + std::abs(moved[i].x - pts[i].x));
+        ++checked;
+    }
+    EXPECT_GT(checked, int(pts.size()) * 8 / 10);
+    EXPECT_LT(worst, 0.1);
+}
+
+// Exposure: a right image at 0.6x gain and +20 bias is brought back to the left's statistics.
+TEST(StereoRowRefinement, MatchExposureRemovesAGlobalGainAndBias) {
+    const cv::Mat left = Texture(45, 752, 480);
+    cv::Mat right;
+    left.convertTo(right, CV_8U, 0.6, 20.0);
+    const cv::Mat fixed = MatchExposure(left, right);
+    cv::Scalar ml, sl, mf, sf;
+    cv::meanStdDev(left, ml, sl);
+    cv::meanStdDev(fixed, mf, sf);
+    EXPECT_NEAR(mf[0], ml[0], 1.0);
+    EXPECT_NEAR(sf[0], sl[0], 1.0);
+}
+
+// Pooling: two sparse keyframes, each below row_min_matches alone, fit together (the residual is a rig property).
+TEST(StereoRowRefinement, SamplesPoolAcrossKeyframes) {
+    const cv::Mat left = Texture(46, 752, 480);
+    const StereoMatchParams p =
+        LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc.yaml").stereo_match;
+    const cv::Mat right = RightWithRowError(left, 9.0, -1.5, 0.0, -1.0 / 480.0);
+    // Each keyframe's points spread over the WHOLE image (so the pooled fit determines the slopes too), but each
+    // keyframe alone has only 2/3 of row_min_matches.
+    const std::vector<cv::Point2f> all = Grid(752, 480);
+    const size_t per = size_t(p.row_min_matches * 2 / 3), stride = all.size() / (2 * per);
+    std::vector<cv::Point2f> a, b;
+    for (size_t i = 0; i < per; ++i) {
+        a.push_back(all[2 * i * stride]);
+        b.push_back(all[(2 * i + 1) * stride]);
+    }
+    EXPECT_FALSE(EstimateRowCorrection(left, right, a, p).ok);
+    RowSamples pool;
+    CollectRowSamples(left, right, a, p, pool);
+    EXPECT_FALSE(FitRowCorrection(pool, p).ok);
+    CollectRowSamples(left, right, b, p, pool);
+    const RowCorrection est = FitRowCorrection(pool, p);
+    ASSERT_TRUE(est.ok) << est.why;
+    EXPECT_TRUE(est.slopes_fitted);
+    EXPECT_NEAR(est.a, -1.5, 0.05);
+    EXPECT_NEAR(est.c * 480.0, -1.0, 0.05);
 }

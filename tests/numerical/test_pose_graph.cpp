@@ -91,3 +91,27 @@ TEST(PoseGraph, InvariantsAreEnforced) {
     e.gnc_weight = 0.5;
     EXPECT_THROW(g.AddEdge(e), std::invalid_argument);   // ODOMETRY is never down-weighted
 }
+
+// An information matrix that is not symmetric PSD makes 1/2 r^T I r unbounded below: AddEdge refuses it. The matrix is
+// the SE-Sync cubicle file's first edge (PD diagonal blocks, translation-rotation cross terms that make it indefinite).
+TEST(PoseGraph, AddEdgeRefusesInformationThatIsNotPsd) {
+    PoseGraph g;
+    g.AddNode(Node(0, SE3::Identity()));
+    g.AddNode(Node(1, SE3::Identity()));
+    const double up[21] = {2.46483e6, 5.3553e6, 0, 0, 0, 0, 1.52034e7, 0, 0, 0, 0, 10, 84022.3, 132748, 0, 10, 0, 0, 10, 0,
+                           91520.2};
+    core::Mat6 I;
+    for (int i = 0, k = 0; i < 6; ++i)
+        for (int j = i; j < 6; ++j, ++k) I(i, j) = I(j, i) = up[k];
+    PoseEdge e;
+    e.from = 0;
+    e.to = 1;
+    e.information = I;
+    EXPECT_THROW(g.AddEdge(e), std::invalid_argument);
+    e.information(0, 1) += 1.0;   // not symmetric
+    EXPECT_THROW(g.AddEdge(e), std::invalid_argument);
+    e.information = core::Mat6::Identity();
+    e.information(5, 5) = 0.0;    // PSD and singular: allowed (an uninformative direction)
+    EXPECT_NO_THROW(g.AddEdge(e));
+    EXPECT_EQ(g.edges().size(), 1u);
+}

@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <limits>
 #include <map>
 #include <set>
@@ -126,4 +127,27 @@ TEST(TrajectoryMetrics, MismatchedLengthsYieldNoNumber) {
     est.pop_back();
     EXPECT_EQ(ComputeATERotation(est, gt).rmse, 0.0);
     EXPECT_FALSE(AlignTrajectories(est, gt, false).valid);
+}
+
+// RPE by TIME: a world-frame drift of r m/s gives a relative translation error of exactly r over any 1 s pair, and it
+// must stay r when the stream drops samples. The index form counts samples, so the same drop stretches its window.
+TEST(TrajectoryMetrics, TimeBasedRpeIsUnaffectedByDroppedSamples) {
+    const auto full = Gt();
+    const double dt = full[1].t.toSeconds() - full[0].t.toSeconds();
+    ASSERT_GT(full.back().t.toSeconds() - full.front().t.toSeconds(), 4.0);   // several 1 s windows on each side
+    const double r = 0.02;   // m/s
+    std::vector<TrajectorySample> gt, est;
+    for (size_t k = 0; k < full.size(); ++k) {
+        if (k % 4 == 1 && k > full.size() / 3 && k < 2 * full.size() / 3) continue;   // drop 1 in 4 mid-stream
+        gt.push_back(full[k]);
+        TrajectorySample e = full[k];
+        e.pose.t += Vec3(r * (full[k].t.toSeconds() - full[0].t.toSeconds()), 0.0, 0.0);
+        est.push_back(e);
+    }
+    const RelativeError by_time = ComputeRPE(est, gt, 1.0, 0.5 * dt);
+    EXPECT_NEAR(by_time.translation.mean, r, r * 0.5 * dt + 1e-12);   // exact when 1 s is a whole number of samples
+    EXPECT_NEAR(by_time.translation.max, r, r * 0.5 * dt + 1e-12);
+    const auto per_second = static_cast<size_t>(std::lround(1.0 / dt));
+    const RelativeError by_index = ComputeRPE(est, gt, per_second);
+    EXPECT_GT(by_index.translation.max, r * 1.2);   // windows that span the drop cover > 1 s
 }

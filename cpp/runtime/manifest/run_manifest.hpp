@@ -93,6 +93,10 @@ struct RunManifest {
     std::string degradation_digest = kUnknownField;
     std::string lens_digest = kUnknownField;          // read-time lens operator (D41)
     std::string pgo_digest = kUnknownField;           // pose-graph assembly, same-arch only (POSE_GRAPH_2.md §5)
+    /// Online stereo row refinement (D54): "a=<px> b=<px/px> c=<px/px> matches=<n> keyframe=<k>" when applied,
+    /// "off" when disabled by config, "not_estimated: <why>" when it never succeeded. A correction estimated from
+    /// the evaluated data itself: disclosed here, not hidden.
+    std::string stereo_row_refinement = "not_applicable";
     /// Final state_hash of the event log (§41).
     std::string final_state_hash = kUnknownField;
 
@@ -177,6 +181,7 @@ inline std::string ToYaml(const RunManifest& m) {
     detail::Field(out, "degradation_digest", m.degradation_digest);
     detail::Field(out, "lens_digest", m.lens_digest);
     detail::Field(out, "pgo_digest", m.pgo_digest);
+    detail::Field(out, "stereo_row_refinement", m.stereo_row_refinement);
     detail::Field(out, "final_state_hash", m.final_state_hash);
 
     if (!m.extra.empty()) {

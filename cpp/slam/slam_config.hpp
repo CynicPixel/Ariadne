@@ -17,7 +17,6 @@ using core::StrictConfig;
 
 struct TriangulationParams {
     double min_depth_m = 0.5;            // below the stereo search's Z_min nothing is observable
-    double max_depth_baselines = 60.0;   // ORB-SLAM3's ThDepth: close points only (60 B ~ 6.6 m on EuRoC)
     double max_reprojection_px = 2.0;    // both views (§11.2 "excessive reprojection residual")
     double sgbm_gate_sigma = 3.0;        // §9.6/§11.2: |Z_tri - Z_sgbm| <= k * sigma
     double disparity_sigma_px = 0.5;     // for sigma_Z of the triangulated depth (§9.5)
@@ -40,13 +39,23 @@ struct KeyframeParams {
     // (translation, rotation, parallax, uncertainty) replaces it in Phase 2.
     double ref_ratio = 0.75;
     int min_tracked_landmarks = 50;
-    int max_frames_between = 20;
+    double max_interval_s = 1.0;   // a keyframe at least this often, in TIME (a frame count breaks under dropped frames)
 };
 
 struct BaParams {
     double huber_delta = 2.0;            // §11.3
     int max_iterations = 15;             // §11.6
     double sigma_px = 1.0;
+    // 2.3 (LOCAL_SLAM_2.3.md): "two_frame_stub" (1.5, the ablation baseline; the default, so v1 configs are
+    // unchanged) or "window" (OpenCV LevMarqBase windowed BA). Every window key is REQUIRED when backend == window.
+    std::string backend = "two_frame_stub";
+    int window_size = 10;                // DSO N_f = 7 ("more than 7 ... marginal"); catalogue 10-15
+    double chi2_reject = 5.991;          // chi^2_2(0.95): drop an observation after the solve
+    int cull_after_keyframes = 2;        // ORB-SLAM VI-B, adapted to stereo (design §5)
+    int min_keyframe_observations = 2;
+    double rel_energy_tolerance = 1e-6;  // LevMarqBase termination (D51)
+    double step_norm_tolerance = 1e-8;
+    double min_gradient_tolerance = 1e-8;
 };
 
 struct SlamConfig {
@@ -61,7 +70,7 @@ inline void ValidateSlam(const SlamConfig& c) {
     auto fail = [&c](const std::string& why) { throw ConfigError("slam config '" + c.name + "': " + why); };
     if (c.name.empty()) fail("name must not be empty");
     const auto& t = c.triangulation;
-    if (!(t.min_depth_m > 0.0) || !(t.max_depth_baselines > 0.0)) fail("depth limits must be > 0");
+    if (!(t.min_depth_m > 0.0)) fail("triangulation min_depth_m must be > 0");
     if (!(t.max_reprojection_px > 0.0) || !(t.sgbm_gate_sigma > 0.0) || !(t.disparity_sigma_px > 0.0) ||
         !(t.max_relative_sigma > 0.0)) {
         fail("triangulation thresholds must be > 0");
@@ -78,8 +87,14 @@ inline void ValidateSlam(const SlamConfig& c) {
     if (k.min_tracked_landmarks < p.min_correspondences) {
         fail("keyframe min_tracked_landmarks must be >= pnp.min_correspondences, or PnP starves first");
     }
-    if (k.max_frames_between < 1) fail("keyframe max_frames_between must be >= 1");
+    if (!(k.max_interval_s > 0.0)) fail("keyframe max_interval_s must be > 0");
     if (!(c.ba.huber_delta > 0.0) || c.ba.max_iterations < 1 || !(c.ba.sigma_px > 0.0)) fail("bad BA settings");
+    if (c.ba.backend == "window" &&
+        (c.ba.window_size < 2 || !(c.ba.chi2_reject > 0.0) || c.ba.cull_after_keyframes < 1 ||
+         c.ba.min_keyframe_observations < 1 || !(c.ba.rel_energy_tolerance > 0.0) ||
+         !(c.ba.step_norm_tolerance > 0.0) || !(c.ba.min_gradient_tolerance > 0.0))) {
+        fail("bad window BA settings");
+    }
 }
 
 inline SlamConfig ParseSlam(StrictConfig& config) {
@@ -87,7 +102,6 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
     c.name = config.Require<std::string>("name");
     StrictConfig t = config.Section("triangulation");
     c.triangulation.min_depth_m = t.Require<double>("min_depth_m");
-    c.triangulation.max_depth_baselines = t.Require<double>("max_depth_baselines");
     c.triangulation.max_reprojection_px = t.Require<double>("max_reprojection_px");
     c.triangulation.sgbm_gate_sigma = t.Require<double>("sgbm_gate_sigma");
     c.triangulation.disparity_sigma_px = t.Require<double>("disparity_sigma_px");
@@ -105,12 +119,24 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
     StrictConfig k = config.Section("keyframe");
     c.keyframe.ref_ratio = k.Require<double>("ref_ratio");
     c.keyframe.min_tracked_landmarks = k.Require<int>("min_tracked_landmarks");
-    c.keyframe.max_frames_between = k.Require<int>("max_frames_between");
+    c.keyframe.max_interval_s = k.Require<double>("max_interval_s");
     k.RequireAllConsumed();
     StrictConfig b = config.Section("ba");
     c.ba.huber_delta = b.Require<double>("huber_delta");
     c.ba.max_iterations = b.Require<int>("max_iterations");
     c.ba.sigma_px = b.Require<double>("sigma_px");
+    c.ba.backend = b.Optional<std::string>("backend", "two_frame_stub");
+    if (c.ba.backend == "window") {
+        c.ba.window_size = b.Require<int>("window_size");
+        c.ba.chi2_reject = b.Require<double>("chi2_reject");
+        c.ba.cull_after_keyframes = b.Require<int>("cull_after_keyframes");
+        c.ba.min_keyframe_observations = b.Require<int>("min_keyframe_observations");
+        c.ba.rel_energy_tolerance = b.Require<double>("rel_energy_tolerance");
+        c.ba.step_norm_tolerance = b.Require<double>("step_norm_tolerance");
+        c.ba.min_gradient_tolerance = b.Require<double>("min_gradient_tolerance");
+    } else if (c.ba.backend != "two_frame_stub") {
+        throw ConfigError("slam config '" + c.name + "': ba.backend must be two_frame_stub or window");
+    }
     b.RequireAllConsumed();
     config.RequireAllConsumed();
     ValidateSlam(c);

@@ -18,6 +18,9 @@ namespace {
 // (the degradation operator) draw from sites far below this, so the streams
 // never overlap. Reserved sites count down from the top of the 48-bit domain.
 constexpr uint64_t kSiteTrackerUsac = core::PhiloxStream::kMaxSite - 1;
+// Draws per frame before the epipolar check is skipped (OpenCV 5.0.0 USAC defect, SMOKE §4q). At the measured
+// 31% per-draw failure rate on the worst frame, 3 draws all fail with probability ~3%.
+constexpr int kUsacAttempts = 3;
 
 bool InBorder(const cv::Point2f& p, cv::Size size, int border) {
     return p.x >= border && p.y >= border && p.x <= size.width - 1 - border &&
@@ -46,15 +49,34 @@ EpipolarResult EpipolarInliers(const std::vector<cv::Point2f>& p0,
     // so the same frame could reject different tracks depending on what ran
     // before it. Here the sampler is seeded from (seed, frame_id) and runs
     // single-threaded, so a replay reproduces the decision exactly.
+    //
+    // OpenCV 5.0.0 defect (SMOKE §4q): on some inputs USAC's F-degeneracy handling hands an EMPTY model to the
+    // Sampson error and CV_Assert(!model.empty()) throws -- seed-dependent (V1_01 frame 1009: 62/200 seeds), not
+    // the polisher, not LO. Only that throw is handled, so every frame that never threw is byte-identical: retry
+    // with the next draws of the SAME Philox stream (still a pure function of seed, frame_id), and after
+    // kUsacAttempts skip the check for this frame. Both are counted; nothing else is swallowed.
+    core::PhiloxStream rng(seed, frame_id, kSiteTrackerUsac);
     cv::UsacParams usac;
     usac.threshold = params.f_ransac_threshold_px;
     usac.confidence = params.f_confidence;
     usac.maxIterations = params.f_max_iterations;
     usac.isParallel = false;
-    usac.randomGeneratorState = static_cast<int>(
-        core::PhiloxStream(seed, frame_id, kSiteTrackerUsac).NextBits32() & 0x7FFFFFFFu);
     std::vector<uchar> inlier;
-    const cv::Mat F = cv::findFundamentalMat(p0, p1, inlier, usac);
+    cv::Mat F;
+    for (int attempt = 0; attempt < kUsacAttempts; ++attempt) {
+        usac.randomGeneratorState = static_cast<int>(rng.NextBits32() & 0x7FFFFFFFu);
+        try {
+            F = cv::findFundamentalMat(p0, p1, inlier, usac);
+            break;
+        } catch (const cv::Exception& e) {
+            if (e.code != cv::Error::StsAssert || e.err.find("!model.empty()") == std::string::npos) throw;
+            ++out.usac_defect_retries;
+            if (attempt + 1 == kUsacAttempts) {
+                out.usac_defect_skipped = true;
+                return out;
+            }
+        }
+    }
     if (F.empty() || inlier.size() != p0.size()) return out;
     out.inlier = std::move(inlier);
     out.ran = true;
@@ -132,6 +154,8 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
             p1.push_back(fwd[i]);
         }
         const EpipolarResult epi = EpipolarInliers(p0, p1, params_, seed, frame_id);
+        stats.usac_defect_retries = epi.usac_defect_retries;
+        stats.usac_defect_skipped = epi.usac_defect_skipped;
         if (epi.ran) {
             stats.epipolar_check_ran = true;
             std::vector<size_t> survivors;

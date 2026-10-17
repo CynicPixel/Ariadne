@@ -58,6 +58,21 @@ StereoRectifier::StereoRectifier(const RawStereoCalibration& calib, double alpha
                                 map_left_[0], map_left_[1]);
     cv::initUndistortRectifyMap(K2, D2, R2_, P2_(cv::Rect(0, 0, 3, 3)), size_, CV_16SC2,
                                 map_right_[0], map_right_[1]);
+    K2_ = K2.clone();
+    D2_ = D2.clone();
+}
+
+void StereoRectifier::RefineRightRows(double a, double b, double c) {
+    if (!std::isfinite(a) || !std::isfinite(b) || !std::isfinite(c) || !(std::abs(c) < 0.5)) {
+        throw std::invalid_argument("StereoRectifier::RefineRightRows: non-finite or implausible correction");
+    }
+    const cv::Matx33d A(1.0, 0.0, 0.0, -b, 1.0 - c, -a, 0.0, 0.0, 1.0);
+    const cv::Mat P2k = P2_(cv::Rect(0, 0, 3, 3));
+    const cv::Mat newK = cv::Mat(A) * P2k;
+    cv::initUndistortRectifyMap(K2_, D2_, R2_, newK, size_, CV_16SC2, map_right_[0], map_right_[1]);
+    row_a_ = a;
+    row_b_ = b;
+    row_c_ = c;
 }
 
 void StereoRectifier::Rectify(const cv::Mat& left, const cv::Mat& right, cv::Mat& left_out,
