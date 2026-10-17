@@ -1598,3 +1598,81 @@ After a solve, node covariances are the marginals at the optimum, or NaN by expl
 
 **Not yet:** BA integration into `StereoVo` (window, keyframe score, lifecycle, exit edges) and the EuRoC/sim runs
 against the targets fixed in `LOCAL_SLAM_2.3.md` §8.
+
+## 2026-10-16 — D53: Phase-1 correctness fixes found by the first full EuRoC sweep (byte-identical against the Phase 1 evidence)
+
+The Phase 1 evidence covered MH_01 only. Running all 11 EuRoC flights exposed four defects in 1.x code. Each is
+fixed with a test. The pre-merge gate stayed byte-identical (54/54, ctest 286/286,
+`build/premerge/aadffb8df5790ca0-20261016T173330Z`). That was verified on an intermediate working tree, before the
+D54 changes. D53 and D54 land in the same commit, so no commit carries D53 alone:
+
+- **OpenCV 5.0.0 USAC defect (SMOKE §4q).** `findFundamentalMat` (`UsacParams`) can throw `!model.empty()`. It
+  aborted all six V-room flights; reproduced standalone, 62/200 seeds on V1_01 frame 1009. Only that throw is
+  handled: up to 3 redraws from the same Philox stream, then the check is skipped for that frame. Both outcomes are
+  counted. The first draw is unchanged. Env-gated replay test: `ARIADNE_USAC_FIXTURE`.
+- **Unstable coasting.** While lost, the constant-velocity model re-derived its velocity from its own extrapolations.
+  Rounding error in R's orthonormality grew ≈ 2.4× per frame, and MH_04 went non-finite after 48 lost frames.
+  The measured velocity is now frozen while coasting.
+- **Silent NaN.** A non-finite pose or ATE now stops the run with the frame, the lost-streak length and the last
+  finite position. It previously produced a NaN score with exit 0.
+- **`PoseGraph::AddEdge`** refuses information that is not finite, symmetric and PSD. The SE-Sync cubicle/rim files
+  carry 5021 and 8815 indefinite matrices; our LM had correctly refused to factor them, while GTSAM did not check.
+  The SE-Sync test excludes exactly those two files and switches to an energy + stationarity criterion; evidence in
+  `POSE_GRAPH_2.md` §5.
+
+## 2026-10-17 — D54: frontend re-baseline — tracked points become map points again (maintainer: option A)
+
+`docs/design/AUDIT_2.3.md` traced the hard flights' lost frames to how tracked points become 3-D points. Feature
+quality and the 2.3 backend were not the cause.
+
+- Fixes 1 and 2 were proven by one-setting interventions before landing.
+- Fix 3 (exposure) was proven by an on/off pair after implementation.
+- Fix 4 (time-based) is unit-tested, but **no intervention showed it matters on EuRoC**. It is a correctness fix for
+  dropped frames.
+
+All are done with the current features. These are Phase-1 frontend fixes, so the v1 numbers and the Phase-1 sim outputs
+change **by design**, and the gate is re-pinned from a clean-commit full run.
+
+1. **Online stereo row refinement.** The V2 recordings sit ≈ 1.7 px off their published calibration (rows), and the
+   1 px row gate threw away 97% of correct stereo matches.
+   - The residual `dy = a + b x + c y` is fitted from round-trip-consistent LK matches with no row gate. Samples
+     pool across keyframes, fitting is trimmed least squares, and estimates beyond the search bound are refused
+     loudly.
+   - The fit is folded into the right rectification map as `A·P2`. P2, Q and `Rig()` are untouched.
+   - Acceptance: V2_01's residual drops from 1.46 px to 0.09 px.
+   - It is disclosed as online calibration refinement in `results.yaml` and in the manifest field
+     `stereo_row_refinement`.
+2. **Far points kept.** The 60-baseline discard misread ORB-SLAM, which classifies far points rather than dropping
+   them (ORB-SLAM2 §III-A). The relative-σ gate is now the depth bound (≈ 9.6 m on EuRoC). Multi-view triangulation
+   beyond it is not implemented.
+3. **Exposure match** before stereo LK and SGBM: a global gain/bias match, needed for EuRoC's per-camera
+   auto-exposure. It lands on evidence: V2_03 v1 lost 1026 → 192 frames.
+4. **Time, not frame counts.** Coasting predicts by elapsed time (velocity per second), the keyframe cap is
+   `max_interval_s`, and RPE pairs samples 1 s apart by timestamp. V2_03 drops 414 frames.
+
+σ was re-measured by the same protocol (MH_01 at σ = 1): 0.453 px, within 10% of 0.46, so 0.46 is kept.
+
+**Result** (11 EuRoC flights; v1 = the 1.5 placeholder, v2 = 2.3; ATE in m):
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v1 before | 0.126 | 0.081 | 0.140 | 3.93 | 0.82 | 0.152 | 0.218 | 1.18 | 2.36 | 2.47 | 3.72 |
+| v1 D54 | 0.112 | 0.128 | 0.151 | 1.60 | 0.257 | 0.162 | 0.226 | 1.74 | 0.105 | 0.213 | 1.65 |
+| v2 D54 | **0.075** | **0.075** | **0.093** | 2.78 | 0.560 | **0.078** | **0.113** | 0.439 | **0.083** | **0.124** | 2.12 |
+
+- **2.3 against its target** (`LOCAL_SLAM_2.3.md` §8): v2 beats v1 on **8/11** and lies within the worst published
+  stereo class on **7/11**.
+- **v1 got worse on 5 of the 6 already-clean flights**: MH_02 0.081 → 0.128, V1_03 1.18 → 1.74, and slightly
+  MH_03, V1_01 and V1_02. **[UNATTRIBUTED]**; the likely cause is far points feeding the two-frame stub. Stated, not
+  hidden (invariant 7).
+- After D54, **55.6% of window solves stop at the 10-iteration cap** (`found = false`); it was 23% at σ = 1 before
+  D54. §11.6 says 15. Open.
+- **Every remaining failure is a flight that still loses more than 100 frames** (MH_04 266, V2_03 181, V1_03 139,
+  MH_05 100). There the window is worse than v1: lost stretches poison the map (AUDIT §4), and a 10-keyframe window
+  spreads the damage.
+
+**Next:** lost-frame handling, then 2.1 / 2.4.
+
+- **Lost-frame handling (AUDIT §4):** no keyframes and no new points at a coasted pose, a new map segment on loss,
+  and a lost-status field on keyframe records.
+- **2.1** (XFeat + re-association) and **2.4** (IMU bridging), for the losses that remain.

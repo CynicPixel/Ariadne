@@ -128,6 +128,41 @@ byte-identical (CLAUDE.md §4).
   results: the same minimum must agree to 1e-6; different minima require both to be stationary, and the lower cost
   is reported. GTSAM stopped rim at its 1000-iteration cap (error 81,076.5), not converged. The objective is the
   g2o-information cost, not SE-Sync's isotropic κ/τ one, so SE-Sync's published optima are not compared here.
+- **SE-Sync results (2026-10-16), and the criterion revised with that evidence.** Run from c18c8b5, 1 h 48 min,
+  i5-1135G7:
+
+  | graph | nodes | ours (its) | GTSAM (its) | verdict |
+  |---|---|---|---|---|
+  | tinyGrid3D | 9 | 9.313908074 (10) | 9.313908372 (10) | same minimum; poses Δt 2.1e-7 m |
+  | smallGrid3D | 125 | 517.925324 (12) | 517.9253315 (12) | same minimum; Δt 2.8e-6 m |
+  | sphere2500 | 2500 | 675.7009666 (21) | 675.7007397 (7) | same minimum (3e-7 relative); Δt 1.7e-3 m |
+  | torus3D | 5000 | 29950.00592 (342) | 29950.00577 (359) | same minimum; Δt 4.0e-5 m |
+  | grid3D | 8000 | 253372.1012 (137) | 253372.1003 (138) | same minimum; Δt 2.1e-4 m |
+  | parking-garage | 1661 | 0.6341922679 (1000, cap) | 0.634188936 (8) | 5e-6 apart; ours stationary (max\|g\| 1.2e-9) but slow |
+  | cubicle | 5750 | — | 1372.78 (41) | **excluded**: 5021 / 16869 information matrices indefinite |
+  | rim | 10195 | — | 81076.5 (1000, cap) | **excluded**: 8815 / 29743 information matrices indefinite |
+
+  - **cubicle and rim are not valid inputs for this cost.** In the files as published (SE-Sync commit `9b631b6b`),
+    about 30% of the edges carry a 6×6 information matrix whose diagonal blocks are PD but whose
+    translation–rotation cross terms make it **indefinite**. For example, cubicle's edge 1→2 has
+    `I(2,3) = 84022.3` against `I(2,2) = I(3,3) = 10`, with minimum eigenvalue −1.57e5. ½ rᵀIr is then unbounded
+    below. Our LDLT guard refused every factorisation: 15/15 failed, the energy stayed at E0, and the driver stopped.
+    That is the correct behaviour. GTSAM's `noiseModel::Gaussian::Information` takes a Cholesky factor without
+    checking `[UNVERIFIED in GTSAM's source; inferred from it returning finite results]`, so its numbers are for a
+    different problem. SE-Sync itself uses only the isotropic κ and τ from the diagonal blocks. Since 2026-10-16,
+    `PoseGraph::AddEdge` refuses any information that is not finite, symmetric and PSD (test
+    `PoseGraph.AddEdgeRefusesInformationThatIsNotPsd`, using cubicle's edge 1→2). The SE-Sync test excludes such files
+    by name and fails if the excluded set is not exactly {cubicle, rim}.
+  - **The 1e-6 pose criterion was ill-posed for large graphs.** sphere2500 agrees with GTSAM to 3e-7 relative in
+    energy, yet differs by 1.7e-3 m along flat directions. Same-minimum is now energy agreement plus stationarity,
+    with poses reported, not gated. The per-pose test stays in the 100-case oracle, where Mahalanobis² against the
+    marginal tells a flat minimum from a disagreement. Computing marginals for 8000 nodes is not worth it here.
+  - **parking-garage exposes slow convergence on extreme conditioning.** The edge information spans 3.7e-10 in
+    min/max eigenvalue ratio. Our Marquardt damping (λ·diag H, `clamp_diagonal`) creeps along a flat valley for 1000
+    iterations, while GTSAM's LM takes 8. Ours ends stationary, 5e-6 above GTSAM. This is a real efficiency gap,
+    recorded open for 2.5 (damping choice: λI vs λ·diag, and Jacobi scaling). It is not hidden by the criterion: the
+    test reports it as "different minima, lower: gtsam".
+
 
 ## 6. Literature: what the 2026 search added (searched 2026-10-16, after the maintainer asked)
 

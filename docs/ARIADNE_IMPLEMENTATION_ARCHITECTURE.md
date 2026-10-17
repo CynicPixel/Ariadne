@@ -1785,6 +1785,20 @@ Use OpenCV:
 
 Store calibration immutable per sensor rig.
 
+**Update 2026-10-17 (D54, §49 ritual):** the stored calibration stays immutable. On top of it, each run may apply
+**one** disclosed online correction to the right rectification map.
+
+- **What is fitted:** the residual row misalignment `dy = a + b x + c y` of the rectified pair, estimated from
+  round-trip-consistent stereo LK matches pooled across the first keyframes.
+- **How it is applied:** folded into the right map as the new camera matrix `A·P2`. P2, Q and the ideal rig are
+  untouched.
+- **Why:** EuRoC's V2 recordings sit ≈ 1.7 px off their published calibration, and a 1 px row gate then rejected 97%
+  of correct matches (`docs/design/AUDIT_2.3.md`).
+- **Disclosure:** the estimate (a, b, c, match count, keyframe) is the manifest field `stereo_row_refinement` and a
+  `results.yaml` line. Estimates that exceed the search bound are refused loudly.
+- **Exposure:** before stereo LK and SGBM, the right image's global gain and bias are matched to the left's
+  (per-camera auto-exposure; EuRoC's listed known issue).
+
 ---
 
 ## 9.3 Disparity
@@ -2049,6 +2063,12 @@ Reject if:
 - excessive reprojection residual,
 - inconsistent stereo depth,
 - high uncertainty.
+
+**Update 2026-10-17 (D54, §49 ritual):** there is no fixed far-depth cap. ORB-SLAM2 (§III-A) classifies points
+beyond ~40 baselines as "far" and keeps them, and our 60-baseline discard had misread that: it cut 36–38% of
+candidates in the EuRoC machine hall. The "high uncertainty" test (σ_Z / Z ≤ `max_relative_sigma`) is the depth
+bound: Z ≤ max_relative_sigma · fB / σ_d, ≈ 9.6 m on EuRoC. Multi-view triangulation of points beyond it is not
+implemented.
 
 ---
 

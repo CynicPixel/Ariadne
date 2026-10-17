@@ -4,6 +4,28 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-17 — 2.3 windowed BA in StereoVo; first full EuRoC sweep; frontend re-baselined (D53, D54)
+
+- **2.3 integrated:** a 10-keyframe window on OpenCV's LM with observability guards, measured σ = 0.46 px, χ²
+  rejection, and culling that spares live tracks. Exit edges come from the window marginals.
+- **The first 11-flight EuRoC sweep** (Phase 1 had run MH_01 only) found four 1.x defects, fixed byte-identically
+  (D53): an OpenCV 5.0.0 USAC throw (SMOKE §4q), unstable coasting that went NaN, a silent NaN score, and indefinite
+  edge information accepted.
+- **Audit** (`AUDIT_2.3.md`): lost frames come from point→map creation, not from features or BA.
+  - V2's rows are 1.7 px off their published calibration.
+  - The far-point cap misread ORB-SLAM.
+  - V2_03 has an exposure mismatch and 414 dropped frames.
+  - Each was proven by intervention.
+- **Fixed by re-baselining (D54, option A):** online row refinement, far points kept, exposure match, time-based
+  motion and RPE.
+- **2.3 against its target:** beats v1 on 8/11 and within the published stereo class on 7/11, up from 4/11. The four
+  failures all lose ≥ 100 frames.
+- **Lost frames are adversarial** (map poisoning; downstream can't tell) → next.
+- **Tests:** ctest 293/293 with oracles and the USAC fixture required. The gate needs re-pinning from a clean-commit
+  full run, because the Phase-1 sim outputs change by design.
+- **Next:** commit; full gate (fresh Kaggle render) → new reference; then lost-frame handling (AUDIT §4), then
+  2.1 / 2.4.
+
 ## 2026-10-16 — Phase 2 solver cores on OpenCV 5's LM driver: PGO = GTSAM 100/100; windowed BA = OpenCV PnP refine (D51, D52)
 
 - **PGO** (`POSE_GRAPH_2.md`): our residuals, exact Jacobians and sparse LDLT behind `cv::detail::LevMarqBase`. GTSAM

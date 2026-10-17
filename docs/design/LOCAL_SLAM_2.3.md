@@ -169,3 +169,59 @@ target of the exit gate belongs to 2.4.
 - The manifest gains `slam_backend`, `window_size`, `ba_max_iterations` and `huber_delta`.
 - `contracts.yaml`'s unset list loses `uncertainty`, as the keyframe uncertainty summary gets filled. The gate check
   is updated in the same change.
+
+## 10. As built and measured (2026-10-16/17; D53, D54)
+
+**What the window path does** (`StereoVo::AddKeyframeWindow`, configs `*_v2.yaml`):
+
+- **Solve.** The last 10 keyframes on OpenCV's `LevMarqBase`, with the oldest fixed.
+- **Dead-track landmarks** stay while an in-window keyframe observes them.
+- **Observability guards** (`window_ba.hpp`; added after crashes on MH_02, MH_05, MH_04, V2_0x):
+  - A landmark enters only if its own unweighted information gives a worst-direction std ≤ `max_relative_sigma` ×
+    range: the §9.5 triangulation test, generalised to N rays.
+  - Every free keyframe must reach a fixed one through ≥ `pnp.min_correspondences` shared landmarks (a BFS over
+    covisibility). The oldest keyframe of an unreached group is held.
+  - Both tests run again at the solution before the marginals are taken.
+  - A remaining **joint** degeneracy gives an uninformative marginal and is counted (`marginal_degenerate`). Example:
+    V1_03, whose null vector is a common scale of two keyframes' translations.
+  - Factor failures are never swallowed: `WindowBaCovariances` still throws.
+- **Hygiene.**
+  - χ²₂(0.95) post-solve rejection.
+  - Culling, ORB-SLAM's two tests: a landmark whose LK track is alive in this frame is never culled (test 1, "being
+    found"); otherwise it needs ≥ 2 in-window keyframes once 2 keyframes have passed. Without the exemption, V2_02
+    doubled its lost frames.
+- **σ = 0.46 px, measured, not tuned.** It is the dof-corrected inlier σ, Σ‖r‖²/(m − p) over χ² inliers, from MH_01 at
+  σ = 1. Re-measured after D54: 0.453. A median of post-fit residuals would read low, because of the lost degrees of
+  freedom.
+- **Covariance.** The newest node gets its anchor's absolute covariance plus its marginal. The exit edge uses window[1]'s
+  marginal only when window[0] is its anchor; otherwise it is uninformative.
+
+**Stated deviations:**
+
+- Inner-node covariances are not recomputed after each re-solve.
+- The final N−1 keyframes get no exit edges at run end.
+- Solves that hit the 10-iteration cap (`found = false`) keep their progress, because only a factor failure counts
+  as a failure. The share is 23% at σ = 1 before D54 and **55.6% at σ = 0.46 after D54** (4630 of 8332 solves, 11
+  flights). §11.6 specifies 15 iterations: the cap is an open item.
+- `sim_v2.yaml` keeps σ = 1.0: σ is calibrated on EuRoC only, not yet on the sim.
+- Row refinement is applied even when the estimate is not significant (MH_01: a = 0.17 px). A significance threshold
+  is a follow-up.
+- The scored trajectory is the causal per-frame one; ORB-SLAM re-composes frames on refined keyframes. This is a
+  protocol caveat on criterion (2).
+
+**Result against §8** (after D54; ATE in m):
+
+| | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| v1 (1.5 placeholder) | 0.112 | 0.128 | 0.151 | 1.60 | 0.257 | 0.162 | 0.226 | 1.74 | 0.105 | 0.213 | 1.65 |
+| v2 (2.3) | **0.075** | **0.075** | **0.093** | 2.78 | 0.560 | **0.078** | **0.113** | 0.439 | **0.083** | **0.124** | 2.12 |
+| worst of the class | 0.54 | 0.46 | 0.33 | 0.78 | 0.50 | 0.55 | 0.23 | 0.07 | 0.23 | 0.20 | 0.79 |
+| lost frames (v2) | 0 | 16 | 0 | 278 | 107 | 4 | 14 | 146 | 20 | 17 | 183 |
+
+- (1) **8/11 pass**: all except MH_04, MH_05 and V2_03.
+- (2) **7/11 pass**: all except MH_04, MH_05, V1_03 and V2_03.
+- **Every failure loses ≥ 100 frames.** There, 2.3 is worse than v1, because lost stretches put landmarks at coasted
+  poses and the window carries them across 10 keyframes (`AUDIT_2.3.md` §4). The fix is upstream of 2.3: lost-frame
+  handling next, then 2.1 / 2.4.
+- **Before D54** the same table read 4/11 on both criteria. The frontend defects, not the window, were most of the
+  gap (AUDIT §1).

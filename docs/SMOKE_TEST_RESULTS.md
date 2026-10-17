@@ -611,3 +611,31 @@ threshold 0.05) on a seeded synthetic 640×480 card and on one EuRoC MH_01 cam0 
   The catalogue's 16.7 ms figure is matched in the same class: 12–15 ms with 8 threads, 27–33 ms with one. That is
   keyframe-rate capable, and C8 (no neural net at frame rate) is unchanged. The engine that ran is a manifest field
   (§7.4).
+
+## 4q. OpenCV 5.0.0 USAC: `findFundamentalMat` can throw on an empty model `[SMOKE-TEST]` 2026-10-16
+
+Found by the first full EuRoC sweep. Earlier evidence covered MH_01 only. All six Vicon-room sequences aborted inside
+the tracker's epipolar check (`klt_tracker.cpp`, the `UsacParams` overload of `cv::findFundamentalMat`):
+`estimator.cpp:418: (-215:Assertion failed) !model.empty() in function 'setModelParameters'`. That assert is in
+`SampsonErrorImpl`, the fundamental-matrix error. So the throw comes from F estimation, not PnP.
+
+- **Reproduced standalone.** The input of V1_01_easy frame 1009 was dumped (285 correspondences, flow 10.8–26.3 px,
+  so there is real parallax). It was replayed against the pinned build (tag `5.0.0`, commit `40738fb1`) with the
+  tracker's parameters (threshold 1 px, confidence 0.99, 1000 iterations, single-threaded). It throws for **62 / 200**
+  `randomGeneratorState` values. With `final_polisher = NONE_POLISHER` it still throws, and with
+  `loMethod = LOCAL_OPTIM_NULL` it still throws (69 / 200). So the cause is neither the polisher nor local
+  optimisation.
+- **Likely path `[UNVERIFIED]`.** `FundamentalDegeneracy::recoverIfDegenerate` (`usac/degeneracy.cpp`) can return
+  "degenerate, recovered" with a reset score. It does this without writing the model when neither calibrated
+  DEGENSAC nor plane-and-parallax recovers one. V1/V2 are rooms with large planar walls and floor, where the
+  degeneracy test fires. The exact sequence inside `ransac_solvers.cpp` was not traced to the line, and no upstream
+  issue was found (searched 2026-10-16).
+- **Handling (`klt_tracker.cpp`).** Only that throw is handled: `cv::Error::StsAssert` whose message contains
+  `!model.empty()`. Any other exception propagates. On the throw, the check redraws `randomGeneratorState` from the
+  same Philox stream `(seed, frame_id, site)`, up to 3 draws in total. If all three throw, the check is skipped for
+  that frame. Both outcomes are counted: `TrackStats::usac_defect_retries` / `usac_defect_skipped`, and the
+  `tracker_opencv_usac_defect` line in `results.yaml`, which is written only when non-zero. The first draw is the
+  draw the tracker always made, so every frame that never threw is byte-identical, and the Phase 1 evidence stands.
+  V1_01_easy now completes, with 1 redraw over 2912 frames.
+- **Not done.** No change to OpenCV itself; the pin stays and the COOL baseline stays. An upstream report needs the
+  maintainer's go-ahead.
