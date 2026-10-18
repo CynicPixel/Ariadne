@@ -4,6 +4,24 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-18 — 2.4 step 1: attitude_only ships for EuRoC v2 (D58)
+
+- **Gyro validated against ground truth:** 0.019° per pair with the bias removed.
+- **Bias** is estimated from VO rotations.
+- **While lost, the gyro replaces the visual bridge:** average ATE 0.289 → 0.223 m, V2_03 1.27 → 0.68. Stereo class
+  10/11.
+- **Gyro-seeded LK:** built, tested, off (losses −3%, V1_03 worse).
+- **Gravity on keyframes:** median 1.3–4.2° error (MAV dynamics).
+- ctest 309/309; pre-merge PASS.
+- **Next:** full preintegration in the window BA (stereo-inertial target average ≤ 0.138 m).
+
+## 2026-10-17 — Two cheap levers closed: scoring protocol and window iterations (D57)
+
+- The committed D56 code reproduces the D56 sweep exactly. The D56 pre-merge passed.
+- ORB-SLAM's keyframe-refined trajectory scoring is now reported: it differs by ≤ 1 mm, so scoring is not the gap.
+- 15 window iterations: no net gain (V1_03 0.56 → 0.96). Kept at 10.
+- The remaining gap is data association (2.1), loop closure (Phase 3), and the IMU (2.4, next here).
+
 ## 2026-10-17 — Lost-frame handling: visual rotation bridge + decaying velocity + tagged segments (D56)
 
 - **Diagnosis:** while lost, the 2-D tracks survive; the landmarks don't. Coasting turned MH_04's 9 cm dark hover

@@ -193,7 +193,22 @@ only points within 50 baselines, i.e. none at 1–2 cm between frames, so it can
 **Ariadne's measured result (D56):** MH_04 2.78 → 0.36 m ATE, V2_03 2.12 → 1.27, MH_05 0.56 → 0.35. Lost-frame
 counts do not move; the losses themselves are 2.1 / 2.4 territory.
 
-### 1.3b Re-association — re-finding mapped landmarks after their tracks die (added 2026-10-17, 2.1)
+### 1.3b Inertial layer — attitude first, then preintegration (added 2026-10-18, D58)
+
+| method | source / licence | what it gives | Ariadne |
+|---|---|---|---|
+| **On-manifold preintegration** | Forster, Carlone, Dellaert, Scaramuzza, T-RO 2017, [arXiv:1512.02363](https://arxiv.org/abs/1512.02363) | ΔR, Δv, Δp between keyframes with first-order bias Jacobians; inertial factors in BA that touch only camera blocks, so the Schur structure is unchanged | arch §10.2, 2.4 `full` (next). Paper perturbs on the RIGHT: re-derived in our left convention, FD-tested (PHASE2_PLAN §2). |
+| **Explicit complementary filter** | Mahony, Hamel, Pflimlin, IEEE TAC 53(5) 2008, [HAL](https://hal.archives-ouvertes.fr/hal-00488376), Theorem 5.1 | attitude from gyro + accel, gyro bias online; crossover at kP | **Adopted** for gravity direction (`attitude_only`), gains as in the paper's experiments: kP = 1, kI = 0.3 rad/s (§VI). Yaw bias is unobservable from gravity. |
+| **Inertial-aided KLT** | Hwangbo, Kim, Kanade, IROS 2009 ([CMU project](https://www.ri.cmu.edu/project/imu-assisted-klt-feature-tracker)) | the gyro predicts each feature's motion, keeping LK in its convergence basin under sharp rotation | Seam built and **tested**: on EuRoC, lost frames −4% only, mixed ATE (D58). Off by default: our losses are landmark failures, not LK failures (D56). |
+| **Inertial-only MAP initialisation** | Campos, Montiel, Tardós, ICRA 2020, [arXiv:2003.05766](https://arxiv.org/abs/2003.05766) | gravity, velocity and biases as a MAP problem from a few seconds of VO; ORB-SLAM3 initialises in < 4 s on EuRoC | Reference for `full`. Stereo gives scale, so scale is not estimated (arch §10.3). |
+
+**Measured on EuRoC (D58):**
+- The gyro integral, with the ground-truth bias removed, matches the ground-truth camera rotation to 0.019° per frame
+  pair, median over 26,530 pairs. Raw, it is 0.23°: the bias dominates.
+- Camera and IMU timing agree to within a sample.
+- Gyro bias is estimated from VO rotations (a robust median), since Mahony cannot observe it about the gravity axis.
+
+### 1.3c Re-association — re-finding mapped landmarks after their tracks die (added 2026-10-17, 2.1)
 
 A landmark is useful only while some pixel is linked to it. With LK, that link is the track that created it. Once the
 track dies, the point can never be observed again, unless it is re-found by appearance.

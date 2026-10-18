@@ -104,7 +104,10 @@ public:
 
     /// Track into `gray` (CV_8UC1). `seed` and `frame_id` key the robust
     /// estimator's random sampling, so a replay reproduces it exactly.
-    TrackedFrame Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed);
+    /// `predicted` (plan 2.4, §10.5): an optional prev->current image homography, e.g. K R^T K^-1 from the gyro;
+    /// when given, every track's forward LK search starts at its predicted position (Hwangbo et al., IROS 2009).
+    /// nullptr keeps the 1.4 behaviour exactly.
+    TrackedFrame Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed, const cv::Matx33d* predicted = nullptr);
 
     /// Re-association (PERCEPTION_2.1.md §4.3): rename live tracks -- the ones the last Process() returned -- to
     /// the ids of existing landmarks, so the SLAM side, which keys landmarks by track id, finds them again. The

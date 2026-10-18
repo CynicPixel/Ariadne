@@ -28,6 +28,7 @@
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "runtime/tools/feature_engine_glue.hpp"
 #include "runtime/tools/reassociation_glue.hpp"
+#include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
 
 #include <opencv2/core/utility.hpp>
@@ -37,6 +38,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <cstdio>
@@ -147,7 +149,32 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     std::printf("%s: %d frames; rig fx=%.2f B=%.4f; gt samples %zu\n", source.SceneName().c_str(), n_planned, rr.fx,
                 rr.baseline_m, gt_poses.size());
 
+    // 2.4 step 2: the gyro rotation between consecutive frames, in the rectified left camera, logged next to the
+    // bridge (vo_trace.csv) to validate frame, sign and time alignment against ground truth BEFORE the estimator uses
+    // the IMU. Zero bias here; the bias comes from initialisation later.
+    const std::vector<core::ImuMeasurement> imu = source.Imu();
+    int64_t prev_frame_t_ns = -1;
+    // imu_mode attitude_only (2.4, slam/inertial/attitude.hpp): gyro rotation while lost, gyro-seeded LK, gravity.
+    std::unique_ptr<slam::AttitudeTracker> attitude;
+    if (scfg.imu.mode != "none") {
+        if (imu.empty()) throw std::runtime_error("slam config imu.mode " + scfg.imu.mode + " but the source has no IMU");
+        slam::AttitudeParams ap;
+        ap.bias_window = scfg.imu.bias_window;
+        ap.stationary_s = scfg.imu.stationary_s;
+        ap.kp = scfg.imu.kp;
+        ap.ki = scfg.imu.ki;
+        attitude = std::make_unique<slam::AttitudeTracker>(ap, imu, source.ImuNoiseModel(), T_B_Crect.R);
+    }
+    const cv::Matx33d K_rect(rr.fx, 0, rr.cx, 0, rr.fy, rr.cy, 0, 0, 1);
+    slam::VoTrackResult prev_tr;
+    long gyro_seeded = 0;
+    std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
     std::vector<runtime::TimedPose> est_body;
+    // ORB-SLAM's trajectory protocol (System::SaveTrajectoryEuRoC): each frame is stored relative to its reference
+    // keyframe and re-composed at the end from that keyframe's FINAL (window-refined) pose. Window backend only, next
+    // to the causal per-frame score, which stays the primary number (LOCAL_SLAM_2.3 §10 protocol caveat).
+    struct FrameRef { uint64_t kf; core::SE3 T_kf_c; };
+    std::vector<FrameRef> frame_ref;
     std::vector<double> t_track, t_vo, t_kf;
     int lost = 0, keyframes = 0, ba_runs = 0;
     int lost_run = 0;            // consecutive lost frames (diagnostic)
@@ -159,7 +186,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     std::ostringstream trace;
     trace << "frame,t_ns,status,tracks,correspondences,pnp_inliers,keyframe,stereo_valid,created,source,segment,"
              "probe,bridge_model,bridge_tracks,bridge_inliers_h,bridge_inliers_e,bridge_cheiral_e,bridge_disagreement_deg,"
-             "bridge_rx,bridge_ry,bridge_rz,anchor_model,anchor_tracks,anchor_age,anchor_drift_deg\n";
+             "bridge_rx,bridge_ry,bridge_rz,anchor_model,anchor_tracks,anchor_age,anchor_drift_deg,gyro_rx,gyro_ry,gyro_rz\n";
     double last_finite_t = 0.0;
     slam::TriangulationStats tri;
     double ba_cost_ratio_sum = 0.0;
@@ -186,7 +213,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         rectifier.Rectify(frame.left, frame.right, l, r);
 
         auto t0 = std::chrono::steady_clock::now();
-        const TrackedFrame tf = tracker.Process(l, static_cast<uint64_t>(i), args.seed);
+        bool have_rot = false;
+        core::Mat3 R_pc = core::Mat3::Identity();
+        cv::Matx33d H_pred;
+        if (attitude && prev_frame_t_ns >= 0 && attitude->Covers(prev_frame_t_ns, frame.t_ns)) {
+            R_pc = attitude->PredictCameraRotation(prev_frame_t_ns, frame.t_ns);
+            have_rot = true;
+            cv::Matx33d Rt;
+            for (int r = 0; r < 3; ++r)
+                for (int c = 0; c < 3; ++c) Rt(r, c) = R_pc(c, r);   // R_C(cur)_C(prev): prev-camera rays into the current one
+            H_pred = K_rect * Rt * K_rect.inv();
+        }
+        const bool seed_lk = have_rot && scfg.imu.seed_lk;
+        gyro_seeded += seed_lk;
+        const TrackedFrame tf = tracker.Process(l, static_cast<uint64_t>(i), args.seed, seed_lk ? &H_pred : nullptr);
         t_track.push_back(Ms(t0));
         usac_retries += tf.stats.usac_defect_retries;
         usac_skipped += tf.stats.usac_defect_skipped;
@@ -198,7 +238,16 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         vf.points = tf.points;
         reassoc.BeforeTrack(l, vo, tracker, vf, args.seed);   // 2.1: may rename orphan tracks to old landmarks
         t0 = std::chrono::steady_clock::now();
+        vf.has_rotation_prior = have_rot;
+        vf.R_prev_cur_prior = R_pc;
         const slam::VoTrackResult tr = vo.Track(vf);
+        if (attitude) {
+            // Consecutive MEASURED frames refine the gyro bias (both PnP poses, before any keyframe refinement).
+            if (tr.status == slam::VoStatus::kTracking && prev_tr.status == slam::VoStatus::kTracking && prev_frame_t_ns >= 0)
+                attitude->ObserveTracked(prev_frame_t_ns, frame.t_ns, prev_tr.T_W_C.R.transpose() * tr.T_W_C.R);
+            attitude->AdvanceTo(frame.t_ns);
+        }
+        prev_tr = tr;
         t_vo.push_back(Ms(t0));
         lost += tr.status == slam::VoStatus::kLost;
         lost_run = tr.status == slam::VoStatus::kLost ? lost_run + 1 : 0;
@@ -287,6 +336,15 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 tracker.Replenish(l);   // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise)
                 ++keyframes;
                 keyframes_lost += tr.status == slam::VoStatus::kLost;
+                if (attitude && !gt_poses.empty()) {
+                    const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), frame.t_ns,
+                                                     [](const runtime::TimedPose& p, int64_t t) { return p.t_ns < t; });
+                    if (it != gt_poses.end() && std::llabs(it->t_ns - frame.t_ns) < 10000000LL) {
+                        const core::Vec3 g_true = it->T.R.transpose() * core::Vec3(0, 0, -1);
+                        const core::Vec3 g_est = T_B_Crect.R * attitude->GravityInCamera();
+                        gravity_err_deg.push_back(std::acos(std::clamp(g_est.dot(g_true), -1.0, 1.0)) * 180.0 / M_PI);
+                    }
+                }
                 tri.candidates += kr.triangulation.candidates;
                 tri.created += kr.triangulation.created;
                 trace_created = kr.triangulation.created;
@@ -332,6 +390,10 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                     kf.landmark_ids = vo.KeyframeLandmarks(kr.keyframe_id);
                 kf.pose_source = kr.source;
                 kf.segment = kr.segment;
+                if (attitude) {
+                    kf.has_gravity = true;
+                    kf.gravity_dir_C = attitude->GravityInCamera();
+                }
                     cv::Mat rgb = l;
                     if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
                     kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
@@ -349,8 +411,23 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
               << ',' << tr.bridge.model << ',' << tr.bridge.tracks << ',' << tr.bridge.inliers_h << ','
               << tr.bridge.inliers_e << ',' << tr.bridge.cheiral_e << ',' << tr.bridge.disagreement_deg << ',' << brot.x() << ',' << brot.y() << ',' << brot.z() << ','
               << tr.anchor_bridge.model << ',' << tr.anchor_bridge.tracks << ',' << tr.anchor_age << ','
-              << tr.anchor_drift_deg << '\n';
+              << tr.anchor_drift_deg << ',';
+        if (!imu.empty() && prev_frame_t_ns >= 0 && imu.front().t_ns <= prev_frame_t_ns && imu.back().t_ns >= vf.t_ns) {
+            const core::Mat3 R_BC = T_B_Crect.R;
+            const core::Vec3 g =
+                core::SO3Log(R_BC.transpose() * core::IntegrateGyro(imu, prev_frame_t_ns, vf.t_ns, core::Vec3::Zero()) * R_BC);
+            trace << g.x() << ',' << g.y() << ',' << g.z() << '\n';
+        } else {
+            trace << "nan,nan,nan\n";
+        }
+        prev_frame_t_ns = vf.t_ns;
         est_body.push_back({vf.t_ns, T_W_C * T_B_Crect.inverse()});
+        if (!vo.graph().nodes().empty()) {
+            const slam::PoseNode& ref = vo.graph().nodes().rbegin()->second;
+            frame_ref.push_back({ref.keyframe, ref.T_W_C.inverse() * T_W_C});
+        } else {
+            frame_ref.push_back({~uint64_t(0), T_W_C});
+        }
         if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
         if (args.on_frame) {
             FrameView fv;
@@ -389,6 +466,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const auto rpe = runtime::ComputeRPE(e, g, 1.0, 0.05);
     double gt_length = 0.0;
     for (size_t i = 1; i < g.size(); ++i) gt_length += (g[i].pose.t - g[i - 1].pose.t).norm();
+    runtime::ErrorStats ate_kf, ate_kf_rot;
+    runtime::RelativeError rpe_kf;
+    if (scfg.ba.backend == "window") {
+        std::vector<core::TrajectorySample> ek;
+        for (size_t i = 0; i < est_body.size(); ++i) {
+            if (assoc[i] < 0) continue;
+            const FrameRef& fr = frame_ref[i];
+            const core::SE3 T = fr.kf == ~uint64_t(0) ? fr.T_kf_c : vo.graph().nodes().at(fr.kf).T_W_C * fr.T_kf_c;
+            ek.push_back({core::Timestamp{est_body[i].t_ns}, 0, T * T_B_Crect.inverse()});
+        }
+        ate_kf = runtime::ComputeATE(ek, g);
+        ate_kf_rot = runtime::ComputeATERotation(ek, g);
+        rpe_kf = runtime::ComputeRPE(ek, g, 1.0, 0.05);
+    }
 
     const fs::path run_dir = fs::path(args.out) / (source.RunName() + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
     fs::create_directories(run_dir);
@@ -428,7 +519,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     RecordFeatureEngine(m, *features, pcfg.features);
     m.extra["replenish_cadence"] = pcfg.tracker.replenish;   // 2.1 §4.2
     m.loop_backend = "none";
-    m.imu_mode = "none";
+    m.imu_mode = scfg.imu.mode;
     m.bag_checksum = source.BagChecksum();
     runtime::RecordBuildIdentity(m);
     runtime::RecordOpenCvIdentity(m);
@@ -480,6 +571,9 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << usac_skipped << "}\n";
     }
     if (scfg.ba.backend == "window") {
+        res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
+            << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
+            << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
         res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
             << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed
             << ", chi2_failed_fraction: " << (win_obs ? double(win_chi2_failed) / win_obs : -1.0)
@@ -489,6 +583,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << ", landmarks_ill_conditioned: " << win_ill << ", landmarks_ill_conditioned_at_solution: " << win_ill_after
             << ", marginal_degenerate: " << win_degenerate
             << ", inlier_sigma_px: " << (win_dof > 0 ? std::sqrt(win_sq / double(win_dof)) : -1.0) << "}\n";
+    }
+    if (attitude) {
+        const core::Vec3 b = attitude->Bias();
+        res << "imu: {mode: " << scfg.imu.mode << ", seed_lk: " << (scfg.imu.seed_lk ? "true" : "false")
+            << ", stationary_start: " << (attitude->StationaryStart() ? "true" : "false") << ", gyro_bias_final: [" << b.x()
+            << ", " << b.y() << ", " << b.z() << "], bias_samples: " << attitude->BiasSamples()
+            << ", lk_seeded_frames: " << gyro_seeded;
+        if (!gravity_err_deg.empty()) {
+            std::vector<double> g = gravity_err_deg;
+            std::sort(g.begin(), g.end());
+            res << ", gravity_err_deg_vs_gt: {median: " << g[g.size() / 2] << ", p90: " << g[g.size() * 9 / 10]
+                << ", max: " << g.back() << "}";
+        }
+        res << "}\n";
     }
     if (scfg.lost.motion != "coast" || scfg.lost.reanchor != "every_frame") {
         res << "lost: {motion: " << scfg.lost.motion << ", reanchor: " << scfg.lost.reanchor

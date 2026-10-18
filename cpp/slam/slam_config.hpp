@@ -76,6 +76,18 @@ struct LostParams {
     int reanchor_min_points = 30;       // gated: tracked landmarks + new ones >= this (2 x pnp.min_correspondences)
 };
 
+/// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged) or "attitude_only" (§10.7:
+/// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA). "full" arrives with
+/// preintegration. A config without an `imu:` section is "none".
+struct ImuParams {
+    std::string mode = "none";
+    bool seed_lk = false;           // §10.5: predict LK's starting point from the gyro rotation
+    int bias_window = 200;          // tracked pairs in the VO-aided gyro-bias median (attitude.hpp)
+    double stationary_s = 2.0;      // PHASE2_PLAN §3 stationary-start test
+    double kp = 1.0;                // Mahony et al. 2008 §VI
+    double ki = 0.3;
+};
+
 struct SlamConfig {
     std::string name;
     TriangulationParams triangulation;
@@ -83,6 +95,7 @@ struct SlamConfig {
     KeyframeParams keyframe;
     BaParams ba;
     LostParams lost;
+    ImuParams imu;
 };
 
 inline void ValidateSlam(const SlamConfig& c) {
@@ -116,6 +129,10 @@ inline void ValidateSlam(const SlamConfig& c) {
         fail("lost: bridge_threshold_px, velocity_decay_s, max_speed_m_s > 0; bridge_min_tracks >= 8; model_ratio in (0, 1)");
     }
     if (l.reanchor_min_points < p.min_correspondences) fail("lost.reanchor_min_points must be >= pnp.min_correspondences");
+    if (c.imu.mode != "none" && c.imu.mode != "attitude_only") fail("imu.mode must be none or attitude_only");
+    if (c.imu.bias_window < 1 || !(c.imu.stationary_s > 0.0) || !(c.imu.kp > 0.0) || !(c.imu.ki >= 0.0)) {
+        fail("imu: bias_window >= 1, stationary_s > 0, kp > 0, ki >= 0");
+    }
     if (c.ba.backend == "window" &&
         (c.ba.window_size < 2 || !(c.ba.chi2_reject > 0.0) || c.ba.cull_after_keyframes < 1 ||
          c.ba.min_keyframe_observations < 1 || !(c.ba.rel_energy_tolerance > 0.0) ||
@@ -176,6 +193,16 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.lost.max_speed_m_s = l.Require<double>("max_speed_m_s");
         c.lost.reanchor_min_points = l.Require<int>("reanchor_min_points");
         l.RequireAllConsumed();
+    }
+    if (config.Has("imu")) {
+        StrictConfig m = config.Section("imu");
+        c.imu.mode = m.Require<std::string>("mode");
+        c.imu.seed_lk = m.Require<bool>("seed_lk");
+        c.imu.bias_window = m.Require<int>("bias_window");
+        c.imu.stationary_s = m.Require<double>("stationary_s");
+        c.imu.kp = m.Require<double>("kp");
+        c.imu.ki = m.Require<double>("ki");
+        m.RequireAllConsumed();
     }
     config.RequireAllConsumed();
     ValidateSlam(c);

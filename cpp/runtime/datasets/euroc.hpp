@@ -16,6 +16,7 @@
 // parsers be tested on the host.
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
+#include "core/inertial/imu.hpp"
 #include "perception/stereo/camera_model.hpp"
 
 #include <Eigen/Geometry>
@@ -204,6 +205,73 @@ inline std::vector<GroundTruthPose> ParseEurocGroundTruth(const std::string& tex
         g.T_W_B.t = core::Vec3(v[0], v[1], v[2]);
         g.T_W_B.R = Eigen::Quaterniond(v[3], v[4], v[5], v[6]).normalized().toRotationMatrix();
         out.push_back(g);
+    }
+    return out;
+}
+
+/// imu0/data.csv: "#timestamp [ns], w_RS_S_x..z [rad/s], a_RS_S_x..z [m/s^2]" at 200 Hz. imu0's T_BS is identity,
+/// so S is the body frame.
+inline std::vector<core::ImuMeasurement> ParseEurocImu(const std::string& text, const std::string& origin) {
+    std::vector<core::ImuMeasurement> out;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        std::vector<double> v;
+        int64_t t = 0;
+        std::istringstream ls(line);
+        std::string cell;
+        for (int col = 0; std::getline(ls, cell, ','); ++col) {
+            if (col == 0) t = std::stoll(cell);
+            else v.push_back(std::stod(cell));
+        }
+        if (v.size() != 6) throw ConfigError(origin + ": IMU row must have 7 columns");
+        if (!out.empty() && t <= out.back().t_ns) throw ConfigError(origin + ": IMU timestamps not increasing");
+        out.push_back({t, core::Vec3(v[0], v[1], v[2]), core::Vec3(v[3], v[4], v[5])});
+    }
+    return out;
+}
+
+/// imu0/sensor.yaml noise densities (Kalibr convention) and rate; T_BS must be identity (body = IMU), else throws.
+inline core::ImuNoise ParseEurocImuNoise(const std::string& text, const std::string& origin) {
+    core::StrictConfig c = core::StrictConfig::FromString(text, origin);
+    core::ImuNoise n;
+    n.gyro_noise_density = c.Require<double>("gyroscope_noise_density");
+    n.gyro_random_walk = c.Require<double>("gyroscope_random_walk");
+    n.accel_noise_density = c.Require<double>("accelerometer_noise_density");
+    n.accel_random_walk = c.Require<double>("accelerometer_random_walk");
+    n.rate_hz = c.Require<double>("rate_hz");
+    const std::vector<double> T = c.Section("T_BS").Require<std::vector<double>>("data");
+    for (int i = 0; i < 16; ++i)
+        if (T.size() != 16 || T[size_t(i)] != (i % 5 == 0 ? 1.0 : 0.0)) throw ConfigError(origin + ": imu0 T_BS is not identity");
+    return n;
+}
+
+/// Ground-truth inertial state (state_groundtruth_estimate0 columns 8-16): velocity in R, gyro and accel biases in
+/// the body frame. For VALIDATING the estimator's initialisation only; never fed to it.
+struct GroundTruthInertial {
+    int64_t t_ns = 0;
+    core::Vec3 v_W, b_g, b_a;
+};
+
+inline std::vector<GroundTruthInertial> ParseEurocGroundTruthInertial(const std::string& text, const std::string& origin) {
+    std::vector<GroundTruthInertial> out;
+    std::istringstream in(text);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        std::vector<double> v;
+        int64_t t = 0;
+        std::istringstream ls(line);
+        std::string cell;
+        for (int col = 0; std::getline(ls, cell, ','); ++col) {
+            if (col == 0) t = std::stoll(cell);
+            else v.push_back(std::stod(cell));
+        }
+        if (v.size() < 16) throw ConfigError(origin + ": ground-truth row has fewer than 17 columns");
+        out.push_back({t, core::Vec3(v[7], v[8], v[9]), core::Vec3(v[10], v[11], v[12]), core::Vec3(v[13], v[14], v[15])});
     }
     return out;
 }

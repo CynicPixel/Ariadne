@@ -1778,3 +1778,42 @@ Design and evidence: `docs/design/LOST_FRAMES.md`. It answers `AUDIT_2.3.md` §4
 - Bridged edges keep the uninformative covariance until a NEES check. The measured σ is the input.
 - The worst blur gaps need 2.4's gyro.
 - Limit the bridge to lost frames once it is validated.
+
+## 2026-10-17 — D57: two cheap accuracy levers measured and closed; the window keeps 10 iterations
+
+Run from the committed D56 tree; the shipped `euroc_v2.yaml` reproduced the D56 sweep exactly on all 11 flights.
+
+- **ORB-SLAM's trajectory protocol** (frames re-composed on the final keyframe poses,
+  `System::SaveTrajectoryEuRoC`) is now reported next to the causal score, as `results.yaml` `keyframe_refined`
+  (window backend only, so v1 bytes are unchanged). It differs by ≤ 1 mm on every flight.
+  - The protocol caveat in `LOCAL_SLAM_2.3.md` §10 is closed: scoring is not part of the gap to ORB-SLAM3.
+- **Window max_iterations 15** (§11.6) vs 10:
+  - The share of solves that end at the cap drops from 45–69% to 28–47%.
+  - ATE: MH_01 0.075 → 0.072, MH_03 0.093 → 0.086, V2_01 0.071 → 0.069; but MH_05 0.349 → 0.360 and **V1_03 0.56 →
+    0.96**. Still 9/11 within the published class.
+  - **Kept at 10.** At 15, a third of the solves still hit the cap, so the cap is not what limits them. The likely
+    cause is the termination tolerances (`rel_energy_tolerance` 1e-6) [UNVERIFIED].
+- **What remains of the gap to ORB-SLAM3:** data association (re-association, 2.1), loop closure (Phase 3), the IMU
+  (2.4). It is not the protocol, and not the iteration budget.
+
+## 2026-10-18 — D58: 2.4 step 1 — attitude_only ships for EuRoC v2: gyro rotation while lost, gravity on keyframes
+
+Design and evidence: `docs/design/INERTIAL_2.4.md`.
+
+- **Validated first.** The gyro integral matches the ground-truth camera rotation to **0.019° per frame pair** with
+  the ground-truth bias removed (26,530 pairs, 11 flights); 0.23° raw. Timing is aligned within a sample.
+- **Gyro bias is VO-aided** (a robust median of `(Log R_gyro,raw − Log R_vo)/dt` over 200 tracked pairs; seeded by a
+  stationary test). Mahony cannot observe the gravity-axis bias.
+- **While lost, the gyro replaces the D56 visual bridge's rotation** (`PoseSource::kGyro`).
+  - EuRoC v2 average ATE 0.289 → **0.223 m**; V2_03 1.27 → **0.68**, V1_03 0.56 → 0.42, V1_02 0.14 → 0.10.
+  - Costs: V1_01 +17 mm, MH_04 +30 mm.
+  - Stereo class: **10/11**. Stereo-inertial class: not yet (`full` needed, as planned).
+- **Gyro-seeded LK** (Hwangbo 2009) is built as a one-hunk seam in `klt_tracker.*` (maintainer-approved), tested,
+  and **off**. Lost frames −3% only; V1_03 0.42 → 0.82.
+- **Gravity** (Mahony 2008 Theorem 5.1, the paper's kP = 1, kI = 0.3) is on every keyframe record. Its error against
+  ground truth is a median 1.3–4.2° per flight, 15° worst: MAV dynamics leak through. Recorded so that a
+  GRAVITY_PRIOR uses an honest σ. The factor itself is 2.5's (pose graph).
+- `imu.mode` defaults to `none`: v1, `sim_v2` (no sim IMU plumbing yet) and the sim gate are unchanged. Pre-merge
+  **PASS**.
+- **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
+  still drop and emit an edge.

@@ -172,3 +172,47 @@ TEST(Euroc, RectifiedCameraToBodyRoundTripNeedsR1) {
     EXPECT_LT(ComputeATERotation(with_r1, truth).rmse, 1e-12);
     EXPECT_GT(ComputeATERotation(without_r1, truth).rmse, 0.005);   // the constant R1 offset survives alignment
 }
+
+// --- IMU (plan 2.4) ---------------------------------------------------------------------------------------------------
+
+TEST(EurocImu, ParsesRowsAndRejectsMalformedOnes) {
+    const std::string csv =
+        "#timestamp [ns],w_RS_S_x [rad s^-1],w_RS_S_y [rad s^-1],w_RS_S_z [rad s^-1],a_RS_S_x [m s^-2],a_RS_S_y [m s^-2],"
+        "a_RS_S_z [m s^-2]\r\n"
+        "1403636579758555392,-0.0991,0.1473,0.0272,8.1477,-0.3759,-2.4026\r\n"
+        "1403636579763555584,-0.0991,0.1403,0.0293,8.0333,-0.4086,-2.4026\r\n";
+    const auto imu = ParseEurocImu(csv, "imu0");
+    ASSERT_EQ(imu.size(), 2u);
+    EXPECT_EQ(imu[1].t_ns, 1403636579763555584LL);
+    EXPECT_DOUBLE_EQ(imu[0].gyro.y(), 0.1473);
+    EXPECT_DOUBLE_EQ(imu[1].accel.x(), 8.0333);
+    EXPECT_THROW(ParseEurocImu("1,2,3\n", "imu0"), ConfigError);
+    EXPECT_THROW(ParseEurocImu("2,0,0,0,0,0,0\n1,0,0,0,0,0,0\n", "imu0"), ConfigError);   // time going back
+}
+
+TEST(EurocImu, NoiseModelRequiresIdentityExtrinsic) {
+    const std::string ok =
+        "T_BS:\n  cols: 4\n  rows: 4\n  data: [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]\n"
+        "rate_hz: 200\ngyroscope_noise_density: 1.6968e-04\ngyroscope_random_walk: 1.9393e-05\n"
+        "accelerometer_noise_density: 2.0000e-3\naccelerometer_random_walk: 3.0000e-3\n";
+    const core::ImuNoise n = ParseEurocImuNoise(ok, "imu0");
+    EXPECT_DOUBLE_EQ(n.gyro_noise_density, 1.6968e-04);
+    EXPECT_DOUBLE_EQ(n.accel_random_walk, 3.0e-3);
+    EXPECT_DOUBLE_EQ(n.rate_hz, 200.0);
+    std::string moved = ok;
+    moved.replace(moved.find("1.0, 0.0, 0.0, 0.0, 0.0"), 3, "0.9");
+    EXPECT_THROW(ParseEurocImuNoise(moved, "imu0"), ConfigError);
+}
+
+// Constant angular rate: the integral over [t0, t1] is exp(w (t1 - t0)) whatever the sample phase, because the first
+// and last intervals are clipped; a bias equal to the rate integrates to identity.
+TEST(ImuIntegration, GyroIntegralClipsToTheIntervalAndRemovesBias) {
+    const core::Vec3 w(0.3, -0.2, 0.5);
+    std::vector<core::ImuMeasurement> s;
+    for (int k = 0; k <= 40; ++k) s.push_back({1000000000LL + k * 5000000LL, w, core::Vec3::Zero()});
+    const int64_t t0 = 1000000000LL + 12345678, t1 = 1000000000LL + 151234567;
+    const core::Mat3 R = core::IntegrateGyro(s, t0, t1, core::Vec3::Zero());
+    EXPECT_LT((core::SO3Log(R) - w * (1e-9 * double(t1 - t0))).norm(), 1e-12);
+    EXPECT_LT(core::SO3Log(core::IntegrateGyro(s, t0, t1, w)).norm(), 1e-15);
+    EXPECT_THROW(core::IntegrateGyro(s, t0 - 100000000LL, t1, core::Vec3::Zero()), std::invalid_argument);
+}

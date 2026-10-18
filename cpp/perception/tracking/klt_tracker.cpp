@@ -99,7 +99,7 @@ LkPyramid KltTracker::BuildPyramid(const cv::Mat& gray, const TrackerParams& par
     return pyr;
 }
 
-TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed) {
+TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed, const cv::Matx33d* predicted) {
     if (gray.empty() || gray.type() != CV_8UC1) {
         throw std::invalid_argument("KltTracker: expected a non-empty CV_8UC1 image");
     }
@@ -121,8 +121,17 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
 
         std::vector<uchar> st_fwd, st_bwd;
         std::vector<float> err;
+        int flags = 0;
+        if (predicted) {   // seed the search at the predicted position (2.4: gyro rotation homography)
+            fwd.resize(points_.size());
+            for (size_t i = 0; i < points_.size(); ++i) {
+                const cv::Vec3d p = (*predicted) * cv::Vec3d(points_[i].x, points_[i].y, 1.0);
+                fwd[i] = std::abs(p[2]) > 1e-12 ? cv::Point2f(float(p[0] / p[2]), float(p[1] / p[2])) : points_[i];
+            }
+            flags = cv::OPTFLOW_USE_INITIAL_FLOW;
+        }
         cv::calcOpticalFlowPyrLK(prev_pyramid_.images, pyramid.images, points_, fwd, st_fwd,
-                                 err, win, levels, LkCriteria(params_), 0,
+                                 err, win, levels, LkCriteria(params_), flags,
                                  params_.min_eig_threshold);
         // Backward pass (Kalal et al. 2010, forward-backward error): track the
         // result back into the previous frame. A correct track returns to its
