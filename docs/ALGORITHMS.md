@@ -66,6 +66,12 @@ FlannBasedMatcher · LightGlueMatcher · ANNIndex
 | `cv::LightGlueMatcher` | Subclass of `cv::DescriptorMatcher`. Call `setPairInfo(qKpts, tKpts, qSize, tSize)` **before** `match()`. Auto-context from in-process `ALIKED`. Drops into any `BFMatcher`-shaped code. |
 | `cv::ANNIndex` | Annoy-backed ANN index — the modern FLANN replacement. **This is your place-recognition retrieval index.** *(Note: class is `ANNIndex`, not `AnnoyIndex`.)* |
 
+> ⚠️ **Correction (2026-10-17, 2.1 OpenCV-native check):** the `cv::XFeat` row does not hold for the **pinned 5.0.0
+> build**. There is no `XFeat` class in either tree (`SMOKE_TEST_RESULTS.md`, the module audit). Ariadne runs XFeat as
+> its own `cv::dnn` graph (`cpp/perception/features/xfeat/xfeat_net.*`, D50, SMOKE §4p). `ALIKED`, `LightGlueMatcher`
+> and `ANNIndex` are present as described above. ORT does not appear in `cvconfig.h`; this is
+> [UNVERIFIED pending `getBuildInformation`], and ORT is treated as absent.
+
 Also confirmed for OpenCV 5:
 - **USAC is the default robust-estimation backend** for `findHomography`, `findEssentialMat`, `findFundamentalMat`, and all `solvePnP` variants → **MAGSAC++-class robustness for free**, no hand-written RANSAC.
 - **LAPACK always available** (internal minimal subset if not installed) → `cv::SVD` and eigendecomposition guaranteed.
@@ -186,6 +192,30 @@ only points within 50 baselines, i.e. none at 1–2 cm between frames, so it can
 
 **Ariadne's measured result (D56):** MH_04 2.78 → 0.36 m ATE, V2_03 2.12 → 1.27, MH_05 0.56 → 0.35. Lost-frame
 counts do not move; the losses themselves are 2.1 / 2.4 territory.
+
+### 1.3b Re-association — re-finding mapped landmarks after their tracks die (added 2026-10-17, 2.1)
+
+A landmark is useful only while some pixel is linked to it. With LK, that link is the track that created it. Once the
+track dies, the point can never be observed again, unless it is re-found by appearance.
+
+On D56's EuRoC runs, 633 of the 683 lost frames have ≥ 30 live tracks but < 15 landmark correspondences
+(`docs/design/PERCEPTION_2.1.md` §4.0). That is the case this section serves.
+
+| method | source / licence | what it does | Ariadne |
+|---|---|---|---|
+| **Relocalisation** | ORB-SLAM, Mur-Artal et al., T-RO 2015 §V-C (arXiv 1502.00956); ORB-SLAM2 `Tracking.cc` `Relocalization()` (⛔ GPL-3.0: read, don't link) | Candidate keyframes by BoW → `ORBmatcher(0.75)` descriptor matching (≥ 15 matches) → PnP-RANSAC (min 10 inliers, χ² 5.991) → pose optimisation; accepts at ≥ 50 inliers. `ORBmatcher::TH_LOW = 50` (Hamming). | **Adopted, restricted to the local window, with brute force instead of BoW** (the window is small): orphan tracks are described at their pixel and matched (mutual NN, ratio 0.75, ≤ 50 bits) against landmarks born at MEASURED keyframes. A seeded USAC PnP, with the frame's healthy correspondences as anchors, keeps only geometric inliers, and the tracker renames them to the landmark ids. StereoVo's own PnP then decides. |
+| **Track Local Map** | ORB-SLAM §V-D | Projects covisible map points with the current pose and searches near the projection (viewing angle < 60°, scale range, representative descriptor). | Planned tracking mode, at keyframes (§4.3 of the design). It needs a real pose prior, so it is not used while lost. |
+| **Representative descriptor** | ORB-SLAM §III-C | The medoid of a map point's observed descriptors. | Ablation A5. The baseline keeps the latest keyframe observation. |
+| **Landmark-aware matching** | OKVIS2, Leutenegger, arXiv 2202.09199 §VI-A | Matches keypoints to existing 3-D landmarks by descriptor distance AND reprojected distance. | Same principle (appearance, then geometry). DL-VINS-Factory (arXiv 2607.01757, preprint) measures OKVIS2 best on EuRoC stereo (0.060 m) among the systems it ran. |
+| **Poisoning guard** | Ariadne AUDIT_2.3 §4 / D56 `PoseSource` | A landmark triangulated at a predicted pose carries that pose's error. | Candidates are restricted to `PoseSource::kMeasured` births; `admit_bridged` is ablation A1b. |
+
+*OpenCV 5:*
+- `cv::BFMatcher` (NORM_HAMMING, `knnMatch` k = 2, plus a reverse `match` for the mutual check) is exact and
+  deterministic.
+- `geometry::solvePnPRansac` with `UsacParams` (seeded, `isParallel = false`).
+- ⚠️ `ORB::compute` on PROVIDED keypoints does not compute orientation (`ICAngles` runs only when detecting,
+  `features/src/orb.cpp`). It drops keypoints within `edgeThreshold` of the border, so descriptors from
+  `OrbEngine::Describe` are unrotated BRIEF, comparable only with each other.
 
 ### 1.4 ⭐ Swarm-SLAM — the reference system for Ariadne
 

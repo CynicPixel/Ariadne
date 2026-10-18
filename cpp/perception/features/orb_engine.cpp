@@ -92,4 +92,31 @@ FeatureSet OrbEngine::DetectAndCompute(const cv::Mat& gray, const cv::Mat& mask)
     return out;
 }
 
+cv::Mat OrbEngine::Describe(const cv::Mat& gray, const std::vector<cv::Point2f>& points,
+                            std::vector<uchar>& described) const {
+    if (gray.type() != CV_8UC1) throw std::invalid_argument("OrbEngine: expected CV_8UC1");
+    described.assign(points.size(), 0);
+    cv::Mat out = cv::Mat::zeros(static_cast<int>(points.size()), 32, CV_8U);
+    if (points.empty()) return out;
+    // Provided keypoints get NO orientation from compute() (OpenCV 5.0.0 orb.cpp: ICAngles runs only when detecting)
+    // and are dropped within edgeThreshold of the border. So level 0, angle 0: every Describe() descriptor is
+    // unrotated BRIEF. Both sides of a re-association match are described this way, so they stay comparable; rotation
+    // invariance is not needed to relocalise within a 10-keyframe window. class_id carries the input index through
+    // the border filter.
+    std::vector<cv::KeyPoint> kps;
+    kps.reserve(points.size());
+    for (size_t i = 0; i < points.size(); ++i) {
+        kps.emplace_back(points[i], static_cast<float>(params_.orb_patch_size), 0.f, 0.f, 0, static_cast<int>(i));
+    }
+    cv::Mat d;
+    orb_->compute(gray, kps, d);
+    if (d.rows != static_cast<int>(kps.size())) throw std::logic_error("OrbEngine: descriptor rows do not match");
+    for (int r = 0; r < d.rows; ++r) {
+        const int i = kps[static_cast<size_t>(r)].class_id;
+        d.row(r).copyTo(out.row(i));
+        described[static_cast<size_t>(i)] = 1;
+    }
+    return out;
+}
+
 }  // namespace ariadne::perception

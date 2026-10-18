@@ -50,6 +50,18 @@ struct FeatureParams {
     int orb_levels = 8;
     double orb_scale_factor = 1.2;
     int orb_patch_size = 31;
+    // 2.1 engine choice (PERCEPTION_2.1.md §4.1). "orb" = the Phase 1 placeholder, kept as the ablation baseline.
+    std::string engine = "orb";                    // orb | xfeat
+    // XFeat (D50 network; upstream verlab/accelerated_features e92685f).
+    std::string xfeat_weights;                     // ATB export (infra/scripts/models.sh xfeat); required for xfeat
+    std::string xfeat_dnn_engine = "opencv_dnn_graph";   // opencv_dnn_graph | gemm_reference (D50)
+    // Network input. resize: bilinear to xfeat_input_width x height, 0 = each side floored to a multiple of 32
+    // (upstream preprocess_tensor: 752x480 -> 736x480). pad: replicate-pad right/bottom to the next multiple of 32.
+    std::string xfeat_input = "resize";            // resize | pad
+    int xfeat_input_width = 0;
+    int xfeat_input_height = 0;
+    float xfeat_detection_threshold = 0.05f;       // upstream XFeat default
+    int xfeat_nms_kernel = 5;                      // upstream default
 };
 
 /// §8.1-8.2 pyramidal Lucas-Kanade tracking.
@@ -67,6 +79,15 @@ struct TrackerParams {
     // spacing mask then rejects most of a cluster, so asking for exactly the
     // shortfall leaves the tracker far below target (measured: 339 of 1200).
     int replenish_request_factor = 4;
+    // 2.1 cadence (PERCEPTION_2.1.md §4.2; arch §7.2, C8). every_frame: Process() replenishes whenever tracks are short
+    // (Phase 1 behaviour). keyframe: Process() replenishes only below replenish_min_tracks (the off-cadence recovery
+    // path); otherwise new tracks start only when the runtime calls Replenish() on a keyframe's image.
+    std::string replenish = "every_frame";   // every_frame | keyframe
+    int replenish_min_tracks = 0;
+    // 2.1 (§9.9): arch §7.2's "image-gradient quality" step for NEW tracks. A detection becomes a track only if its
+    // Shi-Tomasi score (cornerMinEigenVal, blockSize 3) exceeds this x the image maximum: goodFeaturesToTrack's
+    // qualityLevel convention (OpenCV 5.0.0 featureselect.cpp). 0 = off (Phase 1 behaviour).
+    double replenish_min_eig_quality = 0.0;
     // Epipolar outlier rejection on the surviving tracks.
     double f_ransac_threshold_px = 1.0;
     double f_confidence = 0.99;
@@ -118,12 +139,28 @@ struct StereoMatchParams {
     bool exposure_match = true;
 };
 
+/// Re-association of untracked landmarks (PERCEPTION_2.1.md §4.3). Absent from a config = off, and the run is the
+/// pre-2.1 pipeline byte for byte.
+struct ReassociationParams {
+    bool enabled = false;
+    // Lost mode runs on a frame whose live tracks carry fewer than this many healthy-landmark correspondences,
+    // BEFORE that frame's PnP. 2 x pnp.min_correspondences: it starts while PnP still barely passes.
+    int trigger_correspondences = 30;
+    double ratio = 0.75;              // Lowe's ratio; ORB-SLAM2 Relocalization() uses ORBmatcher(0.75) (Tracking.cc)
+    int max_hamming = 50;             // binary descriptors: ORB-SLAM2 ORBmatcher::TH_LOW = 50 (ORBmatcher.cc)
+    double max_l2 = 1.0;              // float descriptors (XFeat, unit-norm 64-D): unused until 4.1
+    double ransac_threshold_px = 2.0; // reprojection inlier threshold of the verifying PnP
+    int min_inliers = 12;             // = slam pnp.min_inliers: below it the relabels are not applied
+    bool admit_bridged = false;       // ablation A1b: candidates born at bridged keyframes too
+};
+
 struct PerceptionConfig {
     std::string name;
     FeatureParams features;
     TrackerParams tracker;
     StereoParams stereo;
     StereoMatchParams stereo_match;
+    ReassociationParams reassociation;
 };
 
 /// The largest disparity SGBM searches: disparities run from min_disparity to
@@ -185,6 +222,23 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (f.orb_levels < 1) fail("orb_levels must be >= 1");
     if (!(f.orb_scale_factor > 1.0)) fail("orb_scale_factor must be > 1");
     if (f.orb_patch_size < 2) fail("orb_patch_size must be >= 2");
+    if (f.engine != "orb" && f.engine != "xfeat") fail("features.engine must be orb or xfeat");
+    if (f.engine == "xfeat" && f.xfeat_weights.empty()) fail("features.engine xfeat needs xfeat_weights");
+    if (f.xfeat_dnn_engine != "opencv_dnn_graph" && f.xfeat_dnn_engine != "gemm_reference") {
+        fail("xfeat_dnn_engine must be opencv_dnn_graph or gemm_reference");
+    }
+    if (f.xfeat_input != "resize" && f.xfeat_input != "pad") fail("xfeat_input must be resize or pad");
+    if (f.xfeat_input_width < 0 || f.xfeat_input_height < 0 || f.xfeat_input_width % 32 ||
+        f.xfeat_input_height % 32) {
+        fail("xfeat_input_width/height must be 0 (auto) or positive multiples of 32");
+    }
+    if (f.xfeat_input == "pad" && (f.xfeat_input_width || f.xfeat_input_height)) {
+        fail("xfeat_input pad derives its size; leave xfeat_input_width/height at 0");
+    }
+    if (!(f.xfeat_detection_threshold >= 0.0f && f.xfeat_detection_threshold < 1.0f)) {
+        fail("xfeat_detection_threshold must be in [0, 1)");
+    }
+    if (f.xfeat_nms_kernel < 1 || f.xfeat_nms_kernel % 2 == 0) fail("xfeat_nms_kernel must be odd and >= 1");
 
     const TrackerParams& t = c.tracker;
     if (t.win_size < 3 || t.win_size % 2 == 0) fail("tracker win_size must be odd and >= 3");
@@ -197,6 +251,13 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (t.target_tracks < 1) fail("target_tracks must be >= 1");
     if (!(t.min_track_distance_px > 0.0)) fail("min_track_distance_px must be > 0");
     if (t.replenish_request_factor < 1) fail("replenish_request_factor must be >= 1");
+    if (t.replenish != "every_frame" && t.replenish != "keyframe") fail("tracker replenish must be every_frame or keyframe");
+    if (!(t.replenish_min_eig_quality >= 0.0 && t.replenish_min_eig_quality < 1.0)) {
+        fail("tracker replenish_min_eig_quality must be in [0, 1)");
+    }
+    if (t.replenish_min_tracks < 0 || t.replenish_min_tracks > t.target_tracks) {
+        fail("tracker replenish_min_tracks must be in [0, target_tracks]");
+    }
     if (!(t.f_ransac_threshold_px > 0.0)) fail("f_ransac_threshold_px must be > 0");
     if (!(t.f_confidence > 0.0 && t.f_confidence < 1.0)) fail("f_confidence must be in (0, 1)");
     // Seven points is the minimal fundamental-matrix sample; with fewer there
@@ -214,6 +275,13 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (!(sm.row_search_px > sm.max_dy_px) || sm.row_min_matches < 3 ||
         !(sm.row_min_span > 0.0 && sm.row_min_span <= 1.0)) {
         fail("stereo_match: row_search_px > max_dy_px, row_min_matches >= 3, row_min_span in (0, 1]");
+    }
+
+    const ReassociationParams& ra = c.reassociation;
+    if (ra.trigger_correspondences < 1 || !(ra.ratio > 0.0 && ra.ratio <= 1.0) || ra.max_hamming < 0 ||
+        !(ra.max_l2 > 0.0) || !(ra.ransac_threshold_px > 0.0) || ra.min_inliers < 4) {
+        fail("reassociation: trigger >= 1, ratio in (0, 1], max_hamming >= 0, max_l2 > 0, threshold > 0, "
+             "min_inliers >= 4 (the P3P minimal sample + 1)");
     }
 
     const StereoParams& s = c.stereo;
@@ -258,6 +326,15 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     f.orb_levels = fs.Optional<int>("orb_levels", f.orb_levels);
     f.orb_scale_factor = fs.Optional<double>("orb_scale_factor", f.orb_scale_factor);
     f.orb_patch_size = fs.Optional<int>("orb_patch_size", f.orb_patch_size);
+    f.engine = fs.Optional<std::string>("engine", f.engine);
+    f.xfeat_weights = fs.Optional<std::string>("xfeat_weights", f.xfeat_weights);
+    f.xfeat_dnn_engine = fs.Optional<std::string>("xfeat_dnn_engine", f.xfeat_dnn_engine);
+    f.xfeat_input = fs.Optional<std::string>("xfeat_input", f.xfeat_input);
+    f.xfeat_input_width = fs.Optional<int>("xfeat_input_width", f.xfeat_input_width);
+    f.xfeat_input_height = fs.Optional<int>("xfeat_input_height", f.xfeat_input_height);
+    f.xfeat_detection_threshold =
+        static_cast<float>(fs.Optional<double>("xfeat_detection_threshold", f.xfeat_detection_threshold));
+    f.xfeat_nms_kernel = fs.Optional<int>("xfeat_nms_kernel", f.xfeat_nms_kernel);
     fs.RequireAllConsumed();
 
     StrictConfig ts = config.Section("tracker");
@@ -273,6 +350,9 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     t.min_track_distance_px = ts.Optional<double>("min_track_distance_px", t.min_track_distance_px);
     t.replenish_request_factor =
         ts.Optional<int>("replenish_request_factor", t.replenish_request_factor);
+    t.replenish = ts.Optional<std::string>("replenish", t.replenish);
+    t.replenish_min_tracks = ts.Optional<int>("replenish_min_tracks", t.replenish_min_tracks);
+    t.replenish_min_eig_quality = ts.Optional<double>("replenish_min_eig_quality", t.replenish_min_eig_quality);
     t.f_ransac_threshold_px = ts.Optional<double>("f_ransac_threshold_px", t.f_ransac_threshold_px);
     t.f_confidence = ts.Optional<double>("f_confidence", t.f_confidence);
     t.f_max_iterations = ts.Optional<int>("f_max_iterations", t.f_max_iterations);
@@ -314,6 +394,20 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
         m.row_min_span = ms.Require<double>("row_min_span");
         m.exposure_match = ms.Require<bool>("exposure_match");
         ms.RequireAllConsumed();
+    }
+
+    if (config.Has("reassociation")) {
+        StrictConfig rs = config.Section("reassociation");
+        ReassociationParams& r = c.reassociation;
+        r.enabled = rs.Require<bool>("enabled");
+        r.trigger_correspondences = rs.Require<int>("trigger_correspondences");
+        r.ratio = rs.Require<double>("ratio");
+        r.max_hamming = rs.Require<int>("max_hamming");
+        r.max_l2 = rs.Optional<double>("max_l2", r.max_l2);
+        r.ransac_threshold_px = rs.Require<double>("ransac_threshold_px");
+        r.min_inliers = rs.Require<int>("min_inliers");
+        r.admit_bridged = rs.Optional<bool>("admit_bridged", r.admit_bridged);
+        rs.RequireAllConsumed();
     }
 
     config.RequireAllConsumed();

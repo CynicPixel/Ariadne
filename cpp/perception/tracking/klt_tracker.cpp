@@ -7,7 +7,9 @@
 #include <opencv2/video/tracking.hpp>
 
 #include <algorithm>
+#include <map>
 #include <numeric>
+#include <set>
 #include <stdexcept>
 
 namespace ariadne::perception {
@@ -191,25 +193,11 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
     const int survivors = static_cast<int>(out.ids.size());
 
     // --- 4. Replenish from the feature engine ------------------------------
-    const int need = params_.target_tracks - survivors;
-    if (need > 0) {
-        const std::vector<cv::KeyPoint> fresh =
-            replenisher_.Detect(gray, mask, need * params_.replenish_request_factor);
-        for (const cv::KeyPoint& k : fresh) {
-            if (static_cast<int>(out.ids.size()) >= params_.target_tracks) break;
-            const cv::Point2f p = k.pt;
-            if (!InBorder(p, size, params_.border_px)) continue;
-            // The engine applies the mask at detection, but two new keypoints
-            // can still sit next to each other; the mask is updated as they
-            // are accepted so the min distance holds among them too.
-            if (mask.at<uchar>(cvRound(p.y), cvRound(p.x)) == 0) continue;
-            out.ids.push_back(next_id_++);
-            out.points.push_back(p);
-            out.prev_points.push_back(p);
-            out.ages.push_back(0);
-            cv::circle(mask, cv::Point(cvRound(p.x), cvRound(p.y)), radius, cv::Scalar(0), cv::FILLED);
-            ++stats.replenished;
-        }
+    // keyframe cadence (§4.2): only the first frame and the off-cadence recovery path replenish here.
+    const bool replenish_here = params_.replenish == "every_frame" || !have_previous ||
+                                survivors < params_.replenish_min_tracks;
+    if (replenish_here) {
+        stats.replenished = AddTracks(gray, mask, out.ids, out.points, &out.prev_points, out.ages);
     }
 
     if (!have_previous) {
@@ -224,6 +212,75 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
     points_ = out.points;
     ages_ = out.ages;
     return out;
+}
+
+int KltTracker::AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64_t>& ids,
+                          std::vector<cv::Point2f>& points, std::vector<cv::Point2f>* prev_points,
+                          std::vector<int>& ages) {
+    const int need = params_.target_tracks - static_cast<int>(ids.size());
+    if (need <= 0) return 0;
+    const cv::Size size = gray.size();
+    const int radius = static_cast<int>(std::lround(params_.min_track_distance_px));
+    int added = 0;
+    const std::vector<cv::KeyPoint> fresh = replenisher_.Detect(gray, mask, need * params_.replenish_request_factor);
+    // §7.2 image-gradient quality (off unless configured): LK needs a well-conditioned 2x2 structure tensor at the
+    // point, which a learned detector does not promise.
+    cv::Mat eig;
+    double eig_min = 0.0;
+    if (params_.replenish_min_eig_quality > 0.0 && !fresh.empty()) {
+        cv::cornerMinEigenVal(gray, eig, /*blockSize=*/3, /*ksize=*/3);
+        double eig_max = 0.0;
+        cv::minMaxLoc(eig, nullptr, &eig_max);
+        eig_min = eig_max * params_.replenish_min_eig_quality;
+    }
+    for (const cv::KeyPoint& k : fresh) {
+        if (static_cast<int>(ids.size()) >= params_.target_tracks) break;
+        const cv::Point2f p = k.pt;
+        if (!InBorder(p, size, params_.border_px)) continue;
+        if (!eig.empty() && !(eig.at<float>(cvRound(p.y), cvRound(p.x)) > eig_min)) continue;
+        // The engine applies the mask at detection, but two new keypoints
+        // can still sit next to each other; the mask is updated as they
+        // are accepted so the min distance holds among them too.
+        if (mask.at<uchar>(cvRound(p.y), cvRound(p.x)) == 0) continue;
+        ids.push_back(next_id_++);
+        points.push_back(p);
+        if (prev_points) prev_points->push_back(p);
+        ages.push_back(0);
+        cv::circle(mask, cv::Point(cvRound(p.x), cvRound(p.y)), radius, cv::Scalar(0), cv::FILLED);
+        ++added;
+    }
+    return added;
+}
+
+int KltTracker::Replenish(const cv::Mat& gray) {
+    if (params_.replenish == "every_frame") return 0;
+    if (gray.empty() || gray.type() != CV_8UC1) {
+        throw std::invalid_argument("KltTracker::Replenish: expected a non-empty CV_8UC1 image");
+    }
+    if (prev_pyramid_.empty() || gray.size() != prev_pyramid_.images[0].size()) {
+        throw std::logic_error("KltTracker::Replenish: call it on the image the last Process() ran on");
+    }
+    // The live tracks already respect the spacing (step 3), so the mask is just their discs.
+    cv::Mat mask(gray.size(), CV_8U, cv::Scalar(255));
+    const int radius = static_cast<int>(std::lround(params_.min_track_distance_px));
+    for (const cv::Point2f& p : points_) {
+        cv::circle(mask, cv::Point(cvRound(p.x), cvRound(p.y)), radius, cv::Scalar(0), cv::FILLED);
+    }
+    return AddTracks(gray, mask, ids_, points_, nullptr, ages_);
+}
+
+void KltTracker::Relabel(const std::vector<uint64_t>& from, const std::vector<uint64_t>& to) {
+    if (from.size() != to.size()) throw std::invalid_argument("KltTracker::Relabel: from/to size");
+    std::map<uint64_t, size_t> live;
+    for (size_t i = 0; i < ids_.size(); ++i) live.emplace(ids_[i], i);
+    std::set<uint64_t> targets;
+    for (size_t k = 0; k < from.size(); ++k) {
+        if (!live.count(from[k])) throw std::invalid_argument("KltTracker::Relabel: track not live");
+        if (live.count(to[k]) || !targets.insert(to[k]).second) {
+            throw std::invalid_argument("KltTracker::Relabel: target id live or repeated");
+        }
+    }
+    for (size_t k = 0; k < from.size(); ++k) ids_[live.at(from[k])] = to[k];
 }
 
 }  // namespace ariadne::perception

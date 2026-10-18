@@ -174,6 +174,10 @@ inline void CubicWeights(float t, float w[4]) {
     w[3] = c2(2 - t);
 }
 
+/// Upstream's sampling convention (InterpolateSparse2d): positions are normalised by (W-1, H-1) but sampled with
+/// align_corners=False, so a pixel x lands at x * Wm / (W-1) - 0.5 on a map of width Wm. Out-of-map taps read 0.
+inline float SampleCoord(float v, int full, int map) { return v * float(map) / float(full - 1) - 0.5f; }
+
 }  // namespace
 
 XFeatNet::XFeatNet(const std::string& weights_atb, Engine engine) : engine_(engine) {
@@ -199,8 +203,8 @@ XFeatNet::XFeatNet(const std::string& weights_atb, Engine engine) : engine_(engi
 }
 
 NetOutput XFeatNet::Forward(const cv::Mat& gray) const {
-    if (gray.type() != CV_8UC1 || gray.rows % 32 || gray.cols % 32 || gray.empty()) {
-        throw std::invalid_argument("xfeat: input must be 8-bit gray with sides that are multiples of 32");
+    if ((gray.type() != CV_8UC1 && gray.type() != CV_32FC1) || gray.rows % 32 || gray.cols % 32 || gray.empty()) {
+        throw std::invalid_argument("xfeat: input must be 8-bit or float gray with sides that are multiples of 32");
     }
     // InstanceNorm2d(1): per-image mean and BIASED variance, eps inside the sqrt.
     FMap x{1, gray.rows, gray.cols, cv::Mat()};
@@ -366,9 +370,8 @@ NetOutput XFeatNet::ForwardDnn(const FMap& x) const {
     return {FromBlob(outs[0]), FromBlob(outs[1]), FromBlob(outs[2])};
 }
 
-Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
-    const NetOutput o = Forward(gray);
-    const int H = gray.rows, W = gray.cols, hf = o.feats.h, wf = o.feats.w;
+std::vector<XFeatNet::Candidate> XFeatNet::Candidates(const NetOutput& o, const DetectParams& p) {
+    const int hf = o.feats.h, wf = o.feats.w, H = 8 * hf, W = 8 * wf;
 
     // Keypoint probabilities: softmax over the 65 logits of each cell, dustbin dropped, unshuffled to full resolution.
     cv::Mat K(H, W, CV_32F);
@@ -386,7 +389,7 @@ Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
     // NMS: a pixel survives if it equals the max of its k x k window (padding counts as -inf) and beats the threshold.
     // Survivors in row-major order, as torch.nonzero returns them.
     const int r = p.nms_kernel / 2;
-    std::vector<cv::Point> pos;
+    std::vector<Candidate> out;
     for (int y = 0; y < H; ++y)
         for (int x = 0; x < W; ++x) {
             const float v = K.at<float>(y, x);
@@ -397,35 +400,30 @@ Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
                     const int yy = y + dy, xx = x + dx;
                     if (yy >= 0 && yy < H && xx >= 0 && xx < W) mx = std::max(mx, K.at<float>(yy, xx));
                 }
-            if (v == mx) pos.emplace_back(x, y);
+            if (v == mx) out.push_back({cv::Point(x, y), 0.0f});
         }
 
-    // Upstream's sampling convention (InterpolateSparse2d): positions are normalised by (W-1, H-1) but sampled with
-    // align_corners=False, so a pixel x lands at x * Wm / (W-1) - 0.5 on a map of width Wm. Out-of-map taps read 0.
-    const auto src = [](float v, int full, int map) { return v * float(map) / float(full - 1) - 0.5f; };
     const float* heat = o.heatmap.data.ptr<float>(0);
-    std::vector<float> score(pos.size());
-    for (size_t i = 0; i < pos.size(); ++i) {
-        const float px = float(pos[i].x), py = float(pos[i].y);
+    for (Candidate& c : out) {
+        const float px = float(c.pos.x), py = float(c.pos.y);
         // nearest on K (full resolution): std::nearbyint, i.e. round half to even, as PyTorch does
-        const int nx = int(std::nearbyint(src(px, W, W))), ny = int(std::nearbyint(src(py, H, H)));
+        const int nx = int(std::nearbyint(SampleCoord(px, W, W))), ny = int(std::nearbyint(SampleCoord(py, H, H)));
         const float kv = At(K.ptr<float>(), H, W, ny, nx);
         // bilinear on the reliability map (1/8 resolution)
-        const float sx = src(px, W, wf), sy = src(py, H, hf);
+        const float sx = SampleCoord(px, W, wf), sy = SampleCoord(py, H, hf);
         const int x0 = int(std::floor(sx)), y0 = int(std::floor(sy));
         const float tx = sx - float(x0), ty = sy - float(y0);
         const float hv = (1 - ty) * ((1 - tx) * At(heat, hf, wf, y0, x0) + tx * At(heat, hf, wf, y0, x0 + 1)) +
                          ty * ((1 - tx) * At(heat, hf, wf, y0 + 1, x0) + tx * At(heat, hf, wf, y0 + 1, x0 + 1));
-        score[i] = kv * hv;
-        if (pos[i].x == 0 && pos[i].y == 0) score[i] = -1.0f;   // upstream marks (0,0) as padding
+        c.score = kv * hv;
+        if (c.pos.x == 0 && c.pos.y == 0) c.score = -1.0f;   // upstream marks (0,0) as padding
     }
-    // Best first; ties broken by detection order (upstream's argsort is unstable, so ties are unspecified there).
-    std::vector<size_t> idx(pos.size());
-    std::iota(idx.begin(), idx.end(), size_t(0));
-    std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return score[a] > score[b]; });
-    if (int(idx.size()) > p.top_k) idx.resize(size_t(p.top_k));
+    return out;
+}
 
-    // Descriptors: per-cell L2-normalised feats, sampled bicubically at each keypoint, then L2-normalised again.
+cv::Mat XFeatNet::SampleDescriptors(const NetOutput& o, const std::vector<cv::Point2f>& pts) {
+    const int hf = o.feats.h, wf = o.feats.w, H = 8 * hf, W = 8 * wf;
+    // Per-cell L2-normalised feats, sampled bicubically at each point, then L2-normalised again.
     cv::Mat M = o.feats.data.clone();   // 64 x (hf*wf)
     for (int j = 0; j < hf * wf; ++j) {
         float nn = 0;
@@ -433,16 +431,14 @@ Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
         const float s = 1.0f / std::max(std::sqrt(nn), 1e-12f);
         for (int c = 0; c < 64; ++c) M.at<float>(c, j) *= s;
     }
-    Detection d;
-    std::vector<float> rows;
-    for (size_t i : idx) {
-        if (!(score[i] > 0)) continue;   // upstream: valid = scores > 0
-        const float sx = src(float(pos[i].x), W, wf), sy = src(float(pos[i].y), H, hf);
+    cv::Mat out(int(pts.size()), 64, CV_32F);
+    for (size_t i = 0; i < pts.size(); ++i) {
+        const float sx = SampleCoord(pts[i].x, W, wf), sy = SampleCoord(pts[i].y, H, hf);
         const int x0 = int(std::floor(sx)), y0 = int(std::floor(sy));
         float wx[4], wy[4];
         CubicWeights(sx - float(x0), wx);
         CubicWeights(sy - float(y0), wy);
-        float desc[64];
+        float* desc = out.ptr<float>(int(i));
         float nn = 0;
         for (int c = 0; c < 64; ++c) {
             const float* m = M.ptr<float>(c);
@@ -456,11 +452,27 @@ Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
             nn += acc * acc;
         }
         const float s = 1.0f / std::max(std::sqrt(nn), 1e-12f);
-        for (float& v : desc) rows.push_back(v * s);
-        d.keypoints.emplace_back(float(pos[i].x), float(pos[i].y));
-        d.scores.push_back(score[i]);
+        for (int c = 0; c < 64; ++c) desc[c] *= s;
     }
-    d.descriptors = cv::Mat(int(d.keypoints.size()), 64, CV_32F, rows.data()).clone();
+    return out;
+}
+
+Detection XFeatNet::Detect(const cv::Mat& gray, const DetectParams& p) const {
+    const NetOutput o = Forward(gray);
+    const std::vector<Candidate> cand = Candidates(o, p);
+    // Best first; ties broken by detection order (upstream's argsort is unstable, so ties are unspecified there).
+    std::vector<size_t> idx(cand.size());
+    std::iota(idx.begin(), idx.end(), size_t(0));
+    std::stable_sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return cand[a].score > cand[b].score; });
+    if (int(idx.size()) > p.top_k) idx.resize(size_t(p.top_k));
+
+    Detection d;
+    for (size_t i : idx) {
+        if (!(cand[i].score > 0)) continue;   // upstream: valid = scores > 0
+        d.keypoints.emplace_back(float(cand[i].pos.x), float(cand[i].pos.y));
+        d.scores.push_back(cand[i].score);
+    }
+    d.descriptors = SampleDescriptors(o, d.keypoints);
     return d;
 }
 

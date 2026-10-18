@@ -31,6 +31,8 @@ public:
     std::vector<cv::KeyPoint> Detect(const cv::Mat& gray, const cv::Mat& mask,
                                      int max_keypoints) const override;
     FeatureSet DetectAndCompute(const cv::Mat& gray, const cv::Mat& mask) const override;
+    cv::Mat Describe(const cv::Mat& gray, const std::vector<cv::Point2f>& points,
+                     std::vector<uchar>& described) const override;
 
 private:
     FeatureParams params_;
