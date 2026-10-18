@@ -63,16 +63,91 @@ confirms D56: tracks are not what fails. Landmark creation in the dark is.
 **Not yet in the stereo-inertial class:** average 0.223 vs ≤ 0.138; per flight, MH_04, MH_05, V1_01, V1_03 and
 V2_03 are out. As planned, `attitude_only` cannot reach it.
 
-## 4. Next: full preintegration (decisions taken)
+## 4. Full preintegration (D59): design, fixed before code
 
-- **State per keyframe:** T_WB, v_W, b_g, b_a (15). Inertial factors touch only camera blocks; the Schur structure
-  is unchanged.
-- **Factors:** Forster's three-block residual plus the bias random walk, re-derived in left perturbation, every block
-  FD-tested.
-- **Window exit (maintainer, 2026-10-18): bias prior only.** The exiting keyframe's bias estimate becomes a loose
-  Gaussian prior on its successor's bias (inflated covariance). Poses and velocity still drop and emit an edge. This
-  is a recorded departure, not FEJ marginalisation.
-- **Initialisation:** stationary when detected; otherwise from stereo poses plus preintegration (stereo gives scale;
-  Campos 2020's MAP formulation without the scale variable).
-- **Sim:** the IMU noise operator is 2.2's degradation wiring (coordinate first). `sim_v2` stays `imu: none` until
-  then.
+**Timebox: end of 2026-10-20.** If `full` is not inside the stereo-inertial class by then, `attitude_only` stays
+shipped (plan fallback) and `full` stays opt-in.
+
+### 4.1 Validated before BA: preintegration against EuRoC ground truth
+
+Between instants 0.5 s apart, Forster's preintegrated ΔR, Δv, Δp (eqs. 35–38) were compared with ground-truth pose,
+velocity and biases (residuals of eq. 45, g = (0, 0, −9.81)). They were whitened by the propagated Σᵢⱼ (eqs. 62–63,
+discrete noise density²/Δt).
+
+- **Physical residuals are small:** median |r_v| 1.8–5.6 cm/s, |r_p| 5–15 mm over 0.5 s. Frames, gravity sign and
+  accelerometer convention are right; an error there gives metres.
+- **χ²/dof is 33–350 with the datasheet densities.** χ² stays flat when the interval goes from 0.1 to 2 s (MH_01:
+  42, 43, 65), so the excess grows like IMU noise, not like a constant ground-truth error.
+- **The Vicon rooms read 5–20× higher than the Leica Machine Hall for the same IMU.** Their ground truth (orientation
+  and velocity) is noisier, so they cannot calibrate the IMU.
+- **Measured inflation** (Machine Hall, 1,271 intervals, median per-block χ², re-measured with the mid-interval
+  integration of §4.2): gyro √9.75 = **3.1**, accelerometer √74–81 = **8.6–9.0**.
+  - The first-order integration had given 3 and ~9.5, so the excess is sensor noise (rotor vibration on a real MAV),
+    not integration error.
+  - Config `imu.noise_inflation_gyro: 3`, `imu.noise_inflation_accel: 9`, applied to the white-noise and random-walk
+    densities alike.
+  - **EuRoC only:** the simulator's IMU noise is exactly its configured model (factor 1).
+  - Ablations: 1× and the pooled 5.4 / 12.4. Never tuned on ATE.
+  - Published VIO configs inflate EuRoC's densities by similar or larger factors.
+
+### 4.2 State, factors, conventions
+
+- Per keyframe: `T_W_C` (left perturbation, as now), `v_W`, `b_g`, `b_a`: a 15-dimensional block.
+  - Every hard-coded 6 in `BaLayout`, `BaSchur`, `BaOplus`, the marginals and the exit edge becomes the per-keyframe
+    block size; the exit edge takes the 6×6 pose sub-block.
+- Inertial factor between consecutive window keyframes: Forster's 9-dimensional residual (eq. 45) with first-order
+  bias correction (eq. 44); repropagate when |δb| exceeds a threshold.
+- **Integration, as built** (`slam/inertial/preintegration.hpp`):
+  - The accelerometer sample is rotated by the MID-interval orientation, as VINS-Mono does. The paper's
+    start-of-interval rotation left 1.8 mm/s and 0.45 mm of residual at the truth of a closed-form test trajectory (0.5 s,
+    1 kHz).
+  - The covariance and bias Jacobians were re-derived for that mean.
+  - Tests: bias Jacobians vs re-integration, every residual block vs central differences (20 random states, large
+    rotations), residual ≈ 0 at truth, Σ vs a 4,000-run Monte Carlo. All pass.
+  - Re-derived for our left perturbation of `T_W_C` through the fixed `T_B_C`; every block finite-difference tested,
+    including large rotations.
+- **Bias random walk** between consecutive keyframes: `b_j − b_i`, covariance random-walk density² × Δt.
+- **Energy ½ rᵀΩr** (the reprojection term's Huber quadratic is s²/2): the IMU-vs-vision weighting is exact. No
+  robust kernel on inertial factors.
+- **Window[0]** (maintainer, 2026-10-18; NOT ORB-SLAM3's choice, which also fixes velocity):
+  - its pose is the gauge, fixed;
+  - its velocity is free;
+  - its biases get a loose Gaussian prior from the previous solve, with covariance × `imu.bias_prior_inflation`
+    (config);
+  - the window[0]→window[1] inertial factor stays.
+- **Observability guards:** an inertial factor TIES consecutive keyframes. `AnchorWindow` must not hold keyframes made
+  while lost when an inertial chain connects them to the gauge, and the degeneracy fallback counts inertial
+  information the same way.
+
+### 4.3 Initialisation and gravity
+
+- **Gravity is estimated once, in the VO world, then held fixed.** The world is not rotated: graph, keyframe records
+  and the gate depend on it.
+- **Init after N consecutive TRACKED keyframes** (MH_04 and MH_05 start dark: lost poses never feed it).
+  - b_g comes from the attitude tracker (VO-aided).
+  - v_i, g and b_a come from linear least squares on Δv, Δp (VINS-style, scale known: stereo); |g| is projected to
+    9.81.
+  - b_a gets a loose prior (weakly observable, arch §10.3).
+  - Checked against ground-truth v, b_a and the gravity direction.
+- Before init: `attitude_only` behaviour.
+
+### 4.4 While lost
+
+`full` can propagate the last keyframe's v and biases instead of the D56 decaying velocity. Which wins, and up to what
+outage length, is MEASURED on held-out fake outages of 0.5–10 s cut into tracked stretches. It is not guessed.
+
+### 4.5 Tests that land with the code
+
+- FD Jacobians of every inertial block.
+- Monte Carlo: the sample covariance of the preintegration error matches Σᵢⱼ.
+- Synthetic end-to-end with analytic IMU: residuals ≈ 0 at the truth, and VIO beats VO across a dark stretch.
+- Determinism with `imu.mode: full`.
+- On EuRoC: inertial χ²/dof at the solutions, reported.
+
+### 4.6 Defaults
+
+`imu.mode: full` is opt-in. `euroc_v2` switches only after it beats `attitude_only`; `sim_v2` stays `none`.
+
+## 5. Sim
+
+The IMU noise operator is 2.2's degradation wiring (coordinate first). `sim_v2` stays `imu: none` until then.
