@@ -2030,6 +2030,16 @@ keeps its prediction — and product (3) is lost.
 **The run manifest records which mode produced every result.** This is what makes the fallback honest rather than
 a quiet downgrade, and it is why the sensor claim in the report can be checked against any individual figure.
 
+> **As built (D58, 2.4 step 1).** `attitude_only` ships for EuRoC v2 (`slam/inertial/attitude.hpp`):
+> - **Rotation prediction:** the bias-corrected gyro integral, with the bias estimated from VO rotations on tracked
+>   frames. Mahony alone cannot see the yaw-axis bias.
+> - **Gravity:** Mahony's explicit filter (Theorem 5.1, kP = 1, kI = 0.3) supplies the direction, carried on every
+>   keyframe record as `gravity_dir_C`.
+> - **While lost,** the gyro replaces the D56 visual bridge's rotation; translation keeps the bridge's decaying velocity.
+> - **§10.5 LK seeding** is a tested seam, off by default.
+> - **Not yet built:** the `GRAVITY_PRIOR` factor belongs to the pose-graph owner (2.5); the sim IMU noise operator is
+>   2.2's degradation wiring. The manifest records `imu_mode`.
+
 ---
 
 # 11. Local map and SLAM backend

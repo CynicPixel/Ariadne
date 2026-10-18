@@ -701,3 +701,30 @@ TEST(StereoRowRefinement, SamplesPoolAcrossKeyframes) {
     EXPECT_NEAR(est.a, -1.5, 0.05);
     EXPECT_NEAR(est.c * 480.0, -1.0, 0.05);
 }
+
+// 2.4 seam (§10.5): a motion beyond LK's pyramid reach is lost unseeded, and recovered when the search starts at the
+// predicted position (here the exact prev->current homography, a pure image translation).
+TEST(PerceptionCv, TrackerSeededByAPredictedHomographyFollowsALargeMotion) {
+    const OrbEngine orb(Features());
+    const cv::Mat f0 = Texture(5);
+    const cv::Mat f1 = Shift(f0, 110.0, -70.0);   // scene moves by (-110, +70)
+    const cv::Matx33d H(1, 0, -110.0, 0, 1, 70.0, 0, 0, 1);
+    auto survivors = [&](const cv::Matx33d* pred, double& median_err) {
+        KltTracker tracker(TrackerNoEpipolar(), orb);
+        tracker.Process(f0, 0, 42);
+        const TrackedFrame t1 = tracker.Process(f1, 1, 42, pred);
+        std::vector<double> err;
+        for (size_t i = 0; i < t1.ids.size(); ++i) {
+            if (t1.ages[i] == 0) continue;
+            const cv::Point2f d = t1.points[i] - t1.prev_points[i];
+            err.push_back(std::hypot(d.x + 110.0, d.y - 70.0));
+        }
+        median_err = err.empty() ? 1e9 : Median(err);
+        return err.size();
+    };
+    double e_none = 0, e_seed = 0;
+    const size_t n_none = survivors(nullptr, e_none), n_seed = survivors(&H, e_seed);
+    EXPECT_GT(n_seed, 300u);
+    EXPECT_LT(e_seed, 0.05);
+    EXPECT_GT(n_seed, 3 * n_none + 50) << "unseeded kept " << n_none;
+}

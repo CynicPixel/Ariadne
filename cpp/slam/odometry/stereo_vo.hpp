@@ -52,6 +52,10 @@ struct VoFrame {
     int64_t t_ns = 0;
     std::vector<uint64_t> track_ids;          // tracker ids, parallel to points
     std::vector<cv::Point2f> points;          // rectified left image
+    /// imu_mode attitude_only: the bias-corrected gyro rotation of the camera since the previous frame
+    /// (R_C(prev)_C(this)). Used only while lost, where it replaces the visual bridge's rotation.
+    bool has_rotation_prior = false;
+    core::Mat3 R_prev_cur_prior = core::Mat3::Identity();
 };
 
 /// Stereo evidence for the tracked points of the frame just tracked, parallel

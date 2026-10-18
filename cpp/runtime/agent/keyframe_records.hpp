@@ -53,6 +53,10 @@ struct Keyframe {
     // from pose_cov. segment counts loss onsets: keyframes of different segments are joined only by predictions.
     slam::PoseSource pose_source = slam::PoseSource::kMeasured;
     uint32_t segment = 0;
+    // §4.2 gravity_dir / §10.4 producer (2.4 attitude_only): gravity's direction (down, unit) in this keyframe's
+    // rectified left camera, from Mahony's filter. Unset (has_gravity false) without an IMU.
+    bool has_gravity = false;
+    core::Vec3 gravity_dir_C = core::Vec3::Zero();
 };
 
 struct ExposureState { double exposure_s = 0.0; double gain = 0.0; };

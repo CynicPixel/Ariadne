@@ -5,6 +5,7 @@
 #include "core/random/philox.hpp"
 #include "runtime/agent/keyframe_records.hpp"
 #include "slam/bundle_adjustment/reprojection_lm.hpp"
+#include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
 
 #include <gtest/gtest.h>
@@ -521,4 +522,57 @@ TEST(LostFrames, ShippedV2BridgeIsDeterministicAcrossThreadsAndGlobalRng) {
                 << "pose " << k << " differs in run " << r;
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// imu_mode attitude_only (2.4).
+
+// The VO-aided bias: every tracked pair contributes (Log(R_gyro,raw) - Log(R_vo)) / dt; the median over the window
+// recovers a planted bias despite 10% wild VO rotations.
+TEST(Attitude, GyroBiasFromVoRotationsIsRobust) {
+    const Vec3 b(0.02, -0.013, 0.008);
+    slam::GyroBiasEstimator est(200);
+    core::PhiloxStream rng(3, 0, 0);
+    for (int k = 0; k < 300; ++k) {
+        const Vec3 w(0.3 * std::sin(0.1 * k), 0.2, -0.1 * std::cos(0.07 * k));
+        const double dt = 0.05;
+        const core::Mat3 R_true = core::SO3Exp(w * dt);
+        core::Mat3 R_vo = R_true * core::SO3Exp(Vec3(core::SampleNormal(rng, 0, 1e-4), core::SampleNormal(rng, 0, 1e-4),
+                                                     core::SampleNormal(rng, 0, 1e-4)));
+        if (k % 10 == 0) R_vo = core::SO3Exp(Vec3(0.2, -0.1, 0.3));   // a wild VO step
+        est.Add(core::SO3Exp((w + b) * dt), R_vo, dt);
+    }
+    EXPECT_LT((est.Bias() - b).norm(), 5e-3);
+}
+
+TEST(Attitude, StationaryStartIsDetectedOnlyAtRest) {
+    core::ImuNoise n;
+    n.gyro_noise_density = 1.7e-4;
+    n.rate_hz = 200;
+    const Vec3 b(0.01, -0.02, 0.005);
+    core::PhiloxStream rng(5, 0, 0);
+    std::vector<core::ImuMeasurement> still, moving;
+    const double sd = n.gyro_noise_density * std::sqrt(n.rate_hz);
+    for (int k = 0; k < 600; ++k) {
+        const Vec3 noise(core::SampleNormal(rng, 0, sd), core::SampleNormal(rng, 0, sd), core::SampleNormal(rng, 0, sd));
+        still.push_back({k * 5000000LL, b + noise, Vec3(0, 0, 9.81)});
+        moving.push_back({k * 5000000LL, b + noise + Vec3(0.5 * std::sin(0.05 * k), 0, 0), Vec3(0, 0, 9.81)});
+    }
+    Vec3 mean;
+    ASSERT_TRUE(slam::StationaryGyroMean(still, n, 2.0, mean));
+    EXPECT_LT((mean - b).norm(), 1e-3);
+    EXPECT_FALSE(slam::StationaryGyroMean(moving, n, 2.0, mean));
+}
+
+// Mahony's filter (Theorem 5.1) at rest, started 20 deg off in roll: roll/pitch converge to the true gravity direction,
+// and the gyro bias on the observable axes is learned.
+TEST(Attitude, MahonyConvergesToGravity) {
+    const core::Mat3 R_true = core::SO3Exp(Vec3(0.3, -0.2, 0.0));   // body tilted
+    const Vec3 accel = R_true.transpose() * Vec3(0, 0, 9.81);         // specific force at rest
+    const Vec3 b(0.01, -0.015, 0.0);
+    slam::MahonyFilter f(1.0, 0.3);
+    f.Init(core::SO3Exp(Vec3(0.35, 0, 0)).transpose() * accel, Vec3::Zero());   // wrong start
+    for (int k = 0; k < 200 * 60; ++k) f.Update(b, accel, 0.005);                // 60 s, gyro reads only its bias
+    const Vec3 g_true = R_true.transpose() * Vec3(0, 0, -1);
+    EXPECT_LT(std::acos(std::min(1.0, f.GravityInBody().dot(g_true))) * 180 / M_PI, 0.05);
 }

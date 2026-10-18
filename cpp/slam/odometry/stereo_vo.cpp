@@ -160,14 +160,18 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
             loss_t0_ns_ = prev_t_ns_;
         }
         res.segment = segment_;
-        const bool bridge = cfg_.lost.motion == "bridge";   // before 2 tracked frames the velocity is zero: rotation only
+        // imu_mode attitude_only: the gyro's rotation (2.4 step 2: median 0.019 deg/pair with the bias removed, ~10x
+        // the bridge) with the bridge's decaying-velocity translation; the bridge stays the fallback without IMU.
+        const bool gyro = cfg_.imu.mode != "none" && frame.has_rotation_prior;
+        const bool bridge = gyro || cfg_.lost.motion == "bridge";   // before 2 tracked frames the velocity is zero
         if (bridge && !coasting_) {   // the anchor starts at the last measured frame
             anchor_ = {prev_T_W_C_, prev_frame_.frame_id, {}};
             for (size_t i = 0; i < prev_frame_.track_ids.size(); ++i)
                 anchor_.points.emplace(prev_frame_.track_ids[i], prev_frame_.points[i]);
         }
         res.T_W_C = bridge ? BridgePrediction(frame, res) : predicted;
-        res.source = bridge ? PoseSource::kBridged : PoseSource::kCoasted;
+        if (gyro) res.T_W_C.R = prev_T_W_C_.R * frame.R_prev_cur_prior;
+        res.source = gyro ? PoseSource::kGyro : bridge ? PoseSource::kBridged : PoseSource::kCoasted;
         res.covariance_given_map = UninformativeCovariance();
     }
 

@@ -70,6 +70,9 @@ public:
     virtual uint32_t Agent() const = 0;           // stamped on every StereoFrame
     /// Calls on_frame for the first max_frames pairs (all if 0), in time order.
     virtual size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) = 0;
+    /// The body (IMU) stream, time-sorted, and its noise model (§10.2; plan 2.4). Empty when the source has no IMU.
+    virtual std::vector<core::ImuMeasurement> Imu() const { return {}; }
+    virtual core::ImuNoise ImuNoiseModel() const { return {}; }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -88,6 +91,12 @@ public:
     }
     std::string RunName() const override { return seq_.filename().string(); }
     std::string SceneName() const override { return "EuRoC/" + seq_.filename().string(); }
+    std::vector<core::ImuMeasurement> Imu() const override {
+        return ParseEurocImu(ReadTextFile((mav_ / "imu0/data.csv").string()), "imu0");
+    }
+    core::ImuNoise ImuNoiseModel() const override {
+        return ParseEurocImuNoise(ReadTextFile((mav_ / "imu0/sensor.yaml").string()), "imu0/sensor.yaml");
+    }
     std::string CameraConfig() const override { return "euroc_cam0_cam1"; }
     std::string BagChecksum() const override {
         const auto prov = seq_.parent_path() / (seq_.filename().string() + ".provenance.json");
