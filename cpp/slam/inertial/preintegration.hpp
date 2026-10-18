@@ -34,6 +34,7 @@
 #include <Eigen/Dense>
 
 #include <cmath>
+#include <stdexcept>
 
 namespace ariadne::slam {
 
@@ -55,6 +56,15 @@ inline Mat3 RightJacobianInvSO3(const Vec3& phi) {
     const Mat3 K = core::Hat(phi);
     if (th < 1e-6) return Mat3::Identity() + 0.5 * K + K * K / 12.0;
     return Mat3::Identity() + 0.5 * K + (1.0 / (th * th) - (1.0 + std::cos(th)) / (2.0 * th * std::sin(th))) * K * K;
+}
+
+/// Inverse of a small SPD covariance (LDLT; never an explicit inverse of an indefinite matrix).
+template <int N>
+Eigen::Matrix<double, N, N> InformationOf(const Eigen::Matrix<double, N, N>& cov) {
+    const Eigen::LDLT<Eigen::Matrix<double, N, N>> ld(cov);
+    if (ld.info() != Eigen::Success || !(ld.vectorD().array() > 0.0).all())
+        throw std::invalid_argument("InformationOf: covariance is not positive definite");
+    return ld.solve(Eigen::Matrix<double, N, N>::Identity());
 }
 
 /// White-noise densities (already inflated by the caller) for the per-sample covariance.

@@ -1977,6 +1977,15 @@ the property that makes the inertial layer cheap to add to an existing BA rather
 Transcribe residual and Jacobian expressions from the paper's equations, not from this document, and validate
 every Jacobian with the finite-difference harness of §11.4.
 
+> **As built (D59, `docs/design/INERTIAL_2.4.md` §4).** The window keeps `T_W_C` (left perturbation) and reaches the
+> body through the fixed `T_C_B`; the same δ left-perturbs `T_W_B`, and the residual Jacobians were re-derived for it.
+> The accelerometer sample is rotated by the mid-interval orientation (VINS-Mono), not Forster's start-of-interval one
+> (which left 1.8 mm/s at the truth). Inertial blocks are a separate segment of the reduced system
+> (`[poses | v,b_g,b_a | landmarks]`). The IMU does not observe velocity, so an inertial chain ties keyframes only out
+> of a group with two pose-determined keyframes; in a dark window window[0]'s velocity is held instead.
+> Discrete noise is density²/Δt; on EuRoC the datasheet densities are inflated ×3 (gyro) and ×9 (accel), measured
+> (§4.1). Every block is finite-difference tested.
+
 ## 10.3 Initialization `[DESIGN, standard practice]`
 
 Agents start stationary for a configurable 1–2 s. During that window:
@@ -1993,6 +2002,14 @@ b_a            = residual after gravity removal, with a loose prior
 
 Stereo provides metric scale from the first pair, so **none of the monocular visual-inertial alignment machinery
 is needed**. This is one of the concrete payoffs of Correction B.
+
+> **As built (D59, INERTIAL_2.4 §4.3), superseding the stationary-start recipe above.** EuRoC's Vicon-room flights
+> do not start at rest, and attitude_only showed the gravity direction is better taken from motion. Initialisation
+> runs after N tracked keyframes, on their window-refined (metric) poses: b_g from the keyframe rotations, then v_k, g
+> and b_a as a linear MAP (ORB-SLAM3's inertial-only MAP with the scale known), g re-solved on the 9.81 sphere,
+> refused on |g| or χ²/dof. **The world is not rotated**: gravity is estimated in the VO world (the first keyframe's
+> camera) and held fixed, because the graph, keyframe records and the gate depend on that world. b_a stays weakly
+> observable exactly as warned above (a gravity tilt θ looks like a bias of 9.81 θ); a loose prior decides it.
 
 ## 10.4 Gravity prior edge — the producer for §12.1
 

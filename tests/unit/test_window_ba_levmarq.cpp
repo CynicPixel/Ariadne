@@ -1,12 +1,16 @@
 // Windowed BA on OpenCV 5's LevMarqBase (LOCAL_SLAM_2.3.md §3, §6):
 //   1. noise-free window from a perturbed start returns the truth;
 //   2. one free pose against FIXED landmarks == cv::solvePnPRefineLM (OpenCV's own LM, left camera, quadratic cost);
-//   3. the reported camera covariance == the camera block of the dense inverse of the undamped H.
+//   3. the reported camera covariance == the camera block of the dense inverse of the undamped H;
+//   4. visual-inertial (INERTIAL_2.4 §4.5): a noise-free window from a perturbed start returns the truth -- poses,
+//      velocities, biases -- and the bias marginal is the dense inverse's block.
 #include "slam/bundle_adjustment/window_ba_levmarq.hpp"
+#include "../numerical/inertial_window_fixture.hpp"
 
 #include <gtest/gtest.h>
 #include <opencv2/geometry.hpp>
 
+#include <algorithm>
 #include <random>
 #include <string>
 
@@ -164,4 +168,92 @@ TEST(WindowBaLevMarq, SingularInformationIsReportedByBothCovariancePaths) {
     w.fixed[0] = true;
     EXPECT_TRUE(TryWindowBaCovariances(w, {1, 3}, cov));
     EXPECT_EQ(cov.size(), 2u);
+}
+
+// 4. Visual-inertial: perturbed poses, velocities, biases and landmarks return to the truth. The IMU is ideal but
+// sampled (1 kHz midpoint hold), so the inertial residual at the truth is ~1e-5, not 0: the tolerances say so.
+TEST(WindowBaLevMarq, NoiseFreeVisualInertialWindowReturnsTheTruth) {
+    std::mt19937 g(31);
+    BaWindow w = test::MakeInertialWindow(g, 6, 60, 0.0);
+    const BaWindow truth = w;
+    std::normal_distribution<double> n(0.0, 1.0);
+    const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+    for (size_t k = 1; k < w.T_W_C.size(); ++k) w.T_W_C[k] = Jitter(g, 0.01, 0.03) * w.T_W_C[k];
+    for (size_t k = 0; k < w.T_W_C.size(); ++k) {
+        w.imu.v[k] += rv(0.1);
+        w.imu.bg[k] += rv(0.005);
+        w.imu.ba[k] += rv(0.05);
+    }
+    for (auto& [id, X] : w.X) X += rv(0.03);
+    w.imu.has_prior = true;   // a loose prior at the truth (window[0]'s, from a previous solve)
+    w.imu.prior_b << test::kTrueBg, test::kTrueBa;
+    w.imu.prior_info = Mat6::Identity();
+    const WindowBaReport rep = SolveWindowBa(w, Tight());
+    std::printf("noise-free VI window: E %.3e -> %.3e in %d iterations, %d factorizations (%d failed)\n",
+                rep.initial_energy, rep.final_energy, rep.iterations, rep.factorizations, rep.failed_factorizations);
+    EXPECT_LT(rep.final_energy, 1e-3);
+    for (size_t k = 0; k < w.T_W_C.size(); ++k) {
+        EXPECT_LT((w.T_W_C[k].t - truth.T_W_C[k].t).norm(), 1e-5) << k;
+        EXPECT_LT(core::SO3Log(w.T_W_C[k].R * truth.T_W_C[k].R.transpose()).norm(), 1e-5) << k;
+        EXPECT_LT((w.imu.v[k] - truth.imu.v[k]).norm(), 1e-4) << k;
+        EXPECT_LT((w.imu.bg[k] - test::kTrueBg).norm(), 1e-4) << k;
+        EXPECT_LT((w.imu.ba[k] - test::kTrueBa).norm(), 1e-3) << k;
+    }
+}
+
+TEST(WindowBaLevMarq, BiasCovarianceIsTheDenseInverseBlock) {
+    std::mt19937 g(37);
+    BaWindow w = test::MakeInertialWindow(g, 5, 40, 0.5);
+    w.imu.has_prior = true;
+    w.imu.prior_b << test::kTrueBg, test::kTrueBa;
+    w.imu.prior_info = Mat6::Identity() * 10.0;
+    const BaLayout L(w);
+    BaSystem s;
+    BaLinearize(w, L, s);
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(L.dim(), L.dim());
+    H.topLeftCorner(L.dim_c(), L.dim_c()) = s.Hcc;
+    for (int l = 0; l < L.n_lms(); ++l) H.block<3, 3>(L.dim_c() + 3 * l, L.dim_c() + 3 * l) = s.Hll[size_t(l)];
+    for (const auto& [cl, B] : s.Hcl) {
+        H.block<6, 3>(6 * cl.first, L.dim_c() + 3 * cl.second) = B;
+        H.block<3, 6>(L.dim_c() + 3 * cl.second, 6 * cl.first) = B.transpose();
+    }
+    const Eigen::MatrixXd C = H.inverse();
+    std::map<int, Mat6> pose, bias;   // one factorization: pose and bias marginals with inertial blocks in S
+    ASSERT_TRUE(TryWindowBaCovariances(w, {1, 4}, pose, nullptr, nullptr, &bias, {1, 4}));
+    for (int k : {1, 4}) {
+        const Mat6 dp = C.block<6, 6>(6 * L.cam(k), 6 * L.cam(k)), db = C.block<6, 6>(L.bias(k), L.bias(k));
+        EXPECT_LT((pose.at(k) - dp).norm(), 1e-9 * dp.norm()) << k;
+        EXPECT_LT((bias.at(k) - db).norm(), 1e-9 * db.norm()) << k;
+    }
+}
+
+// A dark window: vision in window[0] only. AnchorWindow holds v_0 (at the previous solve's value: the truth here) and
+// the IMU dead-reckons the other keyframes from perturbed starts back to the truth.
+TEST(WindowBaLevMarq, DarkWindowIsDeadReckonedWithTheVelocityOfWindow0Held) {
+    std::mt19937 g(41);
+    BaWindow w = test::MakeInertialWindow(g, 5, 40, 0.0);
+    w.obs.erase(std::remove_if(w.obs.begin(), w.obs.end(), [](const WindowObservation& o) { return o.kf != 0; }),
+                w.obs.end());
+    const BaWindow truth = w;
+    int held = 0;
+    AnchorWindow(w, 8, held);
+    ASSERT_TRUE(w.imu.hold_v0);
+    ASSERT_EQ(held, 0);
+    std::normal_distribution<double> n(0.0, 1.0);
+    const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+    for (size_t k = 1; k < w.T_W_C.size(); ++k) {
+        w.T_W_C[k] = Jitter(g, 0.02, 0.1) * w.T_W_C[k];
+        w.imu.v[k] += rv(0.2);
+    }
+    w.imu.has_prior = true;
+    w.imu.prior_b << test::kTrueBg, test::kTrueBa;
+    w.imu.prior_info = Mat6::Identity() * 1e4;
+    const WindowBaReport rep = SolveWindowBa(w, Tight());
+    std::printf("dark VI window: E %.3e -> %.3e in %d iterations\n", rep.initial_energy, rep.final_energy, rep.iterations);
+    EXPECT_TRUE((w.imu.v[0] - truth.imu.v[0]).isZero(0.0));
+    for (size_t k = 1; k < w.T_W_C.size(); ++k) {
+        EXPECT_LT((w.T_W_C[k].t - truth.T_W_C[k].t).norm(), 1e-4) << k;
+        EXPECT_LT(core::SO3Log(w.T_W_C[k].R * truth.T_W_C[k].R.transpose()).norm(), 1e-5) << k;
+        EXPECT_LT((w.imu.v[k] - truth.imu.v[k]).norm(), 1e-4) << k;
+    }
 }

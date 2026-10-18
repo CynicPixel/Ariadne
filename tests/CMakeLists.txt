@@ -14,6 +14,8 @@ add_executable(test_numerical
   numerical/test_pgo.cpp
   numerical/test_window_ba.cpp
   numerical/test_preintegration.cpp
+  numerical/test_window_ba_inertial.cpp
+  numerical/test_inertial_init.cpp
   numerical/test_scripted.cpp)
 target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
   yaml-cpp::yaml-cpp GTest::gtest_main)

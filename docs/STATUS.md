@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.4 full, part 2: inertial window BA + initialisation, opt-in (D59)
+
+- **Built:** velocity/bias states in the window BA, IMU initialisation with refinement at +5/+15 s, StereoVo and
+  runner wiring, `euroc_v2_full` (opt-in), per-flight checks against ground truth (`imu_full`, `imu_trace.csv`).
+- **EuRoC:** average ATE 0.223 → **0.137 m** (target ≤ 0.138 on the average); 7/11 flights in the stereo-inertial
+  class. `euroc_v2` unchanged (byte-identical to D58).
+- **Synthetic:** a 2 s dark stretch drifts 2 cm with the IMU vs 52 cm with the visual bridge.
+- **Open:** gravity cannot correct roll/pitch drift (6-DoF gauge; part 3); `lost_motion` decision re-measured after it.
+- Pre-merge not run (maintainer's instruction).
+
 ## 2026-10-18 — 2.4 step 1: attitude_only ships for EuRoC v2 (D58)
 
 - **Gyro validated against ground truth:** 0.019° per pair with the bias removed.

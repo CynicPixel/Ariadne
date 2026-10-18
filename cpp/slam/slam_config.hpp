@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace ariadne::slam {
@@ -76,9 +77,25 @@ struct LostParams {
     int reanchor_min_points = 30;       // gated: tracked landmarks + new ones >= this (2 x pnp.min_correspondences)
 };
 
-/// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged) or "attitude_only" (§10.7:
-/// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA). "full" arrives with
-/// preintegration. A config without an `imu:` section is "none".
+/// imu.mode full (D59, INERTIAL_2.4 §4): Forster preintegration in the window BA. Required iff mode is full.
+struct ImuFullParams {
+    double noise_inflation_gyro = 3.0;     // §4.1, measured on EuRoC Machine Hall; the sim's IMU is exact (1)
+    double noise_inflation_accel = 9.0;
+    double bias_prior_inflation = 10.0;    // window[0]'s bias prior covariance = the previous marginal x this
+    int init_keyframes = 10;               // consecutive TRACKED window keyframes before initialisation (<= window)
+    double init_accel_bias_sigma = 0.2;    // m/s^2, the zero-mean b_a prior of the initialisation
+    double init_gravity_tolerance = 0.1;   // relative |g| error that refuses an initialisation
+    double init_max_chi2_per_dof = 1e9;    // the initialisation's fit worse than this refuses (initialization.hpp)
+    std::vector<double> refine_after_s = {5.0, 15.0};   // re-run over every keyframe since init (ORB-SLAM3 §V-B)
+    double repropagate_gyro = 0.01;        // rad/s: re-integrate an interval when its b_g moved more than this
+    double repropagate_accel = 0.1;        // m/s^2, the same for b_a (VINS-Mono's thresholds)
+    std::string lost_motion = "decay";     // while lost: "decay" (D56/D58 translation) or "propagate" (IMU, §4.4)
+};
+
+/// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged), "attitude_only" (§10.7:
+/// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA) or "full" (D59:
+/// velocity and biases in the window BA; attitude_only behaviour until initialised). A config without an `imu:`
+/// section is "none".
 struct ImuParams {
     std::string mode = "none";
     bool seed_lk = false;           // §10.5: predict LK's starting point from the gyro rotation
@@ -86,6 +103,7 @@ struct ImuParams {
     double stationary_s = 2.0;      // PHASE2_PLAN §3 stationary-start test
     double kp = 1.0;                // Mahony et al. 2008 §VI
     double ki = 0.3;
+    ImuFullParams full;
 };
 
 struct SlamConfig {
@@ -129,7 +147,21 @@ inline void ValidateSlam(const SlamConfig& c) {
         fail("lost: bridge_threshold_px, velocity_decay_s, max_speed_m_s > 0; bridge_min_tracks >= 8; model_ratio in (0, 1)");
     }
     if (l.reanchor_min_points < p.min_correspondences) fail("lost.reanchor_min_points must be >= pnp.min_correspondences");
-    if (c.imu.mode != "none" && c.imu.mode != "attitude_only") fail("imu.mode must be none or attitude_only");
+    if (c.imu.mode != "none" && c.imu.mode != "attitude_only" && c.imu.mode != "full")
+        fail("imu.mode must be none, attitude_only or full");
+    if (c.imu.mode == "full") {
+        const ImuFullParams& f = c.imu.full;
+        if (c.ba.backend != "window") fail("imu.mode full needs ba.backend window");
+        if (!(f.noise_inflation_gyro > 0.0) || !(f.noise_inflation_accel > 0.0) || !(f.bias_prior_inflation >= 1.0) ||
+            f.init_keyframes < 3 || f.init_keyframes > c.ba.window_size || !(f.init_accel_bias_sigma > 0.0) ||
+            !(f.init_gravity_tolerance > 0.0 && f.init_gravity_tolerance < 1.0) || !(f.init_max_chi2_per_dof > 0.0) ||
+            !(f.repropagate_gyro > 0.0) || !std::is_sorted(f.refine_after_s.begin(), f.refine_after_s.end()) ||
+            (!f.refine_after_s.empty() && !(f.refine_after_s.front() > 0.0)) ||
+            !(f.repropagate_accel > 0.0) || (f.lost_motion != "decay" && f.lost_motion != "propagate")) {
+            fail("imu.full: inflations > 0, bias_prior_inflation >= 1, 3 <= init_keyframes <= ba.window_size, "
+                 "init_accel_bias_sigma > 0, init_gravity_tolerance in (0, 1), init_max_chi2_per_dof > 0, refine_after_s ascending and > 0, repropagate_* > 0, lost_motion decay|propagate");
+        }
+    }
     if (c.imu.bias_window < 1 || !(c.imu.stationary_s > 0.0) || !(c.imu.kp > 0.0) || !(c.imu.ki >= 0.0)) {
         fail("imu: bias_window >= 1, stationary_s > 0, kp > 0, ki >= 0");
     }
@@ -202,6 +234,21 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.imu.stationary_s = m.Require<double>("stationary_s");
         c.imu.kp = m.Require<double>("kp");
         c.imu.ki = m.Require<double>("ki");
+        if (c.imu.mode == "full") {
+            StrictConfig f = m.Section("full");
+            c.imu.full.noise_inflation_gyro = f.Require<double>("noise_inflation_gyro");
+            c.imu.full.noise_inflation_accel = f.Require<double>("noise_inflation_accel");
+            c.imu.full.bias_prior_inflation = f.Require<double>("bias_prior_inflation");
+            c.imu.full.init_keyframes = f.Require<int>("init_keyframes");
+            c.imu.full.init_accel_bias_sigma = f.Require<double>("init_accel_bias_sigma");
+            c.imu.full.init_gravity_tolerance = f.Require<double>("init_gravity_tolerance");
+            c.imu.full.init_max_chi2_per_dof = f.Require<double>("init_max_chi2_per_dof");
+            c.imu.full.refine_after_s = f.Require<std::vector<double>>("refine_after_s");
+            c.imu.full.repropagate_gyro = f.Require<double>("repropagate_gyro");
+            c.imu.full.repropagate_accel = f.Require<double>("repropagate_accel");
+            c.imu.full.lost_motion = f.Require<std::string>("lost_motion");
+            f.RequireAllConsumed();
+        }
         m.RequireAllConsumed();
     }
     config.RequireAllConsumed();

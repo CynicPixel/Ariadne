@@ -49,13 +49,45 @@ std::vector<Vec3> Room(uint64_t seed) {
     return pts;
 }
 
-/// Ground-truth T_W_C along a gentle S-curve down the room.
-SE3 TruthPose(int k) {
-    const double t = k * 0.05;
+/// Ground-truth T_W_C along a gentle S-curve down the room (continuous in t seconds; frame k is at 0.05 k).
+SE3 TruthPoseAt(double t) {
     SE3 T;
     T.R = core::SO3Exp(Vec3(0.02 * std::sin(t), 0.15 * std::sin(0.8 * t), 0.01 * t));
     T.t = Vec3(0.6 * std::sin(0.7 * t), 0.05 * std::sin(t), 0.35 * t);
     return T;
+}
+SE3 TruthPose(int k) { return TruthPoseAt(k * 0.05); }
+
+// --- imu_mode full (D59): an ideal, biased IMU on a body mounted off the camera ----------------------------------
+// The room's world has y DOWN (the floor is at y = +1.5), so gravity is +9.81 along y; frame 0's camera is the world.
+const Vec3 kSimGravity(0, 9.81, 0);
+const Vec3 kSimBg(0.003, -0.002, 0.001), kSimBa(0.05, -0.03, 0.02);
+SE3 SimCameraFromBody() {
+    SE3 T;
+    T.R = core::SO3Exp(Vec3(0.02, -0.03, 0.01));
+    T.t = Vec3(-0.04, 0.02, 0.01);
+    return T;
+}
+/// 200 Hz over [t0, t1]; each sample is the value at its interval's midpoint (the integrator holds it over the
+/// interval). omega and the acceleration are central differences of the closed form.
+std::vector<core::ImuMeasurement> SimImu(double t0, double t1) {
+    const SE3 T_C_B = SimCameraFromBody();
+    const auto body = [&](double t) { return TruthPoseAt(t) * T_C_B; };
+    std::vector<core::ImuMeasurement> out;
+    const double dt = 0.005;
+    for (int k = 0; t0 + k * dt <= t1 + 1e-9; ++k) {
+        const double t = t0 + k * dt, tm = t + 0.5 * dt, h = 1e-5, ha = 1e-3;
+        const Vec3 w = core::SO3Log(body(tm - h).R.transpose() * body(tm + h).R) / (2 * h);
+        const Vec3 a = (body(tm + ha).t - 2.0 * body(tm).t + body(tm - ha).t) / (ha * ha);
+        out.push_back({std::llround(t * 1e9), w + kSimBg, body(tm).R.transpose() * (a - kSimGravity) + kSimBa});
+    }
+    return out;
+}
+VoImuRig SimImuRig() {
+    VoImuRig rig;
+    rig.T_B_C = SimCameraFromBody().inverse();
+    rig.noise = {1.7e-4, 1.9e-5, 2.0e-3, 3.0e-3, 200.0};   // EuRoC's ADIS16448 datasheet values (weights only here)
+    return rig;
 }
 
 struct VoRun {
@@ -71,6 +103,9 @@ struct VoRun {
     core::Mat6 last_node_cov = core::Mat6::Zero();
     SE3 last_node_est, last_node_truth;
     std::vector<core::Mat6> edge_information;
+    bool inertial_ready = false;          // imu_mode full
+    Vec3 gravity = Vec3::Zero(), bg = Vec3::Zero(), ba = Vec3::Zero();
+    std::vector<InertialRefinement> refinements;
 };
 
 /// Feed the VO an ideal tracker's output: track id = point id, 0.3 px noise,
@@ -88,7 +123,11 @@ struct DarkStretch {
 VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout_frames = 1, int blackout_stride = 1,
             const SlamConfig& cfg = Config(), DarkStretch dark = {}) {
     const std::vector<Vec3> pts = Room(1);
-    StereoVo vo(cfg, kRig, 42);
+    const VoImuRig imu_rig = SimImuRig();
+    const bool full = cfg.imu.mode == "full";
+    StereoVo vo(cfg, kRig, 42, 0, full ? &imu_rig : nullptr);
+    const std::vector<core::ImuMeasurement> imu = full ? SimImu(-0.01, frames * 0.05) : std::vector<core::ImuMeasurement>{};
+    int64_t prev_t_ns = -1;
     VoRun run;
     for (int k = 0; k < frames; ++k) {
         const bool in_blackout = blackout_frame >= 0 && k >= blackout_frame && k < blackout_frame + blackout_frames;
@@ -102,6 +141,18 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout
         VoFrame f;
         f.frame_id = static_cast<uint64_t>(k);
         f.t_ns = k * 50000000LL;
+        if (full) {   // [last sample <= previous frame, first sample >= this frame]
+            const int64_t from = prev_t_ns >= 0 ? prev_t_ns : f.t_ns;
+            size_t lo = 0, hi = imu.size() - 1;
+            while (lo + 1 < imu.size() && imu[lo + 1].t_ns <= from) ++lo;
+            for (size_t i = lo; i < imu.size(); ++i)
+                if (imu[i].t_ns >= f.t_ns) {
+                    hi = i;
+                    break;
+                }
+            f.imu.assign(imu.begin() + std::ptrdiff_t(lo), imu.begin() + std::ptrdiff_t(hi) + 1);
+        }
+        prev_t_ns = f.t_ns;
         VoStereo st;
         const bool in_dark = dark.frame >= 0 && k >= dark.frame && k < dark.frame + dark.frames;
         const uint64_t id_base = dark.frame < 0 || k < dark.frame ? 0 : in_dark ? 1000000 : 2000000;
@@ -149,6 +200,13 @@ VoRun RunVo(int frames, int outlier_every, int blackout_frame = -1, int blackout
     }
     run.edges = vo.graph().edges().size();
     for (const auto& e : vo.graph().edges()) run.edge_information.push_back(e.information);
+    if (full) {
+        run.inertial_ready = vo.inertial_ready();
+        run.gravity = vo.gravity();
+        run.refinements = vo.refinements();
+        Vec3 v;
+        vo.NewestInertialState(v, run.bg, run.ba);
+    }
     return run;
 }
 
@@ -575,4 +633,69 @@ TEST(Attitude, MahonyConvergesToGravity) {
     for (int k = 0; k < 200 * 60; ++k) f.Update(b, accel, 0.005);                // 60 s, gyro reads only its bias
     const Vec3 g_true = R_true.transpose() * Vec3(0, 0, -1);
     EXPECT_LT(std::acos(std::min(1.0, f.GravityInBody().dot(g_true))) * 180 / M_PI, 0.05);
+}
+
+// --- imu_mode full (D59, INERTIAL_2.4 §4.5) ---------------------------------------------------------------------------
+namespace {
+
+SlamConfig FullConfig(const std::string& lost_motion) {
+    SlamConfig c = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    c.imu.mode = "full";
+    c.imu.full.noise_inflation_gyro = 1.0;   // the simulated IMU is exactly its model (§4.1: inflation is EuRoC's)
+    c.imu.full.noise_inflation_accel = 1.0;
+    c.imu.full.init_keyframes = 5;
+    c.imu.full.lost_motion = lost_motion;
+    return c;
+}
+
+}  // namespace
+
+// From the 10 s of tracking before the stretch, the initialisation recovers gravity and the biases; then 2 s of
+// darkness (tracks without landmarks or stereo) are dead-reckoned by the IMU. The shipped visual bridge (sim_v2) on
+// the same stretch is the contrast.
+TEST(Inertial, FullModeInitialisesAndCarriesADarkStretch) {
+    const int dark = 200, len = 40, frames = dark + len + 40;
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    const VoRun vo = RunVo(frames, 0, -1, 1, 1, v2, {dark, len});
+    const VoRun vio = RunVo(frames, 0, -1, 1, 1, FullConfig("propagate"), {dark, len});
+    ASSERT_TRUE(vio.inertial_ready);
+    const double g_deg = std::acos(std::clamp(vio.gravity.normalized().dot(kSimGravity.normalized()), -1.0, 1.0)) * 180 / M_PI;
+    const auto end_err = [&](const VoRun& r) { return (r.est[size_t(dark + len - 1)].t - r.truth[size_t(dark + len - 1)].t).norm(); };
+    const auto drift = [&](const VoRun& r) {   // translation error accumulated over the stretch
+        const SE3 e = r.est[size_t(dark - 1)].inverse() * r.est[size_t(dark + len - 1)];
+        const SE3 g = r.truth[size_t(dark - 1)].inverse() * r.truth[size_t(dark + len - 1)];
+        return (e.t - g.t).norm();
+    };
+    std::printf("gravity %.3f deg off; bg err %.2e, ba err %.2e; stretch drift: VIO %.4f m vs bridge %.4f m; "
+                "error at its end: VIO %.4f m vs bridge %.4f m; RMSE VIO %.4f vs bridge %.4f\n",
+                g_deg, (vio.bg - kSimBg).norm(), (vio.ba - kSimBa).norm(), drift(vio), drift(vo), end_err(vio), end_err(vo),
+                TranslationRmse(vio), TranslationRmse(vo));
+    // Gravity's tilt and b_a trade off on this gently rotating path (initialization.hpp OBSERVABILITY: a tilt θ looks
+    // like a bias of 9.81 θ; measured 0.50 deg with |b_a error| 0.067): bounded, not exact.
+    EXPECT_LT(g_deg, 1.0);
+    EXPECT_LT((vio.bg - kSimBg).norm(), 1e-3);
+    // The scheduled refinement (imu.full.refine_after_s: 5 s after initialisation) ran and was accepted.
+    ASSERT_FALSE(vio.refinements.empty());
+    EXPECT_TRUE(vio.refinements.front().ok) << vio.refinements.front().why;
+    for (int k = dark; k < dark + len; ++k) {
+        ASSERT_EQ(vio.status[size_t(k)], VoStatus::kLost) << k;
+        EXPECT_EQ(vio.source[size_t(k)], PoseSource::kInertial) << k;
+    }
+    EXPECT_LT(drift(vio), 0.25 * drift(vo));
+    EXPECT_LT(drift(vio), 0.05);
+    EXPECT_LT(TranslationRmse(vio), TranslationRmse(vo));
+}
+
+TEST(Inertial, FullModeIsDeterministic) {
+    const SlamConfig c = FullConfig("propagate");
+    const VoRun a = RunVo(160, 0, -1, 1, 1, c, {100, 30});
+    const VoRun b = RunVo(160, 0, -1, 1, 1, c, {100, 30});
+    ASSERT_TRUE(a.inertial_ready);
+    ASSERT_EQ(a.est.size(), b.est.size());
+    for (size_t k = 0; k < a.est.size(); ++k) {
+        EXPECT_EQ(a.est[k].t, b.est[k].t) << k;
+        EXPECT_EQ(a.est[k].R, b.est[k].R) << k;
+    }
+    EXPECT_EQ(a.bg, b.bg);
+    EXPECT_EQ(a.ba, b.ba);
 }

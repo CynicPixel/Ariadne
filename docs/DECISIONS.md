@@ -1817,3 +1817,36 @@ Design and evidence: `docs/design/INERTIAL_2.4.md`.
   **PASS**.
 - **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
   still drop and emit an edge.
+
+## 2026-10-19 — D59 (part 2): 2.4 full — inertial window BA, initialisation + refinement, opt-in `euroc_v2_full`
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4 (as built). Part 1 (8691fb3): the preintegrator and factor.
+
+- **Window BA.** Velocity and biases are a separate segment of the reduced system (`[poses | v,b_g,b_a | landmarks]`):
+  Schur, marginals and the exit edge unchanged; with no inertial blocks every number is bit-identical (MH_01 on
+  `euroc_v2` reproduces D58 byte for byte). Energy ½rᵀΩr, no kernel; bias random walk; window[0]: pose fixed,
+  v and b free, bias prior = previous marginal × 10 (carried by the random walk when degenerate or unsolved).
+  Tests: FD gradient and Hessian of every inertial block, Schur = dense, noise-free VI window → truth.
+- **Correction while building (§4.2):** the IMU does not observe velocity (Galilean null space, tested), so an inertial
+  chain ties keyframes only out of a group with two pose-determined keyframes. **Maintainer decision:** in a window
+  whose window[0] has no covisible partner, v₀ is held at the previous solve's value instead of holding lost
+  keyframes at predicted poses. On EuRoC this triggers in up to ~25% of solves on the dark flights (MH_04, V2_03),
+  ~0–5% on the easy ones: the oldest keyframe often shares fewer than `pnp.min_correspondences` landmarks.
+- **Initialisation** (`slam/inertial/initialization.hpp`) after 10 measured keyframes: b_g by Gauss–Newton on the
+  keyframe rotations (**changed from §4.3's "from the attitude tracker"**, recorded there), then v, g, b_a as a linear
+  MAP (ORB-SLAM3's inertial-only MAP, scale known), g on the 9.81 sphere; refused on |g| ±10 % or χ²/dof > 100.
+  The threshold comes from the 11 EuRoC inits checked against GT: the one off by 8.4° (MH_04) had χ²/dof 1296,
+  all others ≤ 55. **Refinement** re-solves over all keyframes since init at +5 s and +15 s (ORB-SLAM3 §V-B).
+  Synthetic: exact with a flat b_a prior (1e-6); b_a/gravity-tilt trade-off quantified (0.44° ↔ 0.076 m/s²).
+- **EuRoC (`euroc_v2_full`, opt-in):** average ATE **0.223 → 0.137 m** (target ≤ 0.138 on the average); **per flight
+  7/11** inside the stereo-inertial class (V1_03 0.254, V2_01 0.077, V2_02 0.107, V2_03 0.281 out). Inertial
+  χ²/dof at the solutions 0.38–1.23 (validates the ×3 / ×9 inflation, frames and lever arm). Costs vs
+  attitude_only: MH_01 +2 mm, V2_01 +7 mm.
+- **Open defect (part 3):** the estimated gravity, in each keyframe's own body frame, degrades over a run on the hard
+  flights (V2_03 median 3.5°, final 5.6°): window[0]'s full 6-DoF pose is the gauge, so gravity cannot correct the
+  trajectory's roll/pitch drift (a VIO gauge is 4-DoF).
+- **§4.4 not decided.** Fake outages (0.5–10 s, MH_01/MH_02/V1_01/V2_01): IMU propagation drifts less to 2 s (0.24 vs
+  0.45 m), then diverges (10 s: 11 m vs 3.1 m), consistent with the gravity defect (δg T²/2). The metric also scored
+  the wrong instant. Re-measured after part 3 with drift to ~2–3 s after re-anchoring; `decay` stays the default.
+- Pre-merge **not run** (maintainer, 2026-10-18: only when absolutely needed); the EuRoC sweeps and unit tests are
+  the evidence. `euroc_v2` (attitude_only) and `sim_v2` (none) unchanged.

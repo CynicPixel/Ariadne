@@ -93,8 +93,11 @@ discrete noise density²/Δt).
 ### 4.2 State, factors, conventions
 
 - Per keyframe: `T_W_C` (left perturbation, as now), `v_W`, `b_g`, `b_a`: a 15-dimensional block.
-  - Every hard-coded 6 in `BaLayout`, `BaSchur`, `BaOplus`, the marginals and the exit edge becomes the per-keyframe
-    block size; the exit edge takes the 6×6 pose sub-block.
+  - **As built (advisor review, 2026-10-18; replaces "every 6 becomes the block size"):** the parameter vector is
+    `[poses 6·n_c | inertial 9·n_i | landmarks 3·n_l]`. Landmarks never touch v or b, so `Hcl`, the Schur
+    elimination, `CameraCovariance` and the exit edge are unchanged; only the reduced system S grows. A pose's
+    fixedness and its velocity/bias's are separate (window[0]: pose fixed, v and b free). With no inertial blocks every
+    number is bit-identical to before.
 - Inertial factor between consecutive window keyframes: Forster's 9-dimensional residual (eq. 45) with first-order
   bias correction (eq. 44); repropagate when |δb| exceeds a threshold.
 - **Integration, as built** (`slam/inertial/preintegration.hpp`):
@@ -115,20 +118,49 @@ discrete noise density²/Δt).
   - its biases get a loose Gaussian prior from the previous solve, with covariance × `imu.bias_prior_inflation`
     (config);
   - the window[0]→window[1] inertial factor stays.
-- **Observability guards:** an inertial factor TIES consecutive keyframes. `AnchorWindow` must not hold keyframes made
-  while lost when an inertial chain connects them to the gauge, and the degeneracy fallback counts inertial
-  information the same way.
+- **Observability guards (corrected while building).** An inertial factor does NOT by itself tie consecutive keyframes:
+  the IMU observes relative rotation and, given the velocity, relative position, but not the velocity. Adding c to
+  every v_k and c(t_k − t_0) to every p_k leaves every inertial residual unchanged (a Galilean null space; test
+  `InertialOnlyChainHasTheGalileanNullSpace`: |Hn|/|n| 2.5e-10 vs 6e6 for a real direction). So `AnchorWindow`
+  follows inertial factors only out of a group that holds two pose-determined keyframes (fixed, or reached through
+  covisibility); two positions at different times fix c.
+- **Dark windows: v_0 held (maintainer, 2026-10-18).** When window[0] (the gauge) has no covisible partner, the rule
+  above would hold every lost keyframe at its predicted pose and the stiff inertial factors would pull the biases
+  toward the prediction's error. Instead window[0]'s velocity is held at the previous solve's estimate
+  (`BaInertial::hold_v0`, set by `AnchorWindow` only in that case): window[0]'s group then ties inertially and the
+  lost keyframes are IMU-determined. Normal windows keep v_0 free (bias prior only). Tests: the held window's H is
+  PD (min eigenvalue 1.6) and the released one is singular (−2.8e-8); a dark window is dead-reckoned from perturbed
+  starts to the truth.
+- **Solve gate.** An inertial window is solved even with fewer landmarks than `pnp.min_correspondences`: a dark
+  stretch is exactly where the IMU must act.
+- **Bias prior bookkeeping.** window[1]'s bias marginal comes from the same factorization as the pose marginals.
+  When it is degenerate, or no solve ran, the previous prior is carried forward by the random walk
+  (Σ_b += diag(σ_rw² Δt)) instead of being dropped; `results.yaml imu_full.bias_prior` counts both branches.
+- Intervals are re-integrated between solves only (never inside one, so the energy LM compares never changes), when
+  the start keyframe's bias moved more than 0.01 rad/s or 0.1 m/s² from the interval's linearisation point
+  (VINS-Mono's thresholds).
 
 ### 4.3 Initialisation and gravity
 
 - **Gravity is estimated once, in the VO world, then held fixed.** The world is not rotated: graph, keyframe records
   and the gate depend on it.
 - **Init after N consecutive TRACKED keyframes** (MH_04 and MH_05 start dark: lost poses never feed it).
-  - b_g comes from the attitude tracker (VO-aided).
-  - v_i, g and b_a come from linear least squares on Δv, Δp (VINS-style, scale known: stereo); |g| is projected to
-    9.81.
-  - b_a gets a loose prior (weakly observable, arch §10.3).
-  - Checked against ground-truth v, b_a and the gravity direction.
+  - **b_g (changed while building, stated here per §49):** from the init keyframes' own window-refined rotations,
+    Gauss–Newton on the rotation residuals weighted by the propagated Σ_R (VINS-Mono `solveGyroscopeBias`), NOT from
+    the attitude tracker. It uses exactly the poses the rest of the initialisation uses and keeps StereoVo independent
+    of the runner's tracker. The intervals are then re-integrated at that b_g.
+  - v_i, g and b_a come from the linear MAP on Δv, Δp weighted by the preintegration information, with a zero-mean
+    b_a prior (σ 0.2 m/s²): ORB-SLAM3's inertial-only MAP with the scale known (stereo), hence linear. g is then
+    re-solved on the |g| = 9.81 sphere (VINS-Mono `RefineGravity`).
+  - **Two refusal checks.** The unconstrained |g| within 10 %, and the fit's χ²/dof. A scale or frame error moves |g|
+    only by (motion acceleration / 9.81): at 1.5× scale |g| moved 8 % (accepted) while χ²/dof rose ×1000
+    (`WrongScaleIsVisibleInTheFit`). The χ² threshold (`imu.full.init_max_chi2_per_dof`) is `[ASSUMPTION]` until set
+    from EuRoC initialisations checked against ground truth.
+  - **b_a is weakly observable (measured on synthetic data):** over ~2 s of mild rotation it trades off against
+    gravity's tilt (a tilt θ looks like a bias of 9.81 θ: b_a error 0.076 = 0.44° × 9.81). The prior decides that
+    direction; the window BA keeps refining b_a. With a flat prior the same data recovers everything to 1e-6.
+  - Checked against ground truth in each keyframe's own body frame (immune to VO drift): gravity angle, velocity RMS,
+    b_g and b_a errors (`results.yaml imu_full.init_vs_gt`, `imu_trace.csv` per keyframe).
 - Before init: `attitude_only` behaviour.
 
 ### 4.4 While lost
@@ -147,6 +179,23 @@ outage length, is MEASURED on held-out fake outages of 0.5–10 s cut into track
 ### 4.6 Defaults
 
 `imu.mode: full` is opt-in. `euroc_v2` switches only after it beats `attitude_only`; `sim_v2` stays `none`.
+
+### 4.7 Results, part 2 (2026-10-19, `euroc_v2_full`, refinement + init gate)
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 | avg |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| attitude_only (D58) | 0.075 | 0.069 | 0.093 | 0.394 | 0.353 | 0.087 | 0.099 | 0.421 | 0.070 | 0.116 | 0.680 | 0.223 |
+| full, init only | 0.077 | 0.036 | 0.099 | 0.267 | 0.204 | 0.063 | 0.095 | 0.252 | 0.080 | 0.104 | 0.304 | 0.144 |
+| **full + refinement + gate** | 0.077 | 0.042 | 0.093 | 0.242 | 0.195 | 0.061 | 0.081 | 0.254 | 0.077 | 0.107 | 0.281 | **0.137** |
+| stereo-inertial class worst | 0.166 | 0.152 | 0.125 | 0.280 | 0.284 | 0.076 | 0.110 | 0.120 | 0.070 | 0.100 | 0.190 | ≤ 0.138 |
+
+- Average inside the target by 1 mm; per flight 7/11 (V1_03, V2_01, V2_02, V2_03 out).
+- Inertial χ²/dof at the solutions 0.38–1.23. Init vs GT (body frame): gravity 0.09–1.65° after the gate (MH_04
+  was 8.4° before it), b_g error ≤ 0.003 rad/s, b_a error 0.03–0.57 m/s² (the tilt trade-off).
+- **Gravity over the run degrades on the hard flights** (body-frame median 3.5°, final 5.6° on V2_03): the 6-DoF gauge
+  on window[0] lets roll/pitch drift that gravity could correct. Part 3: gravity direction estimated in the window
+  (carried prior), then the window rotated back to the fixed g_W about window[0] (a 4-DoF gauge in effect).
+- §4.4 outages (decay vs propagate) re-measured after part 3; the first measurement is in DECISIONS D59.
 
 ## 5. Sim
 

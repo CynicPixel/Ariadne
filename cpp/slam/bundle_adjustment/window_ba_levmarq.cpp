@@ -126,13 +126,16 @@ std::string NotPdDiagnostic(const BaWindow& w, const BaLayout& L, const BaSchur&
 }  // namespace
 
 bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
-                            std::string* why, const WindowBaReport* solve) {
+                            std::string* why, const WindowBaReport* solve, std::map<int, Mat6>* bias_cov,
+                            const std::vector<int>& bias_keyframes) {
+    if (bias_cov && !w.inertial()) throw std::invalid_argument("WindowBaCovariances: bias marginals of a visual-only window");
     // The undamped system at w (the solution, when called after SolveWindowBa).
     const BaLayout L(w);
     BaSystem sys;
     BaLinearize(w, L, sys);
     BaSchur schur;
     cov.clear();
+    if (bias_cov) bias_cov->clear();
     if (!schur.Factorize(sys, L)) {
         if (why) *why = NotPdDiagnostic(w, L, schur, solve ? *solve : WindowBaReport{});
         return false;
@@ -142,6 +145,8 @@ bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes
         if (c < 0) throw std::invalid_argument("WindowBaCovariances: covariance requested for a fixed keyframe");
         cov[k] = schur.CameraCovariance(c);
     }
+    if (bias_cov)
+        for (int k : bias_keyframes) (*bias_cov)[k] = schur.Marginal<6>(L.bias(k));
     return true;
 }
 
