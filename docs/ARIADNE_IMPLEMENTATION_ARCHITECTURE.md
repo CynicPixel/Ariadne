@@ -1858,6 +1858,16 @@ Subpixel: SGBM outputs fixed-point disparity in 1/16 px. Carry `σ_d = 0.25–0.
 Source:
 - https://docs.opencv.org/5.0/main_modules/ptcloud_rgbd.html
 
+> **As built (D61, 2.1).** `stereo.confidence: wls` fills `StereoDepth.confidence` (u8, 0 where invalid) from
+> `DisparityWLSFilter::getConfidenceMap()`.
+> - It uses a right-matcher pass and the generic filter, with the native SGBM ROI and radius. NOT
+>   `createDisparityWLSFilter(sgbm)`, which would mutate our SGBM.
+> - The left disparity is unchanged unless `wls_filtered_disparity`.
+> - Default `none` (placeholder): nothing consumes the map yet, and it costs a second SGBM pass (~23 ms) plus the
+>   filter (~14 ms) per stereo pass at 752×480.
+> - Quality against EuRoC laser-scan GT (AUC, Hu & Mordohai protocol) is **unmeasured**; the design is in
+>   PERCEPTION_2.1 §10.6.
+
 ---
 
 ## 9.4 Confined-space disparity arithmetic

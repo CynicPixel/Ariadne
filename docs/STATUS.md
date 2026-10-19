@@ -4,9 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-10-19 — 2.1 perception: ORB + lost-mode re-association for EuRoC v2; XFeat measured, not shipped (D60, draft)
+## 2026-10-19 — 2.1 §9.3: WLS stereo confidence wired, tested, off by default (D61)
 
-- **Ships, once D60 is approved:** `perception/euroc_v2.yaml` = `euroc.yaml` + lost-mode re-association, the
+- **Built:** `stereo.confidence: wls` fills `StereoDepth.confidence` from OpenCV's `DisparityWLSFilter` without
+  touching our SGBM (the documented factory mutates it). The left disparity is byte-identical, verified in unit tests
+  and on EuRoC MH_01 and V2_01.
+- **Cost** about 37 ms per stereo pass at 752×480 (right SGBM 23 + filter 14). Default `none` until a consumer exists.
+- **Quality (AUC against EuRoC laser scans): unmeasured** (deferred). §9.4 validator tests completed. ctest 343/343.
+- **Found:** OpenCV 5.0.0 SGBM treats `disp12MaxDiff <= 0` as 1 (strictest), not "disabled".
+
+## 2026-10-19 — 2.1 perception: ORB + lost-mode re-association for EuRoC v2; XFeat measured, not shipped (D60)
+
+- **Ships (D60, approved as scoped):** `perception/euroc_v2.yaml` = `euroc.yaml` + lost-mode re-association, the
   ORB-SLAM relocalisation idea limited to the BA window and verified by seeded PnP.
   - **EuRoC v2 sweeps must switch to `--perception-config configs/perception/euroc_v2.yaml`**; no repo file defines
     the pair.

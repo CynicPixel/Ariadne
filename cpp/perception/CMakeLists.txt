@@ -21,7 +21,7 @@ if(OpenCV_FOUND)
     features/xfeat_engine.cpp
     association/landmark_reassociation.cpp)
   target_link_libraries(ariadne_perception_opencv PUBLIC
-    ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video opencv_dnn
+    ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video opencv_dnn opencv_ximgproc
     opencv_stereo opencv_geometry)
   add_library(ariadne::perception_opencv ALIAS ariadne_perception_opencv)
 endif()

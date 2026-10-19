@@ -1391,6 +1391,14 @@ Verified: `opencv_contrib/4.x/modules/stereo/include/opencv2/stereo/quasi_dense_
 
 **Confirmed useful:** `stereo` — `StereoBM`, `StereoSGBM` (`MODE_SGBM_3WAY`, `MODE_HH4`), `stereoRectify`, `reprojectImageTo3D`, **and `cv::fisheye::stereoRectify`** (fisheye stereo rectification lives in `stereo`, not `calib`). `calib` — `calibrateCamera`, `calibrateCameraRO`, `stereoCalibrate`, `solvePnP`, plus the `fisheye` namespace. `ximgproc` — `guidedFilter`, `dtFilter`, `amFilter`, `fastGlobalSmootherFilter`, **`createDisparityWLSFilter`**. `ccalib` — **`omnidir`** (Mei/UCM omnidirectional model with its own calibration/undistortion/stereo). `xphoto` — `SimpleWB`, `GrayworldWB`, `LearningBasedWB`.
 
+> ⚠️ **Two traps in the pinned OpenCV 5.0.0 / contrib (found 2026-10-19, 2.1 D61; `docs/design/PERCEPTION_2.1.md` §10):**
+> - `ximgproc::createDisparityWLSFilter(matcher)` **mutates the matcher passed in**: uniqueness → 0, `disp12MaxDiff` →
+>   1e6, speckle window → 0 (`disparity_filters.cpp`). To keep an existing SGBM's output, use
+>   `createDisparityWLSFilterGeneric(true)` + `createRightMatcher(sgbm)` (a new matcher) and set the ROI and radius
+>   by hand.
+> - `StereoSGBM` clamps a **non-positive `disp12MaxDiff` to 1** (`stereo/src/stereosgbm.cpp`: `> 0 ? v : 1`), the
+>   strictest check, not "disabled". A large value disables it.
+
 ### 10.2 ⭐⭐ The headlamp physics — why every standard method breaks
 
 **The daylight baseline (Koschmieder):** `I_c = J_c·t + A_c·(1−t)`, `t = e^{−β_c·d}`. Two assumptions do all the work, **and both fail for a headlamp**: `A_c` is a *global constant* (valid because sunlight fills the medium uniformly), and attenuation is *single-path* over the object→camera path only.

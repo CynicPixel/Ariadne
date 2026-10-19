@@ -10,8 +10,11 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <filesystem>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace ariadne::tools {
 
@@ -25,6 +28,12 @@ inline void RecordFeatureEngine(runtime::RunManifest& m, const perception::Local
     m.extra["keypoint_grid"] = std::to_string(p.grid_cols) + "x" + std::to_string(p.grid_rows);
     m.extra["target_tracks"] = std::to_string(pc.tracker.target_tracks);
     m.extra["replenish_cadence"] = pc.tracker.replenish;   // §4.2
+    if (pc.stereo.confidence != "none") {   // §10: what produced StereoDepth.confidence
+        const perception::StereoParams& st = pc.stereo;
+        m.extra["stereo_confidence"] = st.confidence + "/lrc" + std::to_string(st.wls_lrc_threshold) + "/radius" +
+                                       std::to_string(st.wls_discontinuity_radius) + "/filtered_disparity:" +
+                                       (st.wls_filtered_disparity ? "true" : "false");
+    }
     if (p.engine != "xfeat") return;
     const std::filesystem::path w(p.xfeat_weights);
     const std::filesystem::path prov = w.parent_path() / "manifest.yaml";
@@ -37,6 +46,17 @@ inline void RecordFeatureEngine(runtime::RunManifest& m, const perception::Local
         if (n["commit"]) m.extra["xfeat_upstream_commit"] = n["commit"].as<std::string>();
     }
     m.extra["xfeat_weights_checksum"] = sha;
+}
+
+/// results.yaml line for stereo.confidence = wls: cost of the right-matcher pass + filter per stereo pass (§10.7.4).
+inline std::string StereoConfidenceResults(std::vector<double> ms) {
+    std::sort(ms.begin(), ms.end());
+    double sum = 0;
+    for (double v : ms) sum += v;
+    std::ostringstream o;
+    o << "stereo_confidence: {mode: wls, stereo_passes: " << ms.size() << ", ms_mean: " << sum / double(ms.size())
+      << ", ms_median: " << ms[ms.size() / 2] << ", ms_p90: " << ms[ms.size() * 9 / 10] << "}\n";
+    return o.str();
 }
 
 }  // namespace ariadne::tools

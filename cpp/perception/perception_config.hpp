@@ -121,6 +121,15 @@ struct StereoParams {
     // are sparse blobs. Consumers that carve free space must use it.
     int support_window_px = 31;
     double support_min_density = 0.75;
+    // 2.1 (PERCEPTION_2.1.md §10): §9.3's confidence from cv::ximgproc::DisparityWLSFilter. none = the placeholder
+    // (zeros, no right-matcher cost). wls = a right-matcher pass + the filter's confidence map, the left disparity
+    // unchanged unless wls_filtered_disparity.
+    std::string confidence = "none";        // none | wls
+    bool wls_filtered_disparity = false;    // true: `disparity` becomes the WLS output (changes Z and every gate)
+    int wls_lrc_threshold = 24;             // left-right check, 1/16 px (OpenCV default: 1.5 px)
+    int wls_discontinuity_radius = 0;       // 0 = ceil(0.5 * block_size), OpenCV's rule for SGBM
+    double wls_lambda = 8000.0;             // OpenCV default; shapes only the filtered disparity
+    double wls_sigma_color = 1.0;           // OpenCV default; likewise
 };
 
 /// Sparse left->right correspondence at keyframes (stereo_lk_matcher.hpp).
@@ -288,6 +297,12 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     // SGBM's own contract: the range is a positive multiple of 16 and the
     // matching block is odd. P2 > P1 is what makes the smoothness penalty
     // tolerate small depth steps (P1) more cheaply than large ones (P2).
+    if (s.confidence != "none" && s.confidence != "wls") fail("stereo confidence must be none or wls");
+    if (s.wls_filtered_disparity && s.confidence != "wls") fail("wls_filtered_disparity needs confidence: wls");
+    if (s.wls_lrc_threshold <= 0 || s.wls_discontinuity_radius < 0 || !(s.wls_lambda > 0.0) ||
+        !(s.wls_sigma_color > 0.0)) {
+        fail("wls: lrc_threshold > 0, discontinuity_radius >= 0, lambda > 0, sigma_color > 0");
+    }
     if (s.num_disparities <= 0 || s.num_disparities % 16 != 0) {
         fail("num_disparities must be a positive multiple of 16");
     }
@@ -377,6 +392,12 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     s.required_min_range_m = ss.Require<double>("required_min_range_m");
     s.support_window_px = ss.Optional<int>("support_window_px", s.support_window_px);
     s.support_min_density = ss.Optional<double>("support_min_density", s.support_min_density);
+    s.confidence = ss.Optional<std::string>("confidence", s.confidence);
+    s.wls_filtered_disparity = ss.Optional<bool>("wls_filtered_disparity", s.wls_filtered_disparity);
+    s.wls_lrc_threshold = ss.Optional<int>("wls_lrc_threshold", s.wls_lrc_threshold);
+    s.wls_discontinuity_radius = ss.Optional<int>("wls_discontinuity_radius", s.wls_discontinuity_radius);
+    s.wls_lambda = ss.Optional<double>("wls_lambda", s.wls_lambda);
+    s.wls_sigma_color = ss.Optional<double>("wls_sigma_color", s.wls_sigma_color);
     ss.RequireAllConsumed();
 
     // Optional section: absent means the defaults above, which are the

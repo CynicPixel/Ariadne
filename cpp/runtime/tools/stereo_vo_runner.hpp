@@ -142,6 +142,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     const SgbmStereo sgbm(pcfg.stereo, rr);
     slam::StereoVo vo(scfg, rig, args.seed, source.Agent());
     LostReassociator reassoc(pcfg.reassociation, *features, rr.fx, rr.fy, rr.cx, rr.cy);   // 2.1; off unless configured
+    std::vector<double> t_conf;   // 2.1 §10: right-matcher + WLS per stereo pass (stereo.confidence = wls only)
 
     const std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
     const int n_planned = args.frames > 0 ? std::min<int>(args.frames, static_cast<int>(source.FrameCount()))
@@ -309,6 +310,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             }
             const StereoMatches sm = MatchLeftToRight(l, rs, tf.points, pcfg.stereo_match);
             const StereoDepth depth = sgbm.Compute(l, rs);
+            if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
             const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
             cv::Mat z32, s32;
             depth.Z.convertTo(z32, CV_32F);
@@ -606,6 +608,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     }
     if (reassoc.enabled()) res << reassoc.ResultsLine();
     res << features->ResultsYaml();   // 2.1: empty for orb
+    if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10
     res.close();
 
     const auto missing = runtime::MissingRequiredFields(m);

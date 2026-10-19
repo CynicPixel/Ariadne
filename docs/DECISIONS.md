@@ -1820,9 +1820,8 @@ Design and evidence: `docs/design/INERTIAL_2.4.md`.
 
 ## 2026-10-19 — D60: 2.1 — ORB + lost-mode re-association ships for EuRoC v2; XFeat stays a measured ablation (overrides "XFeat primary" for this phase)
 
-> **DRAFT, awaiting maintainer approval.** It overrides a CLAUDE.md §1 locked decision ("XFeat primary features") for
-> the EuRoC v2 VO front-end. The maintainer chose to accept A1 with MH_05 explained (2026-10-19); this text has not yet
-> been approved.
+> **Approved by the maintainer as scoped, 2026-10-19.** It overrides CLAUDE.md §1's "XFeat primary features" for the
+> EuRoC v2 VO front-end only. "XFeat primary" stands for the learned paths. CLAUDE.md itself is not amended.
 
 Design, every run and every bar: `docs/design/PERCEPTION_2.1.md` (§3 rev 3, §9).
 
@@ -1898,3 +1897,32 @@ v1's, taken from the v1 rows of the same sweep. v2's are 278, 183, 146 and 107 (
 
 **Merge note.** `feat/phase2-foundations` (D57, D58) is merged into `feat/2.1-perception` (`dbbf8d5`).
 `ALGORITHMS.md`: D58's inertial section keeps §1.3b; 2.1's re-association catalogue entry is §1.3c.
+
+## 2026-10-19 — D61: §9.3's confidence — the WLS map wired without touching our SGBM; off by default until consumed
+
+Design: `docs/design/PERCEPTION_2.1.md` §10.
+
+- **What:** `stereo.confidence: none | wls` (default `none`, the placeholder). Under `wls`, `SgbmStereo` runs
+  `ximgproc::createRightMatcher(sgbm)` (a new SGBM) and `createDisparityWLSFilterGeneric(true)`, with the ROI
+  (min+num, 0, W − (min+num) − max(0, −min), H) and discontinuity radius ceil(0.5·blockSize) that the native SGBM
+  wiring sets. `getConfidenceMap()` (CV_32F 0–255) → u8, 0 wherever `valid` is 0. The left disparity is
+  byte-identical unless `wls_filtered_disparity: true`.
+- **Why not `createDisparityWLSFilter(sgbm)`, the documented route:** it sets our matcher's uniqueness to 0,
+  disp12MaxDiff to 1e6 and speckle window to 0 (pinned `disparity_filters.cpp`). That would silently change every
+  disparity, the SGBM gate and all v1/v2 outputs.
+- **Deviation from OpenCV's intent, stated:** the map is computed from OUR left disparity (uniqueness 15,
+  disp12MaxDiff 1, speckle 200), which already passed SGBM's 1 px left-right check. On valid pixels WLS's 1.5 px
+  check is therefore mostly redundant, and the confidence is dominated by its variance term (depth edges).
+- **Found:** OpenCV 5.0.0 SGBM clamps a non-positive `disp12MaxDiff` to 1 (`stereosgbm.cpp`: `> 0 ? v : 1`), so
+  "non-positive disables" is false in this build.
+- **Evidence:**
+  - 9 unit tests: placeholder default; byte-identity of disparity/Z/σ_Z/valid with confidence on; high on smooth
+    surfaces, low at a depth step; the left-right check rejects an occlusion band once SGBM's own check is off (1e6);
+    filtered disparity opt-in; 1 vs 8 threads byte-identical; config validation; §9.4's width and boundary cases.
+  - EuRoC MH_01 and V2_01 with `confidence: wls`: results and trajectories byte-identical to the v2 config.
+  - Cost per stereo pass at 752×480: right SGBM 23 ms + filter 14 ms, best of 5 at load 3.8 (pipeline median 40–52 ms
+    under load).
+- **Not measured: quality.** The AUC against EuRoC's Leica scans is deferred by the maintainer (2026-10-19) and
+  recorded as unmeasured. Nothing in 2.1 consumes the map. Turning it on in a shipped config waits for a consumer
+  (TSDF §20.1 or §11.2) and that measurement.
+

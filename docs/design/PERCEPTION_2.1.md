@@ -398,15 +398,15 @@ All rows run on the merged D56 tree (bridge, τ 0.5) unless stated.
 
 | file | hunk |
 |---|---|
-| `cpp/runtime/tools/stereo_vo_runner.hpp` | include `engine_factory.hpp` (replacing `orb_engine.hpp`), `feature_engine_glue.hpp`, `reassociation_glue.hpp`; `MakeFeatureEngine` replaces `OrbEngine orb` (tracker + re-associator take `*features`); `reassoc.BeforeTrack` before `vo.Track`; `reassoc.AfterKeyframe` + `tracker.Replenish` after `AddKeyframe`; `reassoc_trace.csv` if enabled; `RecordFeatureEngine(m, *features, pcfg)` replaces `m.feature_engine = orb.Name()`; manifest `reassociation` + results lines if enabled; `res << features->ResultsYaml()` (empty for ORB) |
+| `cpp/runtime/tools/stereo_vo_runner.hpp` | include `engine_factory.hpp` (replacing `orb_engine.hpp`), `feature_engine_glue.hpp`, `reassociation_glue.hpp`; `MakeFeatureEngine` replaces `OrbEngine orb` (tracker + re-associator take `*features`); `reassoc.BeforeTrack` before `vo.Track`; `reassoc.AfterKeyframe` + `tracker.Replenish` after `AddKeyframe`; `reassoc_trace.csv` if enabled; `RecordFeatureEngine(m, *features, pcfg)` replaces `m.feature_engine = orb.Name()`; manifest `reassociation` + results lines if enabled; `res << features->ResultsYaml()` (empty for ORB); §10: `std::vector<double> t_conf` after the re-associator, `t_conf.push_back(depth.confidence_ms)` after `sgbm.Compute` when the map is real, `res << StereoConfidenceResults(t_conf)` when non-empty |
 | `cpp/slam/odometry/stereo_vo.hpp` | `LandmarkInfo` + const `Landmarks()` accessor (id, X_w, born_kf, birth `PoseSource`) |
 | `cpp/perception/tracking/klt_tracker.{hpp,cpp}` | `Relabel(from, to)`; `Replenish(gray)`; step 4 factored into `AddTracks`; the `replenish_min_eig_quality` gate; `<map>`/`<set>` includes. D58's `predicted` seam is untouched |
 | `cpp/perception/features/feature_engine.hpp` | pure virtual `Describe(gray, points, described)`; virtual `ManifestFields()` / `ResultsYaml()` (empty defaults) |
-| `cpp/perception/perception_config.hpp` | `ReassociationParams` + optional `reassociation:` section; `FeatureParams` `engine`/`xfeat_*`; `TrackerParams` `replenish`, `replenish_min_tracks`, `replenish_min_eig_quality`; all optional, defaults = old behaviour |
+| `cpp/perception/perception_config.hpp` | `ReassociationParams` + optional `reassociation:` section; `FeatureParams` `engine`/`xfeat_*`; `TrackerParams` `replenish`, `replenish_min_tracks`, `replenish_min_eig_quality`; §10 `StereoParams` `confidence`, `wls_*` + their validation; all optional, defaults = old behaviour |
 | `configs/perception/` | new `euroc_v2.yaml` (the D60 v2 config) and `euroc_v2_xfeat.yaml` (the measured XFeat ablation). No existing config edited |
-| `docs/ALGORITHMS.md` | insert-only: the ⚠️ cv::XFeat-absent note after the §1.0 class table; §1.3c re-association entry (renumbered from 1.3b at the D58 merge); §1.3c measured result |
-| `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md` | two "As built (D60)" blockquotes: end of §7.2; after §28.2's manifest field list |
-| `docs/DECISIONS.md`, `docs/STATUS.md` | appended D60 (DRAFT) and a new top STATUS entry |
+| `docs/ALGORITHMS.md` | insert-only: the ⚠️ cv::XFeat-absent note after the §1.0 class table; the ⚠️ WLS-factory / disp12MaxDiff note after the OpenCV-5 module inventory (D61); §1.3c re-association entry (renumbered from 1.3b at the D58 merge); §1.3c measured result |
+| `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md` | "As built" blockquotes: end of §7.2 (D60); after §28.2's manifest field list (D60); end of §9.3 (D61) |
+| `docs/DECISIONS.md`, `docs/STATUS.md` | appended D60 (approved) and D61; two new top STATUS entries |
 
 New, not shared: `perception/association/landmark_reassociation.*`, `perception/features/{xfeat_engine.*,
 engine_factory.hpp}`, `runtime/tools/{reassociation_glue,feature_engine_glue}.hpp`, `xfeat/xfeat_net.*` (D50's, split
@@ -992,3 +992,164 @@ the critical-path session (D56/D58), so the finding goes to them.
 - The verdict as written stands (rev 3: ✗). Whether to judge MH_05 against D58 (0.3429, which A1 beats on all three
   seeds) or by RPE is the maintainer's call. Changing the bar after the result would be post-hoc, and must be
   reported as such.
+
+## 10. SGBM + WLS confidence (§9.3), §9.4 validator, §9.6 contract — design (2026-10-19, BEFORE code)
+
+### 10.1 What and why
+
+`StereoDepth.confidence` is a placeholder today (all zero, `confidence_is_placeholder = true`). §9.3 requires the
+confidence map from `cv::ximgproc::DisparityWLSFilter` and forbids inventing a heuristic. §9.6 names its consumers:
+TSDF weighting (§20.1) and the §11.2 stereo cross-check.
+
+- **Data in → data out:** rectified left/right CV_8UC1 → `StereoDepth` with `confidence` CV_8U, 0–255, made real.
+- The left disparity is **unchanged** (byte-identical) unless a config asks for the WLS-filtered disparity.
+- Consuming the confidence, as a σ_d modulator or a gate, is NOT 2.1 (§4.4).
+
+### 10.2 Literature (primary sources, checked 2026-10-19)
+
+- **WLS smoothing:** Min, Choi, Lu, Ham, Sohn, Do, "Fast Global Image Smoothing Based on Weighted Least Squares",
+  IEEE TIP 23(12):5638–5653, 2014. It is the `fastGlobalSmootherFilter` that `DisparityWLSFilter::filter` runs.
+  It shapes only the *filtered* disparity, not the confidence.
+- **Confidence evaluation protocol:** Hu & Mordohai, "A quantitative evaluation of confidence measures for stereo
+  vision", TPAMI 34(11):2121–2133, 2012 [13 in Poggi]. The protocol, quoted from Poggi, Tosi, Mattoccia, ICCV 2017
+  pp. 5228–5237, §4:
+  - pixels are taken in decreasing-confidence order (5% steps, ties included together);
+  - the error rate (|d − d_gt| > τ) of each growing subset is plotted;
+  - **AUC** is the area under that curve, with optimum **AUC_opt = ε + (1−ε) ln(1−ε)** (eq. 1), where ε is the
+    overall error rate. A random confidence scores AUC ≈ ε.
+- **Where WLS's measure sits:** a left-right consistency measure (category 3.3) gated by local disparity variance.
+  Poggi Table 1(e), **SGM** on KITTI 2012 (ε = 16.78%):
+
+  | measure | AUC | AUC / ε |
+  |---|---|---|
+  | best of category 3.3 (UCC) | 0.0735 | ≈ 0.44 |
+  | CCNN (learned) | 0.0358 | ≈ 0.21 |
+  | optimal | 0.0227 | |
+
+  Learned confidences need a CNN per pixel, outside §9.3. So 2.1 measures where OpenCV's map sits on our data; it
+  does not chase the learned SOTA. (Corrected 2026-10-19: an earlier draft quoted sub-table (c), which is MC-CNN.)
+
+### 10.3 OpenCV-native check (pinned contrib source, installed `libopencv_ximgproc.so.5.0.0`)
+
+`modules/ximgproc/src/disparity_filters.cpp`:
+- `createDisparityWLSFilter(matcher_left)` **mutates the left matcher**: `setDisp12MaxDiff(1000000)`,
+  `setSpeckleWindowSize(0)`, `setUniquenessRatio(0)`. Using it on our `SgbmStereo` would silently change the left
+  disparity, the SGBM gate and every v1 output. **Not used.**
+- Used instead:
+  - `createDisparityWLSFilterGeneric(true)`, with the ROI the native SGBM wiring would set, `Rect(min+num, 0,
+    W − (min+num) − max(0, −min), H)`, and `setDepthDiscontinuityRadius(ceil(0.5·blockSize))`;
+  - `createRightMatcher(sgbm)`, which builds a NEW SGBM (min disparity −(min+num)+1, uniqueness 0, same P1/P2/mode)
+    and does not touch ours.
+- **The confidence, as computed:**
+  - per pixel, the left-right check: |d_L + d_R(x − d_L)| < `LRC_thresh` (24 in 1/16 px = 1.5 px), else 0;
+  - when it passes: min(c_L, c_R) with c = max(1 − 0.001·var₁₆(d), 0), the disparity variance in a box of the
+    discontinuity radius;
+  - ×255 → **CV_32F**, which we convert to CV_8U;
+  - 0 outside the ROI.
+- **Deviation:** natively, the confidence is computed from a uniqueness-0 left disparity. Ours comes from our real
+  left disparity (uniqueness 15, speckle 200). This is stated in the code; the AUC measures the result either way.
+- Invalid SGBM pixels (value −16) are masked to 0 confidence AND-ed with `valid`, never trusted from the LRC.
+- `lambda` (default 8000) and `sigma_color` (1.0) affect only the filtered disparity.
+- Thread split: `num_stripes = getNumThreads()` at creation. Thread-count independence is a test.
+
+### 10.4 Config (`stereo:` section; all optional, defaults = today)
+
+- `confidence: none | wls` (default `none`: placeholder as now, byte-identical, no right-matcher cost).
+- `wls_filtered_disparity: false`: if true, `disparity` is the WLS output. **v2 keeps it false** (it changes Z).
+- `wls_lrc_threshold: 24`, `wls_discontinuity_radius: 0` (0 = ceil(0.5·blockSize), the native SGBM rule),
+  `wls_lambda: 8000`, `wls_sigma_color: 1.0`. All OpenCV defaults, recorded in the manifest.
+
+### 10.5 §9.4 validator
+
+`ValidateStereoAgainstRig` already refuses a blind zone past `required_min_range_m`. Check it against the spec's
+full form, Z_min = f·B / d_max with d_max = min_disparity + num_disparities − 1. One unit test per refusal:
+- Z_min > required;
+- the disparity range covers the image width;
+- num_disparities not a multiple of 16 (an OpenCV requirement);
+- and the boundary case (Z_min == required, accepted).
+
+### 10.6 Evaluation on real ground truth: EuRoC Vicon rooms
+
+V1_* and V2_* ship Leica MS50 scans (`mav0/pointcloud0/data.ply`, 3.2 M points, `T_WR` = identity, the Vicon world
+frame of the GT poses).
+- **Ground-truth disparity at a keyframe:** the scan is put into the rectified left camera with the GT body pose,
+  `T_B_C0` and the rectification rotation R1, then z-buffered (nearest point per pixel, 1-px splat). Then
+  d_gt = f·B / Z_gt.
+- **Frames:** every 40th frame of V1_01, V1_02, V2_01 and V2_02, the flights where GT and the room are clean. The
+  difficult flights are reported, not judged.
+- **Per frame, on SGBM-valid pixels that have GT:** ε at τ = 1 px (Middlebury-style; EuRoC's disparities are
+  small, ≤ 96 px); AUC of the WLS confidence; AUC_opt; AUC of a random order (= ε); AUC of D34's support density
+  (the existing in-house measure, as a baseline).
+- **Sanity, before any AUC is read:** the median |d_sgbm − d_gt| on SGBM-valid pixels ≤ 0.5 px. Otherwise the GT
+  rendering or the alignment is wrong, and AUCs are meaningless.
+- **Tools:**
+  - a C++ dump tool writes per frame: rectified disparity (CV_16S), confidence and support density, plus intrinsics,
+    R1 and timestamp, as raw binaries;
+  - a Python script (`python/analysis/stereo_confidence_eval.py`, numpy only) renders GT and computes the curves.
+  - A manifest goes with the figure directory (§36).
+
+### 10.6b Advisor review (2026-10-19), folded in before any code
+
+- **Our SGBM already runs a left-right check** (`disp12_max_diff: 1`, uniqueness 15, speckle 200). That is why the
+  native wiring turns all three off. So on SGBM-valid pixels, WLS's own check (1.5 px) is mostly redundant, and its
+  confidence reduces to the variance term.
+  - The unit test asserts on the RAW `getConfidenceMap()`, on pixels SGBM keeps and WLS rejects, not on masked output.
+  - The evaluation adds a second row: an SGBM configured as OpenCV intends (uniqueness 0, disp12 1e6, speckle 0),
+    scored on the same GT, to show what our deviation costs.
+  - A close result against support density is expected.
+- **Holes in the GT render:** 3.2 M points leave gaps at short range, through which the z-buffer would show the wall
+  behind. Keep a GT pixel only if its depth is within 2% of the minimum depth in its 5×5 neighbourhood. A
+  side-by-side image (GT vs SGBM disparity) of one frame is checked before any AUC is read.
+- **The disparity evaluated is the pipeline's:** row refinement and exposure matching included. It is dumped from
+  inside the runner behind a flag, with `T_B_Crect` exported from C++, so Python never recomposes R1.
+- **Cost:** `filter()` always runs the FGS smoothing. If that dominates, re-implement `computeConfidenceMap` exactly,
+  with a bit-equality test against `getConfidenceMap()` (the XFeat-reference pattern). Shipped configs stay
+  `confidence: none` until a consumer exists.
+- §9.4: `num_disparities % 16` is already refused (`perception_config.hpp`); no new hunk for it.
+- **Found while testing:** OpenCV 5.0.0 SGBM clamps a non-positive `disp12MaxDiff` to 1 (`stereo/src/stereosgbm.cpp`
+  lines 498, 1231, 1640: `params.disp12MaxDiff > 0 ? params.disp12MaxDiff : 1`). "Non-positive disables the check"
+  is false in this build: it is the strictest setting. A large value (ximgproc uses 1e6) disables it. Our configs
+  use 1, unaffected.
+
+### 10.7 Acceptance (fixed now, before measuring)
+
+1. **Identity:**
+   - `confidence: none` → `StereoDepth` byte-identical to today, and all v1/v2 EuRoC results unchanged (unit test
+     on disparity/Z/valid, plus one EuRoC run);
+   - `confidence: wls` with `wls_filtered_disparity: false` → disparity/Z/valid byte-identical to `none` (unit test).
+2. **Correctness:**
+   - unit tests on synthetic stereo: confidence is 0 where `valid` is 0, high on a textured plane, low at a
+     disparity step and where the left-right check fails (an occlusion band);
+   - thread-count independence (1 vs 8 threads, byte-identical).
+3. **Quality on EuRoC (median over the judged frames):** the WLS confidence AUC is < 0.75·ε (clearly better than
+   random) AND < the support-density AUC. Reported with AUC_opt and AUC/ε next to the literature (category 3.3 on
+   SGM ≈ 0.44, CCNN ≈ 0.21, Poggi Table 1(e)). Failing this is a reported
+   negative result about OpenCV's map on this data, not a reason to invent a heuristic (§9.3).
+4. **Cost:** right-matcher + filter time per keyframe, reported. No gate in 2.1 because nothing consumes it yet.
+5. **§9.4:** one passing test per refusal and for the boundary case.
+
+### 10.8 Results (2026-10-19)
+
+Against §10.7:
+1. **Identity ✓.**
+   - Unit: confidence on, filter off → disparity/Z/σ_Z/valid byte-identical.
+   - Pipeline: `build/a1/cfg/euroc_v2_wlsconf.yaml` (v2 + `confidence: wls`) on MH_01 and V2_01 (`build/a1/WLSCONF`)
+     → results (excluding timing and the new line) and trajectories byte-identical to A1·D58. The manifest records
+     `stereo_confidence: wls/lrc24/radius0/filtered_disparity:false`.
+2. **Correctness ✓** (`tests/unit/test_stereo_confidence.cpp`):
+   - smooth background and slab interior: > 90% of valid pixels ≥ 200;
+   - the first 3 slab columns at the 24 px step: < 10%;
+   - occlusion band, SGBM's own checks off (disp12 = 1e6): > 80% valid, yet > 80% confidence 0, which is WLS's
+     left-right check at work;
+   - 1 vs 8 threads byte-identical.
+3. **Quality: UNMEASURED** (maintainer's call: deferred). The §10.6 evaluation is designed, not built.
+4. **Cost:** right SGBM 23.3 ms + filter 13.5 ms (left SGBM 34.4 ms for scale), best of 5, 8 threads, load 3.8, at
+   752×480 / 96 disparities. Pipeline: median 39.7 ms (MH_01, 719 passes), 52.2 ms (V2_01, 512 passes) under
+   2-parallel load.
+   - The right-matcher pass dominates; it is the left-right check's price.
+   - Re-implementing `computeConfidenceMap` to skip the FGS smoothing would save ≤ 14 ms: not done.
+5. **§9.4 ✓:** width-coverage refusal and the Z_min == required boundary added. Min-range, wide-baseline and
+   multiple-of-16 were already tested.
+
+Shipped configs keep `confidence: none`.
+
