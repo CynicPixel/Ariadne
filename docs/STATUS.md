@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.5: loop degeneracy gate with honest loop covariance (D71)
+
+- **`cpp/slam/robust/degeneracy`:** each PnP loop gets a covariance with B's stereo depth noise propagated
+  (NEES 5.95 against 6 at 1.5–12 m; 54.7 at 25–40 m, hence a separate parallax gate).
+- **Gates:** marginal σ_t / σ_r (metres and radians kept apart), parallax, and 3D collinearity. Pixel collinearity
+  was measured to refuse a well-conditioned planar fan, so it is reported only.
+- **Tests:** 8/8; ctest 308/308. The thresholds are [ASSUMPTION], to be calibrated in D73 on real candidates.
+- **Not wired:** exporting the verifier's inliers and swapping out the proxy information need a decision.
+- **Next:** PCM (D72).
+
 ## 2026-10-19 — 2.5 opened: chordal init passes the SE-Sync gate; pgo_v2 damping; oracle fixed (D70)
 
 - **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init`): `cv::SVDecomp` projection with the determinant

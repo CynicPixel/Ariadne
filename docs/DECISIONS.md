@@ -1736,3 +1736,46 @@ grid3D dominates the 2.6 h gate. The gate is an env-gated evidence run, never pa
 - `test_chordal_init.cpp`, 4 tests: the determinant fix, κ/τ, exact noise-free recovery, refusal of a graph
   disconnected from the anchor.
 - ALGORITHMS §7.2a.
+
+## 2026-10-19 — D71: loop-closure degeneracy gate on the loop's own covariance (marginal σ_t / σ_r, parallax, collinearity), stereo depth noise propagated
+
+**Context.** Arch §14.4 puts a degeneracy gate before PCM. A degenerate PnP loop carries an honest but huge
+covariance, so it is consistent with almost anything and PCM cannot discriminate it. The arch criterion is
+`λ_min/λ_max < τ` on the Hessian, which mixes metres and radians and depends on the frame. The design also assumed
+that 3D point noise could be ignored. Design: `ROBUST_BACKEND_2.5.md` §4.
+
+**Decision.** `cpp/slam/robust/degeneracy.{hpp,cpp}`, `AssessLoop`, a pure library with no wiring.
+- **Pose refinement:** the PnP pose is refined with `cv::solvePnPRefineLM`, then Gauss–Newton weighted by per-point
+  pixel covariances that carry B's stereo noise in (u, v, disparity) (Vakhitov et al., CVPR 2021).
+- **Covariance:** H⁻¹ inflated by max(1, σ̂²), in the left tangent, converted to the pose-graph residual tangent by
+  `OdometryEdge`'s formula.
+- **Gates:**
+  - worst-direction 1σ of the translation marginal [m] and the rotation marginal [rad], absolute bounds (Zhang 2016);
+  - too few inliers with a stereo triangulation angle ≥ θ_min;
+  - collinearity: the 3D inliers lie on a line (λ_mid/λ_max of their covariance).
+- **Reported only:** the within-block ratios, pixel spread, planarity and the corridor score.
+- **§49:** the arch §14.4 criterion is replaced, with a dated update recorded there; ALGORITHMS §7.8a.
+
+**Evidence** (`tests/unit/test_degeneracy.cpp`, 8/8; ctest 308/308, 8 env-gated skips):
+- the finite-difference check of the stereo back-projection Jacobian;
+- the information equals `OdometryEdge`'s conversion;
+- Monte Carlo mean NEES **5.95** over 500 trials (χ²₆ mean 6) at 1.5–12 m with pixel and disparity noise. At
+  25–40 m it is **54.7**: the linearised covariance is about 9× overconfident at far range, which is the measured
+  reason parallax is its own gate;
+- the control passes. A 3D line is named collinear, far-only points are named for parallax, and the small object
+  is named for conditioning;
+- **Collinearity moved from pixels to 3D after measurement.** A pixel-spread gate refused a well-conditioned planar
+  fan (6.4 mm, 1.35 mrad). Conditioning alone missed a 3D rail (8.3 mrad reported), because stereo noise fabricates
+  the missing rotation information. The fan is now a must-not-refuse test.
+- **Scene correction:** 120 points on a 40 px patch measured 2.7 cm and 0.4°, a usable loop. The scene was corrected
+  to 25 points on a 20 px patch; the threshold was not loosened.
+
+**Not done, stated.**
+- **Thresholds** (σ_t 0.10 m, σ_r 0.02 rad, 10 points at ≥ 1°, spread 0.01, σ_px 0.46, σ_d = √2 σ_px) are
+  [ASSUMPTION]. Calibration follows Zhang's margin-midpoint rule on real candidates with ground truth, protocol fixed
+  in design §4, run in D73.
+- **Not wired.** `VerifyResult` does not export inlier correspondences, and the broker's `ProxyInformation` stays,
+  because replacing it changes the Phase-1 sim_collab outputs. Both need a maintainer decision before D73.
+- **Honest covariance is shown at 1.5–12 m only.** On the small-object scene the residuals are about 3× the model
+  (σ̂² 3.2), so the covariance is honest there only through the inflation.
+- **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].

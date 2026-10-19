@@ -151,6 +151,54 @@ edges. Monte-Carlo test of the conversion; tagged [ASSUMPTION] because stereo de
 **Tests.** One synthetic scene per criterion that trips **only** that criterion, plus a well-conditioned control that
 passes all of them.
 
+**As built (2026-10-19, D71).** `cpp/slam/robust/degeneracy.{hpp,cpp}`, `AssessLoop(LoopGeometry)`. Corrections to
+the plan above:
+- **Conditioning uses marginals, not raw blocks.** The raw rotation and translation blocks of H drop the coupling
+  where visual degeneracy lives. The gate bounds the worst-direction 1σ of the translation and rotation **marginals**
+  of the edge covariance in the pose-graph residual tangent, the matrix the PGO consumes. The bounds are absolute
+  (Zhang 2016's precedent), and the within-block ratios are reported (§49 deviation from arch §14.4, recorded there).
+- **Pose and information.** The pose is refined by `cv::solvePnPRefineLM` followed by Gauss–Newton weighted with
+  per-point pixel covariances that carry B's stereo noise in (u, v, disparity) (Vakhitov 2021). This replaces the
+  [ASSUMPTION] above that depth noise is ignored. The information uses `OdometryEdge`'s conversion exactly (tested).
+- **Covariance inflation.** The covariance is inflated by max(1, σ̂²).
+- **Parallax** is the count of inliers with a stereo triangulation angle ≥ θ_min. **Collinearity** is
+  λ_mid/λ_max of the 3D inliers' covariance (a 3D line). **Pixel spread, planarity and corridor** are reported only.
+- **"Only that criterion" is dropped.** The criteria are physically coupled, so each scene must trip its own
+  criterion and have it named. A scene may trip more than one.
+
+Tests (`tests/unit/test_degeneracy.cpp`, 8, all pass): a finite-difference check of the stereo back-projection
+Jacobian, the information conversion, Monte Carlo NEES, the control and four scenes.
+
+| scene | σ_t worst | σ_r worst | near points | 3D line spread | pixel spread | verdict |
+|---|---|---|---|---|---|---|
+| control (120 pts, full image, 1.5–6 m) | 3.9 mm | 0.85 mrad | 116 | 0.66 | 0.65 | ok |
+| pixels on one row (planar fan, 1.5–6 m) | 6.4 mm | 1.35 mrad | 115 | 0.60 | 8e-6 | **ok** (must not be refused) |
+| 3D line (rail, 1.5–9 m) | 53 mm | 8.3 mrad | 95 | 9e-4 | 6e-5 | collinear |
+| far-only (25–40 m) | 27 mm | 0.66 mrad | 0 | 0.18 | 0.42 | parallax |
+| small object (25 pts, 20 px patch, 3.5 m) | 137 mm | 32 mrad | 25 | 0.09 | 0.88 | conditioning_translation, conditioning_rotation |
+
+- **Monte Carlo NEES.** Over 500 trials with pixels and disparities both noisy (1.5–12 m), mean NEES is **5.95**
+  against χ²₆'s mean of 6.
+- **The far-only scene shows why parallax is its own gate.** The linearised covariance says 2.7 cm, but mean NEES
+  at 25–40 m is **54.7** (500 trials): about 9× overconfident at 2.8 px of disparity against 0.65 px of noise.
+- **The collinearity gate was moved from pixels to 3D after measurement.** A pixel-spread gate refused the planar
+  fan, which is well conditioned. Conditioning missed the rail (8.3 mrad reported), because stereo noise scattering
+  the points off the line fabricates rotation information. Whether that 8.3 mrad is overconfident has not been
+  measured [UNVERIFIED].
+- **Scene correction.** 120 points on a 40 px patch are not degenerate (2.7 cm and 0.4° measured), so the scene was
+  corrected, not the threshold.
+- **Noise model on the small-object scene.** Residuals run about 3× the model (σ̂² 3.2), so near the thresholds the
+  covariance is honest only because of the inflation. NEES was validated at 1.5–12 m on full-image scenes only.
+
+**Thresholds, all [ASSUMPTION] until calibrated:** σ_t ≤ 0.10 m, σ_r ≤ 0.02 rad, ≥ 10 inliers at ≥ 1°, 3D line
+spread ≥ 0.01; σ_px 0.46 (EuRoC, carried to the sim) and σ_d = √2·σ_px.
+**Calibration protocol (run in D73, fixed now).** Real loop candidates from the intra-agent source on the sim
+missions, with ground truth. A candidate is labelled bad when its PnP edge error exceeds 3σ of its own covariance or
+0.2 m / 2°. Each threshold goes to the midpoint of the margin between the good and bad groups (Zhang 2016). The
+thresholds are never tuned on the synthetic scenes.
+**Not wired.** `VerifyResult` does not export its inlier correspondences, and replacing `ProxyInformation` in the 1.6
+broker would change the Phase-1 sim_collab outputs. Both wait for D73, pending a maintainer decision.
+
 ## 5. PCM (arch §14.5, D72)
 
 **What.** Two loops are *pairwise consistent* if going round the cycle they form with the odometry comes back to the

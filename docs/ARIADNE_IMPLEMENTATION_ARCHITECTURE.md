@@ -2394,6 +2394,15 @@ Ariadne does not merely reject a false closure; it can **decline to attempt the 
 
 This is specifically motivated by the SubT-derived observation in `ALGORITHMS(1).md` that robust backends cannot rescue an invalid/degenerate hypothesis indefinitely.
 
+**Update 2026-10-19 (D71, §49 ritual):** `λ_min / λ_max < τ_condition` on the full Hessian mixes metres and radians,
+and its verdict depends on the frame. The gate instead bounds the worst-direction 1σ of the translation marginal [m]
+and of the rotation marginal [rad] separately. Both come from the loop's covariance in the pose-graph residual tangent,
+with B's stereo depth noise propagated, and the within-block ratios are reported. Parallax becomes "too few inliers
+with a stereo triangulation angle ≥ θ_min". Collinearity means the **3D** inliers lie on a line; collinear pixels
+alone (a planar fan through the camera centre) are well conditioned with stereo depth. Pixel spread, planarity and
+the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
+`docs/design/ROBUST_BACKEND_2.5.md` §4; ALGORITHMS §7.8a.
+
 ---
 
 ## 14.5 Stage 4 — PCM

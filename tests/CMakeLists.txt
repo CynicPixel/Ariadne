@@ -58,6 +58,7 @@ if(OpenCV_FOUND)
     unit/test_pgo_levmarq.cpp
     unit/test_pgo_oracle.cpp
     unit/test_chordal_init.cpp
+    unit/test_degeneracy.cpp
     unit/test_window_ba_levmarq.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)

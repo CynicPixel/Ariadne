@@ -945,6 +945,34 @@ Each layer independently justifiable; each has a verified permissive reference i
 - **SE-Sync benchmark graphs** (sphere, torus, garage, cubicle, rim): the standard PGO test set, with published
   certified optima. The external check on our certificate's sign convention.
 
+### 7.8a Loop-closure degeneracy gate — sources and the choice made (D71, 2026-10-19)
+
+- **Zhang, Kaess, Singh, ICRA 2016**, "On degeneracy of optimization-based state estimation problems" `[PAPER]`,
+  checked at the source. The degeneracy factor is λ_min of AᵀA, an **absolute** eigenvalue. The threshold is set
+  from one sample dataset at the midpoint of the margin between degenerate and well-conditioned groups. Degenerate
+  directions are handled by solution remapping, which Ariadne does not adopt: the gate declines the loop instead.
+- **Tuna et al., X-ICP, T-RO vol. 40 (2024)** `[PAPER]`: localizability analysed on the rotational and translational
+  sub-blocks of the Hessian separately.
+- **Zhang et al., arXiv 2608.15532 (Aug 2026, preprint, not peer reviewed)**: eigenvalue thresholds on a
+  mixed-unit information matrix depend on the body frame, because H transforms by congruence `Adᵀ H Ad`. Cited only
+  for "do not threshold mixed-unit eigenvalues"; its generalized-eigenvalue method is not adopted.
+- **Vakhitov, Ferraz, Agudo, Moreno-Noguer, CVPR 2021** `[PAPER]`: in PnP the 3D points are uncertain too. Their
+  noise is propagated into pixel space, here as B's stereo noise in (u, v, disparity).
+- **Choice.** Each PnP loop gets a covariance in the pose-graph residual tangent, with stereo depth noise propagated.
+  - **Conditioning gate:** the worst-direction 1σ of the translation marginal [m] and the rotation marginal [rad],
+    each against an absolute bound. Marginals keep the pan-versus-lateral-translation coupling.
+  - **Parallax gate:** the number of points with a stereo triangulation angle ≥ θ_min. It is separate because the
+    linearised covariance is not honest at far range: mean NEES **54.7** at 25–40 m (about 2.8 px of disparity
+    against 0.65 px of noise), where the covariance claims 2.7 cm.
+  - **Collinearity gate:** the 3D inliers lie on a line (λ_mid/λ_max of their covariance). Stereo noise scattering
+    the points off the line fabricates rotation information about it: on a synthetic rail, conditioning reported
+    only 8 mrad. Collinear *pixels* are not the criterion. A planar fan through the camera centre (pixels on one
+    row) is well conditioned with known depth (6.4 mm, 1.35 mrad), and a pixel-spread gate refused it.
+  - **Reported only:** pixel spread, planarity and a corridor score. Planar PnP with known 3D points is not
+    degenerate.
+- **Measured** (synthetic, `test_degeneracy.cpp`): mean NEES over 500 trials is **5.95** against the χ²₆ mean of 6
+  at 1.5–12 m, the range the gate accepts.
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).
