@@ -1676,3 +1676,63 @@ change **by design**, and the gate is re-pinned from a clean-commit full run.
 - **Lost-frame handling (AUDIT §4):** no keyframes and no new points at a coasted pose, a new map segment on loss,
   and a lost-status field on keyframe records.
 - **2.1** (XFeat + re-association) and **2.4** (IMU bridging), for the losses that remain.
+
+## 2026-10-19 — D70: chordal initialisation for the pose graph; pgo_v2 drops OpenCV's absolute damping floor; robust backend placed in `cpp/slam/robust/`
+
+**Context.** Plan 2.5 opens with arch §13.1's chordal initialisation, ahead of the degeneracy gate → PCM → GNC-TLS
+order of §14.5. Three open items came with it: (a) GTSAM `InitializePose3` throwing in the oracle, (b) parking-garage
+needing 1000 LM iterations where GTSAM needs 8, (c) cubicle and rim refused for indefinite information. Design:
+`ROBUST_BACKEND_2.5.md` §1–§3, §9.
+
+**Decision.**
+1. **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init.{hpp,cpp}`). It solves one sparse linear least-squares
+   problem for the rotation rows (κ-weighted, hard anchor, three right-hand sides). Each block is projected to SO(3)
+   with `cv::SVDecomp` and the determinant fix, then translations come from a τ-weighted Laplacian. κ and τ follow
+   SE-Sync's isotropic conversion (`τ = 3/tr(I_t⁻¹)`, `κ = 3/(2 tr(I_R⁻¹))`), shared with D74.
+   - **Baselines (§49 ablation):** dead reckoning and a `cv::buildMST` spanning tree (Prim, highest κ).
+   - **Gate (maintainer decision 2026-10-18, design §9):** on the SE-Sync graphs where our LM from dead reckoning
+     fails, chordal + LM must reach GTSAM's minimum.
+     - The failure set is **torus3D and grid3D**, where GTSAM's LM from the same start stops in the same local
+       minima (29950.006 and 253372.10).
+     - Chordal + LM reaches the reference (12117.637 and 42179.979) in 6 and 8 iterations. On all six graphs it
+       ends within 7.0e-9 relative, stationary, in 4–15 iterations. MST rescues both as well.
+     - This matches Carlone et al. 2015, Table I, on the four graphs the two studies share. **PASSED.**
+2. **pgo_v2 = pgo_v1 with `clamp_diagonal` off**, as the preset `PgoV2()` and `SolvePoseGraph`'s default.
+   - **Why:** OpenCV clamps the damping `λ·diag(H)` to an absolute [1e-6, 1e32]. Ceres, which it mirrors, clamps
+     `diag(JᵀJ)` before applying λ.
+   - **Effect on garage:** with the floor, 95 iterations and a stop 3.7e-5 above the minimum at production
+     tolerances; without it, 15 iterations, at the minimum.
+   - **Open item (b) is reduced, not at parity:** 15–18 iterations against GTSAM's 7.
+   - **No regressions:** the 100-case oracle 100/100 (worst 1.48e-12 relative); the SE-Sync graphs reach the same
+     minimum as GTSAM on all six; ctest 300/300 (8 env-gated skips, the oracle results cited separately).
+   - **The struct defaults stay pgo_v1** because the windowed BA builds on them. Flipping them would have changed
+     odometry silently.
+   - **Guard owed to D73:** the floor also regularised a rank-deficient H, so GNC must anchor every connected
+     component of the active graph, with its own test.
+3. **Oracle corrections** (`python/oracle/pgo_gtsam.py`, oracles only):
+   - GTSAM's `Rot3.Quaternion` does not normalise, and the g2o files are off unit length by up to 6.8e-7. The old
+     SE-Sync oracle therefore solved a slightly different problem, which was garage's "different minimum". Now
+     normalised, and `SeSyncBenchmarkGraphs` asserts equal initial energies.
+   - GTSAM's chordal soft-anchors node 0 at unit precision, against edge weights near 15, which costs 6.5e-3 rad.
+     The oracle scales the edge information by 2⁻⁵⁴ to make the anchor effectively hard.
+   - New cases go in the branch cache only. The shared `.cache/oracle/*` is untouched.
+4. **Open item (a), diagnosed.** `InitializePose3` throws on every case without a `PriorFactorPose3`, because
+   `NonlinearEqualityPose3` is dropped and the anchor is left disconnected. With a unit prior, 3 of 100 cases throw.
+   - The throw is in multifrontal Cholesky only: QR and sequential Cholesky succeed on the same linearisation, and H
+     is positive definite. So this is a false positive in GTSAM, not a problem with the graphs.
+   - The reference start falls back to GTSAM's chordal rotations. The original "case 2" was never committed and is
+     not reproduced [UNVERIFIED].
+5. **Placement (arch §3 updated, §49).** The degeneracy gate, PCM, GNC and the certificate go in `cpp/slam/robust/`,
+   not `perception/` and `collaboration/`. All of them act on pose-graph edges and must also run intra-agent, with no
+   broker. `loop_closure/` holds the intra-agent candidate source (D73).
+
+**Not done here, stated.** No runtime path solves the pose graph yet, so the `pgo_init` config selection, a
+`configs/slam` PGO entry and the manifest fields land with the first caller (D73). Open item (c) belongs to D74.
+grid3D dominates the 2.6 h gate. The gate is an env-gated evidence run, never part of `--premerge`.
+
+**Evidence.**
+- `PgoInit.SeSyncDeadReckoningGate`, `PgoOracle.SeSyncBenchmarkGraphs`, `PgoOracle.DampingAblation`,
+  `PgoInit.ChordalRotationsAgreeWithGtsam` (50 isotropic cases within 2.6e-10 rad of GTSAM's chordal).
+- `test_chordal_init.cpp`, 4 tests: the determinant fix, κ/τ, exact noise-free recovery, refusal of a graph
+  disconnected from the anchor.
+- ALGORITHMS §7.2a.

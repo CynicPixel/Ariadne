@@ -754,6 +754,39 @@ y_α^{k+1} = (1−γ)·y_α^k + γ·A_αα⁻¹ ( b_α − Σ_{β∈N⁺(α)} A_
 
 ⚠️ **Gotchas:** DGS returns *chordal + one GN step*, **not the MLE** — the gap is real at high rotation noise, exactly the texture-poor/dark regime. **Use it as an initializer, not the answer.** Gauss–Seidel needs a **global robot ordering**, which in a partition-prone network is itself a coordination problem (§7.9). And `A_αα` is singular without a gauge anchor (§7.3).
 
+### 7.2a Single-agent initialisation: chordal relaxation vs dead reckoning — measured (D70, 2026-10-19)
+
+Carlone, Tron, Daniilidis, Dellaert, **ICRA 2015**, "Initialization techniques for 3D SLAM: a survey on rotation
+estimation and its use in pose graph optimization" · **Table I `[PAPER]`, checked at the source.** Gauss–Newton from
+the odometric start fails on sphere-a, torus, cube, cubicle and rim and is fine on sphere and garage; chordal
+(Martinec–Pajdla) followed by GN reaches the best observed cost on all of them.
+
+**Measured here** on the anisotropic cost, against GTSAM LM from GTSAM's chordal start (design
+`ROBUST_BACKEND_2.5.md` §9):
+- Our LM from dead reckoning fails on **torus3D** (29950.006 against 12117.637) and **grid3D** = Carlone's cube
+  (253372.10 against 42179.98). GTSAM's LM from the same start stops in the same local minima.
+- It is fine on tinyGrid3D, smallGrid3D, sphere2500 and parking-garage. This matches Table I on the four graphs the
+  two studies share; their sphere-a is not in our set, and cubicle and rim have indefinite information (§7.4, D74).
+- **Chordal + LM** lands within 7e-9 relative of the reference on all six, in 4–15 iterations.
+- **The `cv::buildMST` spanning-tree start** (highest-κ edges) rescues both failures too (7 and 9 iterations). Carlone
+  reports the spanning tree still failing on sphere-a, cubicle and rim, so it remains a baseline, not the default.
+- **Weights:** SE-Sync's isotropic conversion, `κ = 3/(2 tr(I_R⁻¹))` and `τ = 3/tr(I_t⁻¹)` from the diagonal blocks
+  (the same conversion serves the certificate, §7.4). Projection to SO(3) with the determinant fix (§7.7).
+
+⚠️ **Two oracle traps found on the way (both GTSAM 4.3, Python):**
+- **Unnormalised quaternions.** `Rot3.Quaternion` does not normalise, and the SE-Sync g2o files print about 7
+  digits (|q| off by up to 6.8e-7). An oracle that skips normalisation solves with non-orthogonal "rotations", and
+  that looked like "different minima" on garage.
+- **Soft anchor.** `computeOrientationsChordal` pins its anchor with a fixed unit precision while edges weigh about
+  15, so its relaxation drifts by up to 6.5e-3 rad from the hard-anchored one. Scale the edge information by 2⁻⁵⁴
+  in the oracle to make the anchor effectively hard.
+
+⚠️ **OpenCV `LevMarqBase` damping floor.** With `clampDiagonal`, OpenCV clamps the damping `λ·diag(H)` itself to an
+absolute [1e-6, 1e32] (`levmarq.cpp:192–194`). Ceres clamps `diag(JᵀJ)` before applying λ, so its damping still
+vanishes as λ → 0. OpenCV's floor throttles the final Gauss–Newton steps: garage needed 95 iterations and stopped
+3.7e-5 above the minimum with it, 15 iterations at the minimum without it. The pose graph runs with the clamp off
+(`pgo_v2`).
+
 ### 7.3 ⚠️⚠️ Gauge freedom — and the best 20 lines in the codebase
 
 An unanchored SE(3) pose graph has **exactly 6 DoF of gauge freedom**. Consequences:

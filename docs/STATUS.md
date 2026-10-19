@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.5 opened: chordal init passes the SE-Sync gate; pgo_v2 damping; oracle fixed (D70)
+
+- **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init`): `cv::SVDecomp` projection with the determinant
+  fix, plus a `cv::buildMST` baseline.
+- **Measured failure set from dead reckoning: torus3D and grid3D.** GTSAM's LM fails the same way from the same start.
+  Chordal + LM reaches GTSAM's minimum on all six graphs (within 7.0e-9 relative, 4–15 its). **Gate PASSED.**
+- **pgo_v2:** OpenCV's absolute damping floor is turned off for the pose graph. Garage drops from 95 to 15 iterations
+  at production tolerances. The windowed BA stays on pgo_v1.
+- **Oracle bugs fixed:** unnormalised quaternions (garage's "different minimum" was the oracle's) and GTSAM's chordal
+  soft anchor. Open item (a) is diagnosed (GTSAM multifrontal false positive). (b) is reduced, not at parity.
+  (c) moves to D74.
+- **Placement:** `cpp/slam/robust/` (arch §3 updated).
+- **Tests:** ctest 300/300 (8 env-gated skips); 100-case oracle 100/100; SE-Sync no-regression on the corrected oracle.
+- **Next:** the degeneracy gate (D71), then PCM (D72), GNC-TLS and the loop source (D73), then the certificate (D74).
+
 ## 2026-10-17 — 2.3 windowed BA in StereoVo; first full EuRoC sweep; frontend re-baselined (D53, D54)
 
 - **2.3 integrated:** a 10-keyframe window on OpenCV's LM with observability guards, measured σ = 0.46 px, χ²

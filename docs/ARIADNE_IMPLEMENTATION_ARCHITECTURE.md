@@ -665,24 +665,22 @@ ariadne/
 │   │   ├── tracking/
 │   │   ├── stereo/
 │   │   ├── exposure_control/      # §6.5 active exposure + lamp co-control
-│   │   ├── degeneracy/
-│   │   └── keyframes/
+│   │   └── keyframes/             # (loop degeneracy gate moved to slam/robust/, D70)
 │   │
 │   ├── slam/
 │   │   ├── imu/                   # §10 preintegration, bias states, gravity prior
 │   │   ├── landmarks/
 │   │   ├── local_map/
 │   │   ├── bundle_adjustment/
-│   │   ├── pose_graph/
-│   │   └── loop_closure/
+│   │   ├── pose_graph/            # §13 PGO, chordal init (D70)
+│   │   ├── robust/                # §14.4–§14.8 degeneracy gate, PCM, GNC-TLS, certificate (D70)
+│   │   └── loop_closure/          # intra-agent loop candidates (D73)
 │   │
 │   ├── collaboration/
 │   │   ├── retrieval/
 │   │   ├── candidate_selection/
 │   │   ├── protocol/
-│   │   ├── pcm/
-│   │   ├── gnc/
-│   │   ├── broker/
+│   │   ├── broker/                # (PCM and GNC run in slam/robust/ on intra- and inter-agent edges, D70)
 │   │   └── reference_frames/
 │   │
 │   ├── reconstruction/
@@ -2175,6 +2173,11 @@ with trust/radius-like update logic.
 interface. The driver damps with Marquardt's `D = diag(H)` (clamped) and adapts λ by step quality. The schedule below
 remains the Phase 1 two-frame stub's, kept byte-identical. All driver settings are config + manifest fields; design
 `docs/design/POSE_GRAPH_2.md`.
+
+**Update 2026-10-19 (D70):** the pose graph runs `pgo_v2`, which has the diagonal clamp OFF. OpenCV clamps the damping
+`λ·diag(H)` itself to an absolute [1e-6, 1e32], whereas Ceres clamps `diag(JᵀJ)`; the floor throttled the final
+Gauss–Newton steps on parking-garage. The windowed BA keeps the clamp (`pgo_v1` defaults). Design
+`docs/design/ROBUST_BACKEND_2.5.md` §2.
 
 Use Eigen sparse Cholesky internally.
 
