@@ -27,7 +27,9 @@
 
 namespace ariadne::slam {
 
-/// Every LevMarqBase setting, explicitly (configs/slam/pgo_v1.yaml; recorded in the manifest).
+/// Every LevMarqBase setting, explicitly. The defaults are pgo_v1, which the windowed BA (stereo_vo.cpp) also builds
+/// on; the pose graph runs PgoV2() below. No runtime path solves the pose graph yet: its config and manifest fields
+/// land with the first caller (D70).
 struct PgoSettings {
     std::string name = "pgo_v1";
     bool jacobi_scaling = false;
@@ -51,6 +53,19 @@ struct PgoSettings {
     bool recompute_covariance = true;
 };
 
+/// pgo_v2 (D70): pgo_v1 with clamp_diagonal off. OpenCV clamps the DAMPING lambda*diag(H) to an absolute [1e-6, 1e32];
+/// Ceres, whose min/max_lm_diagonal it mirrors, clamps diag(J^T J) before applying lambda, so its damping still vanishes
+/// as lambda -> 0. OpenCV's absolute floor throttles the last Gauss-Newton steps once lambda has shrunk: parking-garage
+/// took 95 iterations and stopped 3.7e-5 above the minimum with it, 15 and at the minimum without (design
+/// ROBUST_BACKEND_2.5.md §2). The floor also regularised a rank-deficient H (a component cut off from the anchor); that
+/// case is handled where it arises instead: GNC anchors every connected component of the active graph (design §6).
+inline PgoSettings PgoV2() {
+    PgoSettings s;
+    s.name = "pgo_v2";
+    s.clamp_diagonal = false;
+    return s;
+}
+
 cv::LevMarq::Settings ToOpenCv(const PgoSettings& s);
 
 struct PgoReport {
@@ -61,6 +76,6 @@ struct PgoReport {
 };
 
 /// Optimise `g` in place (node poses) with `anchor` held fixed; returns the report. The graph's version bumps.
-PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s = {});
+PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s = PgoV2());
 
 }  // namespace ariadne::slam

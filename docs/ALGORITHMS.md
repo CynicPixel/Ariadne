@@ -790,6 +790,39 @@ y_α^{k+1} = (1−γ)·y_α^k + γ·A_αα⁻¹ ( b_α − Σ_{β∈N⁺(α)} A_
 
 ⚠️ **Gotchas:** DGS returns *chordal + one GN step*, **not the MLE** — the gap is real at high rotation noise, exactly the texture-poor/dark regime. **Use it as an initializer, not the answer.** Gauss–Seidel needs a **global robot ordering**, which in a partition-prone network is itself a coordination problem (§7.9). And `A_αα` is singular without a gauge anchor (§7.3).
 
+### 7.2a Single-agent initialisation: chordal relaxation vs dead reckoning — measured (D70, 2026-10-19)
+
+Carlone, Tron, Daniilidis, Dellaert, **ICRA 2015**, "Initialization techniques for 3D SLAM: a survey on rotation
+estimation and its use in pose graph optimization" · **Table I `[PAPER]`, checked at the source.** Gauss–Newton from
+the odometric start fails on sphere-a, torus, cube, cubicle and rim and is fine on sphere and garage; chordal
+(Martinec–Pajdla) followed by GN reaches the best observed cost on all of them.
+
+**Measured here** on the anisotropic cost, against GTSAM LM from GTSAM's chordal start (design
+`ROBUST_BACKEND_2.5.md` §9):
+- Our LM from dead reckoning fails on **torus3D** (29950.006 against 12117.637) and **grid3D** = Carlone's cube
+  (253372.10 against 42179.98). GTSAM's LM from the same start stops in the same local minima.
+- It is fine on tinyGrid3D, smallGrid3D, sphere2500 and parking-garage. This matches Table I on the four graphs the
+  two studies share; their sphere-a is not in our set, and cubicle and rim have indefinite information (§7.4, D74).
+- **Chordal + LM** lands within 7e-9 relative of the reference on all six, in 4–15 iterations.
+- **The `cv::buildMST` spanning-tree start** (highest-κ edges) rescues both failures too (7 and 9 iterations). Carlone
+  reports the spanning tree still failing on sphere-a, cubicle and rim, so it remains a baseline, not the default.
+- **Weights:** SE-Sync's isotropic conversion, `κ = 3/(2 tr(I_R⁻¹))` and `τ = 3/tr(I_t⁻¹)` from the diagonal blocks
+  (the same conversion serves the certificate, §7.4). Projection to SO(3) with the determinant fix (§7.7).
+
+⚠️ **Two oracle traps found on the way (both GTSAM 4.3, Python):**
+- **Unnormalised quaternions.** `Rot3.Quaternion` does not normalise, and the SE-Sync g2o files print about 7
+  digits (|q| off by up to 6.8e-7). An oracle that skips normalisation solves with non-orthogonal "rotations", and
+  that looked like "different minima" on garage.
+- **Soft anchor.** `computeOrientationsChordal` pins its anchor with a fixed unit precision while edges weigh about
+  15, so its relaxation drifts by up to 6.5e-3 rad from the hard-anchored one. Scale the edge information by 2⁻⁵⁴
+  in the oracle to make the anchor effectively hard.
+
+⚠️ **OpenCV `LevMarqBase` damping floor.** With `clampDiagonal`, OpenCV clamps the damping `λ·diag(H)` itself to an
+absolute [1e-6, 1e32] (`levmarq.cpp:192–194`). Ceres clamps `diag(JᵀJ)` before applying λ, so its damping still
+vanishes as λ → 0. OpenCV's floor throttles the final Gauss–Newton steps: garage needed 95 iterations and stopped
+3.7e-5 above the minimum with it, 15 iterations at the minimum without it. The pose graph runs with the clamp off
+(`pgo_v2`).
+
 ### 7.3 ⚠️⚠️ Gauge freedom — and the best 20 lines in the codebase
 
 An unanchored SE(3) pose graph has **exactly 6 DoF of gauge freedom**. Consequences:
@@ -947,6 +980,34 @@ Each layer independently justifiable; each has a verified permissive reference i
   multi-robot graphs with real outliers, for Phase 3 and the 2.5 outlier ramp. Licence to be checked before use.
 - **SE-Sync benchmark graphs** (sphere, torus, garage, cubicle, rim): the standard PGO test set, with published
   certified optima. The external check on our certificate's sign convention.
+
+### 7.8a Loop-closure degeneracy gate — sources and the choice made (D71, 2026-10-19)
+
+- **Zhang, Kaess, Singh, ICRA 2016**, "On degeneracy of optimization-based state estimation problems" `[PAPER]`,
+  checked at the source. The degeneracy factor is λ_min of AᵀA, an **absolute** eigenvalue. The threshold is set
+  from one sample dataset at the midpoint of the margin between degenerate and well-conditioned groups. Degenerate
+  directions are handled by solution remapping, which Ariadne does not adopt: the gate declines the loop instead.
+- **Tuna et al., X-ICP, T-RO vol. 40 (2024)** `[PAPER]`: localizability analysed on the rotational and translational
+  sub-blocks of the Hessian separately.
+- **Zhang et al., arXiv 2608.15532 (Aug 2026, preprint, not peer reviewed)**: eigenvalue thresholds on a
+  mixed-unit information matrix depend on the body frame, because H transforms by congruence `Adᵀ H Ad`. Cited only
+  for "do not threshold mixed-unit eigenvalues"; its generalized-eigenvalue method is not adopted.
+- **Vakhitov, Ferraz, Agudo, Moreno-Noguer, CVPR 2021** `[PAPER]`: in PnP the 3D points are uncertain too. Their
+  noise is propagated into pixel space, here as B's stereo noise in (u, v, disparity).
+- **Choice.** Each PnP loop gets a covariance in the pose-graph residual tangent, with stereo depth noise propagated.
+  - **Conditioning gate:** the worst-direction 1σ of the translation marginal [m] and the rotation marginal [rad],
+    each against an absolute bound. Marginals keep the pan-versus-lateral-translation coupling.
+  - **Parallax gate:** the number of points with a stereo triangulation angle ≥ θ_min. It is separate because the
+    linearised covariance is not honest at far range: mean NEES **54.7** at 25–40 m (about 2.8 px of disparity
+    against 0.65 px of noise), where the covariance claims 2.7 cm.
+  - **Collinearity gate:** the 3D inliers lie on a line (λ_mid/λ_max of their covariance). Stereo noise scattering
+    the points off the line fabricates rotation information about it: on a synthetic rail, conditioning reported
+    only 8 mrad. Collinear *pixels* are not the criterion. A planar fan through the camera centre (pixels on one
+    row) is well conditioned with known depth (6.4 mm, 1.35 mrad), and a pixel-spread gate refused it.
+  - **Reported only:** pixel spread, planarity and a corridor score. Planar PnP with known 3D points is not
+    degenerate.
+- **Measured** (synthetic, `test_degeneracy.cpp`): mean NEES over 500 trials is **5.95** against the χ²₆ mean of 6
+  at 1.5–12 m, the range the gate accepts.
 
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 

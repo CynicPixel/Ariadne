@@ -665,24 +665,22 @@ ariadne/
 │   │   ├── tracking/
 │   │   ├── stereo/
 │   │   ├── exposure_control/      # §6.5 active exposure + lamp co-control
-│   │   ├── degeneracy/
-│   │   └── keyframes/
+│   │   └── keyframes/             # (loop degeneracy gate moved to slam/robust/, D70)
 │   │
 │   ├── slam/
 │   │   ├── imu/                   # §10 preintegration, bias states, gravity prior
 │   │   ├── landmarks/
 │   │   ├── local_map/
 │   │   ├── bundle_adjustment/
-│   │   ├── pose_graph/
-│   │   └── loop_closure/
+│   │   ├── pose_graph/            # §13 PGO, chordal init (D70)
+│   │   ├── robust/                # §14.4–§14.8 degeneracy gate, PCM, GNC-TLS, certificate (D70)
+│   │   └── loop_closure/          # intra-agent loop candidates (D73)
 │   │
 │   ├── collaboration/
 │   │   ├── retrieval/
 │   │   ├── candidate_selection/
 │   │   ├── protocol/
-│   │   ├── pcm/
-│   │   ├── gnc/
-│   │   ├── broker/
+│   │   ├── broker/                # (PCM and GNC run in slam/robust/ on intra- and inter-agent edges, D70)
 │   │   └── reference_frames/
 │   │
 │   ├── reconstruction/
@@ -2219,6 +2217,11 @@ interface. The driver damps with Marquardt's `D = diag(H)` (clamped) and adapts 
 remains the Phase 1 two-frame stub's, kept byte-identical. All driver settings are config + manifest fields; design
 `docs/design/POSE_GRAPH_2.md`.
 
+**Update 2026-10-19 (D70):** the pose graph runs `pgo_v2`, which has the diagonal clamp OFF. OpenCV clamps the damping
+`λ·diag(H)` itself to an absolute [1e-6, 1e32], whereas Ceres clamps `diag(JᵀJ)`; the floor throttled the final
+Gauss–Newton steps on parking-garage. The windowed BA keeps the clamp (`pgo_v1` defaults). Design
+`docs/design/ROBUST_BACKEND_2.5.md` §2.
+
 Use Eigen sparse Cholesky internally.
 
 Reference-check with:
@@ -2433,6 +2436,15 @@ degenerate =
 Ariadne does not merely reject a false closure; it can **decline to attempt the closure** when the scene does not provide enough information.
 
 This is specifically motivated by the SubT-derived observation in `ALGORITHMS(1).md` that robust backends cannot rescue an invalid/degenerate hypothesis indefinitely.
+
+**Update 2026-10-19 (D71, §49 ritual):** `λ_min / λ_max < τ_condition` on the full Hessian mixes metres and radians,
+and its verdict depends on the frame. The gate instead bounds the worst-direction 1σ of the translation marginal [m]
+and of the rotation marginal [rad] separately. Both come from the loop's covariance in the pose-graph residual tangent,
+with B's stereo depth noise propagated, and the within-block ratios are reported. Parallax becomes "too few inliers
+with a stereo triangulation angle ≥ θ_min". Collinearity means the **3D** inliers lie on a line; collinear pixels
+alone (a planar fan through the camera centre) are well conditioned with stereo depth. Pixel spread, planarity and
+the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
+`docs/design/ROBUST_BACKEND_2.5.md` §4; ALGORITHMS §7.8a.
 
 ---
 

@@ -1889,3 +1889,105 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4.8–4.9.
 - **Merge note for 2.1:** 2.1's D60 bars were measured against D58 (attitude_only). After merging, EuRoC needs one
   combined sweep; the two gains (re-association, IMU) both act on the lost stretches and need not add.
 
+## 2026-10-19 — D70: chordal initialisation for the pose graph; pgo_v2 drops OpenCV's absolute damping floor; robust backend placed in `cpp/slam/robust/`
+
+**Context.** Plan 2.5 opens with arch §13.1's chordal initialisation, ahead of the degeneracy gate → PCM → GNC-TLS
+order of §14.5. Three open items came with it: (a) GTSAM `InitializePose3` throwing in the oracle, (b) parking-garage
+needing 1000 LM iterations where GTSAM needs 8, (c) cubicle and rim refused for indefinite information. Design:
+`ROBUST_BACKEND_2.5.md` §1–§3, §9.
+
+**Decision.**
+1. **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init.{hpp,cpp}`). It solves one sparse linear least-squares
+   problem for the rotation rows (κ-weighted, hard anchor, three right-hand sides). Each block is projected to SO(3)
+   with `cv::SVDecomp` and the determinant fix, then translations come from a τ-weighted Laplacian. κ and τ follow
+   SE-Sync's isotropic conversion (`τ = 3/tr(I_t⁻¹)`, `κ = 3/(2 tr(I_R⁻¹))`), shared with D74.
+   - **Baselines (§49 ablation):** dead reckoning and a `cv::buildMST` spanning tree (Prim, highest κ).
+   - **Gate (maintainer decision 2026-10-18, design §9):** on the SE-Sync graphs where our LM from dead reckoning
+     fails, chordal + LM must reach GTSAM's minimum.
+     - The failure set is **torus3D and grid3D**, where GTSAM's LM from the same start stops in the same local
+       minima (29950.006 and 253372.10).
+     - Chordal + LM reaches the reference (12117.637 and 42179.979) in 6 and 8 iterations. On all six graphs it
+       ends within 7.0e-9 relative, stationary, in 4–15 iterations. MST rescues both as well.
+     - This matches Carlone et al. 2015, Table I, on the four graphs the two studies share. **PASSED.**
+2. **pgo_v2 = pgo_v1 with `clamp_diagonal` off**, as the preset `PgoV2()` and `SolvePoseGraph`'s default.
+   - **Why:** OpenCV clamps the damping `λ·diag(H)` to an absolute [1e-6, 1e32]. Ceres, which it mirrors, clamps
+     `diag(JᵀJ)` before applying λ.
+   - **Effect on garage:** with the floor, 95 iterations and a stop 3.7e-5 above the minimum at production
+     tolerances; without it, 15 iterations, at the minimum.
+   - **Open item (b) is reduced, not at parity:** 15–18 iterations against GTSAM's 7.
+   - **No regressions:** the 100-case oracle 100/100 (worst 1.48e-12 relative); the SE-Sync graphs reach the same
+     minimum as GTSAM on all six; ctest 300/300 (8 env-gated skips, the oracle results cited separately).
+   - **The struct defaults stay pgo_v1** because the windowed BA builds on them. Flipping them would have changed
+     odometry silently.
+   - **Guard owed to D73:** the floor also regularised a rank-deficient H, so GNC must anchor every connected
+     component of the active graph, with its own test.
+3. **Oracle corrections** (`python/oracle/pgo_gtsam.py`, oracles only):
+   - GTSAM's `Rot3.Quaternion` does not normalise, and the g2o files are off unit length by up to 6.8e-7. The old
+     SE-Sync oracle therefore solved a slightly different problem, which was garage's "different minimum". Now
+     normalised, and `SeSyncBenchmarkGraphs` asserts equal initial energies.
+   - GTSAM's chordal soft-anchors node 0 at unit precision, against edge weights near 15, which costs 6.5e-3 rad.
+     The oracle scales the edge information by 2⁻⁵⁴ to make the anchor effectively hard.
+   - New cases go in the branch cache only. The shared `.cache/oracle/*` is untouched.
+4. **Open item (a), diagnosed.** `InitializePose3` throws on every case without a `PriorFactorPose3`, because
+   `NonlinearEqualityPose3` is dropped and the anchor is left disconnected. With a unit prior, 3 of 100 cases throw.
+   - The throw is in multifrontal Cholesky only: QR and sequential Cholesky succeed on the same linearisation, and H
+     is positive definite. So this is a false positive in GTSAM, not a problem with the graphs.
+   - The reference start falls back to GTSAM's chordal rotations. The original "case 2" was never committed and is
+     not reproduced [UNVERIFIED].
+5. **Placement (arch §3 updated, §49).** The degeneracy gate, PCM, GNC and the certificate go in `cpp/slam/robust/`,
+   not `perception/` and `collaboration/`. All of them act on pose-graph edges and must also run intra-agent, with no
+   broker. `loop_closure/` holds the intra-agent candidate source (D73).
+
+**Not done here, stated.** No runtime path solves the pose graph yet, so the `pgo_init` config selection, a
+`configs/slam` PGO entry and the manifest fields land with the first caller (D73). Open item (c) belongs to D74.
+grid3D dominates the 2.6 h gate. The gate is an env-gated evidence run, never part of `--premerge`.
+
+**Evidence.**
+- `PgoInit.SeSyncDeadReckoningGate`, `PgoOracle.SeSyncBenchmarkGraphs`, `PgoOracle.DampingAblation`,
+  `PgoInit.ChordalRotationsAgreeWithGtsam` (50 isotropic cases within 2.6e-10 rad of GTSAM's chordal).
+- `test_chordal_init.cpp`, 4 tests: the determinant fix, κ/τ, exact noise-free recovery, refusal of a graph
+  disconnected from the anchor.
+- ALGORITHMS §7.2a.
+
+## 2026-10-19 — D71: loop-closure degeneracy gate on the loop's own covariance (marginal σ_t / σ_r, parallax, collinearity), stereo depth noise propagated
+
+**Context.** Arch §14.4 puts a degeneracy gate before PCM. A degenerate PnP loop carries an honest but huge
+covariance, so it is consistent with almost anything and PCM cannot discriminate it. The arch criterion is
+`λ_min/λ_max < τ` on the Hessian, which mixes metres and radians and depends on the frame. The design also assumed
+that 3D point noise could be ignored. Design: `ROBUST_BACKEND_2.5.md` §4.
+
+**Decision.** `cpp/slam/robust/degeneracy.{hpp,cpp}`, `AssessLoop`, a pure library with no wiring.
+- **Pose refinement:** the PnP pose is refined with `cv::solvePnPRefineLM`, then Gauss–Newton weighted by per-point
+  pixel covariances that carry B's stereo noise in (u, v, disparity) (Vakhitov et al., CVPR 2021).
+- **Covariance:** H⁻¹ inflated by max(1, σ̂²), in the left tangent, converted to the pose-graph residual tangent by
+  `OdometryEdge`'s formula.
+- **Gates:**
+  - worst-direction 1σ of the translation marginal [m] and the rotation marginal [rad], absolute bounds (Zhang 2016);
+  - too few inliers with a stereo triangulation angle ≥ θ_min;
+  - collinearity: the 3D inliers lie on a line (λ_mid/λ_max of their covariance).
+- **Reported only:** the within-block ratios, pixel spread, planarity and the corridor score.
+- **§49:** the arch §14.4 criterion is replaced, with a dated update recorded there; ALGORITHMS §7.8a.
+
+**Evidence** (`tests/unit/test_degeneracy.cpp`, 8/8; ctest 308/308, 8 env-gated skips):
+- the finite-difference check of the stereo back-projection Jacobian;
+- the information equals `OdometryEdge`'s conversion;
+- Monte Carlo mean NEES **5.95** over 500 trials (χ²₆ mean 6) at 1.5–12 m with pixel and disparity noise. At
+  25–40 m it is **54.7**: the linearised covariance is about 9× overconfident at far range, which is the measured
+  reason parallax is its own gate;
+- the control passes. A 3D line is named collinear, far-only points are named for parallax, and the small object
+  is named for conditioning;
+- **Collinearity moved from pixels to 3D after measurement.** A pixel-spread gate refused a well-conditioned planar
+  fan (6.4 mm, 1.35 mrad). Conditioning alone missed a 3D rail (8.3 mrad reported), because stereo noise fabricates
+  the missing rotation information. The fan is now a must-not-refuse test.
+- **Scene correction:** 120 points on a 40 px patch measured 2.7 cm and 0.4°, a usable loop. The scene was corrected
+  to 25 points on a 20 px patch; the threshold was not loosened.
+
+**Not done, stated.**
+- **Thresholds** (σ_t 0.10 m, σ_r 0.02 rad, 10 points at ≥ 1°, spread 0.01, σ_px 0.46, σ_d = √2 σ_px) are
+  [ASSUMPTION]. Calibration follows Zhang's margin-midpoint rule on real candidates with ground truth, protocol fixed
+  in design §4, run in D73.
+- **Not wired.** `VerifyResult` does not export inlier correspondences, and the broker's `ProxyInformation` stays,
+  because replacing it changes the Phase-1 sim_collab outputs. Both need a maintainer decision before D73.
+- **Honest covariance is shown at 1.5–12 m only.** On the small-object scene the residuals are about 3× the model
+  (σ̂² 3.2), so the covariance is honest there only through the inflation.
+- **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].

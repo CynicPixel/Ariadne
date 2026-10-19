@@ -31,6 +31,31 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Open:** gravity cannot correct roll/pitch drift (6-DoF gauge; part 3); `lost_motion` decision re-measured after it.
 - Pre-merge not run (maintainer's instruction).
 
+## 2026-10-19 — 2.5: loop degeneracy gate with honest loop covariance (D71)
+
+- **`cpp/slam/robust/degeneracy`:** each PnP loop gets a covariance with B's stereo depth noise propagated
+  (NEES 5.95 against 6 at 1.5–12 m; 54.7 at 25–40 m, hence a separate parallax gate).
+- **Gates:** marginal σ_t / σ_r (metres and radians kept apart), parallax, and 3D collinearity. Pixel collinearity
+  was measured to refuse a well-conditioned planar fan, so it is reported only.
+- **Tests:** 8/8; ctest 308/308. The thresholds are [ASSUMPTION], to be calibrated in D73 on real candidates.
+- **Not wired:** exporting the verifier's inliers and swapping out the proxy information need a decision.
+- **Next:** PCM (D72).
+
+## 2026-10-19 — 2.5 opened: chordal init passes the SE-Sync gate; pgo_v2 damping; oracle fixed (D70)
+
+- **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init`): `cv::SVDecomp` projection with the determinant
+  fix, plus a `cv::buildMST` baseline.
+- **Measured failure set from dead reckoning: torus3D and grid3D.** GTSAM's LM fails the same way from the same start.
+  Chordal + LM reaches GTSAM's minimum on all six graphs (within 7.0e-9 relative, 4–15 its). **Gate PASSED.**
+- **pgo_v2:** OpenCV's absolute damping floor is turned off for the pose graph. Garage drops from 95 to 15 iterations
+  at production tolerances. The windowed BA stays on pgo_v1.
+- **Oracle bugs fixed:** unnormalised quaternions (garage's "different minimum" was the oracle's) and GTSAM's chordal
+  soft anchor. Open item (a) is diagnosed (GTSAM multifrontal false positive). (b) is reduced, not at parity.
+  (c) moves to D74.
+- **Placement:** `cpp/slam/robust/` (arch §3 updated).
+- **Tests:** ctest 300/300 (8 env-gated skips); 100-case oracle 100/100; SE-Sync no-regression on the corrected oracle.
+- **Next:** the degeneracy gate (D71), then PCM (D72), GNC-TLS and the loop source (D73), then the certificate (D74).
+
 ## 2026-10-18 — 2.4 step 1: attitude_only ships for EuRoC v2 (D58)
 
 - **Gyro validated against ground truth:** 0.019° per pair with the bias removed.
