@@ -1,6 +1,6 @@
-# 2.1 (PERCEPTION_2.1.md): the EuRoC front-end of configs/perception/euroc.yaml plus lost-mode re-association
-# (§4.3). Every other key is euroc.yaml verbatim, so a run with this file and slam/euroc_v2.yaml differs from D56 v2
-# only by re-association (ablation row A1). Dataset-config caveats: see euroc.yaml (D35).
+# EuRoC v2 perception config from D60 on (2.1, PERCEPTION_2.1.md): configs/perception/euroc.yaml plus lost-mode
+# re-association (§4.3). Pair with configs/slam/euroc_v2.yaml. Every other key is euroc.yaml verbatim (measured as
+# row A1). Dataset-config caveats: see euroc.yaml (D35).
 name: euroc_v2
 
 features:

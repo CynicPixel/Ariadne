@@ -177,3 +177,17 @@ TEST(XFeatEngine, ConfigRequiresWeightsAndValidSizes) {
     c.features.engine = "sift";
     EXPECT_THROW(ValidatePerception(c), ConfigError);
 }
+
+// The XFeat ablation config of D60 (row A4t-r, PERCEPTION_2.1.md §9.11) parses and carries the measured values.
+TEST(XFeatEngine, ShippedAblationConfigIsTheMeasuredRow) {
+    const PerceptionConfig c =
+        LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc_v2_xfeat.yaml");
+    EXPECT_EQ(c.features.engine, "xfeat");
+    EXPECT_EQ(c.features.xfeat_input, "resize");
+    EXPECT_EQ(c.tracker.replenish, "keyframe");
+    EXPECT_EQ(c.tracker.replenish_min_tracks, 300);
+    EXPECT_EQ(c.tracker.replenish_min_eig_quality, 0.0);
+    EXPECT_TRUE(c.reassociation.enabled);
+    EXPECT_DOUBLE_EQ(c.reassociation.ratio, 0.75);
+    EXPECT_DOUBLE_EQ(c.reassociation.max_l2, 0.6);
+}

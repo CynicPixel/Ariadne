@@ -1595,6 +1595,19 @@ and/or XFeat semi-dense refinement.
 against a 20–30 Hz requirement. It is a verifier for expensive, rare, high-value decisions — inter-agent
 candidates that survived retrieval and cheap geometric screening — and nothing else (C8).
 
+> **As built (D60, 2.1, `docs/design/PERCEPTION_2.1.md`).** EuRoC v2 ships **ORB + lost-mode re-association**, not
+> XFeat.
+> - **Re-association:** when fewer than 30 tracks hold a landmark, tracks holding none are described and matched to
+>   healthy (MEASURED-born) window landmarks: mutual NN, ratio 0.75, Hamming ≤ 50. The matches are verified by seeded
+>   PnP and relabelled onto the landmark id.
+> - **XFeat as specified here is built and config-selectable:** `features.engine: xfeat` (one cached forward per
+>   image, §7.3 grid selection after the mask), `tracker.replenish: keyframe` with an off-cadence
+>   `replenish_min_tracks`, and this section's image-gradient quality as `replenish_min_eig_quality`, a Shi-Tomasi
+>   gate on new tracks.
+> - Measured on EuRoC, XFeat cuts lost frames hardest but regresses ATE on V2 and MH_02, even with re-association off.
+> - "XFeat primary" stands for the learned paths. The VO front-end choice is revisited when that regression is
+>   removed.
+
 ---
 
 ## 7.3 Keypoint selection
@@ -4165,6 +4178,15 @@ reconstruction_backend:
 ```
 
 This is critical for reproducibility.
+
+> **As built (D60, 2.1).** Front-end entries recorded under the manifest's `extra` map:
+> - `reassociation` (`off` or `lost_window/latest_keyframe[/admit_bridged]`);
+> - `replenish_cadence` (`every_frame` | `keyframe`);
+> - for `feature_engine: xfeat`: `xfeat_dnn_engine` (`opencv_dnn_graph` | `gemm_reference`), `xfeat_input` (e.g.
+>   `resize:736x480`), `xfeat_weights`, `xfeat_weights_checksum` (sha256 from the export's provenance file) and
+>   `xfeat_upstream_commit`.
+>
+> `results.yaml` gains `reassociation:` and `xfeat:` lines when they are enabled.
 
 ---
 

@@ -119,6 +119,67 @@ D54 table"; read literally, the merged tree fails that before 2.1 adds anything 
      `reassociation` (mode, descriptor policy, store), and the keypoint caps. §7.3 makes the caps manifest fields,
      not constants.
 
+### 3 rev 3 — re-baselined on D58, 3-seed medians on both sides (maintainer, 2026-10-18; written BEFORE any D58-tree run)
+
+Why: the D58 merge (`dbbf8d5`) turns on `imu: attitude_only` in `slam/euroc_v2.yaml`, so every 2.1 row now runs
+with the gyro while lost. Against D54/D56 bars, D58's gain would be credited to 2.1. Every rev-2 row (§9.2–9.11)
+stays as measured, on the D56 tree. Rev 3 supersedes rev 2 for the 2.1 claim.
+
+Baselines, on the merged tree:
+- **D58 v2** = `perception/euroc.yaml` + `slam/euroc_v2.yaml`, seeds 1–3, all 11 flights.
+  - Seed 1 must reproduce `build/euroc_d58/v2` (D58's own run): results excluding timing, and trajectory.
+- **D54-equivalent v2** = `perception/euroc.yaml` + `slam/euroc_v2.yaml` with the `lost:` and `imu:` sections
+  removed (absent = coast / every_frame, imu none; D56 and D58 each state that this is unchanged), seeds 1–3, the
+  failing four.
+  - Seed 1 must equal the D54 table (§2.1). Labelled "D54-equivalent (byte-identical at seed 1)" if it does; if it
+    does not, the D54 table's single seed is used and that is stated.
+
+Bars (median = median of seeds 1–3):
+1. **Failing four:** the 2.1 row's median lost frames AND median ATE are each strictly below
+   min(D54-equivalent median, D58 median) per flight.
+2. **Passing seven:** the 2.1 row's median ATE ≤ the worst D58 seed, and at least D58 median × 1.02; its median
+   lost frames ≤ the worst D58 seed. Same idea as rev 2 (the measured seed spread is the tolerance), on medians.
+3. **Reporting:**
+   - every seed is shown next to each median;
+   - the seed-1 verdict is reported next to the median verdict;
+   - a flight where the medians pass but a seed fails is stated as such (MH_04 is bimodal, §9.4).
+4. The timing (§3.3) and reporting (§3.4) rules are unchanged.
+5. The bar values are written below when the baselines finish, before the 2.1 candidate (A4t-r, §9.11) runs on this
+   tree.
+
+**Rev 3 amendment (maintainer, 2026-10-18, time-gated):** the passing seven run the 2.1 candidate at **seed 1
+only**; the failing four keep 3 seeds. The passing-seven limit is still the worst D58 seed (floored at D58 median ×
+1.02), now applied to the candidate's single seed. This is weaker evidence than a 3-seed median, and the results say
+so.
+
+**Baselines measured** (merged tree `dbbf8d5`; `build/a1/{D58,D54EQ}/s{1,2,3}`):
+- D58 seed 1 reproduces `build/euroc_d58/v2` on all 11 flights (results excluding timing, trajectory byte-identical).
+- D54-equivalent seed 1 reproduces the D54 table on all four (same ATE and lost frames, trajectory byte-identical),
+  so it is labelled "D54-equivalent (byte-identical at seed 1)".
+
+| failing four | D58 ATE s1/s2/s3 [med] | D58 lost [med] | D54-eq ATE s1/s2/s3 [med] | D54-eq lost [med] | **bar: ATE < / lost <** |
+|---|---|---|---|---|---|
+| MH_04 | 0.3939/0.3266/0.3728 [0.3728] | 265/262/264 [264] | 2.7770/17.2225/1.4703 [2.7770] | 278/317/281 [281] | **0.3728 / 264** |
+| MH_05 | 0.3528/0.3189/0.3429 [0.3429] | 101/99/102 [101] | 0.5598/0.2165/0.2274 [0.2274] | 107/105/105 [105] | **0.2274 / 101** |
+| V1_03 | 0.4206/0.6274/0.6156 [0.6156] | 141/144/137 [141] | 0.4389/0.5600/0.5529 [0.5529] | 146/147/143 [146] | **0.5529 / 141** |
+| V2_03 | 0.6797/0.4898/0.5950 [0.5950] | 171/170/178 [171] | 2.1179/2.0946/1.9482 [2.0946] | 183/181/186 [183] | **0.5950 / 171** |
+
+Note MH_05: D54-equivalent seeds 2 and 3 (0.216, 0.227) beat D58 by far. D54's seed 1 (0.560) was an unlucky draw,
+so MH_05's ATE bar is now the D54-equivalent median, 0.2274, tighter than rev 2's 0.3490.
+
+| passing seven (seed 1 of the candidate) | D58 ATE s1/s2/s3 [med] | D58 lost | **limit ATE ≤ / lost ≤** |
+|---|---|---|---|
+| MH_01 | 0.0749/0.0664/0.0808 [0.0749] | 0/0/0 | **0.0808 / 0** |
+| MH_02 | 0.0686/0.0763/0.0705 [0.0705] | 16/19/17 | **0.0763 / 19** |
+| MH_03 | 0.0933/0.1130/0.0925 [0.0933] | 0/0/0 | **0.1130 / 0** |
+| V1_01 | 0.0867/0.1066/0.1192 [0.1066] | 4/4/4 | **0.1192 / 4** |
+| V1_02 | 0.0987/0.1489/0.1388 [0.1388] | 13/13/13 | **0.1489 / 13** |
+| V2_01 | 0.0701/0.0653/0.0710 [0.0701] | 18/19/18 | **0.0715 / 19** (median × 1.02 floor) |
+| V2_02 | 0.1165/0.1058/0.1182 [0.1165] | 14/16/16 | **0.1182 / 16** |
+
+Candidate: **A4t-r** (§9.11), `build/a1/cfg/euroc_v2_xfeat_a4t_r.yaml` + `slam/euroc_v2.yaml` (D58), launched
+2026-10-18 with these bars written. V1_03's ATE bar was filled in when D54-eq s3 finished, before any A4t-r result was read.
+
 ## 4. Components, in build order
 
 ### 4.0 Attribution first (no behaviour change)
@@ -330,21 +391,38 @@ All rows run on the merged D56 tree (bridge, τ 0.5) unless stated.
 | A4gt | XFeat | keyframe (300) + gate 0.01 | on | every_frame | §9.10 both fixes: the expected candidate |
 | A4t-off | XFeat | keyframe (300) | **off** | every_frame | §9.11: is V1_02's A4t failure re-association's? (added before running) |
 | A4t-r | XFeat | keyframe (300) | on, XFeat matcher + Lowe ratio 0.75 | every_frame | §9.11: does a ratio test remove it? (added before running) |
+| A4t-off·D58, A1·D58 | XFeat / ORB | keyframe (300) / every frame | off / on | every_frame, D58 gyro | §9.13: which component regresses V2 + MH_02 once the gyro is on (added before running) |
 | A5 | XFeat | keyframe | on, medoid descriptor | best | descriptor policy |
 
-## 6. Shared-file hunks (for mechanical merges)
+## 6. Shared-file hunks (for mechanical merges) — AS BUILT (rewritten 2026-10-19; the planned list is superseded)
 
 | file | hunk |
 |---|---|
-| `cpp/slam/odometry/stereo_vo.{hpp,cpp}` | const window-landmark accessor (id, X_w, `born_kf`, birth `PoseSource`); only if A1s is built: `ReinstateLandmarks` (coordinated) |
-| `cpp/runtime/tools/stereo_vo_runner.hpp` | engine selection; lost-mode call before `vo.Track`; keyframe-mode call after `AddKeyframe`; results/manifest lines. D57's scoring hunk sits near the results writer, so keep these hunks apart from it |
-| `cpp/perception/tracking/klt_tracker.{hpp,cpp}` | `Adopt(point, id)` (perception-owned) |
-| `configs/perception/*` | new keys, with v1 values that preserve current behaviour |
-| `configs/slam/*_v2.yaml` | new keys, v2 only |
-| `docs/ALGORITHMS.md` | insert-only: the XFeat/OpenCV 5.0.0 note; a re-association catalogue entry (ORB-SLAM §V-C/§V-D, OKVIS2 §VI-A) |
+| `cpp/runtime/tools/stereo_vo_runner.hpp` | include `engine_factory.hpp` (replacing `orb_engine.hpp`), `feature_engine_glue.hpp`, `reassociation_glue.hpp`; `MakeFeatureEngine` replaces `OrbEngine orb` (tracker + re-associator take `*features`); `reassoc.BeforeTrack` before `vo.Track`; `reassoc.AfterKeyframe` + `tracker.Replenish` after `AddKeyframe`; `reassoc_trace.csv` if enabled; `RecordFeatureEngine(m, *features, pcfg)` replaces `m.feature_engine = orb.Name()`; manifest `reassociation` + results lines if enabled; `res << features->ResultsYaml()` (empty for ORB) |
+| `cpp/slam/odometry/stereo_vo.hpp` | `LandmarkInfo` + const `Landmarks()` accessor (id, X_w, born_kf, birth `PoseSource`) |
+| `cpp/perception/tracking/klt_tracker.{hpp,cpp}` | `Relabel(from, to)`; `Replenish(gray)`; step 4 factored into `AddTracks`; the `replenish_min_eig_quality` gate; `<map>`/`<set>` includes. D58's `predicted` seam is untouched |
+| `cpp/perception/features/feature_engine.hpp` | pure virtual `Describe(gray, points, described)`; virtual `ManifestFields()` / `ResultsYaml()` (empty defaults) |
+| `cpp/perception/perception_config.hpp` | `ReassociationParams` + optional `reassociation:` section; `FeatureParams` `engine`/`xfeat_*`; `TrackerParams` `replenish`, `replenish_min_tracks`, `replenish_min_eig_quality`; all optional, defaults = old behaviour |
+| `configs/perception/` | new `euroc_v2.yaml` (the D60 v2 config) and `euroc_v2_xfeat.yaml` (the measured XFeat ablation). No existing config edited |
+| `docs/ALGORITHMS.md` | insert-only: the ⚠️ cv::XFeat-absent note after the §1.0 class table; §1.3c re-association entry (renumbered from 1.3b at the D58 merge); §1.3c measured result |
+| `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md` | two "As built (D60)" blockquotes: end of §7.2; after §28.2's manifest field list |
+| `docs/DECISIONS.md`, `docs/STATUS.md` | appended D60 (DRAFT) and a new top STATUS entry |
+
+New, not shared: `perception/association/landmark_reassociation.*`, `perception/features/{xfeat_engine.*,
+engine_factory.hpp}`, `runtime/tools/{reassociation_glue,feature_engine_glue}.hpp`, `xfeat/xfeat_net.*` (D50's, split
+into `Candidates`/`SampleDescriptors`, reference test unchanged), `tests/unit/test_{reassociation,xfeat_engine}.cpp`.
+Philox site of the re-association PnP: `kMaxSite-16`.
 
 Not touched: `bundle_adjustment/`, `pose_graph/`, `robust/`, the 2.4 inertial files, `stereo_lk_matcher.*`, D56's
 lost-handling code (`rotation_bridge.*`, the lost branches in `stereo_vo.cpp`).
+
+Merge of `feat/phase2-foundations` (D57 + D58) into this branch, 2026-10-18 (`dbbf8d5`):
+- `stereo_vo_runner.hpp`: include block only; both sides kept.
+- `docs/ALGORITHMS.md`: D58 and 2.1 both inserted a "§1.3b". D58's (inertial) keeps 1.3b because it is already on
+  the shared branch. **The 2.1 re-association entry is now §1.3c.**
+- `klt_tracker.*` auto-merged: D58's optional `predicted` homography on `Process` and 2.1's
+  `Replenish`/`AddTracks`/quality gate touch different steps.
+- The merged tree passes ctest 332/332 (2 fixture tests skipped by env, as before).
 
 Handover note: `.cache` in this worktree is a symlink. The `.gitignore` pattern `.cache/` matches only directories,
 so it shows as `?? .cache`. Do not commit it.
@@ -720,3 +798,197 @@ ratio 0.75 is ORB-SLAM2 relocalisation's value, already in A1). The tolerance is
 - **Only A4t-off passes** → re-association with XFeat descriptors hurts V1_02 in a way a ratio test does not fix.
   Back to the maintainer, because the failing four need re-association.
 - **Neither passes** → V1_02's failure is not re-association's (the engine/cadence again). Back to the maintainer.
+
+**Results** (D56 tree, pinned binary md5 `ce812f7d…`, `slam/euroc_v2.yaml` as of D56; `build/a1/A4T_R`, `build/a1/A4T_OFF`):
+
+| row | ATE s1/s2/s3 [median] | lost | re-association runs / accepted / relabeled (s1, s2, s3) | verdict (≤ 0.1597, ≤ 13) |
+|---|---|---|---|---|
+| A4t | 0.1743/0.2150/0.1268 [0.1743] | 0/0/0 | 29/29/670, 31/31/738, 30/30/692 | ✗ |
+| **A4t-r** | 0.1483/0.1714/0.1348 [**0.1483**] | 0/0/0 | 30/30/548, 31/31/564, 30/30/521 | **✓** |
+| A4t-off | 0.1577/0.1685/0.1769 [0.1685] | 10/7/8 | off | ✗ (ATE) |
+
+- **A4t-r passes V1_02**, so by the rule above it is the candidate for the full 11 × 3 sweep.
+- The ratio test removes 20–25% of the relabels (670–738 → 521–564) without changing how often lost mode is
+  accepted. It does not stop the 100% acceptance rate. So the ratio test thins the matches inside each accepted set,
+  which is consistent with aliasing; seed 2 still sits above the limit.
+- Process note: A4t-off first failed. `sweep.sh` was edited in place while bash was still reading it (bash reads
+  scripts incrementally), and the D58 merge then put an `imu:` key into `slam/euroc_v2.yaml`, which the D56 binary's
+  strict parser refused. It was re-run on the D56 slam config (`build/a1/cfg/slam_euroc_v2_d56.yaml`, = `53a3c0e`).
+- **Re-association is not V1_02's problem; it helps.** Off, ATE gets worse (median 0.1685) and lost frames rise
+  0 → 7–10. With XFeat descriptors it needs the ratio test: plain XFeat mutual NN (A4t, 0.1743) is worse than no
+  re-association, and the ratio version (A4t-r, 0.1483) is better than both.
+- **So the candidate is A4t-r:** XFeat at keyframes, supply threshold 300, XFeat re-association with ratio 0.75.
+  The engine/cadence diagnosis (§9.9–9.10) and this one were both measured on the D56 tree. The full sweep has to run
+  on the merged tree (D58 `imu: attitude_only` in `slam/euroc_v2.yaml`), against a D58 baseline.
+
+### 9.12 A4t-r on the merged tree (D58 gyro on) against §3 rev 3: FAILS, 2026-10-19
+
+`build/a1/A4TR_D58/s{1,2,3}`; `build/a1/cfg/euroc_v2_xfeat_a4t_r.yaml` + `slam/euroc_v2.yaml` (D58). Failing four
+on 3 seeds, passing seven on seed 1 (rev 3 amendment). The host was suspended overnight mid-sweep; the runs resumed
+and completed. The progress log was lost with the session; results were read from the run directories.
+
+| failing four | ATE s1/s2/s3 [med] | bar | lost s1/s2/s3 [med] | bar | per seed ATE ; lost | verdict | forwards/frame |
+|---|---|---|---|---|---|---|---|
+| MH_04 | 0.3858/0.2829/0.2582 [0.2829] | < 0.3728 | 47/46/48 [47] | < 264 | ✗✓✓ ; ✓✓✓ | ✓ | 0.55 |
+| MH_05 | 0.2474/0.2876/0.2183 [0.2474] | < 0.2274 | 93/92/92 [92] | < 101 | ✗✗✓ ; ✓✓✓ | ATE ✗ | 0.53 |
+| V1_03 | 0.3619/0.3491/0.2983 [0.3491] | < 0.5529 | 36/35/39 [36] | < 141 | ✓✓✓ ; ✓✓✓ | ✓ | 0.78 |
+| V2_03 | 0.8269/0.7120/0.7805 [0.7805] | < 0.5950 | 89/83/82 [83] | < 171 | ✗✗✗ ; ✓✓✓ | ATE ✗ | 0.88 |
+
+| passing seven, seed 1 | ATE | limit | lost | limit | verdict | forwards/frame |
+|---|---|---|---|---|---|---|
+| MH_01 | 0.0599 | 0.0808 | 0 | 0 | ✓ | 0.24 |
+| MH_02 | 0.0964 | 0.0763 | 28 | 19 | ✗ ✗ | 0.30 |
+| MH_03 | 0.1062 | 0.1130 | 0 | 0 | ✓ | 0.37 |
+| V1_01 | 0.0705 | 0.1192 | 0 | 4 | ✓ | 0.31 |
+| V1_02 | 0.1483 | 0.1489 | 0 | 13 | ✓ (by 0.4%) | 0.68 |
+| V2_01 | 0.1118 | 0.0715 | 7 | 19 | ATE ✗ (+56%) | 0.53 |
+| V2_02 | 0.1362 | 0.1182 | 2 | 16 | ATE ✗ | 0.79 |
+
+**Verdict: A4t-r fails §3 rev 3.** 2 of 4 failing flights pass both bars; 4 of 7 passing flights hold.
+
+What the numbers say:
+- **Lost frames improve everywhere, on every seed.** MH_04 264 → 47, V1_03 141 → 36, V2_03 171 → 83, against
+  D58's medians. The lost-frame half of the brief is met on all four.
+- **ATE splits by environment:**
+  - MH_04, V1_03, MH_01, MH_03 and V1_01 improve.
+  - All three V2 flights get WORSE than D58: V2_01 0.070 → 0.112, V2_02 0.117 → 0.136, V2_03 0.595 → 0.781 (every
+    seed), though V2_03 loses half as many frames.
+  - With D58's gyro, a lost frame is bridged well. A2.1 frame that is no longer "lost" is now a PnP pose that can be
+    worse than the gyro bridge it replaced. On the D56 tree (visual bridge) A4t-r's V-flight gains were real.
+    That is the leading hypothesis, NOT a measurement.
+- **MH_05:** A4t-r beats D58 (0.343 → 0.247) but not the D54-equivalent median (0.227). D54 coast scores 0.216 /
+  0.227 on seeds 2 and 3: D56/D58's lost handling made MH_05's ATE worse than plain coasting, a regression that
+  predates 2.1.
+- V1_02, MH_01 and MH_03 at seed 1 are identical to the D56-tree A4t-r runs (§9.11, §9.10). Those flights have no
+  lost frames, so the gyro never acts.
+- XFeat cost: 0.24–0.88 forwards per frame. The V2 flights sit near frame rate (0.79–0.88), which is close to C8's
+  limit in practice.
+
+### 9.13 Which component regresses under the gyro? (maintainer chose this, 2026-10-19; reading fixed BEFORE running)
+
+Seed 1, merged tree, `slam/euroc_v2.yaml` (D58), on V2_01, V2_03 and MH_02:
+- **A4t-off·D58**: XFeat + cadence 300, re-association OFF (`build/a1/cfg/euroc_v2_xfeat_a4t_off.yaml`).
+- **A1·D58**: ORB every frame + re-association ON (`configs/perception/euroc_v2.yaml`).
+
+"Holds" = within the rev-3 limit: V2_01 ATE ≤ 0.0715, MH_02 ATE ≤ 0.0763 and lost ≤ 19, V2_03 ATE < 0.5950.
+
+- **A4t-off holds, A1 regresses** → re-association is what regresses once the gyro bridges lost frames. Fix
+  direction: re-associate only when it beats the bridge (e.g. stricter verification, or not while the gyro prior is
+  available).
+- **A1 holds, A4t-off regresses** → the XFeat engine/cadence is the regressor on V2 (texture/motion), independent
+  of association.
+- **Both regress** → both. **Neither** → an interaction of XFeat with re-association (they only regress together).
+
+One seed: this ranks hypotheses, it does not accept anything.
+
+**Results** (`build/a1/{A4TOFF_D58,A1_D58}/s1`; D58 and A4t-r rows from §3 rev 3 and §9.12):
+
+| seed 1 | V2_01 ATE / lost | V2_03 ATE / lost | MH_02 ATE / lost |
+|---|---|---|---|
+| limit | ≤ 0.0715 / ≤ 19 | < 0.5950 / < 171 | ≤ 0.0763 / ≤ 19 |
+| D58 (ORB, re-assoc off) | 0.0701 / 18 | 0.6797 / 171 | 0.0686 / 16 |
+| A4t-r (XFeat + re-assoc) | 0.1118 ✗ / 7 | 0.8269 ✗ / 89 | 0.0964 ✗ / 28 ✗ |
+| A4t-off (XFeat, re-assoc off) | 0.0621 ✓ / 8 | 0.7227 ✗ / 144 | 0.1066 ✗ / 27 ✗ |
+| A1 (ORB + re-assoc) | 0.0703 ✓ / 17 | 0.5694 ✓ / 130 | 0.0728 ✓ / 16 |
+
+Reading (rule fixed above):
+- **V2_03 and MH_02: "A1 holds, A4t-off regresses" → the XFeat engine/cadence is the regressor.**
+- **V2_01: "neither" → an interaction** (each alone holds; together 0.112).
+- **The §9.12 hypothesis is refuted.** Re-association does not become harmful under the gyro. With ORB it improves
+  V2_03 on D58: ATE 0.680 → 0.569, lost 171 → 130 (accepted 103, relabeled 878), and it is neutral on V2_01 and
+  MH_02.
+- So on the D58 tree, at one seed, **ORB + re-association (A1) is the only configuration that holds on all three**.
+  XFeat cuts lost frames hardest (V2_01 18 → 8) but costs accuracy on V2_03 and MH_02 even without re-association.
+- One seed. A1·D58 has not been run on the failing four or on the other passing flights.
+
+### 9.14 A1·D58 (ORB + lost-mode re-association, D58 gyro) as the 2.1 candidate (maintainer, 2026-10-19)
+
+Judged against §3 rev 3 exactly as written, the same bars A4t-r failed, with no change: the failing four on 3 seeds,
+the passing seven on seed 1. The seed-1 runs of V2_01, V2_03 and MH_02 come from §9.13 (deterministic, not re-run).
+
+If it passes, it deviates from the locked "XFeat primary features" (CLAUDE.md §1, arch §7.2), so it needs a §49
+arch decision by the maintainer (D60–D64). XFeat stays config-selectable as the measured ablation (§9.6–9.13). If it
+fails, it is reported like A4t-r.
+
+**Results** (`build/a1/A1_D58/s{1,2,3}`), against §3 rev 3 unchanged:
+
+| failing four | ATE s1/s2/s3 [med] | bar | lost s1/s2/s3 [med] | bar | per seed ATE ; lost | verdict |
+|---|---|---|---|---|---|---|
+| MH_04 | 0.3650/0.3294/0.3720 [0.3650] | < 0.3728 | 266/66/67 [67] | < 264 | ✓✓✓ ; ✗✓✓ | ✓ (bimodal lost, as on D56 §9.4) |
+| MH_05 | 0.3142/0.3415/0.3128 [0.3142] | < 0.2274 | 101/99/97 [99] | < 101 | ✗✗✗ ; ✗✓✓ | ATE ✗ |
+| V1_03 | 0.3910/0.5986/0.4341 [0.4341] | < 0.5529 | 89/92/95 [92] | < 141 | ✓✗✓ ; ✓✓✓ | ✓ |
+| V2_03 | 0.5694/0.5291/0.5345 [0.5345] | < 0.5950 | 130/121/122 [122] | < 171 | ✓✓✓ ; ✓✓✓ | ✓ |
+
+| passing seven, seed 1 | MH_01 | MH_02 | MH_03 | V1_01 | V1_02 | V2_01 | V2_02 |
+|---|---|---|---|---|---|---|---|
+| ATE / lost | 0.0749/0 | 0.0728/16 | 0.0933/0 | 0.0566/1 | 0.1054/3 | 0.0703/17 | **0.1262**/8 |
+| limit | 0.0808/0 | 0.0763/19 | 0.1130/0 | 0.1192/4 | 0.1489/13 | 0.0715/19 | 0.1182/16 |
+| verdict | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ATE ✗ (+6.8%) |
+
+**Verdict: A1·D58 fails §3 rev 3 on two items**: MH_05 ATE and V2_02 ATE (seed 1). Everything else holds.
+Lost frames fall on 10 of 11 flights; MH_01 and MH_03 stay at 0.
+
+| | failing four passing both bars | passing seven held | misses |
+|---|---|---|---|
+| A4t-r·D58 (XFeat) | 2 / 4 | 4 / 7 | MH_05 ATE, V2_03 ATE, MH_02, V2_01, V2_02 |
+| **A1·D58 (ORB)** | **3 / 4** | **6 / 7** | MH_05 ATE, V2_02 ATE |
+
+About the two misses (facts, not excuses; the verdict stands):
+- **MH_05's ATE bar (0.2274) is beaten by no D58-tree config.** D58 alone scores 0.343, A4t-r 0.247, A1 0.314. The
+  bar comes from D54-equivalent seeds 2 and 3 (0.216, 0.227), i.e. plain coasting. On MH_05, D56/D58's lost handling
+  is worse than coasting, a regression that predates 2.1. Only the D56-tree XFeat rows ever went below it (A4 0.218,
+  A3r 0.219).
+- **V2_02 is one seed.** D58's own spread there is 0.106–0.118. A1 is 7% over the worst of it. Seeds 2–3 were not
+  run (rev 3 amendment), so it is not known whether this is noise.
+
+**Post-hoc check (maintainer's choice, after the seed-1 verdict): V2_02 seeds 2 and 3.**
+
+| V2_02 | ATE s1/s2/s3 [med] | lost s1/s2/s3 [med] |
+|---|---|---|
+| D58 | 0.1165/0.1058/0.1182 [0.1165] | 14/16/16 [16] |
+| A1·D58 | 0.1262/0.1169/0.1054 [0.1169] | 8/9/4 [8] |
+
+On 3 seeds, A1's V2_02 ATE equals D58's (median 0.1169 against 0.1165, within the 0.1182 limit by 1%), with half the
+lost frames. The seed-1 miss is consistent with seed noise. **This check was added after the seed-1 result was
+known.** The rev-3 verdict (seed 1: ✗) is reported unchanged next to it. Remaining unexplained miss: MH_05 ATE.
+
+### 9.15 Why MH_05's ATE bar (0.2274, D54-equivalent coasting) is not beaten: a compensating error (2026-10-19)
+
+The maintainer asked for this investigation before closing out. It is read-only on existing outputs; scripts are in
+the session scratchpad (`mh05*.py`, numpy, Umeyama SE(3) as in the runner's ATE). The lost-handling code belongs to
+the critical-path session (D56/D58), so the finding goes to them.
+
+1. **Where MH_05 loses frames.**
+   - Frames 1–85 (start): frame 0's keyframe has 6 stereo-valid points and creates 2 landmarks.
+   - Frames 1242–1249 (D54-eq, 8 frames) or 1242–1245 (D58, 4 frames).
+   - The last ~12 frames.
+   - There are no short blips.
+2. **Start (frames 29–86, the first ground truth).** D58's visual bridge gets rotation right (0.23° error, against
+   coasting's 2.0°); both miss translation by 4.4 cm. Not the cause.
+3. **The frame-1242 loss, frame before → frame after.**
+   - D58's gyro: 0.019–0.021 m, 0.14° relative error.
+   - Coasting: 0.31–0.51 m, 4.3–4.5°.
+   - D58 is about 25× better.
+4. **Local drift, 2 s RPE summed over the flight.** D58 8.39 m / 54.9°, D54-eq 10.48 m / 78.5° (seed 2). Equal
+   in every 200-frame bin except the start and the 1242 loss, where D58 is far better.
+5. **Each half aligned on its own scores about 0.08 m in every configuration:**
+
+   | | before 1242 | after 1250 | whole | second half under the first half's alignment |
+   |---|---|---|---|---|
+   | D54-eq s1 / s2 / s3 | 0.081 / 0.081 / 0.137 | 0.081 / 0.086 / 0.084 | 0.560 / 0.216 / 0.227 | 1.073 / 0.403 / 0.381 |
+   | D58 s1 / s2 / s3 | 0.081 / 0.083 / 0.078 | 0.081 / 0.086 / 0.084 | 0.353 / 0.319 / 0.343 | 0.674 / 0.607 / 0.655 |
+   | A1·D58 s1 / s2 / s3 | 0.067 / 0.084 / 0.078 | 0.079 / 0.086 / 0.081 | 0.314 / 0.341 / 0.313 | 0.603 / 0.650 / 0.599 |
+   | A4t-r·D58 s1 / s2 / s3 | 0.082 / 0.082 / 0.080 | 0.059 / 0.063 / 0.056 | 0.247 / 0.288 / 0.218 | 0.469 / 0.549 / 0.404 |
+
+**Conclusion.**
+- MH_05's whole-flight ATE is decided by how the two halves are registered across the 1242 loss: the drift
+  accumulated before it, plus the error made crossing it.
+- Coasting's 0.5 m / 4.3° crossing error happens to oppose the accumulated drift on seeds 2 and 3, which gives 0.216
+  and 0.227. On seed 1 the same coasting error compounds it (1.07 m, ATE 0.560: D54's own table value).
+- **The 0.2274 bar therefore rewards a compensating error, not better lost handling.** By every local measure
+  (crossing error, RPE) D58 is better than coasting.
+- Nothing is wrong with D56/D58's lost handling here. That is the message to the critical-path session.
+- The A1·D58 MH_05 "miss" is a comparison against seed-luck in the baseline.
+- The verdict as written stands (rev 3: ✗). Whether to judge MH_05 against D58 (0.3429, which A1 beats on all three
+  seeds) or by RPE is the maintainer's call. Changing the bar after the result would be post-hoc, and must be
+  reported as such.

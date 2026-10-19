@@ -4,6 +4,28 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.1 perception: ORB + lost-mode re-association for EuRoC v2; XFeat measured, not shipped (D60, draft)
+
+- **Ships, once D60 is approved:** `perception/euroc_v2.yaml` = `euroc.yaml` + lost-mode re-association, the
+  ORB-SLAM relocalisation idea limited to the BA window and verified by seeded PnP.
+  - **EuRoC v2 sweeps must switch to `--perception-config configs/perception/euroc_v2.yaml`**; no repo file defines
+    the pair.
+  - With the section absent, runs are byte-identical on EuRoC v2 (verified), and on v1/sim by construction.
+- **EuRoC v2 on the merged D58 tree:**
+  - failing-four median lost frames 264/101/141/171 → 67/99/92/122;
+  - ATE passes on MH_04, V1_03 and V2_03;
+  - 11-flight seed-1 average ATE 0.223 → 0.204 m;
+  - against the D54 table, it beats all four failing flights on both metrics, and V2_02's ATE is 1.9% worse.
+- **One stated miss: MH_05 ATE.** Its bar is a coasting run whose large error happened to cancel earlier drift
+  (PERCEPTION_2.1 §9.15). The baseline's lost handling is fine.
+- **XFeat is built** (engine, keyframe cadence, Shi-Tomasi gate, exact against upstream) **and measured**: it cuts
+  lost frames hardest but regresses accuracy on V2 and MH_02 even without re-association. It stays
+  config-selectable.
+- Bars were re-derived on D58 with 3-seed medians (rev 3) before measuring. ctest 332/332 on the merged tree.
+  Pre-merge e2e not run (maintainer: only when needed; unit + targeted EuRoC sweeps are the evidence).
+- **Unmet:** XFeat timing (unmeasured); projection-guided re-association (not built).
+- **Next in 2.1:** WLS / §9.4 / §9.6, ANNIndex, ALIKED+LightGlue.
+
 ## 2026-10-18 — 2.4 step 1: attitude_only ships for EuRoC v2 (D58)
 
 - **Gyro validated against ground truth:** 0.019° per pair with the bias removed.

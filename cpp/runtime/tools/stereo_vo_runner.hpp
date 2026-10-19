@@ -516,8 +516,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     m.slam_config = scfg.name;
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = "none";
-    RecordFeatureEngine(m, *features, pcfg.features);
-    m.extra["replenish_cadence"] = pcfg.tracker.replenish;   // 2.1 §4.2
+    RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
     m.bag_checksum = source.BagChecksum();

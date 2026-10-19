@@ -232,6 +232,14 @@ On D56's EuRoC runs, 633 of the 683 lost frames have ≥ 30 live tracks but < 15
   `features/src/orb.cpp`). It drops keypoints within `edgeThreshold` of the border, so descriptors from
   `OrbEngine::Describe` are unrotated BRIEF, comparable only with each other.
 
+**Measured on EuRoC v2 (D60, merged D58 tree, 2026-10-19).** Lost-mode re-association with ORB ships:
+- failing-four median lost frames 264/101/141/171 → 67/99/92/122;
+- 11-flight seed-1 average ATE 0.223 → 0.204 m.
+
+With XFeat descriptors (upstream `XFeat.match`, e92685f: mutual NN + cos > 0.82, no ratio test), V1_02 regressed.
+Adding Lowe 0.75 fixed it (PERCEPTION_2.1 §9.11), so a ratio test is needed on XFeat descriptors too. XFeat as the
+tracking engine regressed V2 and MH_02 ATE independently of re-association (§9.13).
+
 ### 1.4 ⭐ Swarm-SLAM — the reference system for Ariadne
 
 Lajoie & Beltrame, **IEEE RA-L 2024**, [arXiv:2301.06230](https://arxiv.org/abs/2301.06230), [code (MIT)](https://github.com/MISTLab/Swarm-SLAM).

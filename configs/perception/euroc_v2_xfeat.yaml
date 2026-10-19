@@ -1,6 +1,7 @@
-# 2.1 (PERCEPTION_2.1.md §4.1): euroc_v2.yaml with XFeat as the feature engine, replenishing every frame (the tracker
-# cadence of §4.2 is not applied yet) and re-associating with XFeat descriptors. Engine plumbing / smoke config, not an
-# ablation row of §5. Every other key is euroc_v2.yaml verbatim. Dataset-config caveats: see euroc.yaml (D35).
+# 2.1 XFeat ablation for EuRoC v2 (D60; PERCEPTION_2.1.md §9.11-9.13, row A4t-r): euroc_v2.yaml with XFeat as the
+# feature engine at keyframe cadence, off-cadence resupply below 300 tracks, and re-association with XFeat descriptors
+# + Lowe 0.75. Measured, NOT shipped: fewer lost frames than euroc_v2.yaml, worse ATE on V2_* and MH_02 (D60).
+# Dataset-config caveats: see euroc.yaml (D35).
 name: euroc_v2_xfeat
 
 features:
@@ -31,6 +32,8 @@ tracker:
   target_tracks: 400            # VINS-Fusion ~150, OpenVINS ~200 at 752x480; 1200 cannot fit at 20 px spacing
   min_track_distance_px: 20.0
   replenish_request_factor: 4
+  replenish: keyframe           # §4.2 / arch §7.2, C8: XFeat at keyframes, LK between
+  replenish_min_tracks: 300     # off-cadence resupply below 75% of target_tracks [ASSUMPTION, §9.10]; 30 regressed (§9.9)
   f_ransac_threshold_px: 1.0
   f_confidence: 0.99
   f_max_iterations: 1000
@@ -68,7 +71,7 @@ stereo_match:                   # keyframe left->right LK correspondence (valida
 reassociation:                  # 2.1 lost-mode re-association (PERCEPTION_2.1.md §4.3); absent = off
   enabled: true
   trigger_correspondences: 30   # run before PnP when tracks holding a landmark < this (2 x pnp.min_correspondences)
-  ratio: 1.0                    # XFeat's own matcher (upstream XFeat.match, e92685f) has no ratio test: mutual NN only
+  ratio: 0.75                   # upstream XFeat.match has none; without it V1_02 regressed (§9.11). ORB-SLAM2's value
   max_hamming: 50               # binary descriptors only; unused with XFeat
   max_l2: 0.6                   # upstream XFeat.match min_cossim 0.82 on unit vectors: L2 = sqrt(2 - 2 x 0.82) = 0.6
   ransac_threshold_px: 2.0      # verifying PnP inlier threshold (slam pnp.ransac_threshold_px is the final word)

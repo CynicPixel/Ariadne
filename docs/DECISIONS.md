@@ -1817,3 +1817,84 @@ Design and evidence: `docs/design/INERTIAL_2.4.md`.
   **PASS**.
 - **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
   still drop and emit an edge.
+
+## 2026-10-19 — D60: 2.1 — ORB + lost-mode re-association ships for EuRoC v2; XFeat stays a measured ablation (overrides "XFeat primary" for this phase)
+
+> **DRAFT, awaiting maintainer approval.** It overrides a CLAUDE.md §1 locked decision ("XFeat primary features") for
+> the EuRoC v2 VO front-end. The maintainer chose to accept A1 with MH_05 explained (2026-10-19); this text has not yet
+> been approved.
+
+Design, every run and every bar: `docs/design/PERCEPTION_2.1.md` (§3 rev 3, §9).
+
+**What ships.** `configs/perception/euroc_v2.yaml` becomes the EuRoC v2 perception config, paired with
+`configs/slam/euroc_v2.yaml`. It is `euroc.yaml` plus a `reassociation:` section. **No file in the repo defines the
+v2 pair** (D58's v2 sweep ran `perception/euroc.yaml` + `slam/euroc_v2.yaml`). So from D60 on, every EuRoC v2
+sweep, the critical-path session's included, must pass `--perception-config configs/perception/euroc_v2.yaml`, or
+it silently runs without re-association.
+- Lost-mode re-association, the ORB-SLAM §V-C relocalisation idea restricted to the BA window. When fewer than 30
+  live tracks hold a landmark, tracks holding none are described at their pixel and matched against healthy (born at
+  MEASURED keyframes) untracked landmarks: mutual NN, Lowe 0.75, Hamming ≤ 50 (ORB-SLAM2 `ORBmatcher`, `TH_LOW`).
+- The matches are verified by seeded USAC PnP together with the healthy correspondences.
+- Accepted tracks are renamed (`KltTracker::Relabel`), so StereoVo finds the old landmark by id.
+- Off when the section is absent.
+  - Verified byte-identical on EuRoC v2: section absent, D58 seed 1 equals D58's own run on all 11 flights on the
+    merged binary; on the D56 tree, ORB `euroc_v2` re-runs equal A1, and with the code present but the section
+    absent, runs equal D56.
+  - Identical **by construction, not run** for v1 (`slam/euroc.yaml`) and the sim tools that include the runner:
+    every new call returns early when its config section is absent.
+
+**Evidence (merged tree with D58's gyro; §3 rev 3: 3-seed medians on the failing four, seed 1 on the passing seven
+by the maintainer's time-gated amendment):**
+- Failing four, against min(D54-equivalent, D58):
+  - lost frames pass on all four (medians 264 → 67, 101 → 99, 141 → 92, 171 → 122);
+  - ATE passes on MH_04, V1_03 and V2_03 (V2_03 0.595 → 0.535 on every seed).
+- Passing seven: six hold at seed 1. V2_02 missed at seed 1 (0.126 against 0.118); a post-hoc 3-seed check gives a
+  median of 0.1169 against D58's 0.1165, with lost 16 → 8.
+- 11-flight seed 1: average ATE **0.223 → 0.204 m**, lost frames 743 → 631 (MH_04's seed 1 is its bimodal bad draw:
+  266 against 66/67).
+- **Against the brief's literal D54 table** (seed 1, §3.4):
+  - A1 beats it on ATE and lost frames on all four failing flights: MH_04 2.777/278 → 0.365/266, MH_05
+    0.560/107 → 0.314/101, V1_03 0.439/146 → 0.391/89, V2_03 2.118/183 → 0.569/130.
+  - It equals or beats it on six passing flights.
+  - V2_02's ATE is 1.9% worse (0.1238 → 0.1262), with lost frames 17 → 8.
+
+**Accepted with one stated miss: MH_05 ATE** (0.314 against the bar of 0.2274).
+- The bar is the D54-equivalent (coasting) median. Coasting crosses MH_05's frame-1242 loss 25× worse than D58's gyro
+  (0.5 m / 4.3° against 0.02 m / 0.14°), but on seeds 2 and 3 that error happens to cancel earlier drift. Seed 1
+  of the same coasting scores 0.560.
+- Each half of the flight scores about 0.08 m in every configuration, and D58 has 20% less RPE than coasting.
+- A1 beats D58 on MH_05 on every seed (0.314 against 0.343). Analysis: PERCEPTION_2.1 §9.15. Nothing is wrong with
+  D56/D58's lost handling on MH_05.
+
+**Why not XFeat (CLAUDE.md §1 "XFeat primary features", arch §7.2).** It is built and verified, and stays
+config-selectable (`features.engine: xfeat`):
+- `XFeatEngine` over D50's net: one cached forward per image, mask before §7.3 grid selection, `Describe` at any
+  pixel with upstream's sampler, upstream's 752 → 736 preprocessing reproduced to float precision.
+- Keyframe cadence (`tracker.replenish: keyframe`, `replenish_min_tracks`) and the §7.2 image-gradient gate
+  (`replenish_min_eig_quality`).
+
+Measured, it cuts lost frames hardest but costs accuracy:
+- On the D56 tree, XFeat at keyframes (A4) regressed 6 of the 7 passing flights.
+- An engine × cadence 2×2 showed both contribute.
+- The best fix (A4t-r: resupply below 300 tracks + ratio 0.75 on XFeat's matcher) failed rev 3 on the merged tree:
+  V2_01, V2_02, V2_03 and MH_02 ATE.
+- With re-association OFF, XFeat alone still regresses V2_03 and MH_02 (§9.13), so the regressor is the engine
+  (or its cadence), not the association.
+- It also runs at 0.53–0.88 forwards per frame on the V2 flights, near C8's frame-rate limit.
+
+XFeat remains the planned primary for the learned paths it was chosen for. This decision is about the EuRoC v2 VO
+front-end in 2.1, revisited if a later phase removes the regression.
+
+**Not done in 2.1 here, stated plainly:**
+- **XFeat timing within the §4p budget: unmet (unmeasured).** Forward passes were only timed under load (28–78 ms
+  against ≤ 16 ms).
+- **The PRIORITY item is half built.** Descriptor re-association with PnP verification exists. Projection-guided
+  search into the window (ORB-SLAM's Track Local Map) does not.
+- The XFeat input-size decision is not taken; `resize` (upstream) is the default.
+- The rest of plan 2.1 is not started: WLS/§9.4/§9.6, ANNIndex, ALIKED+LightGlue.
+
+**Correction to D54 (append-only).** D54's quoted lost frames "MH_04 266, V2_03 181, V1_03 139, MH_05 100" are
+v1's, taken from the v1 rows of the same sweep. v2's are 278, 183, 146 and 107 (PERCEPTION_2.1 §2.1).
+
+**Merge note.** `feat/phase2-foundations` (D57, D58) is merged into `feat/2.1-perception` (`dbbf8d5`).
+`ALGORITHMS.md`: D58's inertial section keeps §1.3b; 2.1's re-association catalogue entry is §1.3c.
