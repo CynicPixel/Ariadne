@@ -4,6 +4,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — EuRoC v2 now runs the full inertial layer (D59 switch)
+
+- `euroc_v2` = `imu.mode full` (avg ATE 0.121 m, 9/11 in the stereo-inertial class); attitude_only kept as
+  `euroc_v2_attitude`. Both verified byte-identical to their previous runs.
+- **Next (2.4):** gravity-prior edges per keyframe for the pose graph (arch §10.4), then the combined sweep after the
+  2.1 merge.
+
 ## 2026-10-19 — 2.4 full, part 3: bias prior fixed; 9/11 in the stereo-inertial class (D59)
 
 - **EuRoC `euroc_v2_full`:** average ATE **0.121 m** (target ≤ 0.138); 9/11 flights in class (V1_03 0.357, V2_02

@@ -178,7 +178,11 @@ outage length, is MEASURED on held-out fake outages of 0.5–10 s cut into track
 
 ### 4.6 Defaults
 
-`imu.mode: full` is opt-in. `euroc_v2` switches only after it beats `attitude_only`; `sim_v2` stays `none`.
+- **2026-10-19 (maintainer): `euroc_v2` is `imu.mode: full`** (avg 0.121 vs 0.223 m, 9/11 vs 4/11 in the
+  stereo-inertial class; costs MH_03 +6 mm, V1_03 still out). The attitude_only config is kept as
+  `euroc_v2_attitude` (the D58 baseline and ablation). The opt-in `euroc_v2_full` it replaces was identical apart
+  from its name; the §4.7–4.9 evidence directories still carry that name.
+- `sim_v2` stays `none` (§5).
 
 ### 4.7 Results, part 2 (2026-10-19, `euroc_v2_full`, refinement + init gate)
 
@@ -218,7 +222,8 @@ no yaw, and a window tilted 2° was found at 2.0000° and rotated back onto the 
 window "keeping [covisible keyframes'] pose fixed", and its VI welding BA has "the keyframe immediately before the
 local window … included but fixed". Long-term tilt is held there by map reuse (old points seen from fixed covisible
 keyframes) and loop closure. Here those are 2.1 (re-association) and Phase 3. The per-keyframe gravity for the pose
-graph is arch §10.4's GRAVITY_PRIOR (2.5). So the residual tilt drift on hard flights is not a 2.4 gauge defect.
+graph is arch §10.4's GRAVITY_PRIOR: produced here (plan 2.4, "gravity-prior edges"; next), consumed by the pose
+graph (2.5). So the residual tilt drift on hard flights is not a 2.4 gauge defect.
 
 **Lesson applied to the bias prior.** The same mechanism exists there: ×10 on the whole marginal loses the prior's own
 information on any direction a window does not observe (b_a in a dark window). Measured in the fake outages:

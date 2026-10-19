@@ -1812,7 +1812,8 @@ Design and evidence: `docs/design/INERTIAL_2.4.md`.
   and **off**. Lost frames −3% only; V1_03 0.42 → 0.82.
 - **Gravity** (Mahony 2008 Theorem 5.1, the paper's kP = 1, kI = 0.3) is on every keyframe record. Its error against
   ground truth is a median 1.3–4.2° per flight, 15° worst: MAV dynamics leak through. Recorded so that a
-  GRAVITY_PRIOR uses an honest σ. The factor itself is 2.5's (pose graph).
+  GRAVITY_PRIOR uses an honest σ. The factor itself is 2.5's (pose graph). [Corrected in D59: the plan puts
+  producing gravity-prior edges in 2.4; 2.5 consumes them.]
 - `imu.mode` defaults to `none`: v1, `sim_v2` (no sim IMU plumbing yet) and the sim gate are unchanged. Pre-merge
   **PASS**.
 - **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
@@ -1872,4 +1873,19 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4.8–4.9.
   10 s (4.6 vs 3.1 m): long IMU-only stretches diverge; bounding them belongs with map segments (2.1 / Phase 3).
 - ctest 328/328. `euroc_v2` (attitude_only) byte-identical to D58 on MH_01; `euroc_v2_full` stays opt-in pending
   the maintainer's switch decision. Pre-merge not run (maintainer's instruction).
+
+## 2026-10-19 — D59 (switch): `euroc_v2` is imu.mode full; attitude_only kept as `euroc_v2_attitude`
+
+- **Maintainer decision.** EuRoC average ATE 0.121 vs 0.223 m, 9/11 vs 4/11 flights in the stereo-inertial class
+  (INERTIAL_2.4 §4.9). Costs: MH_03 +6 mm; V1_03 (0.357) and V2_02 (+1 mm) stay out of class.
+- `configs/slam/euroc_v2.yaml` takes the full-mode values of `euroc_v2_full` (removed: identical apart from its name;
+  the D59 evidence directories keep that name). `configs/slam/euroc_v2_attitude.yaml` is the D58 configuration,
+  kept as the baseline/ablation.
+- **Verified by targeted runs, not the pre-merge (maintainer's instruction):** the new `euroc_v2` reproduces the
+  committed full-mode V2_03 trajectory byte for byte, and `euroc_v2_attitude` reproduces D58 on MH_01 byte for byte.
+  `sim_v2` (imu none) and the sim gate are untouched.
+- **Ownership corrected:** gravity-prior edges (arch §10.4) are a 2.4 deliverable per the plan, produced here and
+  consumed by 2.5's pose graph; the D58 entry had assigned them to 2.5. They are this session's next item.
+- **Merge note for 2.1:** 2.1's D60 bars were measured against D58 (attitude_only). After merging, EuRoC needs one
+  combined sweep; the two gains (re-association, IMU) both act on the lost stretches and need not add.
 
