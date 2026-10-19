@@ -127,7 +127,7 @@ std::string NotPdDiagnostic(const BaWindow& w, const BaLayout& L, const BaSchur&
 
 bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
                             std::string* why, const WindowBaReport* solve, std::map<int, Mat6>* bias_cov,
-                            const std::vector<int>& bias_keyframes) {
+                            const std::vector<int>& bias_keyframes, Eigen::Matrix2d* gravity_cov) {
     if (bias_cov && !w.inertial()) throw std::invalid_argument("WindowBaCovariances: bias marginals of a visual-only window");
     // The undamped system at w (the solution, when called after SolveWindowBa).
     const BaLayout L(w);
@@ -147,6 +147,10 @@ bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes
     }
     if (bias_cov)
         for (int k : bias_keyframes) (*bias_cov)[k] = schur.Marginal<6>(L.bias(k));
+    if (gravity_cov) {
+        if (L.grav() < 0) throw std::invalid_argument("WindowBaCovariances: gravity is not a variable of this window");
+        *gravity_cov = schur.Marginal<2>(L.grav());
+    }
     return true;
 }
 

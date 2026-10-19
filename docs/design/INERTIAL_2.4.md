@@ -197,6 +197,56 @@ outage length, is MEASURED on held-out fake outages of 0.5–10 s cut into track
   (carried prior), then the window rotated back to the fixed g_W about window[0] (a 4-DoF gauge in effect).
 - §4.4 outages (decay vs propagate) re-measured after part 3; the first measurement is in DECISIONS D59.
 
+### 4.8 Gravity in the window (part 3): built, NEGATIVE, kept as an ablation (`imu.full.estimate_gravity`)
+
+**Idea.** window[0]'s 6-DoF pose is the gauge, so the accelerometer cannot pull the trajectory's roll/pitch back to
+gravity. Gravity's direction became 2 tilt parameters of every window (carried prior), and after each solve the whole
+solution was rotated about window[0]'s position, with no yaw, so gravity is the reference again: a 4-DoF gauge in
+effect. Every cached world-frame state in StereoVo got the same rotation.
+
+**Tested correct:** FD gradient and Hessian with the tilt block, Schur = dense, energy invariant under the alignment,
+no yaw, and a window tilted 2° was found at 2.0000° and rotated back onto the truth.
+
+**Result on EuRoC: much worse.** Average ATE 0.137 → 0.566 m, 0/11 in class; rotate-back corrections summed to
+620–4,760° per flight (single steps 8–20°). The MH_01 per-keyframe trace shows a feedback loop:
+- a 10-keyframe window cannot separate tilt from b_a (a tilt θ looks like a bias of 9.81 θ), so the window's tilt
+  marginal is mostly its own prior;
+- the prior was carried with the bias-prior bookkeeping (marginal × 10), which loosens an unobserved direction tenfold
+  per window: prior σ 3.6° → 12° within a few keyframes, tilt moves of 1–3° per window, b_a swinging 0.1 → 1.4 m/s².
+
+**Why part 2 stands.** ORB-SLAM3's local visual-inertial BA anchors on fixed keyframes too: §V-C optimises a sliding
+window "keeping [covisible keyframes'] pose fixed", and its VI welding BA has "the keyframe immediately before the
+local window … included but fixed". Long-term tilt is held there by map reuse (old points seen from fixed covisible
+keyframes) and loop closure. Here those are 2.1 (re-association) and Phase 3. The per-keyframe gravity for the pose
+graph is arch §10.4's GRAVITY_PRIOR (2.5). So the residual tilt drift on hard flights is not a 2.4 gauge defect.
+
+**Lesson applied to the bias prior.** The same mechanism exists there: ×10 on the whole marginal loses the prior's own
+information on any direction a window does not observe (b_a in a dark window). Measured in the fake outages:
+V2_01 / propagate / 10 s, |b_a error| 0.15 → 2.0 m/s². Since part 3 the next prior keeps the carried prior's
+information and deflates only the data's addition: Λ_next = Λ_carried + PSD(Λ_marg − Λ_carried) / κ.
+
+### 4.9 Results, part 3 (2026-10-19): bias prior never looser; §4.4 decided
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 | avg |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| attitude_only (D58, shipped) | 0.075 | 0.069 | 0.093 | 0.394 | 0.353 | 0.087 | 0.099 | 0.421 | 0.070 | 0.116 | 0.680 | 0.223 |
+| full, part 2 (×10 bias prior) | 0.077 | 0.042 | 0.093 | 0.242 | 0.195 | 0.061 | 0.081 | 0.254 | 0.077 | 0.107 | 0.281 | 0.137 |
+| **full, part 3** | 0.068 | 0.039 | 0.099 | 0.222 | 0.128 | 0.056 | 0.052 | 0.357 | 0.039 | 0.101 | 0.168 | **0.121** |
+| stereo-inertial class worst | 0.166 | 0.152 | 0.125 | 0.280 | 0.284 | 0.076 | 0.110 | 0.120 | 0.070 | 0.100 | 0.190 | ≤ 0.138 |
+
+- **Average 0.121 (target ≤ 0.138 met by 17 mm); per flight 9/11** (V1_03 out at 0.357; V2_02 out by 1 mm).
+- The states against ground truth improved on every hard flight, V1_03 included (b_a median 0.245 → 0.192 m/s²,
+  b_g 0.0076 → 0.0034 rad/s, v 0.046 → 0.040 m/s); V1_03's ATE regression (0.254 → 0.357) is not a worse IMU
+  estimate. V1_03 has flipped on small changes before (D58: 0.42 ↔ 0.82 with LK seeding). Reported as measured.
+- Body-frame gravity error, median over the run: V2_03 3.51 → 1.37°, MH_04 1.27 → 0.40°.
+- **§4.4 decided (fake outages, corrected metric: drift 2.5 s after the outage ends):** under `lost.reanchor:
+  every_frame` (euroc_v2's), every lost frame is a keyframe and the inertial window solves its pose, so `decay` and
+  `propagate` give identical results to the millimetre (354 propagated frames on MH_01, same poses). `lost_motion`
+  only sets the window's starting point there; it stays `decay`. What the outages measure is full vs attitude_only:
+  0.5 s 0.042 vs 0.102 m, 2 s 0.18 vs 0.61, 5 s 0.64 vs 1.29, **10 s 4.6 vs 3.1 (full worse)**: ten seconds of IMU
+  dead reckoning on a MAV diverges (V2_01 9.1 m). ORB-SLAM3 bounds IMU-only tracking at 5 s before starting a new
+  map; the analogue here belongs with map segments and re-association (2.1 / Phase 3) and is recorded, not tuned.
+
 ## 5. Sim
 
 The IMU noise operator is 2.2's degradation wiring (coordinate first). `sim_v2` stays `imu: none` until then.

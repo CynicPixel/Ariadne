@@ -55,6 +55,7 @@ struct InertialInitResult {
     Vec3 bg = Vec3::Zero(), ba = Vec3::Zero(), g_W = Vec3::Zero();
     std::vector<Vec3> v;                   // per keyframe, body velocity in W
     Eigen::Matrix<double, 6, 6> bias_cov = Eigen::Matrix<double, 6, 6>::Zero();   // [bg; ba] marginal of the solves
+    Eigen::Matrix2d gravity_cov = Eigen::Matrix2d::Zero();   // tilt marginal (rad^2) in GravityTangentBasis(g_W / |g|)
     double gravity_norm_unconstrained = 0.0;
     double condition = 0.0;                // of step 2's normal matrix
     double chi2_per_dof = 0.0;             // step 2's whitened residual at the solution, per degree of freedom
@@ -110,12 +111,7 @@ inline InertialInitResult InitializeInertial(const std::vector<core::SE3>& T_W_B
         Eigen::VectorXd b = Eigen::VectorXd::Zero(n);
         double yOy = 0.0;   // y^T Ω y, for the residual at the solution: |r|^2_Ω = y^T Ω y - x^T b (normal equations)
         // Tangent basis at g_dir (on the sphere: g = |g| g_dir + B w, linear in w).
-        Eigen::Matrix<double, 3, 2> B;
-        {
-            const Vec3 a = std::abs(g_dir.x()) < 0.9 ? Vec3::UnitX() : Vec3::UnitY();
-            const Vec3 b1 = (a - g_dir * g_dir.dot(a)).normalized();
-            B << b1, g_dir.cross(b1);
-        }
+        const Eigen::Matrix<double, 3, 2> B = GravityTangentBasis(g_dir);
         const Vec3 g0 = on_sphere ? Vec3(p.gravity_norm * g_dir) : Vec3::Zero();
         const Eigen::Matrix<double, 3, Eigen::Dynamic> G =
             on_sphere ? Eigen::Matrix<double, 3, Eigen::Dynamic>(B) : Eigen::Matrix<double, 3, Eigen::Dynamic>(Mat3::Identity());
@@ -180,6 +176,9 @@ inline InertialInitResult InitializeInertial(const std::vector<core::SE3>& T_W_B
     const Eigen::MatrixXd C = H.ldlt().solve(Eigen::MatrixXd::Identity(H.rows(), H.cols()));
     out.bias_cov.topLeftCorner<3, 3>() = Hg.inverse();
     out.bias_cov.bottomRightCorner<3, 3>() = C.block<3, 3>(3 * N + 2, 3 * N + 2);
+    // The sphere parameters w are |g| x tilt (g = |g| ĝ + B w): the tilt marginal is C_ww / |g|^2. (The last solve's
+    // basis is at the direction before its update, which differs from the final one by the converged step only.)
+    out.gravity_cov = C.block<2, 2>(3 * N, 3 * N) / (p.gravity_norm * p.gravity_norm);
     out.ok = true;
     return out;
 }

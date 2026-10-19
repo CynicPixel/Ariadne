@@ -1984,7 +1984,10 @@ every Jacobian with the finite-difference harness of §11.4.
 > (`[poses | v,b_g,b_a | landmarks]`). The IMU does not observe velocity, so an inertial chain ties keyframes only out
 > of a group with two pose-determined keyframes; in a dark window window[0]'s velocity is held instead.
 > Discrete noise is density²/Δt; on EuRoC the datasheet densities are inflated ×3 (gyro) and ×9 (accel), measured
-> (§4.1). Every block is finite-difference tested.
+> (§4.1). Every block is finite-difference tested. window[0]'s bias prior keeps the previous prior's information
+> (random-walk-propagated) and deflates only the window's added information (Λ_carried + (Λ_marg − Λ_carried)/κ);
+> deflating the whole marginal let unobserved b_a run away in dark windows. Estimating gravity's direction per window
+> (a 4-DoF gauge) was built and is a recorded negative result (INERTIAL_2.4 §4.8).
 
 ## 10.3 Initialization `[DESIGN, standard practice]`
 

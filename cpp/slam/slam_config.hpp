@@ -87,6 +87,7 @@ struct ImuFullParams {
     double init_gravity_tolerance = 0.1;   // relative |g| error that refuses an initialisation
     double init_max_chi2_per_dof = 1e9;    // the initialisation's fit worse than this refuses (initialization.hpp)
     std::vector<double> refine_after_s = {5.0, 15.0};   // re-run over every keyframe since init (ORB-SLAM3 §V-B)
+    bool estimate_gravity = false;         // §4.8 ablation (negative result): gravity's direction in every window
     double repropagate_gyro = 0.01;        // rad/s: re-integrate an interval when its b_g moved more than this
     double repropagate_accel = 0.1;        // m/s^2, the same for b_a (VINS-Mono's thresholds)
     std::string lost_motion = "decay";     // while lost: "decay" (D56/D58 translation) or "propagate" (IMU, §4.4)
@@ -244,6 +245,7 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
             c.imu.full.init_gravity_tolerance = f.Require<double>("init_gravity_tolerance");
             c.imu.full.init_max_chi2_per_dof = f.Require<double>("init_max_chi2_per_dof");
             c.imu.full.refine_after_s = f.Require<std::vector<double>>("refine_after_s");
+            c.imu.full.estimate_gravity = f.Require<bool>("estimate_gravity");
             c.imu.full.repropagate_gyro = f.Require<double>("repropagate_gyro");
             c.imu.full.repropagate_accel = f.Require<double>("repropagate_accel");
             c.imu.full.lost_motion = f.Require<std::string>("lost_motion");

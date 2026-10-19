@@ -207,6 +207,7 @@ TEST(WindowBaLevMarq, BiasCovarianceIsTheDenseInverseBlock) {
     w.imu.has_prior = true;
     w.imu.prior_b << test::kTrueBg, test::kTrueBa;
     w.imu.prior_info = Mat6::Identity() * 10.0;
+    w.imu.estimate_gravity = true;
     const BaLayout L(w);
     BaSystem s;
     BaLinearize(w, L, s);
@@ -218,8 +219,11 @@ TEST(WindowBaLevMarq, BiasCovarianceIsTheDenseInverseBlock) {
         H.block<3, 6>(L.dim_c() + 3 * cl.second, 6 * cl.first) = B.transpose();
     }
     const Eigen::MatrixXd C = H.inverse();
-    std::map<int, Mat6> pose, bias;   // one factorization: pose and bias marginals with inertial blocks in S
-    ASSERT_TRUE(TryWindowBaCovariances(w, {1, 4}, pose, nullptr, nullptr, &bias, {1, 4}));
+    std::map<int, Mat6> pose, bias;   // one factorization: pose, bias and gravity marginals with inertial blocks in S
+    Eigen::Matrix2d gcov;
+    ASSERT_TRUE(TryWindowBaCovariances(w, {1, 4}, pose, nullptr, nullptr, &bias, {1, 4}, &gcov));
+    const Eigen::Matrix2d gd = C.block<2, 2>(L.grav(), L.grav());
+    EXPECT_LT((gcov - gd).norm(), 1e-9 * gd.norm());
     for (int k : {1, 4}) {
         const Mat6 dp = C.block<6, 6>(6 * L.cam(k), 6 * L.cam(k)), db = C.block<6, 6>(L.bias(k), L.bias(k));
         EXPECT_LT((pose.at(k) - dp).norm(), 1e-9 * dp.norm()) << k;
@@ -253,6 +257,37 @@ TEST(WindowBaLevMarq, DarkWindowIsDeadReckonedWithTheVelocityOfWindow0Held) {
     EXPECT_TRUE((w.imu.v[0] - truth.imu.v[0]).isZero(0.0));
     for (size_t k = 1; k < w.T_W_C.size(); ++k) {
         EXPECT_LT((w.T_W_C[k].t - truth.T_W_C[k].t).norm(), 1e-4) << k;
+        EXPECT_LT(core::SO3Log(w.T_W_C[k].R * truth.T_W_C[k].R.transpose()).norm(), 1e-5) << k;
+        EXPECT_LT((w.imu.v[k] - truth.imu.v[k]).norm(), 1e-4) << k;
+    }
+}
+
+// §4.8: a window whose world is tilted 2 deg against gravity (window[0] fixed in the tilted frame, gravity at the
+// reference) cannot be fitted without moving gravity; with gravity's direction a variable the solve finds the tilt,
+// and GravityAlignment about window[0] rotates the solution back onto the untilted truth.
+TEST(WindowBaLevMarq, TiltedWindowIsRotatedBackOntoGravity) {
+    std::mt19937 g(43);
+    const BaWindow truth = test::MakeInertialWindow(g, 6, 60, 0.0);
+    BaWindow w = truth;
+    const Vec3 c = truth.T_W_C[0].t;
+    SE3 tilt;   // 2 deg about a horizontal axis, about window[0]'s position
+    tilt.R = core::SO3Exp(Vec3(1, 1, 0).normalized() * (2.0 * M_PI / 180));
+    tilt.t = c - tilt.R * c;
+    TransformWindow(w, tilt);
+    w.imu.g_W = test::kGravity;   // gravity at the reference, not tilted with the world
+    w.imu.g_prior = test::kGravity;
+    w.imu.estimate_gravity = true;
+    w.imu.has_prior = true;
+    w.imu.prior_b << test::kTrueBg, test::kTrueBa;
+    w.imu.prior_info = Mat6::Identity();
+    const WindowBaReport rep = SolveWindowBa(w, Tight());
+    const double tilt_found = std::acos(std::clamp(w.imu.g_W.normalized().dot(test::kGravity.normalized()), -1.0, 1.0));
+    std::printf("tilted window: E %.3e -> %.3e; tilt found %.4f deg (applied 2)\n", rep.initial_energy,
+                rep.final_energy, tilt_found * 180 / M_PI);
+    EXPECT_NEAR(tilt_found * 180 / M_PI, 2.0, 1e-3);
+    TransformWindow(w, GravityAlignment(w.imu.g_W, test::kGravity, w.T_W_C[0].t));
+    for (size_t k = 0; k < w.T_W_C.size(); ++k) {
+        EXPECT_LT((w.T_W_C[k].t - truth.T_W_C[k].t).norm(), 1e-5) << k;
         EXPECT_LT(core::SO3Log(w.T_W_C[k].R * truth.T_W_C[k].R.transpose()).norm(), 1e-5) << k;
         EXPECT_LT((w.imu.v[k] - truth.imu.v[k]).norm(), 1e-4) << k;
     }

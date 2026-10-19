@@ -1850,3 +1850,26 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4 (as built). Part 1 (8691f
   the wrong instant. Re-measured after part 3 with drift to ~2–3 s after re-anchoring; `decay` stays the default.
 - Pre-merge **not run** (maintainer, 2026-10-18: only when absolutely needed); the EuRoC sweeps and unit tests are
   the evidence. `euroc_v2` (attitude_only) and `sim_v2` (none) unchanged.
+
+## 2026-10-19 — D59 (part 3): bias prior never looser than the carried prior; gravity-in-window is a negative result
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4.8–4.9.
+
+- **Gravity's direction in every window + rotate-back (a 4-DoF gauge in effect): built, tested, NEGATIVE, off**
+  (`imu.full.estimate_gravity: false`, kept as an ablation). EuRoC average 0.137 → 0.566 m, 0/11: a 10-keyframe
+  window cannot separate tilt from b_a, and the ×10 prior bookkeeping loosened the unobserved tilt every window
+  (σ 3.6° → 12° on MH_01). ORB-SLAM3's local VI BA also anchors on fixed keyframes (§V-C, §VI-C); long-term tilt
+  there comes from map reuse and loop closure (2.1 / Phase 3 here), so part 2's gauge stands.
+- **Bias prior fixed by the same lesson.** The ×10 deflation applied to the whole marginal lost the prior's own
+  information on unobserved directions (b_a in dark windows; V2_01 propagate 10 s: |b_a error| 0.15 → 2.0 m/s²).
+  Now Λ_next = Λ_carried + PSD(Λ_marg − Λ_carried)/κ: only the window's added information is deflated.
+  **EuRoC `euroc_v2_full`: average 0.137 → 0.121 m, per flight 7/11 → 9/11** (V1_03 0.357 and V2_02 0.101 out).
+  Bias and velocity errors vs GT drop on every hard flight; V1_03's ATE rises 0.254 → 0.357 despite better states
+  (reported as measured).
+- **§4.4 `lost_motion`: decided by measurement, stays `decay`.** With `reanchor: every_frame` each lost frame is an
+  inertial-window keyframe, so the prediction only seeds the solve: decay and propagate are identical to the mm.
+  Full vs attitude_only across outages (2.5 s after re-anchoring): better up to 5 s (2 s: 0.18 vs 0.61 m), worse at
+  10 s (4.6 vs 3.1 m): long IMU-only stretches diverge; bounding them belongs with map segments (2.1 / Phase 3).
+- ctest 328/328. `euroc_v2` (attitude_only) byte-identical to D58 on MH_01; `euroc_v2_full` stays opt-in pending
+  the maintainer's switch decision. Pre-merge not run (maintainer's instruction).
+

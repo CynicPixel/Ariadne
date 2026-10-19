@@ -180,12 +180,13 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                                                                             : std::vector<runtime::GroundTruthInertial>{};
     long imu_solves = 0, imu_v0_held = 0, imu_factors = 0, imu_repropagated = 0, imu_prior_marginal = 0,
          imu_prior_carried = 0, imu_init_refused = 0, lost_inertial = 0;
-    double imu_chi2 = 0.0;
+    double imu_chi2 = 0.0, imu_tilt_sum = 0.0, imu_tilt_max = 0.0;
     int64_t imu_init_t_ns = -1, first_t_ns = -1;
     std::string imu_init_vs_gt;   // filled at initialisation
     std::ostringstream imu_trace;
     imu_trace << "keyframe,t_ns,source,ba_inertial,v0_held,vx_B,vy_B,vz_B,bgx,bgy,bgz,bax,bay,baz,"
-                 "gt_vx_B,gt_vy_B,gt_vz_B,gt_bgx,gt_bgy,gt_bgz,gt_bax,gt_bay,gt_baz,gravity_err_deg\n";
+                 "gt_vx_B,gt_vy_B,gt_vz_B,gt_bgx,gt_bgy,gt_bgz,gt_bax,gt_bay,gt_baz,gravity_err_deg,tilt_deg,g_prior_sigma_deg,"
+                 "ba_landmarks\n";
     std::vector<std::pair<double, double>> gravity_err_t;   // (t_s, deg): the estimated gravity vs GT, per keyframe
     // Nearest ground-truth pose / inertial state within 10 ms (EuRoC GT is 200 Hz).
     const auto gt_pose_at = [&](int64_t t, core::SE3& T) {
@@ -434,6 +435,8 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                     imu_prior_marginal += kr.imu_prior == 1;
                     imu_prior_carried += kr.imu_prior == 2;
                     imu_init_refused += kr.imu_init_refused;
+                    imu_tilt_sum += kr.imu_tilt_deg;
+                    imu_tilt_max = std::max(imu_tilt_max, kr.imu_tilt_deg);
                     core::SE3 T_gt;
                     runtime::GroundTruthInertial gi;
                     if (kr.imu_initialized) {
@@ -483,10 +486,12 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                             gravity_err_t.emplace_back(1e-9 * double(frame.t_ns - first_t_ns), gdeg);
                             imu_trace << ',' << gv.x() << ',' << gv.y() << ',' << gv.z() << ',' << gi.b_g.x() << ','
                                       << gi.b_g.y() << ',' << gi.b_g.z() << ',' << gi.b_a.x() << ',' << gi.b_a.y() << ','
-                                      << gi.b_a.z() << ',' << gdeg << '\n';
+                                      << gi.b_a.z() << ',' << gdeg;
                         } else {
-                            imu_trace << ",nan,nan,nan,nan,nan,nan,nan,nan,nan,nan\n";
+                            imu_trace << ",nan,nan,nan,nan,nan,nan,nan,nan,nan,nan";
                         }
+                        imu_trace << ',' << kr.imu_tilt_deg << ',' << kr.imu_g_prior_sigma_deg << ',' << kr.ba_landmarks
+                                  << '\n';
                     }
                 }
                 win_rejected += kr.ba_rejected;
@@ -729,7 +734,8 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << ", inertial_solves: " << imu_solves << ", v0_held: " << imu_v0_held
             << ", inertial_chi2_per_dof: " << (imu_factors ? imu_chi2 / (9.0 * double(imu_factors)) : -1.0)
             << ", repropagated: " << imu_repropagated << ", bias_prior: {marginal: " << imu_prior_marginal
-            << ", carried: " << imu_prior_carried << "}, lost_inertial_frames: " << lost_inertial;
+            << ", carried: " << imu_prior_carried << "}, lost_inertial_frames: " << lost_inertial
+            << ", tilt_correction_deg: {sum: " << imu_tilt_sum << ", max: " << imu_tilt_max << "}";
         // The estimated gravity vs ground truth over the run, per keyframe body frame: median and p90 over all
         // keyframes since initialisation, and the final value.
         if (!gravity_err_t.empty()) {
@@ -751,27 +757,35 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         std::ofstream(run_dir / "imu_trace.csv") << imu_trace.str();
     }
     if (!args.outages.empty()) {
-        // Drift across each fake outage: the estimated body motion from the last frame before it to the last frame
-        // inside it, against ground truth (translation m, rotation deg). The frame after which tracking resumes is
-        // the next one; its re-anchoring error is the drift.
+        // Drift across each fake outage, against ground truth (translation m, rotation deg), from the last frame before
+        // it to (1) the last frame inside it -- the prediction at the moment tracking resumes -- and (2) the frame
+        // 2.5 s after it ends, once re-anchoring and the window solves have acted: what persists (INERTIAL_2.4 §4.4).
+        // Frame poses are causal (as tracked), not re-refined afterwards.
         res << "outages: [";
+        const auto drift = [&](int a, int b, double& dt_m, double& dr_deg) {
+            core::SE3 ga, gb;
+            dt_m = dr_deg = -1.0;
+            if (a < 0 || b <= a || !gt_pose_at(est_body[size_t(a)].t_ns, ga) || !gt_pose_at(est_body[size_t(b)].t_ns, gb))
+                return;
+            const core::SE3 e = est_body[size_t(a)].T.inverse() * est_body[size_t(b)].T, g = ga.inverse() * gb;
+            dt_m = (e.t - g.t).norm();
+            dr_deg = core::SO3Log(e.R.transpose() * g.R).norm() * 180.0 / M_PI;
+        };
         for (size_t o = 0; o < args.outages.size(); ++o) {
             const double o0 = args.outages[o].first, o1 = o0 + args.outages[o].second;
-            int a = -1, b = -1;
+            int a = -1, b = -1, c = -1;
             for (size_t k = 0; k < est_body.size(); ++k) {
                 const double t = 1e-9 * double(est_body[k].t_ns - first_t_ns);
                 if (t < o0) a = int(k);
                 if (t < o1) b = int(k);
+                if (t < o1 + 2.5) c = int(k);
             }
-            core::SE3 ga, gb;
-            double dt_m = -1.0, dr_deg = -1.0;
-            if (a >= 0 && b > a && gt_pose_at(est_body[size_t(a)].t_ns, ga) && gt_pose_at(est_body[size_t(b)].t_ns, gb)) {
-                const core::SE3 e = est_body[size_t(a)].T.inverse() * est_body[size_t(b)].T, g = ga.inverse() * gb;
-                dt_m = (e.t - g.t).norm();
-                dr_deg = core::SO3Log(e.R.transpose() * g.R).norm() * 180.0 / M_PI;
-            }
+            double dt_m, dr_deg, at_m, ar_deg;
+            drift(a, b, dt_m, dr_deg);
+            drift(a, c, at_m, ar_deg);
             res << (o ? ", " : "") << "{start_s: " << o0 << ", length_s: " << args.outages[o].second
-                << ", drift_m: " << dt_m << ", drift_deg: " << dr_deg << ", frames: " << (b - a) << "}";
+                << ", drift_m: " << dt_m << ", drift_deg: " << dr_deg << ", after_2_5s_m: " << at_m
+                << ", after_2_5s_deg: " << ar_deg << ", frames: " << (b - a) << "}";
         }
         res << "]\n";
     }

@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.4 full, part 3: bias prior fixed; 9/11 in the stereo-inertial class (D59)
+
+- **EuRoC `euroc_v2_full`:** average ATE **0.121 m** (target ≤ 0.138); 9/11 flights in class (V1_03 0.357, V2_02
+  +1 mm out). attitude_only (shipped) is 0.223.
+- **Bias prior:** keeps the carried prior's information; only the window's data is deflated (fixed a b_a runaway).
+- **Gravity estimated per window:** negative (0.566 m), off, kept as an ablation.
+- **Lost motion:** decay = propagate under every-frame re-anchoring (the window solves lost keyframes); stays decay.
+  Long (10 s) IMU-only outages diverge more than attitude_only: recorded for 2.1 / Phase 3.
+- ctest 328/328; `euroc_v2` byte-identical to D58. Pre-merge not run (maintainer's instruction).
+
 ## 2026-10-19 — 2.4 full, part 2: inertial window BA + initialisation, opt-in (D59)
 
 - **Built:** velocity/bias states in the window BA, IMU initialisation with refinement at +5/+15 s, StereoVo and

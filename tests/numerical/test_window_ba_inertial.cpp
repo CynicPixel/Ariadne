@@ -45,6 +45,12 @@ void Perturb(BaWindow& w, std::mt19937& g, double scale) {
     Vec6 sd;
     sd << Vec3::Constant(0.01), Vec3::Constant(0.1);
     w.imu.prior_info = sd.cwiseInverse().cwiseAbs2().asDiagonal();
+    // Gravity's direction as a variable (§4.8), off the truth by ~1 deg, with a prior.
+    w.imu.estimate_gravity = true;
+    w.imu.g_W = core::SO3Exp(Vec3(0.01 * scale, -0.015 * scale, 0.0)) * w.imu.g_W;
+    w.imu.has_g_prior = true;
+    w.imu.g_prior = core::SO3Exp(Vec3(-0.005, 0.004, 0.0)) * kGravity;
+    w.imu.g_prior_info = Eigen::Matrix2d::Identity() * 1e4;
 }
 
 }  // namespace
@@ -57,6 +63,7 @@ TEST(WindowBaInertial, GradientIsTheEnergyGradient) {
     Perturb(w, g, 1.0);
     const BaLayout L(w);
     ASSERT_EQ(L.n_inertial(), 5);
+    ASSERT_GE(L.grav(), 0);
     BaSystem s;
     const double E = BaLinearize(w, L, s);
     EXPECT_NEAR(E, BaEnergy(w), 1e-9 * E);
@@ -78,7 +85,12 @@ TEST(WindowBaInertial, HessianMatchesFiniteDifferencesOfTheGradientAtTheTruth) {
     w.imu.has_prior = true;
     w.imu.prior_b << kTrueBg, kTrueBa;
     w.imu.prior_info = Mat6::Identity() * 100.0;
+    w.imu.estimate_gravity = true;   // the tilt block and its cross terms too
+    w.imu.has_g_prior = true;
+    w.imu.g_prior = kGravity;
+    w.imu.g_prior_info = Eigen::Matrix2d::Identity() * 1e4;
     const BaLayout L(w);
+    ASSERT_GE(L.grav(), 0);
     BaSystem s;
     BaLinearize(w, L, s);
     const Eigen::MatrixXd H = DenseH(s, L);
@@ -186,4 +198,20 @@ TEST(WindowBaInertial, InertialFactorsTieOnlyOutOfAGroupThatPinsTheVelocity) {
     visual.imu = BaInertial{};
     anchor = AnchorWindow(visual, 8, held);
     EXPECT_EQ(held, 2);
+}
+
+// GravityAlignment is a rigid motion about c: it maps g_from's direction to g_to's with no rotation about gravity, and
+// every residual of the window (reprojection, inertial, priors) is invariant under it, so the energy is unchanged.
+TEST(WindowBaInertial, GravityAlignmentIsARigidMotionThatPreservesTheEnergy) {
+    std::mt19937 g(23);
+    BaWindow w = MakeInertialWindow(g, 5, 30, 0.5);
+    Perturb(w, g, 1.0);
+    const Vec3 c = w.T_W_C[0].t;
+    const SE3 G = GravityAlignment(w.imu.g_W, kGravity, c);
+    BaWindow r = w;
+    TransformWindow(r, G);
+    EXPECT_LT((r.imu.g_W.normalized() - kGravity.normalized()).norm(), 1e-12);
+    EXPECT_LT((G * c - c).norm(), 1e-12);
+    EXPECT_LT(std::abs(core::SO3Log(G.R).dot(w.imu.g_W.normalized())), 1e-12);   // no yaw
+    EXPECT_NEAR(BaEnergy(r), BaEnergy(w), 1e-9 * BaEnergy(w));
 }

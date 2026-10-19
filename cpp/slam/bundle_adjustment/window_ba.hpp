@@ -97,6 +97,13 @@ struct BaInertial {
     /// keyframe of its group, the one case where the IMU's Galilean null space is not removed by vision (maintainer
     /// decision 2026-10-18; INERTIAL_2.4 §4.2). Otherwise false: v_0 is free, biases carry the only prior.
     bool hold_v0 = false;
+    /// Gravity's DIRECTION is a variable (2 tilt parameters, |g| fixed; INERTIAL_2.4 §4.8): with window[0]'s 6-DoF pose
+    /// as the gauge, this is what lets the accelerometer observe the window's roll and pitch. Prior on the tilt of
+    /// g_W from g_prior: r = B_pᵀ ĝ (B_p = GravityTangentBasis(ĝ_prior)), information g_prior_info (rad^-2).
+    bool estimate_gravity = false;
+    bool has_g_prior = false;
+    Vec3 g_prior = Vec3::Zero();
+    Eigen::Matrix2d g_prior_info = Eigen::Matrix2d::Zero();
 };
 
 struct BaWindow {
@@ -318,6 +325,10 @@ public:
             off += 6;
         }
         n_inertial_ = int(vel_off_.size());
+        if (w.inertial() && w.imu.estimate_gravity) {
+            grav_off_ = off;
+            off += 2;
+        }
         dim_i_ = off - 6 * n_cams_;
         for (const auto& [id, X] : w.X) lm_index_[id] = w.fixed_landmarks.count(id) ? -1 : n_lms_++;
         if (n_cams_ == 0 && n_lms_ == 0 && n_inertial_ == 0) throw std::invalid_argument("BaLayout: nothing to optimise");
@@ -333,10 +344,12 @@ public:
     /// (a visual-only window; v_0 under hold_v0).
     int vel(int k) const { return n_inertial_ > 0 ? vel_off_[size_t(k)] : -1; }
     int bias(int k) const { return n_inertial_ > 0 ? bias_off_[size_t(k)] : -1; }
+    /// Offset of gravity's 2 tilt parameters, or -1 when gravity is not a variable.
+    int grav() const { return grav_off_; }
     int lm(uint64_t id) const { return lm_index_.at(id); }
 
 private:
-    int n_cams_ = 0, n_inertial_ = 0, n_lms_ = 0, dim_i_ = 0;
+    int n_cams_ = 0, n_inertial_ = 0, n_lms_ = 0, dim_i_ = 0, grav_off_ = -1;
     std::vector<int> cam_index_, vel_off_, bias_off_;
     std::map<uint64_t, int> lm_index_;
 };
@@ -346,6 +359,32 @@ private:
 /// driver's acceptance test and its model see the same cost.
 struct BaSystem;
 inline double InertialTerms(const BaWindow& w, const BaLayout* L = nullptr, BaSystem* s = nullptr);
+
+/// The rigid motion X -> R (X - c) + c with R the minimal rotation taking direction g_from to g_to (axis g_from x
+/// g_to: no component about gravity, so no yaw). Applied to a window solved with estimate_gravity, it rotates the
+/// solution back to the reference gravity about window[0]'s position: the same optimum (every residual is invariant
+/// under a global rigid motion of poses, points, velocities and g), now in the frame where gravity is g_to.
+inline SE3 GravityAlignment(const Vec3& g_from, const Vec3& g_to, const Vec3& c) {
+    const Vec3 a = g_from.normalized(), b = g_to.normalized();
+    const Vec3 axis = a.cross(b);
+    const double s = axis.norm(), co = a.dot(b);
+    SE3 G;
+    G.R = s < 1e-15 ? Mat3::Identity() : core::SO3Exp(axis / s * std::atan2(s, co));
+    G.t = c - G.R * c;
+    return G;
+}
+
+/// Apply a rigid world motion G to everything in the window that lives in the world frame.
+inline void TransformWindow(BaWindow& w, const SE3& G) {
+    for (auto& T : w.T_W_C) {
+        T = G * T;
+        T.normalize();
+    }
+    for (auto& [id, X] : w.X) X = G * X;
+    for (auto& v : w.imu.v) v = G.R * v;
+    w.imu.g_W = G.R * w.imu.g_W;
+    w.imu.g_prior = G.R * w.imu.g_prior;
+}
 
 /// Robust energy of the whole window. Behind-camera observations make it huge (finite): the step is rejected.
 inline double BaEnergy(const BaWindow& w) {
@@ -424,6 +463,9 @@ inline double InertialTerms(const BaWindow& w, const BaLayout* L, BaSystem* s) {
         }
     };
     double E = 0.0;
+    // Gravity tilt: g <- Exp(B w) g, so dg/dw = -[g]x B (B at the current g, as BaOplus applies it).
+    const Eigen::Matrix<double, 3, 2> dg_dw =
+        -core::Hat(m.g_W) * GravityTangentBasis(m.g_W.normalized());
     for (size_t k = 0; k + 1 < w.T_W_C.size(); ++k) {
         const Preintegrated& pre = m.pre[k];
         const InertialLinearization l = LinearizeInertial(pre, w.T_W_C[k] * m.T_C_B, m.v[k], m.bg[k], m.ba[k],
@@ -441,9 +483,15 @@ inline double InertialTerms(const BaWindow& w, const BaLayout* L, BaSystem* s) {
         const int ci = L->cam(int(k)), cj = L->cam(int(k + 1));
         Eigen::Matrix<double, 9, 6> Jbi;   // [bg_i, ba_i]
         Jbi << l.J_bgi, l.J_bai;
+        // r_v = R_iᵀ(v_j - v_i - g T) - Δv, r_p = R_iᵀ(p_j - p_i - v_i T - ½ g T²) - Δp: linear in g.
+        const Mat3 RiT = (w.T_W_C[k] * m.T_C_B).R.transpose();
+        const double T = pre.dt();
+        Eigen::Matrix<double, 9, 2> Jg = Eigen::Matrix<double, 9, 2>::Zero();
+        Jg.middleRows<3>(3) = -RiT * T * dg_dw;
+        Jg.bottomRows<3>() = -0.5 * RiT * T * T * dg_dw;
         add(l.r, Om,
             {{ci < 0 ? -1 : 6 * ci, l.J_Ti}, {cj < 0 ? -1 : 6 * cj, l.J_Tj}, {L->vel(int(k)), l.J_vi},
-             {L->vel(int(k + 1)), l.J_vj}, {L->bias(int(k)), Jbi}});
+             {L->vel(int(k + 1)), l.J_vj}, {L->bias(int(k)), Jbi}, {L->grav(), Jg}});
         add(rb, Eigen::MatrixXd(ob.asDiagonal()),
             {{L->bias(int(k)), -Mat6::Identity()}, {L->bias(int(k + 1)), Mat6::Identity()}});
     }
@@ -455,6 +503,14 @@ inline double InertialTerms(const BaWindow& w, const BaLayout* L, BaSystem* s) {
         if (assemble) {
             add(rp, m.prior_info, {{L->bias(0), Mat6::Identity()}});
         }
+    }
+    if (m.estimate_gravity && m.has_g_prior) {
+        const Eigen::Matrix<double, 3, 2> Bp = GravityTangentBasis(m.g_prior.normalized());
+        const Vec3 gh = m.g_W.normalized();
+        const Eigen::Vector2d rg = Bp.transpose() * gh;
+        E += 0.5 * rg.dot(m.g_prior_info * rg);
+        if (assemble)
+            add(rg, m.g_prior_info, {{L->grav(), Eigen::Matrix2d(Bp.transpose() * (-core::Hat(gh) * GravityTangentBasis(gh)))}});
     }
     return E;
 }
@@ -567,6 +623,8 @@ inline BaWindow BaOplus(const BaWindow& w, const BaLayout& L, const Eigen::Vecto
         out.imu.bg[k] += x.segment<3>(L.bias(int(k)));
         out.imu.ba[k] += x.segment<3>(L.bias(int(k)) + 3);
     }
+    if (L.grav() >= 0)
+        out.imu.g_W = core::SO3Exp(GravityTangentBasis(w.imu.g_W.normalized()) * x.segment<2>(L.grav())) * w.imu.g_W;
     for (auto& [id, X] : out.X)
         if (L.lm(id) >= 0) X += x.segment<3>(L.dim_c() + 3 * L.lm(id));
     return out;

@@ -149,6 +149,8 @@ struct VoKeyframeResult {
     bool imu_init_refused = false;     // an attempt was refused at this keyframe (StereoVo::inertial_init().why)
     bool imu_refined = false;          // a scheduled refinement (imu.full.refine_after_s) succeeded at this keyframe
     bool imu_refine_refused = false;   // a refinement attempt was refused at this keyframe
+    double imu_tilt_deg = 0.0;         // §4.8: the rotation that took the solved gravity back to the reference
+    double imu_g_prior_sigma_deg = 0.0;   // §4.8: the gravity prior's sigma (largest axis) in that solve
 };
 
 /// One run of the scheduled inertial refinement (imu.full.refine_after_s): the initialisation's MAP re-solved over every
@@ -246,6 +248,8 @@ private:
     /// Apply an initialisation / refinement over keyframes_[s0..]: gravity, the window keyframes' biases and
     /// velocities, and window[0]'s bias prior.
     void ApplyInertialEstimate(const InertialInitResult& r, size_t s0, size_t first);
+    /// The next window[0]'s bias prior covariance from a marginal, never looser than the current prior carried over dt.
+    core::Mat6 NextBiasPrior(const core::Mat6& marginal, double dt) const;
     /// lost.motion = bridge: the lost frame's pose. Rotation from the ANCHOR -- the last measured frame, or the last
     /// frame enough tracks reach back to -- so the two-view baseline grows instead of per-frame noise accumulating.
     core::SE3 BridgePrediction(const VoFrame& frame, VoTrackResult& res);
@@ -302,6 +306,9 @@ private:
     core::Vec6 prior_b_ = core::Vec6::Zero();
     core::Mat6 prior_cov_ = core::Mat6::Zero();
     uint64_t prior_kf_ = 0;
+    bool inertial_prior_set_ = false;               // the initialisation has set the first bias prior
+    // Gravity's tilt prior (rad^2, GravityTangentBasis(g_W_)), for windows that estimate gravity (§4.8).
+    Eigen::Matrix2d g_prior_cov_ = Eigen::Matrix2d::Identity();
 };
 
 }  // namespace ariadne::slam

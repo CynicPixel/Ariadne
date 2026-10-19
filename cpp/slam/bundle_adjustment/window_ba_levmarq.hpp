@@ -35,9 +35,11 @@ std::map<int, Mat6> WindowBaCovariances(const BaWindow& w, const std::vector<int
 /// see (EuRoC V1_03: the null vector is a common scale of two keyframes' translations, with far / right-less landmarks).
 /// `bias_cov`, inertial windows only: also the marginals of the biases [bg; ba] of `bias_keyframes` (fixed poses
 /// allowed: biases are always variables) from the same factorization (window[1]'s becomes the next solve's window[0]
-/// bias prior, INERTIAL_2.4 §4.2).
+/// bias prior, INERTIAL_2.4 §4.2). `gravity_cov`: the tilt marginal (estimate_gravity windows; GravityTangentBasis of
+/// the window's g_W).
 bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
                             std::string* why = nullptr, const WindowBaReport* solve = nullptr,
-                            std::map<int, Mat6>* bias_cov = nullptr, const std::vector<int>& bias_keyframes = {});
+                            std::map<int, Mat6>* bias_cov = nullptr, const std::vector<int>& bias_keyframes = {},
+                            Eigen::Matrix2d* gravity_cov = nullptr);
 
 }  // namespace ariadne::slam

@@ -659,7 +659,11 @@ TEST(Inertial, FullModeInitialisesAndCarriesADarkStretch) {
     const VoRun vo = RunVo(frames, 0, -1, 1, 1, v2, {dark, len});
     const VoRun vio = RunVo(frames, 0, -1, 1, 1, FullConfig("propagate"), {dark, len});
     ASSERT_TRUE(vio.inertial_ready);
-    const double g_deg = std::acos(std::clamp(vio.gravity.normalized().dot(kSimGravity.normalized()), -1.0, 1.0)) * 180 / M_PI;
+    // Gravity in the last camera's own frame, estimated vs true: the world frame itself is rotated by the §4.8 gauge
+    // (the VO world is tilted to agree with the estimated gravity), so only a body-frame comparison means anything.
+    const Vec3 g_cam_est = vio.est.back().R.transpose() * vio.gravity.normalized();
+    const Vec3 g_cam_true = vio.truth.back().R.transpose() * kSimGravity.normalized();
+    const double g_deg = std::acos(std::clamp(g_cam_est.dot(g_cam_true), -1.0, 1.0)) * 180 / M_PI;
     const auto end_err = [&](const VoRun& r) { return (r.est[size_t(dark + len - 1)].t - r.truth[size_t(dark + len - 1)].t).norm(); };
     const auto drift = [&](const VoRun& r) {   // translation error accumulated over the stretch
         const SE3 e = r.est[size_t(dark - 1)].inverse() * r.est[size_t(dark + len - 1)];

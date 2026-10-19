@@ -238,6 +238,22 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
     return res;
 }
 
+core::Mat6 StereoVo::NextBiasPrior(const core::Mat6& marginal, double dt) const {
+    // The next window[0]'s bias prior (INERTIAL_2.4 §4.2, D59 part 3). The current prior, carried over dt by the bias
+    // random walk, is information the next window must keep; the marginal adds the window's data on top of it, and
+    // ONLY that addition is deflated by imu.full.bias_prior_inflation (the overlapping windows count the same data
+    // again). Deflating the whole marginal instead (part 2) loses the prior's own information on every direction the
+    // window does not observe -- b_a in a dark window -- and compounds: V2_01, propagate, 10 s outage, |b_a error|
+    // 0.15 -> 2.0 m/s^2. Λ_next = Λ_carried + PSD(Λ_marg - Λ_carried) / κ.
+    core::Vec6 q;
+    q << core::Vec3::Constant(gyro_rw_ * gyro_rw_ * dt), core::Vec3::Constant(accel_rw_ * accel_rw_ * dt);
+    const core::Mat6 L_carried = InformationOf<6>(core::Mat6(prior_cov_ + core::Mat6(q.asDiagonal())));
+    const core::Mat6 L_marg = InformationOf<6>(core::NearestPSD(marginal, 1e-12));
+    const core::Mat6 L_next =
+        L_carried + core::NearestPSD(L_marg - L_carried, 0.0) / cfg_.imu.full.bias_prior_inflation;
+    return core::NearestPSD(InformationOf<6>(L_next), 1e-12);
+}
+
 void StereoVo::FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out) {
     w.imu.T_C_B = T_C_B_;
     w.imu.g_W = g_W_;
@@ -276,6 +292,12 @@ void StereoVo::FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out) {
     w.imu.has_prior = true;
     w.imu.prior_b = prior_b_;
     w.imu.prior_info = InformationOf<6>(prior_cov_);
+    if (cfg_.imu.full.estimate_gravity) {
+        w.imu.estimate_gravity = true;
+        w.imu.has_g_prior = true;
+        w.imu.g_prior = g_W_;
+        w.imu.g_prior_info = g_prior_cov_.inverse();
+    }
 }
 
 void StereoVo::TryInitializeInertial(size_t first, VoKeyframeResult& out) {
@@ -331,8 +353,16 @@ void StereoVo::ApplyInertialEstimate(const InertialInitResult& r, size_t s0, siz
     }
     // The next inertial solve's window[0] bias prior: this estimate's own marginal, inflated like every other.
     prior_b_ << r.bg, r.ba;
-    prior_cov_ = core::NearestPSD(r.bias_cov * cfg_.imu.full.bias_prior_inflation, 1e-12);
+    if (inertial_prior_set_) {
+        // A refinement: its marginal combined with the prior already held, never looser than it (NextBiasPrior).
+        const double dt = 1e-9 * double(keyframes_[first].t_ns - keyframes_.at(size_t(prior_kf_)).t_ns);
+        prior_cov_ = NextBiasPrior(r.bias_cov, std::max(dt, 0.0));
+    } else {
+        prior_cov_ = core::NearestPSD(r.bias_cov * cfg_.imu.full.bias_prior_inflation, 1e-12);
+        inertial_prior_set_ = true;
+    }
     prior_kf_ = keyframes_[first].id;
+    g_prior_cov_ = r.gravity_cov * cfg_.imu.full.bias_prior_inflation;
 }
 
 void StereoVo::TryRefineInertial(size_t first, VoKeyframeResult& out) {
@@ -732,6 +762,30 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
             out.ba_iterations = rep.iterations;
             out.ba_initial_cost = rep.initial_energy;
             out.ba_final_cost = rep.final_energy;
+            // §4.8 gauge: the solve estimated gravity's direction with window[0]'s 6-DoF pose fixed; rotate the whole
+            // solution about window[0]'s position so gravity is the reference g_W_ again (a 4-DoF gauge in effect:
+            // the accelerometer corrects roll/pitch). Every world-frame state StereoVo holds moves with it, or the next
+            // frame's PnP would see the map jump.
+            bool rotated = false;
+            core::SE3 G;
+            if (w.inertial() && w.imu.estimate_gravity) {
+                G = GravityAlignment(w.imu.g_W, g_W_, w.T_W_C[0].t);
+                out.imu_g_prior_sigma_deg =
+                    std::sqrt(Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d>(g_prior_cov_).eigenvalues()(1)) * 180.0 / M_PI;
+                out.imu_tilt_deg = core::SO3Log(G.R).norm() * 180.0 / M_PI;
+                rotated = out.imu_tilt_deg > 0.0;
+                TransformWindow(w, G);
+                for (auto& kf : keyframes_) {
+                    kf.T_W_C = G * kf.T_W_C;
+                    kf.T_W_C.normalize();
+                    kf.v = G.R * kf.v;
+                }
+                for (auto& [id, lm] : landmarks_) lm.X_w = G * lm.X_w;
+                prev_T_W_C_ = G * prev_T_W_C_;
+                prev2_T_W_C_ = G * prev2_T_W_C_;
+                last_.T_W_C = G * last_.T_W_C;
+                anchor_.T_W_C = G * anchor_.T_W_C;
+            }
             if (w.inertial()) {
                 out.ba_inertial = true;
                 out.ba_v0_held = w.imu.hold_v0;
@@ -744,7 +798,7 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
                 for (size_t k = 0; k + 1 < K; ++k) {
                     const InertialLinearization l =
                         LinearizeInertial(w.imu.pre[k], w.T_W_C[k] * T_C_B_, w.imu.v[k], w.imu.bg[k], w.imu.ba[k],
-                                          w.T_W_C[k + 1] * T_C_B_, w.imu.v[k + 1], g_W_);
+                                          w.T_W_C[k + 1] * T_C_B_, w.imu.v[k + 1], w.imu.g_W);
                     out.ba_inertial_chi2 += l.r.dot(InformationOf<9>(w.imu.pre[k].Sigma()) * l.r);
                 }
             }
@@ -768,24 +822,33 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
             // Inertial and the window full: window[1] is the next solve's window[0]; its bias marginal is that
             // solve's prior (INERTIAL_2.4 §4.2), from the same factorization.
             const std::vector<int> bias_want = w.inertial() && K == N ? std::vector<int>{1} : std::vector<int>{};
+            const bool want_g = !bias_want.empty() && w.imu.estimate_gravity;   // the next window's gravity prior
+            Eigen::Matrix2d g_marg = Eigen::Matrix2d::Zero();
             if ((!want.empty() || !bias_want.empty()) &&
-                !TryWindowBaCovariances(wc, want, marg, nullptr, &rep, w.inertial() ? &bias_marg : nullptr, bias_want))
+                !TryWindowBaCovariances(wc, want, marg, nullptr, &rep, w.inertial() ? &bias_marg : nullptr, bias_want,
+                                        want_g ? &g_marg : nullptr))
                 ++out.ba_marginal_degenerate;
             if (!bias_want.empty()) {
                 const auto b1 = bias_marg.find(1);
                 if (b1 != bias_marg.end()) {
                     prior_b_ << w.imu.bg[1], w.imu.ba[1];
-                    prior_cov_ = core::NearestPSD(b1->second * cfg_.imu.full.bias_prior_inflation, 1e-12);
+                    prior_cov_ = NextBiasPrior(b1->second, 1e-9 * double(keyframes_[first + 1].t_ns - keyframes_[first].t_ns));
                     prior_kf_ = keyframes_[first + 1].id;
                     out.imu_prior = 1;
+                    // Gravity's prior for the next window: this marginal, inflated like the biases' (it double-counts
+                    // the shared keyframes). Expressed in the basis at the solved direction, which the rotation back
+                    // made g_W_ (bases at nearby directions differ by O(tilt)).
+                    if (want_g) g_prior_cov_ = g_marg * cfg_.imu.full.bias_prior_inflation;
                 } else {
-                    out.imu_prior = 2;   // degenerate: the previous prior is carried forward by the random walk
+                    out.imu_prior = 2;   // degenerate: the previous priors are carried forward (biases by the walk)
                 }
             }
             for (size_t k = first; k < keyframes_.size(); ++k) {
                 keyframes_[k].T_W_C = w.T_W_C[k - first];
-                if (k + 1 < keyframes_.size() && k != first)
-                    graph_.UpdateNode(keyframes_[k].id, keyframes_[k].T_W_C, graph_.nodes().at(keyframes_[k].id).covariance);
+                if (k + 1 < keyframes_.size() && (k != first || rotated)) {
+                    const core::Mat6& c = graph_.nodes().at(keyframes_[k].id).covariance;
+                    graph_.UpdateNode(keyframes_[k].id, keyframes_[k].T_W_C, rotated ? core::ChangeFrame(G, c) : c);
+                }
             }
             for (const auto& [id, X] : w.X)
                 if (!ill_after.count(id)) landmarks_.at(id).X_w = X;

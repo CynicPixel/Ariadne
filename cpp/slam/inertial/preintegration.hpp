@@ -67,6 +67,16 @@ Eigen::Matrix<double, N, N> InformationOf(const Eigen::Matrix<double, N, N>& cov
     return ld.solve(Eigen::Matrix<double, N, N>::Identity());
 }
 
+/// An orthonormal basis [b1 b2] of the plane perpendicular to the unit vector `dir` (deterministic). A gravity
+/// direction is perturbed as g <- Exp(B w) g, w in R^2: the two tilts, never a rotation about g itself.
+inline Eigen::Matrix<double, 3, 2> GravityTangentBasis(const Vec3& dir) {
+    const Vec3 a = std::abs(dir.x()) < 0.9 ? Vec3::UnitX() : Vec3::UnitY();
+    const Vec3 b1 = (a - dir * dir.dot(a)).normalized();
+    Eigen::Matrix<double, 3, 2> B;
+    B << b1, dir.cross(b1);
+    return B;
+}
+
 /// White-noise densities (already inflated by the caller) for the per-sample covariance.
 struct PreintegrationNoise {
     double gyro_density = 0.0;    // rad/s/sqrt(Hz)
