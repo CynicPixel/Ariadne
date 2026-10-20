@@ -353,6 +353,48 @@ init that includes the outliers. The near-miss precision is TP/(TP + accepted ne
   warm-started LM solves. The obvious lever, warm-starting the weights from the previous event so that only new
   loops start at w = 1, is not implemented. It is part 2's first optimisation if the demo needs it.
 
+**Part 2a — weight reuse across loop events (maintainer: "weight reuse then wire up", 2026-10-20).**
+- **State.** The caller carries a `GncState` (per edge: −1 not active last event, 0 outlier, 1 inlier). Edges are
+  append-only, so indices are stable keys. A loop that was PCM-active last event and is still active starts at its
+  previous decision; every other active loop starts at 1. The PCM mask always wins.
+- **Fast path.** One solve, accepted only if the split is a TLS fixed point:
+  - every loop held at 1 has r² ≤ c̄²;
+  - every active loop held at 0 has r² > c̄² (otherwise TLS would include it).
+  This is looser than Remark 5's 2r²max ≤ c̄², deliberately: converged inliers sit just under c̄², so the c̄²/2
+  rule would almost never fire.
+- **Fallback.** Otherwise the fast-path solve is discarded, and cold GNC runs from the event's input poses with every
+  active loop a candidate again.
+- **Path dependence:** the result depends on the event history. It stays deterministic under replay of the recorded
+  sequence.
+- **Protocol (fixed before the first run).**
+  - **Setup:** a maze graph of 1,000 nodes, loops arriving in trajectory order with one event per loop. The mix is
+    true revisits, about 10 % random outliers and three 0.5 m / 5° near misses. An early outlier is paired with the
+    first true loop, so PCM rejects that loop and accepts it later.
+  - **Per event:** PCM, warm GNC, and cold GNC on a copy of the same input.
+  - **Gate:** the warm inlier set equals cold's at every event, or is no worse in precision and recall against the
+    truth. Final ATE within 1 % of cold's, and the PCM rejected-then-accepted case must occur.
+  - **Reported:** the fast-path hit rate, fallback reasons, warm against cold time, and the warm path alone at
+    3,000 nodes.
+  - If the hit rate is low, the next lever (cold GNC started at a high μ from the previous weights) is measured
+    first, not built.
+- **As built (2026-10-20), and what measurement changed.** Three fast-path rules were tried in turn, the protocol
+  unchanged throughout:
+
+  | fast-path rule | fast path | warm ≠ cold | final precision / ATE vs cold | gate |
+  |---|---|---|---|---|
+  | TLS fixed point only | 82/83 | 25 events | 1.000 at the end, 0.88–0.94 during | fails: a wrong loop bent the odometry and kept its own r² small |
+  | + innovation 2ΔE ≤ χ²₆ₙ(0.99) | 79/83 | 45 events | 0.986, ATE +3.6 % | fails: an early 0.5 m near miss is statistically consistent with large drift, TLS keeps it, cold GNC rejects it |
+  | + innovation ≤ ½χ²₆ₙ(0.99) (Remark 5's region) | **60/83 (72 %)** | **0 events** | **1.000, ATE identical (0.1127 m)** | **passes** |
+
+  - **The adopted rule.** The fixed point, plus the innovation of the new loops (one extra warm solve with them held
+    at 0) within half the χ²₆ₙ(0.99) bound. The fast path takes only what GNC's convex start would accept; the
+    ambiguous band goes to cold GNC.
+  - **Measured cost.** 1,000 nodes: 82 ms per event warm against 105 ms cold (−22 %). 3,000 nodes, warm only:
+    83 % fast path, 227 ms mean per event, 655 ms worst. Bit-identical over a fixed event sequence.
+  - **Correction to the part 1 timing story.** The 1.6 s / 4.75 s of part 1 was GNC *without* PCM in front.
+    Wired gate → PCM → GNC, PCM removes the random outliers, and even cold GNC costs about one LM solve per event.
+    Weight reuse is a 20 % saving there, not the order of magnitude part 1's numbers suggested.
+
 ## 7. Certificate (arch §14.8, D74) — behind a flag
 
 **What is certified, stated plainly.** SE-Sync certifies global optimality of **its** cost, the isotropic chordal cost

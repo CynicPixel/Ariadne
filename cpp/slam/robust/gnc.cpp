@@ -7,25 +7,130 @@
 
 namespace ariadne::slam {
 
+namespace {
+
+/// chi^2 survival for an EVEN number of degrees of freedom k = 2m: e^-h sum_{i<m} h^i / i!, h = x / 2.
+double ChiSquareEvenSurvival(double x, int k) {
+    if (x <= 0) return 1.0;
+    const double h = 0.5 * x;
+    double term = 1.0, sum = 1.0;
+    for (int i = 1; i < k / 2; ++i) sum += (term *= h / i);
+    return std::exp(-h) * sum;
+}
+
+double ChiSquareEvenQuantile(double p, int k) {
+    double lo = 0.0, hi = 1.0;
+    while (1.0 - ChiSquareEvenSurvival(hi, k) < p) hi *= 2.0;
+    for (int i = 0; i < 200; ++i) {
+        const double mid = 0.5 * (lo + hi);
+        (1.0 - ChiSquareEvenSurvival(mid, k) < p ? lo : hi) = mid;
+    }
+    return 0.5 * (lo + hi);
+}
+
+}  // namespace
+
 double TlsWeight(double r2, double mu, double cbar2) {
     if (r2 <= mu / (mu + 1.0) * cbar2) return 1.0;
     if (r2 >= (mu + 1.0) / mu * cbar2) return 0.0;
     return std::sqrt(cbar2 / r2) * std::sqrt(mu * (mu + 1.0)) - mu;
 }
 
-GncReport SolveGnc(PoseGraph& g, uint64_t anchor, const std::vector<bool>* active, const GncParams& p) {
+GncReport SolveGnc(PoseGraph& g, uint64_t anchor, const std::vector<bool>* active, const GncParams& p,
+                   GncState* state) {
     GncReport rep;
-    PoseGraph w = g;   // working copy: weights change every outer iteration, the input graph only at the end
     std::vector<bool> on;
-    for (size_t i = 0; i < w.edges().size(); ++i) {
-        if (!IsLoopType(w.edges()[i].type)) continue;
+    for (size_t i = 0; i < g.edges().size(); ++i) {
+        if (!IsLoopType(g.edges()[i].type)) continue;
         rep.loops.push_back(i);
         on.push_back(!active || (i < active->size() && (*active)[i]));
-        w.SetGncWeight(i, on.back() ? 1.0 : 0.0);
     }
     const size_t L = rep.loops.size();
     PgoSettings lm = p.lm;
     lm.recompute_covariance = false;
+    auto r2_of = [&](const PoseGraph& pg) {
+        std::vector<double> r2(L);
+        for (size_t k = 0; k < L; ++k) {
+            const PoseEdge& e = pg.edges()[rep.loops[k]];
+            const Vec6 r = pg.Residual(e);
+            r2[k] = r.dot(e.information * r);
+        }
+        return r2;
+    };
+    auto finish = [&](PoseGraph& w, const std::vector<double>& weight, int components, double energy) {
+        rep.w_final = weight;
+        rep.r2_final = r2_of(w);
+        rep.components = components;
+        rep.final_energy = energy;
+        for (size_t k = 0; k < L; ++k) {
+            rep.non_binary += on[k] && weight[k] >= p.binary_tol && weight[k] <= 1.0 - p.binary_tol;
+            (on[k] && weight[k] > p.inlier_weight ? rep.inliers : rep.outliers).push_back(rep.loops[k]);
+        }
+        if (p.marginals_at_end) {   // one pass on the final weights (it starts at the optimum: a few iterations)
+            PgoSettings m = p.lm;
+            m.recompute_covariance = true;
+            SolvePoseGraph(w, anchor, m);
+        }
+        for (size_t k = 0; k < L; ++k) g.SetGncWeight(rep.loops[k], weight[k]);
+        const Mat6 unknown = Mat6::Constant(std::numeric_limits<double>::quiet_NaN());
+        for (const auto& [id, n] : w.nodes()) g.UpdateNode(id, n.T_W_C, p.marginals_at_end ? n.covariance : unknown);
+        if (state) {
+            state->decision.assign(g.edges().size(), int8_t(-1));
+            for (size_t k = 0; k < L; ++k)
+                if (on[k]) state->decision[rep.loops[k]] = int8_t(weight[k] > p.inlier_weight ? 1 : 0);
+        }
+        return rep;
+    };
+
+    // Weight reuse: the previous decisions as one solve; accepted only if the split is a TLS fixed point.
+    rep.warm = state && !state->decision.empty();
+    if (rep.warm) {
+        PoseGraph f = g;
+        std::vector<double> weight(L, 0.0);
+        std::vector<bool> fresh(L, false);
+        for (size_t k = 0; k < L; ++k) {
+            if (!on[k]) continue;
+            const size_t e = rep.loops[k];
+            const bool known = e < state->decision.size() && state->decision[e] >= 0;
+            weight[k] = known ? double(state->decision[e]) : 1.0;
+            fresh[k] = !known;
+            rep.new_loops += !known;
+        }
+        // Without the new loops (warm: the input is that problem's optimum, so this costs one or two iterations).
+        double e_without = 0.0;
+        if (rep.new_loops > 0) {
+            for (size_t k = 0; k < L; ++k) f.SetGncWeight(rep.loops[k], fresh[k] ? 0.0 : weight[k]);
+            const PgoReport r0 = SolvePoseGraph(f, anchor, lm);
+            rep.lm_iterations.push_back(r0.iterations);
+            e_without = r0.final_energy;
+        }
+        for (size_t k = 0; k < L; ++k) f.SetGncWeight(rep.loops[k], weight[k]);
+        const PgoReport fr = SolvePoseGraph(f, anchor, lm);
+        rep.lm_iterations.push_back(fr.iterations);
+        if (rep.new_loops > 0) {
+            rep.innovation = 2.0 * (fr.final_energy - e_without);   // the energy carries 1/2
+            // Half the chi^2 bound: Remark 5's all-inlier region applied to the innovation, so the fast path takes
+            // only what GNC's convex start would already accept; the ambiguous band goes to cold GNC (design §6).
+            rep.innovation_bound = 0.5 * ChiSquareEvenQuantile(0.99, 6 * rep.new_loops);
+            rep.fallback_innovation = rep.innovation > rep.innovation_bound;
+        }
+        const std::vector<double> r2 = r2_of(f);
+        rep.r2_initial = r2;
+        for (size_t k = 0; k < L; ++k) {
+            if (!on[k]) continue;
+            rep.fallback_held_in_over += weight[k] == 1.0 && r2[k] > p.cbar2;
+            rep.fallback_held_out_under += weight[k] == 0.0 && r2[k] <= p.cbar2;
+        }
+        if (rep.fallback_held_in_over == 0 && rep.fallback_held_out_under == 0 && !rep.fallback_innovation) {
+            rep.fast_path = true;
+            rep.stop = "fast_path";
+            return finish(f, weight, fr.components, fr.final_energy);
+        }
+        rep.lm_iterations.clear();   // the fast-path solve is discarded with its copy
+    }
+
+    PoseGraph w = g;   // working copy: weights change every outer iteration, the input graph only at the end
+    for (size_t k = 0; k < L; ++k) w.SetGncWeight(rep.loops[k], on[k] ? 1.0 : 0.0);
     auto r2_all = [&]() {
         std::vector<double> r2(L);
         for (size_t k = 0; k < L; ++k) {
@@ -85,23 +190,7 @@ GncReport SolveGnc(PoseGraph& g, uint64_t anchor, const std::vector<bool>* activ
         if (rep.stop.empty()) rep.stop = "max_outer";
     }
 
-    rep.w_final = weight;
-    rep.r2_final = r2_all();
-    rep.components = last.components;
-    rep.final_energy = last.final_energy;
-    for (size_t k = 0; k < L; ++k) {
-        rep.non_binary += on[k] && weight[k] >= p.binary_tol && weight[k] <= 1.0 - p.binary_tol;
-        (on[k] && weight[k] > p.inlier_weight ? rep.inliers : rep.outliers).push_back(rep.loops[k]);
-    }
-    if (p.marginals_at_end) {   // one pass on the final weights (it starts at the optimum: a few iterations)
-        PgoSettings m = p.lm;
-        m.recompute_covariance = true;
-        SolvePoseGraph(w, anchor, m);
-    }
-    for (size_t k = 0; k < L; ++k) g.SetGncWeight(rep.loops[k], weight[k]);
-    const Mat6 unknown = Mat6::Constant(std::numeric_limits<double>::quiet_NaN());
-    for (const auto& [id, n] : w.nodes()) g.UpdateNode(id, n.T_W_C, p.marginals_at_end ? n.covariance : unknown);
-    return rep;
+    return finish(w, weight, last.components, last.final_energy);
 }
 
 }  // namespace ariadne::slam

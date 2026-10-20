@@ -4,6 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-20 — 2.5: GNC weight reuse across loop events (D73 part 2a)
+
+- **`GncState`** carries each loop's decision from one event to the next. The fast path is one solve, plus one more
+  for the innovation test.
+- **Measured safe rule:** the TLS fixed point plus an innovation ≤ ½χ²₆ₙ(0.99). Two looser rules failed the
+  warm-equals-cold gate (a wrong loop hid in bent odometry; an early near miss was kept).
+- **1,000 nodes, 84 events:** warm = cold at every event, ATE identical, 72 % fast path, −22 % time.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Correction:** part 1's 1.6–4.75 s was GNC without PCM. Behind PCM a loop event costs about 0.1–0.2 s, which is
+  inside the demo's "a little worse than real time".
+- **Next:** part 2b, the wiring (loop source → gate → PCM → GNC, config and manifest fields, calibration).
+
 ## 2026-10-20 — 2.5: GNC-TLS core + per-component anchoring (D73 part 1)
 
 - **`cpp/slam/robust/gnc`:** Yang et al. Prop. 4, with conventions checked against GTSAM 4.3.0's source. It runs on

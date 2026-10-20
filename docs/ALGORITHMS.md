@@ -1041,7 +1041,12 @@ Each layer independently justifiable; each has a verified permissive reference i
 - ⚠️ **Disconnection.** When rejections split the graph, each component needs its own anchor. With pgo_v2's clamp
   off, the singular system would otherwise fail the pivot guard.
 - **Cost:** about 27 outer iterations, each a warm-started LM solve. Measured 1.6 s at 1,000 nodes and 4.75 s at
-  3,000 per event.
+  3,000 per event, with GNC alone. Behind PCM: about 0.1 s and 0.2 s per event.
+- ⚠️ **Reusing weights across events (D73 part 2a)** needs more than "the old split is still a TLS fixed point".
+  A wrong new loop can bend the odometry and keep its own residual small. An innovation test at the full χ² bound
+  still keeps early near misses that drift makes statistically consistent, which TLS slightly favours and cold GNC
+  rejects. Measured safe: the innovation within ½χ²₆ₙ(0.99), Remark 5's region, so only unambiguous loops take the
+  fast path (72–83 % of events).
 
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 

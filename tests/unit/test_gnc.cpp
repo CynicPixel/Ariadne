@@ -431,3 +431,186 @@ TEST(Gnc, TimingAtDemoScale) {
                     sc.precision, sc.recall);
     }
 }
+
+// --- Weight reuse across loop events (D73 part 2a; design §6 protocol, fixed before the first run) -----------------
+// Maze graph, loops arriving in trajectory order (one event per loop): true revisits, ~10 % random outliers, three
+// 0.5 m / 5 deg near misses, and an early outlier paired with the first true loop so PCM first rejects that true
+// loop (no consensus) and accepts it later. Per event: PCM, warm GNC (GncState carried), and cold GNC on a copy of
+// the same input. Gate: warm inliers == cold at every event, or no worse precision/recall against the truth; final
+// ATE within 1 % of cold. Reported: fast-path hit rate, fallback reasons, time warm vs cold.
+namespace {
+
+struct Event {
+    int a, b;
+    int kind;   // 0 true, 1 random outlier, 2 near miss
+};
+
+Scenario Maze(int N, std::mt19937& g, std::vector<Event>& events, unsigned seed) {
+    Scenario s;
+    double x = 0, y = 0, yaw = 0;
+    std::uniform_int_distribution<int> turn(-1, 1);
+    for (int i = 0; i < N; ++i) {
+        s.truth.push_back(At(Vec3(x, y, 0), yaw));
+        x += 0.1 * std::cos(yaw);
+        y += 0.1 * std::sin(yaw);
+        if (std::fabs(std::fmod(x + 100, 4.0) - 2.0) < 0.051 && std::fabs(std::fmod(y + 100, 4.0) - 2.0) < 0.051)
+            yaw += turn(g) * M_PI / 2;
+        if (std::fabs(x) > 6.01 || std::fabs(y) > 6.01) yaw += M_PI, x += 0.2 * std::cos(yaw), y += 0.2 * std::sin(yaw);
+    }
+    s.Build(g);
+    std::mt19937 ge(seed);
+    std::uniform_real_distribution<double> u(0.0, 1.0);
+    int last = -100, near_left = 3;
+    bool first_true = true;
+    for (int i = 0; i < N; ++i) {
+        if (i - last < 10) continue;
+        for (int j = 0; j + 60 < i; ++j)
+            if ((s.truth[size_t(j)].t - s.truth[size_t(i)].t).norm() < 0.5 &&
+                (s.truth[size_t(j)].R.transpose() * s.truth[size_t(i)].R - core::Mat3::Identity()).norm() < 0.3) {
+                // The early outlier, then the first loop forced TRUE (PCM must first reject it, then accept it).
+                if (first_true) events.push_back({std::max(0, i - 200), i - 1, 1});
+                const int kind = (!first_true && near_left > 0 && u(ge) < 0.05) ? (--near_left, 2) : 0;
+                first_true = false;
+                events.push_back({j, i, kind});
+                if (u(ge) < 0.1) {
+                    const int a = int(ge() % unsigned(i)), b = i;
+                    events.push_back({std::min(a, b - 1), b, 1});
+                }
+                last = i;
+                break;
+            }
+    }
+    return s;
+}
+
+size_t AddEvent(Scenario& s, std::mt19937& g, const Event& ev) {
+    std::normal_distribution<double> n(0.0, 1.0);
+    if (ev.kind == 0) return s.Loop(g, ev.a, ev.b);
+    SE3 bad;
+    if (ev.kind == 1) {
+        bad = RandomPose(g, 5.0);
+    } else {
+        Vec6 xi;
+        xi << 0.5 * Vec3(n(g), n(g), n(g)).normalized(), 0.087 * Vec3(n(g), n(g), n(g)).normalized();
+        bad = core::SE3Exp(xi) * (s.truth[size_t(ev.a)].inverse() * s.truth[size_t(ev.b)]);
+    }
+    const size_t e = s.Loop(g, ev.a, ev.b, &bad);
+    s.outlier_loops.push_back(e);
+    return e;
+}
+
+}  // namespace
+
+TEST(GncWarm, EventSequenceMatchesColdGnc) {
+    std::mt19937 g(31);
+    std::vector<Event> events;
+    Scenario s = Maze(1000, g, events, 77u);
+    GncState state;
+    int fast = 0, warm_events = 0, differ = 0, over = 0, under = 0, innov = 0, pcm_flip = 0;
+    double t_warm = 0, t_cold = 0;
+    PoseGraph last_cold;
+    GncReport last_warm;
+    size_t early_true = SIZE_MAX;
+    bool early_rejected = false;
+    for (const Event& ev : events) {
+        const size_t e = AddEvent(s, g, ev);
+        if (ev.kind == 0) {
+            s.true_loops.push_back(e);
+            if (early_true == SIZE_MAX) early_true = e;
+        }
+        const PcmReport pcm = Pcm(s.g);
+        std::vector<bool> active(s.g.edges().size(), false);
+        for (size_t l : pcm.accepted) active[l] = true;
+        if (early_true != SIZE_MAX) {
+            if (!active[early_true]) early_rejected = true;
+            else if (early_rejected) pcm_flip = 1;
+        }
+        PoseGraph cold = s.g;
+        auto t0 = std::chrono::steady_clock::now();
+        const GncReport rc = SolveGnc(cold, 0, &active);
+        t_cold += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        t0 = std::chrono::steady_clock::now();
+        const GncReport rw = SolveGnc(s.g, 0, &active, {}, &state);
+        t_warm += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        warm_events += rw.warm;
+        fast += rw.fast_path;
+        over += rw.fallback_held_in_over > 0;
+        under += rw.fallback_held_out_under > 0;
+        innov += rw.fallback_innovation;
+        if (rw.inliers != rc.inliers) {
+            ++differ;
+            const Score a = Classify(s, rw), b = Classify(s, rc);
+            EXPECT_GE(a.precision, b.precision) << "event " << &ev - events.data();
+            EXPECT_GE(a.recall, b.recall) << "event " << &ev - events.data();
+        }
+        last_cold = std::move(cold);
+        last_warm = rw;
+    }
+    double ate_cold = 0;
+    for (size_t i = 0; i < s.truth.size(); ++i) ate_cold += (last_cold.nodes().at(i).T_W_C.t - s.truth[i].t).squaredNorm();
+    ate_cold = std::sqrt(ate_cold / double(s.truth.size()));
+    const Score fin = Classify(s, last_warm);
+    std::printf("weight reuse, 1000 nodes, %zu events: fast path %d / %d warm events | fallbacks: held-in over c2 %d,"
+                " held-out under c2 %d, innovation %d | warm != cold at %d events | PCM rejected-then-accepted the early true loop: %s\n",
+                events.size(), fast, warm_events, over, under, innov, differ, pcm_flip ? "yes" : "NO (protocol case missing)");
+    std::printf("weight reuse: total time warm %.0f ms vs cold %.0f ms | final ATE warm %.4f m vs cold %.4f m | final"
+                " warm precision %.3f recall %.3f\n", t_warm, t_cold, s.Ate(), ate_cold, fin.precision, fin.recall);
+    EXPECT_EQ(pcm_flip, 1);
+    EXPECT_LE(s.Ate(), 1.01 * ate_cold + 1e-9);
+}
+
+// Warm path alone at 3000 nodes (cold at every event is not run here: time and the machine's memory).
+TEST(GncWarm, TimingAtThreeThousandNodes) {
+    std::mt19937 g(32);
+    std::vector<Event> events;
+    Scenario s = Maze(3000, g, events, 78u);
+    GncState state;
+    int fast = 0;
+    double t_total = 0, t_max = 0, t_fast = 0;
+    for (const Event& ev : events) {
+        const size_t e = AddEvent(s, g, ev);
+        if (ev.kind == 0) s.true_loops.push_back(e);
+        const PcmReport pcm = Pcm(s.g);
+        std::vector<bool> active(s.g.edges().size(), false);
+        for (size_t l : pcm.accepted) active[l] = true;
+        const auto t0 = std::chrono::steady_clock::now();
+        const GncReport rw = SolveGnc(s.g, 0, &active, {}, &state);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        t_total += ms;
+        t_max = std::max(t_max, ms);
+        if (rw.fast_path) ++fast, t_fast += ms;
+    }
+    GncReport last;
+    {
+        PoseGraph copy = s.g;
+        last = SolveGnc(copy, 0, nullptr);
+    }
+    const Score sc = Classify(s, last);
+    std::printf("weight reuse, 3000 nodes, %zu events: fast path %d (%.0f ms mean), per event mean %.0f ms, worst %.0f ms"
+                " | ATE %.4f m (reported)\n", events.size(), fast, fast ? t_fast / fast : 0.0, t_total / events.size(),
+                t_max, s.Ate());
+    (void)sc;
+}
+
+TEST(GncWarm, BitIdenticalOverAFixedEventSequence) {
+    PoseGraph out[2];
+    for (int run = 0; run < 2; ++run) {
+        std::mt19937 g(33);
+        std::vector<Event> events;
+        Scenario s = Maze(400, g, events, 79u);
+        GncState state;
+        for (const Event& ev : events) {
+            AddEvent(s, g, ev);
+            const PcmReport pcm = Pcm(s.g);
+            std::vector<bool> active(s.g.edges().size(), false);
+            for (size_t l : pcm.accepted) active[l] = true;
+            SolveGnc(s.g, 0, &active, {}, &state);
+        }
+        out[run] = s.g;
+    }
+    for (const auto& [id, n] : out[0].nodes()) {
+        const SE3& T = out[1].nodes().at(id).T_W_C;
+        EXPECT_EQ(std::memcmp(n.T_W_C.R.data(), T.R.data(), sizeof(double) * 9), 0);
+        EXPECT_EQ(std::memcmp(n.T_W_C.t.data(), T.t.data(), sizeof(double) * 3), 0);
+    }
+}

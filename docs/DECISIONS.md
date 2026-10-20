@@ -2083,3 +2083,32 @@ oracle at 100/100):
 - **The demo-latency estimate given earlier (0.3–0.8 s at 1,000 nodes) was optimistic.** Measured: 1.6 s.
   Warm-starting the weights across events is the unimplemented lever.
 - **Not wired;** parts 2 and 3 follow.
+
+## 2026-10-20 — D73 part 2a: GNC weight reuse across loop events (fast path = fixed point + half-bound innovation test)
+
+**Context.** The maintainer asked for weight reuse before the wiring, to cut per-event latency. Design §6 part 2a
+holds the protocol, fixed before the first run.
+
+**Decision.**
+- **State.** `SolveGnc(..., GncState*)`: the caller carries per-edge decisions. A loop that was PCM-active last event
+  and still is starts at its previous decision; other active loops start at 1; the mask always wins.
+- **Fast path:** accepted only if all of these hold:
+  - every loop held at 1 has r² ≤ c̄²;
+  - every active loop held at 0 has r² > c̄²;
+  - the n new loops raise the full cost by 2ΔE ≤ ½χ²₆ₙ(0.99). This takes one extra warm solve with them at 0.
+- **Fallback.** Otherwise the fast-path solve is discarded and cold GNC runs from the event's input poses.
+- **Path dependent** (deterministic under replay).
+
+**Why the half bound (measured, design §6 table).**
+- **The fixed point alone diverged from cold at 25 events:** a wrong loop bent the odometry.
+- **Adding the innovation test at χ²₆ₙ(0.99) diverged at 45 events** and kept a near miss for good: precision
+  0.986, ATE +3.6 %.
+- **Half the bound (Remark 5's region)** matched cold at every one of 84 events, with ATE identical.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, GncWarm 3/3):
+- **1,000 nodes:** 72 % fast path, −22 % time, and PCM's rejected-then-accepted case covered.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Determinism:** bit-identical over a fixed sequence.
+
+**Correction, stated.** Part 1's 1.6 s / 4.75 s per event was GNC with outliers present and no PCM in front. In
+the wired order PCM removes them first, and a loop event costs about 0.1–0.2 s even cold.
