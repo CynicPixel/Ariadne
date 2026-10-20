@@ -2055,8 +2055,9 @@ a quiet downgrade, and it is why the sensor claim in the report can be checked a
 >   keyframe record as `gravity_dir_C`.
 > - **While lost,** the gyro replaces the D56 visual bridge's rotation; translation keeps the bridge's decaying velocity.
 > - **§10.5 LK seeding** is a tested seam, off by default.
-> - **Not yet built:** the `GRAVITY_PRIOR` factor belongs to the pose-graph owner (2.5); the sim IMU noise operator is
->   2.2's degradation wiring. The manifest records `imu_mode`.
+> - **Not yet built:** the `GRAVITY_PRIOR` edges are produced by 2.4 (plan: "gravity-prior edges"; corrected D59)
+>   and consumed by the pose-graph solver (2.5); the sim IMU noise operator is 2.2's degradation wiring. The manifest
+>   records `imu_mode`.
 
 ---
 

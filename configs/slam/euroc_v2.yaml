@@ -68,3 +68,7 @@ imu:                            # D59 full (attitude_only behaviour until initia
     repropagate_gyro: 0.01      # rad/s (VINS-Mono)
     repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
     lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
+  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+    stride_keyframes: 10        # one per window length: non-overlapping data
+    source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
+    attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)

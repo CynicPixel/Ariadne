@@ -254,6 +254,91 @@ core::Mat6 StereoVo::NextBiasPrior(const core::Mat6& marginal, double dt) const 
     return core::NearestPSD(InformationOf<6>(L_next), 1e-12);
 }
 
+void StereoVo::EmitGravityPrior(const BaWindow& w, const PgoSettings& ls, VoKeyframeResult& out) {
+    const GravityPriorParams& gp = cfg_.imu.gravity_prior;
+    const KeyframeState& kf = keyframes_.back();
+    if (gp_any_ && kf.id < last_gp_kf_ + uint64_t(gp.stride_keyframes)) return;
+    const auto basis_cov = [](const Eigen::Matrix<double, 2, 3>& M, const Eigen::Matrix3d& C) {
+        return Eigen::Matrix2d(M * C * M.transpose());
+    };
+    using Cand = VoKeyframeResult::GravityCandidate;
+    std::vector<Cand>& cands = out.gravity_candidates;
+    core::Vec3 g_ref = core::Vec3::Zero();
+    if (full_imu_ && inertial_ready_ && w.inertial()) {
+        g_ref = g_W_.normalized();
+        const core::Mat3 R = kf.T_W_C.R;
+        // pose: the node's own tilt; sigma covers the reference direction's error and the node's rotation uncertainty.
+        Cand pose{"pose", true, core::Vec3(R.transpose() * g_ref), Eigen::Matrix2d::Zero()};
+        {
+            const Eigen::Matrix<double, 2, 3> Bt = GravityTangentBasis(pose.g_C).transpose();
+            const Eigen::Matrix<double, 2, 3> Mphi = Bt * R.transpose() * core::Hat(g_ref);   // node rotation phi
+            const Eigen::Matrix<double, 2, 2> Mg = -Bt * R.transpose() * core::Hat(g_ref) * GravityTangentBasis(g_ref);
+            pose.cov = basis_cov(Mphi, graph_.nodes().at(kf.id).covariance.bottomRightCorner<3, 3>()) +
+                       Mg * g_ref_cov_ * Mg.transpose();
+        }
+        cands.push_back(pose);
+        // query: gravity re-estimated from this window's own data (never fed back), with and without the carried
+        // bias prior (which encodes the fixed-gravity history along tilt <-> b_a).
+        for (const bool keep_bias_prior : {true, false}) {
+            Cand q{keep_bias_prior ? "query" : "query_free_ba", false, core::Vec3::Zero(), Eigen::Matrix2d::Zero()};
+            BaWindow wq = w;
+            wq.imu.estimate_gravity = true;
+            wq.imu.has_g_prior = false;
+            wq.imu.has_prior = keep_bias_prior;
+            try {
+                SolveWindowBa(wq, ls);
+                std::map<int, core::Mat6> none;
+                Eigen::Matrix2d gcov;
+                if (TryWindowBaCovariances(wq, {}, none, nullptr, nullptr, nullptr, {}, &gcov)) {
+                    const core::Vec3 gq = wq.imu.g_W.normalized();
+                    const core::Mat3 Rq = wq.T_W_C.back().R;
+                    q.g_C = Rq.transpose() * gq;
+                    const Eigen::Matrix<double, 2, 2> M =
+                        -GravityTangentBasis(q.g_C).transpose() * Rq.transpose() * core::Hat(gq) * GravityTangentBasis(gq);
+                    q.cov = M * gcov * M.transpose();
+                    q.ok = q.cov.allFinite() && q.cov.determinant() > 0.0;
+                }
+            } catch (const std::exception&) {
+                q.ok = false;   // a singular query (no information on the tilt): no candidate, counted by the caller
+            }
+            cands.push_back(q);
+        }
+        // attitude: Mahony's direction (the filter runs in full mode too). It is independent of g_W's own error, which
+        // every VIO-derived candidate inherits as a constant per-flight offset (§4.10 evaluation). Its edges compare
+        // with the agent's VIO gravity g_W here (the reference the solver aligns to).
+        if (kf_has_gravity_) {
+            const double s = gp.attitude_sigma_deg * M_PI / 180.0;
+            cands.push_back({"attitude", true, core::Vec3(kf_gravity_dir_C_.normalized()), Eigen::Matrix2d::Identity() * s * s});
+        }
+    } else if (cfg_.imu.mode == "attitude_only" || (full_imu_ && !inertial_ready_)) {
+        if (!kf_has_gravity_) return;
+        // attitude_only: Mahony's direction; the world reference is the first emitted keyframe's (a gauge choice).
+        const core::Vec3 gC = kf_gravity_dir_C_.normalized();
+        if (!att_g_ref_set_) {
+            att_g_ref_W_ = (kf.T_W_C.R * gC).normalized();
+            att_g_ref_set_ = true;
+        }
+        g_ref = att_g_ref_W_;
+        const double s = gp.attitude_sigma_deg * M_PI / 180.0;
+        cands.push_back({"attitude", true, gC, Eigen::Matrix2d::Identity() * s * s});
+    } else {
+        return;
+    }
+    const std::string want = full_imu_ && inertial_ready_ && w.inertial() ? gp.source : std::string("attitude");
+    for (const Cand& c : cands) {
+        if (c.name != want || !c.ok) continue;
+        GravityPrior e;
+        e.keyframe = kf.id;
+        e.g_C = c.g_C.normalized();
+        e.g_ref_W = g_ref;
+        e.information = InformationOf<2>(c.cov);
+        graph_.AddGravityPrior(e);
+        out.gravity_prior_emitted = true;
+    }
+    gp_any_ = true;
+    last_gp_kf_ = kf.id;
+}
+
 void StereoVo::FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out) {
     w.imu.T_C_B = T_C_B_;
     w.imu.g_W = g_W_;
@@ -363,6 +448,7 @@ void StereoVo::ApplyInertialEstimate(const InertialInitResult& r, size_t s0, siz
     }
     prior_kf_ = keyframes_[first].id;
     g_prior_cov_ = r.gravity_cov * cfg_.imu.full.bias_prior_inflation;
+    g_ref_cov_ = r.gravity_cov;
 }
 
 void StereoVo::TryRefineInertial(size_t first, VoKeyframeResult& out) {
@@ -888,6 +974,7 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
             const auto m1 = marg.find(1);
             pending_exit_cov_ = m1 != marg.end() && anchor[1] == 0 ? m1->second : UninformativeCovariance();
             have_pending_exit_ = true;
+            if (cfg_.imu.gravity_prior.enabled) EmitGravityPrior(w, ls, out);
         } else if (w.inertial() && K == N) {
             out.imu_prior = 2;   // no solve: window[0] moves on, its prior is carried forward
         }
@@ -926,6 +1013,7 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
     last_.T_W_C = keyframes_.back().T_W_C;
     prev_T_W_C_ = last_.T_W_C;
     last_kf_t_ns_ = t_ns;
+    kf_has_gravity_ = false;   // SetKeyframeGravity applies to one keyframe only
     return out;
 }
 

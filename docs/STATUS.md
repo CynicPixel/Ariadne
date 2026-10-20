@@ -4,6 +4,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
+
+- One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
+  NEES-calibrated on MH, held-out V NEES 3.0). VIO-derived alternatives measured and rejected (overconfident 2–70×).
+- Trajectories unchanged. Handoff to 2.5: consume them in the PGO (robustified, gravity direction as a variable).
+- 2.4 plan items left: none in the plan list; the sim IMU noise operator is 2.2's.
+
 ## 2026-10-19 — EuRoC v2 now runs the full inertial layer (D59 switch)
 
 - `euroc_v2` = `imu.mode full` (avg ATE 0.121 m, 9/11 in the stereo-inertial class); attitude_only kept as

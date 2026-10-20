@@ -50,6 +50,7 @@ namespace ariadne::slam {
 
 using core::RectifiedStereo;
 struct BaWindow;
+struct PgoSettings;
 
 struct VoFrame {
     uint64_t frame_id = 0;
@@ -151,6 +152,16 @@ struct VoKeyframeResult {
     bool imu_refine_refused = false;   // a refinement attempt was refused at this keyframe
     double imu_tilt_deg = 0.0;         // §4.8: the rotation that took the solved gravity back to the reference
     double imu_g_prior_sigma_deg = 0.0;   // §4.8: the gravity prior's sigma (largest axis) in that solve
+    /// GRAVITY_PRIOR (§4.10): at an emission, every candidate measurement of this keyframe's down direction (logged for
+    /// the NEES evaluation) and whether the configured one became an edge.
+    struct GravityCandidate {
+        std::string name;
+        bool ok = false;
+        core::Vec3 g_C = core::Vec3::Zero();
+        Eigen::Matrix2d cov = Eigen::Matrix2d::Zero();   // rad^2, GravityTangentBasis(g_C)
+    };
+    std::vector<GravityCandidate> gravity_candidates;
+    bool gravity_prior_emitted = false;
 };
 
 /// One run of the scheduled inertial refinement (imu.full.refine_after_s): the initialisation's MAP re-solved over every
@@ -173,6 +184,13 @@ public:
              const VoImuRig* imu = nullptr);
 
     VoTrackResult Track(const VoFrame& frame);
+
+    /// imu_mode attitude_only (or full before initialisation): gravity's down direction in the coming keyframe's camera
+    /// (Mahony, at that frame's time), for its GRAVITY_PRIOR edge (§4.10). Consumed by the next AddKeyframe.
+    void SetKeyframeGravity(const core::Vec3& gravity_dir_C) {
+        kf_has_gravity_ = true;
+        kf_gravity_dir_C_ = gravity_dir_C;
+    }
 
     /// Call after Track() returned need_keyframe, with stereo for that frame.
     VoKeyframeResult AddKeyframe(const VoStereo& stereo);
@@ -241,6 +259,8 @@ private:
     /// imu_mode full: the inertial part of the window keyframes_[first..] (re-integrating stale intervals), and the
     /// window[0] bias prior carried to that keyframe.
     void FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out);
+    /// GRAVITY_PRIOR edges at the configured stride (§4.10): candidates for the newest keyframe, the chosen one emitted.
+    void EmitGravityPrior(const BaWindow& w, const PgoSettings& ls, VoKeyframeResult& out);
     /// imu_mode full, not initialised: try the initialisation on the newest window keyframes.
     void TryInitializeInertial(size_t first, VoKeyframeResult& out);
     /// imu_mode full, initialised: the scheduled refinement, when due.
@@ -309,6 +329,15 @@ private:
     bool inertial_prior_set_ = false;               // the initialisation has set the first bias prior
     // Gravity's tilt prior (rad^2, GravityTangentBasis(g_W_)), for windows that estimate gravity (§4.8).
     Eigen::Matrix2d g_prior_cov_ = Eigen::Matrix2d::Identity();
+    // GRAVITY_PRIOR (§4.10): the reference direction's own tilt variance (the initialisation's / refinement's, not
+    // inflated), the attitude_only world reference (the first emitted keyframe's), and the emission stride.
+    Eigen::Matrix2d g_ref_cov_ = Eigen::Matrix2d::Zero();
+    bool att_g_ref_set_ = false;
+    core::Vec3 att_g_ref_W_ = core::Vec3::Zero();
+    bool gp_any_ = false;
+    uint64_t last_gp_kf_ = 0;
+    bool kf_has_gravity_ = false;                   // the newest keyframe's frame carried a Mahony direction
+    core::Vec3 kf_gravity_dir_C_ = core::Vec3::Zero();
 };
 
 }  // namespace ariadne::slam

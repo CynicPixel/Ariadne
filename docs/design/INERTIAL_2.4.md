@@ -252,6 +252,73 @@ information and deflates only the data's addition: Λ_next = Λ_carried + PSD(Λ
   dead reckoning on a MAV diverges (V2_01 9.1 m). ORB-SLAM3 bounds IMU-only tracking at 5 s before starting a new
   map; the analogue here belongs with map segments and re-association (2.1 / Phase 3) and is recorded, not tuned.
 
+### 4.10 Gravity-prior edges (arch §10.4, §12.1): design, fixed before code
+
+**Scope.** 2.4 produces the edges (struct, residual, Jacobian, emission, validation). The pose-graph solver (2.5)
+consumes them: `PoseGraph::Cost()` and `pgo_levmarq` are not touched; the edges live in their own container with
+their own cost, and a handoff note goes to 2.5. Inter-agent use (broker PGO, §15) and a wire field are Phase 3.
+
+**Factor (literature: GTSAM `AttitudeFactor<Pose3>`, `navigation/AttitudeFactor.h`, [VERIFIED web 2026-10-19]:
+`error = nRef.errorVector(nRb * bMeasured)`).** Unary on a keyframe's T_W_C:
+- measurement: g_C, the unit "down" direction in the keyframe's rectified left camera;
+- reference: ĝ_W, the agent's gravity direction in its world;
+- residual r = B(ĝ_W)ᵀ (R_WC g_C) ∈ R², B = `GravityTangentBasis` (a basis of the plane ⟂ ĝ_W): zero when the
+  camera's tilt agrees, blind to yaw;
+- Jacobian for the left perturbation [ρ; φ] of T_W_C: ∂r/∂ρ = 0, ∂r/∂φ = −B(ĝ_W)ᵀ [R_WC g_C]×;
+- information: 2×2 in that basis. OpenCV has no equivalent (OpenCV-native check: none).
+- Our basis differs from GTSAM's `Unit3` basis by a 2×2 rotation: a GTSAM comparison is on costs, with isotropic
+  information.
+
+**The measurement and its σ (decided by NEES, not argued).** A prior that copies the node's own tilt (g_C = R_WCᵀ ĝ_W)
+is zero at emission and its error is the accumulated tilt drift; it would resist loop closures that correct that
+drift unless σ covers it. Two candidates are logged per emission and compared:
+- **A (independent):** gravity's direction re-estimated from the solved window's own data (the §4.8 tilt variables,
+  as a one-shot query that never feeds back), σ from that estimate's marginal. Caveat: the carried b_a prior encodes
+  the fixed-gravity history, so a query that keeps it is not independent along tilt ↔ b_a; the query variants with and
+  without it are both measured.
+- **B (pose-derived):** g_C = R_WCᵀ ĝ_W, σ² = the initialisation's gravity variance + the node's absolute rotation
+  variance on the two tilt axes (it grows with the drift).
+- **Criterion:** per flight, the 2-dof NEES of the emitted g_C against the ground-truth camera-frame gravity, mean ≈ 2,
+  tail reported. Never tuned on ATE.
+- **Correlation:** consecutive windows share data, so an edge per keyframe would count the same information many
+  times. Emission stride = `ba.window_size` keyframes (non-overlapping windows); the NEES is measured at that stride.
+
+**attitude_only producer.** Mahony's g_C on the same stride, σ from config. Its error is heavy-tailed (D58: median
+1.3–4.2°, worst 15°) and §12.1 robustifies only loop edges: the NEES tail is reported and flagged to the consumer.
+
+**No IMU (sim_v2: none): no edges.** The sim gate must not change.
+
+**Tests:** FD Jacobian (large rotations; translation block exactly zero); yaw invariance about ĝ_W; zero residual
+at emission; cost against GTSAM on isotropic information when the oracle image is used.
+
+### 4.11 Gravity-prior edges: measured and decided (2026-10-20)
+
+Every emission (stride 10 keyframes) logged four candidates; 22 EuRoC runs (11 flights, full and attitude_only).
+2-dof NEES against the ground-truth camera-frame gravity (ideal mean 2, p90 4.6), and median angle error:
+
+| flight | pose | query | query_free_ba | Mahony (σ 5°) |
+|---|---|---|---|---|
+| MH_01 | 3.5 / 0.44° | 6.3 / 0.46° | 3.2 / 2.7° | 0.20 / 1.3° |
+| MH_03 | 25.8 / 1.77° | 73.0 / 1.75° | 7.2 / 5.6° | 1.08 / 4.1° |
+| V1_01 | 366 / 2.41° | 145 / 2.38° | 10.5 / 2.6° | 0.51 / 3.2° |
+| V2_03 | 0.0 / 1.35° | 76.2 / 1.45° | 20.0 / 8.6° | 0.60 / 2.8° |
+| (all 11) | 0–366 | 4.7–145 | 2.0–20 | 0.09–1.08 |
+
+- **VIO-derived candidates are accurate but not honest.** `pose` and `query` err 0.4–2.4° (median), but every one
+  inherits the fixed reference gravity's own error, a constant per-flight offset no window marginal contains
+  (V1_01: 2.4° median, its initialisation was 2.7° off). Overconfident by a flight-dependent 2–70×; `pose`'s σ
+  also becomes uninformative after lost stretches (NEES 0). Without the b_a prior (`query_free_ba`) the estimate is
+  near-honest but carries 2–9° errors.
+- **Mahony is independent of g_W and consistent across flights: chosen, σ = 2.3°.** Calibrated on Machine Hall (the
+  accurate Leica ground truth, as in §4.1; pooled NEES 2.00), validated on the held-out Vicon flights: pooled NEES
+  3.0, p90 7.3, p99 18.9 (part of the excess is the Vicon rooms' noisier orientation). Heavy tail: the consumer
+  should robustify these edges (§12.1 robustifies only loops by default).
+- **Reference direction.** g_ref_W is the producer's estimate (full: the VIO gravity; attitude_only: the first emitted
+  keyframe's Mahony direction). Its own error is a constant tilt shared by every edge: the solver should estimate the
+  agent's gravity direction as a 2-DoF variable initialised at g_ref_W.
+- Emitting edges changes no trajectory (all 11 full-mode runs byte-identical to D59 part 3); `graph_version` in
+  results.yaml changes.
+
 ## 5. Sim
 
 The IMU noise operator is 2.2's degradation wiring (coordinate first). `sim_v2` stays `imu: none` until then.

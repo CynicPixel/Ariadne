@@ -29,6 +29,8 @@
 #include <string>
 #include <vector>
 
+#include "slam/pose_graph/gravity_prior.hpp"
+
 namespace ariadne::slam {
 
 using core::Mat6;
@@ -131,13 +133,38 @@ public:
         return c;
     }
 
+    /// GRAVITY_PRIOR edges (§12.1, unary; gravity_prior.hpp). Kept apart from edges(): Cost() and the solver are the
+    /// pose-graph owner's (2.5), who decides how to consume them.
+    void AddGravityPrior(const GravityPrior& g) {
+        if (!nodes_.count(g.keyframe)) throw std::invalid_argument("PoseGraph: gravity prior on an unknown keyframe");
+        if (std::abs(g.g_C.norm() - 1.0) > 1e-9 || std::abs(g.g_ref_W.norm() - 1.0) > 1e-9)
+            throw std::invalid_argument("PoseGraph: gravity prior directions must be unit vectors");
+        const double scale = g.information.cwiseAbs().maxCoeff();
+        if (!g.information.allFinite() || !(scale > 0.0) ||
+            std::abs(g.information(0, 1) - g.information(1, 0)) > 1e-9 * scale ||
+            Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d>(g.information, Eigen::EigenvaluesOnly).eigenvalues()(0) <
+                -1e-12 * scale)
+            throw std::invalid_argument("PoseGraph: gravity prior information must be finite, non-zero, symmetric PSD");
+        gravity_priors_.push_back(g);
+        ++version_;
+    }
+
+    /// sum over gravity priors of rᵀ Λ r at the current node estimates (not part of Cost()).
+    double GravityCost() const {
+        double c = 0.0;
+        for (const auto& g : gravity_priors_) c += GravityPriorChi2(g, nodes_.at(g.keyframe).T_W_C);
+        return c;
+    }
+
     const std::map<uint64_t, PoseNode>& nodes() const { return nodes_; }
     const std::vector<PoseEdge>& edges() const { return edges_; }
+    const std::vector<GravityPrior>& gravity_priors() const { return gravity_priors_; }
     uint64_t version() const { return version_; }
 
 private:
     std::map<uint64_t, PoseNode> nodes_;   // ordered by keyframe id: stable iteration
     std::vector<PoseEdge> edges_;
+    std::vector<GravityPrior> gravity_priors_;
     uint64_t version_ = 0;
 };
 
