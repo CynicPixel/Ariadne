@@ -55,3 +55,7 @@ imu:                            # 2.4 attitude_only (slam/inertial/attitude.hpp;
   stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
   kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
   ki: 0.3
+  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+    stride_keyframes: 10        # one per window length: non-overlapping data
+    source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
+    attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)

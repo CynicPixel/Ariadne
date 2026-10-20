@@ -30,6 +30,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Next:** part 2 (loop source, wiring, calibration, GTSAM GNC oracle), then part 3 (verifier export, proxy swap,
   re-pin).
 
+## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
+
+- One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
+  NEES-calibrated on MH, held-out V NEES 3.0). VIO-derived alternatives measured and rejected (overconfident 2–70×).
+- Trajectories unchanged. Handoff to 2.5: consume them in the PGO (robustified, gravity direction as a variable).
+- 2.4 plan items left: none in the plan list; the sim IMU noise operator is 2.2's.
+
 ## 2026-10-19 — 2.5: PCM with a per-loop threshold; recall 1.000 at 10–40 % outliers (D72)
 
 - **`cpp/slam/robust/pcm`:** cycle consistency against the odometry-only chain. Every leg configuration on one chain

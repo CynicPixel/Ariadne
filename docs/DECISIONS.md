@@ -2112,3 +2112,21 @@ holds the protocol, fixed before the first run.
 
 **Correction, stated.** Part 1's 1.6 s / 4.75 s per event was GNC with outliers present and no PCM in front. In
 the wired order PCM removes them first, and a loop event costs about 0.1–0.2 s even cold.
+
+## 2026-10-20 — D59 (gravity priors): GRAVITY_PRIOR edges produced; Mahony is the source, σ 2.3°
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
+
+- **Edge** (`slam/pose_graph/gravity_prior.hpp`): unary on a keyframe's T_W_C, r = B(g_C)ᵀ R_WCᵀ ĝ_W (2-dof, blind to
+  yaw), the body-side form of GTSAM's `AttitudeFactor<Pose3>` (same cost for isotropic information). FD-tested
+  Jacobian; kept in `PoseGraph::gravity_priors()`, apart from `edges()` and `Cost()`, which are 2.5's.
+- **Emission:** one edge per 10 keyframes (non-overlapping windows), both inertial modes; none without an IMU.
+- **Source decided by 2-dof NEES vs ground truth, never ATE** (22 EuRoC runs): the VIO-derived candidates are accurate
+  (0.4–2.4°) but inherit the reference gravity's constant per-flight error, overconfident 2–70×. **Mahony** is
+  independent and consistent: σ = 2.3° calibrated on Machine Hall (NEES 2.00), held-out Vicon flights NEES 3.0;
+  heavy tail (p99 ≈ 18).
+- `euroc_v2` and `euroc_v2_attitude` emit them; trajectories unchanged (byte-identical), `graph_version` changes.
+- **Handoff to 2.5 (consumer):** (1) add the edges' cost to the PGO from `gravity_priors()` (residual and Jacobian in
+  `LinearizeGravityPrior`); (2) robustify them (heavy tail); (3) estimate the agent's gravity direction as a 2-DoF
+  variable initialised at `g_ref_W` (its error is shared by every edge); (4) wire field: Phase 3 (inter-agent).
+

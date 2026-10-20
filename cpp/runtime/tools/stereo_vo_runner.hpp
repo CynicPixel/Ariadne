@@ -188,6 +188,12 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                  "gt_vx_B,gt_vy_B,gt_vz_B,gt_bgx,gt_bgy,gt_bgz,gt_bax,gt_bay,gt_baz,gravity_err_deg,tilt_deg,g_prior_sigma_deg,"
                  "ba_landmarks\n";
     std::vector<std::pair<double, double>> gravity_err_t;   // (t_s, deg): the estimated gravity vs GT, per keyframe
+    // GRAVITY_PRIOR (§4.10): per candidate, NEES and angle error vs GT at each emission; edges emitted.
+    struct GpStats { std::vector<double> nees, ang; long failed = 0; };
+    std::map<std::string, GpStats> gp_stats;
+    long gp_edges = 0;
+    std::ostringstream gp_trace;
+    gp_trace << "keyframe,t_ns,candidate,nees,angle_err_deg,sigma_deg,emitted\n";
     // Nearest ground-truth pose / inertial state within 10 ms (EuRoC GT is 200 Hz).
     const auto gt_pose_at = [&](int64_t t, core::SE3& T) {
         const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), t,
@@ -391,7 +397,33 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             if (made_keyframe) {
                 stereo_valid += trace_valid;
                 stereo_total += static_cast<long>(sm.valid.size());
+                if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
+                // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
+                // down direction vs the true one in this keyframe's camera (EuRoC GT world: z up).
+                if (!kr.gravity_candidates.empty() && !gt_poses.empty()) {
+                    const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), frame.t_ns,
+                                                     [](const runtime::TimedPose& p, int64_t t) { return p.t_ns < t; });
+                    if (it != gt_poses.end() && std::llabs(it->t_ns - frame.t_ns) < 10000000LL) {
+                        const core::Vec3 g_true = ((it->T * T_B_Crect).R.transpose() * core::Vec3(0, 0, -1)).normalized();
+                        for (const auto& c : kr.gravity_candidates) {
+                            auto& acc = gp_stats[c.name];
+                            if (!c.ok) {
+                                ++acc.failed;
+                                continue;
+                            }
+                            const Eigen::Vector2d e = slam::GravityTangentBasis(c.g_C.normalized()).transpose() * g_true;
+                            const double nees = e.dot(c.cov.ldlt().solve(e));
+                            const double ang = std::acos(std::clamp(c.g_C.normalized().dot(g_true), -1.0, 1.0)) * 180.0 / M_PI;
+                            const double sig = std::sqrt(0.5 * c.cov.trace()) * 180.0 / M_PI;
+                            acc.nees.push_back(nees);
+                            acc.ang.push_back(ang);
+                            gp_trace << kr.keyframe_id << ',' << frame.t_ns << ',' << c.name << ',' << nees << ',' << ang
+                                     << ',' << sig << ',' << int(kr.gravity_prior_emitted) << '\n';
+                        }
+                    }
+                }
+                gp_edges += kr.gravity_prior_emitted;
                 t_kf.push_back(Ms(t0));
                 ++keyframes;
                 keyframes_lost += tr.status == slam::VoStatus::kLost;
@@ -755,6 +787,26 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         }
         res << "]}\n";
         std::ofstream(run_dir / "imu_trace.csv") << imu_trace.str();
+    }
+    if (scfg.imu.gravity_prior.enabled) {
+        // Mean NEES ~2 for a consistent 2-dof measurement; the p90 shows the tail (chi2_2 p90 = 4.6).
+        res << "gravity_prior: {source: " << scfg.imu.gravity_prior.source << ", stride_keyframes: "
+            << scfg.imu.gravity_prior.stride_keyframes << ", edges: " << gp_edges << ", candidates: {";
+        bool firstc = true;
+        for (auto& [name, a] : gp_stats) {
+            double mean = 0.0;
+            for (double v : a.nees) mean += v;
+            std::sort(a.nees.begin(), a.nees.end());
+            std::sort(a.ang.begin(), a.ang.end());
+            const size_t n = a.nees.size();
+            res << (firstc ? "" : ", ") << name << ": {n: " << n << ", failed: " << a.failed
+                << ", nees_mean: " << (n ? mean / double(n) : -1.0) << ", nees_median: " << (n ? a.nees[n / 2] : -1.0)
+                << ", nees_p90: " << (n ? a.nees[n * 9 / 10] : -1.0) << ", angle_median_deg: " << (n ? a.ang[n / 2] : -1.0)
+                << ", angle_p90_deg: " << (n ? a.ang[n * 9 / 10] : -1.0) << "}";
+            firstc = false;
+        }
+        res << "}}\n";
+        std::ofstream(run_dir / "gravity_prior_trace.csv") << gp_trace.str();
     }
     if (!args.outages.empty()) {
         // Drift across each fake outage, against ground truth (translation m, rotation deg), from the last frame before

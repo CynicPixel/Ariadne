@@ -93,6 +93,14 @@ struct ImuFullParams {
     std::string lost_motion = "decay";     // while lost: "decay" (D56/D58 translation) or "propagate" (IMU, §4.4)
 };
 
+/// GRAVITY_PRIOR edges (arch §10.4, INERTIAL_2.4 §4.10). Absent (`imu.gravity_prior` not in the config): none.
+struct GravityPriorParams {
+    bool enabled = false;
+    int stride_keyframes = 10;        // one edge per this many keyframes: non-overlapping windows (§4.10 correlation)
+    std::string source = "attitude";  // full mode: attitude | query | query_free_ba | pose (decided by NEES vs GT)
+    double attitude_sigma_deg = 5.0;  // attitude_only (Mahony) edges: per-axis sigma
+};
+
 /// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged), "attitude_only" (§10.7:
 /// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA) or "full" (D59:
 /// velocity and biases in the window BA; attitude_only behaviour until initialised). A config without an `imu:`
@@ -105,6 +113,7 @@ struct ImuParams {
     double kp = 1.0;                // Mahony et al. 2008 §VI
     double ki = 0.3;
     ImuFullParams full;
+    GravityPriorParams gravity_prior;
 };
 
 struct SlamConfig {
@@ -150,6 +159,13 @@ inline void ValidateSlam(const SlamConfig& c) {
     if (l.reanchor_min_points < p.min_correspondences) fail("lost.reanchor_min_points must be >= pnp.min_correspondences");
     if (c.imu.mode != "none" && c.imu.mode != "attitude_only" && c.imu.mode != "full")
         fail("imu.mode must be none, attitude_only or full");
+    if (c.imu.gravity_prior.enabled) {
+        const GravityPriorParams& g = c.imu.gravity_prior;
+        if (c.imu.mode == "none") fail("imu.gravity_prior needs an IMU (imu.mode attitude_only or full)");
+        if (g.stride_keyframes < 1 || (g.source != "attitude" && g.source != "query" && g.source != "query_free_ba" && g.source != "pose") ||
+            !(g.attitude_sigma_deg > 0.0))
+            fail("imu.gravity_prior: stride_keyframes >= 1, source attitude|query|query_free_ba|pose, attitude_sigma_deg > 0");
+    }
     if (c.imu.mode == "full") {
         const ImuFullParams& f = c.imu.full;
         if (c.ba.backend != "window") fail("imu.mode full needs ba.backend window");
@@ -235,6 +251,14 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.imu.stationary_s = m.Require<double>("stationary_s");
         c.imu.kp = m.Require<double>("kp");
         c.imu.ki = m.Require<double>("ki");
+        if (m.Has("gravity_prior")) {
+            StrictConfig g = m.Section("gravity_prior");
+            c.imu.gravity_prior.enabled = true;
+            c.imu.gravity_prior.stride_keyframes = g.Require<int>("stride_keyframes");
+            c.imu.gravity_prior.source = g.Require<std::string>("source");
+            c.imu.gravity_prior.attitude_sigma_deg = g.Require<double>("attitude_sigma_deg");
+            g.RequireAllConsumed();
+        }
         if (c.imu.mode == "full") {
             StrictConfig f = m.Section("full");
             c.imu.full.noise_inflation_gyro = f.Require<double>("noise_inflation_gyro");
