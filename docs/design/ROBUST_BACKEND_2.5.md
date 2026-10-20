@@ -306,6 +306,53 @@ node pairs with uniformly random SE(3) measurements (the paper's protocol), 20 s
   0.2 m / 1° (about 4σ) are scored by their effect on ATE, not by classification. If the 0.5 m gate fails, the first
   remedy is α_loop = 0.01 in PCM (§5).
 
+**Definitions (fixed before the first measured run, 2026-10-20).** Inlier means final w > 0.5, and precision and
+recall are counted over loop edges only. Every run starts from the odometry-composed poses, never from a chordal
+init that includes the outliers. The near-miss precision is TP/(TP + accepted near misses), pooled over 20 seeds.
+
+**D73 is split into three parts** (D59's pattern; IDs are limited to D70–D74):
+1. **Part 1:** the GNC core plus component anchoring, a pure library.
+2. **Part 2:** the intra-agent loop source, wired gate → PCM → GNC, with config and manifest fields, covariances
+   off on the event path, and the D71 threshold calibration.
+3. **Part 3:** the `VerifyResult` inlier export and the `ProxyInformation` swap, with `--premerge` and a re-pin.
+
+**As built, part 1 (2026-10-20).** `cpp/slam/robust/gnc.{hpp,cpp}`, `SolveGnc(graph, anchor, active mask)`.
+- **Runs on a working copy.** The input graph gets the final poses and weights once (`PoseGraph::SetGncWeight`,
+  loop-type edges only, w ∈ [0, 1]).
+- **Edge indices are stable.** The mask comes from PCM's accepted set, so the gate, PCM and GNC reports join on the
+  same index. Inner solves never recompute marginals.
+- **Conventions checked against GTSAM 4.3.0's `GncOptimizer.h`:** barcSq = 0.5·χ²inv; TLS λ₀ = barcSq/(2e − barcSq)
+  over factors, taking the smallest positive value; stop on relative cost, weight convergence or λ. These match ours.
+  The GTSAM oracle comparison is moved to part 2 [UNVERIFIED until then].
+- **`SolvePoseGraph` solves each connected component of the active graph** (loops at w ≤ 1e-4 are inactive) with
+  its own anchor: the given one, else the lowest id. Covariances outside the anchor's component are NaN. A single
+  component takes the unchanged path, and the existing PGO tests stay green (numerical 10/10; `PgoLevMarq`, chordal
+  and the 100-case GTSAM oracle 9/9).
+
+| test (`tests/unit/test_gnc.cpp`, 10/10) | result |
+|---|---|
+| Prop. 4 weight is the argmin of the Black–Rangarajan dual w r² + μc̄²(1−w)/(μ+w) | to 1e-4 on a 2·10⁵ grid, all (μ, r²) |
+| no outliers | stops (weights), energy equals plain LM to 1e-9 |
+| **grid (6×6×3), 10–40 % random outliers, 20 seeds: precision / recall worst** | **1.000 / 0.967** (gate ≥ 0.99 / ≥ 0.95) |
+| **sphere (8 rings × 20), same** | **1.000 / 0.967** |
+| ATE (grid / sphere) | 0.081–0.092 m / 0.128–0.148 m |
+| ramp 50–90 %, grid, 10 seeds | 10/10 successes at every rate (random outliers are easy; a real breakpoint needs harder outliers) |
+| **near misses 0.5 m / 5° through PCM → GNC** | PCM removed 200/200, so pooled precision is 1.000. **GNC alone:** 0/200 accepted, 1186/1200 true kept |
+| near misses 0.2 m / 1° through PCM → GNC | 199/200 pass PCM, 143 accepted by GNC; ATE 0.102 m against 0.091 m without them (+11 %) |
+| self-consistent wrong cluster (8 loops, one rigid offset, 30 true loops) | 0/8 accepted (reported) |
+| two agents linked only by 3 random loops | GNC alone keeps 1 (a lone link is unverifiable); PCM → no_consensus → GNC 0/3, 2 components, B held at its anchor |
+| bit-identical twice | yes |
+| **timing, maze graphs with 10 % outliers** | **1.6 s at 1,000 nodes, 4.75 s at 3,000** (about 27 outer iterations, 100–120 LM iterations) |
+
+- **The 0.5 m near-miss gate is met, but trivially.** On the grid topology PCM rejects every 0.5 m near miss, so
+  the gate does not exercise GNC. GNC on its own rejects all of them as well, measured separately.
+- **0.2 m / 1° near misses** are 4σ translation errors, and neither stage separates them. They cost 11 % ATE. That
+  is the price of the D72 decision, now measured.
+- **Timing replaces the earlier [ASSUMPTION]** given to the maintainer for demo latency (0.3–0.8 s at 1,000 nodes).
+  Measured: 1.6 s at 1,000 and 4.75 s at 3,000 per loop event, run in the background. The cost is about 27
+  warm-started LM solves. The obvious lever, warm-starting the weights from the previous event so that only new
+  loops start at w = 1, is not implemented. It is part 2's first optimisation if the demo needs it.
+
 ## 7. Certificate (arch §14.8, D74) — behind a flag
 
 **What is certified, stated plainly.** SE-Sync certifies global optimality of **its** cost, the isotropic chordal cost

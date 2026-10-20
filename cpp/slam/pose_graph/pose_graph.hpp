@@ -114,6 +114,18 @@ public:
         ++version_;
     }
 
+    /// GNC weight of a LOOP-type edge (§12.1: only loops are robustified), in [0, 1]. GNC (D73) sets weights on a
+    /// working copy and writes the final ones back once, so a loop event bumps the version once, not per iteration.
+    void SetGncWeight(size_t edge, double w) {
+        if (edge >= edges_.size()) throw std::out_of_range("PoseGraph::SetGncWeight: no such edge");
+        if (!IsLoopType(edges_[edge].type)) {
+            throw std::invalid_argument("PoseGraph::SetGncWeight: only loop-type edges carry a GNC weight (§12.1)");
+        }
+        if (!(w >= 0.0 && w <= 1.0)) throw std::invalid_argument("PoseGraph::SetGncWeight: weight must be in [0, 1]");
+        edges_[edge].gnc_weight = w;
+        ++version_;
+    }
+
     /// §12.2 residual of an edge at the current node estimates.
     Vec6 Residual(const PoseEdge& e) const {
         const SE3& Xi = nodes_.at(e.from).T_W_C;

@@ -73,9 +73,18 @@ struct PgoReport {
     int iterations = 0;          // the driver's count of LM attempts
     double initial_energy = 0.0, final_energy = 0.0;
     int linearizations = 0, factorizations = 0, failed_factorizations = 0;
+    int components = 1;          // connected components of the active graph, each solved with its own anchor
 };
 
+/// A loop edge whose GNC weight is at or below this is inactive: it neither connects components nor enters a solve.
+constexpr double kInactiveGncWeight = 1e-4;
+
 /// Optimise `g` in place (node poses) with `anchor` held fixed; returns the report. The graph's version bumps.
+/// COMPONENTS (D73). The active graph (every edge except loops at weight <= kInactiveGncWeight) can fall apart: a
+/// second agent before its first inter-agent loop, or GNC rejecting the only loops between two agents. Without the
+/// OpenCV damping floor (pgo_v2) that system is singular, so each component is solved on its own: `anchor` holds the
+/// component containing it; every other component is held at its lowest keyframe id's current pose. Covariances of
+/// nodes outside the anchor's component are NaN (their uncertainty relative to the world frame is not defined).
 PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s = PgoV2());
 
 }  // namespace ariadne::slam

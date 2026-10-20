@@ -2554,6 +2554,15 @@ edge rejection
 This creates an excellent judge-visible trace: the per-edge weight trajectory shows a false closure being
 *demoted*, which is far more convincing than a final inlier/outlier label.
 
+**Update 2026-10-20 (D73 part 1):** implemented as specified. The residual is whitened, `r² = rᵀΩr` with `ε² =
+χ²₆(0.99) = 16.81`, so σ² is absorbed into Ω. Weights, μ₀ and the ×1.4 schedule match GTSAM 4.3.0's `GncOptimizer`,
+which uses barcSq = ε²/2 because its error carries ½. Two additions:
+- **Component anchoring.** When rejections split the active graph, each component is solved with its own anchor, in
+  `SolvePoseGraph` itself: pgo_v2 has no damping floor to hide a singular system.
+- **Limitation, measured.** A lone loop between two otherwise unconnected agents fits exactly, so GNC cannot reject
+  it. PCM's no-consensus rule is the defence when several such loops disagree; a single one passes as "untested".
+- Implemented in `cpp/slam/robust/gnc`; design `ROBUST_BACKEND_2.5.md` §6.
+
 ---
 
 ## 14.7 Optional Stage 6 — DCS / switchable constraints

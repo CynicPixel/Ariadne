@@ -2043,3 +2043,43 @@ job.
 - The greedy clique can return a smaller set than exact. It didn't on the test graphs, and a shuffled-order run
   before the tie fix showed 12 against 13.
 - Not wired: D73 builds the loop source → gate → PCM → GNC.
+
+## 2026-10-20 — D73 part 1: GNC-TLS on PCM's output; every connected component anchored
+
+**Context.** Arch §14.6: GNC-TLS (Yang et al., RA-L 2020) on the loops that survive PCM, odometry at w = 1, weight
+trajectories exposed. pgo_v2 (D70) removed OpenCV's damping floor, which had been the only regulariser for a graph
+split by rejections. Design: `ROBUST_BACKEND_2.5.md` §6. D73 is split into three parts (design §6); this is part 1.
+
+**Decision.**
+- **`cpp/slam/robust/gnc.{hpp,cpp}`:** whitened r² = rᵀΩr, c̄² = χ²₆(0.99) = 16.81, Prop. 4 weights, μ₀ =
+  c̄²/(2r²max − c̄²), μ ×1.4.
+- **Stopping:** on weights within 1e-4 of {0, 1}, a relative cost change below 1e-5, or 100 outer iterations.
+- **Execution:** runs on a working copy. PCM's accepted set arrives as an edge mask, so indices stay stable. The
+  input graph gets the final poses and weights once (new `PoseGraph::SetGncWeight`, loop edges only, w ∈ [0, 1]).
+  Inner solves skip marginals.
+- **Conventions:** checked against GTSAM 4.3.0's `GncOptimizer.h`, and they match. The oracle run is deferred to
+  part 2 [UNVERIFIED].
+- **`SolvePoseGraph` anchors every connected component** of the active graph (loops at w ≤ 1e-4 are inactive). The
+  common single-component path is unchanged.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, 10/10; existing PGO tests 10/10 numerical and 9/9 opencv, with the GTSAM
+oracle at 100/100):
+- **Weights:** the Prop. 4 weight equals the dual's argmin.
+- **No outliers:** energy equals plain LM.
+- **Gate met:** grid and sphere at 10–40 % random outliers, precision 1.000 and recall worst 0.967. The ramp gives
+  10/10 up to 90 %.
+- **Near misses:** at 0.5 m / 5°, PCM → GNC accepts none (PCM removed them all), and GNC alone accepts 0/200. At
+  0.2 m / 1°, 143/200 accepted, +11 % ATE.
+- **Self-consistent 8-loop cluster:** 0/8 accepted.
+- **Split graphs:** two agents linked by 3 random loops → PCM no_consensus → 2 components, B held at its anchor.
+- **Bit-identical twice:** yes.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per event.
+
+**Not done, stated.**
+- **A lone inter-agent link is unverifiable** by GNC: measured, it is kept. PCM tags it "untested", so the first
+  inter-agent loop rests on the degeneracy gate alone.
+- **Hard outliers:** the 10–90 % ramp uses random outliers, so no breakpoint was found. A harder protocol (aliasing
+  clusters, near misses at scale) belongs to part 2's real candidates.
+- **The demo-latency estimate given earlier (0.3–0.8 s at 1,000 nodes) was optimistic.** Measured: 1.6 s.
+  Warm-starting the weights across events is the unimplemented lever.
+- **Not wired;** parts 2 and 3 follow.

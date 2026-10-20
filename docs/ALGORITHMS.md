@@ -1026,6 +1026,23 @@ Each layer independently justifiable; each has a verified permissive reference i
   simply be added. They are split at the four endpoints, with summed coefficients. Checked: the mean statistic is
   5.75–6.15 for disjoint, nested, crossing, backward and shared-end configurations.
 
+### 7.8c GNC-TLS — what it does and does not catch, measured (D73 part 1, 2026-10-20)
+
+- **Yang, Antonante, Tzoumas, Carlone, RA-L 2020** `[PAPER]`, Prop. 4 and Remark 5. Conventions were cross-checked
+  against GTSAM 4.3.0's `GncOptimizer.h`, which puts barcSq = ½χ² on its ½-scaled error. The closed-form weight is
+  verified as the argmin of the Black–Rangarajan dual.
+- **Random outliers** (the paper's protocol): on grid and sphere topologies, 20 seeds, precision 1.000 and recall
+  ≥ 0.967 at 10–40 %, and 10/10 successes up to 90 % on the grid. Random SE(3) outliers are easy; this ramp does not
+  locate a breakpoint.
+- **Near misses** are the realistic case. At 0.5 m / 5° GNC rejects 200/200 on its own. At 0.2 m / 1° (about 4σ),
+  71 % of them pass PCM → GNC, costing 11 % ATE.
+- ⚠️ **A lone link is unverifiable.** One loop between two otherwise unconnected agents fits exactly, so no robust
+  cost can reject it. Only redundancy (PCM over several loops) can.
+- ⚠️ **Disconnection.** When rejections split the graph, each component needs its own anchor. With pgo_v2's clamp
+  off, the singular system would otherwise fail the pivot guard.
+- **Cost:** about 27 outer iterations, each a warm-started LM solve. Measured 1.6 s at 1,000 nodes and 4.75 s at
+  3,000 per event.
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).

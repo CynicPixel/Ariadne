@@ -4,6 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-20 — 2.5: GNC-TLS core + per-component anchoring (D73 part 1)
+
+- **`cpp/slam/robust/gnc`:** Yang et al. Prop. 4, with conventions checked against GTSAM 4.3.0's source. It runs on
+  a working copy and keeps edge indices stable from the gate through GNC. `SolvePoseGraph` now anchors every
+  connected component.
+- **Results, random outliers 10–40 %, grid and sphere:** precision 1.000, recall worst 0.967 (gate met). 0.5 m / 5°
+  near misses: all rejected. 0.2 m / 1° near misses: 71 % pass, +11 % ATE (the price of the D72 decision).
+- **Measured limitation:** a lone inter-agent link cannot be verified by GNC. PCM's no-consensus rule handles
+  several disagreeing links.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per loop event. This corrects the earlier 0.3–0.8 s estimate.
+- **Tests:** GNC 10/10; existing PGO tests unchanged.
+- **Next:** part 2 (loop source, wiring, calibration, GTSAM GNC oracle), then part 3 (verifier export, proxy swap,
+  re-pin).
+
 ## 2026-10-19 — 2.5: PCM with a per-loop threshold; recall 1.000 at 10–40 % outliers (D72)
 
 - **`cpp/slam/robust/pcm`:** cycle consistency against the odometry-only chain. Every leg configuration on one chain
