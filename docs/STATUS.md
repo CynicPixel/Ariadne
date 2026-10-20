@@ -4,6 +4,19 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-19 — 2.5: PCM with a per-loop threshold; recall 1.000 at 10–40 % outliers (D72)
+
+- **`cpp/slam/robust/pcm`:** cycle consistency against the odometry-only chain. Every leg configuration on one chain
+  and both inter-agent orientations give a mean statistic of 5.75–6.24 (χ²₆ mean 6).
+- **Arch's fixed χ²₆(0.95) drops 15 % of true loops** (worst seed 40 %), because a maximum clique needs every pair
+  of a true loop to pass. The default is a per-loop Bonferroni threshold (α_loop = 0.001, derived from the
+  requirement).
+- **Results:** recall 1.000 and precision 1.000 on random outliers at 10–40 %. Near misses at 0.2–0.5 m pass more
+  often (precision 0.75–0.94); they are GNC's job (D73). 186 ms for 300 loops on 3000 nodes.
+- **The blind spot** (a self-consistent wrong cluster passes) is asserted and labelled.
+- **Tests:** 12/12; ctest 355/355 on the merged tree (D55–D59 included).
+- **Next:** GNC-TLS + the intra-agent loop source + the verifier inlier export + the proxy swap (D73).
+
 ## 2026-10-19 — EuRoC v2 now runs the full inertial layer (D59 switch)
 
 - `euroc_v2` = `imu.mode full` (avg ATE 0.121 m, 9/11 in the stereo-inertial class); attitude_only kept as

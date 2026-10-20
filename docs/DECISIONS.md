@@ -1991,3 +1991,55 @@ that 3D point noise could be ignored. Design: `ROBUST_BACKEND_2.5.md` §4.
 - **Honest covariance is shown at 1.5–12 m only.** On the small-object scene the residuals are about 3× the model
   (σ̂² 3.2), so the covariance is honest there only through the inflation.
 - **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].
+
+## 2026-10-19 — D72: PCM against the odometry-only chain, with a per-loop (Bonferroni) pair threshold
+
+**Context.** Arch §14.5: pairwise cycle consistency (Mangelson et al., ICRA 2018) at χ²₆(0.95), a maximum consistent
+set by greedy maximal clique, exact for ≤ 25, after the degeneracy gate (D71) and before GNC (D73).
+Design: `ROBUST_BACKEND_2.5.md` §5.
+
+**Decision.** `cpp/slam/robust/pcm.{hpp,cpp}`, `Pcm(PoseGraph)`, a pure library with no wiring.
+- **Odometry legs:** prefix-composed adjoints on the odometry-only chain (`kOdometry` and `kStereoOdometry`).
+  Non-chain components throw.
+- **Shared odometry edges:** when both legs run along one chain, each shared edge is counted once with summed,
+  signed coefficients.
+- **Groups:** per pair of odometry components. One candidate is accepted as "untested". Two or more candidates with
+  a maximum clique of 1 accept nothing ("no_consensus").
+- **Clique:** greedy CLIQUEHEU (Pattabiraman et al.); exact Bron–Kerbosch behind a flag. Loops are ordered by
+  (from, to), so the result does not depend on insertion order.
+- **Threshold (§49 deviation, arch §14.5 updated):** per-loop false rejection α_loop/(n − 1) per pair, with
+  α_loop = 0.001 derived from the recall requirement. The fixed χ²₆(0.95) is kept as the ablation baseline.
+
+**Why the threshold changed.** A maximum clique keeps a true loop only if all of its pairs pass. At 5 % per pair the
+fixed quantile measured recall 0.84–0.86 mean and 0.60–0.70 worst. The acceptance criterion was fixed beforehand:
+recall ≥ 0.95 on every seed at ≤ 40 % outliers, because a dropped true loop is unrecoverable and outliers are GNC's
+job.
+
+**Evidence** (`tests/unit/test_pcm.cpp`, 12/12; ctest 355/355 on the merged tree):
+- **Odometry legs:** Monte Carlo NEES 6.01 and 6.24.
+- **Pair statistic** (mean, χ²₆: 6): 5.90, 6.15, 5.95, 5.93 and 5.75 for disjoint, nested, crossing, backward and
+  shared-end legs; 6.07 and 5.96 for inter-agent pairs with loop 2 forward and reversed.
+- **Cliques:** greedy = exact on 200/200 planted-clique graphs.
+- **Random outliers, 10–40 %:** recall **1.000** on every seed, precision 1.000.
+- **Near-miss outliers:** precision 0.75 at 0.2 m / 1°, 0.94 at 0.5 m / 5°, 1.00 at 1 m / 10°. Recall stays
+  0.99–1.00, against 0.83–0.85 for the fixed quantile.
+- **Blind spot:** 5 aliased, mutually consistent wrong loops beat 3 true ones. Asserted and labelled.
+- **Timing:** 186 ms for 300 loops on 3000 nodes.
+
+**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+- **The two failures are not symmetric.** True loops dropped by the fixed quantile cannot be recovered; near misses
+  passed by the default are GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ 176, against GNC's c̄² = 16.8.
+- **Stated trade:** the bound loosens with group size (27.6 at 10 loops, 30.3 at 30, 33.1 at 100, 35.6 at 300,
+  against 12.59).
+- **Blind spot:** unchanged under either threshold.
+- **Condition for D73:** GNC's acceptance runs on PCM's output with 0.5 m / 5° near misses and requires precision
+  ≥ 0.99 on them; 0.2 m / 1° near misses are scored by ATE. If GNC fails, the first remedy is α_loop = 0.01, not the
+  fixed quantile.
+
+**Not done, stated.**
+- Near misses near the loop noise pass PCM by design; D73's GNC test must include them.
+- D56 lost stretches are bridged by identity-covariance edges, so PCM is blunt across them. Not measured on real
+  data.
+- The greedy clique can return a smaller set than exact. It didn't on the test graphs, and a shuffled-order run
+  before the tie fix showed 12 against 13.
+- Not wired: D73 builds the loop source → gate → PCM → GNC.

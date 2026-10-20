@@ -1009,6 +1009,23 @@ Each layer independently justifiable; each has a verified permissive reference i
 - **Measured** (synthetic, `test_degeneracy.cpp`): mean NEES over 500 trials is **5.95** against the χ²₆ mean of 6
   at 1.5–12 m, the range the gate accepts.
 
+### 7.8b PCM — the threshold is a per-loop decision, not a per-pair one (D72, 2026-10-19)
+
+- **Mangelson, Dominic, Eustice, Vasudevan, ICRA 2018** `[PAPER]`: pairwise cycle consistency plus a maximum
+  clique, per robot pair. **Pattabiraman et al., arXiv 1209.5818**: the CLIQUEHEU greedy heuristic used here. Which
+  heuristic Kimera-RPGO's reference code uses was not checked [UNVERIFIED].
+- **The finding.** A maximum clique keeps a true loop only if every one of its n − 1 pairs passes, so a per-pair
+  test at 5 % loses true loops in proportion to group size. Measured on 30-loop groups with χ²₆(0.95): recall
+  0.84–0.86 mean and 0.60–0.70 worst, at every outlier rate. A dropped true loop is unrecoverable downstream.
+- **The choice.** Bonferroni per loop: α_pair = α_loop/(n − 1), with the threshold from the closed-form χ²₆
+  survival e^(−x/2)(1 + x/2 + x²/8). α_loop = 0.001 is derived from "≤ 1 true loop lost in 30".
+  - **Random outliers (10–40 %):** recall 1.000 and precision 1.000 on all 20 seeds.
+  - **The cost:** near-miss outliers at 0.2–0.5 m pass more often (precision 0.75 at 0.2 m / 1°, 0.94 at
+    0.5 m / 5°). They are left to GNC.
+- **Shared odometry.** For intra-agent pairs the two odometry legs can share edges, so their covariances must not
+  simply be added. They are split at the four endpoints, with summed coefficients. Checked: the mean statistic is
+  5.75–6.15 for disjoint, nested, crossing, backward and shared-end configurations.
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).

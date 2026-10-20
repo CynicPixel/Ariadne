@@ -212,6 +212,67 @@ behind a flag for ≤ 25 candidates.
 **Known blind spot (kept as a test).** Pairwise consistency does not imply joint consistency, and a self-consistent
 cluster of wrong loops passes PCM (catalogue §17.2). The test asserts the current behaviour and is labelled.
 
+**Acceptance (fixed before the first measured run).** Synthetic single chain of 300 keyframes, 30 true loops, outliers
+are random node pairs with uniformly random SE(3) measurements, 20 seeds per rate. Recall of true loops must be ≥ 0.95
+on every seed at ≤ 40 % outliers: a true loop PCM drops is lost for good, while an outlier that passes is GNC's job.
+Precision, greedy against exact clique size, and time per event at about 300 loops are reported, not gated.
+
+**As built (2026-10-19, D72).** `cpp/slam/robust/pcm.{hpp,cpp}`, `Pcm(PoseGraph)`, a pure library with no wiring.
+- **Odometry legs** come from the odometry-only chain (`kOdometry` and `kStereoOdometry` edges) by prefix-composed
+  adjoints, so each leg is O(1). Components must be chains; anything else throws. Parallel odometry edges between one
+  node pair are counted, and the first in edge order is used.
+- **Shared odometry edges.** When both legs run along one chain they can share edges: crossing loops 10→100 and
+  90→20 share [20, 90). The chain is split at the four endpoints, and each piece carries the summed coefficient
+  σ₁M₁ + σ₂M₂, so shared edges count once, with signs (legs in opposite directions cancel).
+- **Groups:** the unordered pair of odometry components. A group with 1 loop is accepted and tagged "untested". A
+  group of 2 or more whose maximum clique is 1 accepts nothing ("no_consensus").
+- **Clique:** greedy CLIQUEHEU (Pattabiraman et al., arXiv 1209.5818) by default. Exact Bron–Kerbosch with Tomita
+  pivoting sits behind a flag for groups of ≤ 25. Loops are ordered by (from, to), so the result does not depend on
+  edge insertion order (tested over 5 shuffles).
+- **Threshold, a §49 deviation from arch §14.5's fixed χ²₆(0.95).** A maximum clique keeps a true loop only if all
+  of its n − 1 pairs pass, so a 5 % per-pair rejection drops true loops.
+  - **Measured at the fixed quantile:** recall mean 0.84–0.86, worst 0.60–0.70.
+  - **The default controls false rejection per loop instead:** α_pair = α_loop/(n − 1), with the threshold from the
+    closed-form χ²₆ quantile.
+  - **α_loop = 0.001 is derived from the requirement, not fitted.** About n·α_loop/2 true loops are lost per group,
+    and recall ≥ 0.95 on 30 loops allows one loss. P(≥ 2 lost) is about 1e-4 per group at 0.001, and about 0.75
+    loops are lost on average at 0.05.
+  - The fixed quantile is kept as the ablation baseline.
+
+Tests (`tests/unit/test_pcm.cpp`, 12/12; ctest 355/355 on the merged tree):
+
+| check | result |
+|---|---|
+| odometry leg Monte Carlo NEES, forward / backward, forward and mixed storage | 6.01 / 6.01, 6.24 / 6.24 |
+| pair statistic mean over 400 trials (χ²₆: 6): disjoint, nested, crossing, backward, shared end | 5.90, 6.15, 5.95, 5.93, 5.75 |
+| pair statistic, two agents, loop 2 stored forward / reversed | 6.07 / 5.96 |
+| greedy clique size = exact, planted-clique graphs of 8–24 vertices | 200 / 200 |
+| random outliers 10–40 %, default: recall (mean / worst), precision | **1.000 / 1.000**, 1.000 at every rate |
+| random outliers 10–40 %, fixed χ²₆(0.95): recall (mean / worst) | 0.84–0.86 / 0.60–0.70 |
+| near-miss outliers 0.2 m / 1°, default vs fixed 0.95: precision (recall) | 0.75 (1.00) vs 0.79 (0.83) |
+| near-miss outliers 0.5 m / 5° | 0.94 (0.99) vs 1.00 (0.85) |
+| near-miss outliers 1.0 m / 10° | 1.00 (1.00) vs 1.00 (0.85) |
+| blind spot: 5 loops aliasing one rigidly displaced region against 3 true loops | the 5 wrong loops accepted (labelled) |
+| 3000 nodes, 300 loops (60 random outliers) | 186 ms per event, all 240 true loops accepted |
+
+- **The trade, stated plainly.** The default lets through near misses close to the loop noise (0.2 m / 1° is a 4σ
+  translation error at σ_t = 5 cm, and about all 10 pass) and some at 0.5 m / 5°. The fixed quantile rejects them, but it drops
+  15–17 % of true loops at every error size. GNC (D73) is the stage that must reject the near misses, so its test
+  includes them.
+- **D56 bridges.** A lost stretch is bridged by an edge with identity covariance, so pairs spanning it pass
+  trivially there. That is conservative, and it blunts PCM across the bridge. Not measured on real data.
+- **The bound loosens as a group grows.** χ² bound at α_loop = 0.001: 27.6 at 10 loops, 30.3 at 30, 33.1 at 100,
+  35.6 at 300, against the fixed 12.59. A mission's single intra-agent group becomes more permissive over time.
+- **The blind spot is unchanged by this choice.** A self-consistent wrong cluster passes under either threshold, and
+  the wider bound makes a small-offset cluster slightly more likely to merge with the true loops' clique. The defence
+  remains the degeneracy gate and Iteration 7.
+
+**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+The fixed quantile's failure (dropping true loops) cannot be recovered downstream. The default's failure (near misses
+passing) is GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ (0.5/0.05)² + (0.087/0.01)² ≈ 176, against GNC's
+c̄² = 16.8. **Condition, carried into §6:** if GNC fails its near-miss gate, the first remedy is a tighter α_loop
+(0.01), not a return to the fixed quantile.
+
 ## 6. GNC-TLS (arch §14.6, D73)
 
 **What.** Graduated non-convexity: start from a convex surrogate of the truncated-least-squares cost, solve, then make
@@ -240,6 +301,10 @@ node pairs with uniformly random SE(3) measurements (the paper's protocol), 20 s
 - at ≤ 40 % outliers: **precision ≥ 0.99 and recall ≥ 0.95** on loop-edge classification, every seed;
 - the 10 → 90 % ramp: success probability, ATE, runtime, and the **breakpoint** reported (no gate);
 - one self-consistent wrong cluster per graph: result reported whatever it is (GNC is not expected to beat it).
+- **Near misses after PCM (added 2026-10-19 with the D72 decision).** GNC's acceptance runs on the loops PCM
+  accepted, with 0.5 m / 5° near misses mixed in, and requires **precision ≥ 0.99 on them**. Near misses at
+  0.2 m / 1° (about 4σ) are scored by their effect on ATE, not by classification. If the 0.5 m gate fails, the first
+  remedy is α_loop = 0.01 in PCM (§5).
 
 ## 7. Certificate (arch §14.8, D74) — behind a flag
 
@@ -276,6 +341,13 @@ cost) fails — the case the certificate exists for.
 touched). Retrieval: 1.6's mean-bit descriptor with a temporal exclusion window — labelled placeholder until 2.1's
 EigenPlaces lands. Verification: `edge_verifier` unchanged. Output flows gate → PCM → GNC. The Phase-1 1.6 false loop
 accept becomes a regression case that must now be rejected.
+
+**Maintainer decisions (2026-10-19, after D71).**
+1. **D73 may add an isolated inlier-export hunk to `VerifyResult`** (`edge_verifier.hpp`) so the degeneracy gate gets
+   the PnP correspondences.
+2. **The inter-agent `ProxyInformation` is replaced in 2.5** (D73) by the gate's covariance. The answer was "yes" to
+   a "2.5 or Phase 3?" question; it is read as "in 2.5". This changes the Phase-1 sim_collab outputs that
+   `--premerge` pins, so D73 re-pins them and lists the change.
 
 ## 9. Init acceptance gate — "the SE-Sync graphs that failed from dead reckoning" (maintainer decision 2026-10-18)
 

@@ -2501,6 +2501,17 @@ This is precisely why the degeneracy gate of §14.4 runs **before** PCM, not aft
 the scene cannot support, so they never reach the stage that would confirm them in each other's company. **Keep
 that ordering inviolable.** A refactor that reorders these stages for convenience silently removes the defence.
 
+**Update 2026-10-19 (D72, §49 ritual):**
+- **The pair threshold is no longer the fixed χ²₆(0.95).** A maximum clique keeps a true loop only if all of its
+  n − 1 pairs pass. At 5 % per pair, measured recall was 0.84–0.86, worst 0.60–0.70 on 30-loop groups. The default
+  bounds false rejection per loop instead, at α_loop/(n − 1) per pair with α_loop = 0.001, derived from the
+  recall ≥ 0.95 requirement. The fixed quantile stays as config, as the ablation baseline.
+- **Group rules:** a group with one candidate passes, tagged untested. Two or more candidates with a maximum clique
+  of 1 pass nothing.
+- **Clique:** the default is the greedy CLIQUEHEU heuristic. Exact Bron–Kerbosch runs behind a flag for ≤ 25.
+- **Odometry legs** come from the odometry-only chain, with shared edges counted once.
+- Implemented in `cpp/slam/robust/pcm`; design `ROBUST_BACKEND_2.5.md` §5.
+
 ---
 
 ## 14.6 Stage 5 — GNC
