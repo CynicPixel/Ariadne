@@ -322,6 +322,21 @@ Global descriptors are broadcast **per keyframe to every peer**, so descriptor d
 
 **⭐ EigenPlaces — the pick.** Berton, Trivigno, Caputo, Masone, **ICCV 2023**, [code (MIT)](https://github.com/gmberton/EigenPlaces). Trains on *clusters of images from different viewpoints of the same place*, building lateral-viewpoint invariance into the embedding without extra inference-time supervision. **This matters enormously for inter-agent loop closure, where a drone and a ground robot see the same corridor from radically different heights and headings.** Dims: R18 (256/512), R50 (128/256/512/2048), R101, VGG16 (512). **Use ResNet50 @ 256-D → 1 KB/keyframe.** Via `torch.hub` → ONNX → `dnn::readNetFromONNX`; index with `features::ANNIndex`.
 
+> **As built and measured (2.1, 2026-10-20; PERCEPTION_2.1 §11; D62 draft).** R50-256 at commit `a2969f7`
+> exports to ONNX (opset 17, fixed input size) and runs in `cv::dnn` exactly as upstream on both engines (cosine
+> 1.0000000, SMOKE §4r). EuRoC loop-closure recall, 297 queries over 11 flights (positive = 1 m and 30°, database
+> older than 30 s): R@1 0.626 at 376×240 and 0.677 at 752×480, against 0.444 for the mean-bit ORB placeholder and
+> 0.167 for random. Cost ≈ 150–200 ms and 650–850 ms per descriptor (shared CPU).
+> **`cv::ANNIndex` findings (pinned source):**
+> - `addItems` numbers items from 0 on every call;
+> - no adds after `build()`;
+> - no filter during search;
+> - the multithreaded build seeds every thread alike over `hardware_concurrency()`, so repeatability across core
+>   counts is not guaranteed.
+>
+> At ≤ thousands of keyframes per agent an exact gemm is the default (D62). `ANNIndex` is the scale ablation:
+> top-1 identical to exact on 297/297 queries at N ≤ 181.
+
 **CosPlace** — Berton et al., **CVPR 2022**, [code (MIT)](https://github.com/gmberton/CosPlace). Swarm-SLAM's choice. Reframes VPR training as **classification** over geographically-partitioned "CosPlace Groups" with a cosine-margin classifier, scaling to 41M images without mining. Superseded by EigenPlaces on viewpoint robustness; same license and interface.
 ⚠️ *Both are trained on street-view imagery — indoor darkness is out of distribution. This is the one place where fine-tuning or domain adaptation would pay off.*
 

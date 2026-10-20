@@ -310,6 +310,14 @@ Implementation consequence:
 
 Use `cv::ANNIndex` for retrieval/index persistence.
 
+> **As built (2.1, D62 — DRAFT, pending the maintainer).** `perception/place/`:
+> - `PlaceRecognizer` runs EigenPlaces R50-256 through `cv::dnn`, one Net per thread;
+> - `PlaceIndex` has two backends, `exact` (one gemm, the default) and `annoy` (`cv::ANNIndex`, rebuilt from the
+>   full matrix when stale, over-fetch then filter, exact rescoring).
+>
+> Retrieval on EuRoC: pooled R@1 0.626 (376×240) / 0.677 (752×480) against 0.444 for mean-bit (PERCEPTION_2.1
+> §11.6). Default inference size 376×240 (maintainer, 2026-10-20; §11.7). No consumer in 2.1; 2.5 consumes the loop-candidate query.
+
 ---
 
 ### Keep: Swarm-SLAM communication architecture

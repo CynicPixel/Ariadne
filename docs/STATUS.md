@@ -4,6 +4,17 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-20 — 2.1 retrieval: EigenPlaces R50-256 via cv::dnn + PlaceIndex (D62 draft)
+
+- **Built:** `PlaceRecognizer`, exact against upstream (SMOKE §4r), and `PlaceIndex` (exact default; `cv::ANNIndex`
+  ablation). The offline tool `ariadne_place_eval` plus `python/analysis/place_recall_eval.py`; no runner hunk.
+- **EuRoC loop-closure recall** (11 flights, 297 queries, 1 m / 30°, database older than 30 s): pooled R@1
+  EP-376 0.626, EP-752 0.677, mean-bit ORB 0.444, random 0.167.
+  - Bar 1 (beat the placeholder by 0.10 and twice random) passes.
+  - Bar 2 (376 within 0.05 of 752) is missed by 0.0005. The maintainer chose 376×240 as the default
+    (2026-10-20, PERCEPTION_2.1 §11.7); 752 stays selectable.
+- **Cost:** EP-376 ≈ 150–200 ms, EP-752 ≈ 650–850 ms per descriptor (shared CPU). Annoy = exact on 297/297 top-1.
+
 ## 2026-10-19 — 2.1 §9.3: WLS stereo confidence wired, tested, off by default (D61)
 
 - **Built:** `stereo.confidence: wls` fills `StereoDepth.confidence` from OpenCV's `DisparityWLSFilter` without

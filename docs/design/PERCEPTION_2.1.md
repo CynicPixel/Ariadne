@@ -1153,3 +1153,184 @@ Against §10.7:
 
 Shipped configs keep `confidence: none`.
 
+
+## 11. Place retrieval — EigenPlaces R50-256 + an index (§13, §7.4) — preflight and design (2026-10-19, BEFORE code)
+
+### 11.1 Primary sources (checked 2026-10-19)
+
+- **EigenPlaces:** Berton, Trivigno, Caputo, Masone, ICCV 2023 (arXiv 2308.10832). Official code
+  `github.com/gmberton/EigenPlaces`, MIT licence, HEAD `a2969f7` (2026-03-15). Model, from upstream source:
+  - `hubconf.get_trained_model("ResNet50", 256)`: weights from
+    `github.com/gmberton/EigenPlaces/releases/download/v1.0/ResNet50_256_eigenplaces.pth`;
+  - network: torchvision ResNet-50 minus avgpool/fc (`children()[:-2]`), then `L2Norm(dim=1) → GeM(p learned,
+    init 3, eps 1e-6: avg_pool(clamp(x, eps)^p)^(1/p)) → Flatten → Linear(2048, 256) → L2Norm`.
+  - Upstream evaluates positives within 25 m (outdoor). Test-time resolution and normalisation are to be read from
+    upstream's test dataset code at export, NOT assumed. The arch §7.4 table says "224×224 or the repo's inference
+    resolution — record it".
+- **Index:** `cv::ANNIndex` (OpenCV 5 `features`, "features_annoy") is Spotify's Annoy (random-projection forest),
+  vendored in `modules/features/3rdparty/annoy`.
+
+### 11.2 OpenCV-native check (pinned source), and three findings about `cv::ANNIndex`
+
+1. **`addItems` always numbers from 0** (`features/src/annoy.cpp`: `add_item(0…n−1)`). A second call overwrites the
+   first batch's ids, so incremental keyframe insertion through this API corrupts the index. It must be rebuilt
+   from the full matrix (Annoy is build-once anyway: no adds after `build()`).
+2. **(Read from source, not tested: `hardware_concurrency` cannot be varied in this container.) The build is
+   multithreaded over `hardware_concurrency()` threads** (`build(trees, -1)`, not settable through
+   the wrapper), and **every thread seeds its RNG identically** (`thread_build`: `Random _random(_seed)`). Two
+   consequences:
+   - with `trees` explicit, threads build DUPLICATE trees, so diversity, and recall, depend on the core count;
+   - with `trees = -1`, threads race to a shared `2·n_items` node budget, so the tree count itself is scheduling-
+     dependent.
+   Replay determinism across machines is not guaranteed. A test decides it.
+3. `DIST_ANGULAR` / `DIST_DOTPRODUCT` exist. On unit vectors, cosine ranking equals Euclidean ranking.
+
+**ONNX Runtime is absent from the build** (§4.5), so EigenPlaces runs through `cv::dnn::readNetFromONNX` or not
+at all. ResNet-50 uses only Conv/BN/ReLU/MaxPool/Add, and the head adds Clip, Pow, ReduceMean (or AveragePool),
+MatMul/Gemm and the ReduceL2/Div of `F.normalize`. All are common importer ops; the smoke test decides.
+
+### 11.3 Proposed design
+
+- **`PlaceRecognizer` (perception):** EigenPlaces R50-256 via `cv::dnn`, one Net per thread (§7.4).
+  - Gray EuRoC images are replicated to 3 channels, resized to the recorded inference size, and normalised as
+    upstream does.
+  - Output: 256-D L2-normalised float.
+  - Engine and model sha in the manifest (`place_recognition` is already a schema field).
+- **`PlaceIndex` (perception or collaboration/retrieval):** add(keyframe id, descriptor), query(descriptor, k,
+  exclude ids) → (ids, cosine). Two backends:
+  - **`exact`**: brute force via one `cv::gemm` on unit vectors. Deterministic, optimal recall, ~N×256 FLOPs (a few
+    µs at thousands of keyframes).
+  - **`annoy`**: `cv::ANNIndex` with explicit trees and seed, rebuilt from the full matrix when stale.
+  - **Default `exact`** while N is in the thousands per agent. `annoy` is the persistence/scale ablation the arch
+    names. Which one ran is logged.
+  - This keeps the arch's index behind the interface. Choosing `exact` as the default is a deviation from "Use
+    cv::ANNIndex", so it needs the §49 ritual (catalogue note, decision D62) if adopted.
+- **2.1 scope:** descriptors at keyframes plus the index, and the loop-candidate query 2.5 needs: top-k excluding a
+  temporal window. No PGO consumer in 2.1.
+
+### 11.4 Smoke test (SMOKE §4r) before dependent code
+
+1. Export in a **session image** (`ariadne-eigenplaces-ref:feat-2.1`, FROM `ariadne-xfeat-ref:1` plus pinned
+   torchvision and onnx). Shared `infra/docker/*` is not touched; moving the Dockerfile into the repo is a
+   maintainer ask.
+   - The weights are downloaded once and their sha256 recorded.
+   - The export runs `--network none` after that.
+   - Outputs: an ONNX file (opset 17) and reference descriptors from upstream's own model on fixed inputs (a EuRoC
+     frame and a synthetic one).
+2. `cv::dnn` load + forward. **Pass: cosine ≥ 0.9999 against upstream's descriptor on every reference input**
+   (D50's acceptance style). Forward time at the inference size: 1 and 8 threads.
+3. If the importer fails, the result is recorded as such. Options then: D50's pattern (our graph from weights) or
+   ORT (absent → a build change, not allowed).
+
+### 11.5 Evaluation and acceptance (FIXED 2026-10-19 after the advisor review and SMOKE §4r, before any run)
+
+Advisor points folded in:
+- the existing `GLOBAL_DESCRIPTOR` contract (256-D unit vector, cosine) is the interface;
+- mean-bit ORB is the baseline;
+- the shapes are fixed;
+- cost is measured first (SMOKE §4r);
+- an offline tool, with no runner hunk, because nothing consumes retrieval in 2.1.
+
+**Samples.** Every EuRoC flight, one cam0 frame per 1.0 s (every 20th image), raw (unrectified) cam0, only frames
+with GT within 10 ms. The spacing equals the deployment plan (descriptors ≥ 1 s apart, §4r), so the evaluation
+measures what would run.
+
+**Descriptors per sample:**
+- **EigenPlaces at 376×240**, the primary (cost), via our C++ `PlaceRecognizer` (cv::dnn ENGINE_CLASSIC, exact per
+  §4r);
+- **EigenPlaces at 752×480**, the upstream protocol, reported;
+- **mean-bit ORB**, the placeholder: `MeanBitDescriptor` of `OrbEngine::DetectAndCompute` with `perception/euroc.yaml`
+  features, exactly what `ariadne_sim_collab` computes;
+- **random**: the analytic expectation.
+
+**Queries and database (within a flight).** For a query at time t_q, the database is the samples with t < t_q − 30 s.
+That is loop closure against the past; 30 s excludes temporal neighbours, slow drift and the MH_04 hover (~10 s).
+Stationary stretches therefore never pair with themselves.
+
+**Positive:** camera centres within **1.0 m** AND optical axes within **30°** (GT body pose × `T_B_C0` from
+`cam0/sensor.yaml`). Position alone over-counts rooms revisited facing the other way. Only queries with ≥ 1 positive
+count.
+
+**Metrics:** recall@1 and @5 (a hit = ≥ 1 positive in the top k by cosine), per flight and pooled over all queries of
+the 11 flights.
+
+**Acceptance:**
+1. Pooled R@1 of EigenPlaces-376 ≥ mean-bit R@1 + 0.10 (absolute) AND ≥ 2× random R@1.
+2. EigenPlaces-376 is within 0.05 of EigenPlaces-752 pooled R@1, or the gap is reported and the size decision is
+   revisited.
+
+Distribution shift, stated rather than hidden: the model is trained on outdoor RGB street views (SF-XL) and gets
+indoor gray replicated to RGB. CLAHE is the arch's ablation (§1473), not run here.
+
+**Index:** `exact` (one gemm over unit vectors) gives the reference top-k. `annoy` (`cv::ANNIndex`, DIST_ANGULAR,
+explicit trees = 10, seed fixed) is measured for:
+- (a) recall@k agreement with exact on the same queries;
+- (b) repeatability: build twice in one process → identical results.
+
+Cross-machine determinism (core count) is a stated risk read from source, not testable here.
+
+### 11.6 Results (measured 2026-10-19/20; `ariadne_place_eval` on all 11 EuRoC flights, `place_recall_eval.py`)
+
+Run at `abe704b` + the uncommitted retrieval files (dirty tree, recorded in each flight's `manifest.yaml`), image
+`sha256:2f3bc8cb…`, EigenPlaces `a2969f7`, weights sha256 `2923c102…`. Raw outputs: `build/a1/place/<flight>/`;
+table: `build/a1/place/recall.yaml`. 1325 samples, 297 queries with ≥ 1 positive.
+
+| flight | queries | EP-376 R@1 | EP-376 R@5 | EP-752 R@1 | EP-752 R@5 | mean-bit R@1 | mean-bit R@5 | random R@1 |
+|---|---|---|---|---|---|---|---|---|
+| MH_01 | 43 | 0.721 | 0.977 | 0.721 | 0.907 | 0.674 | 0.814 | 0.457 |
+| MH_02 | 23 | 0.913 | 1.000 | 0.913 | 1.000 | 0.783 | 0.913 | 0.565 |
+| MH_03 | 37 | 0.486 | 0.892 | 0.595 | 0.919 | 0.514 | 0.892 | 0.069 |
+| MH_04 | 13 | 0.769 | 0.923 | 0.846 | 0.923 | 0.692 | 0.923 | 0.204 |
+| MH_05 | 15 | 0.867 | 0.867 | 0.800 | 0.867 | 0.733 | 0.867 | 0.092 |
+| V1_01 | 50 | 0.540 | 0.780 | 0.660 | 0.920 | 0.220 | 0.420 | 0.058 |
+| V1_02 | 15 | 0.600 | 0.867 | 0.733 | 1.000 | 0.333 | 0.667 | 0.097 |
+| V1_03 | 46 | 0.478 | 0.804 | 0.543 | 0.848 | 0.283 | 0.565 | 0.054 |
+| V2_01 | 11 | 0.455 | 0.909 | 0.545 | 1.000 | 0.364 | 0.909 | 0.037 |
+| V2_02 | 20 | 0.750 | 0.900 | 0.600 | 0.800 | 0.200 | 0.400 | 0.050 |
+| V2_03 | 24 | 0.625 | 0.833 | 0.708 | 0.833 | 0.375 | 0.708 | 0.083 |
+| **pooled** | **297** | **0.626** | **0.875** | **0.677** | **0.902** | **0.444** | **0.694** | **0.167** |
+
+**Acceptance (§11.5):**
+1. **PASS.** EP-376 0.626 ≥ mean-bit 0.444 + 0.10 = 0.544, and ≥ 2 × random 0.167 = 0.334.
+2. **MISS, by less than one query.** EP-752 − EP-376 = 201/297 − 186/297 = 15/297 = 0.0505 > 0.05 (the bar allows
+   14.85). Paired top-1 outcomes: both 173, only-752 28, only-376 13, neither 83; exact McNemar two-sided
+   p = 0.028. That p assumes independent queries; ours are not (samples 1 s apart share a revisit and tend to hit or
+   miss together), so it is optimistic. The direction is consistent (752 ahead on 7 flights, behind on 2). Per the
+   bar, the size decision is revisited in §11.7, not rounded away.
+
+**Reading the table.**
+- The Machine Hall rows have inflated random baselines (MH_01 0.457, MH_02 0.565). Those flights start and end
+  hovering over the same take-off area, so a query has many positives. There, mean-bit is close to EigenPlaces.
+- The Vicon-room rows are where the learned descriptor earns its cost: V1_01 0.22 → 0.54/0.66, V2_02 0.20 → 0.75/0.60.
+- 752 beats 376 on 7 flights, ties on 2 and loses on 2 (MH_05, V2_02).
+
+**Cost** (mean per descriptor; host shared, 2 dumps in parallel, cv threads 8; indicative only):
+
+| | EP-376 | EP-752 | mean-bit |
+|---|---|---|---|
+| range over flights, ms | 147–205 | 644–853 | 22–44 |
+
+EP-752 costs ≈ 4.3× EP-376 for +0.051 R@1.
+
+**Index (annoy vs exact).** Pooled R@1 identical for all three descriptors, and annoy's top-1 equals exact's on
+297/297 queries. N ≤ 181 items per flight is not a stress test of the approximation: this shows the wrapper is
+correct (ids, filter, rescoring), not that annoy is needed or that it holds at scale. Bar (b), repeatability, is
+covered by the unit test only (`PlaceIndex.AnnoyAgreesWithExactAndRepeats`, 200/200 on random vectors); the EuRoC
+dumps built each index once. With N in the hundreds-to-thousands per agent, the exact
+gemm is a few µs and is the default proposed in D62.
+
+**Not measured here:** CLAHE (arch ablation); a size between 376 and 752; cross-machine annoy determinism (read
+from source as a risk, §11.2).
+
+### 11.7 Size decision, revisited (bar 2 missed) — DECIDED 2026-10-20 by the maintainer: (a) 376×240
+
+- **(a) Keep 376×240 as the default.** It is ≈ 4.3× cheaper (≈ 150–200 ms against 650–850 ms here), passes bar 1
+  with margin, and misses bar 2 by half a query. 752 stays a config option.
+- **(b) Make 752×480 the default.** It follows the upstream protocol and gains +0.051 pooled R@1 (+0.03 R@5). At one
+  descriptor per ≥ 1 s it takes most of a core.
+- **(c) Measure one size in between first** (for example 560×360: a new export plus one more dump, ≈ 30 min
+  wall-clock).
+
+**Scope.** The decision is EuRoC-scoped. The rig is 1280×720 RGB. The exports are fixed at EuRoC's 752:480 aspect,
+and `PlaceRecognizer::Preprocess` accepts CV_8UC1 only. Sim needs its own export (the aspect ratio) and an RGB path.
+This is a stated limitation and does not block 2.1.

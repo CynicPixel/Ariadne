@@ -60,7 +60,9 @@ if(OpenCV_FOUND)
     unit/test_window_ba_levmarq.cpp
     unit/test_reassociation.cpp
     unit/test_xfeat_engine.cpp
-    unit/test_stereo_confidence.cpp)
+    unit/test_stereo_confidence.cpp
+    unit/test_eigenplaces_reference.cpp
+    unit/test_place.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

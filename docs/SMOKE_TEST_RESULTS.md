@@ -639,3 +639,44 @@ the tracker's epipolar check (`klt_tracker.cpp`, the `UsacParams` overload of `c
   V1_01_easy now completes, with 1 redraw over 2912 frames.
 - **Not done.** No change to OpenCV itself; the pin stays and the COOL baseline stays. An upstream report needs the
   maintainer's go-ahead.
+
+## 4r. EigenPlaces R50-256 through `cv::dnn` (ONNX): exact against upstream PyTorch `[SMOKE-TEST]` 2026-10-19
+
+Gates 2.1 retrieval (`docs/design/PERCEPTION_2.1.md` §11).
+
+**Source and environment**
+- Upstream: `gmberton/EigenPlaces` (MIT) at commit `a2969f71d5ea31017443af490b15273ca4c50af1`.
+- Weights: `releases/download/v1.0/ResNet50_256_eigenplaces.pth`, sha256 `2923c102…dc9d7e7`. Downloaded once to the
+  session cache; upstream publishes no checksum, so it is recorded on first download.
+- `python/model_tools/eigenplaces_reference.py` runs in the session image `ariadne-eigenplaces-ref:feat-2.1`
+  (`ariadne-xfeat-ref:1` + torchvision 0.20.1+cpu + onnx 1.17.0; the Dockerfile is session-local, a maintainer ask
+  to move it into `infra/docker`).
+- Settings: `--network none`, upstream and weights mounted read-only, torch 1 thread, deterministic algorithms.
+- Upstream's constructor fetches CosPlace weights over `torch.hub` only to initialise the backbone. That one call is
+  stubbed, because `load_state_dict(strict=True)` replaces those values entirely.
+
+**What is exported**
+- The whole model and the backbone up to `layer4`, at FIXED sizes 752×480 (EuRoC native, upstream's full-resolution
+  test protocol) and 376×240 (`INTER_AREA`), opset 17.
+- Head weights (GeM p, fc) as ATB, the fallback if the head failed to import (it did not).
+- Reference inputs: the exact preprocessed tensors (gray/255 → resize → RGB replicate → ImageNet normalisation) of
+  EuRoC MH_01 frame 200 and V1_01 frame 500, with upstream's descriptors.
+
+**Result** (`tests/unit/test_eigenplaces_reference.cpp`; `ARIADNE_EIGENPLACES_REF` = the export directory)
+
+| engine | 752×480 cosine (both frames) | 376×240 cosine (both frames) |
+|---|---|---|
+| `readNetFromONNX` `ENGINE_NEW` | 1.0000000 | 1.0000000 |
+| `readNetFromONNX` `ENGINE_CLASSIC` | 1.0000000 | 1.0000000 |
+
+- Both engines import and run the graph, head included, with |d| = 1.000000. No fallback is needed.
+- **Forward cost (indicative only, host load 23 from other sessions):**
+
+  | engine | 752×480 | 376×240 |
+  |---|---|---|
+  | ENGINE_NEW | 1.0–2.7 s | 0.25–0.5 s |
+  | ENGINE_CLASSIC | 1.4–2.2 s | 0.2–0.38 s |
+
+- **Consequence:** ResNet-50 cannot run on every keyframe on this CPU. Retrieval descriptors are computed on a
+  spaced subset (≥ 1 s apart) at 376×240. A quiet-host timing replaces these figures before any budget claim.
+- ONNX Runtime is absent from the build (`ENGINE_ORT` unavailable), so `cv::dnn` is the only engine, as §7.4 plans.

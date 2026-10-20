@@ -19,6 +19,7 @@ if(OpenCV_FOUND)
     stereo/stereo_lk_matcher.cpp
     features/xfeat/xfeat_net.cpp
     features/xfeat_engine.cpp
+    place/place_recognizer.cpp
     association/landmark_reassociation.cpp)
   target_link_libraries(ariadne_perception_opencv PUBLIC
     ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video opencv_dnn opencv_ximgproc

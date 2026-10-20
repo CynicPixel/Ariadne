@@ -1926,3 +1926,33 @@ Design: `docs/design/PERCEPTION_2.1.md` §10.
   recorded as unmeasured. Nothing in 2.1 consumes the map. Turning it on in a shipped config waits for a consumer
   (TSDF §20.1 or §11.2) and that measurement.
 
+
+## 2026-10-20 — D62 (DRAFT, pending the maintainer): place retrieval — EigenPlaces R50-256 via cv::dnn; exact index default, cv::ANNIndex the ablation
+
+Design: `docs/design/PERCEPTION_2.1.md` §11. Catalogue: `ALGORITHMS.md` §1.6 (as-built note).
+
+- **What:**
+  - `perception::PlaceRecognizer` runs EigenPlaces R50-256 (Berton et al., ICCV 2023, MIT, `a2969f7`). The export
+    comes from `python/model_tools/eigenplaces_reference.py` (opset 17, fixed input size). It runs in `cv::dnn`
+    `ENGINE_CLASSIC`, one Net per thread, and outputs a 256-D unit vector (the existing `GLOBAL_DESCRIPTOR`
+    contract).
+  - `perception::PlaceIndex` provides top-k cosine with an admission filter.
+- **Deviation, stated (§49):** the arch says "Use `cv::ANNIndex`". The default here is **`exact`** (one gemm, a few
+  µs at thousands of keyframes, deterministic). `annoy` (`cv::ANNIndex`) is kept behind the same interface as the
+  persistence/scale ablation. Reason: three findings from the pinned source (ids restart at 0 per `addItems`, no add
+  after build, a per-thread seed over `hardware_concurrency()`).
+- **Evidence:**
+  - SMOKE §4r: `cv::dnn` matches upstream at cosine 1.0000000, both engines, both sizes.
+  - Unit tests: `test_place` (exact, filter, annoy agreement 199/200, repeat 200/200, rebuild after add,
+    preprocessing ≤ 1e-5, end-to-end cosine ≥ 0.9999) and `test_eigenplaces_reference`.
+  - EuRoC, 11 flights, 297 queries: pooled R@1 EP-376 0.626, EP-752 0.677, mean-bit 0.444, random 0.167. Annoy
+    top-1 equals exact on 297/297.
+- **Acceptance (§11.5, fixed before the run):** bar 1 PASS. Bar 2 MISSED by 15/297 = 0.0505 against 0.05: half a
+  query, consistent direction, paired McNemar p = 0.028 (optimistic, the queries are correlated).
+- **Size (§11.7): DECIDED by the maintainer 2026-10-20, (a) 376×240 is the default.** The bar-2 miss is accepted
+  and stated. 752×480 stays a selectable export. A size in between was not measured.
+- **Limits:**
+  - EuRoC-scoped: the rig is 1280×720 RGB, and sim needs its own export and an RGB path.
+  - No consumer in 2.1 (2.5 owns loop closure).
+  - CLAHE not run.
+  - Annoy determinism across core counts is unverified.
