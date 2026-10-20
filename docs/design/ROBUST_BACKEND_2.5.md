@@ -431,6 +431,34 @@ touched). Retrieval: 1.6's mean-bit descriptor with a temporal exclusion window 
 EigenPlaces lands. Verification: `edge_verifier` unchanged. Output flows gate → PCM → GNC. The Phase-1 1.6 false loop
 accept becomes a regression case that must now be rejected.
 
+**As built, part 2b backend (2026-10-20, slam-only; the runtime adapter follows the main-session merge).**
+- **Pieces.** `cpp/slam/loop_closure/retrieval.hpp` takes plain float descriptors: cosine similarity, a temporal
+  exclusion window, top-k. `loop_backend.{hpp,cpp}` runs gate → PCM → GNC (with `GncState`) once per query keyframe
+  (candidates batched) on a mirror of the VO graph.
+- **The mirror.** `Sync` copies the VO's final odometry edges and dead-reckons new nodes on the corrected
+  trajectory, which adds zero energy (tested), so part 2a's innovation premise holds. A broken chain throws.
+- **Read-only towards the VO:** VO outputs are unchanged with loops on or off.
+- **Latency.** In window mode a keyframe enters the mirror when it leaves the BA window, about one window (10
+  keyframes) late. Its loops wait (`Ready()`), and the wait is part of their latency, recorded per event. In
+  two-frame-stub mode the delay is zero.
+- **Edge:** A (pixels) → B (3D points), Z = the gate's refined T_A_B, pinned by a zero-residual test.
+- **Synthetic result** (`tests/unit/test_loop_backend.cpp`, 4/4): two laps of a 6 m square, 10 loop events, one
+  self-consistent wrong loop that passes the gate. 10/10 true loops are GNC inliers, the wrong loop is rejected, and
+  ATE goes from 0.304 m (odometry) to 0.086 m (mirror), with 7/10 events on the fast path.
+
+**EuRoC evaluation definitions (fixed 2026-10-20, before the adapter exists).**
+- **Funnel per sequence:** keyframes → retrieved candidates → verified (`edge_verifier`) → passed the gate →
+  accepted by PCM → GNC inliers.
+- **Retrieval recall** against ground-truth revisits, meaning keyframe pairs outside the exclusion window within
+  1 m and 30° of each other. The mean-bit descriptor is a placeholder, so low recall is reported as is.
+- **ATE:** the mirror's keyframes against the VO's keyframes, the same keyframe set, with the existing scorer and
+  alignment. Keyframes still in the window at the end of a run are scored at their VO-relative dead-reckoned pose.
+- **Latency per loop event:** window wait plus gate, PCM and GNC.
+- **D71 calibration** (design §4 protocol). Each verified candidate is labelled bad if its PnP edge error against
+  the ground-truth relative pose exceeds 3σ of its own covariance, or 0.2 m / 2°. Each threshold goes to the
+  midpoint of the good/bad margin.
+- **Memory:** features kept per keyframe are capped in the adapter (3,000 keyframes at demo scale).
+
 **Maintainer decisions (2026-10-19, after D71).**
 1. **D73 may add an isolated inlier-export hunk to `VerifyResult`** (`edge_verifier.hpp`) so the degeneracy gate gets
    the PnP correspondences.
