@@ -1545,3 +1545,60 @@ indicative only):
 
 Cold pair (two extractions + match) for C ≈ 3.1 s under this load, against ≈ 1.7 s in SMOKE §4s-2. That is a
 hard-pair cost: rare pairs only (C8).
+
+## 13. Regenerating the reference exports (fresh checkout; phase1.sh requires both)
+
+`infra/scripts/phase1.sh` fails without `.cache/models/eigenplaces_ref/manifest.yaml` and
+`.cache/models/aliked_lg_ref/manifest.yaml`. They were made in this session (outputs under
+`.cache/feat-2.1-perception/models/`, copied to `.cache/models/`). To regenerate them:
+
+**1. Image** (FROM `ariadne-xfeat-ref:1`, which `infra/scripts/models.sh xfeat` builds). Not in `infra/docker/`
+(shared); moving it there is a maintainer ask.
+```dockerfile
+FROM ariadne-xfeat-ref:1
+RUN pip install --no-cache-dir --root-user-action=ignore --index-url https://download.pytorch.org/whl/cpu \
+      torchvision==0.20.1+cpu \
+ && pip install --no-cache-dir --root-user-action=ignore onnx==1.17.0 \
+ && python -c "import torch, torchvision; assert torch.__version__ == '2.5.1+cpu', torch.__version__; assert torchvision.__version__ == '0.20.1+cpu', torchvision.__version__"
+```
+`docker build -t ariadne-eigenplaces-ref:feat-2.1 -f <that file> .` (built here as `sha256:115b188c…`).
+
+**2. Upstream sources and weights** (the network is used only here; check every sha256):
+```sh
+U=.cache/upstream; mkdir -p $U/weights_ep $U/weights_aliked
+git clone https://github.com/gmberton/EigenPlaces $U/eigenplaces_src && git -C $U/eigenplaces_src checkout a2969f71d5ea31017443af490b15273ca4c50af1
+curl -L -o $U/weights_ep/ResNet50_256_eigenplaces.pth https://github.com/gmberton/EigenPlaces/releases/download/v1.0/ResNet50_256_eigenplaces.pth
+#   sha256 2923c10295563ea15efa1571b499c67a7aab4d1ee6e19eba5e8b92756dc9d7e7
+git clone https://github.com/cvg/LightGlue $U/lightglue_src && git -C $U/lightglue_src checkout eb42fee2d71449efb0aa5c10549752b5d75384d8
+curl -L -o $U/weights_aliked/aliked-n16.pth https://github.com/Shiaoming/ALIKED/raw/683d7c65197395c0b3f01ebe76e1084a27e73a65/models/aliked-n16.pth
+#   sha256 5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2
+curl -L -o $U/weights_aliked/aliked_lightglue.pth https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/aliked_lightglue.pth
+#   sha256 d975e965b105311a6143194852297dff4f02aea5cc2e10cecfed966ca0e22503
+```
+
+**3. Exports** (offline, `--network none`; each script refuses to write unless its own upstream check passes):
+```sh
+E=.cache/datasets/euroc; C=$PWD/.cache; IMG=ariadne-eigenplaces-ref:feat-2.1
+docker run --rm --network none -u $(id -u):$(id -g) -v $PWD/python/model_tools:/tools:ro \
+  -v $C/upstream/eigenplaces_src:/ep:ro -v $C/upstream/weights_ep:/w:ro -v $C/datasets/euroc:/euroc:ro \
+  -v $C/models/eigenplaces_ref:/out $IMG python -I /tools/eigenplaces_reference.py --upstream /ep \
+  --weights /w/ResNet50_256_eigenplaces.pth --out /out --size 752x480 --size 376x240 \
+  --image euroc_mh01_f200=/euroc/MH_01_easy/mav0/cam0/data/1403636589713555456.png \
+  --image euroc_v101_f500=/euroc/V1_01_easy/mav0/cam0/data/1403715298212143104.png \
+  --upstream-commit a2969f71d5ea31017443af490b15273ca4c50af1
+docker run --rm --network none -u $(id -u):$(id -g) -v $PWD/python/model_tools:/tools:ro \
+  -v $C/upstream/lightglue_src:/lg:ro -v $C/upstream/weights_aliked:/w:ro -v $C/datasets/euroc:/euroc:ro \
+  -v $C/models/aliked_lg_ref:/out $IMG python -I /tools/aliked_lightglue_reference.py --upstream /lg --weights /w \
+  --out /out --size 752x480 --k 1024 --k 2048 \
+  --image mh01_f200=/euroc/MH_01_easy/mav0/cam0/data/1403636589713555456.png \
+  --image mh01_f205=/euroc/MH_01_easy/mav0/cam0/data/1403636589963555584.png \
+  --image v101_a=/euroc/V1_01_easy/mav0/cam0/data/1403715282262142976.png \
+  --image v101_b=/euroc/V1_01_easy/mav0/cam0/data/1403715384262142976.png \
+  --pair mh01_f200,mh01_f205 --pair v101_a,v101_b \
+  --upstream-commit eb42fee2d71449efb0aa5c10549752b5d75384d8 --aliked-commit 683d7c65197395c0b3f01ebe76e1084a27e73a65
+```
+
+**4. Check:** `ARIADNE_EIGENPLACES_REF=… ARIADNE_ALIKED_LG_REF=… ARIADNE_REQUIRE_MODELS=1 test_opencv
+--gtest_filter='*EigenPlacesReference*:PlaceRecognizer*:AlikedLightGlueReference.*:HardPair.*'` must pass.
+Expected output hashes are in each `manifest.yaml` and in SMOKE §4r / §4s-2. A torch-side re-run should reproduce
+them bit-exactly: 1 thread, deterministic algorithms.
