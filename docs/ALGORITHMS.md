@@ -1009,6 +1009,61 @@ Each layer independently justifiable; each has a verified permissive reference i
 - **Measured** (synthetic, `test_degeneracy.cpp`): mean NEES over 500 trials is **5.95** against the χ²₆ mean of 6
   at 1.5–12 m, the range the gate accepts.
 
+### 7.8b PCM — the threshold is a per-loop decision, not a per-pair one (D72, 2026-10-19)
+
+- **Mangelson, Dominic, Eustice, Vasudevan, ICRA 2018** `[PAPER]`: pairwise cycle consistency plus a maximum
+  clique, per robot pair. **Pattabiraman et al., arXiv 1209.5818**: the CLIQUEHEU greedy heuristic used here. Which
+  heuristic Kimera-RPGO's reference code uses was not checked [UNVERIFIED].
+- **The finding.** A maximum clique keeps a true loop only if every one of its n − 1 pairs passes, so a per-pair
+  test at 5 % loses true loops in proportion to group size. Measured on 30-loop groups with χ²₆(0.95): recall
+  0.84–0.86 mean and 0.60–0.70 worst, at every outlier rate. A dropped true loop is unrecoverable downstream.
+- **The choice.** Bonferroni per loop: α_pair = α_loop/(n − 1), with the threshold from the closed-form χ²₆
+  survival e^(−x/2)(1 + x/2 + x²/8). α_loop = 0.001 is derived from "≤ 1 true loop lost in 30".
+  - **Random outliers (10–40 %):** recall 1.000 and precision 1.000 on all 20 seeds.
+  - **The cost:** near-miss outliers at 0.2–0.5 m pass more often (precision 0.75 at 0.2 m / 1°, 0.94 at
+    0.5 m / 5°). They are left to GNC.
+- **Shared odometry.** For intra-agent pairs the two odometry legs can share edges, so their covariances must not
+  simply be added. They are split at the four endpoints, with summed coefficients. Checked: the mean statistic is
+  5.75–6.15 for disjoint, nested, crossing, backward and shared-end configurations.
+
+### 7.8c GNC-TLS — what it does and does not catch, measured (D73 part 1, 2026-10-20)
+
+- **Yang, Antonante, Tzoumas, Carlone, RA-L 2020** `[PAPER]`, Prop. 4 and Remark 5. Conventions were cross-checked
+  against GTSAM 4.3.0's `GncOptimizer.h`, which puts barcSq = ½χ² on its ½-scaled error. The closed-form weight is
+  verified as the argmin of the Black–Rangarajan dual.
+- **Random outliers** (the paper's protocol): on grid and sphere topologies, 20 seeds, precision 1.000 and recall
+  ≥ 0.967 at 10–40 %, and 10/10 successes up to 90 % on the grid. Random SE(3) outliers are easy; this ramp does not
+  locate a breakpoint.
+- **Near misses** are the realistic case. At 0.5 m / 5° GNC rejects 200/200 on its own. At 0.2 m / 1° (about 4σ),
+  71 % of them pass PCM → GNC, costing 11 % ATE.
+- ⚠️ **A lone link is unverifiable.** One loop between two otherwise unconnected agents fits exactly, so no robust
+  cost can reject it. Only redundancy (PCM over several loops) can.
+- ⚠️ **Disconnection.** When rejections split the graph, each component needs its own anchor. With pgo_v2's clamp
+  off, the singular system would otherwise fail the pivot guard.
+- **Cost:** about 27 outer iterations, each a warm-started LM solve. Measured 1.6 s at 1,000 nodes and 4.75 s at
+  3,000 per event, with GNC alone. Behind PCM: about 0.1 s and 0.2 s per event.
+- ⚠️ **Reusing weights across events (D73 part 2a)** needs more than "the old split is still a TLS fixed point".
+  A wrong new loop can bend the odometry and keep its own residual small. An innovation test at the full χ² bound
+  still keeps early near misses that drift makes statistically consistent, which TLS slightly favours and cold GNC
+  rejects. Measured safe: the innovation within ½χ²₆ₙ(0.99), Remark 5's region, so only unambiguous loops take the
+  fast path (72–83 % of events).
+
+### 7.8d ⚠️ Loop covariances on real data — measured overconfidence and the fix (D73 part 2b, 2026-10-21)
+
+- **Measured.** The PnP-Hessian loop covariance, even with stereo depth noise propagated (D71: NEES 5.95 on
+  synthetic data), gives median NEES ≈ 1e4 on EuRoC V1_01, against 6. The worst-direction σ is about right in size
+  (fitted k_t ≈ 1); the narrow directions are wildly overconfident.
+- **Why.** 100+ inliers are treated as independent, so σ ∝ 1/√N, but the dominant errors are shared: SGBM depth
+  bias at the depth edges where ORB corners sit, calibration and rectification, and the ground truth's own
+  timing and extrinsics. RANSAC keeps the best-fitting points, so the residual-based inflation never fires.
+- **Literature.** COVINS-G (arXiv 2301.07147) reports analytic loop covariances NEES "several magnitudes" too large;
+  its sampling fix still gives NEES ≈ 30. Censi's Hessian ICP covariance is "widely considered overoptimistic"
+  (Brossard et al., RA-L 2020, arXiv 1909.05722). Common SOTA practice (ORB-SLAM [UNVERIFIED], Kimera's configured
+  noise, NVIDIA's guidance) uses fixed or tuned loop noise rather than per-loop covariance.
+- **Fix adopted.** var = k σ²_PnP + floor², isotropic per block, fitted by maximum likelihood on ground-truth-good
+  loops. Held out: mean NEES 5.24; the tail is still heavy (4.4 % above χ²₆(0.99)), and GNC absorbs it. With it, PCM
+  and GNC raise precision stage by stage (0.53 → 0.80 → 0.88 → 0.97 on V1_02).
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).

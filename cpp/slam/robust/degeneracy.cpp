@@ -150,6 +150,16 @@ DegeneracyReport AssessLoop(const LoopGeometry& g, const DegeneracyParams& p) {
     rep.worst_r_axis = er.eigenvectors().col(2);
     rep.ratio_t = et.eigenvalues()(0) / et.eigenvalues()(2);
     rep.ratio_r = er.eigenvalues()(0) / er.eigenvalues()(2);
+    if (p.noise_model) {   // the edge's covariance, replaced by the calibrated model (criteria below keep the PnP sigmas)
+        Mat6 cov_m = Mat6::Zero();
+        cov_m.topLeftCorner<3, 3>() = (p.noise_k_t * rep.sigma_t_worst * rep.sigma_t_worst +
+                                       p.noise_floor_t_m * p.noise_floor_t_m) * core::Mat3::Identity();
+        cov_m.bottomRightCorner<3, 3>() = (p.noise_k_r * rep.sigma_r_worst * rep.sigma_r_worst +
+                                           p.noise_floor_r_rad * p.noise_floor_r_rad) * core::Mat3::Identity();
+        rep.information = cov_m.ldlt().solve(Mat6::Identity());
+        rep.information = 0.5 * (rep.information + rep.information.transpose());
+        rep.cov_left = core::ChangeFrame(T, cov_m);   // back to T_A_B's left tangent (inverse of the map above)
+    }
 
     std::vector<double> tri;
     for (const auto& x : X) tri.push_back(2.0 * std::atan(g.rig.baseline / (2.0 * x.z())) * 180.0 / M_PI);

@@ -17,6 +17,9 @@ if(OpenCV_FOUND)
     pose_graph/chordal_init.cpp
     pose_graph/multi_agent.cpp
     robust/degeneracy.cpp
+    robust/pcm.cpp
+    robust/gnc.cpp
+    loop_closure/loop_backend.cpp
     bundle_adjustment/window_ba_levmarq.cpp)
   target_link_libraries(ariadne_slam_opencv PUBLIC ariadne::slam opencv_core opencv_geometry)
   add_library(ariadne::slam_opencv ALIAS ariadne_slam_opencv)

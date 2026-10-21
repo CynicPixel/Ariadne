@@ -18,6 +18,7 @@
 #include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
+#include "runtime/agent/intra_loop_closure.hpp"
 #include "runtime/agent/keyframe_records.hpp"
 #include "runtime/datasets/stereo_source.hpp"
 #include "runtime/manifest/build_identity.hpp"
@@ -140,6 +141,9 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     }
 
     const OrbEngine orb(pcfg.features);
+    // D73 part 2b: intra-agent loop closure, only with a `loop_closure:` config section. Read-only towards the VO.
+    std::unique_ptr<runtime::IntraLoopClosure> loops;
+    if (scfg.loop_closure.enabled) loops = std::make_unique<runtime::IntraLoopClosure>(scfg.loop_closure, rig, args.seed);
     KltTracker tracker(pcfg.tracker, orb);
     const SgbmStereo sgbm(pcfg.stereo, rr);
     // imu_mode full (D59): the IMU's mount (rectified left camera in the body) and its datasheet noise; StereoVo
@@ -561,6 +565,11 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                     kv.baseline_m = rr.baseline_m;
                     args.on_keyframe(kv);
                 }
+                if (loops) {
+                    const runtime::KeyframeBundle lb =
+                        runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, l, depth, supported);
+                    loops->OnKeyframe(kr.keyframe_id, frame.t_ns, l, runtime::MaskedDepth32(lb.depth, lb.mask), vo.graph());
+                }
             }
         }
         const core::Vec3 brot = core::SO3Log(tr.bridge.R_prev_cur);
@@ -638,6 +647,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         ate_kf = runtime::ComputeATE(ek, g);
         ate_kf_rot = runtime::ComputeATERotation(ek, g);
         rpe_kf = runtime::ComputeRPE(ek, g, 1.0, 0.05);
+    }
+    // The same keyframe-refined protocol on the loop-corrected keyframe poses (D73 part 2b, design §8).
+    runtime::ErrorStats ate_loop, ate_loop_rot;
+    if (loops) {
+        loops->Finish(vo.graph(), est_body.empty() ? 0 : est_body.back().t_ns);
+        std::vector<core::TrajectorySample> el;
+        for (size_t i = 0; i < est_body.size(); ++i) {
+            if (assoc[i] < 0) continue;
+            const FrameRef& fr = frame_ref[i];
+            const core::SE3 T = fr.kf == ~uint64_t(0) ? fr.T_kf_c : loops->Corrected(fr.kf, vo.graph()) * fr.T_kf_c;
+            el.push_back({core::Timestamp{est_body[i].t_ns}, 0, T * T_B_Crect.inverse()});
+        }
+        ate_loop = runtime::ComputeATE(el, g);
+        ate_loop_rot = runtime::ComputeATERotation(el, g);
     }
 
     const fs::path run_dir = fs::path(args.out) / (source.RunName() + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
@@ -727,6 +750,26 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << usac_skipped << "}\n";
     }
     if (scfg.ba.backend == "window") {
+        if (loops) {
+            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << ate_loop.rmse
+                << ", ate_rotation_rmse_rad: " << ate_loop_rot.rmse << "}\n";
+            loops->WriteOutputs(run_dir.string(),
+                                // Interpolated between the bracketing GT samples (<= 20 ms apart), not the nearest one:
+                                // nearest-sample timing error would otherwise count as loop error (design §8).
+                                [&](int64_t t) -> std::optional<core::SE3> {
+                                    const auto it = std::lower_bound(
+                                        gt_poses.begin(), gt_poses.end(), t,
+                                        [](const runtime::TimedPose& p, int64_t x) { return p.t_ns < x; });
+                                    if (it == gt_poses.begin() || it == gt_poses.end()) return std::nullopt;
+                                    const runtime::TimedPose& b = *it;
+                                    const runtime::TimedPose& a = *(it - 1);
+                                    if (b.t_ns - a.t_ns > 20000000LL) return std::nullopt;
+                                    const double s = double(t - a.t_ns) / double(b.t_ns - a.t_ns);
+                                    const core::SE3 Ti = a.T * core::SE3Exp(s * core::SE3Log(a.T.inverse() * b.T));
+                                    return Ti * T_B_Crect;
+                                },
+                                res);
+        }
         res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
             << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
             << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";

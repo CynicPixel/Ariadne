@@ -116,6 +116,22 @@ struct ImuParams {
     GravityPriorParams gravity_prior;
 };
 
+/// Intra-agent loop closure (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): retrieval -> verifier -> degeneracy gate
+/// -> PCM -> GNC on a mirror of the VO graph. OFF without a `loop_closure:` section, so existing configs and their
+/// outputs are unchanged; a `loop_closure:` section must name every key. Read-only towards the VO.
+struct LoopClosureParams {
+    bool enabled = false;
+    int orb_features = 500;          // per keyframe, stored for verification (memory: ~26 KB per keyframe)
+    int exclude_recent = 50;         // retrieval: keyframes just before the query are never candidates
+    double exclude_seconds = 10.0;   // ... nor keyframes within this many seconds
+    double min_score = 0.5;          // cosine of the mean-bit placeholder descriptor (1.6's retrieval_threshold)
+    int top_k = 3;
+    // Edge noise model (DegeneracyParams::noise_*; design §8): var = k sigma_PnP^2 + floor^2, per block. k <= 0 and
+    // floor 0 both: the PnP covariance unchanged.
+    bool noise_model = false;
+    double noise_k_t = 1.0, noise_floor_t_m = 0.0, noise_k_r = 1.0, noise_floor_r_rad = 0.0;
+};
+
 struct SlamConfig {
     std::string name;
     TriangulationParams triangulation;
@@ -124,6 +140,7 @@ struct SlamConfig {
     BaParams ba;
     LostParams lost;
     ImuParams imu;
+    LoopClosureParams loop_closure;
 };
 
 inline void ValidateSlam(const SlamConfig& c) {
@@ -276,6 +293,29 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
             f.RequireAllConsumed();
         }
         m.RequireAllConsumed();
+    }
+    if (config.Has("loop_closure")) {
+        StrictConfig q = config.Section("loop_closure");
+        c.loop_closure.enabled = q.Require<bool>("enabled");
+        c.loop_closure.orb_features = q.Require<int>("orb_features");
+        c.loop_closure.exclude_recent = q.Require<int>("exclude_recent");
+        c.loop_closure.exclude_seconds = q.Require<double>("exclude_seconds");
+        c.loop_closure.min_score = q.Require<double>("min_score");
+        c.loop_closure.top_k = q.Require<int>("top_k");
+        c.loop_closure.noise_model = q.Require<bool>("noise_model");
+        c.loop_closure.noise_k_t = q.Require<double>("noise_k_t");
+        c.loop_closure.noise_floor_t_m = q.Require<double>("noise_floor_t_m");
+        c.loop_closure.noise_k_r = q.Require<double>("noise_k_r");
+        c.loop_closure.noise_floor_r_rad = q.Require<double>("noise_floor_r_rad");
+        q.RequireAllConsumed();
+        const auto& L = c.loop_closure;
+        if (L.orb_features < 50 || L.exclude_recent < 0 || !(L.exclude_seconds >= 0.0) ||
+            !(L.min_score > -1.0 && L.min_score < 1.0) || L.top_k < 1 || L.noise_k_t < 0.0 || L.noise_k_r < 0.0 ||
+            L.noise_floor_t_m < 0.0 || L.noise_floor_r_rad < 0.0 ||
+            (L.noise_model && L.noise_k_t + L.noise_floor_t_m <= 0.0) || (L.noise_model && L.noise_k_r + L.noise_floor_r_rad <= 0.0)) {
+            throw ConfigError("slam config '" + c.name + "': loop_closure: orb_features >= 50, exclude_* >= 0, "
+                              "min_score in (-1, 1), top_k >= 1, noise_* >= 0 (not both zero per block when on)");
+        }
     }
     config.RequireAllConsumed();
     ValidateSlam(c);
