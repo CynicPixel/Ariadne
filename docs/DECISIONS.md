@@ -2177,6 +2177,36 @@ The MH_01-only fit failed held-out V1_01, which is stated; hence the joint fit.
 - **The gate's σ thresholds** are unchanged (the Youden fit barely moved them).
 - **Retrieval recall** 51–66 % (placeholder descriptor).
 
+## 2026-10-21 — D73 part 2c: GRAVITY_PRIOR edges consumed by the pose graph (per-agent 2-DoF gravity, Huber)
+
+**Context.** The D59 handoff to 2.5: (1) add the gravity priors' cost to the PGO; (2) robustify them (heavy tail);
+(3) estimate each agent's gravity direction as a 2-DoF variable starting at g_ref_W; (4) wiring, which is Phase 3.
+Design: `ROBUST_BACKEND_2.5.md` §8.
+
+**Decision.**
+- **`PgoProblem` / `PgoSettings::gravity`** (off by default):
+  - one 2-DoF gravity variable per agent with priors, on the sphere;
+  - priors cost ½ρ(s) with a Huber kernel at k² = χ²₂(0.99) and information scaled by 0.6;
+  - they are not in GNC.
+- **`SolvePoseGraph`** reports `gravity_W` per agent and carries the priors through the per-component split.
+- **The loop mirror** syncs the VO's priors (queued, never dropped) and re-solves when they land.
+- **Config:** `loop_closure.gravity_priors` (`euroc_v2_loops` false, `euroc_v2_loops_gravity` true).
+
+**Why 0.6:** the lag-1 autocorrelation of Mahony's prior errors is 0.12–0.36 on three EuRoC flights, measured
+offline from the run traces, so the effective number of independent priors is lower than the count.
+
+**Evidence** (`tests/unit/test_gravity_pgo.cpp`, 4/4):
+- the gradient matches finite differences, Huber included;
+- the solve is bit-identical when off;
+- a 1.5° reference error is estimated to 0.62°, and tilt RMS goes 3.78° → 2.01°;
+- a 30° outlier prior moves its keyframe by 1.85°.
+`PgoLevMarq` 4/4 and numerical `PgoProblem`/`PoseGraph` 10/10 pass; the oracle was not rerun (the off path is
+unchanged).
+
+**Not done, stated.**
+- No EuRoC run yet, by the maintainer's priority (sim calibration and part 3 first).
+- The 4-DoF-pose-graph comparison is recorded, not built [UNVERIFIED citations].
+
 ## 2026-10-21 — D65: gain-up degradation configs for the VST; the 16 shipped configs stay
 
 The 2.2 preflight measured what D produces (`docs/design/RADIOMETRIC_2.2.md` §2). At unity gain the 8-bit output

@@ -1,0 +1,95 @@
+# D73 part 2c: euroc_v2_loops with the VO's gravity priors consumed by the loop mirror. Otherwise identical.
+# D73 part 2b (ROBUST_BACKEND_2.5.md §8): euroc_v2 + intra-agent loop closure (retrieval -> verifier -> degeneracy
+# gate -> PCM -> GNC on a mirror of the VO graph). Read-only towards the VO: every euroc_v2 output is unchanged; the
+# loop-closed keyframe trajectory is scored next to it. Identical to euroc_v2.yaml apart from name and loop_closure.
+# D59 (INERTIAL_2.4.md §4): imu.mode full -- Forster preintegration in the window BA. Default since 2026-10-19
+# (maintainer): EuRoC average ATE 0.121 vs 0.223 m for attitude_only (euroc_v2_attitude, the D58 baseline/ablation).
+# 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
+# Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
+name: euroc_v2_loops_gravity
+
+triangulation:
+  min_depth_m: 0.5              # configs/perception/euroc.yaml: Z_min 0.505 m
+  max_reprojection_px: 2.0
+  sgbm_gate_sigma: 3.0          # §9.6: inconsistent if |Z_tri - Z_sgbm| > 3 sigma
+  disparity_sigma_px: 0.5       # §9.3
+  max_relative_sigma: 0.1       # sigma_Z / Z
+
+pnp:
+  ransac_threshold_px: 2.0
+  confidence: 0.999
+  max_iterations: 200
+  min_correspondences: 15
+  min_inliers: 12
+  huber_delta: 2.0              # §11.3 1.5-2.5
+  sigma_px: 1.0
+
+keyframe:
+  ref_ratio: 0.75               # ORB-SLAM3 thRefRatio
+  min_tracked_landmarks: 50
+  max_interval_s: 1.0           # a keyframe at least every second (time, not frames)
+
+ba:
+  huber_delta: 2.0
+  max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
+  sigma_px: 0.46                # calibrated (LOCAL_SLAM_2.3.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
+  backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
+  window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
+  chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
+  cull_after_keyframes: 2       # ORB-SLAM VI-B (adapted to stereo, design §5)
+  min_keyframe_observations: 2
+  rel_energy_tolerance: 1.0e-6  # LevMarqBase termination (D51)
+  step_norm_tolerance: 1.0e-8
+  min_gradient_tolerance: 1.0e-8
+
+lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+  motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
+  reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
+  bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
+  bridge_min_tracks: 20         # tracks shared with the anchor frame needed to try the bridge (else re-anchor on the previous frame)
+  model_ratio: 0.45             # ORB-SLAM (T-RO 2015 §IV-B): H when S_H / (S_H + S_F) > 0.45, else E
+  velocity_decay_s: 0.5         # tau of exp(-t/tau) on the pre-loss velocity, declared before the sweep (D56: 0.2 and no decay reported)
+  max_speed_m_s: 3.0            # clamp a corrupt pre-loss speed (EuRoC MAV < ~2.3 m/s)
+  reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences
+
+imu:                            # D59 full (attitude_only behaviour until initialised). Absent = none.
+  mode: full                    # velocity + biases in the window BA (INERTIAL_2.4 §4)
+  seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
+  bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
+  stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
+  kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
+  ki: 0.3
+  full:
+    noise_inflation_gyro: 3     # §4.1: measured, Machine Hall chi2 (sqrt 9.75); EuRoC only, sim = 1
+    noise_inflation_accel: 9    # §4.1: sqrt(74-81)
+    bias_prior_inflation: 10    # window[0] bias prior = previous marginal x 10 (it double-counts the overlap)
+    init_keyframes: 10          # consecutive MEASURED window keyframes (~2-10 s at 1 s max interval)
+    init_accel_bias_sigma: 0.2  # m/s^2, zero-mean b_a prior (EuRoC GT |b_a| <= ~0.1-0.2)
+    init_gravity_tolerance: 0.1 # relative |g| error that refuses
+    init_max_chi2_per_dof: 100  # D59 sweep, 11 inits vs GT: the one off by > 3 deg (MH_04, 8.4) had 1296, all others <= 55
+    refine_after_s: [5, 15]     # re-solve over all keyframes since init (ORB-SLAM3 T-RO 2021 §V-B: 5 and 15 s)
+    estimate_gravity: false     # §4.8 ablation, NEGATIVE: tilt/b_a feedback loop (avg 0.566 m, 0/11); part-2 gauge
+    repropagate_gyro: 0.01      # rad/s (VINS-Mono)
+    repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
+    lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
+  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+    stride_keyframes: 10        # one per window length: non-overlapping data
+    source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
+    attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)
+
+loop_closure:
+  enabled: true
+  orb_features: 500            # per keyframe, kept for verification (~26 KB each)
+  exclude_recent: 50           # keyframes just before the query are never candidates
+  exclude_seconds: 10.0        # ... nor keyframes within 10 s
+  min_score: 0.5               # cosine, mean-bit PLACEHOLDER descriptor (1.6's retrieval_threshold) [ASSUMPTION]
+  top_k: 3
+  # Edge noise model (ROBUST_BACKEND_2.5.md §8): var = k sigma_PnP^2 + floor^2 per block. Fitted 2026-10-21 by maximum
+  # likelihood on the ground-truth-good loops of MH_01_easy + V1_01_easy (euroc_v2_loops runs, nearest-sample GT);
+  # held-out validation pending [ASSUMPTION until then]. MH_01-only fit failed held-out V1_01 (mean NEES 9.5).
+  noise_model: true
+  noise_k_t: 1.33
+  noise_floor_t_m: 0.014
+  noise_k_r: 0.178
+  noise_floor_r_rad: 0.0095
+  gravity_priors: true          # D73 part 2c: per-agent 2-DoF gravity + Huber priors (pgo_problem.hpp)

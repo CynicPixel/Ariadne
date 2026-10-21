@@ -47,6 +47,24 @@ void LoopBackend::Sync(const PoseGraph& vo) {
         g_.AddEdge(copy);
     }
     vo_edges_seen_ = vo.edges().size();
+    if (!p_.gnc.lm.gravity.enabled) return;
+    for (size_t i = vo_priors_seen_; i < vo.gravity_priors().size(); ++i) pending_priors_.push_back(vo.gravity_priors()[i]);
+    vo_priors_seen_ = vo.gravity_priors().size();
+    bool added = false;
+    for (auto it = pending_priors_.begin(); it != pending_priors_.end();) {
+        if (g_.nodes().count(it->keyframe)) {
+            g_.AddGravityPrior(*it);
+            it = pending_priors_.erase(it);
+            added = true;
+        } else {
+            ++it;
+        }
+    }
+    if (added && !g_.edges().empty()) {
+        PgoSettings s = p_.gnc.lm;
+        s.recompute_covariance = false;
+        SolvePoseGraph(g_, anchor_, s);
+    }
 }
 
 LoopEventRecord LoopBackend::OnCandidates(const std::vector<LoopCandidate>& cands, int64_t t_ns) {

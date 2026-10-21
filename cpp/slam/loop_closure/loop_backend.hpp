@@ -67,6 +67,9 @@ public:
 
     /// Copy the VO graph's new final odometry edges (append-only), dead-reckoning new nodes on the corrected
     /// trajectory. Throws if an edge's from-node is unknown to the mirror (a broken chain is a bug, never skipped).
+    /// With gravity priors on (gnc.lm.gravity.enabled, D73 part 2c) the VO's GRAVITY_PRIOR edges are copied too and
+    /// the mirror is re-solved (current loop weights, no GNC) whenever new ones land: the priors act between and
+    /// without loops, and the next loop event again starts from the optimum without its new loops (part 2a).
     void Sync(const PoseGraph& vo);
 
     /// Both keyframes are in the mirror (their odometry is final).
@@ -83,6 +86,8 @@ private:
     PoseGraph g_;
     GncState state_;
     size_t vo_edges_seen_ = 0;
+    size_t vo_priors_seen_ = 0;
+    std::vector<GravityPrior> pending_priors_;   // keyframe not mirrored yet: queued, never dropped
     bool seeded_ = false;
     uint64_t anchor_ = 0;
 };

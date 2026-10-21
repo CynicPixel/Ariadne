@@ -282,6 +282,7 @@ private:
         b.gate.noise_floor_t_m = p.noise_floor_t_m;
         b.gate.noise_k_r = p.noise_k_r;
         b.gate.noise_floor_r_rad = p.noise_floor_r_rad;
+        b.gnc.lm.gravity.enabled = p.gravity_priors;
         return b;
     }
     struct Pending {
