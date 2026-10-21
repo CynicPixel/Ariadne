@@ -1,6 +1,8 @@
 #include "slam/pose_graph/pgo_levmarq.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 
 namespace ariadne::slam {
@@ -111,7 +113,9 @@ cv::LevMarq::Settings ToOpenCv(const PgoSettings& s) {
         .setInitialLmDownFactor(s.initial_lm_down_factor);
 }
 
-PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
+namespace {
+
+PgoReport SolveConnected(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
     PgoProblem p(g, anchor);
     PgoReport rep;
     rep.initial_energy = p.Energy(p.poses());
@@ -131,6 +135,59 @@ PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
     }
     const Mat6 unknown = Mat6::Constant(std::numeric_limits<double>::quiet_NaN());
     for (const auto& [id, T] : p.poses()) g.UpdateNode(id, T, s.recompute_covariance ? cov.at(id) : unknown);
+    return rep;
+}
+
+bool Active(const PoseEdge& e) { return !IsLoopType(e.type) || e.gnc_weight > kInactiveGncWeight; }
+
+/// Connected components of the active graph, each as ascending keyframe ids; components ordered by smallest id.
+std::vector<std::vector<uint64_t>> ActiveComponents(const PoseGraph& g) {
+    std::map<uint64_t, uint64_t> parent;
+    for (const auto& [id, n] : g.nodes()) parent[id] = id;
+    std::function<uint64_t(uint64_t)> find = [&](uint64_t x) { return parent[x] == x ? x : parent[x] = find(parent[x]); };
+    for (const auto& e : g.edges())
+        if (e.from != e.to && Active(e)) {
+            const uint64_t a = find(e.from), b = find(e.to);
+            if (a != b) parent[std::max(a, b)] = std::min(a, b);
+        }
+    std::map<uint64_t, std::vector<uint64_t>> comp;
+    for (const auto& [id, n] : g.nodes()) comp[find(id)].push_back(id);
+    std::vector<std::vector<uint64_t>> out;
+    for (auto& [root, ids] : comp) out.push_back(std::move(ids));
+    return out;
+}
+
+}  // namespace
+
+PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
+    const std::vector<std::vector<uint64_t>> comps = ActiveComponents(g);
+    if (comps.size() == 1) return SolveConnected(g, anchor, s);   // the common case, unchanged
+    PgoReport rep;
+    rep.found = true;
+    rep.components = int(comps.size());
+    const Mat6 unknown = Mat6::Constant(std::numeric_limits<double>::quiet_NaN());
+    for (const auto& ids : comps) {
+        const bool main = std::binary_search(ids.begin(), ids.end(), anchor);
+        if (ids.size() == 1) {   // a lone node: nothing to solve, its pose stands
+            if (!main) g.UpdateNode(ids[0], g.nodes().at(ids[0]).T_W_C, unknown);
+            continue;
+        }
+        PoseGraph sub;
+        for (uint64_t id : ids) sub.AddNode(g.nodes().at(id));
+        for (const auto& e : g.edges())
+            if (Active(e) && std::binary_search(ids.begin(), ids.end(), e.from) &&
+                std::binary_search(ids.begin(), ids.end(), e.to))
+                sub.AddEdge(e);
+        const PgoReport r = SolveConnected(sub, main ? anchor : ids.front(), s);
+        rep.found = rep.found && r.found;
+        rep.iterations += r.iterations;
+        rep.initial_energy += r.initial_energy;
+        rep.final_energy += r.final_energy;
+        rep.linearizations += r.linearizations;
+        rep.factorizations += r.factorizations;
+        rep.failed_factorizations += r.failed_factorizations;
+        for (const auto& [id, n] : sub.nodes()) g.UpdateNode(id, n.T_W_C, main ? n.covariance : unknown);
+    }
     return rep;
 }
 

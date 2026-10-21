@@ -1992,6 +1992,127 @@ that 3D point noise could be ignored. Design: `ROBUST_BACKEND_2.5.md` §4.
   (σ̂² 3.2), so the covariance is honest there only through the inflation.
 - **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].
 
+## 2026-10-19 — D72: PCM against the odometry-only chain, with a per-loop (Bonferroni) pair threshold
+
+**Context.** Arch §14.5: pairwise cycle consistency (Mangelson et al., ICRA 2018) at χ²₆(0.95), a maximum consistent
+set by greedy maximal clique, exact for ≤ 25, after the degeneracy gate (D71) and before GNC (D73).
+Design: `ROBUST_BACKEND_2.5.md` §5.
+
+**Decision.** `cpp/slam/robust/pcm.{hpp,cpp}`, `Pcm(PoseGraph)`, a pure library with no wiring.
+- **Odometry legs:** prefix-composed adjoints on the odometry-only chain (`kOdometry` and `kStereoOdometry`).
+  Non-chain components throw.
+- **Shared odometry edges:** when both legs run along one chain, each shared edge is counted once with summed,
+  signed coefficients.
+- **Groups:** per pair of odometry components. One candidate is accepted as "untested". Two or more candidates with
+  a maximum clique of 1 accept nothing ("no_consensus").
+- **Clique:** greedy CLIQUEHEU (Pattabiraman et al.); exact Bron–Kerbosch behind a flag. Loops are ordered by
+  (from, to), so the result does not depend on insertion order.
+- **Threshold (§49 deviation, arch §14.5 updated):** per-loop false rejection α_loop/(n − 1) per pair, with
+  α_loop = 0.001 derived from the recall requirement. The fixed χ²₆(0.95) is kept as the ablation baseline.
+
+**Why the threshold changed.** A maximum clique keeps a true loop only if all of its pairs pass. At 5 % per pair the
+fixed quantile measured recall 0.84–0.86 mean and 0.60–0.70 worst. The acceptance criterion was fixed beforehand:
+recall ≥ 0.95 on every seed at ≤ 40 % outliers, because a dropped true loop is unrecoverable and outliers are GNC's
+job.
+
+**Evidence** (`tests/unit/test_pcm.cpp`, 12/12; ctest 355/355 on the merged tree):
+- **Odometry legs:** Monte Carlo NEES 6.01 and 6.24.
+- **Pair statistic** (mean, χ²₆: 6): 5.90, 6.15, 5.95, 5.93 and 5.75 for disjoint, nested, crossing, backward and
+  shared-end legs; 6.07 and 5.96 for inter-agent pairs with loop 2 forward and reversed.
+- **Cliques:** greedy = exact on 200/200 planted-clique graphs.
+- **Random outliers, 10–40 %:** recall **1.000** on every seed, precision 1.000.
+- **Near-miss outliers:** precision 0.75 at 0.2 m / 1°, 0.94 at 0.5 m / 5°, 1.00 at 1 m / 10°. Recall stays
+  0.99–1.00, against 0.83–0.85 for the fixed quantile.
+- **Blind spot:** 5 aliased, mutually consistent wrong loops beat 3 true ones. Asserted and labelled.
+- **Timing:** 186 ms for 300 loops on 3000 nodes.
+
+**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+- **The two failures are not symmetric.** True loops dropped by the fixed quantile cannot be recovered; near misses
+  passed by the default are GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ 176, against GNC's c̄² = 16.8.
+- **Stated trade:** the bound loosens with group size (27.6 at 10 loops, 30.3 at 30, 33.1 at 100, 35.6 at 300,
+  against 12.59).
+- **Blind spot:** unchanged under either threshold.
+- **Condition for D73:** GNC's acceptance runs on PCM's output with 0.5 m / 5° near misses and requires precision
+  ≥ 0.99 on them; 0.2 m / 1° near misses are scored by ATE. If GNC fails, the first remedy is α_loop = 0.01, not the
+  fixed quantile.
+
+**Not done, stated.**
+- Near misses near the loop noise pass PCM by design; D73's GNC test must include them.
+- D56 lost stretches are bridged by identity-covariance edges, so PCM is blunt across them. Not measured on real
+  data.
+- The greedy clique can return a smaller set than exact. It didn't on the test graphs, and a shuffled-order run
+  before the tie fix showed 12 against 13.
+- Not wired: D73 builds the loop source → gate → PCM → GNC.
+
+## 2026-10-20 — D73 part 1: GNC-TLS on PCM's output; every connected component anchored
+
+**Context.** Arch §14.6: GNC-TLS (Yang et al., RA-L 2020) on the loops that survive PCM, odometry at w = 1, weight
+trajectories exposed. pgo_v2 (D70) removed OpenCV's damping floor, which had been the only regulariser for a graph
+split by rejections. Design: `ROBUST_BACKEND_2.5.md` §6. D73 is split into three parts (design §6); this is part 1.
+
+**Decision.**
+- **`cpp/slam/robust/gnc.{hpp,cpp}`:** whitened r² = rᵀΩr, c̄² = χ²₆(0.99) = 16.81, Prop. 4 weights, μ₀ =
+  c̄²/(2r²max − c̄²), μ ×1.4.
+- **Stopping:** on weights within 1e-4 of {0, 1}, a relative cost change below 1e-5, or 100 outer iterations.
+- **Execution:** runs on a working copy. PCM's accepted set arrives as an edge mask, so indices stay stable. The
+  input graph gets the final poses and weights once (new `PoseGraph::SetGncWeight`, loop edges only, w ∈ [0, 1]).
+  Inner solves skip marginals.
+- **Conventions:** checked against GTSAM 4.3.0's `GncOptimizer.h`, and they match. The oracle run is deferred to
+  part 2 [UNVERIFIED].
+- **`SolvePoseGraph` anchors every connected component** of the active graph (loops at w ≤ 1e-4 are inactive). The
+  common single-component path is unchanged.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, 10/10; existing PGO tests 10/10 numerical and 9/9 opencv, with the GTSAM
+oracle at 100/100):
+- **Weights:** the Prop. 4 weight equals the dual's argmin.
+- **No outliers:** energy equals plain LM.
+- **Gate met:** grid and sphere at 10–40 % random outliers, precision 1.000 and recall worst 0.967. The ramp gives
+  10/10 up to 90 %.
+- **Near misses:** at 0.5 m / 5°, PCM → GNC accepts none (PCM removed them all), and GNC alone accepts 0/200. At
+  0.2 m / 1°, 143/200 accepted, +11 % ATE.
+- **Self-consistent 8-loop cluster:** 0/8 accepted.
+- **Split graphs:** two agents linked by 3 random loops → PCM no_consensus → 2 components, B held at its anchor.
+- **Bit-identical twice:** yes.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per event.
+
+**Not done, stated.**
+- **A lone inter-agent link is unverifiable** by GNC: measured, it is kept. PCM tags it "untested", so the first
+  inter-agent loop rests on the degeneracy gate alone.
+- **Hard outliers:** the 10–90 % ramp uses random outliers, so no breakpoint was found. A harder protocol (aliasing
+  clusters, near misses at scale) belongs to part 2's real candidates.
+- **The demo-latency estimate given earlier (0.3–0.8 s at 1,000 nodes) was optimistic.** Measured: 1.6 s.
+  Warm-starting the weights across events is the unimplemented lever.
+- **Not wired;** parts 2 and 3 follow.
+
+## 2026-10-20 — D73 part 2a: GNC weight reuse across loop events (fast path = fixed point + half-bound innovation test)
+
+**Context.** The maintainer asked for weight reuse before the wiring, to cut per-event latency. Design §6 part 2a
+holds the protocol, fixed before the first run.
+
+**Decision.**
+- **State.** `SolveGnc(..., GncState*)`: the caller carries per-edge decisions. A loop that was PCM-active last event
+  and still is starts at its previous decision; other active loops start at 1; the mask always wins.
+- **Fast path:** accepted only if all of these hold:
+  - every loop held at 1 has r² ≤ c̄²;
+  - every active loop held at 0 has r² > c̄²;
+  - the n new loops raise the full cost by 2ΔE ≤ ½χ²₆ₙ(0.99). This takes one extra warm solve with them at 0.
+- **Fallback.** Otherwise the fast-path solve is discarded and cold GNC runs from the event's input poses.
+- **Path dependent** (deterministic under replay).
+
+**Why the half bound (measured, design §6 table).**
+- **The fixed point alone diverged from cold at 25 events:** a wrong loop bent the odometry.
+- **Adding the innovation test at χ²₆ₙ(0.99) diverged at 45 events** and kept a near miss for good: precision
+  0.986, ATE +3.6 %.
+- **Half the bound (Remark 5's region)** matched cold at every one of 84 events, with ATE identical.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, GncWarm 3/3):
+- **1,000 nodes:** 72 % fast path, −22 % time, and PCM's rejected-then-accepted case covered.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Determinism:** bit-identical over a fixed sequence.
+
+**Correction, stated.** Part 1's 1.6 s / 4.75 s per event was GNC with outliers present and no PCM in front. In
+the wired order PCM removes them first, and a loop event costs about 0.1–0.2 s even cold.
+
 ## 2026-10-20 — D59 (gravity priors): GRAVITY_PRIOR edges produced; Mahony is the source, σ 2.3°
 
 Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
@@ -2008,6 +2129,53 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
 - **Handoff to 2.5 (consumer):** (1) add the edges' cost to the PGO from `gravity_priors()` (residual and Jacobian in
   `LinearizeGravityPrior`); (2) robustify them (heavy tail); (3) estimate the agent's gravity direction as a 2-DoF
   variable initialised at `g_ref_W` (its error is shared by every edge); (4) wire field: Phase 3 (inter-agent).
+
+
+## 2026-10-21 — D73 part 2b: intra-agent loop closure wired (off by default); calibrated loop noise model
+
+**Context.** The loop backend (gate → PCM → GNC on a VO mirror) existed but was not wired. The first EuRoC run
+showed the PnP loop covariance far too confident for PCM and GNC. Design: `ROBUST_BACKEND_2.5.md` §8.
+
+**Decision.**
+- **The adapter** (`runtime/agent/intra_loop_closure.hpp`), wired into `stereo_vo_runner.hpp` behind an optional
+  `loop_closure:` section (`configs/slam/euroc_v2_loops.yaml`). Per keyframe:
+  - ORB features plus SGBM 3D points, and the mean-bit placeholder descriptor;
+  - retrieval, with the last 50 keyframes and the last 10 s excluded;
+  - verification with `edge_verifier`, whose new inlier export was a maintainer-approved hunk;
+  - each loop queued until its keyframes leave the BA window, then one backend event.
+  The VO is never written. Outputs: `loop_trace.jsonl`, `loop_candidates.csv` (ground-truth errors, full error
+  vector and covariance), and a summary block with the funnel, recall, latency and the PCM good-pair statistic.
+- **Edge noise model** (`DegeneracyParams::noise_*`): var = k σ²_PnP + floor², per block.
+  - Fitted jointly on MH_01 + V1_01: k_t 1.33, floor_t 0.014 m, k_r 0.178, floor_r 0.0095 rad.
+  - The gate's criteria still read the PnP σ.
+  - The labels' "3σ of its own covariance" prong was dropped; labels are 0.2 m / 2° against interpolated ground truth.
+
+**Why.** On V1_01 the PnP covariance gave median NEES ≈ 1e4, about 1000× overconfident. Correlated errors don't
+average down; COVINS-G reports the same. With that covariance, PCM did not improve on the gate (0.67 against 0.63).
+The MH_01-only fit failed held-out V1_01, which is stated; hence the joint fit.
+
+**Evidence** (keyframe-refined ATE, VO → loops):
+- MH_01 0.0676 → 0.0207 m (−69 %)
+- V1_01 0.0563 → 0.0382 m (−32 %)
+- V1_02, held out: 0.0517 → 0.0254 m (−51 %)
+- **V1_02 funnel precision:** 0.53 → 0.80 → 0.88 → 0.97 (GNC: 142 good, 4 bad).
+- **Held-out NEES:** mean 5.24 passes; the tail is 4.4 % against ≤ 3 %, which misses. The maintainer accepted the
+  model with the miss stated; GNC absorbs the tail.
+- **PCM good-pair statistic:** 2.1–7.8, so no odometry scale is needed.
+- **MH_01 without the model:** GNC kept 51 good of 55 (0.93); with it, 118 good of 177 (0.67), at the same ATE
+  (0.0205 / 0.0207 m). On V1_01 the model raised recall (21 → 86 good) and precision (0.81 → 0.91).
+- **Evidence:** `evaluation/runs/2.5/loop_closure/` (five runs, no ground truth, `analyze_loops.py`). The manifests'
+  `git_dirty: false` is wrong: the binaries were built from the uncommitted tree on 4b45934.
+- **Latency:** 1.3–2.4 s mean, 7.3 s worst, mostly waiting for the BA window.
+- **Tests:** `Degeneracy` 9/9, including the noise-model test.
+
+**Not done, stated.**
+- **Sim calibration**, which the demo needs.
+- **ORB per-octave σ.**
+- **MH_01's 59 accepted loops labelled bad:** small translation error, a ~3.8° systematic rotation offset, none
+  gross. Cause [UNVERIFIED].
+- **The gate's σ thresholds** are unchanged (the Youden fit barely moved them).
+- **Retrieval recall** 51–66 % (placeholder descriptor).
 
 ## 2026-10-21 — D65: gain-up degradation configs for the VST; the 16 shipped configs stay
 

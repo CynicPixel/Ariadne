@@ -2447,6 +2447,14 @@ alone (a planar fan through the camera centre) are well conditioned with stereo 
 the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
 `docs/design/ROBUST_BACKEND_2.5.md` §4; ALGORITHMS §7.8a.
 
+**Update 2026-10-21 (D73 part 2b):** on real data (EuRoC) the PnP-Hessian loop covariance is about 100–1000×
+overconfident. Correlated depth and calibration errors do not average down with the inlier count; COVINS-G (arXiv
+2301.07147) reports the same for analytic loop covariances.
+- **The edge information** is the calibrated model var = k σ²_PnP + floor², per translation and rotation block.
+  Fitted on EuRoC MH_01 + V1_01; held-out V1_02 gives mean NEES 5.24.
+- **The gate's criteria** still read the PnP σ.
+- **Calibration is per sensor and environment.** The sim needs its own.
+
 ---
 
 ## 14.5 Stage 4 — PCM
@@ -2502,6 +2510,17 @@ This is precisely why the degeneracy gate of §14.4 runs **before** PCM, not aft
 the scene cannot support, so they never reach the stage that would confirm them in each other's company. **Keep
 that ordering inviolable.** A refactor that reorders these stages for convenience silently removes the defence.
 
+**Update 2026-10-19 (D72, §49 ritual):**
+- **The pair threshold is no longer the fixed χ²₆(0.95).** A maximum clique keeps a true loop only if all of its
+  n − 1 pairs pass. At 5 % per pair, measured recall was 0.84–0.86, worst 0.60–0.70 on 30-loop groups. The default
+  bounds false rejection per loop instead, at α_loop/(n − 1) per pair with α_loop = 0.001, derived from the
+  recall ≥ 0.95 requirement. The fixed quantile stays as config, as the ablation baseline.
+- **Group rules:** a group with one candidate passes, tagged untested. Two or more candidates with a maximum clique
+  of 1 pass nothing.
+- **Clique:** the default is the greedy CLIQUEHEU heuristic. Exact Bron–Kerbosch runs behind a flag for ≤ 25.
+- **Odometry legs** come from the odometry-only chain, with shared edges counted once.
+- Implemented in `cpp/slam/robust/pcm`; design `ROBUST_BACKEND_2.5.md` §5.
+
 ---
 
 ## 14.6 Stage 5 — GNC
@@ -2543,6 +2562,15 @@ edge rejection
 
 This creates an excellent judge-visible trace: the per-edge weight trajectory shows a false closure being
 *demoted*, which is far more convincing than a final inlier/outlier label.
+
+**Update 2026-10-20 (D73 part 1):** implemented as specified. The residual is whitened, `r² = rᵀΩr` with `ε² =
+χ²₆(0.99) = 16.81`, so σ² is absorbed into Ω. Weights, μ₀ and the ×1.4 schedule match GTSAM 4.3.0's `GncOptimizer`,
+which uses barcSq = ε²/2 because its error carries ½. Two additions:
+- **Component anchoring.** When rejections split the active graph, each component is solved with its own anchor, in
+  `SolvePoseGraph` itself: pgo_v2 has no damping floor to hide a singular system.
+- **Limitation, measured.** A lone loop between two otherwise unconnected agents fits exactly, so GNC cannot reject
+  it. PCM's no-consensus rule is the defence when several such loops disagree; a single one passes as "untested".
+- Implemented in `cpp/slam/robust/gnc`; design `ROBUST_BACKEND_2.5.md` §6.
 
 ---
 

@@ -18,12 +18,66 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Tests run:** only the targeted ones (test_numerical Gat/NoiseEstimate/FlatField/Degradation 39/39; test_unit
   Config/PerceptionConfig 6/6; the stage test standalone 5/5). Pre-merge not run: default configs are a call-through.
 
+## 2026-10-21 — 2.5: intra-agent loop closure live on EuRoC; loop noise model calibrated (D73 part 2b)
+
+- **Wired:** retrieval → verifier → degeneracy gate → PCM → GNC on a mirror of the VO graph, behind a `loop_closure:`
+  config section (`euroc_v2_loops`). Off by default and read-only towards the VO.
+- **Keyframe-refined ATE:** MH_01 0.0676 → 0.0207 m (−69 %), V1_01 0.0563 → 0.0382 m (−32 %), held-out V1_02
+  0.0517 → 0.0254 m (−51 %).
+- **The PnP loop covariance is about 1000× overconfident on real data.** A calibrated model, k σ²_PnP + floor², gives
+  held-out mean NEES 5.24, with a 4.4 % tail (criterion ≤ 3 %: missed, stated). Precision rises at every stage, to
+  0.97 at GNC.
+- **Open:**
+  - sim calibration for the demo;
+  - MH_01's systematic ~3.8° rotation offset on accepted loops [UNVERIFIED cause];
+  - retrieval recall 51–66 % with the placeholder descriptor.
+- **Next:** part 2c (gravity priors in the PGO), then part 3 (proxy swap + re-pin).
+
+## 2026-10-20 — 2.5: GNC weight reuse across loop events (D73 part 2a)
+
+- **`GncState`** carries each loop's decision from one event to the next. The fast path is one solve, plus one more
+  for the innovation test.
+- **Measured safe rule:** the TLS fixed point plus an innovation ≤ ½χ²₆ₙ(0.99). Two looser rules failed the
+  warm-equals-cold gate (a wrong loop hid in bent odometry; an early near miss was kept).
+- **1,000 nodes, 84 events:** warm = cold at every event, ATE identical, 72 % fast path, −22 % time.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Correction:** part 1's 1.6–4.75 s was GNC without PCM. Behind PCM a loop event costs about 0.1–0.2 s, which is
+  inside the demo's "a little worse than real time".
+- **Next:** part 2b, the wiring (loop source → gate → PCM → GNC, config and manifest fields, calibration).
+
+## 2026-10-20 — 2.5: GNC-TLS core + per-component anchoring (D73 part 1)
+
+- **`cpp/slam/robust/gnc`:** Yang et al. Prop. 4, with conventions checked against GTSAM 4.3.0's source. It runs on
+  a working copy and keeps edge indices stable from the gate through GNC. `SolvePoseGraph` now anchors every
+  connected component.
+- **Results, random outliers 10–40 %, grid and sphere:** precision 1.000, recall worst 0.967 (gate met). 0.5 m / 5°
+  near misses: all rejected. 0.2 m / 1° near misses: 71 % pass, +11 % ATE (the price of the D72 decision).
+- **Measured limitation:** a lone inter-agent link cannot be verified by GNC. PCM's no-consensus rule handles
+  several disagreeing links.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per loop event. This corrects the earlier 0.3–0.8 s estimate.
+- **Tests:** GNC 10/10; existing PGO tests unchanged.
+- **Next:** part 2 (loop source, wiring, calibration, GTSAM GNC oracle), then part 3 (verifier export, proxy swap,
+  re-pin).
+
 ## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
 
 - One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
   NEES-calibrated on MH, held-out V NEES 3.0). VIO-derived alternatives measured and rejected (overconfident 2–70×).
 - Trajectories unchanged. Handoff to 2.5: consume them in the PGO (robustified, gravity direction as a variable).
 - 2.4 plan items left: none in the plan list; the sim IMU noise operator is 2.2's.
+
+## 2026-10-19 — 2.5: PCM with a per-loop threshold; recall 1.000 at 10–40 % outliers (D72)
+
+- **`cpp/slam/robust/pcm`:** cycle consistency against the odometry-only chain. Every leg configuration on one chain
+  and both inter-agent orientations give a mean statistic of 5.75–6.24 (χ²₆ mean 6).
+- **Arch's fixed χ²₆(0.95) drops 15 % of true loops** (worst seed 40 %), because a maximum clique needs every pair
+  of a true loop to pass. The default is a per-loop Bonferroni threshold (α_loop = 0.001, derived from the
+  requirement).
+- **Results:** recall 1.000 and precision 1.000 on random outliers at 10–40 %. Near misses at 0.2–0.5 m pass more
+  often (precision 0.75–0.94); they are GNC's job (D73). 186 ms for 300 loops on 3000 nodes.
+- **The blind spot** (a self-consistent wrong cluster passes) is asserted and labelled.
+- **Tests:** 12/12; ctest 355/355 on the merged tree (D55–D59 included).
+- **Next:** GNC-TLS + the intra-agent loop source + the verifier inlier export + the proxy swap (D73).
 
 ## 2026-10-19 — EuRoC v2 now runs the full inertial layer (D59 switch)
 
