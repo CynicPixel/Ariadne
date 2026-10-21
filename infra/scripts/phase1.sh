@@ -66,11 +66,18 @@ log "0. build + full ctest"
 [ -f .cache/models/xfeat_ref/xfeat_weights.atb ] || die "no XFeat export (run: infra/scripts/models.sh xfeat)"
 # ...and so must the PGO oracle (Phase 2 exit-gate item): the 100 GTSAM cases from infra/scripts/models.sh pgo-oracle.
 [ "$(ls .cache/oracle/pgo/*.graph 2>/dev/null | wc -l)" -eq 100 ] || die "no PGO oracle cases (run: infra/scripts/models.sh pgo-oracle)"
-cmd "$S/core.sh dev    # configure, build, full ctest, with ARIADNE_REQUIRE_MODELS=1"
+# ...and 2.1's reference exports (D62 EigenPlaces, D63 ALIKED+LightGlue): the tests FAIL without them under
+# ARIADNE_REQUIRE_MODELS=1. Produced offline by python/model_tools/{eigenplaces,aliked_lightglue}_reference.py.
+[ -f .cache/models/eigenplaces_ref/manifest.yaml ] || die "no EigenPlaces export in .cache/models/eigenplaces_ref (D62)"
+[ -f .cache/models/aliked_lg_ref/manifest.yaml ] || die "no ALIKED+LightGlue export in .cache/models/aliked_lg_ref (D63)"
+# Build and ctest parallelism: 2 by default. The 15 GB host crashed at 8 (2026-10-21); raise only deliberately.
+JOBS="${ARIADNE_BUILD_JOBS:-2}"
+cmd "$S/core.sh dev    # configure, build, full ctest (--parallel $JOBS), with ARIADNE_REQUIRE_MODELS=1"
 $S/core.sh dev bash -c "cmake -S /work -B /work/build/docker -G Ninja -DARIADNE_REQUIRE_OPENCV=ON -DCMAKE_SKIP_RPATH=ON \
-  -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-docker >/dev/null && cmake --build /work/build/docker --parallel 8 \
+  -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-docker >/dev/null && cmake --build /work/build/docker --parallel $JOBS \
   && ARIADNE_XFEAT_REF=/work/.cache/models/xfeat_ref ARIADNE_PGO_ORACLE=/work/.cache/oracle/pgo ARIADNE_REQUIRE_MODELS=1 \
-     ctest --test-dir /work/build/docker --output-on-failure --parallel 8" > "$BIG/ctest.log" 2>&1 \
+     ARIADNE_EIGENPLACES_REF=/work/.cache/models/eigenplaces_ref ARIADNE_ALIKED_LG_REF=/work/.cache/models/aliked_lg_ref \
+     ctest --test-dir /work/build/docker --output-on-failure --parallel $JOBS" > "$BIG/ctest.log" 2>&1 \
   || { tail -30 "$BIG/ctest.log"; die "build or ctest failed"; }
 grep -E "tests passed|tests failed" "$BIG/ctest.log" > "$G/ctest.txt"
 cmd "$S/core.sh dev ctest -R '^(CollabProtocol|Serialization)\\.'"
