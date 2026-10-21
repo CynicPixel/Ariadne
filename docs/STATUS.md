@@ -4,6 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.2: radiometric front end, opt-in with a measured-noise gate (D65–D69)
+
+- **Built:**
+  - GAT with our own exact unbiased inverse, which reproduces the paper's accuracy figures;
+  - a single-image noise fit with the σ_z ≈ 1 check;
+  - a flat field calibrated to ≤ 0.5% RMS;
+  - D applied in SimSource (opt-in, per-camera seeds, byte-identical parallel D, digest unchanged);
+  - two gain-up degradation configs.
+- **Gate:** ON at the sim gain-up configs; OFF at dark0, at posterised dark2, and on all 11 EuRoC flights.
+- **Effect** (dark3_ag16, 1000 frames): no measurable benefit. Keyframes +37%, landmarks −17%. Default stays off.
+  Denoiser defaults to Gaussian (14 ms per image for the stage); NLM is an ablation only (≈ 360 ms per image).
+- **Tests run:** only the targeted ones (test_numerical Gat/NoiseEstimate/FlatField/Degradation 39/39; test_unit
+  Config/PerceptionConfig 6/6; the stage test standalone 5/5). Pre-merge not run: default configs are a call-through.
+
 ## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
 
 - One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
