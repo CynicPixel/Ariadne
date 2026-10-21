@@ -1,3 +1,7 @@
+# L2 (D91, 2026-10-22): sim_v2 runs the full inertial layer (D59) on the sim IMU through the seeded noise operator
+# (ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml; without it the runner refuses: no IMU). The imu section
+# is euroc_v2's with the noise inflation 1 (the injected model IS the estimator's model). The visual-only v2 path
+# is sim_v2_vo.
 # 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder SLAM for the simulated rig: euroc.yaml with the depth floor of sim_v1.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
@@ -46,3 +50,28 @@ lost:                           # lost-frame handling (LOST_FRAMES.md, D56); abs
   velocity_decay_s: 0.5         # tau of exp(-t/tau) on the pre-loss velocity, declared before the sweep (D56: 0.2 and no decay reported)
   max_speed_m_s: 3.0            # clamp a corrupt pre-loss speed (EuRoC MAV < ~2.3 m/s)
   reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences
+
+imu:                            # D59 full (attitude_only behaviour until initialised). Absent = none.
+  mode: full                    # velocity + biases in the window BA (INERTIAL_2.4 §4)
+  seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
+  bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
+  stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
+  kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
+  ki: 0.3
+  full:
+    noise_inflation_gyro: 1     # the sim IMU is exactly its injected model (configs/sim/imu_noise_v1.yaml)
+    noise_inflation_accel: 1
+    bias_prior_inflation: 10    # window[0] bias prior = previous marginal x 10 (it double-counts the overlap)
+    init_keyframes: 10          # consecutive MEASURED window keyframes (~2-10 s at 1 s max interval)
+    init_accel_bias_sigma: 0.2  # m/s^2, zero-mean b_a prior (sim b_a,0 = 0; random walk only)
+    init_gravity_tolerance: 0.1 # relative |g| error that refuses
+    init_max_chi2_per_dof: 100  # D59 sweep, 11 inits vs GT: the one off by > 3 deg (MH_04, 8.4) had 1296, all others <= 55
+    refine_after_s: [5, 15]     # re-solve over all keyframes since init (ORB-SLAM3 T-RO 2021 §V-B: 5 and 15 s)
+    estimate_gravity: false     # §4.8 ablation, NEGATIVE: tilt/b_a feedback loop (avg 0.566 m, 0/11); part-2 gauge
+    repropagate_gyro: 0.01      # rad/s (VINS-Mono)
+    repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
+    lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
+  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+    stride_keyframes: 10        # one per window length: non-overlapping data
+    source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
+    attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)

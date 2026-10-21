@@ -539,11 +539,11 @@ TEST(LostFrames, BridgedTranslationDecaysToRest) {
     EXPECT_LT(last_step, 1e-3 * first_step);
 }
 
-// The SHIPPED v2 path (sim_v2.yaml: window backend, bridge, every_frame) through a dark stretch: every dark frame
+// The SHIPPED v2 path (sim_v2_vo.yaml: window backend, bridge, every_frame) through a dark stretch: every dark frame
 // bridged in one new segment, the rotation measured, every dark frame a keyframe (every_frame), and tracking back on
 // the fresh track set right after.
 TEST(LostFrames, ShippedV2DarkStretchIsBridgedAndRecovers) {
-    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2_vo.yaml");
     ASSERT_EQ(v2.ba.backend, "window");
     ASSERT_EQ(v2.lost.motion, "bridge");
     ASSERT_EQ(v2.lost.reanchor, "every_frame");
@@ -564,7 +564,7 @@ TEST(LostFrames, ShippedV2DarkStretchIsBridgedAndRecovers) {
 // Determinism of the shipped v2 path with the bridge active: OpenCV thread count and global RNG state must not reach
 // the poses (the bridge's USAC is seeded per (seed, frame, site) and single-threaded).
 TEST(LostFrames, ShippedV2BridgeIsDeterministicAcrossThreadsAndGlobalRng) {
-    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2_vo.yaml");
     const int def = cv::getNumThreads();
     std::vector<VoRun> runs;
     for (int threads : {1, 2, def}) {
@@ -639,7 +639,7 @@ TEST(Attitude, MahonyConvergesToGravity) {
 namespace {
 
 SlamConfig FullConfig(const std::string& lost_motion) {
-    SlamConfig c = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    SlamConfig c = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2_vo.yaml");
     c.imu.mode = "full";
     c.imu.full.noise_inflation_gyro = 1.0;   // the simulated IMU is exactly its model (§4.1: inflation is EuRoC's)
     c.imu.full.noise_inflation_accel = 1.0;
@@ -651,11 +651,11 @@ SlamConfig FullConfig(const std::string& lost_motion) {
 }  // namespace
 
 // From the 10 s of tracking before the stretch, the initialisation recovers gravity and the biases; then 2 s of
-// darkness (tracks without landmarks or stereo) are dead-reckoned by the IMU. The shipped visual bridge (sim_v2) on
+// darkness (tracks without landmarks or stereo) are dead-reckoned by the IMU. The shipped visual bridge (sim_v2_vo) on
 // the same stretch is the contrast.
 TEST(Inertial, FullModeInitialisesAndCarriesADarkStretch) {
     const int dark = 200, len = 40, frames = dark + len + 40;
-    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2.yaml");
+    const SlamConfig v2 = LoadSlam(std::string(ARIADNE_SOURCE_DIR) + "/configs/slam/sim_v2_vo.yaml");
     const VoRun vo = RunVo(frames, 0, -1, 1, 1, v2, {dark, len});
     const VoRun vio = RunVo(frames, 0, -1, 1, 1, FullConfig("propagate"), {dark, len});
     ASSERT_TRUE(vio.inertial_ready);
