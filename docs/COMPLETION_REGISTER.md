@@ -102,7 +102,7 @@ identical.
 
 | item | state | evidence / missing | owner |
 |---|---|---|---|
-| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. **D62 draft** (exact-default deviation). Projection-guided re-association deferred, triggered by the combined run. L4–L6. CLAHE retrieval split not run. | A1 |
+| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. **D62 draft** (exact-default deviation). Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4–L6. CLAHE retrieval split not run. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
@@ -111,7 +111,7 @@ identical.
 | Gate: FD Jacobian suite | done | | |
 | Gate: oracle 100/100; certificate certified / not certified | **partial** | oracle done (D52). Certificate: D74. | B |
 | Gate: outlier ramp with breakpoint | **partial** | random outliers give no breakpoint up to 90% (D73). Needs aliasing-structured (mutually consistent) false loops. | B |
-| Gate: EuRoC VIO in class; TUM regression pinned | partial | 9/11 (D59). The combined run with 2.1 is running (M). TUM: —. | M / — |
+| Gate: EuRoC VIO in class; TUM regression pinned | partial | EuRoC done: the combined run averages 0.120, 9/11 in class (D85). TUM: —. | M / — |
 | Exit run (full, fresh render, clean tree) | not started | after the items above | M |
 
 ## Phase 3 (opened early, D80)

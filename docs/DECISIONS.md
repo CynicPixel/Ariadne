@@ -2665,3 +2665,28 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
   dominating V1_03/V2_02. Descriptor re-association with PnP verification (D60) is what shipped.
 - **Reference exports:** the regeneration commands for `.cache/models/{eigenplaces_ref,aliked_lg_ref}` are in
   PERCEPTION_2.1 §13.
+
+## 2026-10-21 — D85: the combined EuRoC run (2.4 full VIO + 2.1 re-association), `main` 62441c4: neutral overall; V1_03 still out
+
+Run: `build/d85_tools/combined_euroc.sh`, with `euroc_v2` perception (ORB + lost-mode re-association, D60) and `euroc_v2` slam
+(full VIO, D59). 11 flights run sequentially, all `RUN_OK`. Metric: keyframe-refined ATE (D57 protocol), the same
+metric as `INERTIAL_2.4.md` §4.9.
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 | avg |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2.4 only (D59 part 3) | 0.068 | 0.039 | 0.099 | 0.222 | 0.128 | 0.056 | 0.052 | 0.357 | 0.039 | 0.101 | 0.168 | 0.121 |
+| combined | 0.068 | 0.044 | 0.099 | 0.223 | 0.140 | 0.054 | 0.047 | 0.329 | 0.039 | 0.110 | 0.169 | **0.120** |
+| lost frames / re-associations accepted | 0/2 | 13/11 | 0/0 | 262/32 | 96/15 | 1/8 | 3/34 | 92/125 | 16/4 | 7/28 | 118/112 | 608 total |
+
+- **Effect: neutral.** The average drops 1 mm. Per flight it is mixed: V1_03 −28 mm, V1_02 −5 mm; MH_05 +12 mm,
+  V2_02 +9 mm, MH_02 +5 mm. It is still **9/11 in the stereo-inertial class**, with the same two flights out:
+  V1_03 (0.329 vs 0.120) and V2_02 (0.110 vs 0.100). The ±10 mm moves are single runs; V1_03 has flipped on small
+  changes before (D58).
+- **The Phase 2 EuRoC gate condition stands at 9/11, average 0.120 ≤ 0.138.**
+- **A1's trigger for projection-guided re-association, evaluated:**
+  - V1_03 still has 92 lost frames and is out of class, so the trigger fires for V1_03.
+  - V2_02 has 7 lost frames: its miss is drift, not lost stretches, so the trigger does not fire there.
+  - The 2.4-only per-flight lost counts were not recorded in §4.9, so "still dominate" is judged on the combined run
+    alone.
+  - **Maintainer's call** whether V1_03 alone justifies building it (register: 2.1 row).
+

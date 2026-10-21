@@ -341,8 +341,8 @@ The plan 2.4 line, item by item:
 out of class are V1_03 (0.357 m) and V2_02 (+1 mm over).
 
 **Open, stated rather than hidden:**
-- **The combined EuRoC run with 2.1's re-association (D60) has not been done.** Their gains act on the same lost
-  stretches, so they may not simply add. Until it runs, the 0.121 m / 9-of-11 figures are the 2.4-only numbers.
+- **The combined EuRoC run with 2.1's re-association: done (D85).** Average 0.120, still 9/11 in class (V1_03 and
+  V2_02 out). The effect is neutral overall, with mixed ±10 mm per flight.
 - **Long outages:** 10 s without vision diverges (`--outages` evidence, D59). With re-association enabled, the runner
   now refuses `--outages` (2.1's guard).
 - **Gravity estimated inside the window:** a negative result, kept off (`estimate_gravity: false`, D59 part 3).

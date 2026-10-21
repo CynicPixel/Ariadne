@@ -4,6 +4,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — Combined EuRoC run done (D85); completion register created
+
+- **2.4 full VIO + 2.1 re-association:** average 0.120 (0.121 for 2.4 alone), 9/11 in class. V1_03 and V2_02 are
+  still out. Neutral overall. The projection-guided re-association trigger fires for V1_03 only: the maintainer
+  decides.
+- **`docs/COMPLETION_REGISTER.md`:** every plan line, gate, invariant and locked decision, with owners and carries.
+- **Unowned gaps it found:**
+  - L1, the live closed-loop runtime (`ros2/` is empty);
+  - 0.2/0.6, no arm64 OpenCV build or image (this blocks COOL);
+  - 0.3, the COOL trial not started;
+  - L2, the sim IMU noise operator;
+  - L3, the sim-rig retrieval and hard-pair exports;
+  - TUM.
+
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
 - **Open: the D74 certificate**, not started (plus κ/τ for cubicle and rim).
