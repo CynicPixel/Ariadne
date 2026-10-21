@@ -11,14 +11,14 @@ sim:
   seed: 1
   slam_config: configs/slam/sim_v2.yaml
   reference: {degradation: none, perception: sim_v1}   # the clean recording
-  degradations: [dark2_dust0_ag8, dark3_dust0_ag16]    # D65: noise the VST can stabilise
+  degradations: [dark2_dust0_ag8, dark3_dust0_ag16]    # D65: noise the VST can stabilise. dark2_dust0_ag8: NOT RUN (gate decision only)
   control: {degradation: dark2_dust0, perception: [sim_v1, sim_v1_rad_auto]}   # posterised: the gate must refuse
   rows:
     off: sim_v1
-    flat_only: sim_v1_rad_flat
+    flat_only: sim_v1_rad_flat                   # NOT RUN
     flat_vst_gaussian_gated: sim_v1_rad_auto     # the proposal (realtime: 0.8 ms denoise)
-    flat_vst_nlm_gated: sim_v1_rad_nlm           # ablation; ~360 ms per image, not realtime
-    flat_vst_gaussian_algebraic_forced: sim_v1_rad_alg  # expected null on the 8-bit hand-off (design §5)
+    flat_vst_nlm_gated: sim_v1_rad_nlm           # NOT RUN. ablation; ~360 ms per image, not realtime
+    flat_vst_gaussian_algebraic_forced: sim_v1_rad_alg  # NOT RUN. expected null on the 8-bit hand-off (design §5)
   # 2026-10-21, maintainer: run only what cannot be done without. MEASURED: dark3_dust0_ag16 x {off, flat_vst_gaussian_gated}.
   # The other rows are defined but not run.
 
@@ -27,7 +27,7 @@ euroc:
   slam_config: configs/slam/euroc_v2.yaml
   default_configs_unchanged: true   # no radiometric: section -> call-through; LOCAL_SLAM_2.3 §10 table stands
   gate_decision: {perception: euroc_rad_auto, frames: 12, flights: all 11}
-  forced_on: {perception: euroc_rad_on, baseline: euroc, flights: [MH_01_easy, V1_03_difficult, V2_03_difficult]}
+  forced_on: {status: NOT_RUN, perception: euroc_rad_on, baseline: euroc, flights: [MH_01_easy, V1_03_difficult, V2_03_difficult]}
 
 metrics: [ate_se3.rmse_m, vo.lost_frames, vo.keyframes, vo.landmarks_alive_at_end, stereo_match_valid_fraction,
           radiometric.decision, radiometric.ms_per_image, radiometric.left.sigma_z, radiometric.left.snr_at_median]
