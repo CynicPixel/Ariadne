@@ -63,6 +63,30 @@ inline core::SE3 FromPoseValue(const PoseValue& p) {
     return T;
 }
 
+/// §4.3 wire information: the upper triangle of the 6x6, row-major, 21 floats.
+inline std::vector<float> PackInformation(const core::Mat6& I) {
+    std::vector<float> v;
+    v.reserve(21);
+    for (int r = 0; r < 6; ++r)
+        for (int c = r; c < 6; ++c) v.push_back(float(I(r, c)));
+    return v;
+}
+inline core::Mat6 UnpackInformation(const std::vector<float>& v) {
+    core::Mat6 I = core::Mat6::Zero();
+    size_t k = 0;
+    for (int r = 0; r < 6; ++r)
+        for (int c = r; c < 6; ++c, ++k) I(r, c) = I(c, r) = k < v.size() ? double(v[k]) : 0.0;
+    return I;
+}
+
+/// An agent's odometry measurement into a new keyframe: Z = T_Cfrom_Cto, with
+/// its information in the PoseEdge convention (slam/pose_graph/pose_graph.hpp).
+struct OdometryEdge {
+    uint64_t from_keyframe = 0;
+    core::SE3 Z;
+    core::Mat6 information = core::Mat6::Identity();
+};
+
 // --- hooks -----------------------------------------------------------------------
 
 struct KeyframeRef {
@@ -74,7 +98,7 @@ struct KeyframeRef {
 
 struct SolveInput {
     std::vector<AgentId> members;
-    std::map<AgentId, PoseGraphValue> graphs;   // each member's latest snapshot (nodes in W_member)
+    std::map<AgentId, PoseGraphValue> graphs;   // each member's latest snapshot (nodes + odometry edges in W_member)
     std::vector<LoopEdgeValue> edges;           // inter-agent edges whose endpoints the snapshots cover
     AgentId anchor = 0;                         // G = W_anchor
     AgentId gauge_agent = 0;                    // whose T_G_W is held fixed
@@ -158,9 +182,22 @@ public:
 
     // --- application input ---
 
-    /// A keyframe of this agent's odometry: pose in W_self, plus its global descriptor.
+    /// A keyframe of this agent's odometry: pose in W_self, the odometry edge
+    /// into it (none for the first keyframe), and its global descriptor.
     void AddKeyframe(uint64_t keyframe, int64_t stamp_ns, const core::SE3& T_W_C,
-                     const core::GlobalDescriptorValue& descriptor, core::Timestamp t) {
+                     const std::optional<OdometryEdge>& odometry, const core::GlobalDescriptorValue& descriptor,
+                     core::Timestamp t) {
+        if (odometry) {
+            LoopEdgeValue e;
+            e.agent_a = e.agent_b = self_;
+            e.keyframe_a = odometry->from_keyframe;
+            e.keyframe_b = keyframe;
+            e.measurement = ToPoseValue(odometry->Z);
+            e.information = PackInformation(odometry->information);
+            e.frame_a = e.frame_b = {self_, 0};
+            e.status = wire::EdgeStatus::ODOMETRY;
+            odometry_.push_back(e);
+        }
         core::PoseNodeValue n;
         n.agent = self_;
         n.keyframe = keyframe;
@@ -273,6 +310,7 @@ private:
     PoseGraphValue Snapshot() const {
         PoseGraphValue g;
         g.nodes = nodes_;
+        g.edges = odometry_;
         // `anchor` names the frame of agent_frames: my T_G_W as last adopted.
         if (T_G_W_ && adopted_) {
             g.anchor = {mem_.anchor(), uint32_t(adopted_->epoch.counter)};
@@ -373,6 +411,12 @@ private:
                 } else if (mem_.IsBroker()) {
                     for (const auto& n : m.pose_graph.nodes)
                         if (n.frame.agent != m.sender || n.frame.epoch != 0) {
+                            ++stats_.frame_rejects;
+                            return;
+                        }
+                    for (const auto& e : m.pose_graph.edges)
+                        if (e.agent_a != m.sender || e.agent_b != m.sender || e.frame_a.agent != m.sender ||
+                            e.frame_b.agent != m.sender || e.frame_a.epoch != 0 || e.frame_b.epoch != 0) {
                             ++stats_.frame_rejects;
                             return;
                         }
@@ -618,6 +662,7 @@ private:
 
     // agent state
     std::vector<core::PoseNodeValue> nodes_;
+    std::vector<LoopEdgeValue> odometry_;   // intra-agent, in W_self
     std::map<uint64_t, core::GlobalDescriptorValue> descriptors_;
     std::map<EdgeKey, LoopEdgeValue> edges_;
     size_t snapshot_nodes_ = 0;

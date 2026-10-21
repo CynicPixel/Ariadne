@@ -15,6 +15,7 @@ if(OpenCV_FOUND)
     odometry/rotation_bridge.cpp
     pose_graph/pgo_levmarq.cpp
     pose_graph/chordal_init.cpp
+    pose_graph/multi_agent.cpp
     robust/degeneracy.cpp
     bundle_adjustment/window_ba_levmarq.cpp)
   target_link_libraries(ariadne_slam_opencv PUBLIC ariadne::slam opencv_core opencv_geometry)

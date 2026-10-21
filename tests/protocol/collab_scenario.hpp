@@ -47,6 +47,12 @@ struct Scenario {
     core::SE3 T_World_W(size_t a) const { return T_World_C(a, 0.0); }
     core::SE3 T_W_C(size_t a, double t) const { return T_World_W(a).inverse() * T_World_C(a, t); }
     double KfTime(uint64_t kf) const { return double(kf) * keyframe_dt_s; }
+    /// 1 cm / ~0.6 deg standard deviations: [rho; phi] information.
+    static core::Mat6 Information() {
+        core::Mat6 I = core::Mat6::Zero();
+        I.diagonal() << 1e4, 1e4, 1e4, 1e4, 1e4, 1e4;
+        return I;
+    }
 
     NodeHooks Hooks(size_t self) const {
         NodeHooks h;
@@ -84,6 +90,7 @@ struct Scenario {
             e.frame_b = {b.agent, 0};
             e.status = ariadne::wire::EdgeStatus::GEOMETRY_VERIFIED;
             e.inlier_count = 100;
+            e.information = PackInformation(Information());
             return e;
         };
         h.solve = &AlignSolve;
@@ -156,7 +163,14 @@ struct Swarm {
                 core::GlobalDescriptorValue g;
                 g.keyframe_id = next_kf;
                 g.descriptor.assign(256, 0.0f);
-                nodes[a]->AddKeyframe(next_kf, int64_t(sc.KfTime(next_kf) * 1e9), sc.T_W_C(a, sc.KfTime(next_kf)), g, t);
+                std::optional<OdometryEdge> odo;
+                if (next_kf > 0) {
+                    odo = OdometryEdge{next_kf - 1,
+                                       sc.T_W_C(a, sc.KfTime(next_kf - 1)).inverse() * sc.T_W_C(a, sc.KfTime(next_kf)),
+                                       Scenario::Information()};
+                }
+                nodes[a]->AddKeyframe(next_kf, int64_t(sc.KfTime(next_kf) * 1e9), sc.T_W_C(a, sc.KfTime(next_kf)), odo,
+                                      g, t);
             }
             ++next_kf;
         }

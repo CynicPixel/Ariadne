@@ -4,6 +4,23 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 3.2 protocol built and tested; production broker solve (D82, D83)
+
+- `cpp/collaboration/protocol/`:
+  - a seeded datagram network behind the `LinkModel` seam for 3.3;
+  - a fragment-level ARQ transport with per-class delivery;
+  - membership with hysteresis, Swarm-SLAM's election, epochs;
+  - the collaboration node (two-stage exchange, broker duties, frames);
+  - the I5 outcome audit.
+- **I5 campaign (oracle hooks):** 54/54 runs consistent, 0 corrupt.
+  - Split-brain merges under a new epoch.
+  - The classifier is shown to flag corruption and incompleteness.
+  - Deterministic per seed.
+- **Production broker solve:** a multi-agent PGO (node ATE 0.228 → 0.019 m on a synthetic swarm). The protocol with
+  this solve ends consistent under a partition.
+- **Next:** 3.4 spectral prioritization (the policy that decides which feature requests to send), then the sim
+  integration (`protocol: v2`). The robust stage waits on 2.5.
+
 ## 2026-10-21 — Phase 3 opened (D80); 3.2 protocol designed (D81)
 
 - Phase 3 opened before the Phase 2 gate, on maintainer instruction. This session owns 3.2 → 3.4 → 3.5.

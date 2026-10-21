@@ -2090,3 +2090,35 @@ Design: `docs/design/COLLAB_3.2.md` §10. Code: `cpp/collaboration/protocol/` (`
   - A run that ends while partitioned is classified `explicitly_incomplete`, and its reasons name the missing pieces.
   - Same seed ⇒ identical ledgers and outcome reasons at the node level.
 
+## 2026-10-21 — D83: the production broker solve — one multi-agent PGO; snapshots carry odometry edges
+
+Code: `slam/pose_graph/multi_agent.{hpp,cpp}` (slam_opencv), adapter `collaboration/broker/broker_solve.hpp`
+(`NodeHooks::solve` for the runtime); tests `tests/unit/test_multi_agent.cpp`.
+
+- **What it solves.** One joint pose graph over the members' subgraphs, with node ids `(agent << 40) | keyframe`:
+  their nodes, their odometry edges with information, and the verified inter-agent edges.
+- **Placement and initialisation.** Agents with no edge path to the gauge are reported unplaced. The rest start from a
+  spanning-tree alignment, then the chordal initialiser runs (D70), then LM on `LevMarqBase` (D51).
+- **Gauge.** The gauge agent's first node is fixed at `T_G_W_gauge · T_W_C` (§15.4). The solve is skipped when the
+  joint graph has no edge: a lone broker with one keyframe has zero free variables, and that crashed LevMarq
+  (a segfault, found by the protocol-level test).
+- **Per-agent T_G_W.** The gauge agent reports the gauge value (G = W_anchor). Every other agent reports a frame fit
+  of its W-frame poses onto their optimised G poses: the chordal rotation mean, then the mean translation residual.
+  - A positions-only Kabsch fit was rejected: it is ambiguous on a straight trajectory.
+  - Per-keyframe corrections are returned as `T_G_C` but are **not yet on the wire**. The estimate carries only the
+    rigid T_G_W; keyframe-local consumers (Phase 6) will need the node poses.
+- **Snapshots now carry the agent's odometry edges.** `EdgeStatus::ODOMETRY` was appended to the schema, the
+  information is packed as the 21-float upper triangle, and `AddKeyframe` takes the odometry edge. This is the §15.2
+  payload the I6 byte gate prices.
+- **Measured (synthetic, 3 agents, 60 keyframes, odometry noise 1 cm / 0.4° per step):**
+  - node ATE: 0.228 m dead reckoning → 0.019 m after the solve;
+  - each T_G_W lies within 5 cm / 0.6° of the best rigid fit of that agent's drifted trajectory to ground truth.
+- **Protocol with the production solve:** a 4-agent run with a partition {0,1}|{2,3} at 10–30 s and 10% loss ends
+  `consistent`, with every T_G_W within 5 mm / 5 mrad of ground truth. The 54-run oracle campaign is still 54/54
+  consistent with odometry edges in the snapshots.
+- **Not yet:**
+  - the robust stage (degeneracy gate → PCM → GNC-TLS, 2.5's `cpp/slam/robust/`) between the edge list and the solve;
+    inter-agent edges currently enter as verified;
+  - the gravity-prior yaw-only gauge.
+  - Both wait on 2.5 merging.
+

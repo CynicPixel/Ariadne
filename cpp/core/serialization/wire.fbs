@@ -35,7 +35,9 @@ enum EdgeStatus : ubyte {
   DEGENERATE = 2,
   PCM_REJECTED = 3,
   GNC_INLIER = 4,
-  GNC_OUTLIER = 5
+  GNC_OUTLIER = 5,
+  /// Appended (3.2): an intra-agent odometry edge inside a POSE_GRAPH snapshot.
+  ODOMETRY = 6
 }
 
 struct Quaternion { w:float; x:float; y:float; z:float; }
