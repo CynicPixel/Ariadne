@@ -2130,3 +2130,49 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
   `LinearizeGravityPrior`); (2) robustify them (heavy tail); (3) estimate the agent's gravity direction as a 2-DoF
   variable initialised at `g_ref_W` (its error is shared by every edge); (4) wire field: Phase 3 (inter-agent).
 
+
+## 2026-10-21 — D73 part 2b: intra-agent loop closure wired (off by default); calibrated loop noise model
+
+**Context.** The loop backend (gate → PCM → GNC on a VO mirror) existed but was not wired. The first EuRoC run
+showed the PnP loop covariance far too confident for PCM and GNC. Design: `ROBUST_BACKEND_2.5.md` §8.
+
+**Decision.**
+- **The adapter** (`runtime/agent/intra_loop_closure.hpp`), wired into `stereo_vo_runner.hpp` behind an optional
+  `loop_closure:` section (`configs/slam/euroc_v2_loops.yaml`). Per keyframe:
+  - ORB features plus SGBM 3D points, and the mean-bit placeholder descriptor;
+  - retrieval, with the last 50 keyframes and the last 10 s excluded;
+  - verification with `edge_verifier`, whose new inlier export was a maintainer-approved hunk;
+  - each loop queued until its keyframes leave the BA window, then one backend event.
+  The VO is never written. Outputs: `loop_trace.jsonl`, `loop_candidates.csv` (ground-truth errors, full error
+  vector and covariance), and a summary block with the funnel, recall, latency and the PCM good-pair statistic.
+- **Edge noise model** (`DegeneracyParams::noise_*`): var = k σ²_PnP + floor², per block.
+  - Fitted jointly on MH_01 + V1_01: k_t 1.33, floor_t 0.014 m, k_r 0.178, floor_r 0.0095 rad.
+  - The gate's criteria still read the PnP σ.
+  - The labels' "3σ of its own covariance" prong was dropped; labels are 0.2 m / 2° against interpolated ground truth.
+
+**Why.** On V1_01 the PnP covariance gave median NEES ≈ 1e4, about 1000× overconfident. Correlated errors don't
+average down; COVINS-G reports the same. With that covariance, PCM did not improve on the gate (0.67 against 0.63).
+The MH_01-only fit failed held-out V1_01, which is stated; hence the joint fit.
+
+**Evidence** (keyframe-refined ATE, VO → loops):
+- MH_01 0.0676 → 0.0207 m (−69 %)
+- V1_01 0.0563 → 0.0382 m (−32 %)
+- V1_02, held out: 0.0517 → 0.0254 m (−51 %)
+- **V1_02 funnel precision:** 0.53 → 0.80 → 0.88 → 0.97 (GNC: 142 good, 4 bad).
+- **Held-out NEES:** mean 5.24 passes; the tail is 4.4 % against ≤ 3 %, which misses. The maintainer accepted the
+  model with the miss stated; GNC absorbs the tail.
+- **PCM good-pair statistic:** 2.1–7.8, so no odometry scale is needed.
+- **MH_01 without the model:** GNC kept 51 good of 55 (0.93); with it, 118 good of 177 (0.67), at the same ATE
+  (0.0205 / 0.0207 m). On V1_01 the model raised recall (21 → 86 good) and precision (0.81 → 0.91).
+- **Evidence:** `evaluation/runs/2.5/loop_closure/` (five runs, no ground truth, `analyze_loops.py`). The manifests'
+  `git_dirty: false` is wrong: the binaries were built from the uncommitted tree on 4b45934.
+- **Latency:** 1.3–2.4 s mean, 7.3 s worst, mostly waiting for the BA window.
+- **Tests:** `Degeneracy` 9/9, including the noise-model test.
+
+**Not done, stated.**
+- **Sim calibration**, which the demo needs.
+- **ORB per-octave σ.**
+- **MH_01's 59 accepted loops labelled bad:** small translation error, a ~3.8° systematic rotation offset, none
+  gross. Cause [UNVERIFIED].
+- **The gate's σ thresholds** are unchanged (the Youden fit barely moved them).
+- **Retrieval recall** 51–66 % (placeholder descriptor).

@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.5: intra-agent loop closure live on EuRoC; loop noise model calibrated (D73 part 2b)
+
+- **Wired:** retrieval → verifier → degeneracy gate → PCM → GNC on a mirror of the VO graph, behind a `loop_closure:`
+  config section (`euroc_v2_loops`). Off by default and read-only towards the VO.
+- **Keyframe-refined ATE:** MH_01 0.0676 → 0.0207 m (−69 %), V1_01 0.0563 → 0.0382 m (−32 %), held-out V1_02
+  0.0517 → 0.0254 m (−51 %).
+- **The PnP loop covariance is about 1000× overconfident on real data.** A calibrated model, k σ²_PnP + floor², gives
+  held-out mean NEES 5.24, with a 4.4 % tail (criterion ≤ 3 %: missed, stated). Precision rises at every stage, to
+  0.97 at GNC.
+- **Open:**
+  - sim calibration for the demo;
+  - MH_01's systematic ~3.8° rotation offset on accepted loops [UNVERIFIED cause];
+  - retrieval recall 51–66 % with the placeholder descriptor.
+- **Next:** part 2c (gravity priors in the PGO), then part 3 (proxy swap + re-pin).
+
 ## 2026-10-20 — 2.5: GNC weight reuse across loop events (D73 part 2a)
 
 - **`GncState`** carries each loop's decision from one event to the next. The fast path is one solve, plus one more

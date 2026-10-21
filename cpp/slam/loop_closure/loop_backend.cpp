@@ -64,6 +64,8 @@ LoopEventRecord LoopBackend::OnCandidates(const std::vector<LoopCandidate>& cand
         rc.gate_reasons = d.reasons;
         rc.sigma_t = d.sigma_t_worst;
         rc.sigma_r = d.sigma_r_worst;
+        rc.T_A_B = d.T_A_B;
+        rc.cov_left = d.cov_left;
         if (!d.degenerate) {
             PoseEdge e;
             e.type = p_.loop_type;

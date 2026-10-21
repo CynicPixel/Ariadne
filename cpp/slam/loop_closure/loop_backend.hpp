@@ -46,6 +46,8 @@ struct LoopEventRecord {
         bool degenerate = true;
         std::vector<std::string> gate_reasons;
         double sigma_t = 0, sigma_r = 0;
+        SE3 T_A_B;                // the gate's refined edge and its left covariance (for ground-truth labelling)
+        Mat6 cov_left = Mat6::Zero();
         long edge = -1;           // edge index in the mirror if added
         bool pcm_accepted = false;
         bool gnc_inlier = false;

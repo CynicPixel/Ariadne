@@ -459,6 +459,79 @@ accept becomes a regression case that must now be rejected.
   midpoint of the good/bad margin.
 - **Memory:** features kept per keyframe are capped in the adapter (3,000 keyframes at demo scale).
 
+**First real-data run, V1_01_easy (2026-10-21; one flight, so it is not yet D73's result).** Keyframe-refined ATE
+0.0563 m → 0.0392 m with loops. Funnel, labelled by ground truth at 0.2 m / 2° absolute:
+
+| stage | n | good | precision |
+|---|---|---|---|
+| verified (edge_verifier) | 464 | 144 | 31 % |
+| passed the degeneracy gate | 154 | 97 | 63 % |
+| refused by the gate | 310 | 47 | 15 % |
+| PCM accepted | 42 | 28 | 67 % |
+| GNC inlier | 26 | 21 | 81 % |
+
+- **The gate discriminates.** It refuses 82 % of the bad candidates and keeps 67 % of the good ones (σ_t median
+  0.030 m for good, 0.096 m for bad).
+- **The loop covariance is ~100–1000× overconfident on real data** (NEES p10 1.1e3, p50 1.1e4), against 5.95 on
+  synthetic data. PCM and GNC test against χ² bounds that assume honest covariances, so they reject good loops and
+  filter poorly.
+- **Label rule.** The protocol's "3σ of its own covariance" label prong is dropped (it made every candidate bad);
+  labels are absolute.
+- **Known mismodelling, stated [ASSUMPTION]:**
+  - ORB keypoint σ grows ×1.2 per octave, but the gate uses 0.46 px for all;
+  - SGBM depth is read at the rounded pixel with stereo-LK's disparity σ, and its bias is invisible to residuals;
+  - ground truth is the nearest sample within 10 ms, not interpolated, so part of the "error" is timing.
+
+**Noise-model fix, criterion fixed before fitting (2026-10-21).**
+- **Model.** A model-error covariance per loop, Σ = Σ_PnP + Σ_model, in T_A_B's left tangent. Two candidates:
+  1. an additive floor diag(σ_t² I₃, σ_r² I₃);
+  2. k·Σ_PnP + floor.
+- **Fit** on Machine Hall's ground-truth-good loops, translation and rotation separately and robustly:
+  σ² = median(err²) / 2.366 (the χ²₃ median).
+- **Validate on V1_01, held out:** mean NEES of the good loops within [5, 7], and ≤ 3 % above χ²₆(0.99). Both models
+  reported; the simpler one is adopted if both pass.
+- **Then,** in this order:
+  - recompute σ_t / σ_r with the floor, and rerun the D71 midpoint calibration of the gate thresholds offline on
+    the same CSVs (the 0.10 m / 0.02 rad values are only right for the overconfident covariance);
+  - check PCM's odometry input, the pair statistic over ground-truth-good loop pairs (should be ~6), before and
+    after; if it stays far above 6, a scale on the odometry legs inside PCM (never in the VO), decided only on
+    those numbers;
+  - one rerun per flight.
+- **Sim:** the EuRoC floor does not transfer (different camera, rendered images). The demo needs its own
+  calibration from one sim mission run with ground truth. Every calibrated value in config carries its provenance.
+
+**Result with the noise model (2026-10-21; maintainer accepted the model with its tail miss stated).**
+- **Fits.** The MH_01-only fit failed held-out V1_01 (mean NEES 9.53, 11.8 % above χ²₆(0.99)). Refit jointly on
+  MH_01 + V1_01: k_t 1.33, floor_t 0.014 m, k_r 0.178, floor_r 0.0095 rad.
+- **Held-out V1_02:** mean NEES **5.24** (pass) but **4.4 %** above χ²₆(0.99) (fail, against ≤ 3 %). The median of
+  3.61 shows a slightly conservative bulk under a heavy tail that one Gaussian cannot match. GNC handles the tail:
+  it kept 142 of the 145 good loops PCM accepted.
+- **Ground truth** for labels is interpolated between samples. The fit used nearest-sample labels, so the floor is
+  slightly conservative.
+
+| flight | keyframe-refined ATE, VO → loops | retrieval recall | good / all: verified · gate · PCM · GNC | good-loop NEES (mean, > χ²₆(0.99)) | good-pair PCM stat (median) | latency mean / max |
+|---|---|---|---|---|---|---|
+| MH_01 (train) | 0.0676 → **0.0207 m (−69 %)** | 152/245 | 156/302 · 118/199 · 118/178 · 118/177 | 4.76, 0.0 % | 2.1 | 2.4 / 7.3 s |
+| V1_01 (train) | 0.0563 → **0.0382 m (−32 %)** | 109/212 | 144/464 · 98/154 · 90/117 · 86/95 | 6.96, 4.9 % | 6.7 | 2.4 / 5.3 s |
+| V1_02 (held out) | 0.0517 → **0.0254 m (−51 %)** | 129/194 | 180/341 · 168/209 · 145/165 · 142/146 | 5.24, 4.4 % | 7.8 | 1.3 / 4.4 s |
+
+- **Precision rises at every stage.** On V1_02: verified 0.53 → gate 0.80 → PCM 0.88 → GNC 0.97. Before the model
+  (V1_01) PCM did not improve on the gate.
+- **MH_01's "bad" GNC inliers (59).** None is gross (none is over 1 m or 10°). Translation error has a median of
+  2 cm, but rotation error a median of 3.8°, and these loops are mutually consistent: a systematic rotation offset,
+  not random wrong loops. A ground-truth camera–body rotation error showing up on loops between very different
+  headings is one candidate cause [UNVERIFIED]. ATE still improves by 69 %.
+- **PCM good-pair statistic.** MH_01 2.1 (conservative), V1 6.7–7.8 (about honest). The odometry legs need no
+  scale.
+- **On MH_01 the model traded precision for recall, not ATE.** Without it GNC kept 51 good loops of 55 accepted
+  (0.93); with it, 118 of 177 (0.67). ATE was 0.0205 m against 0.0207 m. On V1_01 it raised both recall (21 → 86
+  good) and precision (0.81 → 0.91).
+- **Evidence:** `evaluation/runs/2.5/loop_closure/` (README, `analyze_loops.py` reproduces these tables).
+- **Latency** is dominated by waiting for the BA window to release the keyframe (about 10 keyframes).
+- **Retrieval recall** is 51–66 % with the mean-bit placeholder; EigenPlaces (2.1) is expected to raise it.
+- **Not done.** The sim needs its own calibration. ORB keypoint σ per octave is still a flat 0.46 px. The gate's
+  σ thresholds are left at 0.10 m / 0.02 rad: the Youden fit (0.075 / 0.0145) moved them little and was not adopted.
+
 **Maintainer decisions (2026-10-19, after D71).**
 1. **D73 may add an isolated inlier-export hunk to `VerifyResult`** (`edge_verifier.hpp`) so the degeneracy gate gets
    the PnP correspondences.

@@ -2447,6 +2447,14 @@ alone (a planar fan through the camera centre) are well conditioned with stereo 
 the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
 `docs/design/ROBUST_BACKEND_2.5.md` §4; ALGORITHMS §7.8a.
 
+**Update 2026-10-21 (D73 part 2b):** on real data (EuRoC) the PnP-Hessian loop covariance is about 100–1000×
+overconfident. Correlated depth and calibration errors do not average down with the inlier count; COVINS-G (arXiv
+2301.07147) reports the same for analytic loop covariances.
+- **The edge information** is the calibrated model var = k σ²_PnP + floor², per translation and rotation block.
+  Fitted on EuRoC MH_01 + V1_01; held-out V1_02 gives mean NEES 5.24.
+- **The gate's criteria** still read the PnP σ.
+- **Calibration is per sensor and environment.** The sim needs its own.
+
 ---
 
 ## 14.5 Stage 4 — PCM

@@ -226,3 +226,27 @@ TEST(Degeneracy, SmallObjectIsNamedForConditioning) {
     EXPECT_TRUE(r.degenerate);
     EXPECT_TRUE(Has(r, "conditioning_translation"));
 }
+
+// Edge noise model (design §8): the edge information becomes diag(1/var_t I, 1/var_r I) with var = k sigma_PnP^2 +
+// floor^2, in the residual tangent; the gate's verdict and the PnP sigmas it reads are unchanged.
+TEST(Degeneracy, NoiseModelReplacesTheEdgeCovarianceOnly) {
+    std::mt19937 g(9);
+    LoopGeometry lg = Scene(g, 120, FullImage(), Depth(1.5, 6.0), 0.46, 0.65);
+    lg.T_A_B = Jitter(g, 0.02, 0.01) * TruthAB();
+    const DegeneracyReport off = AssessLoop(lg);
+    DegeneracyParams p;
+    p.noise_model = true;
+    p.noise_k_t = 1.33, p.noise_floor_t_m = 0.014, p.noise_k_r = 0.178, p.noise_floor_r_rad = 0.0095;
+    const DegeneracyReport on = AssessLoop(lg, p);
+    EXPECT_EQ(on.degenerate, off.degenerate);
+    EXPECT_EQ(on.sigma_t_worst, off.sigma_t_worst);
+    const double vt = 1.33 * off.sigma_t_worst * off.sigma_t_worst + 0.014 * 0.014;
+    const double vr = 0.178 * off.sigma_r_worst * off.sigma_r_worst + 0.0095 * 0.0095;
+    Mat6 expect = Mat6::Zero();
+    expect.topLeftCorner<3, 3>() = core::Mat3::Identity() / vt;
+    expect.bottomRightCorner<3, 3>() = core::Mat3::Identity() / vr;
+    EXPECT_LT((on.information - expect).norm(), 1e-9 * expect.norm());
+    // cov_left maps back to the same residual-tangent blocks (OdometryEdge's conversion).
+    const Mat6 info_back = OdometryEdge(0, 1, on.T_A_B, on.cov_left, EdgeType::kLocalLoop).information;
+    EXPECT_LT((info_back - expect).norm(), 1e-6 * expect.norm());
+}

@@ -1048,6 +1048,22 @@ Each layer independently justifiable; each has a verified permissive reference i
   rejects. Measured safe: the innovation within ½χ²₆ₙ(0.99), Remark 5's region, so only unambiguous loops take the
   fast path (72–83 % of events).
 
+### 7.8d ⚠️ Loop covariances on real data — measured overconfidence and the fix (D73 part 2b, 2026-10-21)
+
+- **Measured.** The PnP-Hessian loop covariance, even with stereo depth noise propagated (D71: NEES 5.95 on
+  synthetic data), gives median NEES ≈ 1e4 on EuRoC V1_01, against 6. The worst-direction σ is about right in size
+  (fitted k_t ≈ 1); the narrow directions are wildly overconfident.
+- **Why.** 100+ inliers are treated as independent, so σ ∝ 1/√N, but the dominant errors are shared: SGBM depth
+  bias at the depth edges where ORB corners sit, calibration and rectification, and the ground truth's own
+  timing and extrinsics. RANSAC keeps the best-fitting points, so the residual-based inflation never fires.
+- **Literature.** COVINS-G (arXiv 2301.07147) reports analytic loop covariances NEES "several magnitudes" too large;
+  its sampling fix still gives NEES ≈ 30. Censi's Hessian ICP covariance is "widely considered overoptimistic"
+  (Brossard et al., RA-L 2020, arXiv 1909.05722). Common SOTA practice (ORB-SLAM [UNVERIFIED], Kimera's configured
+  noise, NVIDIA's guidance) uses fixed or tuned loop noise rather than per-loop covariance.
+- **Fix adopted.** var = k σ²_PnP + floor², isotropic per block, fitted by maximum likelihood on ground-truth-good
+  loops. Held out: mean NEES 5.24; the tail is still heavy (4.4 % above χ²₆(0.99)), and GNC absorbs it. With it, PCM
+  and GNC raise precision stage by stage (0.53 → 0.80 → 0.88 → 0.97 on V1_02).
+
 ### 7.9 ⚠️⚠️ ADMM is not loss-tolerant — an architectural constraint
 
 **Convergence conditions, stated precisely:** convex `f_i` — Shi et al., **IEEE T-SP 2014**, linear convergence under strong convexity + Lipschitz gradient. **Nonconvex `f_i` (this is PGO)** — Wang, Yin, Zeng, **J. Sci. Comput. 78, 2019**: convergence to a *stationary point* requires ρ **sufficiently large** (roughly ρ > 2L), with **no global-optimality guarantee.** ρ tuning: **residual balancing** is what actually works (`‖r_primal‖ > 10‖r_dual‖ ⇒ ρ ← 2ρ`, reverse ⇒ `ρ ← ρ/2`).

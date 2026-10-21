@@ -60,6 +60,12 @@ struct DegeneracyParams {
     double min_triangulation_deg = 1.0; // [ASSUMPTION] stereo angle 2 atan(b / 2z) counted as "near"
     int min_near_points = 10;           // [ASSUMPTION]
     double min_line_spread_ratio = 0.01;    // [ASSUMPTION] lambda_mid/lambda_max of the 3D inliers' covariance
+    /// Model-error covariance for the EDGE (design §8, D73 part 2b): the PnP covariance is far too confident on real
+    /// data (correlated depth/calibration errors do not average down with the inlier count), so the edge gets the
+    /// isotropic blocks  var_t = k_t sigma_t^2 + floor_t^2,  var_r = k_r sigma_r^2 + floor_r^2  (sigma = the PnP
+    /// worst-direction marginal). The gate's criteria still read the PnP sigmas. Off: the PnP covariance as is.
+    bool noise_model = false;
+    double noise_k_t = 1.0, noise_floor_t_m = 0.0, noise_k_r = 1.0, noise_floor_r_rad = 0.0;
 };
 
 struct DegeneracyReport {
