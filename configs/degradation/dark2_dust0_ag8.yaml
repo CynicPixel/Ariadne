@@ -1,0 +1,37 @@
+# Ariadne degradation config: dark2_dust0_ag8
+#
+# Named parameter vector for the seeded degradation operator D (arch 5.6).
+# Referenced by run manifests; never inline constants.
+#
+# dark2_dust0 with the camera's analog gain raised to 8 (2.2, D65): what a real
+# camera does in the dark. At unity gain the 8-bit output posterises this
+# scene (the 2.2 preflight measured dark2 at sigma 0.2-0.7 DN, mostly rounding),
+# so the shipped dark2_dust0 carries no measurable sensor noise and cannot
+# exercise the VST denoise; here the noise follows var = a*mean + b to within
+# 0.5% (RADIOMETRIC_2.2.md §2). Same sensor and scene radiance as dark2_dust0;
+# only the gain differs. The 16 shipped configs are unchanged.
+
+name: dark2_dust0_ag8
+
+# Stage 1: scene radiance (as dark2_dust0)
+radiance_scale: 0.06
+
+# Stages 2-3: sensor noise (fixed: same camera in every config)
+enable_shot_noise: true
+photon_scale: 10000.0
+read_noise_electrons: 2.5
+
+# Stage 4: optics and fixed-pattern response (fixed: same camera)
+vignette_strength: 0.28
+prnu_sigma: 0.012
+
+# Stage 5-6: exposure, gain, quantization
+exposure: 1.0
+analog_gain: 8.0
+digital_gain: 1.0
+bit_depth: 8
+saturation: 1.0
+
+# Stage 7: dust
+enable_dust: false
+dust_beta: 0.0
