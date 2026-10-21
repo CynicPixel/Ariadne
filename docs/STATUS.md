@@ -11,6 +11,12 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   (descriptor compression rows).
 - **Decision IDs D90–D95 are claimed by A1** for L3, L6, 3.1 and 3.6.
 - **D62 approved** by the maintainer (DECISIONS 2026-10-21): exact index default, `cv::ANNIndex` the scale ablation.
+- **L4 done:** `infra/scripts/models.sh eigenplaces | aliked-lg`. Each clones and fetches pinned sources,
+  sha256-checks the weights, exports offline, then checks every output against sha256s pinned in the script. The
+  export image is built inline from a heredoc (`ariadne-model-ref:1`, FROM `ariadne-xfeat-ref:1`), so
+  `infra/docker/` is untouched. A full regeneration into `.cache/feat-2.1-perception/models_regen/` was **bit-exact**:
+  11/11 and 19/19 files, ONNX included. That regeneration ran with the L3 RGB additions already in the scripts; the
+  gray path is unchanged by them. `models.sh test` now builds with `ARIADNE_BUILD_JOBS` (default 2), not 8.
 
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
