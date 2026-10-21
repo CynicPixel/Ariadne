@@ -1428,6 +1428,13 @@ Start with `cv::fastNlMeansDenoising` at small `h`; also try `medianBlur` 3×3 f
 counts, and that bias lands *exactly* in the dark regions Ariadne exists to handle. Gate the whole stage on
 measured noise level per §6.4.
 
+> **As built (2.2, D66/D67/D69, 2026-10-21).** Stages 1–2 run per camera **before rectification**, on the raw frames
+> after D (`RadiometricSource`, between the source and the rectifier). D is applied in `SimSource` (opt-in,
+> `--degradation`, per-camera seeds, D66). Deviations from the text above: α/σ are **fitted online** from the first
+> 8 frame pairs (simplified Foi 2008), not offline captures; the gate is ON when the stabilised σ_z is in [0.8, 1.25]
+> **and** gray-path SNR at the median level is **< 30**; the default denoiser is a Gaussian (≈ 14 ms/image total),
+> NLM (≈ 360 ms/image) is an ablation. Off by default; measured-neutral on the one segment run (D69).
+
 ### Stage 3 — light falloff
 
 Given calibrated lamp intensity P, lamp pose `T_C_L` (§5.3), and the current depth estimate `D(x)`, compute `r(x)`

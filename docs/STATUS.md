@@ -4,6 +4,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.2 closed: complete except exposure normalisation (Stage 4), deferred to Phase 5
+
+- Delivered: Stage 1 (flat field) and Stage 2 (GAT + exact unbiased inverse, gated on measured noise), D in
+  SimSource (D65–D69). Opt-in; measured-neutral on the one segment run.
+- **Not delivered:** the plan line's exposure normalisation. Its real version is §6.2 Stage 4, which needs the
+  Phase 5 lamp/exposure model; 2.2 has no exposure stage (the manifest's `exposure_norm` is inert text). The 2.2
+  checkbox means "complete except this deferral".
+
 ## 2026-10-22 — 2.1 close-out: plan line 2.1 against what shipped
 
 | 2.1 item | state | D-ID |

@@ -240,18 +240,18 @@ unchanged (8535765251477677907).
 
 | row | perception config |
 |---|---|
-| off | `sim_v1` |
-| flat only | `sim_v1_rad_flat` |
-| flat + Gaussian (gated): **the proposal** | `sim_v1_rad_auto` |
-| flat + NLM (gated): not realtime | `sim_v1_rad_nlm` |
-| flat + Gaussian, algebraic inverse, forced on | `sim_v1_rad_alg`; expected null (§5) |
+| off | `sim_v1` (run on dark3_ag16 only) |
+| flat only | `sim_v1_rad_flat` — **NOT RUN** |
+| flat + Gaussian (gated): **the proposal** | `sim_v1_rad_auto` (run on dark3_ag16 only; dark2_ag8 **NOT RUN**) |
+| flat + NLM (gated): not realtime | `sim_v1_rad_nlm` — **NOT RUN** |
+| flat + Gaussian, algebraic inverse, forced on | `sim_v1_rad_alg`; expected null (§5) — **NOT RUN** |
 
 Metrics: ATE, lost frames, stereo-match valid fraction, landmarks alive, radiometric ms per image.
 
 **EuRoC.**
 - Default configs: byte-identical by construction (§1), so the LOCAL_SLAM_2.3 §10 table stands.
-- `euroc_rad_auto`: the gate decision on all 11 flights (short runs).
-- `euroc_rad_on`: forced on, on 2–3 flights, reported either way.
+- `euroc_rad_auto`: the gate decision on all 11 flights (short runs). Run (§6.0).
+- `euroc_rad_on`: forced on, on 2–3 flights. **NOT RUN** (dropped; no result exists).
 
 ## 7. Phase-1 gate
 
