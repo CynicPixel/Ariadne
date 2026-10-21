@@ -4,6 +4,13 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — AWS unblocked (D84)
+
+- **Bedrock works:** the September verification block has cleared. The orchestrator model is **Nova 2 Lite**
+  (`eu.amazon.nova-2-lite-v1:0`), with DeepSeek V3.2 as fallback; both pass a tool-use smoke test. Claude is not needed.
+- **GPU:** spot G/VT, 4 vCPU in eu-north-1, approved 2026-10-19. On-demand is still pending.
+- Phase 7's AWS prerequisites are no longer blocked.
+
 ## 2026-10-21 — 3.2 protocol built and tested; production broker solve (D82, D83)
 
 - `cpp/collaboration/protocol/`:

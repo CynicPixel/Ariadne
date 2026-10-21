@@ -2290,3 +2290,22 @@ Code: `slam/pose_graph/multi_agent.{hpp,cpp}` (slam_opencv), adapter `collaborat
   - the gravity-prior yaw-only gauge.
   - Both wait on 2.5 merging.
 
+## 2026-10-21 — D84: AWS unblocked: Bedrock works (the 2026-09-29 verification block has cleared); GPU spot quota approved
+
+Re-tested live as `user/pixel` in eu-north-1. Superseded: the D26–D28 "Bedrock: Operation not allowed / account being
+verified" open item, and STATUS's "Pending with AWS: GPU quota … Bedrock is blocked".
+
+- **Bedrock runtime works.** `converse` on `eu.amazon.nova-micro-v1:0` answered (9 tokens). No support case is needed.
+- **Orchestrator model (maintainer: "any cheap model that's good enough").** Primary: **Amazon Nova 2 Lite** via the
+  EU profile `eu.amazon.nova-2-lite-v1:0`. Fallback: **DeepSeek V3.2** (`deepseek.v3.2`, in-region on-demand).
+  - Quotas (cross-region, EU): Nova 2 Lite 200 RPM / 8M TPM. In-region on-demand: DeepSeek V3.2 and Qwen3-32B at
+    1000 RPM / 100M TPM.
+  - Nova is first-party, needs no use-case form or Marketplace subscription, and keeps data in the EU profile.
+  - Tool-use smoke test: both made a correct structured `toolUse` call on a frontier-assignment prompt. They chose the
+    adjacent safe frontier over a high-gain one behind a 0.95-risk collapse, with a stated reason.
+  - `[UNVERIFIED]` per-token prices: pull them before Phase 7 budgets.
+- **Claude on Bedrock is not used.** The Anthropic use-case form is not filed, and the 5.5-family models have 0 TPM on
+  this account. Haiku 4.5 has quota (50 RPM / 5M TPM) if it is ever wanted.
+- **GPU: EC2 Spot "All G and VT" in eu-north-1 approved at 4 vCPU (AWS, 2026-10-19).** One 4-vCPU GPU instance; spot,
+  so reclaimable: checkpoint gsplat and keep a demo fallback. On-demand G/VT (case 179205877900026) is still pending.
+
