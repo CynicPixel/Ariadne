@@ -2,8 +2,29 @@
 
 Plan 2.5 (PHASE2_PLAN §1, phased plan Phase 2): replace the Phase-1 pose-graph placeholders with arch §13–§14 as
 specified — chordal initialisation, degeneracy gate → PCM → GNC-TLS (the §14.5 order is inviolable), the SE-Sync-style
-certificate behind a flag, and a real intra-agent loop-candidate source. Decisions D70–D74. Status: **design, as of
-2026-10-18**; the "As built" notes are appended per section when each lands.
+certificate behind a flag, and a real intra-agent loop-candidate source. Decisions D70–D74.
+
+**Status (2026-10-21): implemented through D73 part 2c** (D70 chordal init, D71 degeneracy gate, D72 PCM, D73
+GNC-TLS + weight reuse + intra-agent loop source + calibrated loop noise model + gravity priors). The per-section
+"As built" notes record what was measured. **Still open:**
+- **D74 certificate (§7): not started.** A Phase 2 exit-gate item, together with κ/τ for cubicle and rim.
+- **Outlier-ramp breakpoint (§6): not found.** Random SE(3) outliers gave 10/10 successes up to 90 %, so a harder
+  protocol (aliasing clusters, near misses at scale) is needed. A Phase 2 exit-gate item.
+
+**Defaults.** Intra-agent loop closure and gravity priors in the pose graph are **off by default**. Only
+`configs/slam/euroc_v2_loops.yaml` (loops on, `gravity_priors: false`) and `euroc_v2_loops_gravity.yaml` carry the
+`loop_closure:` section; every other shipped config omits it, so the runner never constructs the loop adapter. The
+run manifest records the slam config by name (`slam_config:`), which is how a run shows which mode it used. There is
+no separate manifest field. Evidence: D73 part 2b, `evaluation/runs/2.5/loop_closure/`.
+
+**Reproducibility of the oracles.** The oracles are env-gated and skip without their variables:
+- **`infra/scripts/models.sh pgo-oracle` → `ARIADNE_PGO_ORACLE`:** the 100 random cases, which take seconds and are
+  in ctest when set.
+- **`models.sh pgo-sesync` → `ARIADNE_PGO_SESYNC`:** the SE-Sync graphs, about 2 h (grid3D and rim dominate).
+- **`ARIADNE_PGO_SESYNC_DR` / `ARIADNE_PGO_SESYNC_CHORDAL`:** the §9 init gate, 2.6 h, from `pgo_gtsam.py --init
+  dr|chordal` (§9 gives the commands).
+`--premerge` sets only `ARIADNE_PGO_ORACLE`. The SE-Sync suites are hour-long evidence runs that the gate never
+enables.
 
 ## 0. Preflight (done before this design; evidence in the session handover)
 
