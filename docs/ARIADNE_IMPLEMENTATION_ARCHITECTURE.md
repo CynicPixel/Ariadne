@@ -3073,6 +3073,13 @@ bytes/keyframe
 
 This is an Ariadne-specific contribution because representation quality and communication cost are jointly optimized.
 
+> **Measured (3.6, D93, EuRoC, RETRIEVAL_3.1_3.6 §4).**
+> - fp16 and int8 with a per-vector scale (258 B) leave every query's top-k hit unchanged against fp32 (1024 B), at
+>   376×240 and at 752×480.
+> - PCA truncation helps nothing at 376×240 and loses up to 0.037 R@1 at 752×480.
+>
+> The wire candidate is int8 at 258 B. It needs a `wire.fbs` change (3.2), since `GlobalDescriptor` is `[float]`.
+
 ---
 
 ## 17.3 Aliasability diagnostics

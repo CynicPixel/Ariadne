@@ -2750,3 +2750,33 @@ approved.
   cost is unmeasured: N single-threaded nets against one N-threaded net is an L5/7.3 question.
 - **§49:** the arch decision is the §7.4 blockquote. A manifest field (the pool size, `ModelRecord`s) is **deferred to
   the first runtime consumer**, like D63's.
+
+## 2026-10-22 — D93: global-descriptor compression (3.6) — int8 with a per-vector scale is free on EuRoC; PCA is not worth its shared basis
+
+Design and protocol fixed before the run: `docs/design/RETRIEVAL_3.1_3.6.md` §2. Result: §4.
+
+- **What:** the §17.2 rows (fp32, fp16, int8, PCA→128 fp16, PCA→256 int8, plus PCA→64 fp16 and PCA→128 int8) are
+  scored offline on D62's EuRoC dumps by `python/analysis/retrieval_rows_eval.py compression`. The protocol is
+  §11.5's; PCA is fitted on the other environment.
+- **Result:**
+  - fp32 reproduces D62 exactly.
+  - fp16 and int8 (258 B) give identical hits on all 297 queries, at both sizes.
+  - PCA truncation is admissible at 376×240 but not at 752×480. PCA→256's gain is mean-centring.
+  - All differences are n.s. (McNemar p ≥ 0.07).
+- **Recommendation for the wire (3.2's call, main session):** int8 with a per-vector fp16 scale, 258 B per keyframe
+  against 1024 B. `wire.fbs` `GlobalDescriptor.descriptor` is `[float]`, so this needs a schema change; 3.6 changed
+  no comms file. The bytes here are payload `[PROXY]`.
+- **Limits:**
+  - EuRoC only, with 297 correlated queries.
+  - Sim retrieval rows come with 3.1's sim evaluation.
+  - **Stated gap:** §31.9's XFeat local-descriptor fp16/int8 row is not run. D60 ships ORB (32 B binary) on the wire,
+    so it lands with the first XFeat-on-the-wire configuration (register).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | no new algorithm |
+  | arch decision | D93, plus the §17.2 blockquote |
+  | ablation matrix | §31.9 global rows: done (§4); XFeat row: stated gap |
+  | benchmark config | `retrieval_rows_eval.py compression` with its fixed defaults (bar 0.01) |
+  | manifest | the run directory's `manifest.yaml` (input sha256, image, command) |

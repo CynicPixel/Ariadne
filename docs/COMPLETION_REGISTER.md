@@ -123,7 +123,7 @@ identical.
 | 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
-| 3.6 descriptor compression rows | not started | | A1 |
+| 3.6 descriptor compression rows | done for global descriptors (D93); XFeat local row = stated gap | `evaluation/runs/retrieval_3.6/20261021T212015Z`: fp16/int8 lossless on EuRoC, PCA not worth it; int8 258 B is the wire candidate, **needs a wire.fbs change → 3.2 (M)**. XFeat fp16/int8 row → the first XFeat-on-the-wire config (D60 ships ORB) | A1 |
 | Gate: fault injection + split brain | partial | unit level done (D82). Sim-level after 3.3. | M |
 | Gate: byte table ≤15% | not started | definition fixed (COLLAB_3.2 §7) | M |
 | Gate: ATE vs bytes, ≥2 scenes × 3 seeds | not started | needs 3.3, 3.4, L3 | M |

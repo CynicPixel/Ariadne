@@ -23,6 +23,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **L6 done (D91):** `dnn::PerThread<T>` in every cv::dnn wrapper. The two-thread test found that concurrent
   ENGINE_NEW forwards sharing OpenCV's default pool drift at the 1e-5 level, so the contract's second rule is OpenCV
   pool = 1 when several callers share a wrapper. Under it the test is byte-identical, 5/5 repeats.
+- **3.6 done for global descriptors (D93):** offline on the D62 dumps. fp16 and int8 (258 B) are lossless on EuRoC,
+  and PCA is not worth its shared basis. The wire candidate is int8; the `wire.fbs` change is 3.2's. The XFeat local
+  row is a stated gap.
 - **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with
   `ARIADNE_REQUIRE_MODELS=1`. No premerge was run: phase 1 runs ORB, and none of these wrappers is on its path.
 
