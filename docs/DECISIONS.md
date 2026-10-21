@@ -2009,3 +2009,52 @@ Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
   `LinearizeGravityPrior`); (2) robustify them (heavy tail); (3) estimate the agent's gravity direction as a 2-DoF
   variable initialised at `g_ref_W` (its error is shared by every edge); (4) wire field: Phase 3 (inter-agent).
 
+## 2026-10-21 — D80: Phase 3 opened before the Phase 2 gate (maintainer instruction); decision IDs D80–D89 claimed
+
+- **Opened early, explicitly.** CLAUDE.md §4 opens a phase only on the previous gate. Phase 2's gate is not passed:
+  2.1 and 2.2 are unmerged, 2.5's D74 certificate is open, and the phase-gate premerge has not run.
+  The maintainer started Phase 3 on 2026-10-21 ("start phase 3 collaboration"), given the deadline.
+- **What the early opening must not do.** Phase 3 must not change the Phase 2 code paths the gate will measure.
+  The Phase-1 gate's pinned references (incl. `figures/bytes.json`) keep describing the Phase-1 exchange until a
+  recorded re-pin. The new protocol lives beside it (`docs/design/COLLAB_3.2.md` §9).
+- **Ownership.** This session takes the critical path in order: 3.2, then 3.4, then 3.5. 3.1 and 3.6 (∥A) and 3.3
+  (∥B) are for parallel sessions; 3.3 implements the `LinkModel` seam published in COLLAB_3.2 §2.
+- **IDs.** D80–D89 are Phase 3's critical path. In use elsewhere: D60s (2.1), D70–D74 (2.5).
+
+## 2026-10-21 — D81: the 3.2 protocol design — per-class delivery, fragment ARQ, one-hop election with epochs
+
+Design: `docs/design/COLLAB_3.2.md`; advisor-reviewed twice. Preflight: Swarm-SLAM (code-verified), Tian et al. 2018
+(vertex cover), CERBERUS (completed-transmission rule), Lajoie 2026 (real link drop-out), COSMO-Bench. No DTN+C-SLAM
+paper found. OpenCV has nothing native here.
+
+- **Delivery semantics differ by class.** Phase 1's strict per-stream order would stall forever on a TTL-expired or
+  cancelled message.
+  - Heartbeat/ack: latest-wins.
+  - Descriptors, requests, feature responses, submaps: idempotent sets, best effort, re-requestable.
+  - Edges and graphs: reliable and in order.
+- **Fragment-level reassembly with selective retransmit.** Whole-message delivery cannot converge under loss
+  (0.7^15 ≈ 0.5%).
+  - Reliable sequence numbers are assigned at first transmission, so superseding/expiry/cancel never opens a hole.
+  - Unacked messages to an old broker are abandoned and counted on election change.
+- **Deviation from §15.3, superseding:** a newer queued pose-graph snapshot replaces an unsent older one from the same
+  agent. "Never expire" still holds in substance, because the snapshot contains the older one. Edges are never
+  superseded.
+- **Deviation from §15.4 (§49 note), the election rule:** the broker is the lexicographic min of (anchor_id, agent_id)
+  over the agent and its symmetric one-hop neighbours.
+  - This is Swarm-SLAM's exact `is_optimizer()` rule, not "lowest AgentId of the component".
+  - There is no relaying, so a broker serves only agents it reaches directly.
+  - Neighbour links use hysteresis (in after 2 of 3 periods, out after 4 misses).
+- **Epochs and staleness:**
+  - An epoch is `(counter, members_hash, broker)`, with counter = 1 + max over members' heartbeats. That makes a
+    merge strictly newer than both sides.
+  - An agent accepts an estimate only if it is a member, the estimate comes from the broker it elected, and the
+    counter is newer.
+  - The corruption check keys on the full epoch, with digests over the wire-encoded (float32) estimate.
+- **Gauge:** the anchor's first pose is fixed in full. A side that lacks its anchor fixes its lowest member's
+  `T_G_Wi`. Yaw-only waits behind a switch for 2.5's gravity-prior consumer.
+- **The I6 byte gate is fixed now, before any data:**
+  - predicted = the §16 cost model before sending, with a compression-ratio model calibrated on disjoint runs;
+  - measured = first-transmission wire bytes, per class, classes 1–6, >15% fails;
+  - retransmit, ack and heartbeat overhead get their own rows and their own curve.
+- **Store-and-forward = hold until the destination is reachable.** Multi-hop relay is out of scope.
+

@@ -4,6 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — Phase 3 opened (D80); 3.2 protocol designed (D81)
+
+- Phase 3 opened before the Phase 2 gate, on maintainer instruction. This session owns 3.2 → 3.4 → 3.5.
+  3.1/3.6 (∥A) and 3.3 (∥B) are free for parallel sessions. Decision IDs D80–D89 are claimed for Phase 3.
+- 3.2 design: `docs/design/COLLAB_3.2.md`.
+  - Per-class delivery, fragment ARQ.
+  - Swarm-SLAM's one-hop (anchor, id) election with epochs, and a split-brain merge rule.
+  - The I6 byte-gate definition, fixed before any numbers exist.
+  - The `LinkModel` seam for 3.3.
+- **Next:** `Network`/`FaultPlan` → Inbox v2 → Outbox → ARQ → election → frames → outcome harness → campaign. These are
+  seeded discrete-event unit tests; no premerge run is needed.
+
 ## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
 
 - One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
