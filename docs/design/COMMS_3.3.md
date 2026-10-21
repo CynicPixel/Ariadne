@@ -89,9 +89,28 @@ At the median P_rx of each scenario, goodput is (payload / wire) × (1 − E[PER
 | rf_gz_default (−41.5 dBm) | 0.70 | 0.90 | 0.95 | 0.97 | 0.98 |
 | collapsed_v1 (−72.9 dBm) | 0.61 | 0.77 | 0.79 | 0.80 | 0.80 |
 
-- Goodput rises monotonically with size. RFComms redraws a 10 dB shadowing per packet, so a packet is lost mostly
-  when its draw fades below the knee, whatever its size. Bigger datagrams then win by amortising the 28 B overhead.
-- **Verdict: keep `kPathMtuBytes = 1500`.**
+- **At the median,** goodput rises with size. RFComms redraws a 10 dB shadowing per packet, so a packet is lost
+  mostly when its draw fades below the knee, whatever its size. Bigger datagrams then win by amortising the 28 B
+  overhead.
+- **At the edge, the verdict depends on RFComms' quirks.** Computed offline from the same formulas (no run), at
+  collapsed_v1's 2-wall mean power (−81.7 dBm) and its 10th-percentile power (−81.3 dBm):
+
+  | model at the edge | 64 | 256 | 512 | 1024 | 1472 | best |
+  |---|---|---|---|---|---|---|
+  | RFComms as modelled (bytes, per-packet σ) | 0.42 | 0.51 | 0.52 | 0.51 | 0.51 | 512 (1472 within 3 %) |
+  | bit exponent | 0.37 | 0.46 | 0.46 | 0.46 | 0.46 | 512 (flat) |
+  | per-link σ (slow fading) | 0.68 | 0.85 | 0.84 | 0.77 | 0.70 | 256 |
+  | bits + per-link σ (the physical case) | 0.59 | 0.54 | 0.35 | 0.14 | 0.06 | **64** |
+
+  Rows are at the 2-wall mean; p10 differs by ≤ 0.1.
+
+- **Verdict, conditional:**
+  - **Under RFComms as modelled,** keep `kPathMtuBytes = 1500`. It costs ≤ 3 % goodput at the edge.
+  - **Under the physical case** (PER in bits, slow fading), full-MTU fragments lose 3–10× goodput at the edge,
+    where 64–256 B wins.
+
+  L8 is therefore a **recommendation to the 3.2 owner**, not closed. If the link model is ever made physical, size
+  edge-link fragments adaptively, or cap them at ~256 B. The serializer is untouched.
 - **The cost of the seam:** a single-size `loss_p` overstates heartbeat and ack loss by 1.3–2.3× near the edge.
   That is conservative for the election: heartbeats are lost more often than RFComms would lose them.
 

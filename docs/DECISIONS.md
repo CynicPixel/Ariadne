@@ -2713,8 +2713,13 @@ metric as `INERTIAL_2.4.md` §4.9.
 - **Seam limit, stated:** `Sample()` has no datagram size, so `loss_p` is for 1500 B. 40-byte heartbeats would see
   1.3–2.3× less loss near the edge. A size on the seam is the 3.2 owner's call; nothing in
   `collaboration/protocol/` was changed.
-- **L8 resolved: keep `kPathMtuBytes` = 1500.** Under RFComms' per-packet shadowing, goodput rises monotonically
-  with datagram size: 0.61 at 64 B vs 0.80 at 1472 B for `collapsed_v1` at its median power.
+- **L8, conditional: keep `kPathMtuBytes` = 1500 under RFComms as modelled.**
+  - At `collapsed_v1`'s median power, goodput rises with size: 0.61 at 64 B vs 0.80 at 1472 B.
+  - At the edge (the 2-wall mean, −81.7 dBm) the best size is 512 B, and 1472 B costs ≤ 3 %.
+  - Under the physical case instead (PER in bits, slow per-link fading), 1472 B gives 0.06 against 0.59 at 64 B: a
+    3–10× loss at the edge.
+  - Recommendation to the 3.2 owner (COMMS_3.3 §4): if the link model is made physical, cap or adapt edge-link
+    fragment size. The serializer is not changed here.
 - **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
   exists.
 

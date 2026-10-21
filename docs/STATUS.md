@@ -4,12 +4,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-10-22 — 3.3 comms broker node: RFComms link model + wall ray-cast + partitions; L8 keeps 1500 B (D92)
+## 2026-10-22 — 3.3 comms broker node: RFComms link model + wall ray-cast + partitions; L8 conditional (D92)
 
 - `CommsNode` owns the link stack, the `Network` and the one ledger (Endpoints-only rule tested). `RfLinkModel`
   transcribes RFComms (gz-sim8) and adds per-wall attenuation from the GT wall faces.
 - ci_tiny probe: gz-default radio loss-free (null); `collapsed_v1` 1.6 / 17 / 49 % loss at 0 / 1 / 2 walls; the
   partition scenario is down for exactly the scripted 25 s.
+- **L8:** 1500 B holds under RFComms as modelled. Under bit-wise PER and slow fading it loses 3–10× goodput at the
+  edge; that is a recommendation to the 3.2 owner.
 - **Partial:** no protocol traffic over it until 3.2's sim integration. Decision IDs D90–D99 are claimed by this
   session (the claim is on `feat/2.6-tum`).
 

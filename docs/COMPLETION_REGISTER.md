@@ -67,7 +67,7 @@ identical.
 | L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | not started | A1 |
 | L6 | DNN per-thread `Net` contract object (§7.4) | partial | A1 (one Net per instance; no shared contract; Phase 7 multithreading needs it) |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
-| L8 | MTU / IPv4 framing model revisited against the real link model | done | A2: D92. Keep 1500 B (goodput rises with size under RFComms). Seam limit stated: `loss_p` for one size, heartbeats 1.3–2.3× over-lossy near the edge (3.2 owner's call). |
+| L8 | MTU / IPv4 framing model revisited against the real link model | **revisited; recommendation open** | A2: D92 / COMMS_3.3 §4. Keep 1500 B under RFComms as modelled (≤3 % edge cost). Under bit-wise PER + slow fading, 1472 B loses 3–10× goodput at the edge (64–256 B wins): the 3.2 owner decides. Seam limit: `loss_p` for one size; heartbeats 1.3–2.3× over-lossy near the edge. |
 | L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
