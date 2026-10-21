@@ -26,7 +26,10 @@
 #include "core/random/distributions.hpp"
 #include "core/random/philox.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <thread>
+#include <vector>
 
 namespace ariadne::perception {
 
@@ -200,12 +203,14 @@ inline double Clamp01(double v) {
 /// does not influence shot-noise statistics. That is the documented order and
 /// is implemented literally; the physical alternative is recorded there as an
 /// open question rather than silently applied here.
-inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
-                       const DegradationParams& params, uint64_t seed,
-                       uint64_t frame_id) {
-    ImageU8 out(input.width, input.height, input.channels);
-    if (input.Empty()) return out;
+namespace detail {
 
+/// Rows [y0, y1) of Degrade into `out` (already sized). Every pixel depends on
+/// its own (seed, frame_id, pixel, stage) keys only, so any row split gives the
+/// same bytes.
+inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
+                        const DegradationParams& params, uint64_t seed,
+                        uint64_t frame_id, int y0, int y1, ImageU8& out) {
     const bool use_dust =
         params.enable_dust && !depth_gt.Empty() && SameExtent(input, depth_gt);
 
@@ -220,7 +225,7 @@ inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
     const double gain_total =
         params.exposure * params.analog_gain * params.digital_gain;
 
-    for (int y = 0; y < input.height; ++y) {
+    for (int y = y0; y < y1; ++y) {
         for (int x = 0; x < input.width; ++x) {
             const size_t pixel_index =
                 static_cast<size_t>(y) * input.width + x;
@@ -291,6 +296,16 @@ inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
             }
         }
     }
+}
+
+}  // namespace detail
+
+inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
+                       const DegradationParams& params, uint64_t seed,
+                       uint64_t frame_id) {
+    ImageU8 out(input.width, input.height, input.channels);
+    if (input.Empty()) return out;
+    detail::DegradeRows(input, depth_gt, params, seed, frame_id, 0, input.height, out);
     return out;
 }
 
@@ -299,6 +314,31 @@ inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
 inline ImageU8 Degrade(const ImageU8& input, const DegradationParams& params,
                        uint64_t seed, uint64_t frame_id) {
     return Degrade(input, ImageF32{}, params, seed, frame_id);
+}
+
+/// The same bytes as Degrade, rows split into `threads` bands (2.2: D on a
+/// 1280x720 RGB frame is ~1 s on one core). Byte identity is by the contract
+/// above and is tested against Degrade, not assumed.
+inline ImageU8 DegradeParallel(const ImageU8& input, const ImageF32& depth_gt,
+                               const DegradationParams& params, uint64_t seed,
+                               uint64_t frame_id, int threads) {
+    ImageU8 out(input.width, input.height, input.channels);
+    if (input.Empty()) return out;
+    const int n = std::max(1, std::min(threads, input.height));
+    std::vector<std::thread> pool;
+    for (int t = 0; t < n; ++t) {
+        const int y0 = input.height * t / n, y1 = input.height * (t + 1) / n;
+        pool.emplace_back([&, y0, y1] {
+            detail::DegradeRows(input, depth_gt, params, seed, frame_id, y0, y1, out);
+        });
+    }
+    for (std::thread& th : pool) th.join();
+    return out;
+}
+
+inline ImageU8 DegradeParallel(const ImageU8& input, const DegradationParams& params,
+                               uint64_t seed, uint64_t frame_id, int threads) {
+    return DegradeParallel(input, ImageF32{}, params, seed, frame_id, threads);
 }
 
 }  // namespace ariadne::perception
