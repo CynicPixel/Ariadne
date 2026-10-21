@@ -2206,3 +2206,117 @@ unchanged).
 **Not done, stated.**
 - No EuRoC run yet, by the maintainer's priority (sim calibration and part 3 first).
 - The 4-DoF-pose-graph comparison is recorded, not built [UNVERIFIED citations].
+
+## 2026-10-21 — D65: gain-up degradation configs for the VST; the 16 shipped configs stay
+
+The 2.2 preflight measured what D produces (`docs/design/RADIOMETRIC_2.2.md` §2). At unity gain the 8-bit output
+posterises dark2 (0–15 DN, σ 0.2–0.7 DN, mostly rounding) and dark3 (0–4 DN). The shipped dark configs therefore carry no
+measurable sensor noise, and a measured-noise gate correctly refuses the VST on all of them.
+
+- **Added:** `dark2_dust0_ag8` and `dark3_dust0_ag16`: the same sensor and scene radiance, with the analog gain raised to
+  8 and 16. That's what a real camera does in the dark. Their noise follows `var = a·m + b` to within 0.5%.
+- **Not chosen:**
+  - re-tuning the 16 shipped configs (they feed every Phase-1 baseline);
+  - a >8-bit D output (the frontend takes 8-bit only; a wide change).
+
+## 2026-10-21 — D66: D applied in SimSource, opt-in; per-camera seeds; byte-identical parallel D
+
+- **Opt-in.** `SimSource::SetDegradation(named config, run seed, threads)` and `ariadne_sim_vo --degradation YAML`.
+  Without them nothing changes, and the manifest still says `degradation_config: none`.
+- **Order:** lens → D on the RGB frame → BT.601 gray, the order a real camera has.
+- **Seeds:** each (agent, camera) gets `DeriveSeed(DeriveSeed(run_seed, "degradation"), "agentK/left|right")`, so left
+  and right do not share noise or PRNU fields.
+- **D's frame id** is the per-camera arrival index, which equals the pair index (a missing frame aborts the run as
+  before).
+- **Dust is refused:** it needs GT depth for both cameras (Phase 5).
+- **`DegradeParallel`:** row bands over `std::thread`. It is byte-identical to `Degrade` by the determinism contract,
+  and that is tested, not assumed. The degradation digest is unchanged (8535765251477677907).
+- **Flat field:** each camera's K is calibrated at `SetDegradation` from 16 D frames of a flat target under its own
+  sensor and seed. The frame ids are `0xC0FFEE…`, disjoint from run frames. The calibration agrees with D's analytic
+  vignette × PRNU to ≤ 0.5% RMS.
+
+## 2026-10-21 — D67: the radiometric front end: flat field + gated GAT/exact-inverse VST, before rectification
+
+Arch §6.2 stages 1–2 (§6.4 gate). Raw 8-bit gray in and out, between the source and the rectifier: the rectifier's
+interpolation would mix the noise the GAT models, and K lives in raw coordinates.
+
+- **Config.** An optional `radiometric:` section in the perception config.
+  - Absent means `mode: off`: a call-through decorator, so no pixel and no gate-compared byte changes.
+  - Modes: `flat_only | auto | on`. Denoisers: `nlm | gaussian | none`. Inverses: `exact | closed_form | algebraic`.
+  - Shipped ablation configs: `sim_v1_rad_{flat,auto,gauss,alg}`, `euroc_rad_{auto,on}`.
+- **Order: flat field, then VST.** Correct for D, which scales the noise by K. ALGORITHMS §14.5's opposite order
+  (VST, then ÷K) is the right one for real optics. **D's K-after-noise order is therefore unphysical:** recorded as an
+  open question for Phase 5, not changed now, because it would move the degradation digest.
+- **Noise model fitted online** (single-image, simplified Foi 2008, [PROXY]) on the first 8 pairs, per camera.
+  **Deviation from arch §6.2**, which calibrates (α, σ) offline per (exposure, gain): EuRoC has no static captures, and a
+  per-(t, g) table needs the §6.5 photometric state (Phase 5).
+- **Gate,** decided once per run, jointly for both cameras. ON iff every camera has:
+  - a valid fit;
+  - σ_z ∈ [0.8, 1.25] after the GAT (the RPG-VST check);
+  - SNR at the median level < **30**.
+
+  **The threshold was corrected from the draft's 20 on 2026-10-21, before any VO measurement.** 20 was derived from
+  single-channel D output. The sim path is RGB → D → gray, which scales the variance by Σw² = 0.447, so SNR is 1.5×
+  higher: the same boundary is 30. Test `GrayPathScalesTheModel` pins the scaling.
+- **Stage 4 (exposure/gain normalisation) is inert** and says so in the results. D54's `MatchExposure` keeps the
+  statistics-driven left/right match. Stage 4 is the metadata-driven temporal normalisation to (t₀, g₀); no source
+  carries (t, g) yet. No duplication, and `stereo_lk_matcher.*` is untouched.
+- **Manifest:** a new field `radiometric` (`off`, or mode/decision/denoiser/inverse/flat-field summary). The fits and
+  the gate's reasons go in the `radiometric:` block of results.yaml, written only when enabled.
+- **Denoiser: `GaussianBlur` 5×5 by default** (0.8 ms per 1280×720 image; the demo must be near-realtime,
+  maintainer 2026-10-21).
+  - `cv::fastNlMeansDenoising`, arch §6.2's suggestion, is an ablation row only. It takes 8U/16U only, so the
+    stabilised image is scaled into 8U, and the stage costs ≈ 360 ms per image with it.
+  - BM3D is unavailable: our build has `OPENCV_ENABLE_NONFREE` off.
+
+## 2026-10-21 — D68: the exact unbiased inverse is ours, implemented from the paper and checked against its figures
+
+The invansc package (Mäkitalo & Foi) is under a non-commercial licence. None of its code or `.mat` tables is used or
+shipped; the inverse is implemented from the thesis' equations.
+
+- **The table.** E{f_s(z) | y, s} (eq. 4.10) by quadrature: the Poisson sum truncated at 12 SD; the Gaussian part
+  integrated in u, with z = t0 + u², which removes the square-root kink. It is tabulated on a quadratic y-grid over
+  [0, 200]. Below the table: the ML zero (eq. 4.14). Above it: the closed form.
+- **Evidence** (`tests/numerical/test_gat.cpp`): our tables reproduce the paper's accuracy figures.
+
+  | quantity | ours | paper |
+  |---|---|---|
+  | closed form, L∞ | 0.0470 | 0.0468 |
+  | closed form, weighted L2² | 0.00690 | 0.0069 |
+  | I0 − s², L∞ | 0.0470 | 0.0470 |
+  | I0 − s², weighted L2² | 0.00295 | 0.0028 |
+
+  The exact inverse passes an independent exact-Poisson Monte Carlo unbiasedness test that the algebraic inverse fails.
+- **Correction to ALGORITHMS §14.5** (recorded there by an insert): the closed form's `D < 2√(3/8) → 0` branch comes
+  from the thesis (§3.2.2), not the `.m` file, which omits it.
+
+## 2026-10-21 — D69: 2.2 verdict: the gate works as designed; on the measured segment the VST buys nothing measurable
+
+**What was measured.** Per the maintainer: only what cannot be done without, and the demo must be near-realtime.
+`ariadne_sim_vo`, `ci_tiny_0` agent 0, 1000 frames, `sim_v2`, seed 1. Full numbers: `RADIOMETRIC_2.2.md` §6.
+
+| row | ATE | lost | keyframes | landmarks alive | stereo valid |
+|---|---|---|---|---|---|
+| clean recording | 3 mm | 0 | 80 | 770 | 0.776 |
+| `dark3_dust0_ag16`, stage off | 5 mm | 0 | 76 | 238 | 0.747 |
+| `dark3_dust0_ag16`, flat field + VST, Gaussian (gate on) | 4 mm | 0 | **104** | **197** | **0.722** |
+
+- **The gate decides from measured noise, as designed.**
+  - Sim: ON at both gain-up configs (σ_z 1.00, SNR 7–16); OFF at dark0 (SNR) and at posterised dark2 (no valid fit).
+  - EuRoC: OFF on all 11 flights (SNR 34–80).
+  - The draft's threshold of 20 would have given the same decisions on these scenes. The correction to 30 (D67) was
+    physics, not outcome.
+- **No measurable benefit on this segment** (negative result, reported).
+  - The noise costs little here: 0 lost frames either way, ATE 5 mm vs 3 mm clean.
+  - The 1 mm ATE difference is one seed on an easy 50 s segment, and is **not** claimed.
+  - Secondary metrics are slightly **worse** with the stage: keyframes +37%, landmarks alive −17%, stereo-valid
+    fraction −2.5 points. The smoothing plausibly shortens LK tracks [UNVERIFIED: not isolated].
+  - What would show a benefit, if any: a segment where `stage off` loses frames, i.e. deeper darkness or harder motion.
+    Not run.
+- **Cost.** The stage takes 14 ms per 1280×720 image with the Gaussian denoiser; most of it is the single-threaded
+  inverse-LUT loop, which can be parallelised. The default denoiser is Gaussian; NLM (≈ 360 ms per image) is an
+  ablation row only.
+- **Defaults stay off.** The shipped perception configs carry no `radiometric:` section. 2.2 lands as an opt-in stage
+  with measured gating. Making it default-on is not justified by this evidence.
+- **Not run (defined in `configs/benchmark/radiometric_2.2.yaml`):** the rest of the sim matrix (dark2_ag8,
+  flat-only, NLM, algebraic) and the EuRoC forced-on rows.

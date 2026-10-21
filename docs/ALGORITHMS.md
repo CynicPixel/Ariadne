@@ -2228,6 +2228,43 @@ I(D) = (D/2)² + (1/4)·sqrt(3/2)·D⁻¹ − (11/8)·D⁻² + (5/8)·sqrt(3/2)�
 
 ⛔ **Don't bother:** PURE-LET (more work than GAT + off-the-shelf denoiser for comparable results — mention as the road not taken), non-local PCA, **all Quanta Image Sensor work** (specialized single-photon hardware; algorithms don't transfer — read the HDR-QIS paper for framing only).
 
+> **2.2 as built (2026-10-21; D65–D68, `docs/design/RADIOMETRIC_2.2.md`). Insert; the text above is unchanged.**
+> - **Source and licence.** GAT and the exact unbiased inverse are implemented **from the thesis equations**
+>   (Mäkitalo, Tampere UT 2013, eqs. 3.7, 4.3–4.14, 4.37). The invansc `.m` and `.mat` files are under a non-commercial
+>   licence; they were read only to cross-check formulas, and nothing of theirs ships.
+> - **Correction to item 3 above.** The `D < 2√(3/8) → 0` branch of the closed form is the thesis' (§3.2.2, below
+>   eq. 3.5). The reference `.m` omits it.
+> - **Evidence.** Our eq.-4.10 tables reproduce the paper's accuracy figures:
+>
+>   | quantity | ours | paper |
+>   |---|---|---|
+>   | closed form, L∞ (4.40) | 0.0470 | 0.0468 |
+>   | closed form, weighted L2² (4.39) | 0.00690 | 0.0069 |
+>   | I0 − σ², L∞ (4.36) | 0.0470 | 0.0470 |
+>   | I0 − σ², weighted L2² (4.35) | 0.00295 | 0.0028 |
+>
+>   An independent exact-Poisson Monte Carlo passes the exact inverse and fails the algebraic one at low counts.
+> - **The (a, b) fit** is the level-set + robust-MAD + WLS version [PROXY: no ML fit, no clipped likelihood; clipped
+>   neighbourhoods are excluded]. The gain check holds (a doubles with gain).
+>   - b is the weak term: 0.82 vs 1.12 DN² at the deepest gain-up config.
+>   - The stabilised-domain check σ_z ≈ 1 (RPG-VST, arXiv 2607.24291) is the gate's real test of the fit.
+> - **Ordering nuance (refines the ⚠️ above).** "VST before ÷K" is right when K acts on the light before photon
+>   counting: real optics. The simulator's D applies PRNU and vignette AFTER the noise. There, raw
+>   `var = K·a·m′ + K²·b`, and ÷K FIRST restores one model. So 2.2 flat-fields first, in the sim only. D's order is
+>   an open question for Phase 5.
+> - **The 8-bit caveat, measured.** Linear 8-bit (D's output) keeps the model valid wherever it isn't posterised:
+>   σ_z ≈ 1 at gain-up. At unity-gain darkness it **is** posterised, and the measured-noise gate refuses the VST
+>   there, as the ⚠️ says it must.
+>   - The 8-bit hand-off after denoising also re-quantises without dither. The inverse choice is then invisible below
+>     ≈ α/4 DN.
+> - **Colour.** RGB → per-channel noise → BT.601 gray keeps the mean and scales the variance by Σw² = 0.447. Fit (a, b)
+>   on the image the denoiser actually sees.
+> - **OpenCV 5.0.0 facts.**
+>   - `fastNlMeansDenoising` accepts 8U/16U only: the stabilised image is scaled into 8U. It costs ≈ 236 ms at
+>     1280×720 on 8 threads.
+>   - `xphoto::bm3dDenoising` is refused in our build (non-free off).
+>   - `GaussianBlur` 5×5: 0.8 ms.
+
 ### 14.6 Priority
 
 1. **GAT + exact unbiased inverse** — 2–3 days, highest value.

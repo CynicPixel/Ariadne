@@ -17,9 +17,10 @@ if(OpenCV_FOUND)
     stereo/sgbm_stereo.cpp
     stereo/stereo_rectifier.cpp
     stereo/stereo_lk_matcher.cpp
-    features/xfeat/xfeat_net.cpp)
+    features/xfeat/xfeat_net.cpp
+    radiometric/radiometric_stage.cpp)
   target_link_libraries(ariadne_perception_opencv PUBLIC
     ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video opencv_dnn
-    opencv_stereo opencv_geometry)
+    opencv_stereo opencv_geometry opencv_photo)
   add_library(ariadne::perception_opencv ALIAS ariadne_perception_opencv)
 endif()

@@ -331,3 +331,26 @@ TEST(Degradation, GoldenDigestForAFixedConfiguration) {
     EXPECT_EQ(DegradeDigest(), 8535765251477677907ull)
         << "degradation output changed; re-record deliberately or investigate";
 }
+
+// 2.2: the row-band parallel entry point produces Degrade's bytes for any band count, with every stage on
+// (RGB, shot + read noise, PRNU, vignette, gain, dust with its field) and odd sizes that do not divide evenly.
+TEST(Degradation, ParallelRowBandsAreByteIdentical) {
+    ImageU8 in(97, 61, 3);
+    for (int y = 0; y < in.height; ++y)
+        for (int x = 0; x < in.width; ++x)
+            for (int c = 0; c < 3; ++c) in.At(x, y, c) = static_cast<uint8_t>((x * 7 + y * 3 + c * 11) & 0xFF);
+    DegradationParams p;
+    p.radiance_scale = 0.3;
+    p.read_noise_electrons = 2.5;
+    p.vignette_strength = 0.28;
+    p.prnu_sigma = 0.012;
+    p.analog_gain = 4.0;
+    p.enable_dust = true;
+    p.dust_beta = 0.2;
+    const ImageF32 depth = FlatDepth(97, 61, 4.0f);
+    const ImageU8 serial = Degrade(in, depth, p, 77, 5);
+    for (int threads : {1, 2, 3, 8, 61, 200}) {
+        EXPECT_EQ(DegradeParallel(in, depth, p, 77, 5, threads).data, serial.data) << threads << " threads";
+    }
+    EXPECT_EQ(DegradeParallel(in, p, 77, 5, 4).data, Degrade(in, p, 77, 5).data);
+}
