@@ -1,0 +1,19 @@
+# 3.3 (D92) collapsed_v1 plus scripted faults (arch §5.7 "partitioned" / "intermittent"): agents 0 and 1 split for
+# 20 s, then agent 1 drops out for 5 s. Times are seconds from the mission's first sim-clock stamp.
+name: collapsed_partition_v1
+mode: attenuated
+rf:
+  max_range_m: 50.0
+  fading_exponent: 3.0
+  l0_db: 40.0
+  sigma_db: 10.0
+  capacity_bps: 250.0e3
+  tx_power_dbm: 0.0
+  noise_floor_dbm: -90.0
+  wall_loss_db: 6.9
+  latency_s: 0.005
+  datagram_bytes: 1500
+partitions:
+  - {t0_s: 20.0, t1_s: 40.0, groups: [[0], [1]]}
+disconnects:
+  - {agent: 1, t0_s: 60.0, t1_s: 65.0}

@@ -42,6 +42,12 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_sim_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # 3.3 (D92): the comms node's link state along a sim mission's GT trajectories.
+  add_executable(ariadne_comms_probe tools/ariadne_comms_probe.cpp)
+  target_link_libraries(ariadne_comms_probe PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_comms_probe RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # 2.1 retrieval evaluation dump (design PERCEPTION_2.1 §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
   add_executable(ariadne_place_eval tools/ariadne_place_eval.cpp)
   target_link_libraries(ariadne_place_eval PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
