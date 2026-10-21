@@ -28,6 +28,11 @@
 //   in order per (sender, class); descriptors/requests/responses/submaps as
 //   idempotent sets keyed by content id. A hole in an unordered set stalls
 //   nothing, which is what makes TTLs and cancellation safe.
+// - Reliable sequence = (incarnation << 40) | n. Abandoning reliable messages
+//   (broker change, §3.2) would otherwise leave the receiver waiting forever
+//   for sequence numbers that were spent and then dropped; instead the sender
+//   starts a new incarnation and the receiver, on seeing it, resets the stream.
+//   The abandoned content is re-sent by the application (broker state is soft).
 //
 // Every first transmission and every retransmission passes through the codec's
 // accounting row into the ByteLedger (retransmit rows flagged, §7).
@@ -117,6 +122,7 @@ inline int PriorityOf(MessageClass c) {
 inline bool IsReliableClass(MessageClass c) { return c == MessageClass::POSE_EDGE || c == MessageClass::POSE_GRAPH; }
 inline bool IsLatestWinsClass(MessageClass c) { return c == MessageClass::HEARTBEAT || c == MessageClass::ACK; }
 inline constexpr int kPriorities = 5;
+inline constexpr int kIncarnationShift = 40;
 
 // --- Endpoint ----------------------------------------------------------------
 
@@ -135,11 +141,13 @@ struct EndpointParams {
     double send_budget_Bps = 0.0;      // per destination; 0 = unlimited (the network still models bandwidth)
     double send_burst_bytes = 64 * 1024;
     double rto_min_s = 1.0;
-    double rto_max_s = 16.0;
+    double rto_max_s = 8.0;            // bounds the drain time under heavy loss; unreachable peers are not sent to at all
     double ack_delay_s = 0.2;          // standalone ACK if no heartbeat carried it by then
-    size_t max_ack_done = 256;         // ids per ack (keeps an ACK to one datagram)
+    // An ack rides a heartbeat or a standalone ACK, which must fit one datagram
+    // (SendImmediate throws otherwise): budget its encoded bytes, leave the rest pending.
+    size_t max_ack_bytes = 900;        // heartbeat body ~200 B + ack <= 1466 B fragment payload
+    int ack_repeats = 3;               // each done id rides this many acks: 1 - 0.3^3 = 97% at 30% loss
     size_t reorder_buffer = 4096;      // per reliable stream
-    size_t max_ack_partial = 32;       // partial bitmaps per ack
     double reassembly_timeout_s = 120.0;   // an abandoned partial message is forgotten (matches the 120 s TTL)
 };
 
@@ -148,6 +156,7 @@ struct EndpointStats {
     uint64_t delivered = 0, duplicates = 0, stale_heartbeats = 0, decode_rejected = 0;
     uint64_t expired = 0, cancelled = 0, superseded = 0, abandoned_reliable = 0, abandoned_best_effort = 0;
     uint64_t acked = 0;
+    uint64_t abandoned_reliable_rx = 0;   // buffered messages dropped on a new incarnation
 };
 
 class Endpoint {
@@ -217,6 +226,9 @@ public:
         auto& q = pr.queue[PriorityOf(MessageClass::POSE_EDGE) - 1];
         stats_.abandoned_reliable += q.size();
         q.clear();
+        // New stream incarnation: the receiver skips the numbers spent on abandoned messages.
+        ++pr.incarnation;
+        for (MessageClass c : {MessageClass::POSE_EDGE, MessageClass::POSE_GRAPH}) pr.next_seq[uint8_t(c)] = 0;
     }
 
     /// Send a message now, outside the queues and the send budget: heartbeats
@@ -237,12 +249,19 @@ public:
     AckValue TakeAck(AgentId from) {
         Peer& pr = peer(from);
         AckValue a;
-        const size_t n = std::min(pr.ack_done.size(), p_.max_ack_done);
-        a.done.assign(pr.ack_done.begin(), pr.ack_done.begin() + n);
-        pr.ack_done.erase(pr.ack_done.begin(), pr.ack_done.begin() + n);
+        // Conservative FlatBuffers sizes: 4 B per done id; a partial entry is a
+        // table (vtable + offsets ~ 24 B) plus its bitmap rounded to 4 B.
+        size_t bytes = 32;
+        for (auto it = pr.ack_done.begin(); it != pr.ack_done.end() && bytes + 4 <= p_.max_ack_bytes;) {
+            a.done.push_back(it->first);
+            bytes += 4;
+            it = --it->second == 0 ? pr.ack_done.erase(it) : std::next(it);
+        }
         for (const auto& [id, r] : pr.reassembly) {
-            if (a.partial.size() >= p_.max_ack_partial) break;
+            const size_t cost = 24 + 4 * ((r.received.size() + 3) / 4);
+            if (bytes + cost > p_.max_ack_bytes) break;
             a.partial.push_back({id, r.received});
+            bytes += cost;
         }
         pr.ack_due.reset();
         return a;
@@ -356,6 +375,21 @@ public:
         for (const auto& [id, m] : it->second.inflight) n += m.reliable;
         return n;
     }
+    /// Unacked reliable messages to `dest`: (class, key, seconds since last transmission; -1 = still queued).
+    std::vector<std::tuple<MessageClass, uint64_t, double>> UnackedReliableDetail(AgentId dest, core::Timestamp t) const {
+        std::vector<std::tuple<MessageClass, uint64_t, double>> out;
+        const auto it = peers_.find(dest);
+        if (it == peers_.end()) return out;
+        for (const auto& m : it->second.queue[PriorityOf(MessageClass::POSE_EDGE) - 1]) out.emplace_back(m.cls, m.key, -1.0);
+        for (const auto& [id, m] : it->second.inflight)
+            if (m.reliable) out.emplace_back(m.cls, m.key, (t - m.last_tx).toSeconds());
+        return out;
+    }
+    std::vector<AgentId> Peers() const {
+        std::vector<AgentId> out;
+        for (const auto& [id, pr] : peers_) out.push_back(id);
+        return out;
+    }
     size_t UnackedReliableTotal() const {
         size_t n = 0;
         for (const auto& [dest, pr] : peers_) n += UnackedReliable(dest);
@@ -368,10 +402,12 @@ public:
     const EndpointStats& stats() const { return stats_; }
 
 private:
-    /// Sender and receiver agree on what is acked: reliable classes, and any
-    /// multi-datagram message that is not periodic.
+    /// Sender and receiver agree on what is acked: reliable classes, global
+    /// descriptors (single datagram, but the broker cannot re-request one it
+    /// never heard of), and any multi-datagram message that is not periodic.
     static bool IsTracked(MessageClass c, size_t fragments) {
-        return !IsLatestWinsClass(c) && (IsReliableClass(c) || fragments > 1);
+        return !IsLatestWinsClass(c) &&
+               (IsReliableClass(c) || c == MessageClass::GLOBAL_DESCRIPTOR || fragments > 1);
     }
 
     struct Inflight {
@@ -399,13 +435,14 @@ private:
         std::map<uint32_t, Inflight> inflight;
         uint32_t next_msg_id = 1;   // 0 = "none"
         std::map<uint8_t, uint64_t> next_seq;
+        uint64_t incarnation = 0;   // reliable streams to this peer
         double tokens = 0.0;
         std::optional<core::Timestamp> last_refill;
         std::map<uint8_t, std::set<uint64_t>> sent, delivered;
         // receive side
         std::map<uint32_t, Reassembly> reassembly;
         std::set<uint32_t> done_ids;
-        std::vector<uint32_t> ack_done;
+        std::map<uint32_t, int> ack_done;   // id -> acks it still rides
         std::optional<core::Timestamp> ack_due;
         std::map<uint8_t, uint64_t> latest_seq;   // latest-wins classes
         std::map<uint8_t, uint64_t> next_reliable;
@@ -454,6 +491,8 @@ private:
     void ExpireInflight(Peer& pr, core::Timestamp t) {
         for (auto it = pr.inflight.begin(); it != pr.inflight.end();) {
             if (it->second.expires && t >= *it->second.expires) {
+                // Expired unacked: no longer "sent", so a later broker is given it again.
+                pr.sent[uint8_t(it->second.cls)].erase(it->second.key);
                 it = pr.inflight.erase(it);
                 ++stats_.abandoned_best_effort;
             } else {
@@ -465,7 +504,9 @@ private:
     /// Encode now (sequence assigned now), fragment, and register. Untracked
     /// messages leave the table once fully sent (end of Pump).
     uint32_t Start(Peer& pr, OutMessage om, core::Timestamp t) {
-        SerializedMessage m = om.encode(pr.next_seq[uint8_t(om.cls)]++, t);
+        uint64_t seq = pr.next_seq[uint8_t(om.cls)]++;
+        if (IsReliableClass(om.cls)) seq |= pr.incarnation << kIncarnationShift;
+        SerializedMessage m = om.encode(seq, t);
         const uint32_t id = pr.next_msg_id++;
         Inflight f;
         f.cls = om.cls;
@@ -519,7 +560,7 @@ private:
     }
 
     void AckDone(Peer& pr, uint32_t id, core::Timestamp t) {
-        pr.ack_done.push_back(id);
+        pr.ack_done[id] = p_.ack_repeats;
         if (!pr.ack_due) pr.ack_due = t;
     }
 
@@ -527,7 +568,7 @@ private:
         for (uint32_t id : a.done) {
             const auto it = pr.inflight.find(id);
             if (it == pr.inflight.end()) continue;
-            if (it->second.reliable) pr.delivered[uint8_t(it->second.cls)].insert(it->second.key);
+            pr.delivered[uint8_t(it->second.cls)].insert(it->second.key);
             pr.inflight.erase(it);
             ++stats_.acked;
         }
@@ -561,6 +602,16 @@ private:
         if (IsReliableClass(m.cls)) {
             uint64_t& next = pr.next_reliable[c];
             auto& buf = pr.reorder[c];
+            const uint64_t inc = m.sequence >> kIncarnationShift, cur = next >> kIncarnationShift;
+            if (inc < cur) {   // from an abandoned incarnation: the sender re-sends its content
+                ++stats_.duplicates;
+                return;
+            }
+            if (inc > cur) {
+                next = inc << kIncarnationShift;
+                stats_.abandoned_reliable_rx += buf.size();
+                buf.clear();
+            }
             if (m.sequence < next || buf.count(m.sequence)) {
                 ++stats_.duplicates;
                 return;

@@ -82,8 +82,12 @@ class LinkModel {             // 3.3 implements this from RFComms + GT-mesh ray-
   - disconnect of one agent over a window;
   - extra latency and jitter;
   - duplication, and reorder by holding a message back.
-- **Ownership.** 3.3's comms broker node owns the real link model and the ray-cast. It is the only writer of
-  `ByteRecord`s at runtime (§15.6). This item's tests use a `ScriptedLinkModel`.
+- **Ownership.** 3.3's comms broker node owns the real link model and the ray-cast. This item's tests use a
+  `ScriptedLinkModel`.
+- **Who writes `ByteRecord`s.** Each `Endpoint` records every first transmission, retransmission, heartbeat and ack
+  at the serialization boundary (§15.7). In the runtime, all Endpoints record into **one `ByteLedger` owned by 3.3's
+  comms node**, which makes the comms node the single owner of the byte record (§15.6). The comms node enforces link
+  state on datagrams it forwards and must **not** re-record them, or bytes are counted twice.
 
 ## 3. Agent-side protocol state
 
@@ -94,7 +98,7 @@ class LinkModel {             // 3.3 implements this from RFComms + GT-mesh ray-
 | HEARTBEAT (0) | 1 | **latest-wins** (older sequence dropped) | none, periodic (1 s) | superseded |
 | ACK (12) | 1 | latest-wins per (peer, class) | none; the ack is cumulative and repeated | superseded |
 | POSE_EDGE (5), POSE_GRAPH (6) | 2 | **reliable, in order** per (sender, class): the high-water mark and reorder buffer are kept | acks + retransmit | never; a graph batch is superseded (§3.3) |
-| GLOBAL_DESCRIPTOR (1) | 3 | **idempotent set**, keyed by (sender, keyframe), unordered | best effort, re-requestable | 120 s |
+| GLOBAL_DESCRIPTOR (1) | 3 | **idempotent set**, keyed by (sender, keyframe), unordered | **acked, resent until TTL** (D82: a broker cannot re-request a descriptor it never heard of) | 120 s |
 | MATCH_REQUEST (3) | 3 | idempotent set keyed by request_id | best effort; the broker re-requests on timeout | 120 s |
 | MATCH_RESPONSE (4) | 4 | idempotent set keyed by request_id; a response to an unknown or cancelled request is dropped | best effort | cancellable by policy |
 | SUBMAP_* (7, 8) | 5 | idempotent set keyed by (sender, submap id) | best effort | cancellable by policy |
@@ -181,7 +185,7 @@ Two placements need comment:
 ## 4. Membership, election, epochs
 
 The heartbeat gains these fields, appended so older encodings still decode:
-- `neighbors:[uint]`: agents heard within `T_hb = 3 s`;
+- `neighbors:[uint]`: agents heard, with the hysteresis below;
 - `anchor:uint`: the agent's current anchor, i.e. origin;
 - `broker:uint`: the broker it elected;
 - `epoch:Epoch`: the latest epoch it accepted;
@@ -192,8 +196,12 @@ The 1.6 tool sends no heartbeats, so the pinned `figures/bytes.json` is unaffect
 **Neighbours are symmetric, with hysteresis.**
 - `j` becomes a neighbour of `i` when `i` has heard `j` in `m = 2` of the last 3 heartbeat periods **and** `j`'s latest
   heartbeat lists `i`.
-- It stops being one after `k = 4` consecutive missed periods, or after `j`'s heartbeats stop listing `i` for `k`
-  periods.
+- It stops being one after `k = 12` consecutive missed periods at a 0.5 s heartbeat (6 s), or after `j`'s heartbeats
+  stop listing `i` for `k` periods.
+- **k is sized from the loss rate.** A false drop needs k consecutive lost heartbeats, `p^k` per period.
+  - The first choice, `k = 4` at 1 Hz, gave 0.3^4 ≈ 0.8%/period: measured 40 broker changes in 290 s with 4 agents.
+  - `k = 12` gives 0.3^12 ≈ 5·10⁻⁷, i.e. ≈ 4·10⁻³ expected false drops per 300 s run over 12 directed links.
+  - The price is 6 s to detect a real partition.
 - Hysteresis stops loss-driven flapping. Test: steady 30% loss with no partition gives zero broker changes.
 - An asymmetric link, where only one side hears the other, is therefore not a neighbour link.
 - This is what stops two agents with opposite views from both electing themselves.
@@ -345,3 +353,31 @@ edges, absent members), never just "incomplete".
   placeholders are demoted to baselines, never deleted.
 - **The new protocol** gets its own runtime node. The sim tool switches to it under `protocol: v2` once 3.4's policy
   exists, so the Phase-1 gate's pinned `bytes.json` keeps describing the Phase-1 path until a recorded re-pin.
+
+## 10. Changes forced by the tests (D82)
+
+The fault campaign (§8.10) and the split-brain test found four design gaps. Each is fixed and recorded here.
+
+1. **Descriptors are acked and resent until their TTL.**
+   - Fire-and-forget descriptors sent into a partition were lost but recorded as sent, so no later broker ever got them.
+     The split-brain run lost every cross pair near the partition start.
+   - Now: a descriptor is resent until acked or 120 s old. An expired one leaves the sent set, so the next broker is
+     sent it again.
+2. **Acks are repeated, and the retransmit timeout is capped at 8 s.**
+   - A done id rode one ack. At 30% loss a round (data + ack) succeeds 0.7·0.7 ≈ 49%. With a 16 s timeout cap, a 90 s
+     drain left ≈1% of ~600 edge messages unacked (measured: 1–4 per run).
+   - Now: each id rides 3 acks (ack success 1 − 0.3³ ≈ 97%) and the timeout cap is 8 s.
+3. **Reliable streams have incarnations: `seq = incarnation << 40 | n`.**
+   - Abandoning in-flight reliable messages on a broker change spent sequence numbers that never arrived. The new
+     broker's in-order stream from that agent then waited forever: 435 edges held for snapshots in every partition and
+     broker-disconnect run.
+   - Now: `AbandonReliable` starts a new incarnation. A receiver that sees one resets the stream and drops what it had
+     buffered from the old one; the application re-sends that content anyway.
+   - This is the same hole class as superseding (§3.2), entered through abandonment.
+4. **The broker re-solves when an edge arrives or its member set changes**, not only when a new snapshot arrives.
+   Otherwise edges re-sent after a merge never reached a solve.
+
+**Result:** 54 runs (6 faults × loss 0/10/30% × 3 seeds) all end `consistent`, zero `corrupt`. Split-brain merges under
+counter > both sides, the lower anchor wins, every T_G_W matches ground truth within 2 mm / 2 mrad, and the edge set
+equals the no-partition run's.
+

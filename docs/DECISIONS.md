@@ -2058,3 +2058,35 @@ paper found. OpenCV has nothing native here.
   - retransmit, ack and heartbeat overhead get their own rows and their own curve.
 - **Store-and-forward = hold until the destination is reachable.** Multi-hop relay is out of scope.
 
+## 2026-10-21 — D82: 3.2 protocol, the fixes the fault campaign forced; I5 campaign 54/54 consistent
+
+Design: `docs/design/COLLAB_3.2.md` §10. Code: `cpp/collaboration/protocol/` (`network`, `transport`, `membership`,
+`collab_node`, `outcome`); tests `tests/protocol/test_{network,transport,membership,collab_v2}.cpp`.
+
+- **Descriptors are acked and resent until their TTL.** A broker cannot re-request a descriptor it never heard of.
+  An expired descriptor leaves the sent set, so the next broker is sent it again.
+- **Acks are repeated 3×, and the retransmit timeout is capped at 8 s.** Measured: 1–4 unacked edge messages per
+  30%-loss run before the change; none after.
+- **Reliable stream incarnations** (`seq = incarnation << 40 | n`). Abandonment on a broker change would otherwise leave
+  a permanent sequence hole (measured: 435 edges held in every partition run).
+- **Heartbeat hysteresis is sized from the loss rate:** 0.5 s period, out after 12 missed periods. `k = 4` at 1 Hz
+  flapped the broker 40 times in 290 s at 30% loss.
+- **The broker re-solves on a new edge or a member-set change.**
+- **I5 evidence, unit-level (synthetic 4-agent scenario, ground-truth hooks):** 6 faults × loss {0, 10, 30%} × 3 seeds
+  = 54 runs, **54 consistent, 0 incomplete, 0 corrupt**. Split-brain {0,1}|{2,3} merges under a new epoch, and the
+  frames match ground truth within 2 mm. An unknown-frame pose is rejected.
+- **Not yet:**
+  - the production broker solve (multi-agent PGO, then 2.5's robust stage);
+  - runtime/sim integration with real XFeat features;
+  - 3.3's link model.
+  - **Snapshots carry nodes only.** They lack odometry edges and their information. The oracle solve reads node poses
+    as exact, so nothing failed, but a multi-agent PGO needs odometry factors, and the I6 POSE_GRAPH sizes need the
+    §15.2 payload (nodes, edges, covariances).
+    - The next step changes the API first: `AddKeyframe` takes the odometry edge with its information, and the snapshot
+      carries the intra-agent edges.
+  - The hooks are oracles: this evidence covers the protocol, not estimation accuracy.
+- **The classifiers are proven to fire.**
+  - A rogue estimate (an unissued epoch, a perturbed T_G_W) that a member adopts is classified `corrupt`.
+  - A run that ends while partitioned is classified `explicitly_incomplete`, and its reasons name the missing pieces.
+  - Same seed ⇒ identical ledgers and outcome reasons at the node level.
+

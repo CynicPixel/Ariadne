@@ -403,3 +403,30 @@ TEST(Transport, SameSeedSameLedger) {
     };
     EXPECT_EQ(run(3), run(3));
 }
+
+TEST(Transport, AbandonedSequenceNumbersDoNotStallTheNextIncarnation) {
+    // Sent (sequence spent) but lost, then abandoned on a broker change; the stream must not wait for it.
+    Pair p({true, 0.01, 0.0, 0.0}, 1);
+    p.links.Set(0, 1, {false, 0, 0, 0});
+    p.a.Enqueue(1, EdgeMsg(0, 1, 1, At(0)));
+    p.a.Enqueue(1, EdgeMsg(0, 1, 2, At(0)));
+    p.RunUntil(1.0);
+    p.a.AbandonReliable(1);
+    p.links.Set(0, 1, {true, 0.01, 0.0, 0.0});
+    p.a.Enqueue(1, EdgeMsg(0, 1, 3, At(1.0)));
+    for (double t = 1.0; t < 4.0; t += 0.01) p.Step(At(t));
+    ASSERT_EQ(p.CountAtB(MessageClass::POSE_EDGE), 1u);
+    for (const auto& m : p.at_b)
+        if (m.cls == MessageClass::POSE_EDGE) EXPECT_EQ(m.edge.keyframe_a, 3u);
+    EXPECT_EQ(p.a.UnackedReliable(1), 0u);
+}
+
+TEST(Transport, AckBurstNeverOverflowsAHeartbeat) {
+    // ~400 edges acked at once while feature responses are mid-reassembly: the ack is budgeted, never thrown.
+    Pair p({true, 0.02, 0.3, 0.0}, 12);
+    for (uint64_t k = 0; k < 400; ++k) p.a.Enqueue(1, EdgeMsg(0, 1, k, At(0)));
+    for (uint64_t r = 0; r < 20; ++r) p.a.Enqueue(1, ResponseMsg(0, 1, 1000 + r, 800, At(0)));
+    EXPECT_NO_THROW(p.RunUntil(120.0));
+    EXPECT_EQ(p.CountAtB(MessageClass::POSE_EDGE), 400u);
+    EXPECT_EQ(p.a.UnackedReliable(1), 0u);
+}

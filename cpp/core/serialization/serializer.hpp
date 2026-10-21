@@ -410,10 +410,11 @@ public:
         for (const auto& e : graph.edges) edges.push_back(BuildEdge(fbb, e));
 
         const auto anchor = detail::ToWire(graph.anchor);
-        // 3.2 fields are written only on a broker estimate, so a Phase-1 graph
-        // encodes byte-identically to before the schema grew.
+        // 3.2 fields are written only when set (a broker estimate, or a 3.2
+        // snapshot carrying its sender's T_G_W), so a Phase-1 graph encodes
+        // byte-identically to before the schema grew.
         flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<wire::AgentFrame>>> frames_off = 0;
-        if (graph.has_epoch) {
+        if (graph.has_epoch || !graph.agent_frames.empty()) {
             std::vector<flatbuffers::Offset<wire::AgentFrame>> frames;
             for (const auto& f : graph.agent_frames) {
                 const auto T = detail::ToWire(f.T_G_W);
