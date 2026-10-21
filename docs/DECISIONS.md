@@ -2654,3 +2654,14 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
   | benchmark config | **deferred to 2.5**, the first runtime consumer: no `configs/` entry and no `HardPairParams` in `perception_config` yet. The offline tool takes its paths on the command line. |
   | manifest schema | **deferred to 2.5:** §28.2 has no hard-pair field yet. `ariadne_loop_verify`'s manifest records `hard_pair: [<HardPairMatcher::Name()>…]`. |
 - **The rotation-only zero-false-accept numbers are a diagnostic chosen after seeing the data, not a bar.**
+
+## 2026-10-22 — 2.1 close-out notes (bookkeeping; no new decision)
+
+- **D62 stays DRAFT.** The maintainer decided its size question (376×240, 2026-10-20), but its deviation from the
+  arch's "Use `cv::ANNIndex`" (exact index as the default) has not been explicitly approved. 2.5, the first
+  consumer, should take that call.
+- **Projection-guided re-association** (the PRIORITY item's second half, ORB-SLAM's track-local-map search into the
+  window) is a **stated gap, deferred.** Trigger: revisit if the combined EuRoC run shows lost stretches still
+  dominating V1_03/V2_02. Descriptor re-association with PnP verification (D60) is what shipped.
+- **Reference exports:** the regeneration commands for `.cache/models/{eigenplaces_ref,aliked_lg_ref}` are in
+  PERCEPTION_2.1 §13.

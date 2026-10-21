@@ -4,6 +4,28 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — 2.1 close-out: plan line 2.1 against what shipped
+
+| 2.1 item | state | D-ID |
+|---|---|---|
+| XFeat keyframes + LK tracking | **done, as a measured ablation**: engine, keyframe cadence and LK built and exact against upstream; ORB + re-association ships for EuRoC v2 (XFeat regressed ATE) | D50, D60 |
+| spatial-bin keypoint selection | **done** (grid selection, `keypoint_grid` in the manifest) | D50, D60 |
+| DNN execution contract (per-thread Nets) | **partial**: one Net per instance in every wrapper (XFeat, PlaceRecognizer, HardPairMatcher); no shared contract object | D60–D63 |
+| SGBM + WLS confidence (§9.3) | **done, off by default**; left disparity byte-identical; confidence AUC **not measured** | D61 |
+| §9.4 confined-space validator | **done** (unit tests) | D61 |
+| §9.6 depth-uncertainty contract | **done** (σ_Z/valid contract tested; byte-identical with confidence on) | D61 |
+| ANNIndex retrieval | **done**: EigenPlaces R50-256 via cv::dnn; `cv::ANNIndex` kept as the ablation, exact index the default (**D62 draft**) | D62 |
+| ALIKED + LightGlue hard path | **done**: our own upstream export, exact; EuRoC pose AUC@10 0.607 vs ORB 0.284 | D63 |
+| projection + descriptor re-association (PRIORITY) | descriptor half **done**; projection-guided half **deferred** (trigger: lost stretches still dominate V1_03/V2_02 in the combined EuRoC run) | D60 |
+| ORB placeholder kept as baseline | **done** | D60 |
+
+Still owed:
+- quiet-host timings (XFeat, EigenPlaces, ALIKED+LightGlue);
+- WLS AUC;
+- the cause of cv::dnn's rounding behind the SDDH Floor fix (`[UNVERIFIED]`).
+
+Reference-export regeneration: PERCEPTION_2.1 §13.
+
 ## 2026-10-21 — 2.3 / 2.4 closed out (bookkeeping)
 
 - **2.3:** every item of the plan line is built (`LOCAL_SLAM_2.3.md` §11). Nothing open.

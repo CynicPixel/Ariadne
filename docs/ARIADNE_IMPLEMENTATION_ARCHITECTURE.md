@@ -310,7 +310,7 @@ Implementation consequence:
 
 Use `cv::ANNIndex` for retrieval/index persistence.
 
-> **As built (2.1, D62 — DRAFT, pending the maintainer).** `perception/place/`:
+> **As built (2.1, D62 — DRAFT: size decided 2026-10-20; the exact-default deviation awaits approval, DECISIONS 2.1 close-out).** `perception/place/`:
 > - `PlaceRecognizer` runs EigenPlaces R50-256 through `cv::dnn`, one Net per thread;
 > - `PlaceIndex` has two backends, `exact` (one gemm, the default) and `annoy` (`cv::ANNIndex`, rebuilt from the
 >   full matrix when stale, over-fetch then filter, exact rescoring).
