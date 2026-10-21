@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 #include <opencv2/core.hpp>
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -38,6 +39,16 @@ public:
 
     /// Keypoints and descriptors, rows aligned: descriptors.rows == keypoints.size().
     virtual FeatureSet DetectAndCompute(const cv::Mat& gray, const cv::Mat& mask) const = 0;
+    /// Descriptors AT given pixels, without detecting (re-association, PERCEPTION_2.1.md §4.3: an LK-tracked point
+    /// gets an appearance without being re-detected). Row i describes points[i]; `described[i]` is 0 where the
+    /// engine cannot (ORB: the patch leaves the image), and that row is zero.
+    virtual cv::Mat Describe(const cv::Mat& gray, const std::vector<cv::Point2f>& points,
+                             std::vector<uchar>& described) const = 0;
+
+    /// Engine-specific manifest entries (§3.4: dnn engine, input size); empty for engines without any.
+    virtual std::map<std::string, std::string> ManifestFields() const { return {}; }
+    /// Engine-specific results.yaml lines (timing); empty = nothing written.
+    virtual std::string ResultsYaml() const { return {}; }
 };
 
 }  // namespace ariadne::perception

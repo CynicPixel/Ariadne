@@ -223,6 +223,24 @@ public:
         for (const auto& [id, obs] : keyframes_[kf].obs) ids.push_back(id);
         return ids;
     }
+    /// 2.1 re-association (PERCEPTION_2.1.md §4.3): every live landmark with the provenance of the keyframe that
+    /// created it, so a caller can restrict itself to landmarks mapped from MEASURED poses (AUDIT_2.3 §4: a landmark
+    /// triangulated at a predicted pose locks that pose's error in). Ascending id. Changes nothing.
+    struct LandmarkInfo {
+        uint64_t id = 0;
+        core::Vec3 X_w;
+        uint64_t born_kf = 0;
+        PoseSource born_source = PoseSource::kMeasured;
+    };
+    std::vector<LandmarkInfo> Landmarks() const {
+        std::vector<LandmarkInfo> out;
+        out.reserve(landmarks_.size());
+        for (const auto& [id, l] : landmarks_) {
+            out.push_back({id, l.X_w, l.born_kf,
+                           l.born_kf < keyframes_.size() ? keyframes_[l.born_kf].source : PoseSource::kCoasted});
+        }
+        return out;
+    }
 
 private:
     struct Landmark {

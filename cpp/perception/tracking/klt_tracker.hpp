@@ -109,6 +109,18 @@ public:
     /// nullptr keeps the 1.4 behaviour exactly.
     TrackedFrame Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed, const cv::Matx33d* predicted = nullptr);
 
+    /// Re-association (PERCEPTION_2.1.md §4.3): rename live tracks -- the ones the last Process() returned -- to
+    /// the ids of existing landmarks, so the SLAM side, which keys landmarks by track id, finds them again. The
+    /// track keeps its position and age. Parallel arrays; throws unless every `from` is live and every `to` is
+    /// neither live nor repeated (one track per landmark). Ids never come from next_id_, so no fresh id collides.
+    void Relabel(const std::vector<uint64_t>& from, const std::vector<uint64_t>& to);
+
+    /// 2.1 cadence (§4.2), replenish: keyframe. Start new tracks on `gray`, which MUST be the image the last
+    /// Process() ran on (the next Process() tracks them from its pyramid). Called after a keyframe is made, so a
+    /// learned engine's forward for that image is shared with the keyframe's description. Returns the tracks
+    /// started; a no-op (0) under every_frame, where Process() already replenished.
+    int Replenish(const cv::Mat& gray);
+
     /// The pyramid LK consumes, exposed so it can be timed on its own.
     static LkPyramid BuildPyramid(const cv::Mat& gray, const TrackerParams& params);
 
@@ -120,6 +132,10 @@ private:
     std::vector<cv::Point2f> points_;
     std::vector<int> ages_;
     uint64_t next_id_ = 0;
+
+    /// Step 4: append engine detections outside `mask` (updated as they are accepted) until target_tracks.
+    int AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64_t>& ids, std::vector<cv::Point2f>& points,
+                  std::vector<cv::Point2f>* prev_points, std::vector<int>& ages);
 };
 
 }  // namespace ariadne::perception

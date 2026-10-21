@@ -2,6 +2,9 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
+#include <chrono>
+#include <cmath>
 #include <stdexcept>
 
 namespace ariadne::perception {
@@ -29,6 +32,20 @@ SgbmStereo::SgbmStereo(const StereoParams& params, const RectifiedStereoRig& rig
         static_cast<int>(params_.p2_coefficient * area), params_.disp12_max_diff,
         params_.pre_filter_cap, params_.uniqueness_ratio, params_.speckle_window_size,
         params_.speckle_range, SgbmMode(params_.mode));
+    if (params_.confidence == "wls") {
+        right_ = cv::ximgproc::createRightMatcher(sgbm_);
+        wls_ = cv::ximgproc::createDisparityWLSFilterGeneric(/*use_confidence=*/true);
+        wls_->setLambda(params_.wls_lambda);
+        wls_->setSigmaColor(params_.wls_sigma_color);
+        wls_->setLRCthresh(params_.wls_lrc_threshold);
+        wls_->setDepthDiscontinuityRadius(params_.wls_discontinuity_radius > 0
+                                              ? params_.wls_discontinuity_radius
+                                              : static_cast<int>(std::ceil(0.5 * params_.block_size)));
+        // The ROI createDisparityWLSFilter sets for an SGBM: columns left of min+num have no full search range.
+        const int left_off = std::max(0, params_.min_disparity + params_.num_disparities);
+        const int right_off = std::max(0, -params_.min_disparity);
+        wls_roi_ = cv::Rect(left_off, 0, rig_.width - left_off - right_off, rig_.height);
+    }
 }
 
 StereoDepth SgbmStereo::Compute(const cv::Mat& left, const cv::Mat& right) const {
@@ -39,6 +56,16 @@ StereoDepth SgbmStereo::Compute(const cv::Mat& left, const cv::Mat& right) const
     }
     StereoDepth out;
     sgbm_->compute(left, right, out.disparity);   // CV_16S, d * 16
+    cv::Mat wls_conf;
+    if (wls_) {
+        const auto t0 = std::chrono::steady_clock::now();
+        cv::Mat right_disp, filtered;
+        right_->compute(right, left, right_disp);   // the right view's disparity (negative values)
+        wls_->filter(out.disparity, left, filtered, right_disp, wls_roi_);
+        wls_->getConfidenceMap().convertTo(wls_conf, CV_8U);   // CV_32F 0..255 -> u8, rounded
+        if (params_.wls_filtered_disparity) out.disparity = filtered;
+        out.confidence_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    }
 
     // Valid: the value is a real match (at least min_disparity), strictly
     // positive so Z is finite, and outside the blind columns. SGBM marks
@@ -70,8 +97,14 @@ StereoDepth SgbmStereo::Compute(const cv::Mat& left, const cv::Mat& right) const
     }
     z32.convertTo(out.Z, CV_16F);
     s32.convertTo(out.sigma_Z, CV_16F);
-    out.confidence = cv::Mat::zeros(size, CV_8U);
-    out.confidence_is_placeholder = true;
+    if (wls_) {
+        out.confidence = cv::Mat::zeros(size, CV_8U);
+        wls_conf.copyTo(out.confidence, out.valid);   // never a confidence for an invalid depth
+        out.confidence_is_placeholder = false;
+    } else {
+        out.confidence = cv::Mat::zeros(size, CV_8U);
+        out.confidence_is_placeholder = true;
+    }
     out.valid_fraction = static_cast<double>(valid_count) / (size.width * size.height);
     return out;
 }

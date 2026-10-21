@@ -42,6 +42,14 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_sim_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # 2.1 retrieval evaluation dump (design PERCEPTION_2.1 §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
+  add_executable(ariadne_place_eval tools/ariadne_place_eval.cpp)
+  target_link_libraries(ariadne_place_eval PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
+
+  # 2.1 hard-pair evaluation: loop-candidate verification (PERCEPTION_2.1 §12.4). Offline, no runner hunk.
+  add_executable(ariadne_loop_verify tools/ariadne_loop_verify.cpp)
+  target_link_libraries(ariadne_loop_verify PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
+
   # 1.6 placeholder collaboration over a sim recording (design COLLAB_1.6).
   add_executable(ariadne_sim_collab tools/ariadne_sim_collab.cpp)
   target_link_libraries(ariadne_sim_collab PRIVATE

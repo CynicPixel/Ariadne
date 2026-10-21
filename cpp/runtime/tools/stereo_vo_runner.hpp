@@ -13,7 +13,7 @@
 // written in TUM format for evo (the 1.9 oracle).
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
-#include "perception/features/orb_engine.hpp"
+#include "perception/features/engine_factory.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
 #include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
@@ -28,6 +28,8 @@
 #include "runtime/manifest/run_manifest.hpp"
 #include "runtime/metrics/trajectory_io.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
+#include "runtime/tools/feature_engine_glue.hpp"
+#include "runtime/tools/reassociation_glue.hpp"
 #include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
 
@@ -143,16 +145,23 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                      scfg.triangulation.min_depth_m, MinObservableRange(pcfg.stereo, rr));
     }
 
-    const OrbEngine orb(pcfg.features);
+    const std::unique_ptr<LocalFeatureEngine> features = MakeFeatureEngine(pcfg.features);   // 2.1: orb | xfeat
     // D73 part 2b: intra-agent loop closure, only with a `loop_closure:` config section. Read-only towards the VO.
     std::unique_ptr<runtime::IntraLoopClosure> loops;
     if (scfg.loop_closure.enabled) loops = std::make_unique<runtime::IntraLoopClosure>(scfg.loop_closure, rig, args.seed);
-    KltTracker tracker(pcfg.tracker, orb);
+    KltTracker tracker(pcfg.tracker, *features);
     const SgbmStereo sgbm(pcfg.stereo, rr);
     // imu_mode full (D59): the IMU's mount (rectified left camera in the body) and its datasheet noise; StereoVo
     // applies imu.full's inflation.
     const slam::VoImuRig imu_rig{T_B_Crect, source.ImuNoiseModel()};
     slam::StereoVo vo(scfg, rig, args.seed, source.Agent(), scfg.imu.mode == "full" ? &imu_rig : nullptr);
+    LostReassociator reassoc(pcfg.reassociation, *features, rr.fx, rr.fy, rr.cx, rr.cy);   // 2.1; off unless configured
+    // --outages hands the VO track ids shifted per outage; re-association renames ids in the TRACKER, so the two
+    // would rename in different id spaces. Refused rather than silently wrong.
+    if (pcfg.reassociation.enabled && !args.outages.empty()) {
+        throw std::runtime_error("--outages cannot be combined with perception reassociation (track id spaces differ)");
+    }
+    std::vector<double> t_conf;   // 2.1 §10: right-matcher + WLS per stereo pass (stereo.confidence = wls only)
 
     const std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
     const int n_planned = args.frames > 0 ? std::min<int>(args.frames, static_cast<int>(source.FrameCount()))
@@ -299,6 +308,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         }
         vf.track_ids = tfv.ids;
         vf.points = tfv.points;
+        reassoc.BeforeTrack(l, vo, tracker, vf, args.seed);   // 2.1: may rename orphan tracks to old landmarks
         t0 = std::chrono::steady_clock::now();
         vf.has_rotation_prior = have_rot;
         vf.R_prev_cur_prior = R_pc;
@@ -383,6 +393,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             }
             const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
             const StereoDepth depth = sgbm.Compute(l, rs);
+            if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
             const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
             cv::Mat z32, s32;
             depth.Z.convertTo(z32, CV_32F);
@@ -432,6 +443,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 }
                 gp_edges += kr.gravity_prior_emitted;
                 t_kf.push_back(Ms(t0));
+                reassoc.AfterKeyframe(l, vo, vf);   // 2.1: landmark descriptors at this keyframe
+                tracker.Replenish(l);   // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise)
                 ++keyframes;
                 keyframes_lost += tr.status == slam::VoStatus::kLost;
                 if (attitude && !gt_poses.empty()) {
@@ -670,6 +683,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     fs::create_directories(run_dir);
     runtime::WriteTum((run_dir / "estimate_body.tum").string(), est_body);
     std::ofstream(run_dir / "vo_trace.csv") << trace.str();
+    if (reassoc.enabled()) std::ofstream(run_dir / "reassoc_trace.csv") << reassoc.Trace();
     // Ground truth goes under raw/, which .gitignore excludes: for EuRoC it is
     // the dataset's own data (InC-NC, D35), so evidence commits carry our
     // estimate and derived numbers but never a copy of the dataset.
@@ -701,7 +715,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = source.DegradationConfig();
     m.radiometric = source.Summary();
-    m.feature_engine = orb.Name();
+    RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
     m.bag_checksum = source.BagChecksum();
@@ -713,6 +727,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     std::string cmd;
     for (int i = 0; i < argc; ++i) cmd += (i ? " " : "") + std::string(argv[i]);
     m.extra["command"] = cmd;
+    if (reassoc.enabled()) m.extra["reassociation"] = reassoc.ManifestValue();
     std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(m);
 
     std::ofstream res(run_dir / "results.yaml");
@@ -896,6 +911,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
+    if (reassoc.enabled()) res << reassoc.ResultsLine();
+    res << features->ResultsYaml();   // 2.1: empty for orb
+    if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10
     res.close();
 
     const auto missing = runtime::MissingRequiredFields(m);

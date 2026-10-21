@@ -62,6 +62,65 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   prior is contained. Tests 4/4; existing PGO tests unchanged.
 - **Not yet on EuRoC:** the sim calibration and part 3 come first (maintainer).
 
+## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63 draft)
+
+- **Built:**
+  - Our export from upstream (`cvg/LightGlue@eb42fee`, ALIKED-n16, native 752×480), exact through cv::ALIKED /
+    cv::LightGlueMatcher (SMOKE §4s-2).
+  - `perception::HardPairMatcher`.
+  - The offline `ariadne_loop_verify` with `loop_verify_eval.py`.
+  - 7 new tests pass (only the new ones were run).
+- **EuRoC loop-candidate verification** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
+  AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights; AP_geom 0.807 vs 0.303 (all 676
+  positives as the denominator). LightGlue adds
+  +0.042 over mutual NN. Both bars pass (PERCEPTION_2.1 §12.6).
+- **Stated:**
+  - 4 confident wrong verifications in the Vicon rooms, so the downstream PnP and degeneracy gates stay.
+  - Zero-false-accept recall is ≈ 0 by the fixed definition, because tiny baselines break the translation term.
+  - Cost ≈ 1.2 s per pair warm under load; hard pairs only.
+
+## 2026-10-20 — 2.1 retrieval: EigenPlaces R50-256 via cv::dnn + PlaceIndex (D62 draft)
+
+- **Built:** `PlaceRecognizer`, exact against upstream (SMOKE §4r), and `PlaceIndex` (exact default; `cv::ANNIndex`
+  ablation). The offline tool `ariadne_place_eval` plus `python/analysis/place_recall_eval.py`; no runner hunk.
+- **EuRoC loop-closure recall** (11 flights, 297 queries, 1 m / 30°, database older than 30 s): pooled R@1
+  EP-376 0.626, EP-752 0.677, mean-bit ORB 0.444, random 0.167.
+  - Bar 1 (beat the placeholder by 0.10 and twice random) passes.
+  - Bar 2 (376 within 0.05 of 752) is missed by 0.0005. The maintainer chose 376×240 as the default
+    (2026-10-20, PERCEPTION_2.1 §11.7); 752 stays selectable.
+- **Cost:** EP-376 ≈ 150–200 ms, EP-752 ≈ 650–850 ms per descriptor (shared CPU). Annoy = exact on 297/297 top-1.
+
+## 2026-10-19 — 2.1 §9.3: WLS stereo confidence wired, tested, off by default (D61)
+
+- **Built:** `stereo.confidence: wls` fills `StereoDepth.confidence` from OpenCV's `DisparityWLSFilter` without
+  touching our SGBM (the documented factory mutates it). The left disparity is byte-identical, verified in unit tests
+  and on EuRoC MH_01 and V2_01.
+- **Cost** about 37 ms per stereo pass at 752×480 (right SGBM 23 + filter 14). Default `none` until a consumer exists.
+- **Quality (AUC against EuRoC laser scans): unmeasured** (deferred). §9.4 validator tests completed. ctest 343/343.
+- **Found:** OpenCV 5.0.0 SGBM treats `disp12MaxDiff <= 0` as 1 (strictest), not "disabled".
+
+## 2026-10-19 — 2.1 perception: ORB + lost-mode re-association for EuRoC v2; XFeat measured, not shipped (D60)
+
+- **Ships (D60, approved as scoped):** `perception/euroc_v2.yaml` = `euroc.yaml` + lost-mode re-association, the
+  ORB-SLAM relocalisation idea limited to the BA window and verified by seeded PnP.
+  - **EuRoC v2 sweeps must switch to `--perception-config configs/perception/euroc_v2.yaml`**; no repo file defines
+    the pair.
+  - With the section absent, runs are byte-identical on EuRoC v2 (verified), and on v1/sim by construction.
+- **EuRoC v2 on the merged D58 tree:**
+  - failing-four median lost frames 264/101/141/171 → 67/99/92/122;
+  - ATE passes on MH_04, V1_03 and V2_03;
+  - 11-flight seed-1 average ATE 0.223 → 0.204 m;
+  - against the D54 table, it beats all four failing flights on both metrics, and V2_02's ATE is 1.9% worse.
+- **One stated miss: MH_05 ATE.** Its bar is a coasting run whose large error happened to cancel earlier drift
+  (PERCEPTION_2.1 §9.15). The baseline's lost handling is fine.
+- **XFeat is built** (engine, keyframe cadence, Shi-Tomasi gate, exact against upstream) **and measured**: it cuts
+  lost frames hardest but regresses accuracy on V2 and MH_02 even without re-association. It stays
+  config-selectable.
+- Bars were re-derived on D58 with 3-seed medians (rev 3) before measuring. ctest 332/332 on the merged tree.
+  Pre-merge e2e not run (maintainer: only when needed; unit + targeted EuRoC sweeps are the evidence).
+- **Unmet:** XFeat timing (unmeasured); projection-guided re-association (not built).
+- **Next in 2.1:** WLS / §9.4 / §9.6, ANNIndex, ALIKED+LightGlue.
+
 ## 2026-10-21 — 2.5: intra-agent loop closure live on EuRoC; loop noise model calibrated (D73 part 2b)
 
 - **Wired:** retrieval → verifier → degeneracy gate → PCM → GNC on a mirror of the VO graph, behind a `loop_closure:`

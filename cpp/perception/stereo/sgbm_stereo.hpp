@@ -20,15 +20,29 @@
 // Z and sigma_Z are computed in float32 and stored as fp16 (relative precision
 // ~5e-4, far below sigma_Z itself).
 //
-// `confidence` is a [PLACEHOLDER]: all zero, and `confidence_is_placeholder`
-// says so. §9.3 requires the DisparityWLSFilter confidence map (Phase 2) and
-// forbids inventing a heuristic; zero rather than 255 so that a consumer that
-// reads it by mistake discards the depth instead of trusting it.
+// `confidence` (2.1, PERCEPTION_2.1.md §10), with stereo.confidence:
+//   none  [PLACEHOLDER] all zero, `confidence_is_placeholder` says so; zero
+//         rather than 255 so a consumer that reads it by mistake discards the
+//         depth instead of trusting it.
+//   wls   §9.3's map from cv::ximgproc::DisparityWLSFilter. A right-matcher
+//         SGBM pass (createRightMatcher: a NEW matcher, ours is untouched)
+//         gives d_R; per pixel the filter keeps min(c_L, c_R) where the
+//         left-right check |d_L + d_R(x - d_L)| < wls_lrc_threshold/16 px
+//         passes, else 0; c = max(1 - 0.001 var(d16), 0) over a box of the
+//         discontinuity radius (a smooth surface scores 255, a depth edge
+//         low). 0 wherever `valid` is 0. The left disparity stays SGBM's
+//         unless wls_filtered_disparity.
+//   NOT createDisparityWLSFilter(matcher): it sets the matcher's uniqueness
+//   to 0, disp12MaxDiff to 1e6 and speckle window to 0, which would change
+//   our left disparity. createDisparityWLSFilterGeneric + the ROI and radius
+//   the native SGBM wiring would set. Deviation: natively the map is computed
+//   from a uniqueness-0 left disparity; here from ours.
 // ---------------------------------------------------------------------------
 #include "perception/perception_config.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/stereo.hpp>
+#include <opencv2/ximgproc/disparity_filter.hpp>
 
 namespace ariadne::perception {
 
@@ -36,9 +50,10 @@ struct StereoDepth {
     cv::Mat disparity;    // CV_16S, 1/16 px (D34); invalid pixels hold the SGBM invalid value
     cv::Mat Z;            // CV_16F, metres; 0 where invalid
     cv::Mat sigma_Z;      // CV_16F, metres; 0 where invalid (§9.5)
-    cv::Mat confidence;   // CV_8U  [PLACEHOLDER] zeros until WLS (Phase 2)
+    cv::Mat confidence;   // CV_8U  0-255; zeros (placeholder) unless stereo.confidence = wls
     cv::Mat valid;        // CV_8U  255 = valid depth
     bool confidence_is_placeholder = true;
+    double confidence_ms = 0.0;   // right-matcher pass + WLS filter wall clock (0 when none)
     double valid_fraction = 0.0;
     /// Columns [0, blind_columns) can never be valid: their match would lie
     /// left of the right image's first column. Reported, not hidden.
@@ -73,6 +88,10 @@ private:
     StereoParams params_;
     RectifiedStereoRig rig_;
     cv::Ptr<cv::StereoSGBM> sgbm_;
+    // stereo.confidence = wls only. Not thread-safe (the filter keeps its last map): one SgbmStereo per thread.
+    cv::Ptr<cv::StereoMatcher> right_;
+    cv::Ptr<cv::ximgproc::DisparityWLSFilter> wls_;
+    cv::Rect wls_roi_;
 };
 
 }  // namespace ariadne::perception

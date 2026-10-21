@@ -1,0 +1,57 @@
+#pragma once
+// ---------------------------------------------------------------------------
+// Global place descriptor (arch §13, §7.4; PERCEPTION_2.1.md §11): EigenPlaces
+// R50-256 (Berton et al., ICCV 2023; gmberton/EigenPlaces, MIT) exported to
+// ONNX by python/model_tools/eigenplaces_reference.py and run by cv::dnn.
+//
+// WHAT IT IS. A ResNet-50 trained so that images of the same place from
+// different viewpoints map to nearby vectors. Its last feature map (2048 x
+// H/32 x W/32) is L2-normalised per location, GeM-pooled (the generalised
+// mean, (mean x^p)^(1/p), between average pooling at p = 1 and max pooling as
+// p -> inf; p is learned), projected to 256-D and L2-normalised: one unit
+// vector per image. Place similarity = cosine = dot product. It fills the
+// GLOBAL_DESCRIPTOR contract the mean-bit placeholder fills today (256-D unit
+// vector, cosine; collaboration/retrieval/mean_bit_descriptor.hpp).
+//
+// PREPROCESSING, exactly as the exporter's: gray / 255 -> INTER_AREA to the
+// export's fixed size (identity at the native size) -> the gray channel
+// replicated to RGB -> ImageNet mean/std. The ONNX graph has a FIXED input
+// size (GeM's kernel is the map size); the file name carries it.
+//
+// COST (SMOKE §4r, indicative): 0.2-0.5 s at 376x240, 1-2.7 s at 752x480 on
+// this CPU. Not for every keyframe: describe a spaced subset.
+// A cv::dnn::Net is not thread-safe (§7.4): one PlaceRecognizer per thread.
+// ---------------------------------------------------------------------------
+#include <opencv2/core.hpp>
+#include <opencv2/dnn.hpp>
+
+#include <string>
+#include <vector>
+
+namespace ariadne::perception {
+
+struct PlaceRecognizerParams {
+    std::string onnx;            // eigenplaces_r50_256_<W>x<H>.onnx
+    int width = 376, height = 240;
+    std::string engine = "classic";   // classic | new (cv::dnn ENGINE_CLASSIC / ENGINE_NEW; both exact, SMOKE §4r)
+};
+
+class PlaceRecognizer {
+public:
+    explicit PlaceRecognizer(const PlaceRecognizerParams& p);
+
+    /// 256-D unit vector for an 8-bit gray image (any size; resized to the export's).
+    std::vector<float> Describe(const cv::Mat& gray);
+
+    /// The exact network input: 1 x 3 x H x W CV_32F (NCHW).
+    static cv::Mat Preprocess(const cv::Mat& gray, int width, int height);
+
+    /// Manifest id, e.g. "eigenplaces_r50_256@376x240/cv_dnn_classic".
+    std::string Name() const;
+
+private:
+    PlaceRecognizerParams p_;
+    cv::dnn::Net net_;
+};
+
+}  // namespace ariadne::perception

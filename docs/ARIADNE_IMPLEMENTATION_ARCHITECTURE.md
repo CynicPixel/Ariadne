@@ -310,6 +310,14 @@ Implementation consequence:
 
 Use `cv::ANNIndex` for retrieval/index persistence.
 
+> **As built (2.1, D62 — DRAFT, pending the maintainer).** `perception/place/`:
+> - `PlaceRecognizer` runs EigenPlaces R50-256 through `cv::dnn`, one Net per thread;
+> - `PlaceIndex` has two backends, `exact` (one gemm, the default) and `annoy` (`cv::ANNIndex`, rebuilt from the
+>   full matrix when stale, over-fetch then filter, exact rescoring).
+>
+> Retrieval on EuRoC: pooled R@1 0.626 (376×240) / 0.677 (752×480) against 0.444 for mean-bit (PERCEPTION_2.1
+> §11.6). Default inference size 376×240 (maintainer, 2026-10-20; §11.7). No consumer in 2.1; 2.5 consumes the loop-candidate query.
+
 ---
 
 ### Keep: Swarm-SLAM communication architecture
@@ -1593,6 +1601,19 @@ and/or XFeat semi-dense refinement.
 against a 20–30 Hz requirement. It is a verifier for expensive, rare, high-value decisions — inter-agent
 candidates that survived retrieval and cheap geometric screening — and nothing else (C8).
 
+> **As built (D60, 2.1, `docs/design/PERCEPTION_2.1.md`).** EuRoC v2 ships **ORB + lost-mode re-association**, not
+> XFeat.
+> - **Re-association:** when fewer than 30 tracks hold a landmark, tracks holding none are described and matched to
+>   healthy (MEASURED-born) window landmarks: mutual NN, ratio 0.75, Hamming ≤ 50. The matches are verified by seeded
+>   PnP and relabelled onto the landmark id.
+> - **XFeat as specified here is built and config-selectable:** `features.engine: xfeat` (one cached forward per
+>   image, §7.3 grid selection after the mask), `tracker.replenish: keyframe` with an off-cadence
+>   `replenish_min_tracks`, and this section's image-gradient quality as `replenish_min_eig_quality`, a Shi-Tomasi
+>   gate on new tracks.
+> - Measured on EuRoC, XFeat cuts lost frames hardest but regresses ATE on V2 and MH_02, even with re-association off.
+> - "XFeat primary" stands for the learned paths. The VO front-end choice is revisited when that regression is
+>   removed.
+
 ---
 
 ## 7.3 Keypoint selection
@@ -1662,6 +1683,21 @@ pool owns N nets loaded from the same ONNX file.
 **LightGlue.** `cv::LightGlueMatcher` requires `setPairInfo(qKpts, tKpts, qSize, tSize)` *before* `match()`. Wrap
 it so it drops into the same `DescriptorMatcher` seam as brute-force and ANN matching, so the matcher is an
 ablation switch rather than a structural commitment.
+
+> **As built (2.1, D63 draft; PERCEPTION_2.1 §12, SMOKE §4s).**
+> `perception::HardPairMatcher` wraps `cv::ALIKED` + `cv::LightGlueMatcher` on Ariadne's own export from upstream:
+> ALIKED-n16 at K = 1024 (2048 is the ablation), native 752×480, LightGlue with all 9 layers. The wrapper owns three
+> conventions:
+> - the image size must equal the export's (it throws otherwise; sim needs its own export);
+> - upstream's aspect-preserving keypoint normalisation, passed through an empty `Size()`; OpenCV's per-axis rule is
+>   the ablation;
+> - one instance per thread.
+>
+> Cost about 0.5 s per extraction and 0.6 s per match (shared CPU), so it serves hard pairs only (C8).
+>
+> **Measured on EuRoC loop candidates** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
+> AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights. But 4 confident wrong verifications show
+> that an E-inlier count alone is not a loop gate, so the PnP and degeneracy gates stay downstream (§12.6).
 
 **Fallback if the new DNN engine rejects an operator.** The sanctioned path is the ONNX Runtime integration that
 OpenCV 5 itself ships `[VERIFIED web 2026-08-30, docs.opencv.org/5.0]`. This keeps the "runs through OpenCV" claim
@@ -1842,6 +1878,16 @@ Subpixel: SGBM outputs fixed-point disparity in 1/16 px. Carry `σ_d = 0.25–0.
 
 Source:
 - https://docs.opencv.org/5.0/main_modules/ptcloud_rgbd.html
+
+> **As built (D61, 2.1).** `stereo.confidence: wls` fills `StereoDepth.confidence` (u8, 0 where invalid) from
+> `DisparityWLSFilter::getConfidenceMap()`.
+> - It uses a right-matcher pass and the generic filter, with the native SGBM ROI and radius. NOT
+>   `createDisparityWLSFilter(sgbm)`, which would mutate our SGBM.
+> - The left disparity is unchanged unless `wls_filtered_disparity`.
+> - Default `none` (placeholder): nothing consumes the map yet, and it costs a second SGBM pass (~23 ms) plus the
+>   filter (~14 ms) per stereo pass at 752×480.
+> - Quality against EuRoC laser-scan GT (AUC, Hu & Mordohai protocol) is **unmeasured**; the design is in
+>   PERCEPTION_2.1 §10.6.
 
 ---
 
@@ -4226,6 +4272,15 @@ reconstruction_backend:
 ```
 
 This is critical for reproducibility.
+
+> **As built (D60, 2.1).** Front-end entries recorded under the manifest's `extra` map:
+> - `reassociation` (`off` or `lost_window/latest_keyframe[/admit_bridged]`);
+> - `replenish_cadence` (`every_frame` | `keyframe`);
+> - for `feature_engine: xfeat`: `xfeat_dnn_engine` (`opencv_dnn_graph` | `gemm_reference`), `xfeat_input` (e.g.
+>   `resize:736x480`), `xfeat_weights`, `xfeat_weights_checksum` (sha256 from the export's provenance file) and
+>   `xfeat_upstream_commit`.
+>
+> `results.yaml` gains `reassociation:` and `xfeat:` lines when they are enabled.
 
 ---
 

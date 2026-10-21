@@ -88,12 +88,24 @@ public:
     explicit XFeatNet(const std::string& weights_atb, Engine engine = Engine::kOpenCvDnn);
     Engine engine() const { return engine_; }
 
-    /// The network on an 8-bit gray image whose sides are multiples of 32 (fed as raw 0..255, as upstream does).
+    /// The network on a gray image whose sides are multiples of 32, 8-bit or float, fed as raw 0..255 as upstream
+    /// does (float lets a caller resize the way upstream's preprocess_tensor does, without re-quantising to 8 bits).
     NetOutput Forward(const cv::Mat& gray) const;
 
     /// upstream XFeat.detectAndCompute (sparse): NMS on the 8x8-unshuffled keypoint probabilities, score = probability
-    /// x reliability, top-k, bicubic descriptor sampling, L2 normalisation.
+    /// x reliability, top-k, bicubic descriptor sampling, L2 normalisation. = Candidates + top-k + SampleDescriptors.
     Detection Detect(const cv::Mat& gray, const DetectParams& p = {}) const;
+
+    /// A pixel of the network input that survives NMS and the threshold, with upstream's score ((0,0) scores -1).
+    struct Candidate {
+        cv::Point pos;
+        float score = 0.0f;
+    };
+    /// Detect's first half: every NMS survivor, row-major, scored; no top-k (callers select their own way, §7.3).
+    static std::vector<Candidate> Candidates(const NetOutput& o, const DetectParams& p);
+    /// Detect's second half at ANY pixels (x, y) of the network input: upstream's bicubic sampler on the per-cell
+    /// L2-normalised dense map, then L2 normalisation. N x 64 CV_32F, row i for pts[i].
+    static cv::Mat SampleDescriptors(const NetOutput& o, const std::vector<cv::Point2f>& pts);
 
 private:
     NetOutput ForwardGemm(const FMap& x) const;

@@ -2453,3 +2453,202 @@ verified" open item, and STATUS's "Pending with AWS: GPU quota … Bedrock is bl
 - **GPU: EC2 Spot "All G and VT" in eu-north-1 approved at 4 vCPU (AWS, 2026-10-19).** One 4-vCPU GPU instance; spot,
   so reclaimable: checkpoint gsplat and keep a demo fallback. On-demand G/VT (case 179205877900026) is still pending.
 
+## 2026-10-19 — D60: 2.1 — ORB + lost-mode re-association ships for EuRoC v2; XFeat stays a measured ablation (overrides "XFeat primary" for this phase)
+
+> **Approved by the maintainer as scoped, 2026-10-19.** It overrides CLAUDE.md §1's "XFeat primary features" for the
+> EuRoC v2 VO front-end only. "XFeat primary" stands for the learned paths. CLAUDE.md itself is not amended.
+
+Design, every run and every bar: `docs/design/PERCEPTION_2.1.md` (§3 rev 3, §9).
+
+**What ships.** `configs/perception/euroc_v2.yaml` becomes the EuRoC v2 perception config, paired with
+`configs/slam/euroc_v2.yaml`. It is `euroc.yaml` plus a `reassociation:` section. **No file in the repo defines the
+v2 pair** (D58's v2 sweep ran `perception/euroc.yaml` + `slam/euroc_v2.yaml`). So from D60 on, every EuRoC v2
+sweep, the critical-path session's included, must pass `--perception-config configs/perception/euroc_v2.yaml`, or
+it silently runs without re-association.
+- Lost-mode re-association, the ORB-SLAM §V-C relocalisation idea restricted to the BA window. When fewer than 30
+  live tracks hold a landmark, tracks holding none are described at their pixel and matched against healthy (born at
+  MEASURED keyframes) untracked landmarks: mutual NN, Lowe 0.75, Hamming ≤ 50 (ORB-SLAM2 `ORBmatcher`, `TH_LOW`).
+- The matches are verified by seeded USAC PnP together with the healthy correspondences.
+- Accepted tracks are renamed (`KltTracker::Relabel`), so StereoVo finds the old landmark by id.
+- Off when the section is absent.
+  - Verified byte-identical on EuRoC v2: section absent, D58 seed 1 equals D58's own run on all 11 flights on the
+    merged binary; on the D56 tree, ORB `euroc_v2` re-runs equal A1, and with the code present but the section
+    absent, runs equal D56.
+  - Identical **by construction, not run** for v1 (`slam/euroc.yaml`) and the sim tools that include the runner:
+    every new call returns early when its config section is absent.
+
+**Evidence (merged tree with D58's gyro; §3 rev 3: 3-seed medians on the failing four, seed 1 on the passing seven
+by the maintainer's time-gated amendment):**
+- Failing four, against min(D54-equivalent, D58):
+  - lost frames pass on all four (medians 264 → 67, 101 → 99, 141 → 92, 171 → 122);
+  - ATE passes on MH_04, V1_03 and V2_03 (V2_03 0.595 → 0.535 on every seed).
+- Passing seven: six hold at seed 1. V2_02 missed at seed 1 (0.126 against 0.118); a post-hoc 3-seed check gives a
+  median of 0.1169 against D58's 0.1165, with lost 16 → 8.
+- 11-flight seed 1: average ATE **0.223 → 0.204 m**, lost frames 743 → 631 (MH_04's seed 1 is its bimodal bad draw:
+  266 against 66/67).
+- **Against the brief's literal D54 table** (seed 1, §3.4):
+  - A1 beats it on ATE and lost frames on all four failing flights: MH_04 2.777/278 → 0.365/266, MH_05
+    0.560/107 → 0.314/101, V1_03 0.439/146 → 0.391/89, V2_03 2.118/183 → 0.569/130.
+  - It equals or beats it on six passing flights.
+  - V2_02's ATE is 1.9% worse (0.1238 → 0.1262), with lost frames 17 → 8.
+
+**Accepted with one stated miss: MH_05 ATE** (0.314 against the bar of 0.2274).
+- The bar is the D54-equivalent (coasting) median. Coasting crosses MH_05's frame-1242 loss 25× worse than D58's gyro
+  (0.5 m / 4.3° against 0.02 m / 0.14°), but on seeds 2 and 3 that error happens to cancel earlier drift. Seed 1
+  of the same coasting scores 0.560.
+- Each half of the flight scores about 0.08 m in every configuration, and D58 has 20% less RPE than coasting.
+- A1 beats D58 on MH_05 on every seed (0.314 against 0.343). Analysis: PERCEPTION_2.1 §9.15. Nothing is wrong with
+  D56/D58's lost handling on MH_05.
+
+**Why not XFeat (CLAUDE.md §1 "XFeat primary features", arch §7.2).** It is built and verified, and stays
+config-selectable (`features.engine: xfeat`):
+- `XFeatEngine` over D50's net: one cached forward per image, mask before §7.3 grid selection, `Describe` at any
+  pixel with upstream's sampler, upstream's 752 → 736 preprocessing reproduced to float precision.
+- Keyframe cadence (`tracker.replenish: keyframe`, `replenish_min_tracks`) and the §7.2 image-gradient gate
+  (`replenish_min_eig_quality`).
+
+Measured, it cuts lost frames hardest but costs accuracy:
+- On the D56 tree, XFeat at keyframes (A4) regressed 6 of the 7 passing flights.
+- An engine × cadence 2×2 showed both contribute.
+- The best fix (A4t-r: resupply below 300 tracks + ratio 0.75 on XFeat's matcher) failed rev 3 on the merged tree:
+  V2_01, V2_02, V2_03 and MH_02 ATE.
+- With re-association OFF, XFeat alone still regresses V2_03 and MH_02 (§9.13), so the regressor is the engine
+  (or its cadence), not the association.
+- It also runs at 0.53–0.88 forwards per frame on the V2 flights, near C8's frame-rate limit.
+
+XFeat remains the planned primary for the learned paths it was chosen for. This decision is about the EuRoC v2 VO
+front-end in 2.1, revisited if a later phase removes the regression.
+
+**Not done in 2.1 here, stated plainly:**
+- **XFeat timing within the §4p budget: unmet (unmeasured).** Forward passes were only timed under load (28–78 ms
+  against ≤ 16 ms).
+- **The PRIORITY item is half built.** Descriptor re-association with PnP verification exists. Projection-guided
+  search into the window (ORB-SLAM's Track Local Map) does not.
+- The XFeat input-size decision is not taken; `resize` (upstream) is the default.
+- The rest of plan 2.1 is not started: WLS/§9.4/§9.6, ANNIndex, ALIKED+LightGlue.
+
+**Correction to D54 (append-only).** D54's quoted lost frames "MH_04 266, V2_03 181, V1_03 139, MH_05 100" are
+v1's, taken from the v1 rows of the same sweep. v2's are 278, 183, 146 and 107 (PERCEPTION_2.1 §2.1).
+
+**Merge note.** `feat/phase2-foundations` (D57, D58) is merged into `feat/2.1-perception` (`dbbf8d5`).
+`ALGORITHMS.md`: D58's inertial section keeps §1.3b; 2.1's re-association catalogue entry is §1.3c.
+
+## 2026-10-19 — D61: §9.3's confidence — the WLS map wired without touching our SGBM; off by default until consumed
+
+Design: `docs/design/PERCEPTION_2.1.md` §10.
+
+- **What:** `stereo.confidence: none | wls` (default `none`, the placeholder). Under `wls`, `SgbmStereo` runs
+  `ximgproc::createRightMatcher(sgbm)` (a new SGBM) and `createDisparityWLSFilterGeneric(true)`, with the ROI
+  (min+num, 0, W − (min+num) − max(0, −min), H) and discontinuity radius ceil(0.5·blockSize) that the native SGBM
+  wiring sets. `getConfidenceMap()` (CV_32F 0–255) → u8, 0 wherever `valid` is 0. The left disparity is
+  byte-identical unless `wls_filtered_disparity: true`.
+- **Why not `createDisparityWLSFilter(sgbm)`, the documented route:** it sets our matcher's uniqueness to 0,
+  disp12MaxDiff to 1e6 and speckle window to 0 (pinned `disparity_filters.cpp`). That would silently change every
+  disparity, the SGBM gate and all v1/v2 outputs.
+- **Deviation from OpenCV's intent, stated:** the map is computed from OUR left disparity (uniqueness 15,
+  disp12MaxDiff 1, speckle 200), which already passed SGBM's 1 px left-right check. On valid pixels WLS's 1.5 px
+  check is therefore mostly redundant, and the confidence is dominated by its variance term (depth edges).
+- **Found:** OpenCV 5.0.0 SGBM clamps a non-positive `disp12MaxDiff` to 1 (`stereosgbm.cpp`: `> 0 ? v : 1`), so
+  "non-positive disables" is false in this build.
+- **Evidence:**
+  - 9 unit tests: placeholder default; byte-identity of disparity/Z/σ_Z/valid with confidence on; high on smooth
+    surfaces, low at a depth step; the left-right check rejects an occlusion band once SGBM's own check is off (1e6);
+    filtered disparity opt-in; 1 vs 8 threads byte-identical; config validation; §9.4's width and boundary cases.
+  - EuRoC MH_01 and V2_01 with `confidence: wls`: results and trajectories byte-identical to the v2 config.
+  - Cost per stereo pass at 752×480: right SGBM 23 ms + filter 14 ms, best of 5 at load 3.8 (pipeline median 40–52 ms
+    under load).
+- **Not measured: quality.** The AUC against EuRoC's Leica scans is deferred by the maintainer (2026-10-19) and
+  recorded as unmeasured. Nothing in 2.1 consumes the map. Turning it on in a shipped config waits for a consumer
+  (TSDF §20.1 or §11.2) and that measurement.
+
+
+## 2026-10-20 — D62 (DRAFT, pending the maintainer): place retrieval — EigenPlaces R50-256 via cv::dnn; exact index default, cv::ANNIndex the ablation
+
+Design: `docs/design/PERCEPTION_2.1.md` §11. Catalogue: `ALGORITHMS.md` §1.6 (as-built note).
+
+- **What:**
+  - `perception::PlaceRecognizer` runs EigenPlaces R50-256 (Berton et al., ICCV 2023, MIT, `a2969f7`). The export
+    comes from `python/model_tools/eigenplaces_reference.py` (opset 17, fixed input size). It runs in `cv::dnn`
+    `ENGINE_CLASSIC`, one Net per thread, and outputs a 256-D unit vector (the existing `GLOBAL_DESCRIPTOR`
+    contract).
+  - `perception::PlaceIndex` provides top-k cosine with an admission filter.
+- **Deviation, stated (§49):** the arch says "Use `cv::ANNIndex`". The default here is **`exact`** (one gemm, a few
+  µs at thousands of keyframes, deterministic). `annoy` (`cv::ANNIndex`) is kept behind the same interface as the
+  persistence/scale ablation. Reason: three findings from the pinned source (ids restart at 0 per `addItems`, no add
+  after build, a per-thread seed over `hardware_concurrency()`).
+- **Evidence:**
+  - SMOKE §4r: `cv::dnn` matches upstream at cosine 1.0000000, both engines, both sizes.
+  - Unit tests: `test_place` (exact, filter, annoy agreement 199/200, repeat 200/200, rebuild after add,
+    preprocessing ≤ 1e-5, end-to-end cosine ≥ 0.9999) and `test_eigenplaces_reference`.
+  - EuRoC, 11 flights, 297 queries: pooled R@1 EP-376 0.626, EP-752 0.677, mean-bit 0.444, random 0.167. Annoy
+    top-1 equals exact on 297/297.
+- **Acceptance (§11.5, fixed before the run):** bar 1 PASS. Bar 2 MISSED by 15/297 = 0.0505 against 0.05: half a
+  query, consistent direction, paired McNemar p = 0.028 (optimistic, the queries are correlated).
+- **Size (§11.7): DECIDED by the maintainer 2026-10-20, (a) 376×240 is the default.** The bar-2 miss is accepted
+  and stated. 752×480 stays a selectable export. A size in between was not measured.
+- **Limits:**
+  - EuRoC-scoped: the rig is 1280×720 RGB, and sim needs its own export and an RGB path.
+  - No consumer in 2.1 (2.5 owns loop closure).
+  - CLAHE not run.
+  - Annoy determinism across core counts is unverified.
+
+## 2026-10-21 — D63 (DRAFT, pending the maintainer): the hard-pair path — ALIKED-n16 + LightGlue from our own upstream export, through cv::ALIKED / cv::LightGlueMatcher
+
+Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4s / §4s-2. Catalogue: `ALGORITHMS.md`
+(the correction note under the OpenCV-5 inventory).
+
+- **What:** `perception::HardPairMatcher`, with ALIKED-n16 at K = 1024, native 752×480, and LightGlue running all
+  9 layers with `filter_threshold` 0.1. Upstream keypoint normalisation goes through `setPairInfo(..., Size(),
+  Size())`; one instance per thread. The models are exported by `python/model_tools/aliked_lightglue_reference.py`
+  from `cvg/LightGlue@eb42fee` with the weights `Shiaoming/ALIKED@683d7c6` `aliked-n16.pth` and LightGlue
+  `v0.1_arxiv` `aliked_lightglue.pth`, configured as glue-factory's official setting.
+- **Why our own export** (the maintainer's call, 2026-10-20): opencv_extra's files are an unlicensed personal
+  export, of ALIKED-**n16rot** (LightGlue's ALIKED weights were trained on n16), at a fixed 640×640 square.
+- **Deviations from OpenCV's documented use, stated:**
+  - pre-normalised keypoints, not OpenCV's per-axis rule;
+  - keypoints emitted in cv::ALIKED's own convention, so its (n+1)/2·W mapping returns upstream's (W−1) pixels;
+  - export-only rewrites for cv::dnn ENGINE_NEW (DCN as GridSample + MatMul, gathers, explicit reshapes, a Floor
+    before a Cast), each checked against unmodified upstream.
+- **Evidence:**
+  - **Exact against upstream PyTorch through OpenCV's classes:** keypoints 100% within 9.3e-5 px, descriptors
+    within 4e-6, identical LightGlue match sets.
+  - **Tests:** 2 reference tests, 3 wrapper tests (normalisation, size and parameter checks, upstream match set
+    reproduced), 2 geometry convention tests (a synthetic pose recovered within 0.0003°).
+  - **EuRoC loop-candidate verification**, 4815 EP-376 top-5 pairs on 11 flights, with the 1.6 verifier's own
+    RANSAC essential matrix, against the ORB placeholder:
+
+    | | ORB placeholder (A) | ALIKED + LightGlue (C) |
+    |---|---|---|
+    | pose AUC@10° | 0.284 | 0.607 (+0.322) |
+    | flights where C ≥ A | | 11/11 |
+    | AP_geom, fixed denominator (all 676 positives) | 0.303 | 0.807 |
+    | AP_geom, per-row denominator (as first scored) | 0.578 | 0.891 |
+
+    LightGlue over mutual NN: AUC@10° +0.042. Both §12.5 bars **PASS**, bar 1 under both AP denominators.
+    The per-row one was the scorer as first written; the fixed one is like-for-like (§12.6).
+  - **Reported:** OpenCV's per-axis normalisation is a wash, so upstream stays the default. K = 2048 brings no pose
+    gain on all positives at ≈ 2.8× the cost, so K = 1024 stays. E's subset AP is biased against C by
+    construction and does not decide K.
+- **Stated limits:**
+  - Zero-false-accept recall as fixed is ≈ 0 for every row: tiny-baseline revisits with correct rotation fail the
+    translation term. A rotation-only diagnostic gives C 0.381.
+  - **4 confident wrong verifications** (210–264 inliers, rotation error 37–59°) in the Vicon rooms. An
+    essential-matrix inlier count alone is not a loop-closure gate; the downstream PnP and degeneracy gates (1.6,
+    D71) must stay.
+  - The inlier threshold τ does not transfer stably from MH to V.
+  - The exports are 752×480 only; sim at 1280×720 needs its own export plus an RGB path.
+  - No runtime consumer in 2.1 (2.5 and 3.x call it).
+  - Cost ≈ 1.2 s per warm pair and ≈ 3 s per cold pair under load (≈ 0.6 / 1.7 s quiet).
+  - The location of cv::dnn's rounding behind the Floor fix is `[UNVERIFIED]`.
+- **Ablation baselines kept:** ORB + ratio (1.6 verifier), ALIKED + mutual NN, OpenCV per-axis normalisation,
+  K = 2048.
+- **§49 ritual for this adoption** (locked by CLAUDE.md §1, adopted here):
+
+  | step | status |
+  |---|---|
+  | catalogue | the ALGORITHMS.md correction and as-built note |
+  | arch decision | D63, plus the §7.4 blockquote |
+  | ablation matrix | PERCEPTION_2.1 §12.4 rows A–E |
+  | benchmark config | **deferred to 2.5**, the first runtime consumer: no `configs/` entry and no `HardPairParams` in `perception_config` yet. The offline tool takes its paths on the command line. |
+  | manifest schema | **deferred to 2.5:** §28.2 has no hard-pair field yet. `ariadne_loop_verify`'s manifest records `hard_pair: [<HardPairMatcher::Name()>…]`. |
+- **The rotation-only zero-false-accept numbers are a diagnostic chosen after seeing the data, not a bar.**

@@ -66,6 +66,30 @@ FlannBasedMatcher · LightGlueMatcher · ANNIndex
 | `cv::LightGlueMatcher` | Subclass of `cv::DescriptorMatcher`. Call `setPairInfo(qKpts, tKpts, qSize, tSize)` **before** `match()`. Auto-context from in-process `ALIKED`. Drops into any `BFMatcher`-shaped code. |
 | `cv::ANNIndex` | Annoy-backed ANN index — the modern FLANN replacement. **This is your place-recognition retrieval index.** *(Note: class is `ANNIndex`, not `AnnoyIndex`.)* |
 
+> ⚠️ **Correction (2026-10-17, 2.1 OpenCV-native check):** the `cv::XFeat` row does not hold for the **pinned 5.0.0
+> build**. There is no `XFeat` class in either tree (`SMOKE_TEST_RESULTS.md`, the module audit). Ariadne runs XFeat as
+> its own `cv::dnn` graph (`cpp/perception/features/xfeat/xfeat_net.*`, D50, SMOKE §4p). `ALIKED`, `LightGlueMatcher`
+> and `ANNIndex` are present as described above. ORT does not appear in `cvconfig.h`; this is
+> [UNVERIFIED pending `getBuildInformation`], and ORT is treated as absent.
+
+> ⚠️ **Correction (2026-10-21, 2.1 hard-pair preflight; SMOKE §4s, PERCEPTION_2.1 §12), the `cv::ALIKED` and
+> `cv::LightGlueMatcher` rows against the pinned 5.0.0 source:**
+> - **No weights ship.** OpenCV's own test loads opencv_extra testdata fetched from a personal repo with no
+>   licence and no export script (`aliked-n16rot-top1k-640.onnx`, `aliked_lightglue.onnx`).
+> - **Both load on ENGINE_NEW only;** ENGINE_CLASSIC fails on both.
+> - **"Auto-context from in-process ALIKED" is false:** the implementation never reads it, and `setPairInfo` is
+>   mandatory.
+> - **`setPairInfo` normalises pixels per axis** (x/W·2−1, y/H·2−1). Upstream LightGlue keeps the aspect ratio:
+>   shift W/2, H/2; scale max(W,H)/2. An empty `Size()` passes pre-normalised keypoints through.
+> - **`clone()` shares the Net,** so it is not a per-thread copy.
+> - **`cv::ALIKED` ignores `mask`** and resizes to `inputSize` without keeping the aspect ratio. It maps
+>   normalised keypoints as (n+1)/2·W, where upstream uses (W−1).
+>
+> **As built:** Ariadne exports its own from upstream (`cvg/LightGlue@eb42fee`, ALIKED-n16 per glue-factory's
+> official config, native 752×480, `python/model_tools/aliked_lightglue_reference.py`). Through these same two
+> classes it is exact against upstream PyTorch: keypoints within 1e-4 px, descriptors within 4e-6, identical match
+> sets (SMOKE §4s-2).
+
 Also confirmed for OpenCV 5:
 - **USAC is the default robust-estimation backend** for `findHomography`, `findEssentialMat`, `findFundamentalMat`, and all `solvePnP` variants → **MAGSAC++-class robustness for free**, no hand-written RANSAC.
 - **LAPACK always available** (internal minimal subset if not installed) → `cv::SVD` and eigendecomposition guaranteed.
@@ -202,6 +226,38 @@ counts do not move; the losses themselves are 2.1 / 2.4 territory.
 - Camera and IMU timing agree to within a sample.
 - Gyro bias is estimated from VO rotations (a robust median), since Mahony cannot observe it about the gravity axis.
 
+### 1.3c Re-association — re-finding mapped landmarks after their tracks die (added 2026-10-17, 2.1)
+
+A landmark is useful only while some pixel is linked to it. With LK, that link is the track that created it. Once the
+track dies, the point can never be observed again, unless it is re-found by appearance.
+
+On D56's EuRoC runs, 633 of the 683 lost frames have ≥ 30 live tracks but < 15 landmark correspondences
+(`docs/design/PERCEPTION_2.1.md` §4.0). That is the case this section serves.
+
+| method | source / licence | what it does | Ariadne |
+|---|---|---|---|
+| **Relocalisation** | ORB-SLAM, Mur-Artal et al., T-RO 2015 §V-C (arXiv 1502.00956); ORB-SLAM2 `Tracking.cc` `Relocalization()` (⛔ GPL-3.0: read, don't link) | Candidate keyframes by BoW → `ORBmatcher(0.75)` descriptor matching (≥ 15 matches) → PnP-RANSAC (min 10 inliers, χ² 5.991) → pose optimisation; accepts at ≥ 50 inliers. `ORBmatcher::TH_LOW = 50` (Hamming). | **Adopted, restricted to the local window, with brute force instead of BoW** (the window is small): orphan tracks are described at their pixel and matched (mutual NN, ratio 0.75, ≤ 50 bits) against landmarks born at MEASURED keyframes. A seeded USAC PnP, with the frame's healthy correspondences as anchors, keeps only geometric inliers, and the tracker renames them to the landmark ids. StereoVo's own PnP then decides. |
+| **Track Local Map** | ORB-SLAM §V-D | Projects covisible map points with the current pose and searches near the projection (viewing angle < 60°, scale range, representative descriptor). | Planned tracking mode, at keyframes (§4.3 of the design). It needs a real pose prior, so it is not used while lost. |
+| **Representative descriptor** | ORB-SLAM §III-C | The medoid of a map point's observed descriptors. | Ablation A5. The baseline keeps the latest keyframe observation. |
+| **Landmark-aware matching** | OKVIS2, Leutenegger, arXiv 2202.09199 §VI-A | Matches keypoints to existing 3-D landmarks by descriptor distance AND reprojected distance. | Same principle (appearance, then geometry). DL-VINS-Factory (arXiv 2607.01757, preprint) measures OKVIS2 best on EuRoC stereo (0.060 m) among the systems it ran. |
+| **Poisoning guard** | Ariadne AUDIT_2.3 §4 / D56 `PoseSource` | A landmark triangulated at a predicted pose carries that pose's error. | Candidates are restricted to `PoseSource::kMeasured` births; `admit_bridged` is ablation A1b. |
+
+*OpenCV 5:*
+- `cv::BFMatcher` (NORM_HAMMING, `knnMatch` k = 2, plus a reverse `match` for the mutual check) is exact and
+  deterministic.
+- `geometry::solvePnPRansac` with `UsacParams` (seeded, `isParallel = false`).
+- ⚠️ `ORB::compute` on PROVIDED keypoints does not compute orientation (`ICAngles` runs only when detecting,
+  `features/src/orb.cpp`). It drops keypoints within `edgeThreshold` of the border, so descriptors from
+  `OrbEngine::Describe` are unrotated BRIEF, comparable only with each other.
+
+**Measured on EuRoC v2 (D60, merged D58 tree, 2026-10-19).** Lost-mode re-association with ORB ships:
+- failing-four median lost frames 264/101/141/171 → 67/99/92/122;
+- 11-flight seed-1 average ATE 0.223 → 0.204 m.
+
+With XFeat descriptors (upstream `XFeat.match`, e92685f: mutual NN + cos > 0.82, no ratio test), V1_02 regressed.
+Adding Lowe 0.75 fixed it (PERCEPTION_2.1 §9.11), so a ratio test is needed on XFeat descriptors too. XFeat as the
+tracking engine regressed V2 and MH_02 ATE independently of re-association (§9.13).
+
 ### 1.4 ⭐ Swarm-SLAM — the reference system for Ariadne
 
 Lajoie & Beltrame, **IEEE RA-L 2024**, [arXiv:2301.06230](https://arxiv.org/abs/2301.06230), [code (MIT)](https://github.com/MISTLab/Swarm-SLAM).
@@ -283,6 +339,21 @@ Global descriptors are broadcast **per keyframe to every peer**, so descriptor d
 > **The single most decision-relevant table here.** Choosing BoQ-ResNet50 over EigenPlaces-128 costs **128× the place-recognition bandwidth** for marginal recall gain. Swarm-SLAM's entire 3-robot mission was 94.95 MB total — **AnyLoc alone would blow that by 6×.**
 
 **⭐ EigenPlaces — the pick.** Berton, Trivigno, Caputo, Masone, **ICCV 2023**, [code (MIT)](https://github.com/gmberton/EigenPlaces). Trains on *clusters of images from different viewpoints of the same place*, building lateral-viewpoint invariance into the embedding without extra inference-time supervision. **This matters enormously for inter-agent loop closure, where a drone and a ground robot see the same corridor from radically different heights and headings.** Dims: R18 (256/512), R50 (128/256/512/2048), R101, VGG16 (512). **Use ResNet50 @ 256-D → 1 KB/keyframe.** Via `torch.hub` → ONNX → `dnn::readNetFromONNX`; index with `features::ANNIndex`.
+
+> **As built and measured (2.1, 2026-10-20; PERCEPTION_2.1 §11; D62 draft).** R50-256 at commit `a2969f7`
+> exports to ONNX (opset 17, fixed input size) and runs in `cv::dnn` exactly as upstream on both engines (cosine
+> 1.0000000, SMOKE §4r). EuRoC loop-closure recall, 297 queries over 11 flights (positive = 1 m and 30°, database
+> older than 30 s): R@1 0.626 at 376×240 and 0.677 at 752×480, against 0.444 for the mean-bit ORB placeholder and
+> 0.167 for random. Cost ≈ 150–200 ms and 650–850 ms per descriptor (shared CPU).
+> **`cv::ANNIndex` findings (pinned source):**
+> - `addItems` numbers items from 0 on every call;
+> - no adds after `build()`;
+> - no filter during search;
+> - the multithreaded build seeds every thread alike over `hardware_concurrency()`, so repeatability across core
+>   counts is not guaranteed.
+>
+> At ≤ thousands of keyframes per agent an exact gemm is the default (D62). `ANNIndex` is the scale ablation:
+> top-1 identical to exact on 297/297 queries at N ≤ 181.
 
 **CosPlace** — Berton et al., **CVPR 2022**, [code (MIT)](https://github.com/gmberton/CosPlace). Swarm-SLAM's choice. Reframes VPR training as **classification** over geographically-partitioned "CosPlace Groups" with a cosine-margin classifier, scaling to 41M images without mining. Superseded by EigenPlaces on viewpoint robustness; same license and interface.
 ⚠️ *Both are trained on street-view imagery — indoor darkness is out of distribution. This is the one place where fine-tuning or domain adaptation would pay off.*
@@ -1468,6 +1539,14 @@ Verified: `opencv_contrib/4.x/modules/stereo/include/opencv2/stereo/quasi_dense_
 | contrib: `aruco` | ❌ removed (folded into main `objdetect` in 4.7+) |
 
 **Confirmed useful:** `stereo` — `StereoBM`, `StereoSGBM` (`MODE_SGBM_3WAY`, `MODE_HH4`), `stereoRectify`, `reprojectImageTo3D`, **and `cv::fisheye::stereoRectify`** (fisheye stereo rectification lives in `stereo`, not `calib`). `calib` — `calibrateCamera`, `calibrateCameraRO`, `stereoCalibrate`, `solvePnP`, plus the `fisheye` namespace. `ximgproc` — `guidedFilter`, `dtFilter`, `amFilter`, `fastGlobalSmootherFilter`, **`createDisparityWLSFilter`**. `ccalib` — **`omnidir`** (Mei/UCM omnidirectional model with its own calibration/undistortion/stereo). `xphoto` — `SimpleWB`, `GrayworldWB`, `LearningBasedWB`.
+
+> ⚠️ **Two traps in the pinned OpenCV 5.0.0 / contrib (found 2026-10-19, 2.1 D61; `docs/design/PERCEPTION_2.1.md` §10):**
+> - `ximgproc::createDisparityWLSFilter(matcher)` **mutates the matcher passed in**: uniqueness → 0, `disp12MaxDiff` →
+>   1e6, speckle window → 0 (`disparity_filters.cpp`). To keep an existing SGBM's output, use
+>   `createDisparityWLSFilterGeneric(true)` + `createRightMatcher(sgbm)` (a new matcher) and set the ROI and radius
+>   by hand.
+> - `StereoSGBM` clamps a **non-positive `disp12MaxDiff` to 1** (`stereo/src/stereosgbm.cpp`: `> 0 ? v : 1`), the
+>   strictest check, not "disabled". A large value disables it.
 
 ### 10.2 ⭐⭐ The headlamp physics — why every standard method breaks
 
