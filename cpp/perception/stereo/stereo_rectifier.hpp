@@ -52,6 +52,9 @@ public:
     /// Rectify a left image only, with the same maps (e.g. the colour frame
     /// the reconstruction service needs alongside the gray VO input).
     void RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const;
+    /// The same left map, nearest-neighbour: for a registered depth image (2.6, D90), where interpolating across
+    /// a depth edge would invent depths that exist nowhere.
+    void RectifyLeftNearest(const cv::Mat& left, cv::Mat& left_out) const;
 
     /// Fold a measured residual misalignment dy = a + b x + c y (right image pixels; EstimateRowCorrection) into the
     /// RIGHT map only: its new camera matrix becomes A * P2(:, 0:3) with A = [1 0 0; -b 1-c -a; 0 0 1], so a right

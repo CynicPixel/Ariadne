@@ -60,6 +60,7 @@ if(OpenCV_FOUND)
   add_executable(test_opencv
     unit/test_opencv_identity.cpp
     unit/test_perception_cv.cpp
+    unit/test_tum.cpp
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
     unit/test_radiometric_stage.cpp

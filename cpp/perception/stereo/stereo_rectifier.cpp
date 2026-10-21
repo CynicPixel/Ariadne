@@ -92,4 +92,9 @@ void StereoRectifier::RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const 
     cv::remap(left, left_out, map_left_[0], map_left_[1], cv::INTER_LINEAR, cv::BORDER_CONSTANT);
 }
 
+void StereoRectifier::RectifyLeftNearest(const cv::Mat& left, cv::Mat& left_out) const {
+    if (left.size() != size_) throw std::invalid_argument("StereoRectifier: image size does not match the calibration");
+    cv::remap(left, left_out, map_left_[0], map_left_[1], cv::INTER_NEAREST, cv::BORDER_CONSTANT);
+}
+
 }  // namespace ariadne::perception
