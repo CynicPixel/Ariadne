@@ -381,3 +381,16 @@ The fault campaign (§8.10) and the split-brain test found four design gaps. Eac
 counter > both sides, the lower anchor wins, every T_G_W matches ground truth within 2 mm / 2 mrad, and the edge set
 equals the no-partition run's.
 
+## 11. Runtime `verify` hook: what may accept an inter-agent edge (L7, from D63)
+
+D63 measured **4 confident wrong verifications** on EuRoC Vicon rooms: 210–264 essential-matrix inliers, rotation error
+37–59°. An inlier count alone is therefore not a loop gate. The runtime `NodeHooks::verify` must apply, in order:
+1. geometric verification (ALIKED+LightGlue or ORB; essential-matrix RANSAC);
+2. metric SE(3) from PnP on the candidate's stereo 3D points;
+3. the D71 degeneracy gate on the edge's own covariance.
+
+Then the broker's robust stage (PCM → GNC-TLS) runs over the batch before the solve.
+
+An edge that passes step 1 alone is never emitted. The protocol tests' oracle `verify` is exempt: it is ground truth
+by construction.
+
