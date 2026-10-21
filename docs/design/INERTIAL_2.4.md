@@ -1,4 +1,4 @@
-# Design — 2.4 inertial layer: attitude_only (built, D58), then full preintegration
+# Design — 2.4 inertial layer: attitude_only (D58) and full preintegration (D59), both built
 
 Plan 2.4 (arch §10). Order fixed by PHASE2_PLAN §1: `attitude_only` first (§10.7 fallback, about half a day), then
 Forster preintegration in the window BA (about two days). If `full` is not in the stereo-inertial class by then, ship
@@ -321,4 +321,30 @@ Every emission (stride 10 keyframes) logged four candidates; 22 EuRoC runs (11 f
 
 ## 5. Sim
 
-The IMU noise operator is 2.2's degradation wiring (coordinate first). `sim_v2` stays `imu: none` until then.
+The IMU noise operator was planned as part of 2.2's degradation wiring. **2.2 did not build it:** D65–D69 contain no
+IMU work. So `sim_v2` stays `imu: none`. The sim recordings carry clean IMU streams, but no seeded IMU noise or bias
+operator consumes them. The item is open and unowned (§6).
+
+## 6. Status (2026-10-21, on `main` 3cf5f0c; premerge PASS)
+
+The plan 2.4 line, item by item:
+
+| plan item | state | where |
+|---|---|---|
+| preintegration with bias states | built: Forster on-manifold, 9-dof residual, bias random walk, carried bias prior | D59 parts 2–3, §4 |
+| stationary initialization | built: gyro bias from a stationary test (`attitude_only`); the full mode initialises b_g, v, g, b_a from keyframes (inertial-only MAP) and refines at +5 s / +15 s | D58 §2, D59 §4 |
+| gravity-prior edges | built and emitted: Mahony source, σ 2.3°; consumed by 2.5's pose graph (D73 part 2c, off by default) | D59 gravity priors, §4.10–4.11 |
+| motion-predicted LK seeding | built, **off by default**: lost frames −3%, but V1_03 worse | D58 §3 |
+| `attitude_only` fallback, selectable | built: `euroc_v2_attitude` | D58, D59 switch |
+
+**Measured:** `euroc_v2` (`imu.mode full`) average ATE 0.121 m, 9/11 flights in the stereo-inertial class. The two
+out of class are V1_03 (0.357 m) and V2_02 (+1 mm over).
+
+**Open, stated rather than hidden:**
+- **The combined EuRoC run with 2.1's re-association (D60) has not been done.** Their gains act on the same lost
+  stretches, so they may not simply add. Until it runs, the 0.121 m / 9-of-11 figures are the 2.4-only numbers.
+- **Long outages:** 10 s without vision diverges (`--outages` evidence, D59). With re-association enabled, the runner
+  now refuses `--outages` (2.1's guard).
+- **Gravity estimated inside the window:** a negative result, kept off (`estimate_gravity: false`, D59 part 3).
+- **The sim IMU noise operator** is not built (§5).
+

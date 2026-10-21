@@ -227,3 +227,18 @@ target of the exit gate belongs to 2.4.
   and the rest within ±0.03 except V102 0.137. (1) **10/11**; (2) **9/11**.
 - **Before D54** the same table read 4/11 on both criteria. The frontend defects, not the window, were most of the
   gap (AUDIT §1).
+
+## 11. Status (2026-10-21, on `main` 3cf5f0c; premerge PASS)
+
+Every item of the plan 2.3 line is built:
+- keyframe policy (§5);
+- landmark lifecycle (§5);
+- the analytic-Jacobian Schur LM window BA on `LevMarqBase` (§3, D51/D52);
+- window exit by drop plus odometry edge, no FEJ marginalisation (§4);
+- covariance recovery (§4);
+- the local pose graph.
+
+The audit (`AUDIT_2.3.md`, D53/D54) fixed the map-point defects, and the re-baseline is pinned (D55). Later EuRoC
+accuracy work moved to 2.4 (lost-frame handling D56, VIO D58/D59) and 2.1 (re-association D60). No 2.3-specific item
+is open.
+

@@ -4,6 +4,19 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.3 / 2.4 closed out (bookkeeping)
+
+- **2.3:** every item of the plan line is built (`LOCAL_SLAM_2.3.md` §11). Nothing open.
+- **2.4:** every item of the plan line is built (`INERTIAL_2.4.md` §6). LK seeding is off by default.
+  `euroc_v2` = full VIO, 0.121 m and 9/11 in class.
+- **Open, stated:**
+  - The combined EuRoC run with 2.1's re-association has not been done; the numbers above are 2.4-only.
+  - 10 s vision outages diverge.
+  - The sim IMU noise operator is **not built and has no owner**. This corrects the 2026-10-20 entry, which said it was
+    2.2's; D65–D69 contain no IMU work.
+- `main` 3cf5f0c integrates 2.1 (through D63), 2.2, 2.3, 2.4, 2.5 (through D73 part 2c) and 3.2. Its premerge passes:
+  495/495 ctest, 54/54 gate checks, `bytes.json` identical. That is premerge evidence, not exit-gate evidence.
+
 ## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63, approved)
 
 ## 2026-10-21 — AWS unblocked (D84)
