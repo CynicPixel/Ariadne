@@ -63,6 +63,119 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Unmet:** XFeat timing (unmeasured); projection-guided re-association (not built).
 - **Next in 2.1:** WLS / §9.4 / §9.6, ANNIndex, ALIKED+LightGlue.
 
+## 2026-10-21 — 2.5: intra-agent loop closure live on EuRoC; loop noise model calibrated (D73 part 2b)
+
+- **Wired:** retrieval → verifier → degeneracy gate → PCM → GNC on a mirror of the VO graph, behind a `loop_closure:`
+  config section (`euroc_v2_loops`). Off by default and read-only towards the VO.
+- **Keyframe-refined ATE:** MH_01 0.0676 → 0.0207 m (−69 %), V1_01 0.0563 → 0.0382 m (−32 %), held-out V1_02
+  0.0517 → 0.0254 m (−51 %).
+- **The PnP loop covariance is about 1000× overconfident on real data.** A calibrated model, k σ²_PnP + floor², gives
+  held-out mean NEES 5.24, with a 4.4 % tail (criterion ≤ 3 %: missed, stated). Precision rises at every stage, to
+  0.97 at GNC.
+- **Open:**
+  - sim calibration for the demo;
+  - MH_01's systematic ~3.8° rotation offset on accepted loops [UNVERIFIED cause];
+  - retrieval recall 51–66 % with the placeholder descriptor.
+- **Next:** part 2c (gravity priors in the PGO), then part 3 (proxy swap + re-pin).
+
+## 2026-10-20 — 2.5: GNC weight reuse across loop events (D73 part 2a)
+
+- **`GncState`** carries each loop's decision from one event to the next. The fast path is one solve, plus one more
+  for the innovation test.
+- **Measured safe rule:** the TLS fixed point plus an innovation ≤ ½χ²₆ₙ(0.99). Two looser rules failed the
+  warm-equals-cold gate (a wrong loop hid in bent odometry; an early near miss was kept).
+- **1,000 nodes, 84 events:** warm = cold at every event, ATE identical, 72 % fast path, −22 % time.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Correction:** part 1's 1.6–4.75 s was GNC without PCM. Behind PCM a loop event costs about 0.1–0.2 s, which is
+  inside the demo's "a little worse than real time".
+- **Next:** part 2b, the wiring (loop source → gate → PCM → GNC, config and manifest fields, calibration).
+
+## 2026-10-20 — 2.5: GNC-TLS core + per-component anchoring (D73 part 1)
+
+- **`cpp/slam/robust/gnc`:** Yang et al. Prop. 4, with conventions checked against GTSAM 4.3.0's source. It runs on
+  a working copy and keeps edge indices stable from the gate through GNC. `SolvePoseGraph` now anchors every
+  connected component.
+- **Results, random outliers 10–40 %, grid and sphere:** precision 1.000, recall worst 0.967 (gate met). 0.5 m / 5°
+  near misses: all rejected. 0.2 m / 1° near misses: 71 % pass, +11 % ATE (the price of the D72 decision).
+- **Measured limitation:** a lone inter-agent link cannot be verified by GNC. PCM's no-consensus rule handles
+  several disagreeing links.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per loop event. This corrects the earlier 0.3–0.8 s estimate.
+- **Tests:** GNC 10/10; existing PGO tests unchanged.
+- **Next:** part 2 (loop source, wiring, calibration, GTSAM GNC oracle), then part 3 (verifier export, proxy swap,
+  re-pin).
+
+## 2026-10-20 — 2.4: gravity-prior edges produced (D59)
+
+- One GRAVITY_PRIOR edge per 10 keyframes on `euroc_v2` and `euroc_v2_attitude`, from Mahony's gravity (σ 2.3°,
+  NEES-calibrated on MH, held-out V NEES 3.0). VIO-derived alternatives measured and rejected (overconfident 2–70×).
+- Trajectories unchanged. Handoff to 2.5: consume them in the PGO (robustified, gravity direction as a variable).
+- 2.4 plan items left: none in the plan list; the sim IMU noise operator is 2.2's.
+
+## 2026-10-19 — 2.5: PCM with a per-loop threshold; recall 1.000 at 10–40 % outliers (D72)
+
+- **`cpp/slam/robust/pcm`:** cycle consistency against the odometry-only chain. Every leg configuration on one chain
+  and both inter-agent orientations give a mean statistic of 5.75–6.24 (χ²₆ mean 6).
+- **Arch's fixed χ²₆(0.95) drops 15 % of true loops** (worst seed 40 %), because a maximum clique needs every pair
+  of a true loop to pass. The default is a per-loop Bonferroni threshold (α_loop = 0.001, derived from the
+  requirement).
+- **Results:** recall 1.000 and precision 1.000 on random outliers at 10–40 %. Near misses at 0.2–0.5 m pass more
+  often (precision 0.75–0.94); they are GNC's job (D73). 186 ms for 300 loops on 3000 nodes.
+- **The blind spot** (a self-consistent wrong cluster passes) is asserted and labelled.
+- **Tests:** 12/12; ctest 355/355 on the merged tree (D55–D59 included).
+- **Next:** GNC-TLS + the intra-agent loop source + the verifier inlier export + the proxy swap (D73).
+
+## 2026-10-19 — EuRoC v2 now runs the full inertial layer (D59 switch)
+
+- `euroc_v2` = `imu.mode full` (avg ATE 0.121 m, 9/11 in the stereo-inertial class); attitude_only kept as
+  `euroc_v2_attitude`. Both verified byte-identical to their previous runs.
+- **Next (2.4):** gravity-prior edges per keyframe for the pose graph (arch §10.4), then the combined sweep after the
+  2.1 merge.
+
+## 2026-10-19 — 2.4 full, part 3: bias prior fixed; 9/11 in the stereo-inertial class (D59)
+
+- **EuRoC `euroc_v2_full`:** average ATE **0.121 m** (target ≤ 0.138); 9/11 flights in class (V1_03 0.357, V2_02
+  +1 mm out). attitude_only (shipped) is 0.223.
+- **Bias prior:** keeps the carried prior's information; only the window's data is deflated (fixed a b_a runaway).
+- **Gravity estimated per window:** negative (0.566 m), off, kept as an ablation.
+- **Lost motion:** decay = propagate under every-frame re-anchoring (the window solves lost keyframes); stays decay.
+  Long (10 s) IMU-only outages diverge more than attitude_only: recorded for 2.1 / Phase 3.
+- ctest 328/328; `euroc_v2` byte-identical to D58. Pre-merge not run (maintainer's instruction).
+
+## 2026-10-19 — 2.4 full, part 2: inertial window BA + initialisation, opt-in (D59)
+
+- **Built:** velocity/bias states in the window BA, IMU initialisation with refinement at +5/+15 s, StereoVo and
+  runner wiring, `euroc_v2_full` (opt-in), per-flight checks against ground truth (`imu_full`, `imu_trace.csv`).
+- **EuRoC:** average ATE 0.223 → **0.137 m** (target ≤ 0.138 on the average); 7/11 flights in the stereo-inertial
+  class. `euroc_v2` unchanged (byte-identical to D58).
+- **Synthetic:** a 2 s dark stretch drifts 2 cm with the IMU vs 52 cm with the visual bridge.
+- **Open:** gravity cannot correct roll/pitch drift (6-DoF gauge; part 3); `lost_motion` decision re-measured after it.
+- Pre-merge not run (maintainer's instruction).
+
+## 2026-10-19 — 2.5: loop degeneracy gate with honest loop covariance (D71)
+
+- **`cpp/slam/robust/degeneracy`:** each PnP loop gets a covariance with B's stereo depth noise propagated
+  (NEES 5.95 against 6 at 1.5–12 m; 54.7 at 25–40 m, hence a separate parallax gate).
+- **Gates:** marginal σ_t / σ_r (metres and radians kept apart), parallax, and 3D collinearity. Pixel collinearity
+  was measured to refuse a well-conditioned planar fan, so it is reported only.
+- **Tests:** 8/8; ctest 308/308. The thresholds are [ASSUMPTION], to be calibrated in D73 on real candidates.
+- **Not wired:** exporting the verifier's inliers and swapping out the proxy information need a decision.
+- **Next:** PCM (D72).
+
+## 2026-10-19 — 2.5 opened: chordal init passes the SE-Sync gate; pgo_v2 damping; oracle fixed (D70)
+
+- **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init`): `cv::SVDecomp` projection with the determinant
+  fix, plus a `cv::buildMST` baseline.
+- **Measured failure set from dead reckoning: torus3D and grid3D.** GTSAM's LM fails the same way from the same start.
+  Chordal + LM reaches GTSAM's minimum on all six graphs (within 7.0e-9 relative, 4–15 its). **Gate PASSED.**
+- **pgo_v2:** OpenCV's absolute damping floor is turned off for the pose graph. Garage drops from 95 to 15 iterations
+  at production tolerances. The windowed BA stays on pgo_v1.
+- **Oracle bugs fixed:** unnormalised quaternions (garage's "different minimum" was the oracle's) and GTSAM's chordal
+  soft anchor. Open item (a) is diagnosed (GTSAM multifrontal false positive). (b) is reduced, not at parity.
+  (c) moves to D74.
+- **Placement:** `cpp/slam/robust/` (arch §3 updated).
+- **Tests:** ctest 300/300 (8 env-gated skips); 100-case oracle 100/100; SE-Sync no-regression on the corrected oracle.
+- **Next:** the degeneracy gate (D71), then PCM (D72), GNC-TLS and the loop source (D73), then the certificate (D74).
+
 ## 2026-10-18 — 2.4 step 1: attitude_only ships for EuRoC v2 (D58)
 
 - **Gyro validated against ground truth:** 0.019° per pair with the bias removed.

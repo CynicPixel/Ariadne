@@ -673,24 +673,22 @@ ariadne/
 │   │   ├── tracking/
 │   │   ├── stereo/
 │   │   ├── exposure_control/      # §6.5 active exposure + lamp co-control
-│   │   ├── degeneracy/
-│   │   └── keyframes/
+│   │   └── keyframes/             # (loop degeneracy gate moved to slam/robust/, D70)
 │   │
 │   ├── slam/
 │   │   ├── imu/                   # §10 preintegration, bias states, gravity prior
 │   │   ├── landmarks/
 │   │   ├── local_map/
 │   │   ├── bundle_adjustment/
-│   │   ├── pose_graph/
-│   │   └── loop_closure/
+│   │   ├── pose_graph/            # §13 PGO, chordal init (D70)
+│   │   ├── robust/                # §14.4–§14.8 degeneracy gate, PCM, GNC-TLS, certificate (D70)
+│   │   └── loop_closure/          # intra-agent loop candidates (D73)
 │   │
 │   ├── collaboration/
 │   │   ├── retrieval/
 │   │   ├── candidate_selection/
 │   │   ├── protocol/
-│   │   ├── pcm/
-│   │   ├── gnc/
-│   │   ├── broker/
+│   │   ├── broker/                # (PCM and GNC run in slam/robust/ on intra- and inter-agent edges, D70)
 │   │   └── reference_frames/
 │   │
 │   ├── reconstruction/
@@ -2023,6 +2021,18 @@ the property that makes the inertial layer cheap to add to an existing BA rather
 Transcribe residual and Jacobian expressions from the paper's equations, not from this document, and validate
 every Jacobian with the finite-difference harness of §11.4.
 
+> **As built (D59, `docs/design/INERTIAL_2.4.md` §4).** The window keeps `T_W_C` (left perturbation) and reaches the
+> body through the fixed `T_C_B`; the same δ left-perturbs `T_W_B`, and the residual Jacobians were re-derived for it.
+> The accelerometer sample is rotated by the mid-interval orientation (VINS-Mono), not Forster's start-of-interval one
+> (which left 1.8 mm/s at the truth). Inertial blocks are a separate segment of the reduced system
+> (`[poses | v,b_g,b_a | landmarks]`). The IMU does not observe velocity, so an inertial chain ties keyframes only out
+> of a group with two pose-determined keyframes; in a dark window window[0]'s velocity is held instead.
+> Discrete noise is density²/Δt; on EuRoC the datasheet densities are inflated ×3 (gyro) and ×9 (accel), measured
+> (§4.1). Every block is finite-difference tested. window[0]'s bias prior keeps the previous prior's information
+> (random-walk-propagated) and deflates only the window's added information (Λ_carried + (Λ_marg − Λ_carried)/κ);
+> deflating the whole marginal let unobserved b_a run away in dark windows. Estimating gravity's direction per window
+> (a 4-DoF gauge) was built and is a recorded negative result (INERTIAL_2.4 §4.8).
+
 ## 10.3 Initialization `[DESIGN, standard practice]`
 
 Agents start stationary for a configurable 1–2 s. During that window:
@@ -2039,6 +2049,14 @@ b_a            = residual after gravity removal, with a loose prior
 
 Stereo provides metric scale from the first pair, so **none of the monocular visual-inertial alignment machinery
 is needed**. This is one of the concrete payoffs of Correction B.
+
+> **As built (D59, INERTIAL_2.4 §4.3), superseding the stationary-start recipe above.** EuRoC's Vicon-room flights
+> do not start at rest, and attitude_only showed the gravity direction is better taken from motion. Initialisation
+> runs after N tracked keyframes, on their window-refined (metric) poses: b_g from the keyframe rotations, then v_k, g
+> and b_a as a linear MAP (ORB-SLAM3's inertial-only MAP with the scale known), g re-solved on the 9.81 sphere,
+> refused on |g| or χ²/dof. **The world is not rotated**: gravity is estimated in the VO world (the first keyframe's
+> camera) and held fixed, because the graph, keyframe records and the gate depend on that world. b_a stays weakly
+> observable exactly as warned above (a gravity tilt θ looks like a bias of 9.81 θ); a loose prior decides it.
 
 ## 10.4 Gravity prior edge — the producer for §12.1
 
@@ -2083,8 +2101,9 @@ a quiet downgrade, and it is why the sensor claim in the report can be checked a
 >   keyframe record as `gravity_dir_C`.
 > - **While lost,** the gyro replaces the D56 visual bridge's rotation; translation keeps the bridge's decaying velocity.
 > - **§10.5 LK seeding** is a tested seam, off by default.
-> - **Not yet built:** the `GRAVITY_PRIOR` factor belongs to the pose-graph owner (2.5); the sim IMU noise operator is
->   2.2's degradation wiring. The manifest records `imu_mode`.
+> - **Not yet built:** the `GRAVITY_PRIOR` edges are produced by 2.4 (plan: "gravity-prior edges"; corrected D59)
+>   and consumed by the pose-graph solver (2.5); the sim IMU noise operator is 2.2's degradation wiring. The manifest
+>   records `imu_mode`.
 
 ---
 
@@ -2244,6 +2263,11 @@ with trust/radius-like update logic.
 interface. The driver damps with Marquardt's `D = diag(H)` (clamped) and adapts λ by step quality. The schedule below
 remains the Phase 1 two-frame stub's, kept byte-identical. All driver settings are config + manifest fields; design
 `docs/design/POSE_GRAPH_2.md`.
+
+**Update 2026-10-19 (D70):** the pose graph runs `pgo_v2`, which has the diagonal clamp OFF. OpenCV clamps the damping
+`λ·diag(H)` itself to an absolute [1e-6, 1e32], whereas Ceres clamps `diag(JᵀJ)`; the floor throttled the final
+Gauss–Newton steps on parking-garage. The windowed BA keeps the clamp (`pgo_v1` defaults). Design
+`docs/design/ROBUST_BACKEND_2.5.md` §2.
 
 Use Eigen sparse Cholesky internally.
 
@@ -2460,6 +2484,23 @@ Ariadne does not merely reject a false closure; it can **decline to attempt the 
 
 This is specifically motivated by the SubT-derived observation in `ALGORITHMS(1).md` that robust backends cannot rescue an invalid/degenerate hypothesis indefinitely.
 
+**Update 2026-10-19 (D71, §49 ritual):** `λ_min / λ_max < τ_condition` on the full Hessian mixes metres and radians,
+and its verdict depends on the frame. The gate instead bounds the worst-direction 1σ of the translation marginal [m]
+and of the rotation marginal [rad] separately. Both come from the loop's covariance in the pose-graph residual tangent,
+with B's stereo depth noise propagated, and the within-block ratios are reported. Parallax becomes "too few inliers
+with a stereo triangulation angle ≥ θ_min". Collinearity means the **3D** inliers lie on a line; collinear pixels
+alone (a planar fan through the camera centre) are well conditioned with stereo depth. Pixel spread, planarity and
+the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
+`docs/design/ROBUST_BACKEND_2.5.md` §4; ALGORITHMS §7.8a.
+
+**Update 2026-10-21 (D73 part 2b):** on real data (EuRoC) the PnP-Hessian loop covariance is about 100–1000×
+overconfident. Correlated depth and calibration errors do not average down with the inlier count; COVINS-G (arXiv
+2301.07147) reports the same for analytic loop covariances.
+- **The edge information** is the calibrated model var = k σ²_PnP + floor², per translation and rotation block.
+  Fitted on EuRoC MH_01 + V1_01; held-out V1_02 gives mean NEES 5.24.
+- **The gate's criteria** still read the PnP σ.
+- **Calibration is per sensor and environment.** The sim needs its own.
+
 ---
 
 ## 14.5 Stage 4 — PCM
@@ -2515,6 +2556,17 @@ This is precisely why the degeneracy gate of §14.4 runs **before** PCM, not aft
 the scene cannot support, so they never reach the stage that would confirm them in each other's company. **Keep
 that ordering inviolable.** A refactor that reorders these stages for convenience silently removes the defence.
 
+**Update 2026-10-19 (D72, §49 ritual):**
+- **The pair threshold is no longer the fixed χ²₆(0.95).** A maximum clique keeps a true loop only if all of its
+  n − 1 pairs pass. At 5 % per pair, measured recall was 0.84–0.86, worst 0.60–0.70 on 30-loop groups. The default
+  bounds false rejection per loop instead, at α_loop/(n − 1) per pair with α_loop = 0.001, derived from the
+  recall ≥ 0.95 requirement. The fixed quantile stays as config, as the ablation baseline.
+- **Group rules:** a group with one candidate passes, tagged untested. Two or more candidates with a maximum clique
+  of 1 pass nothing.
+- **Clique:** the default is the greedy CLIQUEHEU heuristic. Exact Bron–Kerbosch runs behind a flag for ≤ 25.
+- **Odometry legs** come from the odometry-only chain, with shared edges counted once.
+- Implemented in `cpp/slam/robust/pcm`; design `ROBUST_BACKEND_2.5.md` §5.
+
 ---
 
 ## 14.6 Stage 5 — GNC
@@ -2556,6 +2608,15 @@ edge rejection
 
 This creates an excellent judge-visible trace: the per-edge weight trajectory shows a false closure being
 *demoted*, which is far more convincing than a final inlier/outlier label.
+
+**Update 2026-10-20 (D73 part 1):** implemented as specified. The residual is whitened, `r² = rᵀΩr` with `ε² =
+χ²₆(0.99) = 16.81`, so σ² is absorbed into Ω. Weights, μ₀ and the ×1.4 schedule match GTSAM 4.3.0's `GncOptimizer`,
+which uses barcSq = ε²/2 because its error carries ½. Two additions:
+- **Component anchoring.** When rejections split the active graph, each component is solved with its own anchor, in
+  `SolvePoseGraph` itself: pgo_v2 has no damping floor to hide a singular system.
+- **Limitation, measured.** A lone loop between two otherwise unconnected agents fits exactly, so GNC cannot reject
+  it. PCM's no-consensus rule is the defence when several such loops disagree; a single one passes as "untested".
+- Implemented in `cpp/slam/robust/gnc`; design `ROBUST_BACKEND_2.5.md` §6.
 
 ---
 

@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
 
+#include <algorithm>
 #include <string>
 
 namespace ariadne::slam {
@@ -76,9 +77,34 @@ struct LostParams {
     int reanchor_min_points = 30;       // gated: tracked landmarks + new ones >= this (2 x pnp.min_correspondences)
 };
 
-/// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged) or "attitude_only" (§10.7:
-/// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA). "full" arrives with
-/// preintegration. A config without an `imu:` section is "none".
+/// imu.mode full (D59, INERTIAL_2.4 §4): Forster preintegration in the window BA. Required iff mode is full.
+struct ImuFullParams {
+    double noise_inflation_gyro = 3.0;     // §4.1, measured on EuRoC Machine Hall; the sim's IMU is exact (1)
+    double noise_inflation_accel = 9.0;
+    double bias_prior_inflation = 10.0;    // window[0]'s bias prior covariance = the previous marginal x this
+    int init_keyframes = 10;               // consecutive TRACKED window keyframes before initialisation (<= window)
+    double init_accel_bias_sigma = 0.2;    // m/s^2, the zero-mean b_a prior of the initialisation
+    double init_gravity_tolerance = 0.1;   // relative |g| error that refuses an initialisation
+    double init_max_chi2_per_dof = 1e9;    // the initialisation's fit worse than this refuses (initialization.hpp)
+    std::vector<double> refine_after_s = {5.0, 15.0};   // re-run over every keyframe since init (ORB-SLAM3 §V-B)
+    bool estimate_gravity = false;         // §4.8 ablation (negative result): gravity's direction in every window
+    double repropagate_gyro = 0.01;        // rad/s: re-integrate an interval when its b_g moved more than this
+    double repropagate_accel = 0.1;        // m/s^2, the same for b_a (VINS-Mono's thresholds)
+    std::string lost_motion = "decay";     // while lost: "decay" (D56/D58 translation) or "propagate" (IMU, §4.4)
+};
+
+/// GRAVITY_PRIOR edges (arch §10.4, INERTIAL_2.4 §4.10). Absent (`imu.gravity_prior` not in the config): none.
+struct GravityPriorParams {
+    bool enabled = false;
+    int stride_keyframes = 10;        // one edge per this many keyframes: non-overlapping windows (§4.10 correlation)
+    std::string source = "attitude";  // full mode: attitude | query | query_free_ba | pose (decided by NEES vs GT)
+    double attitude_sigma_deg = 5.0;  // attitude_only (Mahony) edges: per-axis sigma
+};
+
+/// Inertial layer (arch §10, plan 2.4). "none" (default: every pre-2.4 config unchanged), "attitude_only" (§10.7:
+/// gyro rotation while lost, gyro-seeded LK, gravity direction; no velocity/bias states in BA) or "full" (D59:
+/// velocity and biases in the window BA; attitude_only behaviour until initialised). A config without an `imu:`
+/// section is "none".
 struct ImuParams {
     std::string mode = "none";
     bool seed_lk = false;           // §10.5: predict LK's starting point from the gyro rotation
@@ -86,6 +112,24 @@ struct ImuParams {
     double stationary_s = 2.0;      // PHASE2_PLAN §3 stationary-start test
     double kp = 1.0;                // Mahony et al. 2008 §VI
     double ki = 0.3;
+    ImuFullParams full;
+    GravityPriorParams gravity_prior;
+};
+
+/// Intra-agent loop closure (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): retrieval -> verifier -> degeneracy gate
+/// -> PCM -> GNC on a mirror of the VO graph. OFF without a `loop_closure:` section, so existing configs and their
+/// outputs are unchanged; a `loop_closure:` section must name every key. Read-only towards the VO.
+struct LoopClosureParams {
+    bool enabled = false;
+    int orb_features = 500;          // per keyframe, stored for verification (memory: ~26 KB per keyframe)
+    int exclude_recent = 50;         // retrieval: keyframes just before the query are never candidates
+    double exclude_seconds = 10.0;   // ... nor keyframes within this many seconds
+    double min_score = 0.5;          // cosine of the mean-bit placeholder descriptor (1.6's retrieval_threshold)
+    int top_k = 3;
+    // Edge noise model (DegeneracyParams::noise_*; design §8): var = k sigma_PnP^2 + floor^2, per block. k <= 0 and
+    // floor 0 both: the PnP covariance unchanged.
+    bool noise_model = false;
+    double noise_k_t = 1.0, noise_floor_t_m = 0.0, noise_k_r = 1.0, noise_floor_r_rad = 0.0;
 };
 
 struct SlamConfig {
@@ -96,6 +140,7 @@ struct SlamConfig {
     BaParams ba;
     LostParams lost;
     ImuParams imu;
+    LoopClosureParams loop_closure;
 };
 
 inline void ValidateSlam(const SlamConfig& c) {
@@ -129,7 +174,28 @@ inline void ValidateSlam(const SlamConfig& c) {
         fail("lost: bridge_threshold_px, velocity_decay_s, max_speed_m_s > 0; bridge_min_tracks >= 8; model_ratio in (0, 1)");
     }
     if (l.reanchor_min_points < p.min_correspondences) fail("lost.reanchor_min_points must be >= pnp.min_correspondences");
-    if (c.imu.mode != "none" && c.imu.mode != "attitude_only") fail("imu.mode must be none or attitude_only");
+    if (c.imu.mode != "none" && c.imu.mode != "attitude_only" && c.imu.mode != "full")
+        fail("imu.mode must be none, attitude_only or full");
+    if (c.imu.gravity_prior.enabled) {
+        const GravityPriorParams& g = c.imu.gravity_prior;
+        if (c.imu.mode == "none") fail("imu.gravity_prior needs an IMU (imu.mode attitude_only or full)");
+        if (g.stride_keyframes < 1 || (g.source != "attitude" && g.source != "query" && g.source != "query_free_ba" && g.source != "pose") ||
+            !(g.attitude_sigma_deg > 0.0))
+            fail("imu.gravity_prior: stride_keyframes >= 1, source attitude|query|query_free_ba|pose, attitude_sigma_deg > 0");
+    }
+    if (c.imu.mode == "full") {
+        const ImuFullParams& f = c.imu.full;
+        if (c.ba.backend != "window") fail("imu.mode full needs ba.backend window");
+        if (!(f.noise_inflation_gyro > 0.0) || !(f.noise_inflation_accel > 0.0) || !(f.bias_prior_inflation >= 1.0) ||
+            f.init_keyframes < 3 || f.init_keyframes > c.ba.window_size || !(f.init_accel_bias_sigma > 0.0) ||
+            !(f.init_gravity_tolerance > 0.0 && f.init_gravity_tolerance < 1.0) || !(f.init_max_chi2_per_dof > 0.0) ||
+            !(f.repropagate_gyro > 0.0) || !std::is_sorted(f.refine_after_s.begin(), f.refine_after_s.end()) ||
+            (!f.refine_after_s.empty() && !(f.refine_after_s.front() > 0.0)) ||
+            !(f.repropagate_accel > 0.0) || (f.lost_motion != "decay" && f.lost_motion != "propagate")) {
+            fail("imu.full: inflations > 0, bias_prior_inflation >= 1, 3 <= init_keyframes <= ba.window_size, "
+                 "init_accel_bias_sigma > 0, init_gravity_tolerance in (0, 1), init_max_chi2_per_dof > 0, refine_after_s ascending and > 0, repropagate_* > 0, lost_motion decay|propagate");
+        }
+    }
     if (c.imu.bias_window < 1 || !(c.imu.stationary_s > 0.0) || !(c.imu.kp > 0.0) || !(c.imu.ki >= 0.0)) {
         fail("imu: bias_window >= 1, stationary_s > 0, kp > 0, ki >= 0");
     }
@@ -202,7 +268,54 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.imu.stationary_s = m.Require<double>("stationary_s");
         c.imu.kp = m.Require<double>("kp");
         c.imu.ki = m.Require<double>("ki");
+        if (m.Has("gravity_prior")) {
+            StrictConfig g = m.Section("gravity_prior");
+            c.imu.gravity_prior.enabled = true;
+            c.imu.gravity_prior.stride_keyframes = g.Require<int>("stride_keyframes");
+            c.imu.gravity_prior.source = g.Require<std::string>("source");
+            c.imu.gravity_prior.attitude_sigma_deg = g.Require<double>("attitude_sigma_deg");
+            g.RequireAllConsumed();
+        }
+        if (c.imu.mode == "full") {
+            StrictConfig f = m.Section("full");
+            c.imu.full.noise_inflation_gyro = f.Require<double>("noise_inflation_gyro");
+            c.imu.full.noise_inflation_accel = f.Require<double>("noise_inflation_accel");
+            c.imu.full.bias_prior_inflation = f.Require<double>("bias_prior_inflation");
+            c.imu.full.init_keyframes = f.Require<int>("init_keyframes");
+            c.imu.full.init_accel_bias_sigma = f.Require<double>("init_accel_bias_sigma");
+            c.imu.full.init_gravity_tolerance = f.Require<double>("init_gravity_tolerance");
+            c.imu.full.init_max_chi2_per_dof = f.Require<double>("init_max_chi2_per_dof");
+            c.imu.full.refine_after_s = f.Require<std::vector<double>>("refine_after_s");
+            c.imu.full.estimate_gravity = f.Require<bool>("estimate_gravity");
+            c.imu.full.repropagate_gyro = f.Require<double>("repropagate_gyro");
+            c.imu.full.repropagate_accel = f.Require<double>("repropagate_accel");
+            c.imu.full.lost_motion = f.Require<std::string>("lost_motion");
+            f.RequireAllConsumed();
+        }
         m.RequireAllConsumed();
+    }
+    if (config.Has("loop_closure")) {
+        StrictConfig q = config.Section("loop_closure");
+        c.loop_closure.enabled = q.Require<bool>("enabled");
+        c.loop_closure.orb_features = q.Require<int>("orb_features");
+        c.loop_closure.exclude_recent = q.Require<int>("exclude_recent");
+        c.loop_closure.exclude_seconds = q.Require<double>("exclude_seconds");
+        c.loop_closure.min_score = q.Require<double>("min_score");
+        c.loop_closure.top_k = q.Require<int>("top_k");
+        c.loop_closure.noise_model = q.Require<bool>("noise_model");
+        c.loop_closure.noise_k_t = q.Require<double>("noise_k_t");
+        c.loop_closure.noise_floor_t_m = q.Require<double>("noise_floor_t_m");
+        c.loop_closure.noise_k_r = q.Require<double>("noise_k_r");
+        c.loop_closure.noise_floor_r_rad = q.Require<double>("noise_floor_r_rad");
+        q.RequireAllConsumed();
+        const auto& L = c.loop_closure;
+        if (L.orb_features < 50 || L.exclude_recent < 0 || !(L.exclude_seconds >= 0.0) ||
+            !(L.min_score > -1.0 && L.min_score < 1.0) || L.top_k < 1 || L.noise_k_t < 0.0 || L.noise_k_r < 0.0 ||
+            L.noise_floor_t_m < 0.0 || L.noise_floor_r_rad < 0.0 ||
+            (L.noise_model && L.noise_k_t + L.noise_floor_t_m <= 0.0) || (L.noise_model && L.noise_k_r + L.noise_floor_r_rad <= 0.0)) {
+            throw ConfigError("slam config '" + c.name + "': loop_closure: orb_features >= 50, exclude_* >= 0, "
+                              "min_score in (-1, 1), top_k >= 1, noise_* >= 0 (not both zero per block when on)");
+        }
     }
     config.RequireAllConsumed();
     ValidateSlam(c);

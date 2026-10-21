@@ -1812,11 +1812,370 @@ Design and evidence: `docs/design/INERTIAL_2.4.md`.
   and **off**. Lost frames −3% only; V1_03 0.42 → 0.82.
 - **Gravity** (Mahony 2008 Theorem 5.1, the paper's kP = 1, kI = 0.3) is on every keyframe record. Its error against
   ground truth is a median 1.3–4.2° per flight, 15° worst: MAV dynamics leak through. Recorded so that a
-  GRAVITY_PRIOR uses an honest σ. The factor itself is 2.5's (pose graph).
+  GRAVITY_PRIOR uses an honest σ. The factor itself is 2.5's (pose graph). [Corrected in D59: the plan puts
+  producing gravity-prior edges in 2.4; 2.5 consumes them.]
 - `imu.mode` defaults to `none`: v1, `sim_v2` (no sim IMU plumbing yet) and the sim gate are unchanged. Pre-merge
   **PASS**.
 - **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
   still drop and emit an edge.
+
+## 2026-10-19 — D59 (part 2): 2.4 full — inertial window BA, initialisation + refinement, opt-in `euroc_v2_full`
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4 (as built). Part 1 (8691fb3): the preintegrator and factor.
+
+- **Window BA.** Velocity and biases are a separate segment of the reduced system (`[poses | v,b_g,b_a | landmarks]`):
+  Schur, marginals and the exit edge unchanged; with no inertial blocks every number is bit-identical (MH_01 on
+  `euroc_v2` reproduces D58 byte for byte). Energy ½rᵀΩr, no kernel; bias random walk; window[0]: pose fixed,
+  v and b free, bias prior = previous marginal × 10 (carried by the random walk when degenerate or unsolved).
+  Tests: FD gradient and Hessian of every inertial block, Schur = dense, noise-free VI window → truth.
+- **Correction while building (§4.2):** the IMU does not observe velocity (Galilean null space, tested), so an inertial
+  chain ties keyframes only out of a group with two pose-determined keyframes. **Maintainer decision:** in a window
+  whose window[0] has no covisible partner, v₀ is held at the previous solve's value instead of holding lost
+  keyframes at predicted poses. On EuRoC this triggers in up to ~25% of solves on the dark flights (MH_04, V2_03),
+  ~0–5% on the easy ones: the oldest keyframe often shares fewer than `pnp.min_correspondences` landmarks.
+- **Initialisation** (`slam/inertial/initialization.hpp`) after 10 measured keyframes: b_g by Gauss–Newton on the
+  keyframe rotations (**changed from §4.3's "from the attitude tracker"**, recorded there), then v, g, b_a as a linear
+  MAP (ORB-SLAM3's inertial-only MAP, scale known), g on the 9.81 sphere; refused on |g| ±10 % or χ²/dof > 100.
+  The threshold comes from the 11 EuRoC inits checked against GT: the one off by 8.4° (MH_04) had χ²/dof 1296,
+  all others ≤ 55. **Refinement** re-solves over all keyframes since init at +5 s and +15 s (ORB-SLAM3 §V-B).
+  Synthetic: exact with a flat b_a prior (1e-6); b_a/gravity-tilt trade-off quantified (0.44° ↔ 0.076 m/s²).
+- **EuRoC (`euroc_v2_full`, opt-in):** average ATE **0.223 → 0.137 m** (target ≤ 0.138 on the average); **per flight
+  7/11** inside the stereo-inertial class (V1_03 0.254, V2_01 0.077, V2_02 0.107, V2_03 0.281 out). Inertial
+  χ²/dof at the solutions 0.38–1.23 (validates the ×3 / ×9 inflation, frames and lever arm). Costs vs
+  attitude_only: MH_01 +2 mm, V2_01 +7 mm.
+- **Open defect (part 3):** the estimated gravity, in each keyframe's own body frame, degrades over a run on the hard
+  flights (V2_03 median 3.5°, final 5.6°): window[0]'s full 6-DoF pose is the gauge, so gravity cannot correct the
+  trajectory's roll/pitch drift (a VIO gauge is 4-DoF).
+- **§4.4 not decided.** Fake outages (0.5–10 s, MH_01/MH_02/V1_01/V2_01): IMU propagation drifts less to 2 s (0.24 vs
+  0.45 m), then diverges (10 s: 11 m vs 3.1 m), consistent with the gravity defect (δg T²/2). The metric also scored
+  the wrong instant. Re-measured after part 3 with drift to ~2–3 s after re-anchoring; `decay` stays the default.
+- Pre-merge **not run** (maintainer, 2026-10-18: only when absolutely needed); the EuRoC sweeps and unit tests are
+  the evidence. `euroc_v2` (attitude_only) and `sim_v2` (none) unchanged.
+
+## 2026-10-19 — D59 (part 3): bias prior never looser than the carried prior; gravity-in-window is a negative result
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4.8–4.9.
+
+- **Gravity's direction in every window + rotate-back (a 4-DoF gauge in effect): built, tested, NEGATIVE, off**
+  (`imu.full.estimate_gravity: false`, kept as an ablation). EuRoC average 0.137 → 0.566 m, 0/11: a 10-keyframe
+  window cannot separate tilt from b_a, and the ×10 prior bookkeeping loosened the unobserved tilt every window
+  (σ 3.6° → 12° on MH_01). ORB-SLAM3's local VI BA also anchors on fixed keyframes (§V-C, §VI-C); long-term tilt
+  there comes from map reuse and loop closure (2.1 / Phase 3 here), so part 2's gauge stands.
+- **Bias prior fixed by the same lesson.** The ×10 deflation applied to the whole marginal lost the prior's own
+  information on unobserved directions (b_a in dark windows; V2_01 propagate 10 s: |b_a error| 0.15 → 2.0 m/s²).
+  Now Λ_next = Λ_carried + PSD(Λ_marg − Λ_carried)/κ: only the window's added information is deflated.
+  **EuRoC `euroc_v2_full`: average 0.137 → 0.121 m, per flight 7/11 → 9/11** (V1_03 0.357 and V2_02 0.101 out).
+  Bias and velocity errors vs GT drop on every hard flight; V1_03's ATE rises 0.254 → 0.357 despite better states
+  (reported as measured).
+- **§4.4 `lost_motion`: decided by measurement, stays `decay`.** With `reanchor: every_frame` each lost frame is an
+  inertial-window keyframe, so the prediction only seeds the solve: decay and propagate are identical to the mm.
+  Full vs attitude_only across outages (2.5 s after re-anchoring): better up to 5 s (2 s: 0.18 vs 0.61 m), worse at
+  10 s (4.6 vs 3.1 m): long IMU-only stretches diverge; bounding them belongs with map segments (2.1 / Phase 3).
+- ctest 328/328. `euroc_v2` (attitude_only) byte-identical to D58 on MH_01; `euroc_v2_full` stays opt-in pending
+  the maintainer's switch decision. Pre-merge not run (maintainer's instruction).
+
+## 2026-10-19 — D59 (switch): `euroc_v2` is imu.mode full; attitude_only kept as `euroc_v2_attitude`
+
+- **Maintainer decision.** EuRoC average ATE 0.121 vs 0.223 m, 9/11 vs 4/11 flights in the stereo-inertial class
+  (INERTIAL_2.4 §4.9). Costs: MH_03 +6 mm; V1_03 (0.357) and V2_02 (+1 mm) stay out of class.
+- `configs/slam/euroc_v2.yaml` takes the full-mode values of `euroc_v2_full` (removed: identical apart from its name;
+  the D59 evidence directories keep that name). `configs/slam/euroc_v2_attitude.yaml` is the D58 configuration,
+  kept as the baseline/ablation.
+- **Verified by targeted runs, not the pre-merge (maintainer's instruction):** the new `euroc_v2` reproduces the
+  committed full-mode V2_03 trajectory byte for byte, and `euroc_v2_attitude` reproduces D58 on MH_01 byte for byte.
+  `sim_v2` (imu none) and the sim gate are untouched.
+- **Ownership corrected:** gravity-prior edges (arch §10.4) are a 2.4 deliverable per the plan, produced here and
+  consumed by 2.5's pose graph; the D58 entry had assigned them to 2.5. They are this session's next item.
+- **Merge note for 2.1:** 2.1's D60 bars were measured against D58 (attitude_only). After merging, EuRoC needs one
+  combined sweep; the two gains (re-association, IMU) both act on the lost stretches and need not add.
+
+## 2026-10-19 — D70: chordal initialisation for the pose graph; pgo_v2 drops OpenCV's absolute damping floor; robust backend placed in `cpp/slam/robust/`
+
+**Context.** Plan 2.5 opens with arch §13.1's chordal initialisation, ahead of the degeneracy gate → PCM → GNC-TLS
+order of §14.5. Three open items came with it: (a) GTSAM `InitializePose3` throwing in the oracle, (b) parking-garage
+needing 1000 LM iterations where GTSAM needs 8, (c) cubicle and rim refused for indefinite information. Design:
+`ROBUST_BACKEND_2.5.md` §1–§3, §9.
+
+**Decision.**
+1. **Chordal initialisation** (`cpp/slam/pose_graph/chordal_init.{hpp,cpp}`). It solves one sparse linear least-squares
+   problem for the rotation rows (κ-weighted, hard anchor, three right-hand sides). Each block is projected to SO(3)
+   with `cv::SVDecomp` and the determinant fix, then translations come from a τ-weighted Laplacian. κ and τ follow
+   SE-Sync's isotropic conversion (`τ = 3/tr(I_t⁻¹)`, `κ = 3/(2 tr(I_R⁻¹))`), shared with D74.
+   - **Baselines (§49 ablation):** dead reckoning and a `cv::buildMST` spanning tree (Prim, highest κ).
+   - **Gate (maintainer decision 2026-10-18, design §9):** on the SE-Sync graphs where our LM from dead reckoning
+     fails, chordal + LM must reach GTSAM's minimum.
+     - The failure set is **torus3D and grid3D**, where GTSAM's LM from the same start stops in the same local
+       minima (29950.006 and 253372.10).
+     - Chordal + LM reaches the reference (12117.637 and 42179.979) in 6 and 8 iterations. On all six graphs it
+       ends within 7.0e-9 relative, stationary, in 4–15 iterations. MST rescues both as well.
+     - This matches Carlone et al. 2015, Table I, on the four graphs the two studies share. **PASSED.**
+2. **pgo_v2 = pgo_v1 with `clamp_diagonal` off**, as the preset `PgoV2()` and `SolvePoseGraph`'s default.
+   - **Why:** OpenCV clamps the damping `λ·diag(H)` to an absolute [1e-6, 1e32]. Ceres, which it mirrors, clamps
+     `diag(JᵀJ)` before applying λ.
+   - **Effect on garage:** with the floor, 95 iterations and a stop 3.7e-5 above the minimum at production
+     tolerances; without it, 15 iterations, at the minimum.
+   - **Open item (b) is reduced, not at parity:** 15–18 iterations against GTSAM's 7.
+   - **No regressions:** the 100-case oracle 100/100 (worst 1.48e-12 relative); the SE-Sync graphs reach the same
+     minimum as GTSAM on all six; ctest 300/300 (8 env-gated skips, the oracle results cited separately).
+   - **The struct defaults stay pgo_v1** because the windowed BA builds on them. Flipping them would have changed
+     odometry silently.
+   - **Guard owed to D73:** the floor also regularised a rank-deficient H, so GNC must anchor every connected
+     component of the active graph, with its own test.
+3. **Oracle corrections** (`python/oracle/pgo_gtsam.py`, oracles only):
+   - GTSAM's `Rot3.Quaternion` does not normalise, and the g2o files are off unit length by up to 6.8e-7. The old
+     SE-Sync oracle therefore solved a slightly different problem, which was garage's "different minimum". Now
+     normalised, and `SeSyncBenchmarkGraphs` asserts equal initial energies.
+   - GTSAM's chordal soft-anchors node 0 at unit precision, against edge weights near 15, which costs 6.5e-3 rad.
+     The oracle scales the edge information by 2⁻⁵⁴ to make the anchor effectively hard.
+   - New cases go in the branch cache only. The shared `.cache/oracle/*` is untouched.
+4. **Open item (a), diagnosed.** `InitializePose3` throws on every case without a `PriorFactorPose3`, because
+   `NonlinearEqualityPose3` is dropped and the anchor is left disconnected. With a unit prior, 3 of 100 cases throw.
+   - The throw is in multifrontal Cholesky only: QR and sequential Cholesky succeed on the same linearisation, and H
+     is positive definite. So this is a false positive in GTSAM, not a problem with the graphs.
+   - The reference start falls back to GTSAM's chordal rotations. The original "case 2" was never committed and is
+     not reproduced [UNVERIFIED].
+5. **Placement (arch §3 updated, §49).** The degeneracy gate, PCM, GNC and the certificate go in `cpp/slam/robust/`,
+   not `perception/` and `collaboration/`. All of them act on pose-graph edges and must also run intra-agent, with no
+   broker. `loop_closure/` holds the intra-agent candidate source (D73).
+
+**Not done here, stated.** No runtime path solves the pose graph yet, so the `pgo_init` config selection, a
+`configs/slam` PGO entry and the manifest fields land with the first caller (D73). Open item (c) belongs to D74.
+grid3D dominates the 2.6 h gate. The gate is an env-gated evidence run, never part of `--premerge`.
+
+**Evidence.**
+- `PgoInit.SeSyncDeadReckoningGate`, `PgoOracle.SeSyncBenchmarkGraphs`, `PgoOracle.DampingAblation`,
+  `PgoInit.ChordalRotationsAgreeWithGtsam` (50 isotropic cases within 2.6e-10 rad of GTSAM's chordal).
+- `test_chordal_init.cpp`, 4 tests: the determinant fix, κ/τ, exact noise-free recovery, refusal of a graph
+  disconnected from the anchor.
+- ALGORITHMS §7.2a.
+
+## 2026-10-19 — D71: loop-closure degeneracy gate on the loop's own covariance (marginal σ_t / σ_r, parallax, collinearity), stereo depth noise propagated
+
+**Context.** Arch §14.4 puts a degeneracy gate before PCM. A degenerate PnP loop carries an honest but huge
+covariance, so it is consistent with almost anything and PCM cannot discriminate it. The arch criterion is
+`λ_min/λ_max < τ` on the Hessian, which mixes metres and radians and depends on the frame. The design also assumed
+that 3D point noise could be ignored. Design: `ROBUST_BACKEND_2.5.md` §4.
+
+**Decision.** `cpp/slam/robust/degeneracy.{hpp,cpp}`, `AssessLoop`, a pure library with no wiring.
+- **Pose refinement:** the PnP pose is refined with `cv::solvePnPRefineLM`, then Gauss–Newton weighted by per-point
+  pixel covariances that carry B's stereo noise in (u, v, disparity) (Vakhitov et al., CVPR 2021).
+- **Covariance:** H⁻¹ inflated by max(1, σ̂²), in the left tangent, converted to the pose-graph residual tangent by
+  `OdometryEdge`'s formula.
+- **Gates:**
+  - worst-direction 1σ of the translation marginal [m] and the rotation marginal [rad], absolute bounds (Zhang 2016);
+  - too few inliers with a stereo triangulation angle ≥ θ_min;
+  - collinearity: the 3D inliers lie on a line (λ_mid/λ_max of their covariance).
+- **Reported only:** the within-block ratios, pixel spread, planarity and the corridor score.
+- **§49:** the arch §14.4 criterion is replaced, with a dated update recorded there; ALGORITHMS §7.8a.
+
+**Evidence** (`tests/unit/test_degeneracy.cpp`, 8/8; ctest 308/308, 8 env-gated skips):
+- the finite-difference check of the stereo back-projection Jacobian;
+- the information equals `OdometryEdge`'s conversion;
+- Monte Carlo mean NEES **5.95** over 500 trials (χ²₆ mean 6) at 1.5–12 m with pixel and disparity noise. At
+  25–40 m it is **54.7**: the linearised covariance is about 9× overconfident at far range, which is the measured
+  reason parallax is its own gate;
+- the control passes. A 3D line is named collinear, far-only points are named for parallax, and the small object
+  is named for conditioning;
+- **Collinearity moved from pixels to 3D after measurement.** A pixel-spread gate refused a well-conditioned planar
+  fan (6.4 mm, 1.35 mrad). Conditioning alone missed a 3D rail (8.3 mrad reported), because stereo noise fabricates
+  the missing rotation information. The fan is now a must-not-refuse test.
+- **Scene correction:** 120 points on a 40 px patch measured 2.7 cm and 0.4°, a usable loop. The scene was corrected
+  to 25 points on a 20 px patch; the threshold was not loosened.
+
+**Not done, stated.**
+- **Thresholds** (σ_t 0.10 m, σ_r 0.02 rad, 10 points at ≥ 1°, spread 0.01, σ_px 0.46, σ_d = √2 σ_px) are
+  [ASSUMPTION]. Calibration follows Zhang's margin-midpoint rule on real candidates with ground truth, protocol fixed
+  in design §4, run in D73.
+- **Not wired.** `VerifyResult` does not export inlier correspondences, and the broker's `ProxyInformation` stays,
+  because replacing it changes the Phase-1 sim_collab outputs. Both need a maintainer decision before D73.
+- **Honest covariance is shown at 1.5–12 m only.** On the small-object scene the residuals are about 3× the model
+  (σ̂² 3.2), so the covariance is honest there only through the inflation.
+- **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].
+
+## 2026-10-19 — D72: PCM against the odometry-only chain, with a per-loop (Bonferroni) pair threshold
+
+**Context.** Arch §14.5: pairwise cycle consistency (Mangelson et al., ICRA 2018) at χ²₆(0.95), a maximum consistent
+set by greedy maximal clique, exact for ≤ 25, after the degeneracy gate (D71) and before GNC (D73).
+Design: `ROBUST_BACKEND_2.5.md` §5.
+
+**Decision.** `cpp/slam/robust/pcm.{hpp,cpp}`, `Pcm(PoseGraph)`, a pure library with no wiring.
+- **Odometry legs:** prefix-composed adjoints on the odometry-only chain (`kOdometry` and `kStereoOdometry`).
+  Non-chain components throw.
+- **Shared odometry edges:** when both legs run along one chain, each shared edge is counted once with summed,
+  signed coefficients.
+- **Groups:** per pair of odometry components. One candidate is accepted as "untested". Two or more candidates with
+  a maximum clique of 1 accept nothing ("no_consensus").
+- **Clique:** greedy CLIQUEHEU (Pattabiraman et al.); exact Bron–Kerbosch behind a flag. Loops are ordered by
+  (from, to), so the result does not depend on insertion order.
+- **Threshold (§49 deviation, arch §14.5 updated):** per-loop false rejection α_loop/(n − 1) per pair, with
+  α_loop = 0.001 derived from the recall requirement. The fixed χ²₆(0.95) is kept as the ablation baseline.
+
+**Why the threshold changed.** A maximum clique keeps a true loop only if all of its pairs pass. At 5 % per pair the
+fixed quantile measured recall 0.84–0.86 mean and 0.60–0.70 worst. The acceptance criterion was fixed beforehand:
+recall ≥ 0.95 on every seed at ≤ 40 % outliers, because a dropped true loop is unrecoverable and outliers are GNC's
+job.
+
+**Evidence** (`tests/unit/test_pcm.cpp`, 12/12; ctest 355/355 on the merged tree):
+- **Odometry legs:** Monte Carlo NEES 6.01 and 6.24.
+- **Pair statistic** (mean, χ²₆: 6): 5.90, 6.15, 5.95, 5.93 and 5.75 for disjoint, nested, crossing, backward and
+  shared-end legs; 6.07 and 5.96 for inter-agent pairs with loop 2 forward and reversed.
+- **Cliques:** greedy = exact on 200/200 planted-clique graphs.
+- **Random outliers, 10–40 %:** recall **1.000** on every seed, precision 1.000.
+- **Near-miss outliers:** precision 0.75 at 0.2 m / 1°, 0.94 at 0.5 m / 5°, 1.00 at 1 m / 10°. Recall stays
+  0.99–1.00, against 0.83–0.85 for the fixed quantile.
+- **Blind spot:** 5 aliased, mutually consistent wrong loops beat 3 true ones. Asserted and labelled.
+- **Timing:** 186 ms for 300 loops on 3000 nodes.
+
+**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+- **The two failures are not symmetric.** True loops dropped by the fixed quantile cannot be recovered; near misses
+  passed by the default are GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ 176, against GNC's c̄² = 16.8.
+- **Stated trade:** the bound loosens with group size (27.6 at 10 loops, 30.3 at 30, 33.1 at 100, 35.6 at 300,
+  against 12.59).
+- **Blind spot:** unchanged under either threshold.
+- **Condition for D73:** GNC's acceptance runs on PCM's output with 0.5 m / 5° near misses and requires precision
+  ≥ 0.99 on them; 0.2 m / 1° near misses are scored by ATE. If GNC fails, the first remedy is α_loop = 0.01, not the
+  fixed quantile.
+
+**Not done, stated.**
+- Near misses near the loop noise pass PCM by design; D73's GNC test must include them.
+- D56 lost stretches are bridged by identity-covariance edges, so PCM is blunt across them. Not measured on real
+  data.
+- The greedy clique can return a smaller set than exact. It didn't on the test graphs, and a shuffled-order run
+  before the tie fix showed 12 against 13.
+- Not wired: D73 builds the loop source → gate → PCM → GNC.
+
+## 2026-10-20 — D73 part 1: GNC-TLS on PCM's output; every connected component anchored
+
+**Context.** Arch §14.6: GNC-TLS (Yang et al., RA-L 2020) on the loops that survive PCM, odometry at w = 1, weight
+trajectories exposed. pgo_v2 (D70) removed OpenCV's damping floor, which had been the only regulariser for a graph
+split by rejections. Design: `ROBUST_BACKEND_2.5.md` §6. D73 is split into three parts (design §6); this is part 1.
+
+**Decision.**
+- **`cpp/slam/robust/gnc.{hpp,cpp}`:** whitened r² = rᵀΩr, c̄² = χ²₆(0.99) = 16.81, Prop. 4 weights, μ₀ =
+  c̄²/(2r²max − c̄²), μ ×1.4.
+- **Stopping:** on weights within 1e-4 of {0, 1}, a relative cost change below 1e-5, or 100 outer iterations.
+- **Execution:** runs on a working copy. PCM's accepted set arrives as an edge mask, so indices stay stable. The
+  input graph gets the final poses and weights once (new `PoseGraph::SetGncWeight`, loop edges only, w ∈ [0, 1]).
+  Inner solves skip marginals.
+- **Conventions:** checked against GTSAM 4.3.0's `GncOptimizer.h`, and they match. The oracle run is deferred to
+  part 2 [UNVERIFIED].
+- **`SolvePoseGraph` anchors every connected component** of the active graph (loops at w ≤ 1e-4 are inactive). The
+  common single-component path is unchanged.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, 10/10; existing PGO tests 10/10 numerical and 9/9 opencv, with the GTSAM
+oracle at 100/100):
+- **Weights:** the Prop. 4 weight equals the dual's argmin.
+- **No outliers:** energy equals plain LM.
+- **Gate met:** grid and sphere at 10–40 % random outliers, precision 1.000 and recall worst 0.967. The ramp gives
+  10/10 up to 90 %.
+- **Near misses:** at 0.5 m / 5°, PCM → GNC accepts none (PCM removed them all), and GNC alone accepts 0/200. At
+  0.2 m / 1°, 143/200 accepted, +11 % ATE.
+- **Self-consistent 8-loop cluster:** 0/8 accepted.
+- **Split graphs:** two agents linked by 3 random loops → PCM no_consensus → 2 components, B held at its anchor.
+- **Bit-identical twice:** yes.
+- **Timing:** 1.6 s at 1,000 nodes and 4.75 s at 3,000 per event.
+
+**Not done, stated.**
+- **A lone inter-agent link is unverifiable** by GNC: measured, it is kept. PCM tags it "untested", so the first
+  inter-agent loop rests on the degeneracy gate alone.
+- **Hard outliers:** the 10–90 % ramp uses random outliers, so no breakpoint was found. A harder protocol (aliasing
+  clusters, near misses at scale) belongs to part 2's real candidates.
+- **The demo-latency estimate given earlier (0.3–0.8 s at 1,000 nodes) was optimistic.** Measured: 1.6 s.
+  Warm-starting the weights across events is the unimplemented lever.
+- **Not wired;** parts 2 and 3 follow.
+
+## 2026-10-20 — D73 part 2a: GNC weight reuse across loop events (fast path = fixed point + half-bound innovation test)
+
+**Context.** The maintainer asked for weight reuse before the wiring, to cut per-event latency. Design §6 part 2a
+holds the protocol, fixed before the first run.
+
+**Decision.**
+- **State.** `SolveGnc(..., GncState*)`: the caller carries per-edge decisions. A loop that was PCM-active last event
+  and still is starts at its previous decision; other active loops start at 1; the mask always wins.
+- **Fast path:** accepted only if all of these hold:
+  - every loop held at 1 has r² ≤ c̄²;
+  - every active loop held at 0 has r² > c̄²;
+  - the n new loops raise the full cost by 2ΔE ≤ ½χ²₆ₙ(0.99). This takes one extra warm solve with them at 0.
+- **Fallback.** Otherwise the fast-path solve is discarded and cold GNC runs from the event's input poses.
+- **Path dependent** (deterministic under replay).
+
+**Why the half bound (measured, design §6 table).**
+- **The fixed point alone diverged from cold at 25 events:** a wrong loop bent the odometry.
+- **Adding the innovation test at χ²₆ₙ(0.99) diverged at 45 events** and kept a near miss for good: precision
+  0.986, ATE +3.6 %.
+- **Half the bound (Remark 5's region)** matched cold at every one of 84 events, with ATE identical.
+
+**Evidence** (`tests/unit/test_gnc.cpp`, GncWarm 3/3):
+- **1,000 nodes:** 72 % fast path, −22 % time, and PCM's rejected-then-accepted case covered.
+- **3,000 nodes:** 83 % fast path, 227 ms mean per event, 655 ms worst.
+- **Determinism:** bit-identical over a fixed sequence.
+
+**Correction, stated.** Part 1's 1.6 s / 4.75 s per event was GNC with outliers present and no PCM in front. In
+the wired order PCM removes them first, and a loop event costs about 0.1–0.2 s even cold.
+
+## 2026-10-20 — D59 (gravity priors): GRAVITY_PRIOR edges produced; Mahony is the source, σ 2.3°
+
+Design and evidence: `docs/design/INERTIAL_2.4.md` §4.10–4.11.
+
+- **Edge** (`slam/pose_graph/gravity_prior.hpp`): unary on a keyframe's T_W_C, r = B(g_C)ᵀ R_WCᵀ ĝ_W (2-dof, blind to
+  yaw), the body-side form of GTSAM's `AttitudeFactor<Pose3>` (same cost for isotropic information). FD-tested
+  Jacobian; kept in `PoseGraph::gravity_priors()`, apart from `edges()` and `Cost()`, which are 2.5's.
+- **Emission:** one edge per 10 keyframes (non-overlapping windows), both inertial modes; none without an IMU.
+- **Source decided by 2-dof NEES vs ground truth, never ATE** (22 EuRoC runs): the VIO-derived candidates are accurate
+  (0.4–2.4°) but inherit the reference gravity's constant per-flight error, overconfident 2–70×. **Mahony** is
+  independent and consistent: σ = 2.3° calibrated on Machine Hall (NEES 2.00), held-out Vicon flights NEES 3.0;
+  heavy tail (p99 ≈ 18).
+- `euroc_v2` and `euroc_v2_attitude` emit them; trajectories unchanged (byte-identical), `graph_version` changes.
+- **Handoff to 2.5 (consumer):** (1) add the edges' cost to the PGO from `gravity_priors()` (residual and Jacobian in
+  `LinearizeGravityPrior`); (2) robustify them (heavy tail); (3) estimate the agent's gravity direction as a 2-DoF
+  variable initialised at `g_ref_W` (its error is shared by every edge); (4) wire field: Phase 3 (inter-agent).
+
+
+## 2026-10-21 — D73 part 2b: intra-agent loop closure wired (off by default); calibrated loop noise model
+
+**Context.** The loop backend (gate → PCM → GNC on a VO mirror) existed but was not wired. The first EuRoC run
+showed the PnP loop covariance far too confident for PCM and GNC. Design: `ROBUST_BACKEND_2.5.md` §8.
+
+**Decision.**
+- **The adapter** (`runtime/agent/intra_loop_closure.hpp`), wired into `stereo_vo_runner.hpp` behind an optional
+  `loop_closure:` section (`configs/slam/euroc_v2_loops.yaml`). Per keyframe:
+  - ORB features plus SGBM 3D points, and the mean-bit placeholder descriptor;
+  - retrieval, with the last 50 keyframes and the last 10 s excluded;
+  - verification with `edge_verifier`, whose new inlier export was a maintainer-approved hunk;
+  - each loop queued until its keyframes leave the BA window, then one backend event.
+  The VO is never written. Outputs: `loop_trace.jsonl`, `loop_candidates.csv` (ground-truth errors, full error
+  vector and covariance), and a summary block with the funnel, recall, latency and the PCM good-pair statistic.
+- **Edge noise model** (`DegeneracyParams::noise_*`): var = k σ²_PnP + floor², per block.
+  - Fitted jointly on MH_01 + V1_01: k_t 1.33, floor_t 0.014 m, k_r 0.178, floor_r 0.0095 rad.
+  - The gate's criteria still read the PnP σ.
+  - The labels' "3σ of its own covariance" prong was dropped; labels are 0.2 m / 2° against interpolated ground truth.
+
+**Why.** On V1_01 the PnP covariance gave median NEES ≈ 1e4, about 1000× overconfident. Correlated errors don't
+average down; COVINS-G reports the same. With that covariance, PCM did not improve on the gate (0.67 against 0.63).
+The MH_01-only fit failed held-out V1_01, which is stated; hence the joint fit.
+
+**Evidence** (keyframe-refined ATE, VO → loops):
+- MH_01 0.0676 → 0.0207 m (−69 %)
+- V1_01 0.0563 → 0.0382 m (−32 %)
+- V1_02, held out: 0.0517 → 0.0254 m (−51 %)
+- **V1_02 funnel precision:** 0.53 → 0.80 → 0.88 → 0.97 (GNC: 142 good, 4 bad).
+- **Held-out NEES:** mean 5.24 passes; the tail is 4.4 % against ≤ 3 %, which misses. The maintainer accepted the
+  model with the miss stated; GNC absorbs the tail.
+- **PCM good-pair statistic:** 2.1–7.8, so no odometry scale is needed.
+- **MH_01 without the model:** GNC kept 51 good of 55 (0.93); with it, 118 good of 177 (0.67), at the same ATE
+  (0.0205 / 0.0207 m). On V1_01 the model raised recall (21 → 86 good) and precision (0.81 → 0.91).
+- **Evidence:** `evaluation/runs/2.5/loop_closure/` (five runs, no ground truth, `analyze_loops.py`). The manifests'
+  `git_dirty: false` is wrong: the binaries were built from the uncommitted tree on 4b45934.
+- **Latency:** 1.3–2.4 s mean, 7.3 s worst, mostly waiting for the BA window.
+- **Tests:** `Degeneracy` 9/9, including the noise-model test.
+
+**Not done, stated.**
+- **Sim calibration**, which the demo needs.
+- **ORB per-octave σ.**
+- **MH_01's 59 accepted loops labelled bad:** small translation error, a ~3.8° systematic rotation offset, none
+  gross. Cause [UNVERIFIED].
+- **The gate's σ thresholds** are unchanged (the Youden fit barely moved them).
+- **Retrieval recall** 51–66 % (placeholder descriptor).
 
 ## 2026-10-19 — D60: 2.1 — ORB + lost-mode re-association ships for EuRoC v2; XFeat stays a measured ablation (overrides "XFeat primary" for this phase)
 

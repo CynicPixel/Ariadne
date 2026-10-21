@@ -32,8 +32,24 @@
 // A landmark that projects behind a camera (z <= z_floor) makes the energy
 // enormous (finite), so the driver rejects that step and raises lambda,
 // instead of evaluating pi at a singularity.
+//
+// INERTIAL (imu.mode full, INERTIAL_2.4.md §4.2). When BaWindow::imu holds
+// preintegrations, every window keyframe also carries its body velocity v_W
+// and biases b_g, b_a (a 9-vector, additive), and the energy gains
+//     sum_k ½ r_k^T Σ_k^-1 r_k        Forster's inertial factor k -> k+1
+//                                     (slam/inertial/preintegration.hpp)
+//   + sum_k ½ |b_k+1 - b_k|^2 / (σ_rw^2 Δt_k)    bias random walk
+//   + ½ (b_0 - b̄)^T Λ (b_0 - b̄)                 bias prior on window[0]
+// No robust kernel on these (Gaussian by construction). A pose's fixedness and
+// its velocity/bias's are SEPARATE: window[0]'s pose is the gauge, its v and b
+// are free. Layout [poses 6 nc | inertial 9 ni | landmarks 3 nl]: landmarks
+// never touch v or b, so the Schur elimination is unchanged and only the
+// reduced system S grows (dim_c covers poses AND inertial blocks). With no
+// inertial blocks every number is what it was before (visual-only windows
+// are bit-identical).
 // ---------------------------------------------------------------------------
 #include "core/math/lie.hpp"
+#include "slam/inertial/preintegration.hpp"
 
 #include <Eigen/Dense>
 
@@ -66,6 +82,30 @@ struct WindowObservation {
     double sigma = 1.0;    // pixel standard deviation
 };
 
+/// The visual-inertial part of a window (empty `pre`: visual-only). Indexed like BaWindow::T_W_C.
+struct BaInertial {
+    SE3 T_C_B;                         // IMU body in the rectified left camera (T_W_B = T_W_C T_C_B)
+    Vec3 g_W = Vec3::Zero();           // gravity in the VO world: estimated at initialisation, an input here
+    std::vector<Vec3> v, bg, ba;       // per keyframe: body velocity in W, gyro bias, accel bias
+    std::vector<Preintegrated> pre;    // pre[k]: keyframe k -> k + 1 (size K - 1), at bias (bg, ba)_lin of k
+    double gyro_random_walk = 0.0;     // rad/s^2/sqrt(Hz), as the caller inflated it
+    double accel_random_walk = 0.0;    // m/s^3/sqrt(Hz)
+    bool has_prior = false;            // bias prior on keyframe 0: r = [bg_0; ba_0] - prior_b, information prior_info
+    Vec6 prior_b = Vec6::Zero();
+    Mat6 prior_info = Mat6::Zero();
+    /// v_0 is not a variable (held at its value): set by AnchorWindow when window[0] is the only pose-determined
+    /// keyframe of its group, the one case where the IMU's Galilean null space is not removed by vision (maintainer
+    /// decision 2026-10-18; INERTIAL_2.4 §4.2). Otherwise false: v_0 is free, biases carry the only prior.
+    bool hold_v0 = false;
+    /// Gravity's DIRECTION is a variable (2 tilt parameters, |g| fixed; INERTIAL_2.4 §4.8): with window[0]'s 6-DoF pose
+    /// as the gauge, this is what lets the accelerometer observe the window's roll and pitch. Prior on the tilt of
+    /// g_W from g_prior: r = B_pᵀ ĝ (B_p = GravityTangentBasis(ĝ_prior)), information g_prior_info (rad^-2).
+    bool estimate_gravity = false;
+    bool has_g_prior = false;
+    Vec3 g_prior = Vec3::Zero();
+    Eigen::Matrix2d g_prior_info = Eigen::Matrix2d::Zero();
+};
+
 struct BaWindow {
     BaCamera cam;
     std::vector<SE3> T_W_C;          // keyframe poses, oldest first
@@ -75,7 +115,21 @@ struct BaWindow {
     std::vector<WindowObservation> obs;
     double huber_delta = 2.0;
     double z_floor = 1e-3;           // m: behind / at the camera
+    BaInertial imu;
+
+    bool inertial() const { return !imu.pre.empty(); }
 };
+
+/// Throws unless the inertial part, when present, matches the window (one preintegration per consecutive pair, a
+/// velocity and biases per keyframe).
+inline void CheckInertial(const BaWindow& w) {
+    if (!w.inertial()) return;
+    const size_t K = w.T_W_C.size();
+    if (w.imu.pre.size() + 1 != K || w.imu.v.size() != K || w.imu.bg.size() != K || w.imu.ba.size() != K)
+        throw std::invalid_argument("BaWindow: inertial part does not match the keyframes");
+    if (!(w.imu.gyro_random_walk > 0.0) || !(w.imu.accel_random_walk > 0.0))
+        throw std::invalid_argument("BaWindow: bias random walk densities must be > 0");
+}
 
 struct ObsLinearization {
     bool valid = false;              // in front of the camera
@@ -164,6 +218,17 @@ inline void RemoveLandmarks(BaWindow& w, const std::set<uint64_t>& ids) {
 /// deterministic) labels each reached keyframe with the fixed keyframe it hangs from. In every component the search
 /// does not reach, the OLDEST keyframe is fixed (its own anchor) and the search continues from it. Returns the
 /// anchor index of each keyframe; `newly_fixed` counts the keyframes fixed here.
+///
+/// INERTIAL windows: the IMU observes relative rotation and, given the velocity, relative position -- but NOT the
+/// velocity itself. Adding c to every v_k and c (t_k - t_0) to every p_k leaves every inertial residual unchanged (a
+/// Galilean null space), so a chain of inertial factors from ONE pose-determined keyframe does not tie anything. It
+/// does once the anchor's group holds two pose-determined keyframes (two positions at different times fix c): an
+/// inertial factor then ties consecutive keyframes. So the search follows inertial factors only out of groups with
+/// >= 2 keyframes reached through fixedness or covisibility (an inertially reached keyframe does not count).
+/// When window[0] (fixed, the gauge) has no covisible partner -- a dark stretch -- holding its velocity at the
+/// previous solve's estimate removes the null space with real information instead: w.imu.hold_v0 is set, window[0]'s
+/// group ties inertially, and the lost keyframes become IMU-determined rather than held at their predicted poses
+/// (where the stiff inertial factors would pull the biases toward the prediction's error).
 inline std::vector<int> AnchorWindow(BaWindow& w, int min_shared, int& newly_fixed) {
     const int K = int(w.T_W_C.size());
     std::vector<std::set<uint64_t>> seen(static_cast<size_t>(K));
@@ -179,27 +244,62 @@ inline std::vector<int> AnchorWindow(BaWindow& w, int min_shared, int& newly_fix
             }
         }
     std::vector<int> anchor(static_cast<size_t>(K), -1);
+    std::vector<int> pose_determined(static_cast<size_t>(K), 0);   // per anchor: keyframes reached without the IMU
     std::vector<int> queue;
+    const bool inertial = w.inertial();
     const auto search = [&]() {
-        for (size_t q = 0; q < queue.size(); ++q)
-            for (int b : adj[size_t(queue[q])])
-                if (anchor[size_t(b)] < 0 && !w.fixed[size_t(b)]) {
-                    anchor[size_t(b)] = anchor[size_t(queue[q])];
-                    queue.push_back(b);
-                }
-        queue.clear();
+        for (;;) {
+            for (size_t q = 0; q < queue.size(); ++q)
+                for (int b : adj[size_t(queue[q])])
+                    if (anchor[size_t(b)] < 0 && !w.fixed[size_t(b)]) {
+                        anchor[size_t(b)] = anchor[size_t(queue[q])];
+                        ++pose_determined[size_t(anchor[size_t(b)])];
+                        queue.push_back(b);
+                    }
+            queue.clear();
+            if (!inertial) return;
+            // One inertial tie (the lowest index first), then the covisibility search again from it.
+            for (int k = 0; k < K && queue.empty(); ++k) {
+                if (anchor[size_t(k)] >= 0) continue;
+                for (int n : {k - 1, k + 1})
+                    if (n >= 0 && n < K && anchor[size_t(n)] >= 0 && pose_determined[size_t(anchor[size_t(n)])] >= 2) {
+                        anchor[size_t(k)] = anchor[size_t(n)];
+                        queue.push_back(k);
+                        break;
+                    }
+            }
+            if (queue.empty()) return;
+        }
     };
     for (int k = 0; k < K; ++k)
         if (w.fixed[size_t(k)]) {
             anchor[size_t(k)] = k;
+            pose_determined[size_t(k)] = 1;
             queue.push_back(k);
         }
+    if (inertial) {
+        // Covisibility first (no inertial ties yet), to see whether window[0]'s group pins the velocity by itself.
+        w.imu.hold_v0 = false;
+        std::vector<int> a = anchor, pd = pose_determined, q = queue;
+        for (size_t i = 0; i < q.size(); ++i)
+            for (int b : adj[size_t(q[i])])
+                if (a[size_t(b)] < 0 && !w.fixed[size_t(b)]) {
+                    a[size_t(b)] = a[size_t(q[i])];
+                    ++pd[size_t(a[size_t(b)])];
+                    q.push_back(b);
+                }
+        if (K > 1 && w.fixed[0] && pd[0] < 2) {
+            w.imu.hold_v0 = true;
+            pose_determined[0] = 2;   // v_0 known: window[0]'s group ties inertially
+        }
+    }
     search();
     newly_fixed = 0;
     for (int k = 0; k < K; ++k)
         if (anchor[size_t(k)] < 0) {
             w.fixed[size_t(k)] = true;
             anchor[size_t(k)] = k;
+            pose_determined[size_t(k)] = 1;
             ++newly_fixed;
             queue.push_back(k);
             search();
@@ -207,31 +307,88 @@ inline std::vector<int> AnchorWindow(BaWindow& w, int min_shared, int& newly_fix
     return anchor;
 }
 
-/// The parameter layout: free cameras (6 each, window order), then landmarks (3 each, ascending id).
+/// The parameter layout: free camera poses (6 each, window order), then inertial blocks [v; bg; ba] (9 each, every
+/// keyframe of an inertial window, window order; window[0]'s is [bg; ba] when hold_v0), then landmarks (3 each,
+/// ascending id). dim_c() is the reduced system's size: poses and inertial blocks.
 class BaLayout {
 public:
     explicit BaLayout(const BaWindow& w) {
         if (w.T_W_C.size() != w.fixed.size()) throw std::invalid_argument("BaLayout: poses and fixed flags differ");
+        CheckInertial(w);
         for (size_t k = 0; k < w.T_W_C.size(); ++k) cam_index_.push_back(w.fixed[k] ? -1 : n_cams_++);
+        int off = 6 * n_cams_;
+        for (size_t k = 0; w.inertial() && k < w.T_W_C.size(); ++k) {
+            const bool held = k == 0 && w.imu.hold_v0;
+            vel_off_.push_back(held ? -1 : off);
+            off += held ? 0 : 3;
+            bias_off_.push_back(off);
+            off += 6;
+        }
+        n_inertial_ = int(vel_off_.size());
+        if (w.inertial() && w.imu.estimate_gravity) {
+            grav_off_ = off;
+            off += 2;
+        }
+        dim_i_ = off - 6 * n_cams_;
         for (const auto& [id, X] : w.X) lm_index_[id] = w.fixed_landmarks.count(id) ? -1 : n_lms_++;
-        if (n_cams_ == 0 && n_lms_ == 0) throw std::invalid_argument("BaLayout: nothing to optimise");
+        if (n_cams_ == 0 && n_lms_ == 0 && n_inertial_ == 0) throw std::invalid_argument("BaLayout: nothing to optimise");
     }
     int n_cams() const { return n_cams_; }
+    int n_inertial() const { return n_inertial_; }
     int n_lms() const { return n_lms_; }
-    int dim_c() const { return 6 * n_cams_; }
-    int dim() const { return 6 * n_cams_ + 3 * n_lms_; }
+    int dim_c() const { return 6 * n_cams_ + dim_i_; }
+    int dim_i() const { return dim_i_; }
+    int dim() const { return dim_c() + 3 * n_lms_; }
     int cam(int k) const { return cam_index_[size_t(k)]; }
+    /// Offsets of keyframe k's velocity and of its biases [bg; ba] in the parameter vector; -1 when not variables
+    /// (a visual-only window; v_0 under hold_v0).
+    int vel(int k) const { return n_inertial_ > 0 ? vel_off_[size_t(k)] : -1; }
+    int bias(int k) const { return n_inertial_ > 0 ? bias_off_[size_t(k)] : -1; }
+    /// Offset of gravity's 2 tilt parameters, or -1 when gravity is not a variable.
+    int grav() const { return grav_off_; }
     int lm(uint64_t id) const { return lm_index_.at(id); }
 
 private:
-    int n_cams_ = 0, n_lms_ = 0;
-    std::vector<int> cam_index_;
+    int n_cams_ = 0, n_inertial_ = 0, n_lms_ = 0, dim_i_ = 0, grav_off_ = -1;
+    std::vector<int> cam_index_, vel_off_, bias_off_;
     std::map<uint64_t, int> lm_index_;
 };
 
+/// The Gaussian (inertial) part of the energy: inertial factors, bias random walk, bias prior. With `s` and `L`, also
+/// accumulates H (into s->Hcc) and g at the current point. ONE function for the energy and the linearisation, so the
+/// driver's acceptance test and its model see the same cost.
+struct BaSystem;
+inline double InertialTerms(const BaWindow& w, const BaLayout* L = nullptr, BaSystem* s = nullptr);
+
+/// The rigid motion X -> R (X - c) + c with R the minimal rotation taking direction g_from to g_to (axis g_from x
+/// g_to: no component about gravity, so no yaw). Applied to a window solved with estimate_gravity, it rotates the
+/// solution back to the reference gravity about window[0]'s position: the same optimum (every residual is invariant
+/// under a global rigid motion of poses, points, velocities and g), now in the frame where gravity is g_to.
+inline SE3 GravityAlignment(const Vec3& g_from, const Vec3& g_to, const Vec3& c) {
+    const Vec3 a = g_from.normalized(), b = g_to.normalized();
+    const Vec3 axis = a.cross(b);
+    const double s = axis.norm(), co = a.dot(b);
+    SE3 G;
+    G.R = s < 1e-15 ? Mat3::Identity() : core::SO3Exp(axis / s * std::atan2(s, co));
+    G.t = c - G.R * c;
+    return G;
+}
+
+/// Apply a rigid world motion G to everything in the window that lives in the world frame.
+inline void TransformWindow(BaWindow& w, const SE3& G) {
+    for (auto& T : w.T_W_C) {
+        T = G * T;
+        T.normalize();
+    }
+    for (auto& [id, X] : w.X) X = G * X;
+    for (auto& v : w.imu.v) v = G.R * v;
+    w.imu.g_W = G.R * w.imu.g_W;
+    w.imu.g_prior = G.R * w.imu.g_prior;
+}
+
 /// Robust energy of the whole window. Behind-camera observations make it huge (finite): the step is rejected.
 inline double BaEnergy(const BaWindow& w) {
-    double E = 0.0;
+    double E = w.inertial() ? InertialTerms(w) : 0.0;
     for (const auto& o : w.obs) {
         const ObsLinearization l = LinearizeObservation(w.cam, w.T_W_C[size_t(o.kf)], w.X.at(o.landmark), o, w.z_floor);
         if (!l.valid) return 1e300;
@@ -287,6 +444,74 @@ inline double BaLinearize(const BaWindow& w, const BaLayout& L, BaSystem& s) {
         }
     }
     for (auto& v : s.lm_cams) std::sort(v.begin(), v.end());
+    if (w.inertial()) E += InertialTerms(w, &L, &s);
+    return E;
+}
+
+inline double InertialTerms(const BaWindow& w, const BaLayout* L, BaSystem* s) {
+    const BaInertial& m = w.imu;
+    const bool assemble = L != nullptr && s != nullptr;
+    // One block of the stacked Jacobian: (parameter offset, columns).
+    struct Block { int off; Eigen::MatrixXd J; };
+    const auto add = [&](const Eigen::VectorXd& r, const Eigen::MatrixXd& Om, const std::vector<Block>& blocks) {
+        for (const Block& a : blocks) {
+            if (a.off < 0) continue;
+            const Eigen::MatrixXd JtOm = a.J.transpose() * Om;
+            s->g.segment(a.off, a.J.cols()) += JtOm * r;
+            for (const Block& b : blocks)
+                if (b.off >= 0) s->Hcc.block(a.off, b.off, a.J.cols(), b.J.cols()) += JtOm * b.J;
+        }
+    };
+    double E = 0.0;
+    // Gravity tilt: g <- Exp(B w) g, so dg/dw = -[g]x B (B at the current g, as BaOplus applies it).
+    const Eigen::Matrix<double, 3, 2> dg_dw =
+        -core::Hat(m.g_W) * GravityTangentBasis(m.g_W.normalized());
+    for (size_t k = 0; k + 1 < w.T_W_C.size(); ++k) {
+        const Preintegrated& pre = m.pre[k];
+        const InertialLinearization l = LinearizeInertial(pre, w.T_W_C[k] * m.T_C_B, m.v[k], m.bg[k], m.ba[k],
+                                                          w.T_W_C[k + 1] * m.T_C_B, m.v[k + 1], m.g_W);
+        const Mat9 Om = InformationOf<9>(pre.Sigma());
+        E += 0.5 * l.r.dot(Om * l.r);
+        // Bias random walk k -> k+1 over the same interval: covariance density^2 * dt per axis.
+        Vec6 rb;
+        rb << m.bg[k + 1] - m.bg[k], m.ba[k + 1] - m.ba[k];
+        Vec6 ob;
+        ob << Vec3::Constant(1.0 / (m.gyro_random_walk * m.gyro_random_walk * pre.dt())),
+            Vec3::Constant(1.0 / (m.accel_random_walk * m.accel_random_walk * pre.dt()));
+        E += 0.5 * rb.dot(ob.cwiseProduct(rb));
+        if (!assemble) continue;
+        const int ci = L->cam(int(k)), cj = L->cam(int(k + 1));
+        Eigen::Matrix<double, 9, 6> Jbi;   // [bg_i, ba_i]
+        Jbi << l.J_bgi, l.J_bai;
+        // r_v = R_iᵀ(v_j - v_i - g T) - Δv, r_p = R_iᵀ(p_j - p_i - v_i T - ½ g T²) - Δp: linear in g.
+        const Mat3 RiT = (w.T_W_C[k] * m.T_C_B).R.transpose();
+        const double T = pre.dt();
+        Eigen::Matrix<double, 9, 2> Jg = Eigen::Matrix<double, 9, 2>::Zero();
+        Jg.middleRows<3>(3) = -RiT * T * dg_dw;
+        Jg.bottomRows<3>() = -0.5 * RiT * T * T * dg_dw;
+        add(l.r, Om,
+            {{ci < 0 ? -1 : 6 * ci, l.J_Ti}, {cj < 0 ? -1 : 6 * cj, l.J_Tj}, {L->vel(int(k)), l.J_vi},
+             {L->vel(int(k + 1)), l.J_vj}, {L->bias(int(k)), Jbi}, {L->grav(), Jg}});
+        add(rb, Eigen::MatrixXd(ob.asDiagonal()),
+            {{L->bias(int(k)), -Mat6::Identity()}, {L->bias(int(k + 1)), Mat6::Identity()}});
+    }
+    if (m.has_prior) {
+        Vec6 rp;
+        rp << m.bg[0], m.ba[0];
+        rp -= m.prior_b;
+        E += 0.5 * rp.dot(m.prior_info * rp);
+        if (assemble) {
+            add(rp, m.prior_info, {{L->bias(0), Mat6::Identity()}});
+        }
+    }
+    if (m.estimate_gravity && m.has_g_prior) {
+        const Eigen::Matrix<double, 3, 2> Bp = GravityTangentBasis(m.g_prior.normalized());
+        const Vec3 gh = m.g_W.normalized();
+        const Eigen::Vector2d rg = Bp.transpose() * gh;
+        E += 0.5 * rg.dot(m.g_prior_info * rg);
+        if (assemble)
+            add(rg, m.g_prior_info, {{L->grav(), Eigen::Matrix2d(Bp.transpose() * (-core::Hat(gh) * GravityTangentBasis(gh)))}});
+    }
     return E;
 }
 
@@ -327,7 +552,7 @@ public:
                 for (int b : cams) S_.block<6, 6>(6 * a, 6 * b) -= Ba * s.Hcl.at({b, l}).transpose();
             }
         }
-        if (L.n_cams() > 0) {
+        if (L.dim_c() > 0) {
             ldlt_.compute(S_);
             if (ldlt_.info() != Eigen::Success || !(ldlt_.vectorD().array() > 0.0).all()) return false;
         }
@@ -357,11 +582,16 @@ public:
 
     /// Marginal covariance (left tangent of T_W_C) of free camera c at the solution: the 6x6 block of S^-1, from
     /// S X = E (never an explicit inverse, §11.6). Call on an UNDAMPED factorization.
-    Mat6 CameraCovariance(int c) const {
-        if (!ok_) throw std::logic_error("BaSchur::CameraCovariance without a factorization");
-        Eigen::MatrixXd E = Eigen::MatrixXd::Zero(S_.rows(), 6);
-        E.block<6, 6>(6 * c, 0) = Mat6::Identity();
-        const Mat6 C = ldlt_.solve(E).block<6, 6>(6 * c, 0);
+    Mat6 CameraCovariance(int c) const { return Marginal<6>(6 * c); }
+
+    /// The N x N block of S^-1 at parameter offset `off` (inside the reduced system: a pose or an inertial block),
+    /// from S X = E. Call on an UNDAMPED factorization.
+    template <int N>
+    Eigen::Matrix<double, N, N> Marginal(int off) const {
+        if (!ok_) throw std::logic_error("BaSchur::Marginal without a factorization");
+        Eigen::MatrixXd E = Eigen::MatrixXd::Zero(S_.rows(), N);
+        E.block<N, N>(off, 0) = Eigen::Matrix<double, N, N>::Identity();
+        const Eigen::Matrix<double, N, N> C = ldlt_.solve(E).template block<N, N>(off, 0);
         return 0.5 * (C + C.transpose());
     }
 
@@ -388,6 +618,13 @@ inline BaWindow BaOplus(const BaWindow& w, const BaLayout& L, const Eigen::Vecto
         out.T_W_C[k] = core::SE3Exp(x.segment<6>(6 * c)) * w.T_W_C[k];
         out.T_W_C[k].normalize();
     }
+    for (size_t k = 0; k < out.imu.v.size() && L.n_inertial() > 0; ++k) {
+        if (L.vel(int(k)) >= 0) out.imu.v[k] += x.segment<3>(L.vel(int(k)));
+        out.imu.bg[k] += x.segment<3>(L.bias(int(k)));
+        out.imu.ba[k] += x.segment<3>(L.bias(int(k)) + 3);
+    }
+    if (L.grav() >= 0)
+        out.imu.g_W = core::SO3Exp(GravityTangentBasis(w.imu.g_W.normalized()) * x.segment<2>(L.grav())) * w.imu.g_W;
     for (auto& [id, X] : out.X)
         if (L.lm(id) >= 0) X += x.segment<3>(L.dim_c() + 3 * L.lm(id));
     return out;

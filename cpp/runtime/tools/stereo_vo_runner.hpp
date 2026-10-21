@@ -18,6 +18,7 @@
 #include "perception/stereo/stereo_lk_matcher.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
+#include "runtime/agent/intra_loop_closure.hpp"
 #include "runtime/agent/keyframe_records.hpp"
 #include "runtime/datasets/stereo_source.hpp"
 #include "runtime/manifest/build_identity.hpp"
@@ -119,6 +120,10 @@ struct StereoVoArgs {
     std::function<void(const KeyframeView&)> on_keyframe;   // optional; never changes the run
     std::function<void(int64_t, const core::SE3&)> on_body_pose;   // every frame's T_O_B; optional
     std::function<void(const FrameView&)> on_frame;                 // every frame; optional; never changes the run
+    /// Fake outages (INERTIAL_2.4 §4.4, deciding imu.full.lost_motion): [start, start + length) seconds from the first
+    /// frame, the VO receives no tracks (as in a lamp failure); after each one the tracks return under FRESH ids, as
+    /// after a real loss with no re-association. The tracker itself runs on, so later frames are unaffected otherwise.
+    std::vector<std::pair<double, double>> outages;
 };
 
 /// The 1.4 + 1.5 pipeline over any StereoSource: rectify -> LK tracker ->
@@ -138,10 +143,21 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     }
 
     const std::unique_ptr<LocalFeatureEngine> features = MakeFeatureEngine(pcfg.features);   // 2.1: orb | xfeat
+    // D73 part 2b: intra-agent loop closure, only with a `loop_closure:` config section. Read-only towards the VO.
+    std::unique_ptr<runtime::IntraLoopClosure> loops;
+    if (scfg.loop_closure.enabled) loops = std::make_unique<runtime::IntraLoopClosure>(scfg.loop_closure, rig, args.seed);
     KltTracker tracker(pcfg.tracker, *features);
     const SgbmStereo sgbm(pcfg.stereo, rr);
-    slam::StereoVo vo(scfg, rig, args.seed, source.Agent());
+    // imu_mode full (D59): the IMU's mount (rectified left camera in the body) and its datasheet noise; StereoVo
+    // applies imu.full's inflation.
+    const slam::VoImuRig imu_rig{T_B_Crect, source.ImuNoiseModel()};
+    slam::StereoVo vo(scfg, rig, args.seed, source.Agent(), scfg.imu.mode == "full" ? &imu_rig : nullptr);
     LostReassociator reassoc(pcfg.reassociation, *features, rr.fx, rr.fy, rr.cx, rr.cy);   // 2.1; off unless configured
+    // --outages hands the VO track ids shifted per outage; re-association renames ids in the TRACKER, so the two
+    // would rename in different id spaces. Refused rather than silently wrong.
+    if (pcfg.reassociation.enabled && !args.outages.empty()) {
+        throw std::runtime_error("--outages cannot be combined with perception reassociation (track id spaces differ)");
+    }
     std::vector<double> t_conf;   // 2.1 §10: right-matcher + WLS per stereo pass (stereo.confidence = wls only)
 
     const std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
@@ -170,6 +186,42 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
+    // imu_mode full (D59): solve and initialisation counters, the initialisation against ground truth (INERTIAL_2.4
+    // §4.3), and a per-keyframe trace of the solved velocity and biases next to ground truth (imu_trace.csv).
+    const bool full_imu = scfg.imu.mode == "full";
+    const std::vector<runtime::GroundTruthInertial> gt_inertial = full_imu ? source.GroundTruthInertialStates()
+                                                                            : std::vector<runtime::GroundTruthInertial>{};
+    long imu_solves = 0, imu_v0_held = 0, imu_factors = 0, imu_repropagated = 0, imu_prior_marginal = 0,
+         imu_prior_carried = 0, imu_init_refused = 0, lost_inertial = 0;
+    double imu_chi2 = 0.0, imu_tilt_sum = 0.0, imu_tilt_max = 0.0;
+    int64_t imu_init_t_ns = -1, first_t_ns = -1;
+    std::string imu_init_vs_gt;   // filled at initialisation
+    std::ostringstream imu_trace;
+    imu_trace << "keyframe,t_ns,source,ba_inertial,v0_held,vx_B,vy_B,vz_B,bgx,bgy,bgz,bax,bay,baz,"
+                 "gt_vx_B,gt_vy_B,gt_vz_B,gt_bgx,gt_bgy,gt_bgz,gt_bax,gt_bay,gt_baz,gravity_err_deg,tilt_deg,g_prior_sigma_deg,"
+                 "ba_landmarks\n";
+    std::vector<std::pair<double, double>> gravity_err_t;   // (t_s, deg): the estimated gravity vs GT, per keyframe
+    // GRAVITY_PRIOR (§4.10): per candidate, NEES and angle error vs GT at each emission; edges emitted.
+    struct GpStats { std::vector<double> nees, ang; long failed = 0; };
+    std::map<std::string, GpStats> gp_stats;
+    long gp_edges = 0;
+    std::ostringstream gp_trace;
+    gp_trace << "keyframe,t_ns,candidate,nees,angle_err_deg,sigma_deg,emitted\n";
+    // Nearest ground-truth pose / inertial state within 10 ms (EuRoC GT is 200 Hz).
+    const auto gt_pose_at = [&](int64_t t, core::SE3& T) {
+        const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), t,
+                                         [](const runtime::TimedPose& p, int64_t x) { return p.t_ns < x; });
+        if (it == gt_poses.end() || std::llabs(it->t_ns - t) >= 10000000LL) return false;
+        T = it->T;
+        return true;
+    };
+    const auto gt_inertial_at = [&](int64_t t, runtime::GroundTruthInertial& g) {
+        const auto it = std::lower_bound(gt_inertial.begin(), gt_inertial.end(), t,
+                                         [](const runtime::GroundTruthInertial& p, int64_t x) { return p.t_ns < x; });
+        if (it == gt_inertial.end() || std::llabs(it->t_ns - t) >= 10000000LL) return false;
+        g = *it;
+        return true;
+    };
     std::vector<runtime::TimedPose> est_body;
     // ORB-SLAM's trajectory protocol (System::SaveTrajectoryEuRoC): each frame is stored relative to its reference
     // keyframe and re-composed at the end from that keyframe's FINAL (window-refined) pose. Window backend only, next
@@ -235,12 +287,39 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         slam::VoFrame vf;
         vf.frame_id = static_cast<uint64_t>(i);
         vf.t_ns = frame.t_ns;
-        vf.track_ids = tf.ids;
-        vf.points = tf.points;
+        if (first_t_ns < 0) first_t_ns = frame.t_ns;
+        // --outages: the VO's view of the tracks (empty inside an outage, fresh ids after each).
+        const double t_rel = 1e-9 * double(frame.t_ns - first_t_ns);
+        bool in_outage = false;
+        uint64_t id_offset = 0;
+        for (const auto& [o0, olen] : args.outages) {
+            in_outage = in_outage || (t_rel >= o0 && t_rel < o0 + olen);
+            if (t_rel >= o0 + olen) id_offset += uint64_t(1) << 40;
+        }
+        TrackedFrame tfv = tf;
+        if (in_outage) {
+            tfv.ids.clear();
+            tfv.points.clear();
+        } else {
+            for (auto& id : tfv.ids) id += id_offset;
+        }
+        vf.track_ids = tfv.ids;
+        vf.points = tfv.points;
         reassoc.BeforeTrack(l, vo, tracker, vf, args.seed);   // 2.1: may rename orphan tracks to old landmarks
         t0 = std::chrono::steady_clock::now();
         vf.has_rotation_prior = have_rot;
         vf.R_prev_cur_prior = R_pc;
+        if (full_imu) {
+            // [the last sample at or before the previous frame (this one, for the first), the first at or after this one]
+            const int64_t from = prev_frame_t_ns >= 0 ? prev_frame_t_ns : frame.t_ns;
+            auto lo = std::upper_bound(imu.begin(), imu.end(), from,
+                                       [](int64_t t, const core::ImuMeasurement& m) { return t < m.t_ns; });
+            if (lo != imu.begin()) --lo;
+            auto hi = std::lower_bound(imu.begin(), imu.end(), frame.t_ns,
+                                       [](const core::ImuMeasurement& m, int64_t t) { return m.t_ns < t; });
+            if (hi != imu.end()) ++hi;
+            if (lo < hi) vf.imu.assign(lo, hi);
+        }
         const slam::VoTrackResult tr = vo.Track(vf);
         if (attitude) {
             // Consecutive MEASURED frames refine the gyro bias (both PnP poses, before any keyframe refinement).
@@ -268,6 +347,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         if (tr.status == slam::VoStatus::kLost) {
             lost_bridged += tr.source == slam::PoseSource::kBridged;
             lost_coasted += tr.source == slam::PoseSource::kCoasted;
+            lost_inertial += tr.source == slam::PoseSource::kInertial;
             if (tr.source == slam::PoseSource::kBridged) {
                 lost_rot_h += tr.anchor_bridge.ok && tr.anchor_bridge.model == 'H';
                 lost_rot_e += tr.anchor_bridge.ok && tr.anchor_bridge.model == 'E';
@@ -289,7 +369,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             cv::Mat rs = condition(r);
             if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
                 ++row_attempts;
-                CollectRowSamples(l, rs, tf.points, pcfg.stereo_match, row_samples);
+                CollectRowSamples(l, rs, tfv.points, pcfg.stereo_match, row_samples);
                 const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
                 if (est.ok) {
                     row_fix = est;
@@ -306,9 +386,9 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 }
             } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
                 // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
-                row_check = EstimateRowCorrection(l, rs, tf.points, pcfg.stereo_match);
+                row_check = EstimateRowCorrection(l, rs, tfv.points, pcfg.stereo_match);
             }
-            const StereoMatches sm = MatchLeftToRight(l, rs, tf.points, pcfg.stereo_match);
+            const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
             const StereoDepth depth = sgbm.Compute(l, rs);
             if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
             const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
@@ -318,7 +398,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             slam::VoStereo st;
             st.right = sm.right;
             st.valid = sm.valid;
-            for (const cv::Point2f& p : tf.points) {
+            for (const cv::Point2f& p : tfv.points) {
                 const int x = cvRound(p.x), y = cvRound(p.y);
                 const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
                 st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
@@ -332,7 +412,33 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             if (made_keyframe) {
                 stereo_valid += trace_valid;
                 stereo_total += static_cast<long>(sm.valid.size());
+                if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
+                // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
+                // down direction vs the true one in this keyframe's camera (EuRoC GT world: z up).
+                if (!kr.gravity_candidates.empty() && !gt_poses.empty()) {
+                    const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), frame.t_ns,
+                                                     [](const runtime::TimedPose& p, int64_t t) { return p.t_ns < t; });
+                    if (it != gt_poses.end() && std::llabs(it->t_ns - frame.t_ns) < 10000000LL) {
+                        const core::Vec3 g_true = ((it->T * T_B_Crect).R.transpose() * core::Vec3(0, 0, -1)).normalized();
+                        for (const auto& c : kr.gravity_candidates) {
+                            auto& acc = gp_stats[c.name];
+                            if (!c.ok) {
+                                ++acc.failed;
+                                continue;
+                            }
+                            const Eigen::Vector2d e = slam::GravityTangentBasis(c.g_C.normalized()).transpose() * g_true;
+                            const double nees = e.dot(c.cov.ldlt().solve(e));
+                            const double ang = std::acos(std::clamp(c.g_C.normalized().dot(g_true), -1.0, 1.0)) * 180.0 / M_PI;
+                            const double sig = std::sqrt(0.5 * c.cov.trace()) * 180.0 / M_PI;
+                            acc.nees.push_back(nees);
+                            acc.ang.push_back(ang);
+                            gp_trace << kr.keyframe_id << ',' << frame.t_ns << ',' << c.name << ',' << nees << ',' << ang
+                                     << ',' << sig << ',' << int(kr.gravity_prior_emitted) << '\n';
+                        }
+                    }
+                }
+                gp_edges += kr.gravity_prior_emitted;
                 t_kf.push_back(Ms(t0));
                 reassoc.AfterKeyframe(l, vo, vf);   // 2.1: landmark descriptors at this keyframe
                 tracker.Replenish(l);   // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise)
@@ -369,6 +475,74 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                     win_unobservable_after += kr.ba_unobservable_after;
                     win_degenerate += kr.ba_marginal_degenerate;
                 }
+                if (full_imu) {
+                    imu_solves += kr.ba_inertial;
+                    imu_v0_held += kr.ba_v0_held;
+                    imu_factors += kr.ba_inertial_factors;
+                    imu_chi2 += kr.ba_inertial_chi2;
+                    imu_repropagated += kr.imu_repropagated;
+                    imu_prior_marginal += kr.imu_prior == 1;
+                    imu_prior_carried += kr.imu_prior == 2;
+                    imu_init_refused += kr.imu_init_refused;
+                    imu_tilt_sum += kr.imu_tilt_deg;
+                    imu_tilt_max = std::max(imu_tilt_max, kr.imu_tilt_deg);
+                    core::SE3 T_gt;
+                    runtime::GroundTruthInertial gi;
+                    if (kr.imu_initialized) {
+                        // §4.3: the initialisation against ground truth, in frames that VO drift cannot bias -- each
+                        // keyframe's own body frame (its estimated orientation vs the ground-truth one).
+                        imu_init_t_ns = frame.t_ns;
+                        const slam::InertialInitResult& in = vo.inertial_init();
+                        const std::vector<int64_t>& ts = vo.init_times();
+                        const uint64_t kf0 = kr.keyframe_id + 1 - ts.size();
+                        double v_sq = 0.0, g_deg = -1.0;
+                        int nv = 0;
+                        for (size_t k = 0; k < ts.size(); ++k) {
+                            if (!gt_pose_at(ts[k], T_gt) || !gt_inertial_at(ts[k], gi)) continue;
+                            const core::Mat3 R_est = (vo.graph().nodes().at(kf0 + k).T_W_C * T_B_Crect.inverse()).R;
+                            v_sq += (R_est.transpose() * in.v[k] - T_gt.R.transpose() * gi.v_W).squaredNorm();
+                            ++nv;
+                            if (k + 1 == ts.size()) {
+                                const core::Vec3 a = (R_est.transpose() * in.g_W).normalized();
+                                const core::Vec3 b = T_gt.R.transpose() * core::Vec3(0, 0, -1);
+                                g_deg = std::acos(std::clamp(a.dot(b), -1.0, 1.0)) * 180.0 / M_PI;
+                            }
+                        }
+                        std::ostringstream o;
+                        o << "{gravity_angle_deg: " << g_deg << ", v_rms_m_s: " << (nv ? std::sqrt(v_sq / nv) : -1.0);
+                        if (gt_inertial_at(ts.back(), gi))
+                            o << ", bg_err: " << (in.bg - gi.b_g).norm() << ", ba_err: " << (in.ba - gi.b_a).norm()
+                              << ", bg_gt_norm: " << gi.b_g.norm() << ", ba_gt_norm: " << gi.b_a.norm();
+                        o << "}";
+                        imu_init_vs_gt = o.str();
+                    }
+                    if (vo.inertial_ready()) {
+                        core::Vec3 v, bg, ba;
+                        vo.NewestInertialState(v, bg, ba);
+                        const core::Mat3 R_est = (vo.graph().nodes().at(kr.keyframe_id).T_W_C * T_B_Crect.inverse()).R;
+                        const core::Vec3 vb = R_est.transpose() * v;
+                        imu_trace << kr.keyframe_id << ',' << frame.t_ns << ',' << slam::ToString(kr.source) << ','
+                                  << int(kr.ba_inertial) << ',' << int(kr.ba_v0_held) << ',' << vb.x() << ',' << vb.y()
+                                  << ',' << vb.z() << ',' << bg.x() << ',' << bg.y() << ',' << bg.z() << ',' << ba.x()
+                                  << ',' << ba.y() << ',' << ba.z();
+                        if (gt_pose_at(frame.t_ns, T_gt) && gt_inertial_at(frame.t_ns, gi)) {
+                            const core::Vec3 gv = T_gt.R.transpose() * gi.v_W;
+                            // Gravity in this keyframe's own body frame, estimated vs ground truth (immune to VO drift
+                            // in the world frame; includes this keyframe's own roll/pitch error).
+                            const core::Vec3 ge = (R_est.transpose() * vo.gravity()).normalized();
+                            const core::Vec3 gg = T_gt.R.transpose() * core::Vec3(0, 0, -1);
+                            const double gdeg = std::acos(std::clamp(ge.dot(gg), -1.0, 1.0)) * 180.0 / M_PI;
+                            gravity_err_t.emplace_back(1e-9 * double(frame.t_ns - first_t_ns), gdeg);
+                            imu_trace << ',' << gv.x() << ',' << gv.y() << ',' << gv.z() << ',' << gi.b_g.x() << ','
+                                      << gi.b_g.y() << ',' << gi.b_g.z() << ',' << gi.b_a.x() << ',' << gi.b_a.y() << ','
+                                      << gi.b_a.z() << ',' << gdeg;
+                        } else {
+                            imu_trace << ",nan,nan,nan,nan,nan,nan,nan,nan,nan,nan";
+                        }
+                        imu_trace << ',' << kr.imu_tilt_deg << ',' << kr.imu_g_prior_sigma_deg << ',' << kr.ba_landmarks
+                                  << '\n';
+                    }
+                }
                 win_rejected += kr.ba_rejected;
                 win_culled += kr.ba_culled;
                 win_exit_edges += kr.exit_edge;
@@ -403,6 +577,11 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
                     args.on_keyframe(kv);
+                }
+                if (loops) {
+                    const runtime::KeyframeBundle lb =
+                        runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, l, depth, supported);
+                    loops->OnKeyframe(kr.keyframe_id, frame.t_ns, l, runtime::MaskedDepth32(lb.depth, lb.mask), vo.graph());
                 }
             }
         }
@@ -481,6 +660,20 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
         ate_kf = runtime::ComputeATE(ek, g);
         ate_kf_rot = runtime::ComputeATERotation(ek, g);
         rpe_kf = runtime::ComputeRPE(ek, g, 1.0, 0.05);
+    }
+    // The same keyframe-refined protocol on the loop-corrected keyframe poses (D73 part 2b, design §8).
+    runtime::ErrorStats ate_loop, ate_loop_rot;
+    if (loops) {
+        loops->Finish(vo.graph(), est_body.empty() ? 0 : est_body.back().t_ns);
+        std::vector<core::TrajectorySample> el;
+        for (size_t i = 0; i < est_body.size(); ++i) {
+            if (assoc[i] < 0) continue;
+            const FrameRef& fr = frame_ref[i];
+            const core::SE3 T = fr.kf == ~uint64_t(0) ? fr.T_kf_c : loops->Corrected(fr.kf, vo.graph()) * fr.T_kf_c;
+            el.push_back({core::Timestamp{est_body[i].t_ns}, 0, T * T_B_Crect.inverse()});
+        }
+        ate_loop = runtime::ComputeATE(el, g);
+        ate_loop_rot = runtime::ComputeATERotation(el, g);
     }
 
     const fs::path run_dir = fs::path(args.out) / (source.RunName() + "-" + UtcNow("%Y%m%dT%H%M%SZ"));
@@ -572,6 +765,26 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << usac_skipped << "}\n";
     }
     if (scfg.ba.backend == "window") {
+        if (loops) {
+            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << ate_loop.rmse
+                << ", ate_rotation_rmse_rad: " << ate_loop_rot.rmse << "}\n";
+            loops->WriteOutputs(run_dir.string(),
+                                // Interpolated between the bracketing GT samples (<= 20 ms apart), not the nearest one:
+                                // nearest-sample timing error would otherwise count as loop error (design §8).
+                                [&](int64_t t) -> std::optional<core::SE3> {
+                                    const auto it = std::lower_bound(
+                                        gt_poses.begin(), gt_poses.end(), t,
+                                        [](const runtime::TimedPose& p, int64_t x) { return p.t_ns < x; });
+                                    if (it == gt_poses.begin() || it == gt_poses.end()) return std::nullopt;
+                                    const runtime::TimedPose& b = *it;
+                                    const runtime::TimedPose& a = *(it - 1);
+                                    if (b.t_ns - a.t_ns > 20000000LL) return std::nullopt;
+                                    const double s = double(t - a.t_ns) / double(b.t_ns - a.t_ns);
+                                    const core::SE3 Ti = a.T * core::SE3Exp(s * core::SE3Log(a.T.inverse() * b.T));
+                                    return Ti * T_B_Crect;
+                                },
+                                res);
+        }
         res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
             << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
             << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
@@ -598,6 +811,93 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
                 << ", max: " << g.back() << "}";
         }
         res << "}\n";
+    }
+    if (full_imu) {
+        const slam::InertialInitResult& in = vo.inertial_init();
+        res << "imu_full: {initialized: " << (vo.inertial_ready() ? "true" : "false")
+            << ", init_attempts: " << vo.init_attempts() << ", init_refused: " << imu_init_refused
+            << ", init_t_s: " << (imu_init_t_ns >= 0 ? 1e-9 * double(imu_init_t_ns - first_t_ns) : -1.0)
+            << ", init: {gravity_norm_unconstrained: " << in.gravity_norm_unconstrained
+            << ", chi2_per_dof: " << in.chi2_per_dof << ", condition: " << in.condition
+            << ", rotation_rms_deg: " << in.rotation_rms_deg << ", last_refusal: \"" << in.why << "\"}"
+            << ", init_vs_gt: " << (imu_init_vs_gt.empty() ? std::string("{}") : imu_init_vs_gt)
+            << ", inertial_solves: " << imu_solves << ", v0_held: " << imu_v0_held
+            << ", inertial_chi2_per_dof: " << (imu_factors ? imu_chi2 / (9.0 * double(imu_factors)) : -1.0)
+            << ", repropagated: " << imu_repropagated << ", bias_prior: {marginal: " << imu_prior_marginal
+            << ", carried: " << imu_prior_carried << "}, lost_inertial_frames: " << lost_inertial
+            << ", tilt_correction_deg: {sum: " << imu_tilt_sum << ", max: " << imu_tilt_max << "}";
+        // The estimated gravity vs ground truth over the run, per keyframe body frame: median and p90 over all
+        // keyframes since initialisation, and the final value.
+        if (!gravity_err_t.empty()) {
+            std::vector<double> g;
+            for (const auto& e : gravity_err_t) g.push_back(e.second);
+            std::sort(g.begin(), g.end());
+            res << ", gravity_err_deg_vs_gt: {median: " << g[g.size() / 2] << ", p90: " << g[g.size() * 9 / 10]
+                << ", final: " << gravity_err_t.back().second << "}";
+        }
+        res << ", refinements: [";
+        for (size_t r = 0; r < vo.refinements().size(); ++r) {
+            const slam::InertialRefinement& f = vo.refinements()[r];
+            res << (r ? ", " : "") << "{t_s: " << 1e-9 * double(f.t_ns - first_t_ns) << ", keyframes: " << f.keyframes
+                << ", ok: " << (f.ok ? "true" : "false") << ", gravity_change_deg: " << f.gravity_change_deg
+                << ", chi2_per_dof: " << f.chi2_per_dof << ", gravity_norm_unconstrained: " << f.gravity_norm_unconstrained
+                << ", why: \"" << f.why << "\"}";
+        }
+        res << "]}\n";
+        std::ofstream(run_dir / "imu_trace.csv") << imu_trace.str();
+    }
+    if (scfg.imu.gravity_prior.enabled) {
+        // Mean NEES ~2 for a consistent 2-dof measurement; the p90 shows the tail (chi2_2 p90 = 4.6).
+        res << "gravity_prior: {source: " << scfg.imu.gravity_prior.source << ", stride_keyframes: "
+            << scfg.imu.gravity_prior.stride_keyframes << ", edges: " << gp_edges << ", candidates: {";
+        bool firstc = true;
+        for (auto& [name, a] : gp_stats) {
+            double mean = 0.0;
+            for (double v : a.nees) mean += v;
+            std::sort(a.nees.begin(), a.nees.end());
+            std::sort(a.ang.begin(), a.ang.end());
+            const size_t n = a.nees.size();
+            res << (firstc ? "" : ", ") << name << ": {n: " << n << ", failed: " << a.failed
+                << ", nees_mean: " << (n ? mean / double(n) : -1.0) << ", nees_median: " << (n ? a.nees[n / 2] : -1.0)
+                << ", nees_p90: " << (n ? a.nees[n * 9 / 10] : -1.0) << ", angle_median_deg: " << (n ? a.ang[n / 2] : -1.0)
+                << ", angle_p90_deg: " << (n ? a.ang[n * 9 / 10] : -1.0) << "}";
+            firstc = false;
+        }
+        res << "}}\n";
+        std::ofstream(run_dir / "gravity_prior_trace.csv") << gp_trace.str();
+    }
+    if (!args.outages.empty()) {
+        // Drift across each fake outage, against ground truth (translation m, rotation deg), from the last frame before
+        // it to (1) the last frame inside it -- the prediction at the moment tracking resumes -- and (2) the frame
+        // 2.5 s after it ends, once re-anchoring and the window solves have acted: what persists (INERTIAL_2.4 §4.4).
+        // Frame poses are causal (as tracked), not re-refined afterwards.
+        res << "outages: [";
+        const auto drift = [&](int a, int b, double& dt_m, double& dr_deg) {
+            core::SE3 ga, gb;
+            dt_m = dr_deg = -1.0;
+            if (a < 0 || b <= a || !gt_pose_at(est_body[size_t(a)].t_ns, ga) || !gt_pose_at(est_body[size_t(b)].t_ns, gb))
+                return;
+            const core::SE3 e = est_body[size_t(a)].T.inverse() * est_body[size_t(b)].T, g = ga.inverse() * gb;
+            dt_m = (e.t - g.t).norm();
+            dr_deg = core::SO3Log(e.R.transpose() * g.R).norm() * 180.0 / M_PI;
+        };
+        for (size_t o = 0; o < args.outages.size(); ++o) {
+            const double o0 = args.outages[o].first, o1 = o0 + args.outages[o].second;
+            int a = -1, b = -1, c = -1;
+            for (size_t k = 0; k < est_body.size(); ++k) {
+                const double t = 1e-9 * double(est_body[k].t_ns - first_t_ns);
+                if (t < o0) a = int(k);
+                if (t < o1) b = int(k);
+                if (t < o1 + 2.5) c = int(k);
+            }
+            double dt_m, dr_deg, at_m, ar_deg;
+            drift(a, b, dt_m, dr_deg);
+            drift(a, c, at_m, ar_deg);
+            res << (o ? ", " : "") << "{start_s: " << o0 << ", length_s: " << args.outages[o].second
+                << ", drift_m: " << dt_m << ", drift_deg: " << dr_deg << ", after_2_5s_m: " << at_m
+                << ", after_2_5s_deg: " << ar_deg << ", frames: " << (b - a) << "}";
+        }
+        res << "]\n";
     }
     if (scfg.lost.motion != "coast" || scfg.lost.reanchor != "every_frame") {
         res << "lost: {motion: " << scfg.lost.motion << ", reanchor: " << scfg.lost.reanchor

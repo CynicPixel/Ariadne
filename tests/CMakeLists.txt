@@ -13,6 +13,10 @@ add_executable(test_numerical
   numerical/test_pose_graph.cpp
   numerical/test_pgo.cpp
   numerical/test_window_ba.cpp
+  numerical/test_preintegration.cpp
+  numerical/test_window_ba_inertial.cpp
+  numerical/test_inertial_init.cpp
+  numerical/test_gravity_prior.cpp
   numerical/test_scripted.cpp)
 target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
   yaml-cpp::yaml-cpp GTest::gtest_main)
@@ -57,6 +61,11 @@ if(OpenCV_FOUND)
     unit/test_xfeat_reference.cpp
     unit/test_pgo_levmarq.cpp
     unit/test_pgo_oracle.cpp
+    unit/test_chordal_init.cpp
+    unit/test_degeneracy.cpp
+    unit/test_pcm.cpp
+    unit/test_gnc.cpp
+    unit/test_loop_backend.cpp
     unit/test_window_ba_levmarq.cpp
     unit/test_reassociation.cpp
     unit/test_xfeat_engine.cpp

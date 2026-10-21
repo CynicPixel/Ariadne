@@ -29,6 +29,9 @@
 // keyframes, not a window.
 // ---------------------------------------------------------------------------
 #include "core/geometry/pinhole.hpp"
+#include "core/inertial/imu.hpp"
+#include "slam/inertial/initialization.hpp"
+#include "slam/inertial/preintegration.hpp"
 #include "slam/odometry/pose_source.hpp"
 #include "slam/odometry/rotation_bridge.hpp"
 #include "slam/pose_graph/pose_graph.hpp"
@@ -46,6 +49,8 @@
 namespace ariadne::slam {
 
 using core::RectifiedStereo;
+struct BaWindow;
+struct PgoSettings;
 
 struct VoFrame {
     uint64_t frame_id = 0;
@@ -56,6 +61,16 @@ struct VoFrame {
     /// (R_C(prev)_C(this)). Used only while lost, where it replaces the visual bridge's rotation.
     bool has_rotation_prior = false;
     core::Mat3 R_prev_cur_prior = core::Mat3::Identity();
+    /// imu_mode full: the body (IMU) samples covering [previous frame, this frame] -- the last sample at or before the
+    /// previous frame through the first at or after this one (the first frame: through the first at or after it).
+    /// Overlap with the previous frame's slice is expected; StereoVo keeps each timestamp once.
+    std::vector<core::ImuMeasurement> imu;
+};
+
+/// imu_mode full: the IMU's mount and noise model (Kalibr densities, before StereoVo's imu.full inflation).
+struct VoImuRig {
+    core::SE3 T_B_C;          // rectified left camera in the body (IMU) frame
+    core::ImuNoise noise;
 };
 
 /// Stereo evidence for the tracked points of the frame just tracked, parallel
@@ -122,13 +137,60 @@ struct VoKeyframeResult {
     double ba_inlier_sq_px = 0.0;      // sum |r|^2 over chi^2 inliers at the solution (sigma_px calibration)
     long ba_inlier_dof = 0;            // their scalar residual count minus the free parameters
     int ba_chi2_failed = 0;       // residuals above chi2_reject at the solution (vs ~5% expected at chi^2_2(0.95))
+    // imu_mode full (D59, INERTIAL_2.4 §4).
+    bool ba_inertial = false;          // the solve had inertial factors (initialised)
+    bool ba_v0_held = false;           // window[0] was the only pose-determined keyframe: its velocity held (§4.2)
+    int ba_inertial_factors = 0;       // inertial factors in the solve (9 scalar residuals each)
+    double ba_inertial_chi2 = 0.0;     // their whitened squared residuals at the solution (§4.5: chi^2/dof per flight)
+    int imu_repropagated = 0;          // intervals re-integrated before the solve (bias moved past imu.full.repropagate_*)
+    int imu_prior = 0;                 // the next solve's window[0] bias prior: 1 this solve's marginal, 2 the previous
+                                       // one carried forward (degenerate marginal or no solve), 0 unchanged (window
+                                       // not full yet, or not initialised)
+    bool imu_initialized = false;      // the inertial initialisation succeeded at this keyframe
+    bool imu_init_refused = false;     // an attempt was refused at this keyframe (StereoVo::inertial_init().why)
+    bool imu_refined = false;          // a scheduled refinement (imu.full.refine_after_s) succeeded at this keyframe
+    bool imu_refine_refused = false;   // a refinement attempt was refused at this keyframe
+    double imu_tilt_deg = 0.0;         // §4.8: the rotation that took the solved gravity back to the reference
+    double imu_g_prior_sigma_deg = 0.0;   // §4.8: the gravity prior's sigma (largest axis) in that solve
+    /// GRAVITY_PRIOR (§4.10): at an emission, every candidate measurement of this keyframe's down direction (logged for
+    /// the NEES evaluation) and whether the configured one became an edge.
+    struct GravityCandidate {
+        std::string name;
+        bool ok = false;
+        core::Vec3 g_C = core::Vec3::Zero();
+        Eigen::Matrix2d cov = Eigen::Matrix2d::Zero();   // rad^2, GravityTangentBasis(g_C)
+    };
+    std::vector<GravityCandidate> gravity_candidates;
+    bool gravity_prior_emitted = false;
+};
+
+/// One run of the scheduled inertial refinement (imu.full.refine_after_s): the initialisation's MAP re-solved over every
+/// keyframe since the initialisation (ORB-SLAM3, T-RO 2021 §V-B: "visual-inertial BA is performed 5 and 15 seconds
+/// after initialization"; here inertial-only, on the window-refined poses).
+struct InertialRefinement {
+    int64_t t_ns = 0;
+    int keyframes = 0;
+    bool ok = false;
+    double gravity_change_deg = 0.0;   // between the gravity before and after (when ok)
+    double chi2_per_dof = 0.0;
+    double gravity_norm_unconstrained = 0.0;
+    std::string why;                   // when !ok
 };
 
 class StereoVo {
 public:
-    StereoVo(const SlamConfig& config, const RectifiedStereo& rig, uint64_t seed, uint32_t agent = 0);
+    /// `imu` is required when config.imu.mode is full (and ignored otherwise).
+    StereoVo(const SlamConfig& config, const RectifiedStereo& rig, uint64_t seed, uint32_t agent = 0,
+             const VoImuRig* imu = nullptr);
 
     VoTrackResult Track(const VoFrame& frame);
+
+    /// imu_mode attitude_only (or full before initialisation): gravity's down direction in the coming keyframe's camera
+    /// (Mahony, at that frame's time), for its GRAVITY_PRIOR edge (§4.10). Consumed by the next AddKeyframe.
+    void SetKeyframeGravity(const core::Vec3& gravity_dir_C) {
+        kf_has_gravity_ = true;
+        kf_gravity_dir_C_ = gravity_dir_C;
+    }
 
     /// Call after Track() returned need_keyframe, with stereo for that frame.
     VoKeyframeResult AddKeyframe(const VoStereo& stereo);
@@ -138,6 +200,21 @@ public:
     bool ShouldReanchor(const VoStereo& stereo) const;
 
     const PoseGraph& graph() const { return graph_; }
+    /// imu_mode full: initialised yet, and the last initialisation attempt (its keyframes' times in init_times()).
+    bool inertial_ready() const { return inertial_ready_; }
+    const InertialInitResult& inertial_init() const { return init_; }
+    const std::vector<int64_t>& init_times() const { return init_t_ns_; }
+    int init_attempts() const { return init_attempts_; }
+    const std::vector<InertialRefinement>& refinements() const { return refinements_; }
+    /// Gravity in the VO world (valid once inertial_ready()).
+    const core::Vec3& gravity() const { return g_W_; }
+    /// imu_mode full: the newest keyframe's velocity (body, in W) and biases, as last solved.
+    void NewestInertialState(core::Vec3& v, core::Vec3& bg, core::Vec3& ba) const {
+        if (keyframes_.empty()) throw std::logic_error("StereoVo::NewestInertialState: no keyframe");
+        v = keyframes_.back().v;
+        bg = keyframes_.back().bg;
+        ba = keyframes_.back().ba;
+    }
     size_t landmark_count() const { return landmarks_.size(); }
     /// The landmarks observed at keyframe `kf` (§4.2 landmark_ids), ascending; throws for an unknown keyframe.
     std::vector<uint64_t> KeyframeLandmarks(uint64_t kf) const {
@@ -179,6 +256,12 @@ private:
         struct Obs { cv::Point2f left, right; bool has_right = false; };
         std::map<uint64_t, Obs> obs;
         int tracked_landmarks = 0;    // landmarks visible when it was created (ref for the KF rule)
+        // imu_mode full.
+        int64_t t_ns = 0;
+        std::vector<core::ImuMeasurement> imu_from_prev;   // samples covering [previous keyframe, this one]
+        Preintegrated pre_from_prev;                        // of imu_from_prev, at the previous keyframe's biases then
+        bool has_pre = false;
+        core::Vec3 v = core::Vec3::Zero(), bg = core::Vec3::Zero(), ba = core::Vec3::Zero();   // body, in W
     };
 
     /// 2.3 windowed BA path (LOCAL_SLAM_2.3.md): solve the last window_size keyframes, reject / cull, update the
@@ -189,6 +272,22 @@ private:
     /// (track index, point in the camera frame). Const: AddKeyframe commits, ShouldReanchor only counts.
     std::vector<std::pair<size_t, core::Vec3>> TriangulateNew(const VoFrame& f, const VoStereo& st,
                                                               TriangulationStats& stats) const;
+    /// imu_mode full, after initialisation: the camera pose at t_ns preintegrated from the last keyframe's state.
+    core::SE3 PropagateFromLastKeyframe(int64_t t_ns) const;
+    /// imu_mode full: the inertial part of the window keyframes_[first..] (re-integrating stale intervals), and the
+    /// window[0] bias prior carried to that keyframe.
+    void FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out);
+    /// GRAVITY_PRIOR edges at the configured stride (§4.10): candidates for the newest keyframe, the chosen one emitted.
+    void EmitGravityPrior(const BaWindow& w, const PgoSettings& ls, VoKeyframeResult& out);
+    /// imu_mode full, not initialised: try the initialisation on the newest window keyframes.
+    void TryInitializeInertial(size_t first, VoKeyframeResult& out);
+    /// imu_mode full, initialised: the scheduled refinement, when due.
+    void TryRefineInertial(size_t first, VoKeyframeResult& out);
+    /// Apply an initialisation / refinement over keyframes_[s0..]: gravity, the window keyframes' biases and
+    /// velocities, and window[0]'s bias prior.
+    void ApplyInertialEstimate(const InertialInitResult& r, size_t s0, size_t first);
+    /// The next window[0]'s bias prior covariance from a marginal, never looser than the current prior carried over dt.
+    core::Mat6 NextBiasPrior(const core::Mat6& marginal, double dt) const;
     /// lost.motion = bridge: the lost frame's pose. Rotation from the ANCHOR -- the last measured frame, or the last
     /// frame enough tracks reach back to -- so the two-view baseline grows instead of per-frame noise accumulating.
     core::SE3 BridgePrediction(const VoFrame& frame, VoTrackResult& res);
@@ -224,6 +323,39 @@ private:
     // Window exit (design §4): the marginal of window[1] from the last solve, in which window[0] was the fixed gauge.
     core::Mat6 pending_exit_cov_ = core::Mat6::Zero();
     bool have_pending_exit_ = false;
+    // imu_mode full (D59).
+    bool full_imu_ = false;
+    VoImuRig imu_rig_;
+    core::SE3 T_C_B_;
+    PreintegrationNoise pre_noise_;                   // inflated white-noise densities
+    double gyro_rw_ = 0.0, accel_rw_ = 0.0;           // inflated random-walk densities
+    std::vector<core::ImuMeasurement> imu_since_kf_;  // samples since (the last one at or before) the newest keyframe
+    bool inertial_ready_ = false;
+    core::Vec3 g_W_ = core::Vec3::Zero();
+    InertialInitResult init_;
+    std::vector<int64_t> init_t_ns_;
+    int init_attempts_ = 0;
+    uint64_t init_kf0_ = 0;                           // the initialisation's first keyframe
+    int64_t init_done_t_ns_ = 0;                      // the keyframe at which it succeeded
+    size_t refinements_done_ = 0;                     // of imu.full.refine_after_s
+    std::vector<InertialRefinement> refinements_;
+    // window[0]'s bias prior: mean [bg; ba] and covariance, valid for keyframe prior_kf_ (carried forward by the random
+    // walk when window[0] moves past it without a new marginal).
+    core::Vec6 prior_b_ = core::Vec6::Zero();
+    core::Mat6 prior_cov_ = core::Mat6::Zero();
+    uint64_t prior_kf_ = 0;
+    bool inertial_prior_set_ = false;               // the initialisation has set the first bias prior
+    // Gravity's tilt prior (rad^2, GravityTangentBasis(g_W_)), for windows that estimate gravity (§4.8).
+    Eigen::Matrix2d g_prior_cov_ = Eigen::Matrix2d::Identity();
+    // GRAVITY_PRIOR (§4.10): the reference direction's own tilt variance (the initialisation's / refinement's, not
+    // inflated), the attitude_only world reference (the first emitted keyframe's), and the emission stride.
+    Eigen::Matrix2d g_ref_cov_ = Eigen::Matrix2d::Zero();
+    bool att_g_ref_set_ = false;
+    core::Vec3 att_g_ref_W_ = core::Vec3::Zero();
+    bool gp_any_ = false;
+    uint64_t last_gp_kf_ = 0;
+    bool kf_has_gravity_ = false;                   // the newest keyframe's frame carried a Mahony direction
+    core::Vec3 kf_gravity_dir_C_ = core::Vec3::Zero();
 };
 
 }  // namespace ariadne::slam

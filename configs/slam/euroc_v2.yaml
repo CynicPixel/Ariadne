@@ -1,3 +1,5 @@
+# D59 (INERTIAL_2.4.md §4): imu.mode full -- Forster preintegration in the window BA. Default since 2026-10-19
+# (maintainer): EuRoC average ATE 0.121 vs 0.223 m for attitude_only (euroc_v2_attitude, the D58 baseline/ablation).
 # 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: euroc_v2
@@ -46,10 +48,27 @@ lost:                           # lost-frame handling (LOST_FRAMES.md, D56); abs
   max_speed_m_s: 3.0            # clamp a corrupt pre-loss speed (EuRoC MAV < ~2.3 m/s)
   reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences
 
-imu:                            # 2.4 attitude_only (slam/inertial/attitude.hpp; D58). Absent = none.
-  mode: attitude_only           # gyro rotation while lost (beats the visual bridge), gravity on keyframes
+imu:                            # D59 full (attitude_only behaviour until initialised). Absent = none.
+  mode: full                    # velocity + biases in the window BA (INERTIAL_2.4 §4)
   seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
   bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
   stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
   kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
   ki: 0.3
+  full:
+    noise_inflation_gyro: 3     # §4.1: measured, Machine Hall chi2 (sqrt 9.75); EuRoC only, sim = 1
+    noise_inflation_accel: 9    # §4.1: sqrt(74-81)
+    bias_prior_inflation: 10    # window[0] bias prior = previous marginal x 10 (it double-counts the overlap)
+    init_keyframes: 10          # consecutive MEASURED window keyframes (~2-10 s at 1 s max interval)
+    init_accel_bias_sigma: 0.2  # m/s^2, zero-mean b_a prior (EuRoC GT |b_a| <= ~0.1-0.2)
+    init_gravity_tolerance: 0.1 # relative |g| error that refuses
+    init_max_chi2_per_dof: 100  # D59 sweep, 11 inits vs GT: the one off by > 3 deg (MH_04, 8.4) had 1296, all others <= 55
+    refine_after_s: [5, 15]     # re-solve over all keyframes since init (ORB-SLAM3 T-RO 2021 §V-B: 5 and 15 s)
+    estimate_gravity: false     # §4.8 ablation, NEGATIVE: tilt/b_a feedback loop (avg 0.566 m, 0/11); part-2 gauge
+    repropagate_gyro: 0.01      # rad/s (VINS-Mono)
+    repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
+    lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
+  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+    stride_keyframes: 10        # one per window length: non-overlapping data
+    source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
+    attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)

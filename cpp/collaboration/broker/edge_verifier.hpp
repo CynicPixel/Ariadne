@@ -68,6 +68,10 @@ struct VerifyResult {
     core::SE3 T_A_B;      // p_A = T_A_B p_B (rectified-left cameras)
     double h_over_e = NAN;    // diagnostic, set once PnP ran
     double planarity = NAN;   // diagnostic, set once PnP ran
+    // The PnP inlier correspondences (D73, maintainer-approved hunk): B's 3D points and A's pixels, for the 2.5
+    // degeneracy gate (slam/robust/degeneracy.hpp). Output only; set once PnP ran; no gate reads them.
+    std::vector<cv::Point3f> inlier_points_B;
+    std::vector<cv::Point2f> inlier_pixels_A;
 };
 
 /// lambda_min / lambda_max of the 3D points' covariance; NaN for fewer than 4.
@@ -153,6 +157,8 @@ inline VerifyResult VerifyEdge(const KeyframeFeatures& a, const core::FeatureRes
         std::vector<cv::Point3f> in3;
         for (int i : inl) in3.push_back(obj[size_t(i)]);
         r.planarity = Planarity(in3);
+        r.inlier_points_B = in3;
+        for (int i : inl) r.inlier_pixels_A.push_back(img[size_t(i)]);
         const int h = HomographyInliers(pa, pb, p.essential_threshold_px, seed);
         r.h_over_e = h < 0 || r.essential_inliers == 0 ? NAN : double(h) / r.essential_inliers;
     }

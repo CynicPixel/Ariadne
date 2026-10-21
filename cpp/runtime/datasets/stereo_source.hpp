@@ -73,6 +73,9 @@ public:
     /// The body (IMU) stream, time-sorted, and its noise model (§10.2; plan 2.4). Empty when the source has no IMU.
     virtual std::vector<core::ImuMeasurement> Imu() const { return {}; }
     virtual core::ImuNoise ImuNoiseModel() const { return {}; }
+    /// Ground-truth velocity and biases, time-sorted, for VALIDATING the inertial initialisation only (never fed to
+    /// the estimator). Empty when the source has none.
+    virtual std::vector<GroundTruthInertial> GroundTruthInertialStates() const { return {}; }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -96,6 +99,10 @@ public:
     }
     core::ImuNoise ImuNoiseModel() const override {
         return ParseEurocImuNoise(ReadTextFile((mav_ / "imu0/sensor.yaml").string()), "imu0/sensor.yaml");
+    }
+    std::vector<GroundTruthInertial> GroundTruthInertialStates() const override {
+        return ParseEurocGroundTruthInertial(ReadTextFile((mav_ / "state_groundtruth_estimate0/data.csv").string()),
+                                             "groundtruth");
     }
     std::string CameraConfig() const override { return "euroc_cam0_cam1"; }
     std::string BagChecksum() const override {
