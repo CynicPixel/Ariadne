@@ -79,7 +79,7 @@ identical.
 |---|---|---|---|
 | 0.1 monorepo, config loader, licences | done | STATUS 2026-09-06 | |
 | 0.2 OpenCV 5 + contrib on amd64 **and arm64**; smoke list | **partial** | amd64 `[BUILD-VERIFIED]` (SMOKE §4b). **arm64 build never done (I3b).** The ORT fallback is not exercised. | — |
-| 0.3 COOL day-1 on the free trial | **not started** | Deliberately held (7-day trial). Must start so the 7.3 benchmark fits inside it. | — |
+| 0.3 COOL day-1 on the free trial | **partial: ready to run, awaiting the subscription** | **Publication terms verified (2026-10-22):** the EULA is the AWS Marketplace Standard Contract (2023-11-07) with no benchmark or publication restriction; confidentiality covers licensor disclosures, not our measurements. COOL v3.1 is built on OpenCV 5.0, Ubuntu 24.04; C++ SDK at `/opt/cool/cpp_sdk/lib`; the vendor documents the `LD_LIBRARY_PATH` switch; software fee $0.04/h on m8g.4xlarge; trial 7 days, auto-converts. Kit: `infra/cool/day1.sh` + `probe.cpp`, `spinup.sh --profile cool`. Quota: Standard vCPU 32 (spot and on-demand). | M (doing C here) |
 | 0.4 core math, FlatBuffers, ByteRecord | done | | |
 | 0.5 logging, manifest, seeds | done | | |
 | 0.6 CI amd64 + arm64, ECR by digest, Terraform | **partial** | Terraform applied. CI workflow `[UNVERIFIED]` (never ran on GitHub); D49 replaced nightly CI with the local premerge. No arm64 image, no ECR push. | — |

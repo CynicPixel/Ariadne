@@ -9,6 +9,7 @@
 #
 # PROFILES (cheapest config that runs each workload; Stockholm prices in D28):
 #   cpu  c8g.large   Graviton4, 2 vCPU/4 GiB. Smallest size COOL is priced for.
+#   cool c8g.4xlarge the COOL Marketplace AMI (Ubuntu 24.04); needs the subscription (infra/cool/day1.sh).
 #   gpu  g4dn.xlarge NVIDIA T4 16 GB, 4 vCPU. Smallest full-GPU NVIDIA type;
 #                    needs the G/VT quota raised from 0.
 # Spot is the default market. On-demand is never a silent fallback: it costs
@@ -59,7 +60,13 @@ profile_defaults() {
       TYPE="${TYPE:-g4dn.xlarge}"
       AMI_PARAM="/aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id"
       ROOT_GB=0 ;;   # 0 = the AMI's own snapshot size (75 GB for this DLAMI)
-    *) die "unknown profile '$1' (cpu | gpu)" ;;
+    cool)
+      # The COOL Marketplace AMI (Ubuntu 24.04, Graviton4; D28: product aajkmdd4qo3r7yhqg61a7aah9). Needs an active
+      # Marketplace subscription, else launch fails with an opt-in error. Root sized for a native OpenCV build.
+      TYPE="${TYPE:-c8g.4xlarge}"
+      AMI_ID="ami-0a302ff85af8d8764"
+      ROOT_GB=40 ;;
+    *) die "unknown profile '$1' (cpu | gpu | cool)" ;;
   esac
 }
 
@@ -174,7 +181,8 @@ EOF
   # 3. Launch. Root volume is forced to DeleteOnTermination: a stray 75 GB
   #    gp3 volume from the GPU AMI would bill silently for months.
   local ami root_dev snap_gb
-  ami="$(awsq ssm get-parameter --name "$AMI_PARAM" --query Parameter.Value --output text)"
+  if [ -n "${AMI_ID:-}" ]; then ami="$AMI_ID"; else
+    ami="$(awsq ssm get-parameter --name "$AMI_PARAM" --query Parameter.Value --output text)"; fi
   # Here-string, not `< <(awsq ...)`: awsq prints no trailing newline, and
   # `read` returns 1 at EOF-without-newline EVEN THOUGH it assigned the
   # variables. Under `set -e` that killed the script silently, mid-launch.
