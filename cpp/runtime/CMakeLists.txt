@@ -50,6 +50,10 @@ if(OpenCV_FOUND)
   add_executable(ariadne_frame_dump tools/ariadne_frame_dump.cpp)
   target_link_libraries(ariadne_frame_dump PRIVATE ariadne::runtime_opencv opencv_imgcodecs)
 
+  # L5: per-image latency of the learned models at EuRoC and sim sizes (p50/p95, one caller, pinned pool).
+  add_executable(ariadne_dnn_timing tools/ariadne_dnn_timing.cpp)
+  target_link_libraries(ariadne_dnn_timing PRIVATE ariadne::perception_opencv opencv_imgcodecs)
+
   # 2.1 hard-pair evaluation: loop-candidate verification (PERCEPTION_2.1 §12.4). Offline, no runner hunk.
   add_executable(ariadne_loop_verify tools/ariadne_loop_verify.cpp)
   target_link_libraries(ariadne_loop_verify PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
