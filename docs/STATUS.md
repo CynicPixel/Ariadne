@@ -4,6 +4,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
+
+- **Open: the D74 certificate**, not started (plus κ/τ for cubicle and rim).
+- **Open: the outlier-ramp breakpoint**, not found: random outliers succeed up to 90 %, so a harder protocol is
+  needed.
+- **Defaults:** loop closure and gravity priors are off unless the slam config has a `loop_closure:` section
+  (`euroc_v2_loops*.yaml`, D73 evidence). Oracle reproducibility is in `ROBUST_BACKEND_2.5.md`'s header.
+
 ## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63, approved)
 
 ## 2026-10-21 — AWS unblocked (D84)
