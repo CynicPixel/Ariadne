@@ -35,7 +35,9 @@ enum EdgeStatus : ubyte {
   DEGENERATE = 2,
   PCM_REJECTED = 3,
   GNC_INLIER = 4,
-  GNC_OUTLIER = 5
+  GNC_OUTLIER = 5,
+  /// Appended (3.2): an intra-agent odometry edge inside a POSE_GRAPH snapshot.
+  ODOMETRY = 6
 }
 
 struct Quaternion { w:float; x:float; y:float; z:float; }
@@ -51,6 +53,22 @@ struct Pose { q:Quaternion; t:Translation; }
 /// deserializer REJECTS untagged poses, because a pose whose frame is unknown
 /// cannot be composed with anything.
 struct FrameTag { agent:uint; epoch:uint; }
+
+/// COLLAB_3.2 §4: a broker solve's identity. `counter` = 1 + max over the
+/// members' last accepted counters, so a merge is newer than both sides; the
+/// full triple (not the counter alone) identifies an estimate.
+struct Epoch { counter:ulong; members_hash:ulong; broker:uint; }
+
+/// COLLAB_3.2 §3.2: transport acks name transport message ids. `done` lists
+/// messages completed (or re-received whole) since the receiver's last ack;
+/// `partial` carries a fragment bitmap (bit i = fragment i received) for a
+/// message still being reassembled, so only missing fragments are resent.
+table PartialAck { msg_id:uint; received:[ubyte]; }
+table Ack { done:[uint]; partial:[PartialAck]; }
+
+/// T_G_W for one agent in a broker estimate: G is the estimate's frame
+/// (PoseGraph.anchor), W the agent's odometry frame.
+table AgentFrame { agent:uint; T_G_W:Pose; }
 
 table PoseNode {
   agent:uint;
@@ -83,6 +101,9 @@ table PoseGraph {
   nodes:[PoseNode];
   edges:[LoopEdge];
   anchor:FrameTag;
+  // Appended (3.2): set only on a broker estimate.
+  epoch:Epoch;
+  agent_frames:[AgentFrame];
 }
 
 table Heartbeat {
@@ -93,6 +114,12 @@ table Heartbeat {
   battery:float;
   link_state:float;
   keyframe_watermark:ulong;
+  // Appended (3.2, COLLAB_3.2 §4).
+  neighbors:[uint];
+  anchor:uint;
+  broker:uint;
+  epoch:Epoch;
+  ack:Ack;
 }
 
 /// Every message on the wire is an Envelope. One root type means one
@@ -138,6 +165,8 @@ table Envelope {
   global_descriptor:GlobalDescriptor;
   match_request:MatchRequest;
   feature_response:FeatureResponse;
+  // Appended (3.2): a standalone ACK.
+  ack:Ack;
 }
 
 root_type Envelope;

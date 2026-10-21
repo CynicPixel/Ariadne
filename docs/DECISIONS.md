@@ -2320,3 +2320,136 @@ shipped; the inverse is implemented from the thesis' equations.
   with measured gating. Making it default-on is not justified by this evidence.
 - **Not run (defined in `configs/benchmark/radiometric_2.2.yaml`):** the rest of the sim matrix (dark2_ag8,
   flat-only, NLM, algebraic) and the EuRoC forced-on rows.
+
+## 2026-10-21 — D80: Phase 3 opened before the Phase 2 gate (maintainer instruction); decision IDs D80–D89 claimed
+
+- **Opened early, explicitly.** CLAUDE.md §4 opens a phase only on the previous gate. Phase 2's gate is not passed:
+  2.1 and 2.2 are unmerged, 2.5's D74 certificate is open, and the phase-gate premerge has not run.
+  The maintainer started Phase 3 on 2026-10-21 ("start phase 3 collaboration"), given the deadline.
+- **What the early opening must not do.** Phase 3 must not change the Phase 2 code paths the gate will measure.
+  The Phase-1 gate's pinned references (incl. `figures/bytes.json`) keep describing the Phase-1 exchange until a
+  recorded re-pin. The new protocol lives beside it (`docs/design/COLLAB_3.2.md` §9).
+- **Ownership.** This session takes the critical path in order: 3.2, then 3.4, then 3.5. 3.1 and 3.6 (∥A) and 3.3
+  (∥B) are for parallel sessions; 3.3 implements the `LinkModel` seam published in COLLAB_3.2 §2.
+- **IDs.** D80–D89 are Phase 3's critical path. In use elsewhere: D60s (2.1), D70–D74 (2.5).
+
+## 2026-10-21 — D81: the 3.2 protocol design — per-class delivery, fragment ARQ, one-hop election with epochs
+
+Design: `docs/design/COLLAB_3.2.md`; advisor-reviewed twice. Preflight: Swarm-SLAM (code-verified), Tian et al. 2018
+(vertex cover), CERBERUS (completed-transmission rule), Lajoie 2026 (real link drop-out), COSMO-Bench. No DTN+C-SLAM
+paper found. OpenCV has nothing native here.
+
+- **Delivery semantics differ by class.** Phase 1's strict per-stream order would stall forever on a TTL-expired or
+  cancelled message.
+  - Heartbeat/ack: latest-wins.
+  - Descriptors, requests, feature responses, submaps: idempotent sets, best effort, re-requestable.
+  - Edges and graphs: reliable and in order.
+- **Fragment-level reassembly with selective retransmit.** Whole-message delivery cannot converge under loss
+  (0.7^15 ≈ 0.5%).
+  - Reliable sequence numbers are assigned at first transmission, so superseding/expiry/cancel never opens a hole.
+  - Unacked messages to an old broker are abandoned and counted on election change.
+- **Deviation from §15.3, superseding:** a newer queued pose-graph snapshot replaces an unsent older one from the same
+  agent. "Never expire" still holds in substance, because the snapshot contains the older one. Edges are never
+  superseded.
+- **Deviation from §15.4 (§49 note), the election rule:** the broker is the lexicographic min of (anchor_id, agent_id)
+  over the agent and its symmetric one-hop neighbours.
+  - This is Swarm-SLAM's exact `is_optimizer()` rule, not "lowest AgentId of the component".
+  - There is no relaying, so a broker serves only agents it reaches directly.
+  - Neighbour links use hysteresis (in after 2 of 3 periods, out after 4 misses).
+- **Epochs and staleness:**
+  - An epoch is `(counter, members_hash, broker)`, with counter = 1 + max over members' heartbeats. That makes a
+    merge strictly newer than both sides.
+  - An agent accepts an estimate only if it is a member, the estimate comes from the broker it elected, and the
+    counter is newer.
+  - The corruption check keys on the full epoch, with digests over the wire-encoded (float32) estimate.
+- **Gauge:** the anchor's first pose is fixed in full. A side that lacks its anchor fixes its lowest member's
+  `T_G_Wi`. Yaw-only waits behind a switch for 2.5's gravity-prior consumer.
+- **The I6 byte gate is fixed now, before any data:**
+  - predicted = the §16 cost model before sending, with a compression-ratio model calibrated on disjoint runs;
+  - measured = first-transmission wire bytes, per class, classes 1–6, >15% fails;
+  - retransmit, ack and heartbeat overhead get their own rows and their own curve.
+- **Store-and-forward = hold until the destination is reachable.** Multi-hop relay is out of scope.
+
+## 2026-10-21 — D82: 3.2 protocol, the fixes the fault campaign forced; I5 campaign 54/54 consistent
+
+Design: `docs/design/COLLAB_3.2.md` §10. Code: `cpp/collaboration/protocol/` (`network`, `transport`, `membership`,
+`collab_node`, `outcome`); tests `tests/protocol/test_{network,transport,membership,collab_v2}.cpp`.
+
+- **Descriptors are acked and resent until their TTL.** A broker cannot re-request a descriptor it never heard of.
+  An expired descriptor leaves the sent set, so the next broker is sent it again.
+- **Acks are repeated 3×, and the retransmit timeout is capped at 8 s.** Measured: 1–4 unacked edge messages per
+  30%-loss run before the change; none after.
+- **Reliable stream incarnations** (`seq = incarnation << 40 | n`). Abandonment on a broker change would otherwise leave
+  a permanent sequence hole (measured: 435 edges held in every partition run).
+- **Heartbeat hysteresis is sized from the loss rate:** 0.5 s period, out after 12 missed periods. `k = 4` at 1 Hz
+  flapped the broker 40 times in 290 s at 30% loss.
+- **The broker re-solves on a new edge or a member-set change.**
+- **I5 evidence, unit-level (synthetic 4-agent scenario, ground-truth hooks):** 6 faults × loss {0, 10, 30%} × 3 seeds
+  = 54 runs, **54 consistent, 0 incomplete, 0 corrupt**. Split-brain {0,1}|{2,3} merges under a new epoch, and the
+  frames match ground truth within 2 mm. An unknown-frame pose is rejected.
+- **Not yet:**
+  - the production broker solve (multi-agent PGO, then 2.5's robust stage);
+  - runtime/sim integration with real XFeat features;
+  - 3.3's link model.
+  - **Snapshots carry nodes only.** They lack odometry edges and their information. The oracle solve reads node poses
+    as exact, so nothing failed, but a multi-agent PGO needs odometry factors, and the I6 POSE_GRAPH sizes need the
+    §15.2 payload (nodes, edges, covariances).
+    - The next step changes the API first: `AddKeyframe` takes the odometry edge with its information, and the snapshot
+      carries the intra-agent edges.
+  - The hooks are oracles: this evidence covers the protocol, not estimation accuracy.
+- **The classifiers are proven to fire.**
+  - A rogue estimate (an unissued epoch, a perturbed T_G_W) that a member adopts is classified `corrupt`.
+  - A run that ends while partitioned is classified `explicitly_incomplete`, and its reasons name the missing pieces.
+  - Same seed ⇒ identical ledgers and outcome reasons at the node level.
+
+## 2026-10-21 — D83: the production broker solve — one multi-agent PGO; snapshots carry odometry edges
+
+Code: `slam/pose_graph/multi_agent.{hpp,cpp}` (slam_opencv), adapter `collaboration/broker/broker_solve.hpp`
+(`NodeHooks::solve` for the runtime); tests `tests/unit/test_multi_agent.cpp`.
+
+- **What it solves.** One joint pose graph over the members' subgraphs, with node ids `(agent << 40) | keyframe`:
+  their nodes, their odometry edges with information, and the verified inter-agent edges.
+- **Placement and initialisation.** Agents with no edge path to the gauge are reported unplaced. The rest start from a
+  spanning-tree alignment, then the chordal initialiser runs (D70), then LM on `LevMarqBase` (D51).
+- **Gauge.** The gauge agent's first node is fixed at `T_G_W_gauge · T_W_C` (§15.4). The solve is skipped when the
+  joint graph has no edge: a lone broker with one keyframe has zero free variables, and that crashed LevMarq
+  (a segfault, found by the protocol-level test).
+- **Per-agent T_G_W.** The gauge agent reports the gauge value (G = W_anchor). Every other agent reports a frame fit
+  of its W-frame poses onto their optimised G poses: the chordal rotation mean, then the mean translation residual.
+  - A positions-only Kabsch fit was rejected: it is ambiguous on a straight trajectory.
+  - Per-keyframe corrections are returned as `T_G_C` but are **not yet on the wire**. The estimate carries only the
+    rigid T_G_W; keyframe-local consumers (Phase 6) will need the node poses.
+- **Snapshots now carry the agent's odometry edges.** `EdgeStatus::ODOMETRY` was appended to the schema, the
+  information is packed as the 21-float upper triangle, and `AddKeyframe` takes the odometry edge. This is the §15.2
+  payload the I6 byte gate prices.
+- **Measured (synthetic, 3 agents, 60 keyframes, odometry noise 1 cm / 0.4° per step):**
+  - node ATE: 0.228 m dead reckoning → 0.019 m after the solve;
+  - each T_G_W lies within 5 cm / 0.6° of the best rigid fit of that agent's drifted trajectory to ground truth.
+- **Protocol with the production solve:** a 4-agent run with a partition {0,1}|{2,3} at 10–30 s and 10% loss ends
+  `consistent`, with every T_G_W within 5 mm / 5 mrad of ground truth. The 54-run oracle campaign is still 54/54
+  consistent with odometry edges in the snapshots.
+- **Not yet:**
+  - the robust stage (degeneracy gate → PCM → GNC-TLS, 2.5's `cpp/slam/robust/`) between the edge list and the solve;
+    inter-agent edges currently enter as verified;
+  - the gravity-prior yaw-only gauge.
+  - Both wait on 2.5 merging.
+
+## 2026-10-21 — D84: AWS unblocked: Bedrock works (the 2026-09-29 verification block has cleared); GPU spot quota approved
+
+Re-tested live as `user/pixel` in eu-north-1. Superseded: the D26–D28 "Bedrock: Operation not allowed / account being
+verified" open item, and STATUS's "Pending with AWS: GPU quota … Bedrock is blocked".
+
+- **Bedrock runtime works.** `converse` on `eu.amazon.nova-micro-v1:0` answered (9 tokens). No support case is needed.
+- **Orchestrator model (maintainer: "any cheap model that's good enough").** Primary: **Amazon Nova 2 Lite** via the
+  EU profile `eu.amazon.nova-2-lite-v1:0`. Fallback: **DeepSeek V3.2** (`deepseek.v3.2`, in-region on-demand).
+  - Quotas (cross-region, EU): Nova 2 Lite 200 RPM / 8M TPM. In-region on-demand: DeepSeek V3.2 and Qwen3-32B at
+    1000 RPM / 100M TPM.
+  - Nova is first-party, needs no use-case form or Marketplace subscription, and keeps data in the EU profile.
+  - Tool-use smoke test: both made a correct structured `toolUse` call on a frontier-assignment prompt. They chose the
+    adjacent safe frontier over a high-gain one behind a 0.95-risk collapse, with a stated reason.
+  - `[UNVERIFIED]` per-token prices: pull them before Phase 7 budgets.
+- **Claude on Bedrock is not used.** The Anthropic use-case form is not filed, and the 5.5-family models have 0 TPM on
+  this account. Haiku 4.5 has quota (50 RPM / 5M TPM) if it is ever wanted.
+- **GPU: EC2 Spot "All G and VT" in eu-north-1 approved at 4 vCPU (AWS, 2026-10-19).** One 4-vCPU GPU instance; spot,
+  so reclaimable: checkpoint gsplat and keep a demo fallback. On-demand G/VT (case 179205877900026) is still pending.
+

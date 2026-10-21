@@ -74,6 +74,22 @@ inline constexpr uint64_t DatagramCount(uint64_t on_wire) {
                               kDatagramPayloadBytes;
 }
 
+/// COLLAB_3.2 §3.2: the 3.2 transport splits a framed message into datagrams,
+/// each carrying a 6 B fragment header (msg_id u32, index u8, count u8) inside
+/// the 1472 B datagram payload. Selective retransmission needs it; the Phase-1
+/// exchange sends whole messages and is charged without it (`Framing`).
+inline constexpr uint64_t kFragmentHeaderBytes = 6;
+inline constexpr uint64_t kFragmentPayloadBytes = kDatagramPayloadBytes - kFragmentHeaderBytes;   // 1466
+inline constexpr uint64_t kMaxFragments = 255;
+
+inline constexpr uint64_t FragmentCount(uint64_t on_wire) {
+    return on_wire == 0 ? 1 : (on_wire + kFragmentPayloadBytes - 1) / kFragmentPayloadBytes;
+}
+
+/// How the codec charges datagram framing: Phase 1's whole messages, or the
+/// 3.2 transport's fragments (6 B more per datagram, 6 B fewer payload bytes).
+enum class Framing { kWholeMessage, kFragmented };
+
 /// Ariadne frame header, carried UNCOMPRESSED ahead of every payload:
 ///   [0]    message class
 ///   [1]    flags, bit 0 = zstd compressed
@@ -112,6 +128,7 @@ struct ByteRecord {
     uint64_t wire_bytes = 0;         // transmitted + framing
     uint64_t cumulative_bytes = 0;   // running total on this ledger
     bool compressed = false;
+    bool retransmit = false;         // 3.2 ARQ: resent fragments; not "first transmission" (COLLAB_3.2 §7)
 
     /// Achieved compression ratio. 1.0 means compression did not help, which
     /// for high-entropy descriptors is the expected outcome and is reported.
@@ -225,10 +242,58 @@ struct LoopEdgeValue {
     bool degeneracy_flag = false;
 };
 
+/// COLLAB_3.2 §4: a broker solve's identity; the full triple identifies it.
+struct EpochValue {
+    uint64_t counter = 0;
+    uint64_t members_hash = 0;
+    AgentId broker = 0;
+    bool operator==(const EpochValue& o) const {
+        return counter == o.counter && members_hash == o.members_hash && broker == o.broker;
+    }
+    bool operator!=(const EpochValue& o) const { return !(*this == o); }
+};
+
+/// T_G_W of one agent in a broker estimate (G = the estimate's anchor frame).
+struct AgentFrameValue {
+    AgentId agent = 0;
+    PoseValue T_G_W;
+};
+
 struct PoseGraphValue {
     std::vector<PoseNodeValue> nodes;
     std::vector<LoopEdgeValue> edges;
     FrameTag anchor;
+    // 3.2: a broker estimate carries its epoch and every member's T_G_W.
+    bool has_epoch = false;
+    EpochValue epoch;
+    std::vector<AgentFrameValue> agent_frames;
+};
+
+/// COLLAB_3.2 §3.2: transport acks by message id.
+struct PartialAckValue {
+    uint32_t msg_id = 0;
+    std::vector<uint8_t> received;   // bitmap, bit i = fragment i
+};
+struct AckValue {
+    std::vector<uint32_t> done;
+    std::vector<PartialAckValue> partial;
+    bool empty() const { return done.empty() && partial.empty(); }
+};
+
+/// §15.2 heartbeat plus the 3.2 membership fields (COLLAB_3.2 §4).
+struct HeartbeatValue {
+    AgentId agent = 0;
+    int64_t stamp_ns = 0;
+    PoseValue pose;
+    FrameTag frame;
+    float battery = 1.0f;
+    float link_state = 0.0f;
+    uint64_t keyframe_watermark = 0;
+    std::vector<AgentId> neighbors;
+    AgentId anchor = 0;
+    AgentId broker = 0;
+    EpochValue epoch;
+    AckValue ack;
 };
 
 struct GlobalDescriptorValue {
@@ -267,6 +332,10 @@ struct DecodedMessage {
     MatchRequestValue match_request;
     bool has_feature_response = false;
     FeatureResponseValue feature_response;
+    bool has_heartbeat = false;
+    HeartbeatValue heartbeat;
+    bool has_ack = false;   // a standalone ACK; a heartbeat's ack is in `heartbeat.ack`
+    AckValue ack;
 };
 
 namespace detail {
@@ -299,6 +368,9 @@ inline FrameTag FromWire(const wire::FrameTag& f) {
 /// The codec. Every encode returns bytes AND the accounting row.
 class WireCodec {
 public:
+    explicit WireCodec(Framing framing = Framing::kWholeMessage) : framing_(framing) {}
+    Framing framing() const { return framing_; }
+
     /// Reasons a decode can fail. Returned rather than thrown so a malformed
     /// or hostile message degrades one link instead of the process.
     enum class Status {
@@ -338,8 +410,21 @@ public:
         for (const auto& e : graph.edges) edges.push_back(BuildEdge(fbb, e));
 
         const auto anchor = detail::ToWire(graph.anchor);
-        const auto pg = wire::CreatePoseGraph(
-            fbb, fbb.CreateVector(nodes), fbb.CreateVector(edges), &anchor);
+        // 3.2 fields are written only when set (a broker estimate, or a 3.2
+        // snapshot carrying its sender's T_G_W), so a Phase-1 graph encodes
+        // byte-identically to before the schema grew.
+        flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<wire::AgentFrame>>> frames_off = 0;
+        if (graph.has_epoch || !graph.agent_frames.empty()) {
+            std::vector<flatbuffers::Offset<wire::AgentFrame>> frames;
+            for (const auto& f : graph.agent_frames) {
+                const auto T = detail::ToWire(f.T_G_W);
+                frames.push_back(wire::CreateAgentFrame(fbb, f.agent, &T));
+            }
+            frames_off = fbb.CreateVector(frames);
+        }
+        const wire::Epoch epoch(graph.epoch.counter, graph.epoch.members_hash, graph.epoch.broker);
+        const auto pg = wire::CreatePoseGraph(fbb, fbb.CreateVector(nodes), fbb.CreateVector(edges), &anchor,
+                                              graph.has_epoch ? &epoch : nullptr, frames_off);
 
         wire::EnvelopeBuilder eb(fbb);
         eb.add_cls(MessageClass::POSE_GRAPH);
@@ -397,6 +482,28 @@ public:
         const auto off = wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca);
         return FinishEnvelope(fbb, MessageClass::MATCH_RESPONSE, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_feature_response(off); });
+    }
+
+    SerializedMessage EncodeHeartbeat(const HeartbeatValue& h, AgentId sender, AgentId receiver, Timestamp t,
+                                      uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256);
+        const auto neighbors = fbb.CreateVector(h.neighbors);
+        const auto ack = BuildAck(fbb, h.ack);
+        const auto pose = detail::ToWire(h.pose);
+        const auto frame = detail::ToWire(h.frame);
+        const wire::Epoch epoch(h.epoch.counter, h.epoch.members_hash, h.epoch.broker);
+        const auto off = wire::CreateHeartbeat(fbb, h.agent, h.stamp_ns, &pose, &frame, h.battery, h.link_state,
+                                               h.keyframe_watermark, neighbors, h.anchor, h.broker, &epoch, ack);
+        return FinishEnvelope(fbb, MessageClass::HEARTBEAT, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_heartbeat(off); });
+    }
+
+    SerializedMessage EncodeAck(const AckValue& a, AgentId sender, AgentId receiver, Timestamp t,
+                                uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(128);
+        const auto off = BuildAck(fbb, a);
+        return FinishEnvelope(fbb, MessageClass::ACK, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_ack(off); });
     }
 
     /// Decode. The message class comes from the frame header, so no
@@ -465,6 +572,15 @@ public:
                     out->pose_graph.edges.push_back(v);
                 }
             }
+            out->pose_graph.has_epoch = pg->epoch() != nullptr;
+            out->pose_graph.agent_frames.clear();
+            if (const auto* ep = pg->epoch()) out->pose_graph.epoch = {ep->counter(), ep->members_hash(), ep->broker()};
+            if (const auto* frames = pg->agent_frames()) {
+                for (const auto* f : *frames) {
+                    if (f->T_G_W() == nullptr) return Status::kUntaggedPose;
+                    out->pose_graph.agent_frames.push_back({f->agent(), detail::FromWire(*f->T_G_W())});
+                }
+            }
         }
 
         if (const auto* e = env->edge()) {
@@ -502,6 +618,31 @@ public:
             v.points3d.assign(f->points3d()->begin(), f->points3d()->end());
             v.camera.assign(f->camera()->begin(), f->camera()->end());
         }
+        out->has_heartbeat = out->has_ack = false;
+        if (const auto* h = env->heartbeat()) {
+            // §15.5: the heartbeat's pose summary is a pose like any other.
+            if (h->pose() == nullptr || h->frame() == nullptr) return Status::kUntaggedPose;
+            out->has_heartbeat = true;
+            auto& v = out->heartbeat;
+            v.agent = h->agent();
+            v.stamp_ns = h->stamp_ns();
+            v.pose = detail::FromWire(*h->pose());
+            v.frame = detail::FromWire(*h->frame());
+            v.battery = h->battery();
+            v.link_state = h->link_state();
+            v.keyframe_watermark = h->keyframe_watermark();
+            v.neighbors.clear();
+            if (h->neighbors()) v.neighbors.assign(h->neighbors()->begin(), h->neighbors()->end());
+            v.anchor = h->anchor();
+            v.broker = h->broker();
+            v.epoch = {};
+            if (const auto* ep = h->epoch()) v.epoch = {ep->counter(), ep->members_hash(), ep->broker()};
+            if (!ReadAck(h->ack(), &v.ack)) return Status::kMalformed;
+        }
+        if (const auto* a = env->ack()) {
+            out->has_ack = true;
+            if (!ReadAck(a, &out->ack)) return Status::kMalformed;
+        }
         return Status::kOk;
     }
 
@@ -518,6 +659,27 @@ private:
         add(eb);
         fbb.Finish(eb.Finish());
         return Finalize(fbb, cls, sender, receiver, t);
+    }
+
+    static flatbuffers::Offset<wire::Ack> BuildAck(flatbuffers::FlatBufferBuilder& fbb, const AckValue& a) {
+        std::vector<flatbuffers::Offset<wire::PartialAck>> partial;
+        for (const auto& p : a.partial)
+            partial.push_back(wire::CreatePartialAck(fbb, p.msg_id, fbb.CreateVector(p.received)));
+        return wire::CreateAck(fbb, fbb.CreateVector(a.done), fbb.CreateVector(partial));
+    }
+
+    /// A missing ack table is an empty ack; a malformed partial entry is not.
+    static bool ReadAck(const wire::Ack* a, AckValue* out) {
+        *out = {};
+        if (a == nullptr) return true;
+        if (a->done()) out->done.assign(a->done()->begin(), a->done()->end());
+        if (const auto* parts = a->partial()) {
+            for (const auto* p : *parts) {
+                if (p->received() == nullptr) return false;
+                out->partial.push_back({p->msg_id(), {p->received()->begin(), p->received()->end()}});
+            }
+        }
+        return true;
     }
 
     static flatbuffers::Offset<wire::LoopEdge> BuildEdge(
@@ -571,9 +733,9 @@ private:
 
     /// Compress where the class calls for it, prepend the frame header, then
     /// charge datagram framing. This is the ONE place wire_bytes is computed.
-    static SerializedMessage Finalize(flatbuffers::FlatBufferBuilder& fbb,
-                                      MessageClass cls, AgentId sender,
-                                      AgentId receiver, Timestamp t) {
+    SerializedMessage Finalize(flatbuffers::FlatBufferBuilder& fbb,
+                               MessageClass cls, AgentId sender,
+                               AgentId receiver, Timestamp t) const {
         SerializedMessage msg;
         const uint8_t* data = fbb.GetBufferPointer();
         const size_t size = fbb.GetSize();
@@ -617,7 +779,9 @@ private:
         msg.record.transmitted_bytes = body.size();
         const uint64_t framed = kFrameHeaderBytes + body.size();
         msg.record.wire_bytes =
-            framed + kDatagramOverheadBytes * DatagramCount(framed);
+            framing_ == Framing::kWholeMessage
+                ? framed + kDatagramOverheadBytes * DatagramCount(framed)
+                : framed + (kDatagramOverheadBytes + kFragmentHeaderBytes) * FragmentCount(framed);
         return msg;
     }
 
@@ -639,6 +803,8 @@ private:
         if (ZSTD_isError(written) || written != out->size()) return false;
         return true;
     }
+
+    Framing framing_;
 };
 
 }  // namespace ariadne::core

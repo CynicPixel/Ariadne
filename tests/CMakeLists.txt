@@ -28,7 +28,11 @@ gtest_discover_tests(test_numerical)
 
 add_executable(test_protocol
   protocol/test_serialization.cpp
-  protocol/test_collab_protocol.cpp)
+  protocol/test_collab_protocol.cpp
+  protocol/test_network.cpp
+  protocol/test_transport.cpp
+  protocol/test_membership.cpp
+  protocol/test_collab_v2.cpp)
 target_link_libraries(test_protocol PRIVATE ariadne::core GTest::gtest_main)
 gtest_discover_tests(test_protocol)
 
@@ -60,6 +64,7 @@ if(OpenCV_FOUND)
     unit/test_lens.cpp
     unit/test_radiometric_stage.cpp
     unit/test_edge_verifier.cpp
+    unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
     unit/test_planning.cpp
     unit/test_xfeat_reference.cpp
