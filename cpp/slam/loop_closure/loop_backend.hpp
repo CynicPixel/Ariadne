@@ -15,6 +15,7 @@
 // loop edge goes A -> B with Z = the gate's refined T_A_B and the gate's information (residual tangent).
 // ---------------------------------------------------------------------------
 #include "slam/pose_graph/pose_graph.hpp"
+#include "slam/robust/certificate.hpp"
 #include "slam/robust/degeneracy.hpp"
 #include "slam/robust/gnc.hpp"
 #include "slam/robust/pcm.hpp"
@@ -35,6 +36,7 @@ struct LoopBackendParams {
     PcmParams pcm;
     GncParams gnc;
     EdgeType loop_type = EdgeType::kLocalLoop;
+    CertificateOptions certificate;   // D74, off by default: run after each solved event, read-only
 };
 
 /// One loop event (all candidates of one query keyframe), for the decision trace.
@@ -59,6 +61,9 @@ struct LoopEventRecord {
     std::string gnc_stop;
     double innovation = 0, innovation_bound = 0;
     double ms_gate = 0, ms_pcm = 0, ms_gnc = 0;
+    bool certificate_ran = false, certified = false;   // D74 (certificate.enabled)
+    std::string certificate_verdict;
+    double ms_certificate = 0;
 };
 
 class LoopBackend {

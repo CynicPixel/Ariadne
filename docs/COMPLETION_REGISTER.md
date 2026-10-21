@@ -39,7 +39,7 @@ identical.
 | INV4 | egress at ρ_responder | done (placeholder) | 1.8 uses ρ_responder 0.40 m (D45). Full spec is 4.5. |
 | INV5 | datasets before simulator | partial | EuRoC done (D53–D60). **TUM not started** (2.6). OIVIO is 5.6. |
 | INV6 | bytes counted at the serializer | done | D14, D82. The ≤15% byte-table gate is a Phase 3 exit item. Carries **I5**: §15.7 per-element table (node 65.8 B vs 28 B) never amended (D12). |
-| INV7 | honesty: no "optimal" without a certificate | **blocked by D74** | |
+| INV7 | honesty: no "optimal" without a certificate | done (mechanism) | D74: `CertifyPoseGraph`, behind `loop_closure.certificate`. A claim must cite a `certified` verdict. The verdict is for the isotropic chordal surrogate and is one-directional. |
 | INV8 | tagged facts, `[SMOKE-TEST]` first | done (practice) | |
 
 ## Locked decisions (CLAUDE.md §1)
@@ -49,7 +49,7 @@ identical.
 | Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. **Sim IMU noise operator not built (—).** |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
 | Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, **draft**. ALIKED+LightGlue hard pairs: D63. **Sim-rig exports (1280×720 RGB) for EigenPlaces and ALIKED: not built (—).** |
-| SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73). **Certificate D74: not started (B).** |
+| SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73), certificate behind a flag (D74). |
 | Edges SE(3); FlatBuffers | done | D14, D81. |
 | Collaboration | partial | Built: two-stage exchange, elected broker with epochs (D81–D83). Not started: spectral λ₂ and vertex cover (3.4). |
 | Reconstruction (gsplat service, albedo proxy, affine exposure, chunk pruning) | partial | Placeholder only (D44). Full spec is 6.1–6.3. |
@@ -106,11 +106,11 @@ identical.
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
-| 2.5 robust back end | **partial: D74 not started** | D70–D73 part 2c | B |
+| 2.5 robust back end | done except the large SE-Sync certificate run and the planted-outlier gate wording (maintainer) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). The certificate on sphere/torus/grid3D/cubicle/rim waits on the maintainer (heavy run). The broker wiring of D76 is M (3.2/3.5). | B |
 | 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
 | Gate: FD Jacobian suite | done | | |
-| Gate: oracle 100/100; certificate certified / not certified | **partial** | oracle done (D52). Certificate: D74. | B |
-| Gate: outlier ramp with breakpoint | **partial** | random outliers give no breakpoint up to 90% (D73). Needs aliasing-structured (mutually consistent) false loops. | B |
+| Gate: oracle 100/100; certificate certified / not certified | **partial** | Oracle done (D52). Certified (D74): low-noise 10/10; garage (f 1.26252 vs Table 1 1.263), tinyGrid3D, smallGrid3D. Large SE-Sync graphs pending (heavy). Planted outliers kept in the cost: **4/10 not certified, 6/10 certified**. That is reported per PHASE2_PLAN §3, not tuned. The plan wording "not certified on planted-outlier graphs" is not met as worded: maintainer call. A stationary non-global point and a perturbed point: not certified. | B |
+| Gate: outlier ramp with breakpoint | done | D75, `evaluation/runs/2.5/outlier_ramp/`: aliasing groups. PCM → GNC breakpoint 90 % (groups of 10) / 70 % (two growing groups). GNC only: none. Success, ATE and runtime are plotted. | B |
 | Gate: EuRoC VIO in class; TUM regression pinned | partial | 9/11 (D59). The combined run with 2.1 is running (M). TUM: —. | M / — |
 | Exit run (full, fresh render, clean tree) | not started | after the items above | M |
 

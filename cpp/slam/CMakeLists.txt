@@ -19,6 +19,8 @@ if(OpenCV_FOUND)
     robust/degeneracy.cpp
     robust/pcm.cpp
     robust/gnc.cpp
+    robust/certificate.cpp
+    robust/joint_robust.cpp
     loop_closure/loop_backend.cpp
     bundle_adjustment/window_ba_levmarq.cpp)
   target_link_libraries(ariadne_slam_opencv PUBLIC ariadne::slam opencv_core opencv_geometry)

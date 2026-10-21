@@ -66,7 +66,13 @@ struct GravityOptions {
     bool enabled = false;
     double huber_k2 = 9.21;      // chi^2_2(0.99): Mahony's measured tail is p99 ~ 18 (D59)
     double info_scale = 0.6;     // effective-N: Mahony priors' lag-1 error autocorrelation 0.12-0.36 (design §8)
+    // D76: ONE gravity variable for every agent (a joint multi-agent graph in G: one physical gravity; every prior's
+    // g_ref_W must then be in G and agree). Off: one per agent, which decouples the agents' tilt (joint_robust.hpp).
+    bool shared = false;
 };
+
+/// The gravity_agents() / PgoReport::gravity_W key of the shared variable (GravityOptions::shared).
+constexpr uint32_t kSharedGravityAgent = 0xFFFFFFFFu;
 
 /// The variables of one solve: every node except the anchor, 6 parameters each, then 2 per gravity agent.
 class PgoProblem {
@@ -87,13 +93,13 @@ public:
             for (const GravityPrior& pr : g.gravity_priors()) {
                 const auto n = g.nodes().find(pr.keyframe);
                 if (n == g.nodes().end()) continue;
-                const uint32_t agent = n->second.agent;
+                const uint32_t agent = go_.shared ? kSharedGravityAgent : n->second.agent;
                 auto it = agent_.find(agent);
                 if (it == agent_.end()) {
                     it = agent_.emplace(agent, int(gravity_.size())).first;
                     gravity_.push_back(pr.g_ref_W);
                 } else if ((gravity_[size_t(it->second)] - pr.g_ref_W).norm() > 1e-9) {
-                    throw std::invalid_argument("PgoProblem: one agent's gravity priors disagree on g_ref_W");
+                    throw std::invalid_argument("PgoProblem: one gravity variable's priors disagree on g_ref_W");
                 }
                 priors_.push_back({pr, it->second});
             }

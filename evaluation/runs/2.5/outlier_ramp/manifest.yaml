@@ -1,0 +1,18 @@
+# §28.2 manifest for the D75 aliasing outlier ramp (synthetic: no dataset, no scene).
+run: aliasing_outlier_ramp
+date: 2026-10-22
+decision: D75
+git_base_commit: aa7dce2      # tree = aa7dce2 + the uncommitted 2.5 close-out (D74-D76); the commit that adds this file holds it
+git_dirty: true
+image_digest: sha256:7f39b6f98cc091721294a5d111a4dda374723b6fa50d2097633b02a836a7c9a9   # ariadne/core-dev:dev
+binary: build/docker/tests/test_opencv
+command: ARIADNE_RAMP_OUT=/work/evaluation/runs/2.5/outlier_ramp test_opencv --gtest_filter='AliasingRamp.*'
+plot: docker run --rm -v "$PWD":/work -w /work ariadne-analysis:1 python3 evaluation/runs/2.5/outlier_ramp/plot_ramp.py
+protocol: tests/unit/test_aliasing_ramp.cpp (header comment; fixed before the first measured run)
+seeds: "75000 + 1000 * round(10 * rate) + seed, seed 0..9 (std::mt19937)"
+rates: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+loops_per_graph: 60
+policies: {size10: "groups of 10", count2: "two groups splitting the false loops"}
+arms: {gnc: "GNC-TLS on every loop", pcm_gnc: "PCM alpha_loop 0.001, then GNC on PCM's accepted loops"}
+backend: {pgo: pgo_v2, pcm: "PcmParams{} (alpha_loop 0.001, greedy clique)", gnc: "GncParams{} (cbar2 16.812, mu x1.4)"}
+outputs: [ramp_raw.csv, ramp_summary.csv, breakpoints.json, ramp.png]

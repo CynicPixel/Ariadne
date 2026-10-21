@@ -141,7 +141,11 @@ public:
                << ",\"fast_path\":" << (e.rec.fast_path ? "true" : "false") << ",\"gnc_stop\":\"" << e.rec.gnc_stop
                << "\",\"innovation\":" << e.rec.innovation << ",\"innovation_bound\":" << e.rec.innovation_bound
                << ",\"ms\":{\"gate\":" << e.rec.ms_gate << ",\"pcm\":" << e.rec.ms_pcm << ",\"gnc\":" << e.rec.ms_gnc
-               << "},\"candidates\":[";
+               << "}";
+            if (e.rec.certificate_ran)   // D74, only with loop_closure.certificate: flag-off traces are unchanged
+                tr << ",\"certificate\":{\"certified\":" << (e.rec.certified ? "true" : "false") << ",\"verdict\":\""
+                   << e.rec.certificate_verdict << "\",\"ms\":" << e.rec.ms_certificate << "}";
+            tr << ",\"candidates\":[";
             for (size_t i = 0; i < e.rec.candidates.size(); ++i) {
                 const auto& c = e.rec.candidates[i];
                 std::string why;
@@ -283,6 +287,7 @@ private:
         b.gate.noise_k_r = p.noise_k_r;
         b.gate.noise_floor_r_rad = p.noise_floor_r_rad;
         b.gnc.lm.gravity.enabled = p.gravity_priors;
+        b.certificate.enabled = p.certificate;
         return b;
     }
     struct Pending {

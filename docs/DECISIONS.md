@@ -2665,3 +2665,108 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
   dominating V1_03/V2_02. Descriptor re-association with PnP verification (D60) is what shipped.
 - **Reference exports:** the regeneration commands for `.cache/models/{eigenplaces_ref,aliked_lg_ref}` are in
   PERCEPTION_2.1 §13.
+
+## 2026-10-22 — D74: the global-optimality certificate, behind a flag (chordal surrogate, grounded Cholesky, relative η)
+
+**Context.** Arch §14.8 asks for an SE-Sync-style certificate as a verification artifact. Design:
+`ROBUST_BACKEND_2.5.md` §7. Code: `cpp/slam/robust/certificate.{hpp,cpp}`.
+
+**Decision.**
+- **What is certified:** SE-Sync's isotropic chordal cost of the active edge set (κ/τ from the information diagonal
+  blocks, D70), weighted by GNC weight. It is not our anisotropic Log cost. Reports say "certified for the isotropic
+  chordal surrogate", and the certificate is one-directional: `not certified` means unknown, not wrong.
+- **The point:** LM on the chordal residuals (OpenCV `LevMarqBase`, anchor fixed), then an exact translation solve. The
+  distance moved and the remaining Riemannian gradient are reported.
+- **The matrix:**
+  - the translation-explicit M, assembled from the residuals rather than transcribed;
+  - Λ_i = sym((M Xᵀ)_{R_i} R_i);
+  - S = M − Λ̃, SE-Sync's sign. Arch §14.8's Λ − Q̃ is the other sign; the noise-free test fixes it.
+- **§49 substitution of the test.** Arch §14.8 says shifted Lanczos. Instead:
+  - Cholesky of S with the **anchor's translation grounded** and **η added to the rotation diagonal only**;
+  - by Schur, this is exactly SE-Sync's reduced test Q̃ − Λ + ηI ≻ 0;
+  - Lanczos (full reorthogonalisation) runs only on failure, to report λ_min;
+  - a certified point carries the bound f − f* ≤ |gap| + 3nη.
+- **η is relative:** η = 1e-10·‖M‖∞. Also reported: the absolute-η verdict (SE-Sync's 1e-3 [UNVERIFIED default]) and
+  the smallest passing decade of ‖M‖.
+- **The flag:** `loop_closure.certificate` (optional key, false when absent; no shipped config sets it).
+  - When on, it runs after each solved loop event on the mirror, read-only.
+  - The trace gains a `certificate` object only when it ran.
+
+**Why grounded, not a full shift.** Shifting the translation blocks too is a weaker test, since (A + ηI)⁻¹ ⪯ A⁺. On
+a non-certified planted-outlier graph a full shift would pass at 0.61× the reduced η, so it over-certifies.
+
+**Evidence** (`tests/unit/test_certificate.cpp`, 8/8 plus the env-gated SE-Sync test):
+- the objective equals tr(XMXᵀ), and the gradient matches finite differences;
+- noise-free 5 nodes: explicit null space 4 (3 rotation + 1 translation shift), reduced null space 3, the other sign
+  indefinite, certified;
+- grounded test = reduced test at ±5 % of −λ_min, and the Ritz value matches the dense reduced λ_min;
+- a stationary non-global point (a wound ring, max|grad| 1.6e-12) and a perturbed point are not certified;
+- low noise: 10/10 certified, worst bound 4e-4 of f;
+- the loop backend is bit-identical with the flag on, and 12/12 events are certified.
+- **SE-Sync, run so far** (chordal init → refine):
+
+  | graph | f | Table 1 | bound |
+  |---|---|---|---|
+  | parking-garage | 1.26252 | 1.263 | f − f* ≤ 0.024 % |
+  | tinyGrid3D | — | — | certified |
+  | smallGrid3D | — | — | certified |
+
+  Sphere, torus, grid3D, cubicle and rim are pending (the user is asked first: heavy).
+
+**Planted outliers, reported, not tuned** (PHASE2_PLAN §3):
+- 3 uniform SE(3) loops kept in a 60-node cost: **6/10 certified**, from each of the truth, dead-reckoning and chordal
+  starts. All starts reached the same stationary point, so the "strictly worse point must fail" assertion had
+  nothing to bite on here; the wound ring covers that.
+- After GNC: 10/10 outliers rejected and 10/10 certified.
+- The phased-plan gate's wording "not certified on planted-outlier graphs" is therefore **not met as worded**. A
+  certified outlier-corrupted optimum is correct behaviour: the certificate proves optimality of the given cost, not
+  correctness.
+
+## 2026-10-22 — D75: the outlier ramp uses perceptual-aliasing groups; breakpoint reported
+
+**Context.** D73's ramp used random SE(3) outliers and found no breakpoint up to 90 %. The exit gate needs one.
+
+**Decision.** A reusable generator, `cpp/slam/robust/aliasing_generator.hpp` (header-only, test support), plants
+groups of false loops Z_k = T_{a_k}⁻¹ Δ T_{b_k} on two runs of consecutive keyframes. These are Sünderhauf &
+Protzel's grouped outliers: mutually consistent through the true odometry.
+- Its own test asserts that PCM accepts a planted group whole; otherwise it would have rebuilt random outliers.
+- The protocol (in the test header, fixed before the run): 60 loops per graph, policies `size10` and `count2`, arms
+  GNC-only and PCM → GNC, 10 seeds per rate, success = precision ≥ 0.99 and recall ≥ 0.95, breakpoint = the lowest rate
+  with success < 0.5.
+- 3.5 reuses the generator with JointId chains, `cross_chain_only` and `kInterAgentLoop`.
+
+**Result** (`evaluation/runs/2.5/outlier_ramp/`):
+- PCM → GNC breaks at **90 %** (`size10`) and **70 %** (`count2`). That is exactly where the largest false group
+  outnumbers the true loops, PCM's maximum-clique limit.
+- GNC alone: no breakpoint (worst 7/10 and 5/10, both at 70 %), at ~10× the runtime.
+- The shipped order stays PCM → GNC (D72); this is its stated limit.
+
+## 2026-10-22 — D76: an entry point for the robust stage on a joint multi-agent graph; shared gravity option
+
+**Context.** COLLAB_3.2 §5 says the broker's solve uses 2.5's robust pipeline (main's row). §11 puts the gate at the
+verifying agent, so the broker sees pre-gated edges.
+
+**Decision.**
+- **`RobustJointSolve`** (`cpp/slam/robust/joint_robust.hpp`): PCM → chordal re-init over the anchor's PCM-accepted
+  component → GNC-TLS. Nodes are JointId(agent, kf).
+  - The re-init removes the hazard that `SolveMultiAgent` places agents along unfiltered inter-agent edges.
+  - `GatedInterAgentEdge` gates on the broker when it holds the geometry.
+  - Preconditions are in the header: noise-model information; GncState only for an append-only joint graph; GNC
+    decides every loop; PCM is per agent pair.
+- **`GravityOptions::shared`:** one gravity variable for all agents (key `kSharedGravityAgent`). The per-agent default
+  decouples the agents' tilt in a joint graph.
+  - A fixed 6-DoF anchor plus a free shared gravity *is* the yaw-only gauge, up to a global rotation; do not also fix
+    gravity.
+
+**Evidence** (`tests/unit/test_joint_robust.cpp`, 2/2):
+- **Aliasing rejected:** agent 1 placed along a false edge of a 6-loop inter-agent aliasing group; on 5 seeds, 10/10
+  true inter-agent loops kept, 0 false. The ATE equals the true-loops-only solve's.
+  - Re-init changed nothing in these seeds: PCM had already removed the false edges, and LM recovered from the bad
+    placement.
+- **Tilt bias:** a 2° tilt bias on all inter-agent edges.
+  - Per-agent gravity leaves agent 1 at 2.59°/2.77° tilt.
+  - Shared gravity: 2.34° (−10 %) with 0.01 rad edges, 0.90° (−68 %) with 0.05 rad edges. The correction follows the
+    priors' confidence against the edges'.
+
+**Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
+Both are main's (3.2 / 3.5).

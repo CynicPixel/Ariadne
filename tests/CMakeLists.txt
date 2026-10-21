@@ -76,6 +76,9 @@ if(OpenCV_FOUND)
     unit/test_gnc.cpp
     unit/test_loop_backend.cpp
     unit/test_gravity_pgo.cpp
+    unit/test_certificate.cpp
+    unit/test_aliasing_ramp.cpp
+    unit/test_joint_robust.cpp
     unit/test_window_ba_levmarq.cpp
     unit/test_reassociation.cpp
     unit/test_xfeat_engine.cpp

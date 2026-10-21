@@ -2,14 +2,20 @@
 
 Plan 2.5 (PHASE2_PLAN §1, phased plan Phase 2): replace the Phase-1 pose-graph placeholders with arch §13–§14 as
 specified — chordal initialisation, degeneracy gate → PCM → GNC-TLS (the §14.5 order is inviolable), the SE-Sync-style
-certificate behind a flag, and a real intra-agent loop-candidate source. Decisions D70–D74.
+certificate behind a flag, and a real intra-agent loop-candidate source. Decisions D70–D76.
 
-**Status (2026-10-21): implemented through D73 part 2c** (D70 chordal init, D71 degeneracy gate, D72 PCM, D73
-GNC-TLS + weight reuse + intra-agent loop source + calibrated loop noise model + gravity priors). The per-section
-"As built" notes record what was measured. **Still open:**
-- **D74 certificate (§7): not started.** A Phase 2 exit-gate item, together with κ/τ for cubicle and rim.
-- **Outlier-ramp breakpoint (§6): not found.** Random SE(3) outliers gave 10/10 successes up to 90 %, so a harder
-  protocol (aliasing clusters, near misses at scale) is needed. A Phase 2 exit-gate item.
+**Status (2026-10-22): implemented through D76.**
+- D70 chordal init, D71 degeneracy gate, D72 PCM.
+- D73: GNC-TLS, weight reuse, the intra-agent loop source, the calibrated loop noise model and gravity priors.
+- D74: the certificate (§7), behind `loop_closure.certificate`.
+- D75: the aliasing outlier ramp and its breakpoint (§6).
+- D76: the joint-graph entry point for the broker, plus shared gravity (§11).
+
+The per-section "As built" notes record what was measured. **Still open:**
+- **SE-Sync certificate run on the large graphs** (sphere, torus, grid3D, cubicle, rim): pending the maintainer
+  (heavy). garage, tinyGrid3D and smallGrid3D certify.
+- **The planted-outlier gate wording.** "Not certified on planted-outlier graphs" holds for 4/10; 6/10 certify. This is
+  reported, not tuned (PHASE2_PLAN §3; D74).
 
 **Defaults.** Intra-agent loop closure and gravity priors in the pose graph are **off by default**. Only
 `configs/slam/euroc_v2_loops.yaml` (loops on, `gravity_priors: false`) and `euroc_v2_loops_gravity.yaml` carry the
@@ -416,6 +422,16 @@ init that includes the outliers. The near-miss precision is TP/(TP + accepted ne
     Wired gate → PCM → GNC, PCM removes the random outliers, and even cold GNC costs about one LM solve per event.
     Weight reuse is a 20 % saving there, not the order of magnitude part 1's numbers suggested.
 
+**Outlier ramp with perceptual-aliasing groups (D75, 2026-10-22).**
+- **Why a new protocol.** Random outliers gave no breakpoint, so false loops now come in mutually consistent groups.
+  The generator is `cpp/slam/robust/aliasing_generator.hpp`: one spurious Δ per group, the Sünderhauf & Protzel
+  grouped policy. PCM accepts a planted group whole, which its test asserts.
+- **Protocol:** in `tests/unit/test_aliasing_ramp.cpp`.
+- **Result** (`evaluation/runs/2.5/outlier_ramp/`):
+  - PCM → GNC breaks at **90 %** with groups of 10 and **70 %** with two growing groups. In both cases the largest
+    false group outnumbers the true loops, PCM's maximum-clique limit.
+  - GNC alone has no breakpoint (worst 5/10 at 70 %), at ~10× the runtime.
+
 ## 7. Certificate (arch §14.8, D74) — behind a flag
 
 **What is certified, stated plainly.** SE-Sync certifies global optimality of **its** cost, the isotropic chordal cost
@@ -444,6 +460,18 @@ asserted on a small graph.
 refinement reproduces the Table 1 objectives (sphere 1.687e3, torus 2.423e4, grid 8.432e4, garage 1.263, cubicle
 7.171e2, rim 5.461e3) and certifies. A perturbed point fails. A **stationary non-global** point (max|g| ≈ 0, higher
 cost) fails — the case the certificate exists for.
+
+**As built (D74, 2026-10-22).** `cpp/slam/robust/certificate.{hpp,cpp}`, as specified above, with one correction
+from review.
+- **The shift.** The Cholesky test grounds the anchor's translation and shifts only the rotation diagonal. By Schur
+  this is exactly the reduced test; a full S + ηI over-certifies, passing at 0.61× the reduced η on a measured graph.
+- **η.** η = 1e-10·‖M‖∞. A certified point carries f − f* ≤ |gap| + 3nη.
+- **Results.**
+  - Unit tests 8/8.
+  - garage f = 1.26252 (Table 1: 1.263), certified, with bound 0.024 % of f. tinyGrid3D and smallGrid3D certify.
+  - Planted outliers kept in the cost: 6/10 certify; after GNC 10/10.
+  - A stationary non-global point and a perturbed point fail.
+- **Flag.** `loop_closure.certificate` (optional key, off): read-only on the mirror, bit-identical tested.
 
 ## 8. Intra-agent loop-candidate source (D73)
 
@@ -657,8 +685,38 @@ ARIADNE_PGO_SESYNC_CHORDAL=<cache>/pgo_sesync_chordal test_opencv --gtest_filter
 | D71 | degeneracy gate; PnP-Hessian loop information replacing the [PROXY] diagonal |
 | D72 | PCM (odometry-only composition; greedy + exact flag) |
 | D73 | GNC-TLS + intra-agent loop source |
-| D74 | certificate (chordal surrogate, Cholesky of S+ηI substitution, relative η); κ/τ for cubicle/rim |
+| D74 | certificate (chordal surrogate, grounded Cholesky with rotation-only η shift, relative η); κ/τ for cubicle/rim |
+| D75 | aliasing outlier generator + ramp; breakpoint 90 % (size10) / 70 % (count2) for PCM → GNC |
+| D76 | joint-graph robust entry point (PCM → chordal re-init → GNC); `GravityOptions::shared` |
 
 Each adopted piece: ALGORITHMS.md entry (append-only hunk) → arch decision → ablation matrix → benchmark config
 (`configs/slam/*`, isolated hunks) → manifest fields (`cpp/runtime/manifest/*`, isolated hunks). Every hunk to a shared
 file is listed in the handover.
+
+## 11. The robust stage on a joint multi-agent graph (D76) — handoff to main (3.2 / 3.5)
+
+**Entry point.** `cpp/slam/robust/joint_robust.hpp`: `RobustJointSolve(PoseGraph&, anchor, JointRobustParams,
+GncState*)` on a graph with JointId(agent, kf) nodes and `kInterAgentLoop` edges.
+- **Order.** PCM, then a chordal re-init over the anchor's PCM-accepted component, then GNC-TLS.
+- **Gating.** `GatedInterAgentEdge` runs the D71 gate when the broker has the geometry. Otherwise the gate stays at
+  the verifying agent (COLLAB_3.2 §11).
+
+**Wiring in `SolveMultiAgent`.** Call it in place of `SolvePoseGraph` after step 3 (assembly). Placement along
+unfiltered edges stays harmless because of the re-init.
+
+**Preconditions.**
+- Edge information includes the loop noise model.
+- `GncState` only for an append-only joint graph.
+- GNC re-decides every loop, local loops included.
+- PCM is per agent pair.
+
+**Gravity.**
+- Per-agent gravity variables (the default) decouple the agents' tilt.
+- For a joint graph in G, set `GravityOptions::shared` (one physical gravity, g_ref in G). That is the yaw-only gauge,
+  up to a global rotation; never fix gravity and the anchor's tilt together.
+- `AgentSubgraph` does not carry gravity priors yet.
+
+**Measured** (`tests/unit/test_joint_robust.cpp`).
+- A 6-loop inter-agent aliasing group, placed first, is rejected on 5/5 seeds, with 10/10 true loops kept.
+- Shared gravity cuts a 2° inter-agent tilt bias by 10 % (0.01 rad edges) to 68 % (0.05 rad edges). Per-agent
+  gravity cuts none.

@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <random>
 
 using namespace ariadne;
@@ -225,4 +226,47 @@ TEST(LoopRetrieval, ExclusionThresholdAndOrder) {
     const auto near = r.Query(12, int64_t(0.6e9), d(1, 0));   // ids 0 and 1 are within 1 s of the query now
     ASSERT_EQ(near.size(), 1u);
     EXPECT_EQ(near[0].first, 2u);
+}
+
+// D74 behind its flag: certificate on vs off, the same event sequence in lockstep. The mirrors stay bit-identical
+// (the certificate is read-only), and only the flagged backend records a verdict.
+TEST(LoopBackend, CertificateFlagIsReadOnly) {
+    std::mt19937 g(2);
+    const std::vector<SE3> truth = TwoLaps();
+    const int N = int(truth.size());
+    const Mat6 odo = Diag(0.01, 0.004);
+    PoseGraph vo;
+    LoopBackendParams on;
+    on.certificate.enabled = true;
+    LoopBackend off_be, on_be(on);
+    SE3 pose = truth[0];
+    int certified = 0, ran = 0;
+    for (int i = 0; i < N; ++i) {
+        PoseNode nd;
+        nd.keyframe = uint64_t(i);
+        const SE3 Z = i > 0 ? core::SE3Exp(Draw(g, odo)) * (truth[size_t(i - 1)].inverse() * truth[size_t(i)]) : SE3();
+        if (i > 0) pose = pose * Z;
+        nd.T_W_C = pose;
+        vo.AddNode(nd);
+        if (i > 0) vo.AddEdge(OdometryEdge(uint64_t(i - 1), uint64_t(i), Z, odo));
+        off_be.Sync(vo);
+        on_be.Sync(vo);
+        if (i >= 60 && i % 5 == 0) {
+            std::vector<LoopCandidate> c(1);
+            c[0].a = uint64_t(i), c[0].b = uint64_t(i - 60);
+            c[0].geometry = Geometry(g, truth[size_t(i)], truth[size_t(i)].inverse() * truth[size_t(i - 60)], 1.0);
+            const LoopEventRecord a = off_be.OnCandidates(c, i), b = on_be.OnCandidates(c, i);
+            EXPECT_FALSE(a.certificate_ran);
+            EXPECT_EQ(b.certificate_ran, b.solved);
+            ran += b.certificate_ran;
+            certified += b.certified;
+        }
+    }
+    for (const auto& [id, n] : off_be.graph().nodes()) {
+        const SE3& T = on_be.graph().nodes().at(id).T_W_C;
+        EXPECT_EQ(std::memcmp(n.T_W_C.R.data(), T.R.data(), sizeof(double) * 9), 0);
+        EXPECT_EQ(std::memcmp(n.T_W_C.t.data(), T.t.data(), sizeof(double) * 3), 0);
+    }
+    std::printf("certificate flag: %d / %d solved events certified (chordal surrogate of the mirror)\n", certified, ran);
+    EXPECT_GT(ran, 0);
 }

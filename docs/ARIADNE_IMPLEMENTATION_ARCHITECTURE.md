@@ -2679,6 +2679,17 @@ Report `certified` or `not certified (λ_min = …)`. **Never claim global optim
 the certificate is one-directional, and a failed certificate means "unknown", not "wrong". Roughly 300 lines plus
 tests.
 
+**As built (D74, 2026-10-22; §49 update).** `cpp/slam/robust/certificate.{hpp,cpp}`, behind
+`loop_closure.certificate` (off).
+- **What is certified:** SE-Sync's isotropic chordal surrogate of the active edge set, refined to a stationary point
+  first. It is not the runtime anisotropic Log cost.
+- **The sign:** SE-Sync's, `S = M − Λ` on the translation-explicit data matrix. The `Λ − Q̃` above is the other sign;
+  the noise-free unit test fixes it.
+- **The test:** shifted Lanczos is replaced by SE-Sync's practice, a Cholesky of S with one translation grounded and a
+  relative η = 1e-10‖M‖ added to the rotation diagonal only. That is exactly the reduced test `Q̃ − Λ + ηI ≻ 0`; a
+  full `S + ηI` over-certifies. Lanczos only reports λ_min on failure.
+- **What a certified result carries:** the bound f − f* ≤ |gap| + 3nη.
+
 ---
 
 # 15. Distributed collaboration protocol
