@@ -4,6 +4,11 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — Session claims D90–D99 for 2.6 TUM, L2 (sim IMU noise operator) and 3.3 (comms broker node)
+
+- Decision IDs **D90–D99** are claimed by this session. D74 stays 2.5's; D80–D89 stay the 3.2 session's.
+- Branches from `main` (aa7dce2): `feat/2.6-tum`, then one branch each for L2 and 3.3.
+
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
 - **Open: the D74 certificate**, not started (plus κ/τ for cubicle and rim).
