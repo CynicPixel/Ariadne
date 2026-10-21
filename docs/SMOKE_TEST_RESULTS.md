@@ -680,3 +680,103 @@ Gates 2.1 retrieval (`docs/design/PERCEPTION_2.1.md` §11).
 - **Consequence:** ResNet-50 cannot run on every keyframe on this CPU. Retrieval descriptors are computed on a
   spaced subset (≥ 1 s apart) at 376×240. A quiet-host timing replaces these figures before any budget claim.
 - ONNX Runtime is absent from the build (`ENGINE_ORT` unavailable), so `cv::dnn` is the only engine, as §7.4 plans.
+
+## 4s. ALIKED + LightGlue through OpenCV 5.0.0's `cv::ALIKED` / `cv::LightGlueMatcher` `[SMOKE-TEST]` 2026-10-20
+
+- **Models.** The pinned build ships no weights. OpenCV's own test (`modules/features/test/test_aliked_lightglue.cpp`)
+  loads two opencv_extra testdata files, `aliked-n16rot-top1k-640.onnx` (sha1 `41faa7bf…`, sha256 `b46868de…`) and
+  `aliked_lightglue.onnx` (sha1 `02723aa5…`, sha256 `a1bd99d2…`). `download_models.py` fetches them from a personal
+  GitHub repo (`YangGuanyuhan/lightglue_opencv_project`, HEAD `9bf886bf`, **no licence file**, export script not
+  published). Upstream weights: ALIKED BSD-3 (Shiaoming/ALIKED), LightGlue Apache-2.0 (cvg/LightGlue `eb42fee`).
+  Provenance of the export is therefore unverified. Downloaded with matching sha1 to
+  `.cache/feat-2.1-perception/models/opencv_extra_aliked/`.
+- **Load** (`readNetFromONNX`, our image, no ORT):
+
+  | engine | ALIKED | LightGlue |
+  |---|---|---|
+  | ENGINE_NEW | ok (41 ms) | ok (453 ms) |
+  | ENGINE_CLASSIC | **fails**: "Multidimensional unsqueeze" (`/desc_head/Unsqueeze_1`) | **fails**: Concat shape (`transformers.0/self_attn/Concat_2`) |
+
+  The model author's compatibility table (ENGINE_NEW "unsupported" for `aliked_lightglue.onnx`) is stale for 5.0.0.
+- **Run** (MH_01 cam0 frames 200 and 205, BGR, ENGINE_NEW, shared CPU): ALIKED 1000/1000 keypoints (fixed top-1k),
+  128-D, **786 ms/image** at 640×640; LightGlue **644 matches** at score ≥ 0.1, **977 ms** for 1000×1000.
+- **Wrapper behaviour, read from the pinned source** (`feature2d_aliked.cpp`, `matchers_lightglue.cpp`):
+  - `ALIKED` ignores `mask` and `useProvidedKeypoints`. It resizes to `inputSize` without keeping the aspect ratio
+    (752×480 is stretched to 640×640) and maps normalised keypoints to pixels as (k+1)/2·W. Upstream
+    (`aliked.py`) uses (k+1)/2·(W−1): up to 1 px at the far edge.
+  - `LightGlueMatcher` normalises pixel keypoints per axis (x/W·2−1, y/H·2−1). Upstream `normalize_keypoints` keeps
+    the aspect ratio (shift W/2, H/2; scale max(W,H)/2). At 752×480 the matcher's positional encoding sees y
+    stretched 1.57×. Passing pre-normalised keypoints with an empty `Size()` bypasses it (public API).
+  - The header promises "automatic context from in-process ALIKED". The implementation never reads it:
+    `setPairInfo` is mandatory.
+  - `clone()` shares the `dnn::Net`, so it is **not** a per-thread copy (§7.4: create one matcher per thread).
+  - `knnMatch` supports k = 1 only; `radiusMatch` throws.
+- **The graphs** (`onnx` 1.17, both opset 17, producer PyTorch 2.1.0):
+  - **ALIKED:** input FIXED at [1,3,640,640]; outputs `keypoints` [1000,2] (a fixed top-1k), `descriptors`
+    [N,128], `scores` [1000]; 398 nodes. There is no DeformConv: the deformable conv is decomposed by hand
+    (GatherND ×16, GridSample ×2, Floor). No control flow. `Params.inputSize` 736×480 or 752×480 fails at load
+    (Reshape assertion), so **native aspect needs a re-export**.
+  - **LightGlue:** dynamic N (`kpts0` [1,N,2], `desc0` [1,N,128]); outputs `matches0` [M,2] int64 and `mscores0`
+    [M]; 2341 nodes, 36 LayerNorm (= 9 layers, all run), and no `If`/`Loop`, so **adaptive depth/width is not in
+    the graph**. Match filtering is in-graph (NonZero/Where; the threshold value is not yet read).
+- **Not yet verified:** equality with upstream PyTorch (keypoints, descriptors, matches) on identical 640×640
+  inputs.
+- **Decision (maintainer, 2026-10-20): export our own from upstream** (option b), not the opencv_extra files.
+
+### 4s-2. Our export: ALIKED-n16 + LightGlue from upstream, exact through cv::ALIKED / cv::LightGlueMatcher `[SMOKE-TEST]` 2026-10-21
+
+- **Sources.**
+  - `cvg/LightGlue` at `eb42fee` (Apache-2.0; its `aliked.py` is ALIKED, BSD-3).
+  - Weights: `Shiaoming/ALIKED@683d7c6` `models/aliked-n16.pth` (sha256 `5be87048…`), and LightGlue
+    `v0.1_arxiv` `aliked_lightglue.pth` (sha256 `d975e965…`).
+  - Configuration from glue-factory `configs/aliked+lightglue-official.yaml`: ALIKED-**n16**, which is what
+    LightGlue's ALIKED weights were trained on (`ALIKED-k2048-n16`). OpenCV's file is n16rot. Top-K
+    (`detection_threshold` 0); LightGlue `depth_confidence` = `width_confidence` = −1; `filter_threshold` 0.1.
+  - Native 752×480 (upstream pads to a multiple of 32 by edge replication), no resize.
+- **Tool:** `python/model_tools/aliked_lightglue_reference.py`, session image `ariadne-eigenplaces-ref:feat-2.1`,
+  `--network none`, kornia stubbed (raises if called; only resize/gray paths use it). Outputs in
+  `.cache/feat-2.1-perception/models/aliked_lg_ref/`: `aliked_n16_k{1024,2048}_752x480.onnx`,
+  `lightglue_aliked.onnx` (dynamic N), references and a manifest with every sha256.
+- **Rewrites for cv::dnn**, each checked in torch against UNMODIFIED upstream before export:
+  - **DCN v1** (no DeformConv importer): written as a sampling grid, one GridSample (zeros, align_corners), then a
+    MatMul. Max |diff| 7.6e-6 alone; dense maps 1.5e-6.
+  - **DKD top-K:** Unfold becomes gathers; the border is a constant mask. Exact (0) on the same score map.
+  - **SDDH:** the gather plus one MatMul; 8.9e-7.
+  - **LightGlue:** `unflatten`/`repeat_interleave`/einsum respelled as explicit reshapes and MatMuls (the traced
+    rank was lost with a dynamic N). Matches are identical; score difference 0.
+  - **Static dims frozen with `int()`.** Otherwise traced Shape→Gather int64 arithmetic hits ENGINE_NEW's
+    "all inputs should have equal types" in an elementwise layer.
+  - **SDDH patch corner computed with Floor, then cast.** With the truncating `.long()` spelling, cv::dnn gave a
+    different patch on ~76–79% of keypoints, as if fractional parts ≥ 0.5 rounded up (cosine ≥ 0.976, max element
+    0.05). The pinned `cast2_layer.cpp` CPU path truncates correctly, so the location of the rounding is not pinned
+    down `[UNVERIFIED]`. After the change: exact.
+  - Keypoints are emitted in cv::ALIKED's convention, n = 2·px/W − 1, so its (n+1)/2·W mapping returns upstream's
+    (k+1)/2·(W−1) pixels.
+- **Keypoints are compared as sets, not index order.** A ~1e-6 change of the score map (any engine's float error)
+  flips near-tied NMS maxima (`score == maxpool(score)`) and the top-K order. Each upstream keypoint is paired with
+  the nearest exported one within 1e-3 px.
+- **Result** (`tests/unit/test_aliked_lightglue_reference.cpp`, `ARIADNE_REQUIRE_MODELS=1`, 2/2 PASS; ENGINE_NEW,
+  shared CPU):
+
+  | | K = 1024 | K = 2048 |
+  |---|---|---|
+  | ALIKED input tensor | identical (0) | identical (0) |
+  | ALIKED keypoints matched (≤ 1e-3 px) | 100%, max 9.2e-5 px | 100%, max 9.3e-5 px |
+  | ALIKED scores / descriptors (max element) | 1.6e-5 / 4.0e-6 | 1.9e-5 / 4.0e-6 |
+  | ALIKED time per image | 0.48–0.59 s | 0.52–0.60 s |
+  | LightGlue match sets (MH_01 0.25 s apart; V1_01 revisit 102 s apart) | 679 / 551, identical | 1314 / 1159, identical |
+  | LightGlue scores | ≤ 6.2e-5 | ≤ 6.4e-5 |
+  | LightGlue time per pair | 0.59–0.65 s | 1.86–1.97 s |
+
+- **For information** (upstream with adaptive depth/width ON, its defaults): it stops at layer 5–7 and keeps 92–99%
+  of the full model's matches (V1_01 k1024: 540 matches, 505 shared with the full 551). The export runs all 9
+  layers (the official evaluation config).
+- **Usage contract:** `cv::ALIKED::Params.inputSize` = the export's size (752×480); `cv::LightGlueMatcher`
+  `setPairInfo(k0n, k1n, Size(), Size())` with keypoints normalised as upstream (shift W/2, H/2; scale max(W,H)/2).
+  One matcher per thread (`clone()` shares the Net).
+- **Export sha256:**
+  - `aliked_n16_k1024_752x480.onnx` `cc5bf19d…`
+  - `aliked_n16_k2048_752x480.onnx` `ee9bc548…`
+  - `lightglue_aliked.onnx` `51906eca…`
+
+  The full hashes are in the export's `manifest.yaml`.

@@ -1686,6 +1686,21 @@ pool owns N nets loaded from the same ONNX file.
 it so it drops into the same `DescriptorMatcher` seam as brute-force and ANN matching, so the matcher is an
 ablation switch rather than a structural commitment.
 
+> **As built (2.1, D63 draft; PERCEPTION_2.1 §12, SMOKE §4s).**
+> `perception::HardPairMatcher` wraps `cv::ALIKED` + `cv::LightGlueMatcher` on Ariadne's own export from upstream:
+> ALIKED-n16 at K = 1024 (2048 is the ablation), native 752×480, LightGlue with all 9 layers. The wrapper owns three
+> conventions:
+> - the image size must equal the export's (it throws otherwise; sim needs its own export);
+> - upstream's aspect-preserving keypoint normalisation, passed through an empty `Size()`; OpenCV's per-axis rule is
+>   the ablation;
+> - one instance per thread.
+>
+> Cost about 0.5 s per extraction and 0.6 s per match (shared CPU), so it serves hard pairs only (C8).
+>
+> **Measured on EuRoC loop candidates** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
+> AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights. But 4 confident wrong verifications show
+> that an E-inlier count alone is not a loop gate, so the PnP and degeneracy gates stay downstream (§12.6).
+
 **Fallback if the new DNN engine rejects an operator.** The sanctioned path is the ONNX Runtime integration that
 OpenCV 5 itself ships `[VERIFIED web 2026-08-30, docs.opencv.org/5.0]`. This keeps the "runs through OpenCV" claim
 intact. **Record which engine actually executed each model in the run manifest** — this is exactly the kind of

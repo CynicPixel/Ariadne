@@ -72,6 +72,24 @@ FlannBasedMatcher · LightGlueMatcher · ANNIndex
 > and `ANNIndex` are present as described above. ORT does not appear in `cvconfig.h`; this is
 > [UNVERIFIED pending `getBuildInformation`], and ORT is treated as absent.
 
+> ⚠️ **Correction (2026-10-21, 2.1 hard-pair preflight; SMOKE §4s, PERCEPTION_2.1 §12), the `cv::ALIKED` and
+> `cv::LightGlueMatcher` rows against the pinned 5.0.0 source:**
+> - **No weights ship.** OpenCV's own test loads opencv_extra testdata fetched from a personal repo with no
+>   licence and no export script (`aliked-n16rot-top1k-640.onnx`, `aliked_lightglue.onnx`).
+> - **Both load on ENGINE_NEW only;** ENGINE_CLASSIC fails on both.
+> - **"Auto-context from in-process ALIKED" is false:** the implementation never reads it, and `setPairInfo` is
+>   mandatory.
+> - **`setPairInfo` normalises pixels per axis** (x/W·2−1, y/H·2−1). Upstream LightGlue keeps the aspect ratio:
+>   shift W/2, H/2; scale max(W,H)/2. An empty `Size()` passes pre-normalised keypoints through.
+> - **`clone()` shares the Net,** so it is not a per-thread copy.
+> - **`cv::ALIKED` ignores `mask`** and resizes to `inputSize` without keeping the aspect ratio. It maps
+>   normalised keypoints as (n+1)/2·W, where upstream uses (W−1).
+>
+> **As built:** Ariadne exports its own from upstream (`cvg/LightGlue@eb42fee`, ALIKED-n16 per glue-factory's
+> official config, native 752×480, `python/model_tools/aliked_lightglue_reference.py`). Through these same two
+> classes it is exact against upstream PyTorch: keypoints within 1e-4 px, descriptors within 4e-6, identical match
+> sets (SMOKE §4s-2).
+
 Also confirmed for OpenCV 5:
 - **USAC is the default robust-estimation backend** for `findHomography`, `findEssentialMat`, `findFundamentalMat`, and all `solvePnP` variants → **MAGSAC++-class robustness for free**, no hand-written RANSAC.
 - **LAPACK always available** (internal minimal subset if not installed) → `cv::SVD` and eigendecomposition guaranteed.

@@ -4,6 +4,23 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63 draft)
+
+- **Built:**
+  - Our export from upstream (`cvg/LightGlue@eb42fee`, ALIKED-n16, native 752×480), exact through cv::ALIKED /
+    cv::LightGlueMatcher (SMOKE §4s-2).
+  - `perception::HardPairMatcher`.
+  - The offline `ariadne_loop_verify` with `loop_verify_eval.py`.
+  - 7 new tests pass (only the new ones were run).
+- **EuRoC loop-candidate verification** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
+  AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights; AP_geom 0.807 vs 0.303 (all 676
+  positives as the denominator). LightGlue adds
+  +0.042 over mutual NN. Both bars pass (PERCEPTION_2.1 §12.6).
+- **Stated:**
+  - 4 confident wrong verifications in the Vicon rooms, so the downstream PnP and degeneracy gates stay.
+  - Zero-false-accept recall is ≈ 0 by the fixed definition, because tiny baselines break the translation term.
+  - Cost ≈ 1.2 s per pair warm under load; hard pairs only.
+
 ## 2026-10-20 — 2.1 retrieval: EigenPlaces R50-256 via cv::dnn + PlaceIndex (D62 draft)
 
 - **Built:** `PlaceRecognizer`, exact against upstream (SMOKE §4r), and `PlaceIndex` (exact default; `cv::ANNIndex`

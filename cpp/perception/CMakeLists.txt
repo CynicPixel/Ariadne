@@ -20,7 +20,8 @@ if(OpenCV_FOUND)
     features/xfeat/xfeat_net.cpp
     features/xfeat_engine.cpp
     place/place_recognizer.cpp
-    association/landmark_reassociation.cpp)
+    association/landmark_reassociation.cpp
+    association/hard_pair_matcher.cpp)
   target_link_libraries(ariadne_perception_opencv PUBLIC
     ariadne::perception opencv_core opencv_imgproc opencv_features opencv_video opencv_dnn opencv_ximgproc
     opencv_stereo opencv_geometry)

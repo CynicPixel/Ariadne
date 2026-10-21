@@ -1956,3 +1956,64 @@ Design: `docs/design/PERCEPTION_2.1.md` §11. Catalogue: `ALGORITHMS.md` §1.6 (
   - No consumer in 2.1 (2.5 owns loop closure).
   - CLAHE not run.
   - Annoy determinism across core counts is unverified.
+
+## 2026-10-21 — D63 (DRAFT, pending the maintainer): the hard-pair path — ALIKED-n16 + LightGlue from our own upstream export, through cv::ALIKED / cv::LightGlueMatcher
+
+Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4s / §4s-2. Catalogue: `ALGORITHMS.md`
+(the correction note under the OpenCV-5 inventory).
+
+- **What:** `perception::HardPairMatcher`, with ALIKED-n16 at K = 1024, native 752×480, and LightGlue running all
+  9 layers with `filter_threshold` 0.1. Upstream keypoint normalisation goes through `setPairInfo(..., Size(),
+  Size())`; one instance per thread. The models are exported by `python/model_tools/aliked_lightglue_reference.py`
+  from `cvg/LightGlue@eb42fee` with the weights `Shiaoming/ALIKED@683d7c6` `aliked-n16.pth` and LightGlue
+  `v0.1_arxiv` `aliked_lightglue.pth`, configured as glue-factory's official setting.
+- **Why our own export** (the maintainer's call, 2026-10-20): opencv_extra's files are an unlicensed personal
+  export, of ALIKED-**n16rot** (LightGlue's ALIKED weights were trained on n16), at a fixed 640×640 square.
+- **Deviations from OpenCV's documented use, stated:**
+  - pre-normalised keypoints, not OpenCV's per-axis rule;
+  - keypoints emitted in cv::ALIKED's own convention, so its (n+1)/2·W mapping returns upstream's (W−1) pixels;
+  - export-only rewrites for cv::dnn ENGINE_NEW (DCN as GridSample + MatMul, gathers, explicit reshapes, a Floor
+    before a Cast), each checked against unmodified upstream.
+- **Evidence:**
+  - **Exact against upstream PyTorch through OpenCV's classes:** keypoints 100% within 9.3e-5 px, descriptors
+    within 4e-6, identical LightGlue match sets.
+  - **Tests:** 2 reference tests, 3 wrapper tests (normalisation, size and parameter checks, upstream match set
+    reproduced), 2 geometry convention tests (a synthetic pose recovered within 0.0003°).
+  - **EuRoC loop-candidate verification**, 4815 EP-376 top-5 pairs on 11 flights, with the 1.6 verifier's own
+    RANSAC essential matrix, against the ORB placeholder:
+
+    | | ORB placeholder (A) | ALIKED + LightGlue (C) |
+    |---|---|---|
+    | pose AUC@10° | 0.284 | 0.607 (+0.322) |
+    | flights where C ≥ A | | 11/11 |
+    | AP_geom, fixed denominator (all 676 positives) | 0.303 | 0.807 |
+    | AP_geom, per-row denominator (as first scored) | 0.578 | 0.891 |
+
+    LightGlue over mutual NN: AUC@10° +0.042. Both §12.5 bars **PASS**, bar 1 under both AP denominators.
+    The per-row one was the scorer as first written; the fixed one is like-for-like (§12.6).
+  - **Reported:** OpenCV's per-axis normalisation is a wash, so upstream stays the default. K = 2048 brings no pose
+    gain on all positives at ≈ 2.8× the cost, so K = 1024 stays. E's subset AP is biased against C by
+    construction and does not decide K.
+- **Stated limits:**
+  - Zero-false-accept recall as fixed is ≈ 0 for every row: tiny-baseline revisits with correct rotation fail the
+    translation term. A rotation-only diagnostic gives C 0.381.
+  - **4 confident wrong verifications** (210–264 inliers, rotation error 37–59°) in the Vicon rooms. An
+    essential-matrix inlier count alone is not a loop-closure gate; the downstream PnP and degeneracy gates (1.6,
+    D71) must stay.
+  - The inlier threshold τ does not transfer stably from MH to V.
+  - The exports are 752×480 only; sim at 1280×720 needs its own export plus an RGB path.
+  - No runtime consumer in 2.1 (2.5 and 3.x call it).
+  - Cost ≈ 1.2 s per warm pair and ≈ 3 s per cold pair under load (≈ 0.6 / 1.7 s quiet).
+  - The location of cv::dnn's rounding behind the Floor fix is `[UNVERIFIED]`.
+- **Ablation baselines kept:** ORB + ratio (1.6 verifier), ALIKED + mutual NN, OpenCV per-axis normalisation,
+  K = 2048.
+- **§49 ritual for this adoption** (locked by CLAUDE.md §1, adopted here):
+
+  | step | status |
+  |---|---|
+  | catalogue | the ALGORITHMS.md correction and as-built note |
+  | arch decision | D63, plus the §7.4 blockquote |
+  | ablation matrix | PERCEPTION_2.1 §12.4 rows A–E |
+  | benchmark config | **deferred to 2.5**, the first runtime consumer: no `configs/` entry and no `HardPairParams` in `perception_config` yet. The offline tool takes its paths on the command line. |
+  | manifest schema | **deferred to 2.5:** §28.2 has no hard-pair field yet. `ariadne_loop_verify`'s manifest records `hard_pair: [<HardPairMatcher::Name()>…]`. |
+- **The rotation-only zero-false-accept numbers are a diagnostic chosen after seeing the data, not a bar.**

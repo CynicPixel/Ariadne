@@ -1334,3 +1334,214 @@ from source as a risk, §11.2).
 **Scope.** The decision is EuRoC-scoped. The rig is 1280×720 RGB. The exports are fixed at EuRoC's 752:480 aspect,
 and `PlaceRecognizer::Preprocess` accepts CV_8UC1 only. Sim needs its own export (the aspect ratio) and an RGB path.
 This is a stated limitation and does not block 2.1.
+
+## 12. Hard-pair path — ALIKED + LightGlue (§7.2 "hard pairs only") — preflight, design and acceptance (2026-10-21, BEFORE the evaluation code)
+
+### 12.1 Primary sources
+
+- **ALIKED.** Zhao, Wu, Zhang, Wu, Li, Liu, IEEE T-IM 2023, arXiv:2304.03608, `Shiaoming/ALIKED` (BSD-3). The SDDH
+  head samples descriptors at learned deformable positions around each keypoint; the backbone has DCN v1 blocks.
+- **LightGlue.** Lindenberger, Sarlin, Pollefeys, ICCV 2023, arXiv:2306.13643, `cvg/LightGlue` (Apache-2.0,
+  `eb42fee`). A transformer matcher over two keypoint sets (self- and cross-attention, rotary positional encoding of
+  normalised keypoints, a dual-softmax assignment with a matchability score). Adaptive depth and width are speed
+  mechanisms.
+- **Evaluation protocol.** glue-factory (`cvg/glue-factory@2d17e3b`, the code behind LightGlue's results):
+  - pose error = max(rotation error, translation-direction error), the latter taken as min(e, 180 − e) because E
+    fixes t only up to sign (`geometry/epipolar.py relative_pose_error`);
+  - an estimator failure counts as ∞;
+  - AUC@{5, 10, 20}° by `utils/tools.py cal_error_auc` (trapezoid of recall vs error, normalised by the
+    threshold).
+
+  Official ALIKED config: `configs/aliked+lightglue-official.yaml`.
+- **Locked.** "ALIKED+LightGlue hard pairs only" (CLAUDE.md §1, arch C8). Alternatives are noted, not adopted:
+  - XFeat's LighterGlue (XFeat repo, CVPR 2024): the frame-rate tier's matcher, not the hard path;
+  - dense matchers (LoFTR, RoMa): too heavy for CPU;
+  - `raco-aliked` in upstream's feature table: no paper found, not in the pinned ecosystem `[UNVERIFIED]`.
+
+### 12.2 OpenCV-native check and smoke test — SMOKE §4s / §4s-2
+
+- `cv::ALIKED` and `cv::LightGlueMatcher` exist in 5.0.0, run on ENGINE_NEW only, and ship no weights.
+- opencv_extra's files: unlicensed export, n16rot, 640×640 square.
+- Our export from upstream reproduces it through OpenCV's own classes:
+  - ALIKED keypoints 100% within 9.3e-5 px, descriptors within 4e-6;
+  - LightGlue match sets identical, scores within 6.4e-5.
+- Cost: ALIKED ≈ 0.5–0.6 s per image; LightGlue ≈ 0.6 s per pair at K = 1024, ≈ 1.9 s at K = 2048.
+
+### 12.3 Design
+
+- **`perception::HardPairMatcher`** (`cpp/perception/association/hard_pair_matcher.{hpp,cpp}`). Owns one
+  `cv::ALIKED` and one `cv::LightGlueMatcher`. **One instance per thread** (§7.4: `clone()` shares the Net).
+  - **`Extract(gray)`** → keypoints (px), descriptors K×128. Gray is replicated to BGR. The image size must equal
+    the export size; anything else throws, since sim at 1280×720 needs its own export.
+  - **`Match(a, b)`** → DMatch list. Keypoints are normalised as upstream (shift W/2, H/2; scale max(W,H)/2) and
+    passed with an empty `Size()`. `normalization: opencv` passes pixels and real sizes, which uses OpenCV's
+    per-axis rule (the ablation).
+  - **`Name()`** for the manifest, e.g. `aliked_n16_k1024@752x480+lightglue/cv_dnn_new/norm_upstream`.
+- **No runtime consumer in 2.1.** 2.5's loop closure and 3.x's inter-agent edges call it. The 1.6 verifier
+  (`collaboration/broker/edge_verifier.hpp`) keeps ORB as the ablation baseline.
+
+### 12.4 Evaluation — loop-candidate verification on EuRoC (offline tool `ariadne_loop_verify`)
+
+- **Pairs.** The §11 place samples (11 flights, 1 per second), so the hard path is evaluated on exactly the
+  candidates retrieval hands it.
+  - For every query with a non-empty database (samples older than 30 s), take its **EP-376 top-5** by exact cosine.
+    The false retrievals are the hard negatives.
+  - Labels from GT camera poses:
+    - **positive:** centres ≤ 1 m AND optical axes ≤ 30° (§11.5's definition);
+    - **negative:** centres > 3 m OR axes > 60°;
+    - **in between:** excluded from the verification metrics (counted and reported). Overlapping views may
+      verify legitimately.
+- **Geometry, identical for every row: the 1.6 verifier's own call.** Raw cam0 pixels → `cv::undistortPoints`
+  (EuRoC radtan, `cam0/sensor.yaml`, P = K) → `findEssentialMat(pa, pb, K, cv::RANSAC, 0.999, 1.0, 1000, mask)` →
+  `recoverPose` (amended after the advisor review; an earlier draft said USAC_MAGSAC, whose threshold is a sigma
+  bound rather than a crisp inlier cut).
+  - Read from the pinned `geometry/src/five-point.cpp`: the `RANSAC` flag runs classic OpenCV RANSAC, not USAC.
+    The threshold is divided by the mean focal length and is a crisp cut.
+  - The registrator seeds its own `RNG((uint64)-1)` on every call, so each pair is deterministic and independent
+    of processing order (2 processes) and of `cv::setRNGSeed`.
+  - 1.0 px is the verifier's value, fixed a priori, not tuned on the scored set.
+  - Score = essential inliers (0 if fewer than 5 matches or no model).
+  - The 1.6 PnP stage needs stereo depth and is out of scope here (monocular pairs), stated.
+- **Rows (ablation matrix):**
+
+  | row | features | matcher | role |
+  |---|---|---|---|
+  | A | ORB, `perception/euroc.yaml` features | BF Hamming, ratio 0.8 (the 1.6 verifier's stage 1) | placeholder baseline |
+  | B | ALIKED-n16, K = 1024 | mutual NN (L2) | isolates LightGlue |
+  | C | ALIKED-n16, K = 1024 | LightGlue, upstream normalisation | **candidate** |
+  | D | ALIKED-n16, K = 1024 | LightGlue, OpenCV per-axis normalisation | wrapper convention |
+  | E | ALIKED-n16, K = 2048 | LightGlue, upstream normalisation | the official K (subset, below) |
+
+- **Size and cost** (counted from the §11 dumps before any run): **4815 pairs**, of them 676 positive, 2537 negative
+  and 1602 in between.
+  - ALIKED features are computed once per sample per K and cached in memory: 1325 samples × 0.55 s × 2 K.
+  - Rows C and D: about 48 min each at 2 processes. Row E on all pairs would be about 2.5 h, so **E runs on a
+    subset declared now:** all positives plus the 500 non-positive pairs with the highest row-C scores.
+  - One process per flight, 2 at a time. The tool writes raw per-pair rows (matches, inliers, R, t, ms) and
+    Python scores them, as `place_eval` does.
+
+- **Metrics:**
+  1. **Verification, judged by geometry** (advisor review). Every pair has a GT relative pose, so a wrong accept
+     is defined by what breaks a pose graph, not by the distance labels. A pair is:
+     - **relevant:** positive-labelled and its estimated pose error ≤ 10°;
+     - **false:** pose error > 10° or an estimator failure, whatever its label;
+     - **neutral:** not positive-labelled but correct (≤ 10°). Overlap that a better matcher rightly verifies is
+       excluded rather than penalised.
+
+     Ranked by inliers:
+     - **AP_geom** (the bar);
+     - recall at ≤ 2 false accepts;
+     - recall at zero false accepts (reported only: one pair decides it);
+     - the label-only AP (positives vs negatives, in-between excluded), reported.
+
+     Deployable threshold: τ = the smallest inlier count with zero false accepts on the **MH flights**, applied to
+     the **V flights** (precision and recall reported).
+  2. **Pose** (positive-labelled pairs): glue-factory's error (an estimator failure = ∞) and AUC@5/10/20°, pooled
+     and per flight, against GT T_Cb_Ca (p_b = T_Cb_Ca p_a, from T_W_B · T_B_C0).
+     - Rotation-only AUC is reported too: EuRoC positives include small baselines, where the translation direction
+       is noise for every method.
+     - Absolute AUC is **not** compared with the paper's MegaDepth numbers (larger baselines). Rows are compared
+       with each other only, on identical pairs.
+  3. **Cost**, indicative on a shared CPU, two figures:
+     - **warm:** per pair with both keyframes' features cached (LightGlue only), the deployment case;
+     - **cold:** two extractions plus the match.
+- **Convention test before EuRoC:** a synthetic pair with known T_Cb_Ca (random 3D points, both projected with the
+  EuRoC K and distortion) through the exact pipeline (undistort → E → recoverPose → error) must give an error of
+  about 0° (< 0.1°). Same for the swapped pair, where the error must be large unless the inverse is used. This
+  catches an inverted R or a swapped point order.
+
+### 12.5 Acceptance (FIXED 2026-10-21 after the advisor review, before any EuRoC run)
+
+1. **C vs A (the placeholder):**
+   - pooled pose AUC@10°(C) ≥ AUC@10°(A) + 0.05;
+   - AND C ≥ A in per-flight AUC@10° on at least 8 of the 11 flights;
+   - AND AP_geom(C) ≥ AP_geom(A).
+2. **C vs B (does LightGlue earn its cost?):** if AUC@10°(C) − AUC@10°(B) < 0.02, LightGlue's ≈ 0.6 s per pair is
+   not earned on EuRoC. That is reported and goes to the maintainer; it is not decided in the doc.
+3. **Reported, no bar:**
+   - D vs C, which decides the wrapper's default normalisation by measurement;
+   - E vs C on E's subset, which decides K;
+   - recall at zero and at ≤ 2 false accepts;
+   - τ from MH applied to V;
+   - label-only AP;
+   - rotation-only AUC;
+   - warm and cold cost.
+
+### 12.6 Results (measured 2026-10-21; `ariadne_loop_verify` on all 11 EuRoC flights, `loop_verify_eval.py`)
+
+Run at `c91c5cf` + uncommitted 2.1 files (dirty, recorded per flight), image `sha256:2f523507…`, our export (SMOKE
+§4s-2). Raw rows: `build/a1/verify/<flight>/`; table: `build/a1/verify/loop_verify.yaml`. 4815 candidate pairs (676
+positive, 2537 negative, 1602 in between); row E on its declared subset of 1176 (all positives + the 500
+highest-C non-positives, selected before E ran).
+
+| row | AP_geom | AUC@5/10/20° (pose) | rotation AUC@5/10/20° | label-only AP | relevant / false items |
+|---|---|---|---|---|---|
+| A ORB + ratio (placeholder) | 0.578 | 0.129 / 0.284 / 0.443 | 0.521 / 0.694 / 0.811 | 0.943 | 354 / 3780 |
+| B ALIKED + mutual NN | 0.891 | 0.322 / 0.565 / 0.742 | 0.713 / 0.838 / 0.907 | 0.891 | 592 / 2434 |
+| **C ALIKED + LightGlue (upstream norm)** | **0.891** | **0.361 / 0.607 / 0.773** | **0.728 / 0.857 / 0.927** | 0.865 | 612 / 1914 |
+| D ALIKED + LightGlue (OpenCV per-axis) | 0.912 | 0.354 / 0.602 / 0.773 | 0.729 / 0.854 / 0.924 | 0.867 | 616 / 1918 |
+| E K = 2048 (subset) | 0.926 (C on the subset: 0.906) | 0.354 / 0.598 / 0.767 (C: 0.607) | 0.721 / 0.849 / 0.922 | 0.965 | 610 / 77 |
+
+**AP_geom denominator, stated (found in the advisor's post-run review).** The scorer as first written counts recall
+over each row's OWN correct positives (354 for A, 612 for C). A positive the row gets wrong is then a false item,
+not missed recall, so the AP measures how well a row ranks its own successes. The fixed-denominator version (all 676
+positive-labelled pairs, the same for every row) is the like-for-like one:
+
+| row | A | B | C | D | E (subset) |
+|---|---|---|---|---|---|
+| AP_geom, fixed denominator | **0.303** | 0.781 | **0.807** | 0.831 | 0.836 |
+| recall at ≤ 2 false accepts, fixed | 0.000 | 0.013 | 0.016 | 0.025 | 0.015 |
+
+**Acceptance (§12.5):**
+1. **PASS under both denominators.** AUC@10° C − A = 0.607 − 0.284 = **+0.322** (bar +0.05); C ≥ A on **11/11**
+   flights (bar 8); AP_geom C ≥ A: per-row 0.891 ≥ 0.578, fixed **0.807 ≥ 0.303**.
+2. **LightGlue earns its cost:** AUC@10° C − B = **+0.042** (bar 0.02). B is close on AP_geom (0.891 both) but
+   recovers worse poses.
+
+**Reported, no bar:**
+- **D vs C (normalisation): a wash.** AP_geom D 0.912 vs C 0.891, but AUC@10° 0.602 vs 0.607. The default stays
+  **upstream**: it is the convention the weights were trained with and the one that reproduces upstream exactly
+  (§4s-2). OpenCV's per-axis rule is kept as the ablation.
+- **E vs C (K):** on E's subset AUC@10° 0.598 vs 0.607, AP_geom 0.926 vs 0.906, at ≈ 2.8× the match cost.
+  - The AP comparison is **biased against C by construction**: the subset's non-positives are the 500 pairs where C
+    scored highest, which concentrates C's false accepts.
+  - The K decision rests on the unbiased evidence instead: pose AUC on all 676 positives (E 0.598 vs C 0.607) and
+    cost. **K = 1024 stays the default.**
+- **Zero-false-accept metrics as fixed: ≈ 0 for every row,** and τ_MH = ∞ for A and C. Diagnosed rather than
+  re-scored: the highest-scoring "false" pairs are positive revisits with **6–13 cm baselines and < 1° rotation
+  error**, for example 671 inliers at 0.13 m (err_t 31.5°) and 668 at 0.06 m (err_t 46.1°). The matches are right;
+  an essential matrix cannot fix the direction of a near-zero baseline. The fixed definition (max of R and t) counts
+  them false. 44 of the 63 C pairs with ≥ 200 inliers and error > 10° have rotation within 5°.
+- **Diagnostic only (defined after seeing the data, NOT a bar):** false = rotation error > 10° or failure. The
+  recalls below use the per-row denominator.
+
+  | row | R@FA0 | R@FA2 | τ_MH | V recall at τ_MH | V false accepts |
+  |---|---|---|---|---|---|
+  | A | 0.072 | 0.160 | 53 | 0.656 | 27 |
+  | B | 0.017 | 0.372 | 234 | 0.522 | 13 |
+  | C | 0.381 | 0.454 | 314 | 0.485 | 4 |
+  | D | 0.278 | 0.416 | 119 | 0.911 | 34 |
+  | E | 0.297 | 0.385 | 588 | 0.503 | 7 |
+
+  C is the most precise at zero false accepts. The τ transfer from MH to V is not stable across rows (D's τ = 119
+  admits 34 false accepts). An inlier count alone is not a deployable loop-closure gate.
+- **Genuine wrong verifications with high confidence: 4 C pairs** (V1_01 #140 and #156, V1_03 #245, V2_02 #303):
+  210–264 inliers, rotation error 37–59°. Their cause (repeated or planar structure in the Vicon rooms) is not
+  diagnosed. The essential-matrix gate alone does not stop them. The 1.6 verifier's PnP stage with stereo depth
+  and the 2.5 degeneracy gate (D71) are the next gates downstream; neither is exercised here.
+- **Label-only AP favours A** (0.943 vs 0.865). Observed cause: C correctly verifies many "negative" pairs, those
+  3–5 m apart or 60–80° apart that still overlap, with rotation error < 3° and 200–440 inliers. Counted: of the 2537
+  negatives, 151 reach ≥ 200 C inliers, and 124 of those have rotation error < 3°. Label-only AP counts every one of them as a false accept. ORB rarely
+  verifies them, so it is not penalised. This is the overlap the geometric definition (§12.4) was written to treat
+  as neutral.
+
+**Cost** (median over flights; load average 17–20 from other sessions, about 2× the quiet smoke-test figures;
+indicative only):
+
+| | ORB | ALIKED K = 1024 | ALIKED K = 2048 |
+|---|---|---|---|
+| extraction per image | 31 ms | 955 ms | 1122 ms |
+| match per pair (warm) | A: 6 ms | B: 20 ms; C: 1216 ms; D: 1220 ms | E: 3352 ms |
+
+Cold pair (two extractions + match) for C ≈ 3.1 s under this load, against ≈ 1.7 s in SMOKE §4s-2. That is a
+hard-pair cost: rare pairs only (C8).
