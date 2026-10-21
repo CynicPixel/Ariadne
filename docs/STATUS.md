@@ -4,6 +4,8 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63, approved)
+
 ## 2026-10-21 — AWS unblocked (D84)
 
 - **Bedrock works:** the September verification block has cleared. The orchestrator model is **Nova 2 Lite**

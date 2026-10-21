@@ -2592,7 +2592,9 @@ Design: `docs/design/PERCEPTION_2.1.md` §11. Catalogue: `ALGORITHMS.md` §1.6 (
   - CLAHE not run.
   - Annoy determinism across core counts is unverified.
 
-## 2026-10-21 — D63 (DRAFT, pending the maintainer): the hard-pair path — ALIKED-n16 + LightGlue from our own upstream export, through cv::ALIKED / cv::LightGlueMatcher
+## 2026-10-21 — D63: the hard-pair path — ALIKED-n16 + LightGlue from our own upstream export, through cv::ALIKED / cv::LightGlueMatcher
+
+**Approved as scoped by the maintainer, 2026-10-21.**
 
 Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4s / §4s-2. Catalogue: `ALGORITHMS.md`
 (the correction note under the OpenCV-5 inventory).
