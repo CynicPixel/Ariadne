@@ -51,6 +51,8 @@ struct PgoSettings {
     /// After the solve, every node's covariance is the marginal at the optimum (H X = E, the anchor's is zero).
     /// false: covariances are set to NaN (never left stale: a consumer reading them must fail visibly).
     bool recompute_covariance = true;
+    /// GRAVITY_PRIOR edges in the solve (D73 part 2c, pgo_problem.hpp); off: they are ignored, as before.
+    GravityOptions gravity;
 };
 
 /// pgo_v2 (D70): pgo_v1 with clamp_diagonal off. OpenCV clamps the DAMPING lambda*diag(H) to an absolute [1e-6, 1e32];
@@ -74,6 +76,7 @@ struct PgoReport {
     double initial_energy = 0.0, final_energy = 0.0;
     int linearizations = 0, factorizations = 0, failed_factorizations = 0;
     int components = 1;          // connected components of the active graph, each solved with its own anchor
+    std::map<uint32_t, core::Vec3> gravity_W;   // estimated gravity direction per agent (gravity priors on)
 };
 
 /// A loop edge whose GNC weight is at or below this is inactive: it neither connects components nor enters a solve.

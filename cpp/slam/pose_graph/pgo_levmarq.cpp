@@ -23,26 +23,32 @@ Eigen::VectorXd ToVec(const cv::Mat_<double>& m) {
 
 class PgoBackend : public cv::detail::LevMarqBackend {
 public:
-    PgoBackend(PgoProblem& p, PgoReport& rep) : p_(p), rep_(rep), current_(p.poses()), probe_(p.poses()) {}
+    PgoBackend(PgoProblem& p, PgoReport& rep)
+        : p_(p), rep_(rep), current_(p.poses()), probe_(p.poses()), gcur_(p.gravity()), gprobe_(p.gravity()) {}
 
     bool enableGeo() override { return false; }
 
     bool calcFunc(double& energy, bool calcEnergy, bool calcJacobian) override {
         if (calcJacobian) {
-            energy = p_.Linearize(probe_, H_, g_);
+            energy = p_.Linearize(probe_, gprobe_, H_, g_);
             ++rep_.linearizations;
         } else if (calcEnergy) {
-            energy = p_.Energy(probe_);
+            energy = p_.Energy(probe_, gprobe_);
         }
         return std::isfinite(energy);
     }
 
     void currentOplusX(const cv::Mat_<double>& x, bool geo) override {
         if (geo) CV_Error(cv::Error::StsBadArg, "PgoBackend: geodesic acceleration is not implemented");
-        probe_ = p_.OplusX(current_, ToVec(x));
+        const Eigen::VectorXd v = ToVec(x);
+        probe_ = p_.OplusX(current_, v);
+        gprobe_ = p_.OplusGravity(gcur_, v);
     }
 
-    void prepareVars() override { probe_ = current_; }
+    void prepareVars() override {
+        probe_ = current_;
+        gprobe_ = gcur_;
+    }
 
     const cv::Mat_<double> getJtb() override { return ToMat(g_); }
 
@@ -77,14 +83,19 @@ public:
 
     bool calcJtbv(cv::Mat_<double>&) override { return false; }
 
-    void acceptProbe() override { current_ = probe_; }
+    void acceptProbe() override {
+        current_ = probe_;
+        gcur_ = gprobe_;
+    }
 
     const std::map<uint64_t, SE3>& current() const { return current_; }
+    const std::vector<core::Vec3>& current_gravity() const { return gcur_; }
 
 private:
     PgoProblem& p_;
     PgoReport& rep_;
     std::map<uint64_t, SE3> current_, probe_;
+    std::vector<core::Vec3> gcur_, gprobe_;
     SparseMat H_;
     Eigen::VectorXd g_;
     GuardedLdlt ldlt_;
@@ -116,7 +127,7 @@ cv::LevMarq::Settings ToOpenCv(const PgoSettings& s) {
 namespace {
 
 PgoReport SolveConnected(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
-    PgoProblem p(g, anchor);
+    PgoProblem p(g, anchor, s.gravity);
     PgoReport rep;
     rep.initial_energy = p.Energy(p.poses());
     // cv::makePtr takes its arguments by const reference; the backend needs the problem mutably.
@@ -126,6 +137,8 @@ PgoReport SolveConnected(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
     rep.found = r.found;
     rep.iterations = r.iters;
     p.poses() = backend->current();
+    p.gravity() = backend->current_gravity();
+    for (const auto& [agent, k] : p.gravity_agents()) rep.gravity_W[agent] = p.gravity()[size_t(k)];
     rep.final_energy = p.Energy(p.poses());
     std::map<uint64_t, Mat6> cov;
     if (s.recompute_covariance) {
@@ -178,7 +191,10 @@ PgoReport SolvePoseGraph(PoseGraph& g, uint64_t anchor, const PgoSettings& s) {
             if (Active(e) && std::binary_search(ids.begin(), ids.end(), e.from) &&
                 std::binary_search(ids.begin(), ids.end(), e.to))
                 sub.AddEdge(e);
+        for (const GravityPrior& pr : g.gravity_priors())
+            if (std::binary_search(ids.begin(), ids.end(), pr.keyframe)) sub.AddGravityPrior(pr);
         const PgoReport r = SolveConnected(sub, main ? anchor : ids.front(), s);
+        for (const auto& [agent, d] : r.gravity_W) rep.gravity_W[agent] = d;
         rep.found = rep.found && r.found;
         rep.iterations += r.iterations;
         rep.initial_energy += r.initial_energy;

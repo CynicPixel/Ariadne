@@ -130,6 +130,7 @@ struct LoopClosureParams {
     // floor 0 both: the PnP covariance unchanged.
     bool noise_model = false;
     double noise_k_t = 1.0, noise_floor_t_m = 0.0, noise_k_r = 1.0, noise_floor_r_rad = 0.0;
+    bool gravity_priors = false;   // D73 part 2c: the VO's GRAVITY_PRIOR edges in the mirror's solves
 };
 
 struct SlamConfig {
@@ -307,6 +308,7 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.loop_closure.noise_floor_t_m = q.Require<double>("noise_floor_t_m");
         c.loop_closure.noise_k_r = q.Require<double>("noise_k_r");
         c.loop_closure.noise_floor_r_rad = q.Require<double>("noise_floor_r_rad");
+        c.loop_closure.gravity_priors = q.Require<bool>("gravity_priors");
         q.RequireAllConsumed();
         const auto& L = c.loop_closure;
         if (L.orb_features < 50 || L.exclude_recent < 0 || !(L.exclude_seconds >= 0.0) ||

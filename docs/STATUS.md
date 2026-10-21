@@ -4,6 +4,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — 2.5: gravity priors consumed by the pose graph (D73 part 2c)
+
+- **Per-agent 2-DoF gravity variable plus Huber priors** in `PgoProblem`, off by default, with the information
+  scaled 0.6 (measured lag-1 correlation). The mirror syncs the priors and re-solves when they land.
+- **Synthetic:** a 1.5° reference-gravity error is estimated to 0.62° and tilt RMS drops 3.78° → 2.01°; a 30° outlier
+  prior is contained. Tests 4/4; existing PGO tests unchanged.
+- **Not yet on EuRoC:** the sim calibration and part 3 come first (maintainer).
+
 ## 2026-10-21 — 2.5: intra-agent loop closure live on EuRoC; loop noise model calibrated (D73 part 2b)
 
 - **Wired:** retrieval → verifier → degeneracy gate → PCM → GNC on a mirror of the VO graph, behind a `loop_closure:`

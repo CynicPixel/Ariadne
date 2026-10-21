@@ -532,6 +532,33 @@ accept becomes a regression case that must now be rejected.
 - **Not done.** The sim needs its own calibration. ORB keypoint σ per octave is still a flat 0.46 px. The gate's
   σ thresholds are left at 0.10 m / 0.02 rad: the Youden fit (0.075 / 0.0145) moved them little and was not adopted.
 
+**Part 2c — gravity priors in the pose graph (2026-10-21; the D59 handoff, items 1–3; item 4 is Phase 3).**
+- **Solver** (`PgoProblem`, `GravityOptions`, off by default). One 2-DoF gravity-direction variable per agent with
+  priors, initialised at their common g_ref_W (a mismatch throws) and retracted on the sphere along
+  GravityTangentBasis(ĝ). Each prior costs ½ρ(s), with s = rᵀ(0.6 Λ)r and a Huber kernel at k² = χ²₂(0.99) = 9.21
+  (Mahony's p99 ≈ 18). The priors are not in GNC (§12.1).
+- **The 0.6 information scale** is an effective-N correction: the lag-1 autocorrelation of Mahony's emitted-prior
+  errors is 0.12–0.36 and lag 2 is ≈ 0 (MH_01, V1_01, V1_02 traces). The pose-derived candidates reach 0.82, which
+  confirms D59's choice of Mahony.
+- **Mirror.** `Sync` copies the VO's priors, queues those whose keyframe is not mirrored yet, and re-solves when new
+  ones land (current loop weights, no GNC), so the priors act between and without loops. Each loop event therefore
+  again starts from the optimum without its new loops: the part 2a premise, which zero-energy sync alone no longer
+  guarantees once priors exist.
+- **Config:** `loop_closure.gravity_priors` (false in `euroc_v2_loops`, so its evidence still reproduces; true in
+  `euroc_v2_loops_gravity`).
+- **Tests** (`tests/unit/test_gravity_pgo.cpp`, 4/4):
+  - the analytic gradient matches finite differences of the energy, Huber regime included;
+  - disabled, the solve is bit-identical to a graph without priors;
+  - a 1.50° reference-gravity error is estimated to 0.62°, and tilt RMS drops from 3.78° to 2.01°;
+  - a 30° outlier prior moves its keyframe by 1.85°.
+  `PgoLevMarq` and the numerical `PgoProblem`/`PoseGraph` tests are unchanged and pass.
+- **SOTA comparison, recorded, not built.** The common inertial loop-closure design keeps roll and pitch from the
+  VIO and optimises a 4-DoF pose graph (VINS-Mono; ORB-SLAM3's inertial essential graph) [UNVERIFIED at the
+  source]. Soft 2-DoF priors plus an estimated gravity direction is the alternative used here; the 4-DoF graph is a
+  future ablation.
+- **Not run on EuRoC yet** (maintainer: the sim calibration and part 3 come first). A null result at σ 2.3° is
+  plausible and would be recorded as such.
+
 **Maintainer decisions (2026-10-19, after D71).**
 1. **D73 may add an isolated inlier-export hunk to `VerifyResult`** (`edge_verifier.hpp`) so the degeneracy gate gets
    the PnP correspondences.

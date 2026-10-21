@@ -91,3 +91,4 @@ loop_closure:
   noise_floor_t_m: 0.014
   noise_k_r: 0.178
   noise_floor_r_rad: 0.0095
+  gravity_priors: false         # D73 part 2c: GRAVITY_PRIOR edges in the mirror (ablation: euroc_v2_loops_gravity)
