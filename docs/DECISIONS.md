@@ -2665,3 +2665,26 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
   dominating V1_03/V2_02. Descriptor re-association with PnP verification (D60) is what shipped.
 - **Reference exports:** the regeneration commands for `.cache/models/{eigenplaces_ref,aliked_lg_ref}` are in
   PERCEPTION_2.1 §13.
+
+## 2026-10-21 — D62 approved: the exact index is PlaceIndex's default; cv::ANNIndex stays as the scale ablation
+
+**Approved as scoped by the maintainer, 2026-10-21.** This supersedes the "D62 stays DRAFT" line in the 2.1 close-out
+notes above. The D62 entry itself is unchanged.
+
+- **What is approved:** `PlaceIndex` defaults to `exact` (one gemm, deterministic, a few µs at thousands of
+  keyframes). `annoy` (`cv::ANNIndex`) stays behind the same interface as the persistence/scale ablation. The arch
+  line "Use `cv::ANNIndex`" now reads as the ablation, not the default (§6 blockquote).
+- **Why still exact:** the three pinned-source findings in D62 (ids restart at 0 per `addItems`, no add after build,
+  a per-thread seed over `hardware_concurrency()`), and top-1 agreement 297/297 on EuRoC, so exact loses nothing at
+  this scale.
+- **§49 ritual:**
+
+  | step | status |
+  |---|---|
+  | catalogue | `ALGORITHMS.md` §1.6 as-built note (D62) |
+  | arch decision | D62, plus the §6 and §31.4 blockquotes |
+  | ablation matrix | arch §31.4 as-built note: index `exact` (default) vs `annoy`/trees (scale); PERCEPTION_2.1 §11.5 |
+  | benchmark config | `ariadne_place_eval` + `place_recall_eval.py` (PERCEPTION_2.1 §11.5). No `configs/` entry until the first runtime consumer (2.5 / 3.1) |
+  | manifest schema | `ariadne_place_eval`'s manifest records `place_index: [exact, annoy/trees<N>/seed1]`. §28.2's `place_recognition` field exists; a `place_index` field is **deferred to the first runtime consumer**, like D63's hard-pair field |
+- **Open:** Annoy determinism across core counts is still unverified. It matters only if the ablation is promoted.
+

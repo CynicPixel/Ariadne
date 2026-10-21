@@ -48,7 +48,7 @@ identical.
 |---|---|---|
 | Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. **Sim IMU noise operator not built (—).** |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
-| Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, **draft**. ALIKED+LightGlue hard pairs: D63. **Sim-rig exports (1280×720 RGB) for EigenPlaces and ALIKED: not built (—).** |
+| Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, approved 2026-10-21 (exact index default, `cv::ANNIndex` the scale ablation). ALIKED+LightGlue hard pairs: D63. **Sim-rig exports (1280×720 RGB) for EigenPlaces and ALIKED: not built (—).** |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73). **Certificate D74: not started (B).** |
 | Edges SE(3); FlatBuffers | done | D14, D81. |
 | Collaboration | partial | Built: two-stage exchange, elected broker with epochs (D81–D83). Not started: spectral λ₂ and vertex cover (3.4). |
@@ -102,7 +102,7 @@ identical.
 
 | item | state | evidence / missing | owner |
 |---|---|---|---|
-| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. **D62 draft** (exact-default deviation). Projection-guided re-association deferred, triggered by the combined run. L4–L6. CLAHE retrieval split not run. | A1 |
+| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred, triggered by the combined run. L4–L6. CLAHE retrieval split not run. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
@@ -118,12 +118,12 @@ identical.
 
 | item | state | evidence / missing; carries | owner |
 |---|---|---|---|
-| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core is D62 (draft). CLAHE split not done. Carries L3. | — (A1 natural) |
+| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core is D62 (approved 2026-10-21). CLAHE split not done. Carries L3. | A1 |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
 | 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
-| 3.6 descriptor compression rows | not started | | — (A1 natural) |
+| 3.6 descriptor compression rows | not started | | A1 |
 | Gate: fault injection + split brain | partial | unit level done (D82). Sim-level after 3.3. | M |
 | Gate: byte table ≤15% | not started | definition fixed (COLLAB_3.2 §7) | M |
 | Gate: ATE vs bytes, ≥2 scenes × 3 seeds | not started | needs 3.3, 3.4, L3 | M |

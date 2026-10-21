@@ -310,7 +310,7 @@ Implementation consequence:
 
 Use `cv::ANNIndex` for retrieval/index persistence.
 
-> **As built (2.1, D62 — DRAFT: size decided 2026-10-20; the exact-default deviation awaits approval, DECISIONS 2.1 close-out).** `perception/place/`:
+> **As built (2.1, D62, approved 2026-10-21: the exact index is the default; `cv::ANNIndex` is the persistence/scale ablation).** `perception/place/`:
 > - `PlaceRecognizer` runs EigenPlaces R50-256 through `cv::dnn`, one Net per thread;
 > - `PlaceIndex` has two backends, `exact` (one gemm, the default) and `annoy` (`cv::ANNIndex`, rebuilt from the
 >   full matrix when stale, over-fetch then filter, exact rescoring).
@@ -4490,6 +4490,9 @@ EigenPlaces-256
 MegaLoc reference
 AnyLoc reference
 ```
+
+> **As built (2.1, D62).** Index axis: `exact` (one gemm, the default) vs `annoy` (`cv::ANNIndex`, trees/seed in the
+> manifest), the scale ablation. EigenPlaces-256 is built at 376×240 (default) and 752×480 (PERCEPTION_2.1 §11).
 
 ## 31.5 Illumination
 

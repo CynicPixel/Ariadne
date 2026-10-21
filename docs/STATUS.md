@@ -4,6 +4,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-21 — A1 (perception) opens its register close-out; D90–D95 claimed
+
+- **Scope (COMPLETION_REGISTER, owner A1), in order:** D62 approval, L4 `models.sh eigenplaces|aliked-lg`, L3
+  sim-rig exports (1280×720 RGB), L6 per-thread `Net` contract, L5 timings, then 3.1 (CLAHE retrieval split) and 3.6
+  (descriptor compression rows).
+- **Decision IDs D90–D95 are claimed by A1** for L3, L6, 3.1 and 3.6.
+- **D62 approved** by the maintainer (DECISIONS 2026-10-21): exact index default, `cv::ANNIndex` the scale ablation.
+
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
 - **Open: the D74 certificate**, not started (plus κ/τ for cubicle and rim).
