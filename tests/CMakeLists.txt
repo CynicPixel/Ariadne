@@ -84,7 +84,8 @@ if(OpenCV_FOUND)
     unit/test_place.cpp
     unit/test_aliked_lightglue_reference.cpp
     unit/test_hard_pair.cpp
-    unit/test_loop_verify_geometry.cpp)
+    unit/test_loop_verify_geometry.cpp
+    unit/test_dnn_contract.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

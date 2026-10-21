@@ -312,8 +312,9 @@ FMap FromBlob(const cv::Mat& blob) {
 
 cv::dnn::Net& XFeatNet::DnnFor(int h, int w) const {
     const auto key = std::make_pair(h, w);
-    const auto it = nets_.find(key);
-    if (it != nets_.end()) return it->second;
+    Graphs& nets = nets_.Local();   // this thread's graphs
+    const auto it = nets.find(key);
+    if (it != nets.end()) return it->second;
     cv::dnn::Net net;
     GraphBuilder g{net};
     net.setInputsNames({"data"});
@@ -355,7 +356,7 @@ cv::dnn::Net& XFeatNet::DnnFor(int h, int w) const {
     g.Seq("kpt", keypoint_head_, "unfold8");
     net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
     net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
-    return nets_.emplace(key, std::move(net)).first->second;
+    return nets.emplace(key, std::move(net)).first->second;
 }
 
 NetOutput XFeatNet::ForwardDnn(const FMap& x) const {

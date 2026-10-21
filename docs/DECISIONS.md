@@ -2688,3 +2688,65 @@ notes above. The D62 entry itself is unchanged.
   | manifest schema | `ariadne_place_eval`'s manifest records `place_index: [exact, annoy/trees<N>/seed1]`. §28.2's `place_recognition` field exists; a `place_index` field is **deferred to the first runtime consumer**, like D63's hard-pair field |
 - **Open:** Annoy determinism across core counts is still unverified. It matters only if the ablation is promoted.
 
+## 2026-10-22 — D90: sim-rig exports — EigenPlaces and ALIKED-n16 + LightGlue at 1280×720 RGB, with an RGB path
+
+**DRAFT pending the maintainer** on one point: EigenPlaces' sim default size. Everything else follows D62/D63 as
+approved.
+
+- **What:**
+  - Sim-rig exports from the same pinned upstreams and weights as D62/D63, made by `models.sh eigenplaces-sim` /
+    `aliked-lg-sim` and checked against sha256s pinned in the script:
+    - EigenPlaces R50-256 at 1280×720 and 640×360;
+    - ALIKED-n16 K = 1024 at 1280×720;
+    - LightGlue (byte-identical to D63's).
+  - The reference frames are recorded `left_rgb` from the phase-1 bag (`ariadne_frame_dump`).
+  - The wrappers gain an RGB path whose channel order is in the name: `PlaceRecognizer::DescribeRgb`,
+    `HardPairMatcher::ExtractRgb`. Both take RGB order, which is what the sim gives (`StereoFrame::left_rgb`).
+    `ExtractRgb` converts RGB → BGR because `cv::ALIKED` swaps back.
+- **Evidence:** SMOKE §4t.
+  - Exact against upstream at the new size, which re-runs D63's 752×480-only validation of the export rewrites.
+  - The regeneration is bit-exact.
+  - A channel-swap guard shows an R/B swap changes the result instead of passing silently.
+- **Proposed (to approve):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
+  about a quarter of 1280×720. Retrieval quality on sim views is not measured yet; that belongs to 3.1 (sim
+  retrieval). ALIKED runs at the native 1280×720: hard pairs only, so cost matters less than localisation.
+- **Limits:**
+  - Four frames from one scene, with weak colour.
+  - The 640×360 vs 1280×720 recall question is open.
+  - There is no runtime consumer yet (3.1/3.5).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | unchanged: same models as D62/D63 (`ALGORITHMS.md` §1.6 notes) |
+  | arch decision | D90, plus the §7.4 blockquote |
+  | ablation matrix | arch §31.4 sizes (EigenPlaces 640×360 / 1280×720); ALIKED K as D63 |
+  | benchmark config | `models.sh eigenplaces-sim` / `aliked-lg-sim`; no `configs/` entry until a runtime consumer |
+  | manifest schema | each export's `manifest.yaml` (`preprocessing_rgb`, `rgb_images`); `Name()` carries the size |
+
+## 2026-10-22 — D91: the DNN execution contract object — `dnn::PerThread<T>` in every cv::dnn wrapper, and the callers own the parallelism
+
+- **What:**
+  - `perception/dnn/per_thread.hpp`: `PerThread<T>::Local()` returns the calling thread's instance, built by a
+    factory on that thread's first call.
+  - XFeatNet (graphs per size), PlaceRecognizer (Net) and HardPairMatcher (the ALIKED + LightGlue pair) hold their
+    networks in it. One wrapper object can be shared by a worker pool, as §7.4 requires: "the feature worker pool
+    owns N nets loaded from the same file".
+  - `ModelRecord {model, file, engine}` (`Record()` / `Records()`) is what the manifest records about which engine
+    ran.
+- **Second rule, found by the test:** per-thread instances are not enough for byte identity.
+  - Every Net shares OpenCV's single process-wide `parallel_for_` pool. Two concurrent ENGINE_NEW ALIKED forwards at
+    the default pool (8 threads) **intermittently** differed: 462/1024 keypoints by up to 6.1e-5 px, descriptors by
+    up to 1.3e-6, LightGlue scores by up to 4.4e-5, match indices identical.
+  - Sequential runs on another thread: identical.
+  - At `cv::setNumThreads(1)`: identical in every repeat (5 × 4 tests).
+  - So when a wrapper serves several threads, **the parallelism is the callers'**: the runtime sets
+    `cv::setNumThreads(dnn::kPoolOpenCvThreads = 1)` once and records it. It is a process-wide setting, so it is the
+    runtime's call and the library does not set it. A single caller may keep the pool.
+- **Evidence:** `test_dnn_contract`. Two threads are released together on one shared wrapper, and both match a
+  single-thread reference byte for byte, for XFeat (1.1 MB of output), PlaceRecognizer and HardPairMatcher.
+  `PerThread` has its own unit test. The 2.1 wrapper and reference suites still pass (31/31).
+- **Not done:** no runtime pool uses it yet; Phase 7 multithreading and 7.3 COOL are the consumers. The pool rule's
+  cost is unmeasured: N single-threaded nets against one N-threaded net is an L5/7.3 question.
+- **§49:** the arch decision is the §7.4 blockquote. A manifest field (the pool size, `ModelRecord`s) is **deferred to
+  the first runtime consumer**, like D63's.

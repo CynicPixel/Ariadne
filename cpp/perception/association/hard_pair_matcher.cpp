@@ -20,35 +20,59 @@ cv::Mat Pixels(const std::vector<cv::KeyPoint>& kp) {
     return m;
 }
 
-}  // namespace
-
-HardPairMatcher::HardPairMatcher(const HardPairParams& p) : p_(p) {
-    if (p_.normalization != "upstream" && p_.normalization != "opencv") {
+HardPairParams Checked(const HardPairParams& p) {
+    if (p.normalization != "upstream" && p.normalization != "opencv") {
         throw std::invalid_argument("HardPairMatcher: normalization upstream|opencv");
     }
-    if (p_.width <= 0 || p_.height <= 0) throw std::invalid_argument("HardPairMatcher: size");
-    cv::ALIKED::Params ap;
-    ap.inputSize = cv::Size(p_.width, p_.height);   // = the image size, so blobFromImage does not resize
-    ap.engine = cv::dnn::ENGINE_NEW;                // ENGINE_CLASSIC cannot import either graph (SMOKE §4s)
-    aliked_ = cv::ALIKED::create(p_.aliked_onnx, ap);
-    lightglue_ = cv::LightGlueMatcher::create(p_.lightglue_onnx, p_.min_score);
-    if (aliked_.empty() || aliked_->empty() || lightglue_.empty()) {
-        throw std::runtime_error("HardPairMatcher: cannot load " + p_.aliked_onnx + " / " + p_.lightglue_onnx);
+    if (p.width <= 0 || p.height <= 0) throw std::invalid_argument("HardPairMatcher: size");
+    return p;
+}
+
+}  // namespace
+
+HardPairMatcher::HardPairMatcher(const HardPairParams& p)
+    : p_(Checked(p)), nets_([q = p_] {
+          cv::ALIKED::Params ap;
+          ap.inputSize = cv::Size(q.width, q.height);   // = the image size, so blobFromImage does not resize
+          ap.engine = cv::dnn::ENGINE_NEW;              // ENGINE_CLASSIC cannot import either graph (SMOKE §4s)
+          auto n = std::make_unique<Nets>();
+          n->aliked = cv::ALIKED::create(q.aliked_onnx, ap);
+          n->lightglue = cv::LightGlueMatcher::create(q.lightglue_onnx, q.min_score);
+          if (n->aliked.empty() || n->aliked->empty() || n->lightglue.empty()) {
+              throw std::runtime_error("HardPairMatcher: cannot load " + q.aliked_onnx + " / " + q.lightglue_onnx);
+          }
+          return n;
+      }) {
+    nets_.Local();   // load on the constructing thread: a bad file fails here
+}
+
+void HardPairMatcher::CheckSize(const cv::Mat& im) const {
+    if (im.cols != p_.width || im.rows != p_.height) {
+        throw std::invalid_argument("HardPairMatcher: image " + std::to_string(im.cols) + "x" +
+                                    std::to_string(im.rows) + " but the export is " + std::to_string(p_.width) +
+                                    "x" + std::to_string(p_.height));
     }
+}
+
+HardPairFeatures HardPairMatcher::ExtractRgb(const cv::Mat& rgb) const {
+    if (rgb.empty() || rgb.type() != CV_8UC3) throw std::invalid_argument("HardPairMatcher: expected CV_8UC3 (RGB)");
+    CheckSize(rgb);
+    cv::Mat bgr;
+    cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+    HardPairFeatures f;
+    f.size = rgb.size();
+    nets_.Local().aliked->detectAndCompute(bgr, cv::noArray(), f.keypoints, f.descriptors);
+    return f;
 }
 
 HardPairFeatures HardPairMatcher::Extract(const cv::Mat& gray) const {
     if (gray.empty() || gray.type() != CV_8UC1) throw std::invalid_argument("HardPairMatcher: expected CV_8UC1");
-    if (gray.cols != p_.width || gray.rows != p_.height) {
-        throw std::invalid_argument("HardPairMatcher: image " + std::to_string(gray.cols) + "x" +
-                                    std::to_string(gray.rows) + " but the export is " + std::to_string(p_.width) +
-                                    "x" + std::to_string(p_.height));
-    }
+    CheckSize(gray);
     cv::Mat bgr;
     cv::cvtColor(gray, bgr, cv::COLOR_GRAY2BGR);   // gray replicated: the model is RGB-trained
     HardPairFeatures f;
     f.size = gray.size();
-    aliked_->detectAndCompute(bgr, cv::noArray(), f.keypoints, f.descriptors);
+    nets_.Local().aliked->detectAndCompute(bgr, cv::noArray(), f.keypoints, f.descriptors);
     return f;
 }
 
@@ -66,15 +90,21 @@ cv::Mat HardPairMatcher::NormalizeUpstream(const std::vector<cv::KeyPoint>& kp, 
 std::vector<cv::DMatch> HardPairMatcher::Match(const HardPairFeatures& a, const HardPairFeatures& b) const {
     std::vector<cv::DMatch> out;
     if (a.keypoints.empty() || b.keypoints.empty()) return out;
+    cv::LightGlueMatcher& lightglue = *nets_.Local().lightglue;
     if (p_.normalization == "upstream") {
         // Empty sizes: LightGlueMatcher passes the keypoints through unchanged.
-        lightglue_->setPairInfo(NormalizeUpstream(a.keypoints, a.size), NormalizeUpstream(b.keypoints, b.size),
+        lightglue.setPairInfo(NormalizeUpstream(a.keypoints, a.size), NormalizeUpstream(b.keypoints, b.size),
                                 cv::Size(), cv::Size());
     } else {
-        lightglue_->setPairInfo(Pixels(a.keypoints), Pixels(b.keypoints), a.size, b.size);
+        lightglue.setPairInfo(Pixels(a.keypoints), Pixels(b.keypoints), a.size, b.size);
     }
-    lightglue_->match(a.descriptors, b.descriptors, out);   // setPairInfo is consumed by this call
+    lightglue.match(a.descriptors, b.descriptors, out);   // setPairInfo is consumed by this call
     return out;
+}
+
+std::vector<dnn::ModelRecord> HardPairMatcher::Records() const {
+    return {{std::filesystem::path(p_.aliked_onnx).stem().string(), p_.aliked_onnx, "cv_dnn_new"},
+            {std::filesystem::path(p_.lightglue_onnx).stem().string(), p_.lightglue_onnx, "cv_dnn_new"}};
 }
 
 std::string HardPairMatcher::Name() const {

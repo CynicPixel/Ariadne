@@ -17,6 +17,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   `infra/docker/` is untouched. A full regeneration into `.cache/feat-2.1-perception/models_regen/` was **bit-exact**:
   11/11 and 19/19 files, ONNX included. That regeneration ran with the L3 RGB additions already in the scripts; the
   gray path is unchanged by them. `models.sh test` now builds with `ARIADNE_BUILD_JOBS` (default 2), not 8.
+- **L3 done (D90, draft on the EigenPlaces sim default size, 640×360 proposed):** sim-rig exports at 1280×720 RGB,
+  exact against upstream on four recorded `left_rgb` frames; regeneration bit-exact; RGB entry points with a
+  channel-swap guard (SMOKE §4t, PERCEPTION_2.1 §14).
+- **L6 done (D91):** `dnn::PerThread<T>` in every cv::dnn wrapper. The two-thread test found that concurrent
+  ENGINE_NEW forwards sharing OpenCV's default pool drift at the 1e-5 level, so the contract's second rule is OpenCV
+  pool = 1 when several callers share a wrapper. Under it the test is byte-identical, 5/5 repeats.
+- **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with
+  `ARIADNE_REQUIRE_MODELS=1`. No premerge was run: phase 1 runs ORB, and none of these wrappers is on its path.
 
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 

@@ -31,13 +31,16 @@
 //                  readable reference, ~100x slower without an external BLAS.
 // Instance norm, softmax, NMS and sampling are written out below to match
 // upstream's PyTorch semantics, including its quirks (see Detect()). A cv::dnn
-// Net is NOT thread-safe (§7.4): use one XFeatNet per thread.
+// Net is NOT thread-safe (§7.4): the graphs live in a dnn::PerThread (D91), so one XFeatNet may be shared by
+// threads; each calling thread builds and runs its own.
 //
 // Correctness is not assumed: tests/unit/test_xfeat_reference.cpp checks
 // the three maps and the final keypoints/descriptors against upstream's own
 // PyTorch outputs on fixed inputs (D15 acceptance test).
 // ---------------------------------------------------------------------------
 #include "perception/features/xfeat/atb.hpp"
+
+#include "perception/dnn/per_thread.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
@@ -113,7 +116,8 @@ private:
     cv::dnn::Net& DnnFor(int h, int w) const;   // one graph per input size (Resize targets are fixed)
 
     Engine engine_;
-    mutable std::map<std::pair<int, int>, cv::dnn::Net> nets_;
+    using Graphs = std::map<std::pair<int, int>, cv::dnn::Net>;
+    dnn::PerThread<Graphs> nets_{[] { return std::make_unique<Graphs>(); }};
     Conv2d skip1_;
     std::vector<Conv2d> block1_, block2_, block3_, block4_, block5_, fusion_, heatmap_head_, keypoint_head_;
 };

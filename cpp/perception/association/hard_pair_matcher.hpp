@@ -24,9 +24,13 @@
 //     scale max(W,H)/2) through setPairInfo(..., Size(), Size()).
 //     normalization "opencv" instead passes pixels and sizes, so OpenCV
 //     rescales each axis to [-1, 1] on its own (the ablation, §12.4 row D);
-//   - one HardPairMatcher per thread: a cv::dnn::Net is not thread-safe and
-//     LightGlueMatcher::clone() shares its Net (§7.4).
+//   - a cv::dnn::Net is not thread-safe and LightGlueMatcher::clone() shares
+//     its Net (§7.4), so the ALIKED + LightGlue pair lives in a
+//     dnn::PerThread (D91): one HardPairMatcher may be shared by threads, each
+//     calling thread loads and runs its own pair.
 // ---------------------------------------------------------------------------
+#include "perception/dnn/per_thread.hpp"
+
 #include <opencv2/core.hpp>
 #include <opencv2/features.hpp>
 
@@ -55,6 +59,9 @@ public:
 
     /// ALIKED on an 8-bit gray image of exactly the export's size.
     HardPairFeatures Extract(const cv::Mat& gray) const;
+    /// ALIKED on an 8-bit image in RGB ORDER (CV_8UC3, StereoFrame::left_rgb) of exactly the export's size: the
+    /// sim rig's path. cv::ALIKED itself expects BGR (blobFromImage swapRB), so this converts RGB -> BGR first.
+    HardPairFeatures ExtractRgb(const cv::Mat& rgb) const;
 
     /// LightGlue matches a -> b (queryIdx in a, trainIdx in b, distance = 1 - confidence).
     std::vector<cv::DMatch> Match(const HardPairFeatures& a, const HardPairFeatures& b) const;
@@ -64,11 +71,17 @@ public:
 
     /// Manifest id, e.g. "aliked_n16_k1024_752x480+lightglue_aliked/cv_dnn_new/norm_upstream".
     std::string Name() const;
+    /// The manifest records (§7.4): ALIKED and LightGlue, both cv::dnn ENGINE_NEW.
+    std::vector<dnn::ModelRecord> Records() const;
 
 private:
+    struct Nets {
+        cv::Ptr<cv::ALIKED> aliked;
+        cv::Ptr<cv::LightGlueMatcher> lightglue;
+    };
+    void CheckSize(const cv::Mat& im) const;
     HardPairParams p_;
-    cv::Ptr<cv::ALIKED> aliked_;
-    cv::Ptr<cv::LightGlueMatcher> lightglue_;
+    dnn::PerThread<Nets> nets_;
 };
 
 }  // namespace ariadne::perception

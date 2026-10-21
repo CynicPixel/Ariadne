@@ -15,13 +15,20 @@
 //
 // PREPROCESSING, exactly as the exporter's: gray / 255 -> INTER_AREA to the
 // export's fixed size (identity at the native size) -> the gray channel
-// replicated to RGB -> ImageNet mean/std. The ONNX graph has a FIXED input
+// replicated to RGB -> ImageNet mean/std. The sim rig's RGB path
+// (DescribeRgb) takes the image in RGB ORDER (StereoFrame::left_rgb, rgb8 as
+// published): /255 -> INTER_AREA on all three channels -> mean/std per
+// channel. A BGR image passed there is not an error but a different input
+// (the R/B means differ), so the channel order is in the method name. The ONNX graph has a FIXED input
 // size (GeM's kernel is the map size); the file name carries it.
 //
 // COST (SMOKE §4r, indicative): 0.2-0.5 s at 376x240, 1-2.7 s at 752x480 on
 // this CPU. Not for every keyframe: describe a spaced subset.
-// A cv::dnn::Net is not thread-safe (§7.4): one PlaceRecognizer per thread.
+// A cv::dnn::Net is not thread-safe (§7.4): the Net lives in a dnn::PerThread (D91), so one PlaceRecognizer may
+// be shared by threads; each calling thread loads and runs its own.
 // ---------------------------------------------------------------------------
+#include "perception/dnn/per_thread.hpp"
+
 #include <opencv2/core.hpp>
 #include <opencv2/dnn.hpp>
 
@@ -41,17 +48,23 @@ public:
     explicit PlaceRecognizer(const PlaceRecognizerParams& p);
 
     /// 256-D unit vector for an 8-bit gray image (any size; resized to the export's).
-    std::vector<float> Describe(const cv::Mat& gray);
+    std::vector<float> Describe(const cv::Mat& gray) const;
 
+    /// 256-D unit vector for an 8-bit image in RGB order (CV_8UC3; any size; resized to the export's).
+    std::vector<float> DescribeRgb(const cv::Mat& rgb) const;
     /// The exact network input: 1 x 3 x H x W CV_32F (NCHW).
     static cv::Mat Preprocess(const cv::Mat& gray, int width, int height);
+    static cv::Mat PreprocessRgb(const cv::Mat& rgb, int width, int height);
 
     /// Manifest id, e.g. "eigenplaces_r50_256@376x240/cv_dnn_classic".
     std::string Name() const;
+    /// The manifest record (§7.4): model, file, engine.
+    dnn::ModelRecord Record() const;
 
 private:
+    std::vector<float> Run(const cv::Mat& blob) const;
     PlaceRecognizerParams p_;
-    cv::dnn::Net net_;
+    dnn::PerThread<cv::dnn::Net> net_;
 };
 
 }  // namespace ariadne::perception

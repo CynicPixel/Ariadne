@@ -67,6 +67,15 @@ def preprocess(gray: np.ndarray, w: int, h: int) -> np.ndarray:
     return ((rgb - MEAN[:, None, None]) / STD[:, None, None])[None].astype(np.float32)
 
 
+def preprocess_rgb(bgr: np.ndarray, w: int, h: int) -> np.ndarray:
+    """colour uint8 HxWx3 as cv2.imread gives it (BGR) -> 1x3xhxw float32 in RGB order, as PlaceRecognizer::DescribeRgb
+    does it from an RGB image: /255 -> INTER_AREA on all three channels together -> ImageNet mean/std."""
+    f = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    if (f.shape[1], f.shape[0]) != (w, h):
+        f = cv2.resize(f, (w, h), interpolation=cv2.INTER_AREA)
+    return ((f.transpose(2, 0, 1) - MEAN[:, None, None]) / STD[:, None, None])[None].astype(np.float32)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--upstream", required=True, type=Path)
@@ -74,6 +83,7 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--size", action="append", required=True, help="WxH")
     ap.add_argument("--image", action="append", default=[], help="NAME=PATH (gray)")
+    ap.add_argument("--rgb-image", action="append", default=[], help="NAME=PATH (colour PNG; the sim rig, RGB path)")
     ap.add_argument("--upstream-commit", required=True, help="git rev-parse HEAD of the checkout (no git in the image)")
     a = ap.parse_args()
 
@@ -106,12 +116,12 @@ def main() -> int:
         trunk = a.out / f"eigenplaces_r50_layer4_{w}x{h}.onnx"
         torch.onnx.export(model.backbone, dummy, str(trunk), opset_version=17, input_names=["image"],
                           output_names=["layer4"], do_constant_folding=True, dynamo=False)
-        for spec in a.image:
+        for spec, rgb in [(s, False) for s in a.image] + [(s, True) for s in a.rgb_image]:
             name, path = spec.split("=", 1)
-            gray = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            gray = cv2.imread(path, cv2.IMREAD_COLOR if rgb else cv2.IMREAD_GRAYSCALE)   # rgb: BGR in memory
             if gray is None:
                 raise SystemExit(f"cannot read {path}")
-            x = preprocess(gray, w, h)
+            x = preprocess_rgb(gray, w, h) if rgb else preprocess(gray, w, h)
             with torch.no_grad():
                 t = torch.from_numpy(x)
                 l4 = model.backbone(t)
@@ -141,6 +151,10 @@ def main() -> int:
                          "(x - [0.485,0.456,0.406]) / [0.229,0.224,0.225], NCHW",
         "sha256": outputs,
     }
+    if a.rgb_image:
+        manifest["preprocessing_rgb"] = ("colour PNG -> RGB order -> /255 -> cv2.resize INTER_AREA (3 channels) to WxH "
+                                         "(if different) -> ImageNet mean/std, NCHW (PlaceRecognizer::DescribeRgb)")
+        manifest["rgb_images"] = [s.split("=", 1)[0] for s in a.rgb_image]
     (a.out / "manifest.yaml").write_text("# EigenPlaces reference export (PERCEPTION_2.1 §11.4). Generated.\n"
                                          + yaml.safe_dump(manifest, sort_keys=False))
     return 0

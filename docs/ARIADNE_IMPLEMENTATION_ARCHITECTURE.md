@@ -1702,6 +1702,15 @@ ablation switch rather than a structural commitment.
 >
 > Cost about 0.5 s per extraction and 0.6 s per match (shared CPU), so it serves hard pairs only (C8).
 >
+> **Sim rig (D90, 2026-10-22, SMOKE §4t).** 1280×720 RGB exports for EigenPlaces (1280×720, 640×360) and
+> ALIKED-n16 (K = 1024, 1280×720) are exact against upstream on recorded sim frames. The RGB path is
+> `PlaceRecognizer::DescribeRgb` / `HardPairMatcher::ExtractRgb`, which take RGB order (`StereoFrame::left_rgb`).
+>
+> **Threading as built (D91).** Every wrapper keeps its networks in `dnn::PerThread<T>`, so one wrapper serves a
+> pool. **Second rule:** with several callers, OpenCV's own pool is set to 1 thread, so the parallelism comes from
+> the callers. Concurrent ENGINE_NEW forwards sharing the default pool differ at the 1e-5 level; at 1 thread they are
+> byte-identical (`test_dnn_contract`).
+>
 > **Measured on EuRoC loop candidates** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
 > AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights. But 4 confident wrong verifications show
 > that an E-inlier count alone is not a loop gate, so the PnP and degeneracy gates stay downstream (§12.6).

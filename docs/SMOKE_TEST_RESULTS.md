@@ -780,3 +780,27 @@ Gates 2.1 retrieval (`docs/design/PERCEPTION_2.1.md` §11).
   - `lightglue_aliked.onnx` `51906eca…`
 
   The full hashes are in the export's `manifest.yaml`.
+
+## 4t. Sim-rig exports (1280×720 RGB): EigenPlaces and ALIKED-n16 + LightGlue, exact through cv::dnn `[SMOKE-TEST]` 2026-10-22
+
+**Input:** four `left_rgb` frames of the phase-1 `ci_tiny` recording (agent 0, frames 200/205 at 10 s and 700/710 at
+35 s, bag `sha256:21399732…`), written by `ariadne_frame_dump` exactly as the pipeline sees them: rgb8 decoded,
+D41 lens applied, no degradation. They are 1280×720. Their colour is weak (mean |R − B| ≈ 7/255).
+
+**Exports:** `models.sh eigenplaces-sim` (1280×720 and 640×360) and `models.sh aliked-lg-sim` (K = 1024 at
+1280×720). Inputs are RGB order straight from the frame; nothing is converted from gray. A second regeneration was
+bit-exact: 11/11 and 12/12 files. `lightglue_aliked.onnx` is byte-identical to the EuRoC export.
+
+| check | result |
+|---|---|
+| ALIKED export rewrite vs upstream (Python, set-based) | matched 1.0 on all 4 frames; max 1.8e-4 px, desc 8.6e-6, score 2.4e-5 |
+| LightGlue rewrite vs upstream | identical match sets: 946 and 949 |
+| `cv::ALIKED` vs upstream (`test_opencv`) | input diff 0; matched 1024/1024; px ≤ 1.8e-4; desc ≤ 8.9e-6; no truncation flips |
+| `cv::LightGlueMatcher` vs upstream | 946/946 and 949/949 shared; score ≤ 4.9e-5 |
+| EigenPlaces, both engines, both sizes | cosine 1.0000000 (8/8) |
+| `PlaceRecognizer::DescribeRgb` | preprocessing ≤ 7.2e-7; cosine 1.0000000. BGR-swapped: input moves 0.26–0.77, cosine 0.996–0.998 |
+| `HardPairMatcher::ExtractRgb` | byte-equal to `cv::ALIKED` on the BGR file. BGR-swapped: 0/1024 keypoints kept exactly. The wrapper reproduces upstream's sim match sets |
+
+**Cost:** indicative only, shared host (load 2–5). EigenPlaces classic is 1.9 s (1280×720) and 0.46 s (640×360) on
+1 thread, 0.76 s and 0.17–0.23 s on 8. ALIKED at 1280×720 is 1.6–2.4 s per frame and LightGlue about 0.95 s per pair,
+both at the default pool. Quiet-host numbers are L5.
