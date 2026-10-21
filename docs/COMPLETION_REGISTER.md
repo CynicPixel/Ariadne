@@ -37,7 +37,7 @@ identical.
 | INV2 | COOL Arm-vs-Arm, same binary, loader switch | **blocked by 0.2 / 0.3** | There is no arm64 OpenCV 5 build (I3b OPEN). The COOL trial has not started (7 days, can't be paused). |
 | INV3 | the agentic claim rests only on the runtime loop | not started | 7.1. Also needs the **live closed-loop runtime (L1)** to act. |
 | INV4 | egress at ρ_responder | done (placeholder) | 1.8 uses ρ_responder 0.40 m (D45). Full spec is 4.5. |
-| INV5 | datasets before simulator | partial | EuRoC done (D53–D60). **TUM not started** (2.6). OIVIO is 5.6. |
+| INV5 | datasets before simulator | partial | EuRoC done (D53–D60). TUM done: pinned regression, fr1 not in class (D90). OIVIO is 5.6. |
 | INV6 | bytes counted at the serializer | done | D14, D82. The ≤15% byte-table gate is a Phase 3 exit item. Carries **I5**: §15.7 per-element table (node 65.8 B vs 28 B) never amended (D12). |
 | INV7 | honesty: no "optimal" without a certificate | **blocked by D74** | |
 | INV8 | tagged facts, `[SMOKE-TEST]` first | done (practice) | |
@@ -107,11 +107,11 @@ identical.
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
 | 2.5 robust back end | **partial: D74 not started** | D70–D73 part 2c | B |
-| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
+| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | done | EuRoC done. "Pinned in CI" = local premerge (D49). TUM: `TumSource` + RGB-D depth path, `tum_regression.yaml` pinned (fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139 m; evo-checked). **fr1 not in class**, unattributed (D90). | A2 |
 | Gate: FD Jacobian suite | done | | |
 | Gate: oracle 100/100; certificate certified / not certified | **partial** | oracle done (D52). Certificate: D74. | B |
 | Gate: outlier ramp with breakpoint | **partial** | random outliers give no breakpoint up to 90% (D73). Needs aliasing-structured (mutually consistent) false loops. | B |
-| Gate: EuRoC VIO in class; TUM regression pinned | partial | 9/11 (D59). The combined run with 2.1 is running (M). TUM: —. | M / — |
+| Gate: EuRoC VIO in class; TUM regression pinned | partial | 9/11 (D59). The combined run with 2.1 is running (M). TUM: pinned (D90). | M / A2 |
 | Exit run (full, fresh render, clean tree) | not started | after the items above | M |
 
 ## Phase 3 (opened early, D80)

@@ -5251,6 +5251,9 @@ alternate route or human approval
 Use several independent datasets from the catalogue:
 
 - TUM RGB-D
+  > **As built (2.6, D90, 2026-10-22).** `TumSource` feeds the stereo pipeline. Sensor depth goes through a virtual
+  > rig (u_R = u_L − fx·B/Z) in place of SGBM and the stereo match, with σ_Z = 1.425e-3·Z² (Khoshelham & Elberink
+  > 2012) as the §9.4/§9.6 depth uncertainty. Pinned in `configs/benchmark/tum_regression.yaml`.
 - EuRoC
 - SubT / subterranean datasets where available
 - ScanNet / Matterport-type indoor sets for reconstruction
