@@ -1684,7 +1684,7 @@ pool owns N nets loaded from the same ONNX file.
 it so it drops into the same `DescriptorMatcher` seam as brute-force and ANN matching, so the matcher is an
 ablation switch rather than a structural commitment.
 
-> **As built (2.1, D63 draft; PERCEPTION_2.1 §12, SMOKE §4s).**
+> **As built (2.1, D63, approved 2026-10-21; PERCEPTION_2.1 §12, SMOKE §4s).**
 > `perception::HardPairMatcher` wraps `cv::ALIKED` + `cv::LightGlueMatcher` on Ariadne's own export from upstream:
 > ALIKED-n16 at K = 1024 (2048 is the ablation), native 752×480, LightGlue with all 9 layers. The wrapper owns three
 > conventions:

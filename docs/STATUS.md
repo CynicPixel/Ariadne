@@ -4,7 +4,7 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63 draft)
+## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63, approved)
 
 - **Built:**
   - Our export from upstream (`cvg/LightGlue@eb42fee`, ALIKED-n16, native 752×480), exact through cv::ALIKED /
