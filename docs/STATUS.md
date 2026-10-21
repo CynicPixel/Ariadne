@@ -23,7 +23,32 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **L6 done (D91):** `dnn::PerThread<T>` in every cv::dnn wrapper. The two-thread test found that concurrent
   ENGINE_NEW forwards sharing OpenCV's default pool drift at the 1e-5 level, so the contract's second rule is OpenCV
   pool = 1 when several callers share a wrapper. Under it the test is byte-identical, 5/5 repeats.
-- **3.6 done for global descriptors (D93):** offline on the D62 dumps. fp16 and int8 (258 B) are lossless on EuRoC,
+- **L5 done:** quiet-host timings, single process, p50/p95 over 30 reps after 3 warm-ups. Measured on a fresh
+  **g4dn.xlarge** (Xeon Platinum 8259CL 2.5 GHz: 4 vCPU = 2 cores × 2 hyper-threads, so `threads 4` includes HT),
+  nothing else running. This is **not the dev box and not m8g**: the demo-machine budget stays open unless the demo
+  runs on this class. Evidence: `evaluation/runs/l5_timing/20261021T211117Z-gpu-e2b3e3/` (CSVs, lscpu, load,
+  manifest). Cost $0.035. ECR image, S3 payload and run prefix deleted after; ECR repo empty again.
+
+  | model (engine) | size | p50 / p95 ms, 1 thread | p50 / p95 ms, 4 threads |
+  |---|---|---|---|
+  | XFeat detect (opencv_dnn_graph) | 736×480 | 60.5 / 62.0 | 41.5 / 42.8 |
+  | XFeat detect | 1280×704 | 153.5 / 155.9 | 101.5 / 102.8 |
+  | EigenPlaces (classic) | 376×240 | 229.8 / 235.3 | 126.3 / 129.0 |
+  | EigenPlaces (classic) | 752×480 | 914.2 / 924.5 | 467.6 / 477.8 |
+  | EigenPlaces (classic) | 640×360 | 602.2 / 605.4 | 311.8 / 315.9 |
+  | EigenPlaces (classic) | 1280×720 | 2472.8 / 2509.2 | 1279.6 / 1302.3 |
+  | EigenPlaces (new) | 376×240 / 640×360 | 314.1 / 880.3 (p50) | 149.7 / 391.8 (p50) |
+  | ALIKED-n16 K=1024 (new) | 752×480 | 1245.0 / 1266.9 | 811.5 / 817.0 |
+  | ALIKED-n16 K=1024 (new) | 1280×720 | 3078.8 / 3106.4 | 1998.6 / 2050.6 |
+  | LightGlue, per pair (new) | 752×480 / 1280×720 | 1593.9 / 1642.9 (p50) | 912.6 / 921.0 (p50) |
+
+  **Reading:**
+  - p95 is within 3 % of p50 everywhere, as a quiet host should give.
+  - ENGINE_CLASSIC is 1.2–1.6× faster than ENGINE_NEW for EigenPlaces, so classic stays the default (D62).
+  - XFeat at sim size (~100 ms) fits keyframe rate, not 20 Hz per frame.
+  - EigenPlaces at the proposed sim default 640×360 costs ~0.3 s per described keyframe.
+  - A sim hard pair (2 × ALIKED + LightGlue) costs ~5 s on 4 vCPU, so it stays "hard pairs only".
+ offline on the D62 dumps. fp16 and int8 (258 B) are lossless on EuRoC,
   and PCA is not worth its shared basis. The wire candidate is int8; the `wire.fbs` change is 3.2's. The XFeat local
   row is a stated gap.
 - **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with

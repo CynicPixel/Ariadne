@@ -1,0 +1,15 @@
+model,size,threads,p50_ms,p95_ms,mean_ms,n
+xfeat/opencv_dnn_graph,736x480,1,60.4972,61.984,60.557,30
+xfeat/opencv_dnn_graph,1280x704,1,153.507,155.94,153.541,30
+eigenplaces/cv_dnn_classic,376x240,1,229.819,235.278,230.369,30
+eigenplaces/cv_dnn_classic,752x480,1,914.169,924.519,912.893,30
+eigenplaces/cv_dnn_classic,640x360,1,602.237,605.372,602.404,30
+eigenplaces/cv_dnn_classic,1280x720,1,2472.79,2509.24,2481.24,30
+eigenplaces/cv_dnn_new,376x240,1,314.064,317.713,314.339,30
+eigenplaces/cv_dnn_new,752x480,1,1259.74,1263.78,1259.61,30
+eigenplaces/cv_dnn_new,640x360,1,880.336,900.271,875.434,30
+eigenplaces/cv_dnn_new,1280x720,1,3919.51,4018.84,3915.87,30
+aliked_n16_k1024/cv_dnn_new,752x480,1,1244.98,1266.91,1247.31,30
+lightglue_aliked/cv_dnn_new (pair),752x480,1,1593.87,1610.84,1595.25,30
+aliked_n16_k1024/cv_dnn_new,1280x720,1,3078.84,3106.43,3067.87,30
+lightglue_aliked/cv_dnn_new (pair),1280x720,1,1642.94,1706.09,1654.89,30
