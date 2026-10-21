@@ -69,7 +69,7 @@ identical.
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
 | L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
 | L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
-| L10 | Stale branches `feat/phase2-foundations` (local 9a51cb5 / origin 53a3c0e) and `feat/3.2-protocol` | open | M: `main` is the integration branch |
+| L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
 ---
 
