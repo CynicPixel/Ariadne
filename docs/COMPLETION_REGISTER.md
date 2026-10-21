@@ -107,7 +107,7 @@ identical.
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
 | 2.5 robust back end | **partial: D74 not started** | D70–D73 part 2c | B |
-| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | done | EuRoC done. "Pinned in CI" = local premerge (D49). TUM: `TumSource` + RGB-D depth path, `tum_regression.yaml` pinned (fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139 m; evo-checked). **fr1 not in class**, unattributed (D90). | A2 |
+| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | done | EuRoC done (premerge, D49). TUM is a **separate pinned check, not in `--premerge`** (maintainer, 2026-10-21): `configs/benchmark/tum_regression.yaml` checked by `infra/scripts/tum_regression.py`. `TumSource` + RGB-D depth path, `tum_regression.yaml` pinned (fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139 m; evo-checked). **fr1 not in class**, unattributed (D90). | A2 |
 | Gate: FD Jacobian suite | done | | |
 | Gate: oracle 100/100; certificate certified / not certified | **partial** | oracle done (D52). Certificate: D74. | B |
 | Gate: outlier ramp with breakpoint | **partial** | random outliers give no breakpoint up to 90% (D73). Needs aliasing-structured (mutually consistent) false loops. | B |
