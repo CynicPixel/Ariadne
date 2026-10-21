@@ -15,11 +15,18 @@
 // in time order plus the raw calibration, exactly what EuRoC provides; the
 // rectifier then exercises the undistort path on both.
 //
-// Not yet here (Phase 5): the sensor stages of Degrade() after the lens. They
-// need GT depth (the dust stage) and a named degradation config; the manifest
-// records degradation_config = "none" until then.
+// The sensor stages of Degrade() (2.2, D66): opt-in per run (SimSource::
+// SetDegradation with a named config), applied to the RGB frame after the lens
+// and before the gray conversion -- the order a real camera has (optics, then
+// the sensor). Each (agent, camera) gets its own D seed, so the two cameras do
+// not carry the same noise and PRNU fields. The dust stage needs GT depth for
+// both cameras and stays refused until Phase 5. Without SetDegradation the
+// manifest records degradation_config = "none" and every pixel is as before.
 // ---------------------------------------------------------------------------
+#include "core/random/seed.hpp"
+#include "perception/degradation/degradation_config.hpp"
 #include "perception/degradation/lens.hpp"
+#include "perception/radiometric/flat_field.hpp"
 #include "perception/stereo/camera_model.hpp"
 #include "runtime/datasets/euroc.hpp"
 #include "runtime/manifest/run_manifest.hpp"
@@ -36,6 +43,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -76,6 +84,11 @@ public:
     /// Ground-truth velocity and biases, time-sorted, for VALIDATING the inertial initialisation only (never fed to
     /// the estimator). Empty when the source has none.
     virtual std::vector<GroundTruthInertial> GroundTruthInertialStates() const { return {}; }
+    /// The named degradation config applied to the frames (§5.6), "none" if none (2.2).
+    virtual std::string DegradationConfig() const { return "none"; }
+    /// Camera `cam`'s (0 left, 1 right) calibrated flat field for the radiometric stage; empty (K = 1) when the
+    /// source has none -- EuRoC publishes none (2.2).
+    virtual perception::radiometric::FlatField FlatFieldOf(int /*cam*/) const { return {}; }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -244,12 +257,36 @@ public:
     std::vector<TimedPose> GroundTruth() const override { return gt_; }
     size_t FrameCount() const override { return frames_; }
     uint32_t Agent() const override { return uint32_t(agent_); }
+    std::string DegradationConfig() const override { return degradation_ ? degradation_name_ : "none"; }
+    perception::radiometric::FlatField FlatFieldOf(int cam) const override { return flat_[cam == 0 ? 0 : 1]; }
+
+    /// Apply D (named config `d`) to every frame from now on (2.2, D66). Camera seeds derive from the run seed,
+    /// the agent and the side. Also calibrates each camera's flat field from D frames of a flat target under
+    /// the same sensor and seed (radiometric/flat_field.hpp), as a lab would before the mission.
+    void SetDegradation(const perception::NamedDegradation& d, uint64_t run_seed, int threads) {
+        if (d.params.enable_dust) {
+            throw std::runtime_error("sim: degradation " + d.name + " enables dust, which needs GT depth for both "
+                                     "cameras (Phase 5); refused rather than run without it");
+        }
+        degradation_ = d.params;
+        degradation_name_ = d.name;
+        threads_ = threads;
+        const uint64_t root = core::DeriveSeed(run_seed, core::seed_purpose::kDegradation);
+        const std::string agent = "agent" + std::to_string(agent_);
+        seed_[0] = core::DeriveSeed(root, (agent + "/left").c_str());
+        seed_[1] = core::DeriveSeed(root, (agent + "/right").c_str());
+        for (int c = 0; c < 2; ++c) {
+            flat_[c] = perception::radiometric::CalibrateFlatField(d.params, seed_[c], lens_.width, lens_.height, 3,
+                                                                   16, 200, threads_);
+        }
+    }
 
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         struct Stop {};
         std::map<int64_t, StereoFrame> pending;   // stamps with only one side so far
         int64_t last_emitted = -1;
         size_t n = 0;
+        uint64_t arrived[2] = {0, 0};             // D's frame id: per-camera arrival index (= the pair index)
         RosbagReader bag;
         bag.Open(sensors_mcap_);
         try {
@@ -263,6 +300,10 @@ public:
                     std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
                 }
                 core::ImageU8 seen = perception::ApplyLens(clean, map_);
+                if (degradation_) {
+                    const int c = left ? 0 : 1;
+                    seen = perception::DegradeParallel(seen, *degradation_, seed_[c], arrived[c]++, threads_);
+                }
                 cv::Mat gray;
                 cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), gray, cv::COLOR_RGB2GRAY);
                 const int64_t t = im.header.stamp.ns();
@@ -299,6 +340,11 @@ private:
     perception::LensMap map_;
     core::SE3 T_B_left_, T_B_right_;
     std::vector<TimedPose> gt_;
+    std::optional<perception::DegradationParams> degradation_;   // 2.2: D, when SetDegradation was called
+    std::string degradation_name_;
+    uint64_t seed_[2] = {0, 0};
+    int threads_ = 1;
+    perception::radiometric::FlatField flat_[2];
 };
 
 }  // namespace ariadne::runtime

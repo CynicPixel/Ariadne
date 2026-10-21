@@ -8,6 +8,9 @@ add_executable(test_numerical
   numerical/test_det_math.cpp
   numerical/test_distributions.cpp
   numerical/test_degradation.cpp
+  numerical/test_gat.cpp
+  numerical/test_noise_estimate.cpp
+  numerical/test_flat_field.cpp
   numerical/test_pinhole.cpp
   numerical/test_ba.cpp
   numerical/test_pose_graph.cpp
@@ -55,6 +58,7 @@ if(OpenCV_FOUND)
     unit/test_perception_cv.cpp
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
+    unit/test_radiometric_stage.cpp
     unit/test_edge_verifier.cpp
     unit/test_keyframe_spool.cpp
     unit/test_planning.cpp

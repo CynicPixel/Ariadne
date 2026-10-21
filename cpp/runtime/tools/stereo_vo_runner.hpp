@@ -19,6 +19,7 @@
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
 #include "runtime/agent/keyframe_records.hpp"
+#include "runtime/datasets/radiometric_source.hpp"
 #include "runtime/datasets/stereo_source.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
@@ -126,8 +127,10 @@ struct StereoVoArgs {
 /// The 1.4 + 1.5 pipeline over any StereoSource: rectify -> LK tracker ->
 /// StereoVo, keyframes with LK stereo matches + SGBM, then scoring against the
 /// source's ground truth. Shared by ariadne_euroc_vo and ariadne_sim_vo.
-inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, int argc, char** argv) {
+inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& args, int argc, char** argv) {
     const PerceptionConfig pcfg = LoadPerception(args.perception_config);
+    // 2.2: the radiometric front end between the source and the rectifier (a call-through when mode is off).
+    runtime::RadiometricSource source(inner_source, pcfg.radiometric);
     const slam::SlamConfig scfg = slam::LoadSlam(args.slam_config);
 
     StereoRectifier rectifier(source.Calibration(), 0.0);   // not const: the right map takes the row refinement
@@ -673,7 +676,8 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
     }
     m.slam_config = scfg.name;
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
-    m.degradation_config = "none";
+    m.degradation_config = source.DegradationConfig();
+    m.radiometric = source.Summary();
     m.feature_engine = orb.Name();
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -848,6 +852,7 @@ inline int RunStereoVo(runtime::StereoSource& source, const StereoVoArgs& args, 
             << "}, keyframes_while_lost: " << keyframes_lost << ", reanchor_probes: " << reanchor_probes
             << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
+    source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
     res.close();
 
     const auto missing = runtime::MissingRequiredFields(m);

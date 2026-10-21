@@ -99,6 +99,9 @@ struct RunManifest {
     std::string stereo_row_refinement = "not_applicable";
     /// Lost-frame handling (D56): "<lost.motion>/<lost.reanchor>"; "coast/every_frame" is the 1.5 behaviour.
     std::string lost_handling = "not_applicable";
+    /// The radiometric front end (2.2, D67): "off", or "<mode>: <gate decision> (<denoiser>, <inverse> inverse);
+    /// flat field ...". The measured noise fit behind the decision is in results.yaml `radiometric:`.
+    std::string radiometric = "off";
     /// Final state_hash of the event log (§41).
     std::string final_state_hash = kUnknownField;
 
@@ -185,6 +188,7 @@ inline std::string ToYaml(const RunManifest& m) {
     detail::Field(out, "pgo_digest", m.pgo_digest);
     detail::Field(out, "stereo_row_refinement", m.stereo_row_refinement);
     detail::Field(out, "lost_handling", m.lost_handling);
+    detail::Field(out, "radiometric", m.radiometric);
     detail::Field(out, "final_state_hash", m.final_state_hash);
 
     if (!m.extra.empty()) {

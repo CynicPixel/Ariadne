@@ -13,6 +13,7 @@
 // joins the two, which is why it takes both.
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
+#include "perception/radiometric/radiometric_config.hpp"
 
 #include <cmath>
 #include <string>
@@ -124,6 +125,7 @@ struct PerceptionConfig {
     TrackerParams tracker;
     StereoParams stereo;
     StereoMatchParams stereo_match;
+    radiometric::RadiometricParams radiometric;   // 2.2; mode off unless the config has a radiometric: section
 };
 
 /// The largest disparity SGBM searches: disparities run from min_disparity to
@@ -314,6 +316,11 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
         m.row_min_span = ms.Require<double>("row_min_span");
         m.exposure_match = ms.Require<bool>("exposure_match");
         ms.RequireAllConsumed();
+    }
+    // Optional section (2.2): absent means mode off, the radiometric stage does not run.
+    if (config.Has("radiometric")) {
+        StrictConfig rs = config.Section("radiometric");
+        c.radiometric = radiometric::ParseRadiometric(rs);
     }
 
     config.RequireAllConsumed();
