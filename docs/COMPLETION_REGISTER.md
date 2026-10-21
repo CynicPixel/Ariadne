@@ -67,7 +67,7 @@ identical.
 | L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | not started | A1 |
 | L6 | DNN per-thread `Net` contract object (§7.4) | partial | A1 (one Net per instance; no shared contract; Phase 7 multithreading needs it) |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
-| L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
+| L8 | MTU / IPv4 framing model revisited against the real link model | done | A2: D92. Keep 1500 B (goodput rises with size under RFComms). Seam limit stated: `loss_p` for one size, heartbeats 1.3–2.3× over-lossy near the edge (3.2 owner's call). |
 | L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
@@ -120,7 +120,7 @@ identical.
 |---|---|---|---|
 | 3.1 EigenPlaces retrieval + CLAHE split | partial | Core is D62 (draft). CLAHE split not done. Carries L3. | — (A1 natural) |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
-| 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
+| 3.3 comms broker node (RFComms + attenuation + partitions) | **partial** | D92: `RfLinkModel` + wall ray-cast + `CommsNode` (one ledger, tested) + scenario configs + `ariadne_comms_probe` on ci_tiny. **Waits on** 3.2's sim integration (`protocol: v2`) to carry protocol traffic. | A2 |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
 | 3.6 descriptor compression rows | not started | | — (A1 natural) |

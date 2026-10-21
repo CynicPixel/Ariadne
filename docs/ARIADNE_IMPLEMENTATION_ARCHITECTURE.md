@@ -1265,6 +1265,11 @@ Rationale: byte accounting and fault injection must be deterministic and replaya
 delivery is not. The wall/rubble penetration count above is computed in the broker by ray-casting the GT mesh
 between agents and adding a per-wall attenuation term to the RFComms-derived loss.
 
+> **As built (3.3, D92, 2026-10-22).** `collaboration/comms/`: RFComms' equations (gz-sim8) are reproduced in the
+> broker rather than read from the live plugin, since replay is the substrate. The wall term counts solid blocks
+> crossed. `loss_p` is the per-packet marginal over shadowing, computed for the 1500 B MTU (a stated seam limit).
+> `CommsNode` owns the one ledger. Not yet carrying protocol traffic (needs 3.2's sim integration).
+
 ---
 
 ## 5.8 Agent motion
