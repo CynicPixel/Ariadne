@@ -354,3 +354,81 @@ TEST(Degradation, ParallelRowBandsAreByteIdentical) {
     }
     EXPECT_EQ(DegradeParallel(in, p, 77, 5, 4).data, Degrade(in, p, 77, 5).data);
 }
+
+// --- L9 / D135: dust fidelity options and the replay lamp actuator ----------
+
+// lamp_power is a pure radiance scale (lamp the only light, linear render): with every noise stage off it is
+// indistinguishable from radiance_scale.
+TEST(DegradationFidelity, LampPowerIsARadianceScale) {
+    const ImageU8 in = Ramp(64, 4);
+    DegradationParams a = NullParams(), b = NullParams();
+    a.lamp_power = 0.5;
+    b.radiance_scale = 0.5;
+    EXPECT_EQ(Degrade(in, a, 1, 0).data, Degrade(in, b, 1, 0).data);
+}
+
+// D9's objection, made measurable: over a black scene in dense dust, post-sensor airlight is a noise-free constant,
+// pre-sensor airlight is light and carries shot noise.
+TEST(DegradationFidelity, PreSensorAirlightCarriesShotNoise) {
+    const ImageU8 black = Flat(128, 128, 0);
+    const ImageF32 far = FlatDepth(128, 128, 50.0f);   // t = exp(-0.3 * 50) ~ 3e-7
+    DegradationParams p;
+    p.read_noise_electrons = 0.0;
+    p.photon_scale = 400.0;                           // few photons: visible shot noise
+    p.enable_dust = true;
+    p.dust_beta = 0.3;
+    p.dust_field_strength = 0.0;
+    p.dust_airlight = 0.5;
+    const ImageU8 post = Degrade(black, far, p, 3, 0);
+    p.dust_order = DustOrder::kPreSensor;
+    const ImageU8 pre = Degrade(black, far, p, 3, 0);
+    EXPECT_EQ(VarianceOf(post), 0.0);
+    EXPECT_GT(VarianceOf(pre), 10.0);                 // ~ (255^2 / 400) * 0.5 ~ 81 before quantisation
+    EXPECT_NEAR(MeanOf(pre), MeanOf(post), 2.0);      // same mean veil
+}
+
+// D11 option (b): with tau > 1 consecutive frames share most of their dust field.
+TEST(DegradationFidelity, CorrelatedDustFieldChangesSlowly) {
+    const ImageU8 in = Flat(96, 96, 200);
+    const ImageF32 d = FlatDepth(96, 96, 4.0f);
+    DegradationParams p = NullParams();
+    p.enable_dust = true;
+    p.dust_beta = 0.2;
+    p.dust_field_strength = 1.0;
+    p.dust_field_frequency = 0.05;
+    const auto step_change = [&](int tau) {
+        p.dust_field_tau_frames = tau;
+        double s = 0.0;
+        for (uint64_t k = 3; k < 9; ++k) {
+            const ImageU8 a = Degrade(in, d, p, 5, k), b = Degrade(in, d, p, 5, k + 1);
+            for (size_t i = 0; i < a.data.size(); ++i) s += std::abs(int(a.data[i]) - int(b.data[i]));
+        }
+        return s;
+    };
+    const double white = step_change(0), slow = step_change(16);
+    EXPECT_GT(white, 0.0);
+    EXPECT_LT(slow, 0.25 * white);
+    // Bit-identical replay of any frame, whatever tau.
+    p.dust_field_tau_frames = 16;
+    EXPECT_EQ(Degrade(in, d, p, 5, 21).data, Degrade(in, d, p, 5, 21).data);
+}
+
+// kLamp airlight follows the lamp's lobe: veil in the cone, none outside it, and it scales with lamp power.
+TEST(DegradationFidelity, LampAirlightFollowsTheLobeAndThePower) {
+    const ImageU8 black = Flat(201, 201, 0);
+    const ImageF32 far = FlatDepth(201, 201, 50.0f);
+    DegradationParams p = NullParams();
+    p.enable_dust = true;
+    p.dust_beta = 0.3;
+    p.dust_field_strength = 0.0;
+    p.dust_airlight = 0.5;
+    p.dust_airlight_mode = DustAirlight::kLamp;
+    p.dust_lamp_focal_px = 100.0;
+    p.dust_lamp_cos_inner = 0.906;   // 25 deg
+    p.dust_lamp_cos_outer = 0.766;   // 40 deg
+    const ImageU8 full = Degrade(black, far, p, 1, 0);
+    EXPECT_NEAR(full.At(100, 100, 0), 128, 1);        // centre: dust_airlight
+    EXPECT_EQ(full.At(0, 0, 0), 0);                    // corner: 54 deg off axis, unlit
+    p.lamp_power = 0.5;
+    EXPECT_NEAR(Degrade(black, far, p, 1, 0).At(100, 100, 0), 64, 1);
+}

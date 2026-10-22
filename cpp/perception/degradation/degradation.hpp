@@ -25,6 +25,7 @@
 #include "core/math/det_math.hpp"
 #include "core/random/distributions.hpp"
 #include "core/random/philox.hpp"
+#include "perception/degradation/srgb.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -61,7 +62,28 @@ enum class NoiseStage : uint64_t {
 /// §6.2 would then appear far more effective than it is.
 inline constexpr uint64_t kFixedPatternFrameId = 0xFFFFFFFFFFFFFFFFull;
 
+/// How input pixel values map to radiance before stage 1 (D130).
+enum class InputTransfer {
+    kLinear,   // value / 255 (the default; every pinned digest and result uses it)
+    kSrgb,     // sRGB decode: the gz-sim8/ogre2 render is sRGB-encoded (SMOKE §4u)
+};
+
+/// Where dust acts (D9; L9 option c, D135).
+enum class DustOrder {
+    kPostSensor,   // §5.6 as written: composited after quantization (the default)
+    kPreSensor,    // on radiance, before shot noise: attenuation removes photons, airlight adds them (and their noise)
+};
+
+/// What the medium's added radiance is (D135).
+enum class DustAirlight {
+    kConstant,     // dust_airlight everywhere (the default)
+    kLamp,         // backscatter of the carried lamp: dust_airlight * lamp_power * the lamp's lobe at the pixel
+};
+
 struct DegradationParams {
+    // --- Input transfer (D130) --------------------------------------------
+    InputTransfer input_transfer = InputTransfer::kLinear;
+
     // --- Stage 1: scene radiance scale (the "darkness level") -------------
     /// Multiplies incoming radiance. 1.0 is the clean image; 0.01 is roughly
     /// two decades below nominal exposure.
@@ -116,6 +138,25 @@ struct DegradationParams {
     /// How strongly the local field modulates beta. 0 gives a homogeneous
     /// medium; 1 varies local density by +/-100%.
     double dust_field_strength = 0.5;
+
+    // --- Dust fidelity options (L9, D135). Defaults are the operator above, byte for byte.
+    DustOrder dust_order = DustOrder::kPostSensor;
+    /// 0: the field is redrawn every frame (D11's "temporally white"). N > 0: interpolated between fields keyed on
+    /// frame / N and frame / N + 1, so it decorrelates over ~N frames instead of 1.
+    int dust_field_tau_frames = 0;
+    /// Advection: the field moves this many pixels per frame.
+    double dust_drift_x_px = 0.0, dust_drift_y_px = 0.0;
+    DustAirlight dust_airlight_mode = DustAirlight::kConstant;
+    /// The lamp's lobe for kLamp, as cosines of the inner / outer half-angles about the optical axis (cosines, not
+    /// degrees: no libm on the per-pixel path), and the render's focal length in px. The 5 cm lamp offset is
+    /// neglected: backscatter is a near-field veil along the view ray.
+    double dust_lamp_cos_inner = 0.0, dust_lamp_cos_outer = 0.0, dust_lamp_focal_px = 0.0;
+
+    // --- Replay lamp actuator (5.3, D132) ----------------------------------
+    /// Lamp power relative to the recording's. With the lamp the only light and a linear(ised) render, scene
+    /// radiance is exactly proportional to it (SMOKE §4u), so replay scales stage 1 by it; it also scales kLamp
+    /// airlight.
+    double lamp_power = 1.0;
 };
 
 namespace detail {
@@ -156,6 +197,20 @@ inline uint64_t SiteId(size_t pixel_index, int channel, int channels,
            static_cast<uint64_t>(stage);
 }
 
+inline double Clamp01(double v) {
+    return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
+}
+
+/// The lamp's lobe at a pixel for kLamp airlight: 1 inside the inner cone, 0 outside the outer, linear in cos(theta)
+/// between. r2_px is the squared pixel distance from the image centre.
+inline double LampLobe(const DegradationParams& p, double r2_px) {
+    const double f = p.dust_lamp_focal_px;
+    const double c = f / DetSqrt(f * f + r2_px);
+    if (c >= p.dust_lamp_cos_inner) return 1.0;
+    if (c <= p.dust_lamp_cos_outer) return 0.0;
+    return (c - p.dust_lamp_cos_outer) / (p.dust_lamp_cos_inner - p.dust_lamp_cos_outer);
+}
+
 /// Transmission through the participating medium at one pixel.
 ///   t = exp(-beta_local * depth),  beta_local modulated by a smooth field.
 inline double DustTransmission(const DegradationParams& p, uint64_t seed,
@@ -170,10 +225,25 @@ inline double DustTransmission(const DegradationParams& p, uint64_t seed,
         // salt_base, so the dust field uses the same keying discipline as every
         // per-pixel draw. Folding the stage into frame_id instead would permute
         // frames against one another.
-        const double n = core::FractalNoise2D(
-            seed, frame_id, x * p.dust_field_frequency,
-            y * p.dust_field_frequency, p.dust_field_octaves,
-            static_cast<uint64_t>(NoiseStage::kDustField));
+        const double xs = x - p.dust_drift_x_px * static_cast<double>(frame_id);
+        const double ys = y - p.dust_drift_y_px * static_cast<double>(frame_id);
+        const auto field = [&](uint64_t key) {
+            return core::FractalNoise2D(seed, key, xs * p.dust_field_frequency, ys * p.dust_field_frequency,
+                                        p.dust_field_octaves, static_cast<uint64_t>(NoiseStage::kDustField));
+        };
+        double n;
+        if (p.dust_field_tau_frames <= 0) {
+            n = field(frame_id);
+        } else {
+            // Blend the two epoch fields around this frame. Dividing by sqrt(a^2 + b^2) keeps the deviation's
+            // variance constant through the blend; a plain lerp would halve it mid-epoch and the haze would pulse.
+            const uint64_t tau = static_cast<uint64_t>(p.dust_field_tau_frames);
+            const double b = static_cast<double>(frame_id % tau) / static_cast<double>(tau);
+            const double a = 1.0 - b;
+            const double dev = (a * (field(frame_id / tau) - 0.5) + b * (field(frame_id / tau + 1) - 0.5)) /
+                               DetSqrt(a * a + b * b);
+            n = Clamp01(0.5 + dev);
+        }
         // n in [0,1] -> multiplier in [1-strength, 1+strength]
         beta *= 1.0 + p.dust_field_strength * (2.0 * n - 1.0);
     }
@@ -181,10 +251,6 @@ inline double DustTransmission(const DegradationParams& p, uint64_t seed,
 
     const double t = DetExp(-beta * depth);
     return t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
-}
-
-inline double Clamp01(double v) {
-    return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
 }
 
 }  // namespace detail
@@ -224,6 +290,8 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
     const double levels_d = static_cast<double>(levels);
     const double gain_total =
         params.exposure * params.analog_gain * params.digital_gain;
+    const bool pre_dust = use_dust && params.dust_order == DustOrder::kPreSensor;
+    const double radiance_gain = params.radiance_scale * params.lamp_power;   // lamp_power 1: exactly radiance_scale
 
     for (int y = y0; y < y1; ++y) {
         for (int x = 0; x < input.width; ++x) {
@@ -239,12 +307,23 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
                 use_dust ? detail::DustTransmission(params, seed, frame_id, x, y,
                                                     depth_gt.At(x, y))
                          : 1.0;
+            const double airlight =
+                params.dust_airlight_mode == DustAirlight::kLamp
+                    ? params.dust_airlight * params.lamp_power * detail::LampLobe(params, dx * dx + dy * dy)
+                    : params.dust_airlight;
 
             for (int c = 0; c < input.channels; ++c) {
                 // Stage 1: scene radiance scale.
-                double radiance =
-                    static_cast<double>(input.At(x, y, c)) * (1.0 / 255.0);
-                radiance *= params.radiance_scale;
+                const uint8_t v = input.At(x, y, c);
+                double radiance = params.input_transfer == InputTransfer::kSrgb
+                                      ? kSrgbToLinear[v]
+                                      : static_cast<double>(v) * (1.0 / 255.0);
+                radiance *= radiance_gain;
+                if (pre_dust) {
+                    // D135: the medium acts on light. Airlight is light from the same lamp, so it is dimmed by the
+                    // same darkness scale as the scene it veils.
+                    radiance = radiance * transmission + airlight * params.radiance_scale * (1.0 - transmission);
+                }
 
                 // Stage 2: Poisson shot noise, in electrons.
                 double electrons = radiance * params.photon_scale;
@@ -285,9 +364,9 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
 
                 // Stage 7: dust compositing, I = J*t + A*(1-t).
                 double value = quantized;
-                if (use_dust) {
+                if (use_dust && !pre_dust) {
                     value = quantized * transmission +
-                            params.dust_airlight * (1.0 - transmission);
+                            airlight * (1.0 - transmission);
                     value = detail::Clamp01(value);
                 }
 

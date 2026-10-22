@@ -14,6 +14,7 @@
 #include "perception/degradation/degradation.hpp"
 
 #include <string>
+#include <vector>
 
 namespace ariadne::perception {
 
@@ -77,6 +78,14 @@ inline void ValidateDegradation(const NamedDegradation& d) {
     // image built on fabricated statistics. The Gaussian approximation is
     // already accurate by lambda=30, so there is no reason to exceed 50 and
     // every reason to keep the cap unreachable.
+    if (p.dust_field_tau_frames < 0) fail("dust_field_tau_frames must be >= 0 (0 = redrawn every frame)");
+    if (!(p.lamp_power > 0.0)) fail("lamp_power must be > 0");
+    if (p.dust_airlight_mode == DustAirlight::kLamp &&
+        !(p.dust_lamp_focal_px > 0.0 && p.dust_lamp_cos_outer > 0.0 &&
+          p.dust_lamp_cos_outer < p.dust_lamp_cos_inner && p.dust_lamp_cos_inner <= 1.0)) {
+        fail("dust_airlight_mode lamp needs dust_lamp_focal_px > 0 and 0 < dust_lamp_cos_outer < "
+             "dust_lamp_cos_inner <= 1");
+    }
     if (p.poisson_exact_max_lambda <= 0.0 || p.poisson_exact_max_lambda > 50.0) {
         fail("poisson_exact_max_lambda must be in (0, 50]; beyond that Knuth's"
              " loop hits its iteration cap and silently truncates the count");
@@ -91,6 +100,12 @@ inline NamedDegradation ParseDegradation(StrictConfig& config) {
     out.name = config.Require<std::string>("name");
     DegradationParams& p = out.params;
 
+    const std::string transfer = config.Optional<std::string>("input_transfer", "linear");
+    if (transfer == "srgb") {
+        p.input_transfer = InputTransfer::kSrgb;
+    } else if (transfer != "linear") {
+        throw ConfigError("degradation config '" + out.name + "': input_transfer must be linear or srgb");
+    }
     p.radiance_scale = config.Require<double>("radiance_scale");
 
     p.enable_shot_noise = config.Optional<bool>("enable_shot_noise", true);
@@ -122,6 +137,30 @@ inline NamedDegradation ParseDegradation(StrictConfig& config) {
     p.dust_field_strength =
         config.Optional<double>("dust_field_strength", p.dust_field_strength);
 
+    // L9 / D135 fidelity options and the replay lamp actuator (all optional; absent = the §5.6 operator).
+    const std::string order = config.Optional<std::string>("dust_order", "post_sensor");
+    if (order == "pre_sensor") {
+        p.dust_order = DustOrder::kPreSensor;
+    } else if (order != "post_sensor") {
+        throw ConfigError("degradation config '" + out.name + "': dust_order must be post_sensor or pre_sensor");
+    }
+    p.dust_field_tau_frames = config.Optional<int>("dust_field_tau_frames", 0);
+    const auto drift = config.Optional<std::vector<double>>("dust_drift_px_per_frame", {0.0, 0.0});
+    if (drift.size() != 2) {
+        throw ConfigError("degradation config '" + out.name + "': dust_drift_px_per_frame is [x, y]");
+    }
+    p.dust_drift_x_px = drift[0];
+    p.dust_drift_y_px = drift[1];
+    const std::string air = config.Optional<std::string>("dust_airlight_mode", "constant");
+    if (air == "lamp") {
+        p.dust_airlight_mode = DustAirlight::kLamp;
+    } else if (air != "constant") {
+        throw ConfigError("degradation config '" + out.name + "': dust_airlight_mode must be constant or lamp");
+    }
+    p.dust_lamp_cos_inner = config.Optional<double>("dust_lamp_cos_inner", 0.0);
+    p.dust_lamp_cos_outer = config.Optional<double>("dust_lamp_cos_outer", 0.0);
+    p.dust_lamp_focal_px = config.Optional<double>("dust_lamp_focal_px", 0.0);
+    p.lamp_power = config.Optional<double>("lamp_power", 1.0);
     config.RequireAllConsumed();
     ValidateDegradation(out);
     return out;
