@@ -47,7 +47,7 @@ IMU = """imu0:
 """
 
 
-def _tree(tmp_path, right_stamps=("1", "2")):
+def _tree(tmp_path, right_stamps=("1", "2"), sof=None):
     calib = tmp_path / "calib"; calib.mkdir()
     (calib / "calibration_cams.yaml").write_text(CAMS)
     (calib / "calibration_imu.yaml").write_text(IMU)
@@ -55,6 +55,10 @@ def _tree(tmp_path, right_stamps=("1", "2")):
     for cam, st in (("cam0", ("1", "2")), ("cam1", right_stamps)):
         (root / "mav0" / cam).mkdir(parents=True)
         (root / "mav0" / cam / "data.csv").write_text("#timestamp [ns],filename\n" + "".join(f"{s},{s}.png\n" for s in st))
+    if sof:   # exposure.csv per camera: (stamp, start_of_frame) rows
+        for cam, rows in sof.items():
+            (root / "mav0" / cam / "exposure.csv").write_text(
+                "#timestamp [ns],start_of_frame [ns],exposure_time [us],iso\n" + "".join(f"{t},{f},30000,900\n" for t, f in rows))
     (root / "mav0" / "imu_imu_data").mkdir()
     (root / "mav0" / "imu_imu_data" / "data.csv").write_text("#t\n")
     (root / "hilti_pair.txt").write_text("left /oak_cam_front/left/image_raw right /oak_cam_front/right/image_raw\n")
@@ -66,7 +70,7 @@ def test_converts_and_self_checks_the_front_pair(tmp_path):
     rep = sy.convert(root, calib, 10.0)
     assert rep["stereo_extrinsic_max_abs_diff"] < 1e-9
     assert rep["baseline_m"] == pytest.approx(0.07514, abs=1e-4)
-    assert rep["stamps_identical"]
+    assert rep["right_restamped_to_left"] == 0 and rep["frames"] == 2
     c0 = yaml.safe_load((root / "mav0/cam0/sensor.yaml").read_text().split("\n", 1)[1])
     assert c0["distortion_model"] == "equidistant" and c0["rate_hz"] == 10.0
     T_BS = np.array(c0["T_BS"]["data"]).reshape(4, 4)
@@ -76,7 +80,27 @@ def test_converts_and_self_checks_the_front_pair(tmp_path):
     assert imu["rate_hz"] == 200.0 and not (root / "mav0/imu_imu_data").exists()
 
 
-def test_refuses_unpaired_stamps(tmp_path):
+def test_refuses_unpaired_stamps_and_leaves_the_tree_untouched(tmp_path):
     root, calib = _tree(tmp_path, right_stamps=("1", "3"))
     with pytest.raises(SystemExit, match="stamps differ"):
+        sy.convert(root, calib, 10.0)
+    assert (root / "mav0/imu_imu_data").exists() and not (root / "mav0/cam0/sensor.yaml").exists()
+
+
+def test_one_trigger_with_centre_stamps_10us_apart_is_restamped(tmp_path):
+    big = 1674219531241094048
+    root, calib = _tree(tmp_path, right_stamps=("1", str(big + 9984)),
+                        sof={"cam0": [(1, 0), (big, big - 15_000_000)], "cam1": [(1, 0), (big + 9984, big - 15_000_000)]})
+    root.joinpath("mav0/cam0/data.csv").write_text(f"#timestamp [ns],filename\n1,1.png\n{big},{big}.png\n")
+    rep = sy.convert(root, calib, 10.0)
+    assert rep["right_restamped_to_left"] == 1
+    assert root.joinpath("mav0/cam1/data.csv").read_text().splitlines()[2] == f"{big},{big + 9984}.png"
+
+
+def test_different_triggers_are_refused_even_when_close(tmp_path):
+    big = 1674219531241094048
+    root, calib = _tree(tmp_path, right_stamps=("1", str(big + 9984)),
+                        sof={"cam0": [(1, 0), (big, big - 15_000_000)], "cam1": [(1, 0), (big + 9984, big - 14_990_016)]})
+    root.joinpath("mav0/cam0/data.csv").write_text(f"#timestamp [ns],filename\n1,1.png\n{big},{big}.png\n")
+    with pytest.raises(SystemExit, match="not one trigger"):
         sy.convert(root, calib, 10.0)
