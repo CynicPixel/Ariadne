@@ -46,6 +46,7 @@ gtest_discover_tests(test_phase0_gate)
 add_executable(test_unit
   unit/test_observability.cpp
   unit/test_config.cpp
+  unit/test_sim_depth.cpp
   unit/test_metrics.cpp
   unit/test_perception_config.cpp
   unit/test_euroc.cpp
