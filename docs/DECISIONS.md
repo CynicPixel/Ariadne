@@ -3138,3 +3138,8 @@ Both are main's (3.2 / 3.5).
   - 2.4 KB per TASK_CONSENSUS message, 13.9 KB per linked event.
   - Event triggering saves only 26 % of bytes, because 4.3's task set churns. That's reported, not tuned; top-K
     announcement and deltas are listed as possible design changes.
+- **D114 gate amendment (2026-10-23, before any gate run; reason: the pilot's flight speed, not a result).**
+  - **Axes:** primary x = mission time (10 fractions of 200 s, on lockstep barriers); secondary = summed metres
+    flown at the barrier points.
+  - **Map:** every row is scored from one shadow Phase 4 map.
+  - `e_total_m` stays 120 m; the reserve rule and λ_e do not engage at the pilot's ≈ 0.15 m/s (stated).

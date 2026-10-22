@@ -149,6 +149,26 @@ The targets per generator:
   never a single run). Scalar: area under the coverage-budget curve. The regime is declared on the figure.
 - **The claim is "Ariadne ≥ every baseline at every budget fraction".** It's tested per scene. A loss is reported
   as a loss.
+- **Amendment (2026-10-23, before any gate run and before any coverage from the pilot was looked at).** The reason
+  is the adapter pilot's flight speed, not a result: B's 30 s lockstep pilot of A1Planner (`feat/l1-a1planner`
+  ea88599) flew 4.7 and 4.2 m, about 0.15–0.2 m/s against the 0.6 m/s cap.
+  - Why it's slow: the mover turns in place to each goal's final yaw, goals are 1.4–2.3 m away, and every 5 s
+    barrier picks a new goal before the last one is reached.
+  - The consequence: in 200 s an agent flies about 30 m, a quarter of the 120 m budget, so most of the fixed
+    budget fractions would never be reached.
+  - **Budget (x), primary: mission time.** 10 fractions of the 200 s mission, T = 20, 40, …, 200 s. Each falls on a
+    5 s lockstep barrier, so the barrier slab snapshots are scored exactly. No dump hook, no interpolation.
+  - **Secondary view:** coverage against summed metres flown (`flown_m` from the trace), at the actual barrier
+    points. No fixed fractions, and no final coverage carried into fractions a run never reached.
+  - **`e_total_m` stays 120 m** (the physical cap, not tuned to the pilot). At ≈ 0.15 m/s neither the reserve rule
+    nor λ_e engages in the gate (λ_e's factor ≈ 1.02 at 30 m). Their evidence is the unit tests only, stated.
+  - **Every row is scored from the same Phase 4 map:** the slab of a shadow Phase 4 mapper fed the row's keyframes,
+    the 1.8 placeholder row included. Otherwise a row's coverage partly measures its mapper (D110: OccupancyGrid vs
+    TSDF coverage 0.933 vs 0.942 on one spool).
+  - **The claim becomes "Ariadne ≥ every baseline at every time fraction",** per scene, losses reported.
+  - **Pilot fact, not fixed before the gate:** the chosen task changes at every barrier, because target ids churn
+    as the map grows and there is no goal persistence. That's the same for every row, so it is stated, not
+    corrected.
 - **Added 2026-10-23 (EXPLORATION_4.6 review), before any run:** the §31.6 row **TARE-inspired** (D116). That makes
   6 policies × 2 scenes × 3 seeds = 36 lockstep runs, ≈ 14 h on llvmpipe (≈ 22 min each).
   - On ci_tiny (about one 6 m subspace) the TARE row is nearly local-only, so a null result there is not over-read.
