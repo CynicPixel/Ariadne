@@ -1,0 +1,36 @@
+# 2.6 TUM RGB-D regression (D100). Phase 2 exit-gate line "TUM: stereo/RGB pipeline ATE regression pinned".
+# A separate pinned check, NOT part of phase1.sh --premerge (maintainer, 2026-10-21). Checked by
+# infra/scripts/tum_regression.py against each run's results.yaml.
+#
+# TARGETS were fixed 2026-10-21 BEFORE any TUM measurement, as for EuRoC (PHASE2_PLAN): per sequence, the WORST of the
+# published RGB-D class. Source: ORB-SLAM2 (Mur-Artal & Tardos, T-RO 2017) Table III "TUM RGB-D dataset, translation
+# RMSE (m)", columns ORB-SLAM2 / ElasticFusion / Kintinuous / DVO-SLAM / RGBD-SLAM, read from arXiv 1610.06475.
+# Those are full SLAM systems (loops, global BA); ours is VO with loops off, so the class bar is not easy.
+# PINS are the measured ATE of the D100 code (2026-10-22; fr1 sequences NOT in class, fr2/xyz in class) plus a tolerance: a regression is a
+# run whose ATE exceeds pin * (1 + rel_tol) + abs_tol_m.
+name: tum_regression_v1
+
+tool: ariadne_tum_vo
+perception_config: configs/perception/tum_v1.yaml
+slam_config: configs/slam/tum_v1.yaml
+intrinsics: calibrated
+seed: 1
+frames: 0                     # all
+metric: ate_se3.rmse_m        # SE(3) Umeyama alignment, full trajectory (the runner's scorer; evo cross-checked once)
+tolerance: {rel_tol: 0.10, abs_tol_m: 0.002}
+
+sequences:
+  freiburg1_xyz:
+    sha256: a0236d97b8c30cd93b653656d2b6c293ff7c982a4130ef2a1a8beecdb124ef98
+    target_m: 0.014           # not in ORB-SLAM2 Table III. Kerl, Sturm & Cremers, IROS 2013, Table III (ATE RMSE m): DVO-SLAM
+                              # 0.011, RGB-D SLAM 0.014, MRSMap 0.013 -> worst 0.014 (read from cvg.cit.tum.de kerl13iros.pdf,
+                              # 2026-10-23; D86's condition). Replaces 0.017 [UNVERIFIED], which no primary table gave.
+    pin_m: 0.0496               # measured 2026-10-22 (D100); evo_ape tum -a agrees to 1e-6 m
+  freiburg1_desk:
+    sha256: e983d6830916e66dc4a46a71368046b149b283de87769690e7aa4e0b9483530c
+    target_m: 0.037           # Kintinuous (ORB-SLAM2 0.016, EF 0.020, DVO 0.021, RGBD-SLAM 0.026)
+    pin_m: 0.0581               # measured 2026-10-22 (D100); evo_ape tum -a agrees to 1e-6 m
+  freiburg2_xyz:
+    sha256: a4903027a7fe6bc6573a1ce96a8afa5689f15d74f4a3f0627e91b5799f62e40b
+    target_m: 0.029           # Kintinuous (ORB-SLAM2 0.004, EF 0.011, DVO 0.018)
+    pin_m: 0.0139               # measured 2026-10-22 (D100); evo_ape tum -a agrees to 1e-6 m

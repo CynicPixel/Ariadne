@@ -134,13 +134,21 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     const PerceptionConfig pcfg = LoadPerception(args.perception_config);
     // 2.2: the radiometric front end between the source and the rectifier (a call-through when mode is off).
     runtime::RadiometricSource source(inner_source, pcfg.radiometric);
-    const slam::SlamConfig scfg = slam::LoadSlam(args.slam_config);
+    // 2.6 (D100): an RGB-D source feeds sensor depth through a virtual rig (perception/rgbd/depth_stereo.hpp) in
+    // place of the right image, SGBM and the LK stereo matcher. Stereo sources take the unchanged path.
+    const std::optional<DepthSensorModel> depth_model = source.DepthSensor();
+    const bool rgbd = depth_model.has_value();
+    if (rgbd && pcfg.radiometric.Enabled()) throw std::runtime_error("the radiometric stage needs a stereo pair");
+    slam::SlamConfig scfg_loaded = slam::LoadSlam(args.slam_config);
 
     StereoRectifier rectifier(source.Calibration(), 0.0);   // not const: the right map takes the row refinement
     const RectifiedStereoRig& rr = rectifier.Rig();
     const core::RectifiedStereo rig{{rr.fx, rr.fy, rr.cx, rr.cy}, rr.baseline_m};
     const core::SE3 T_B_Crect = runtime::BodyFromRectifiedLeft(source.T_B_C0(), ToEigen3(rectifier.R1()));
-    if (scfg.triangulation.min_depth_m < MinObservableRange(pcfg.stereo, rr)) {
+    // RGB-D: the sensor's sigma_Z = k Z^2 enters the triangulation gate as the virtual rig's disparity noise.
+    if (rgbd) scfg_loaded.triangulation.disparity_sigma_px = depth_model->DisparitySigmaPx(rr.fx);
+    const slam::SlamConfig& scfg = scfg_loaded;
+    if (!rgbd && scfg.triangulation.min_depth_m < MinObservableRange(pcfg.stereo, rr)) {
         std::fprintf(stderr, "warning: slam min_depth_m %.3f is below the stereo Z_min %.3f\n",
                      scfg.triangulation.min_depth_m, MinObservableRange(pcfg.stereo, rr));
     }
@@ -265,8 +273,13 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         if (frame.agent != source.Agent() || frame.id != static_cast<uint64_t>(i)) {
             throw std::logic_error("stereo source: frame identity out of sequence at " + std::to_string(i));
         }
-        cv::Mat l, r;
-        rectifier.Rectify(frame.left, frame.right, l, r);
+        cv::Mat l, r, dz;   // dz: RGB-D depth on the rectified left grid (nearest: no invented depths)
+        if (rgbd) {
+            rectifier.RectifyLeft(frame.left, l);
+            rectifier.RectifyLeftNearest(frame.depth, dz);
+        } else {
+            rectifier.Rectify(frame.left, frame.right, l, r);
+        }
 
         auto t0 = std::chrono::steady_clock::now();
         bool have_rot = false;
@@ -363,58 +376,70 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         // only if StereoVo::ShouldReanchor says the next frame's PnP would then have enough landmarks.
         if (tr.need_keyframe || tr.reanchor_probe) {
             t0 = std::chrono::steady_clock::now();
-            // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
-            // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
-            // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
-            const auto condition = [&](const cv::Mat& right) {
-                return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
-            };
-            cv::Mat rs = condition(r);
-            if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
-                ++row_attempts;
-                CollectRowSamples(l, rs, tfv.points, pcfg.stereo_match, row_samples);
-                const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
-                if (est.ok) {
-                    row_fix = est;
-                    row_keyframe = keyframes;
-                    rectifier.RefineRightRows(est.a, est.b, est.c);
-                    cv::Mat l_again;
-                    rectifier.Rectify(frame.left, frame.right, l_again, r);
-                    rs = condition(r);
-                    std::printf("  stereo row refinement at keyframe %d: dy = %+.3f %+.5f x %+.5f y px (%d matches, "
-                                "MAD %.3f px%s)\n", keyframes, est.a, est.b, est.c, est.matches, est.mad_px,
-                                est.slopes_fitted ? "" : ", offset only");
-                } else {
-                    row_last_refusal = est.why;
-                }
-            } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
-                // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
-                row_check = EstimateRowCorrection(l, rs, tfv.points, pcfg.stereo_match);
-            }
-            const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
-            const StereoDepth depth = sgbm.Compute(l, rs);
-            if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
-            const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
-            cv::Mat z32, s32;
-            depth.Z.convertTo(z32, CV_32F);
-            depth.sigma_Z.convertTo(s32, CV_32F);
             slam::VoStereo st;
-            st.right = sm.right;
-            st.valid = sm.valid;
-            for (const cv::Point2f& p : tfv.points) {
-                const int x = cvRound(p.x), y = cvRound(p.y);
-                const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
-                st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
-                st.sgbm_sigma.push_back(ok ? s32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+            StereoDepth depth;   // the keyframe records' dense depth (SGBM, or the sensor's on RGB-D)
+            cv::Mat supported;
+            if (rgbd) {
+                depth = DenseDepthFromSensor(dz, rr.fx, *depth_model);
+                supported = depth.valid;
+                const VirtualStereo vs = VirtualStereoFromDepth(dz, tfv.points, rr.fx, *depth_model);
+                st.right = vs.right;
+                st.valid = vs.valid;
+                st.sgbm_z = vs.z;          // the §9.6 slot: sensor depth where supported
+                st.sgbm_sigma = vs.sigma_z;
+            } else {
+                // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
+                // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
+                // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
+                const auto condition = [&](const cv::Mat& right) {
+                    return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
+                };
+                cv::Mat rs = condition(r);
+                if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
+                    ++row_attempts;
+                    CollectRowSamples(l, rs, tfv.points, pcfg.stereo_match, row_samples);
+                    const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
+                    if (est.ok) {
+                        row_fix = est;
+                        row_keyframe = keyframes;
+                        rectifier.RefineRightRows(est.a, est.b, est.c);
+                        cv::Mat l_again;
+                        rectifier.Rectify(frame.left, frame.right, l_again, r);
+                        rs = condition(r);
+                        std::printf("  stereo row refinement at keyframe %d: dy = %+.3f %+.5f x %+.5f y px (%d matches, "
+                                    "MAD %.3f px%s)\n", keyframes, est.a, est.b, est.c, est.matches, est.mad_px,
+                                    est.slopes_fitted ? "" : ", offset only");
+                    } else {
+                        row_last_refusal = est.why;
+                    }
+                } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
+                    // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
+                    row_check = EstimateRowCorrection(l, rs, tfv.points, pcfg.stereo_match);
+                }
+                const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
+                depth = sgbm.Compute(l, rs);
+                if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
+                supported = DenseSupportMask(depth, pcfg.stereo);
+                cv::Mat z32, s32;
+                depth.Z.convertTo(z32, CV_32F);
+                depth.sigma_Z.convertTo(s32, CV_32F);
+                st.right = sm.right;
+                st.valid = sm.valid;
+                for (const cv::Point2f& p : tfv.points) {
+                    const int x = cvRound(p.x), y = cvRound(p.y);
+                    const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
+                    st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+                    st.sgbm_sigma.push_back(ok ? s32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+                }
             }
             trace_valid = 0;
-            for (uchar v : sm.valid) trace_valid += v;
+            for (uchar v : st.valid) trace_valid += v;
             reanchor_probes += !tr.need_keyframe;
             made_keyframe = tr.need_keyframe || vo.ShouldReanchor(st);
             reanchor_refused += !made_keyframe;
             if (made_keyframe) {
                 stereo_valid += trace_valid;
-                stereo_total += static_cast<long>(sm.valid.size());
+                stereo_total += static_cast<long>(st.valid.size());
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -764,6 +789,13 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                      std::abs(row_check.a + row_check.b * (rr.width - 1) + row_check.c * (rr.height - 1))})
         << ", matches: " << row_check.matches << "}}\n"
         << "stereo_exposure_match: " << (pcfg.stereo_match.exposure_match ? "true" : "false") << "\n";
+    if (rgbd) {   // 2.6 (D100): only for RGB-D sources, so stereo results stay byte-identical
+        res << "rgbd_depth: {sigma_z_model: \"k*Z^2 (Khoshelham & Elberink 2012 eq. 7)\", k_per_m: "
+            << depth_model->sigma_k_per_m << ", z_min_m: " << depth_model->z_min_m << ", z_max_m: " << depth_model->z_max_m
+            << ", max_neighbour_ratio: " << depth_model->max_neighbour_ratio << ", virtual_baseline_m: "
+            << depth_model->virtual_baseline_m << ", disparity_sigma_px: " << scfg.triangulation.disparity_sigma_px
+            << ", valid_fraction_at_keyframes: " << (stereo_total ? double(stereo_valid) / stereo_total : -1.0) << "}\n";
+    }
     if (usac_retries > 0 || usac_skipped > 0) {
         res << "tracker_opencv_usac_defect: {redraws: " << usac_retries << ", epipolar_check_skipped_frames: "
             << usac_skipped << "}\n";

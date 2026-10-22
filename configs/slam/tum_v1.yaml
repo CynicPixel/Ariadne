@@ -1,0 +1,49 @@
+# 2.6 (D100): TUM RGB-D. euroc_v2's values (LOCAL_SLAM_2.3, D51-D57) with: no imu section (TUM has an accelerometer
+# only: imu.mode none), the near depth limit of the Kinect, and the triangulation's disparity noise derived in code
+# from the sensor's sigma_Z = k Z^2 model. ba.sigma_px stays EuRoC's calibrated 0.46 [ASSUMPTION: not re-calibrated
+# on TUM]. Pair with configs/perception/tum_v1.yaml.
+name: tum_v1
+
+triangulation:
+  min_depth_m: 0.4              # = the TUM source's DepthSensorModel z_min_m (Kinect v1 near limit)
+  max_reprojection_px: 2.0
+  sgbm_gate_sigma: 3.0          # §9.6: inconsistent if |Z_tri - Z_sgbm| > 3 sigma
+  disparity_sigma_px: 0.5       # IGNORED on RGB-D: the runner sets k*fx*B from the depth model (D100)
+  max_relative_sigma: 0.1       # sigma_Z / Z
+
+pnp:
+  ransac_threshold_px: 2.0
+  confidence: 0.999
+  max_iterations: 200
+  min_correspondences: 15
+  min_inliers: 12
+  huber_delta: 2.0              # §11.3 1.5-2.5
+  sigma_px: 1.0
+
+keyframe:
+  ref_ratio: 0.75               # ORB-SLAM3 thRefRatio
+  min_tracked_landmarks: 50
+  max_interval_s: 1.0           # a keyframe at least every second (time, not frames)
+
+ba:
+  huber_delta: 2.0
+  max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
+  sigma_px: 0.46                # calibrated (LOCAL_SLAM_2.3.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
+  backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
+  window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
+  chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
+  cull_after_keyframes: 2       # ORB-SLAM VI-B (adapted to stereo, design §5)
+  min_keyframe_observations: 2
+  rel_energy_tolerance: 1.0e-6  # LevMarqBase termination (D51)
+  step_norm_tolerance: 1.0e-8
+  min_gradient_tolerance: 1.0e-8
+
+lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+  motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
+  reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
+  bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
+  bridge_min_tracks: 20         # tracks shared with the anchor frame needed to try the bridge (else re-anchor on the previous frame)
+  model_ratio: 0.45             # ORB-SLAM (T-RO 2015 §IV-B): H when S_H / (S_H + S_F) > 0.45, else E
+  velocity_decay_s: 0.5         # tau of exp(-t/tau) on the pre-loss velocity, declared before the sweep (D56: 0.2 and no decay reported)
+  max_speed_m_s: 3.0            # clamp a corrupt pre-loss speed (handheld Kinect < ~1 m/s)
+  reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences

@@ -3100,3 +3100,59 @@ field except timings.
 - **What this changes:**
   - D86 item 1's "owed" run is done. The SOTA comparison is stated as above, not as parity.
   - V1_03 stays the 5.x regression case (D86, D89).
+
+## 2026-10-22 — D100: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
+
+- **Loader:** `runtime::TumSource` (`cpp/runtime/datasets/tum.hpp`), with `infra/scripts/fetch_tum.py` (sha256
+  pinned). Facts are from the TUM file-format page, read 2026-10-21:
+  - depth is stored at a factor of 5000, pre-scaled, and registered to the distorted RGB;
+  - ground truth is the colour camera's pose, written `qx qy qz qw`;
+  - RGB and depth frames are associated within 20 ms.
+
+  Timestamps are parsed to nanoseconds from the decimal string.
+- **Undistortion:** we use the calibrated fr1/fr2 intrinsics with 5 coefficients. The SAME map is applied to RGB
+  (bilinear) and to depth (nearest), which is exact for depth registered to the distorted pixels.
+  - **Deviation:** the TUM page recommends its uncalibrated ROS default set. We follow ORB-SLAM2's published
+    setup instead. `--intrinsics ros_default` is the ablation (not run).
+- **Depth path (§9.6 contract):** an RGB-D source declares a `DepthSensorModel`
+  (`perception/rgbd/depth_stereo.hpp`). The runner then takes explicit RGB-D branches; stereo sources take the
+  unchanged path.
+  - The right point is synthesised: u_R = u_L − fx·B/Z, with virtual baseline B = 0.08 m (ORB-SLAM2's RGB-D virtual
+    stereo).
+  - The sensor Z fills the §9.6 slot.
+  - Keyframe records get a `StereoDepth` built from the sensor.
+  - Depth is masked to [0.4, 4] m and to a 3×3 max/min ratio of at most 1.05 (flying pixels).
+  - Depth is rectified nearest-neighbour (`StereoRectifier::RectifyLeftNearest`).
+  - The radiometric stage is refused on RGB-D sources.
+- **σ_Z model, stated:** σ_Z = k·Z² with k = 1.425e-3 m⁻¹. Source: Khoshelham & Elberink, Sensors 2012, eq. 7,
+  with |m/fb| = 2.85e-5 cm⁻¹ and σ_d′ = ½ px, transcribed from the PMC full text. It enters the triangulation gate as
+  the virtual rig's disparity noise, σ_d = k·fx·B ≈ 0.059 px, set in code and written to `results.yaml`.
+  - **Stated consequences:**
+    - the §9.6 cross-check compares Z with itself and cannot reject;
+    - BA weights the virtual right point at `ba.sigma_px`, about 15× looser than the model (ORB-SLAM2 does the same).
+- **Configs:** `tum_v1` (perception and slam) is euroc_v2's values with `imu.mode none` (TUM has no gyro) and
+  `min_depth_m` 0.4. `ba.sigma_px` stays EuRoC's calibrated 0.46 [ASSUMPTION].
+- **Regression (`configs/benchmark/tum_regression.yaml`, checked by `infra/scripts/tum_regression.py`):**
+  - It is a separate pinned check, not part of `--premerge` (maintainer).
+  - Targets were fixed before measuring: the worst of ORB-SLAM2 T-RO 2017 Table III's RGB-D class.
+  - Seed 1, full sequences, ATE with SE(3) alignment. evo_ape (`tum -a`) on TUM's raw `groundtruth.txt` agrees to
+    1e-6 m on all three.
+  - Tolerance: pin × 1.1 + 2 mm.
+
+  | sequence | frames | ATE m | target m | in class | keyframes | lost |
+  |---|---|---|---|---|---|---|
+  | fr1/xyz | 792 | **0.0496** | 0.014 (Kerl et al. IROS 2013 Table III; was 0.017 [UNVERIFIED], corrected 2026-10-23 per D86) | **no** | 305 | 0 |
+  | fr1/desk | 573 | **0.0581** | 0.037 | **no** | 343 | 0 |
+  | fr2/xyz | 3615 | **0.0139** | 0.029 | yes | 370 | 0 |
+
+- **The negative result, reported:** both fr1 sequences are 1.6–2.9× above the class bar. That class is full SLAM
+  (loops, global BA); ours is VO with loops off. Causes not yet measured: [UNATTRIBUTED].
+  - Candidates:
+    - fr1's fast handheld motion with a rolling shutter;
+    - RGB/depth time offset of up to 20 ms (unsynchronised on fr1);
+    - a keyframe every ~2 frames (305/792) under euroc_v2's `ref_ratio`;
+    - `ba.sigma_px` not re-calibrated;
+    - the calibrated-vs-ROS-default intrinsics choice.
+- **EuRoC unchanged:** MH_01, 300 frames, `euroc_v2`. `estimate_body.tum` and `vo_trace.csv` are byte-identical
+  between `main` (aa7dce2) and this change.
+- **Cost:** track ≈ 16–18 ms per frame, keyframe ≈ 24–30 ms (640×480).

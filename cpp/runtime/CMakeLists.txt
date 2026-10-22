@@ -36,6 +36,12 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_euroc_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # The same pipeline over a TUM RGB-D sequence: sensor depth through a virtual rig (2.6, D100).
+  add_executable(ariadne_tum_vo tools/ariadne_tum_vo.cpp)
+  target_link_libraries(ariadne_tum_vo PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_tum_vo RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # The same pipeline over a simulator recording (stereo_vo_runner.hpp, D41 lens).
   add_executable(ariadne_sim_vo tools/ariadne_sim_vo.cpp)
   target_link_libraries(ariadne_sim_vo PRIVATE
