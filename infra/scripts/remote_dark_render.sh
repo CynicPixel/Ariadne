@@ -35,7 +35,10 @@ fi
 docker info --format '{{json .Runtimes}}' > "$R/docker_runtimes.json"
 
 log "loading image"
-aws s3 cp "s3://$BUCKET/runs/images/ariadne-sim-${IMAGE_ID#sha256:}.tar.zst" - --only-show-errors \
+# The object is named by the 12-hex short id (what `docker images` prints). A missing key answers 403, not 404:
+# the instance role has no s3:ListBucket (run 20261022T193443Z-gpu-5bdc2c failed exactly so, asking for the full id).
+short="${IMAGE_ID#sha256:}"; short="${short:0:12}"
+aws s3 cp "s3://$BUCKET/runs/images/ariadne-sim-$short.tar.zst" - --only-show-errors \
   | zstd -dc | docker load
 got="$(docker image inspect ariadne/sim:dev --format '{{.Id}}')"
 [ "$got" = "$IMAGE_ID" ] || { log "image id $got != $IMAGE_ID"; exit 2; }
