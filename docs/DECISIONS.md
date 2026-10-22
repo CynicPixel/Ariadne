@@ -2706,7 +2706,7 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
 
   | sequence | frames | ATE m | target m | in class | keyframes | lost |
   |---|---|---|---|---|---|---|
-  | fr1/xyz | 792 | **0.0496** | 0.017 [UNVERIFIED target] | **no** | 305 | 0 |
+  | fr1/xyz | 792 | **0.0496** | 0.014 (Kerl et al. IROS 2013 Table III; was 0.017 [UNVERIFIED], corrected 2026-10-23 per D86) | **no** | 305 | 0 |
   | fr1/desk | 573 | **0.0581** | 0.037 | **no** | 343 | 0 |
   | fr2/xyz | 3615 | **0.0139** | 0.029 | yes | 370 | 0 |
 

@@ -22,7 +22,9 @@ tolerance: {rel_tol: 0.10, abs_tol_m: 0.002}
 sequences:
   freiburg1_xyz:
     sha256: a0236d97b8c30cd93b653656d2b6c293ff7c982a4130ef2a1a8beecdb124ef98
-    target_m: 0.017           # [UNVERIFIED] not in ORB-SLAM2 Table III; Kintinuous 0.017 as cited by later RGB-D papers
+    target_m: 0.014           # not in ORB-SLAM2 Table III. Kerl, Sturm & Cremers, IROS 2013, Table III (ATE RMSE m): DVO-SLAM
+                              # 0.011, RGB-D SLAM 0.014, MRSMap 0.013 -> worst 0.014 (read from cvg.cit.tum.de kerl13iros.pdf,
+                              # 2026-10-23; D86's condition). Replaces 0.017 [UNVERIFIED], which no primary table gave.
     pin_m: 0.0496               # measured 2026-10-22 (D100); evo_ape tum -a agrees to 1e-6 m
   freiburg1_desk:
     sha256: e983d6830916e66dc4a46a71368046b149b283de87769690e7aa4e0b9483530c
