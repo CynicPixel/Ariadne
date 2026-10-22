@@ -9,17 +9,22 @@
 // python/analysis/volumetric_eval.py scores it exactly as mission_eval.py scores 1.8's slab.
 //
 //   ariadne_volumetric_eval --spool DIR --scene DIR --config configs/mission/mission_v1.yaml --out DIR
-//                           [--egress 1 [--support-band LO,HI]]
+//                           [--egress 1 [--support-band LO,HI]] [--nbv 1]
 //
 // --egress 1 (4.5, design EGRESS_4.5 §7, D113): every replan_period_s of mission time (1.8's schedule: t0 + k T,
 // then once after the last keyframe), D111's maps -> body support -> the §22.1 penalty -> EgressPlanner (D* Lite,
 // target -> any briefed entrance at rho_responder). One JSON line per replan in egress_routes.jsonl; the final
 // route's support range in results.yaml (the §7 pre-registered range check, read before any GT scoring).
+// --nbv 1 (4.3, NBV_4.3 §7, D114; implies the replan schedule): at every replan, PlanNbv per integrated agent
+// (pose = its latest keyframe, flown = summed keyframe displacement, peers = the other agent's keyframes); one JSON
+// line per (replan, agent) in nbv_decisions.jsonl: targets per generator, notes, timing, the top 10 options. The
+// trajectory is the spool's: this logs what the planner WOULD choose (machinery evidence, not policy value).
 // --support-band restricts support to voxel layers with centre z in [LO, HI] m (the §7 fallback).
 //
 // Writes slab.png (uint8 0 unknown / 1 free / 2 occupied, row 0 = south), results.yaml, manifest.yaml.
 // The spool reading duplicates ariadne_mission's; it moves onto L1's shared briefing/spool library when that lands.
 // ---------------------------------------------------------------------------
+#include "planning/mission/nbv.hpp"
 #include "planning/route/egress.hpp"
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
@@ -98,7 +103,7 @@ double Ms(std::chrono::steady_clock::time_point t0) {
 int main(int argc, char** argv) {
     try {
         std::string spool_dir, scene_dir, config_path, out;
-        bool egress_on = false;
+        bool egress_on = false, nbv_on = false;
         double band_lo = -1e9, band_hi = 1e9;
         for (int i = 1; i + 1 < argc; i += 2) {
             const std::string k = argv[i], v = argv[i + 1];
@@ -107,6 +112,7 @@ int main(int argc, char** argv) {
             else if (k == "--config") config_path = v;
             else if (k == "--out") out = v;
             else if (k == "--egress") egress_on = v == "1";
+            else if (k == "--nbv") nbv_on = v == "1";
             else if (k == "--support-band") {
                 if (std::sscanf(v.c_str(), "%lf,%lf", &band_lo, &band_hi) != 2 || !(band_hi > band_lo)) {
                     throw std::invalid_argument("--support-band LO,HI");
@@ -185,8 +191,12 @@ int main(int argc, char** argv) {
         Stats s_int, s_esdf, s_fr;
         size_t integrated[2] = {0, 0}, incremental = 0, rebuilds = 0, esdf_voxels = 0;
         std::vector<Kf> held;
+        std::vector<core::Vec3> track[2];
+        double flown[2] = {0, 0};
         auto Integrate = [&](const Kf& k) {
             const core::SE3 T_W_C = T_W_O0 * (k.agent == 0 ? k.T_O_C : T_O0_O1 * k.T_O_C);
+            if (!track[k.agent].empty()) flown[k.agent] += (T_W_C.t - track[k.agent].back()).norm();
+            track[k.agent].push_back(T_W_C.t);
             const cv::Mat Z = ReadHalf(k.stem.string() + "_depth.png", k.w, k.h);
             const cv::Mat S = ReadHalf(k.stem.string() + "_sigma.png", k.w, k.h);
             planning::DepthFrame f;
@@ -229,7 +239,17 @@ int main(int argc, char** argv) {
         const planning::EgressWeights ew;   // w_u = w_c = 1, w_r = 0: the risk proxy is uncalibrated (D112 pending)
         planning::EgressPlanner egress(target, exits, cell);
         std::ofstream eg_log;
-        if (egress_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
+        if (egress_on || nbv_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
+        std::ofstream nbv_log;
+        if (nbv_on) nbv_log.open(fs::path(out) / "nbv_decisions.jsonl");
+        Stats s_nbv;
+        planning::NbvParams nbp;   // replay: no energy budget or mission clock (the hard rule cannot fire; stated)
+        nbp.rho_r = rho_r, nbp.rho_a = trp.agent.rho;
+        if (!kfs.empty()) {
+            nbp.frustum.fx = kfs[0].fx, nbp.frustum.fy = kfs[0].fy, nbp.frustum.cx = kfs[0].cx, nbp.frustum.cy = kfs[0].cy;
+            nbp.frustum.width = kfs[0].w, nbp.frustum.height = kfs[0].h;
+        }
+        nbp.frustum.max_range_m = tp.max_depth;
         double first_valid_s = -1;
         int replans = 0, reroutes = 0;
         Stats s_replan;
@@ -263,10 +283,44 @@ int main(int argc, char** argv) {
                 fresh_cost = fresh.Cost(), fresh_expanded = fresh.Expanded();
             }
             last_route = r, last_support = support;
+            if (nbv_on) {
+                const planning::CoarseLayer coarse_now = planning::BuildCoarse(map);
+                for (int a = 0; a < 2; ++a) {
+                    if (track[a].empty()) continue;
+                    planning::NbvInputs ni;
+                    ni.map = &map, ni.frontiers = &fr, ni.coarse = &coarse_now, ni.trav = &m, ni.grid = gf;
+                    ni.route = &r, ni.route_support = &support, ni.responder = trp.responder, ni.entrances = exits;
+                    for (size_t i = 0; i < track[1 - a].size(); ++i) ni.peers.push_back({1 - a, int64_t(i), track[1 - a][i]});
+                    ni.t_s = ts;
+                    ni.bounds.lo = core::Vec3(ox, oy, 0.0);
+                    ni.bounds.hi = core::Vec3(ox + cols * cell, oy + rows * cell, cfg["grid"]["z_max_m"].as<double>());
+                    planning::AgentState as;
+                    as.position = track[a].back(), as.e_used_m = flown[a], as.own_keyframes = track[a];
+                    const auto t1 = std::chrono::steady_clock::now();
+                    const planning::NbvPlan pl = planning::PlanNbv(ni, a, as, nbp);
+                    const double ms = Ms(t1);
+                    s_nbv.Add(ms);
+                    nbv_log << "{\"t_s\":" << ts << ",\"agent\":" << a << ",\"mode\":\"replay\",\"executed\":false,\"ms\":" << ms
+                            << ",\"lambda_path\":" << pl.lambda_path << ",\"targets\":[" << pl.targets[0] << "," << pl.targets[1]
+                            << "," << pl.targets[2] << "," << pl.targets[3] << "," << pl.targets[4] << "],\"n_options\":"
+                            << pl.options.size() << ",\"notes\":[";
+                    for (size_t i = 0; i < pl.notes.size(); ++i) nbv_log << (i ? "," : "") << "\"" << pl.notes[i] << "\"";
+                    nbv_log << "],\"options\":[";
+                    for (size_t i = 0; i < std::min<size_t>(10, pl.options.size()); ++i) {
+                        const auto& o = pl.options[i];
+                        nbv_log << (i ? "," : "") << "{\"src\":\"" << char(o.source) << "\",\"task_id\":" << o.task_id
+                                << ",\"goal\":[" << o.goal_xy.first << "," << o.goal_xy.second << "],\"yaw\":" << o.goal_yaw
+                                << ",\"path_m\":" << o.path_m << ",\"ig_raw\":[" << o.ig_raw[0] << "," << o.ig_raw[1] << ","
+                                << o.ig_raw[2] << "," << o.ig_raw[3] << "," << o.ig_raw[4] << "],\"gain\":" << o.gain
+                                << ",\"utility\":" << o.utility << ",\"risk\":" << o.risk << "}";
+                    }
+                    nbv_log << "]}\n";
+                }
+            }
         };
         int64_t next_replan = kfs.front().t_ns + int64_t(cfg["replan_period_s"].as<double>() * 1e9);
         for (const auto& k : kfs) {
-            while (egress_on && k.t_ns >= next_replan) {
+            while ((egress_on || nbv_on) && k.t_ns >= next_replan) {
                 Replan(next_replan, false);
                 next_replan += int64_t(cfg["replan_period_s"].as<double>() * 1e9);
             }
@@ -281,7 +335,7 @@ int main(int argc, char** argv) {
             }
             Integrate(k);
         }
-        if (egress_on) Replan(kfs.back().t_ns, true);
+        if (egress_on || nbv_on) Replan(kfs.back().t_ns, true);
 
         // --- slab on the briefing grid (1.8's rule, same band) -------------------------------------------------------
         const int zv0 = int(std::floor(z_lo / tp.voxel)), zv1 = int(std::floor(z_hi / tp.voxel));
@@ -404,6 +458,7 @@ int main(int argc, char** argv) {
             << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
             << "risk_terms: {" << risk_where << "}\n";
         res << "known_weights: {" << wq << "}   # NBV_4.3 §3 entropy-saturation check\n";
+        if (nbv_on) res << "nbv: {replans_x_agents: " << s_nbv.ms.size() << ", ms: {mean: " << s_nbv.Mean() << ", p95: " << s_nbv.Pct(0.95) << "}}\n";
         if (egress_on) {
             // §7 range check (no GT): support along the final route. Flat (spread < 0.1) => the band fallback.
             std::vector<float> sv;

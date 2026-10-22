@@ -223,3 +223,31 @@ meanwhile.
 5. L1's closed-loop facts got from B before asking the maintainer (§9).
 6. AWS provenance: the D112 payload binaries were built at `df38a12` (pinned by `inputs.SHA256SUMS`); run commit
    `c8a3262`. Both go into the D112 run record.
+
+## 11. As built (2026-10-23)
+
+Code: `cpp/planning/mission/nbv.{hpp,cpp}` (D114). Tests: `tests/unit/test_nbv.cpp`, 6 tests, all pass with the 7
+egress tests:
+- the raycast on a wall: exactly 0 coverage behind a solid wall; the entropy identity with and without a hole;
+  egress counts only envelope voxels; clipping to bounds;
+- p90 scale invariance and its fallbacks;
+- λ_path by hand;
+- the reserve rule;
+- the sampler contract;
+- generator E's target at the route's lowest support.
+
+**Replay decision log on the evidence spool** (`evaluation/runs/nbv_4.3_replay/`, 52 decisions: agent 0 at all 40
+replans, agent 1 at the 12 after the merge):
+- **First run: 5.9 s per agent per plan (p95 8.0 s).** The cost was the sampler: every target's 48 sampled views
+  got the full 256-ray bundle.
+  - Fixed: views are ranked by coverage on a 64-ray bundle, and only the 2 kept views get the full 256-ray terms.
+    The voxel state now takes one hash lookup.
+  - IG is now also clipped to the briefing's extent (grid × [0, `z_max`]), so rays leaving the building are not gain.
+- **After the fix: mean 1.98 s, p95 3.1 s.**
+  - That's fine under lockstep L1 (the world is paused while planning).
+  - Unpaused, it would exceed the 5 s period's budget on the dev host. Not a target; stated.
+- **Generator mix by the end:** A 32–36 targets, B 109–118, C 20 (agent 0), E 2. D: 0 (no producer).
+- **The top choice:** A 27, B 24, C 1. None empty.
+- Both missing producers are named in every line's notes.
+- The early views' Δcoverage (≈ 15k voxels) is real: at t = 5 s the building's interior is unknown and inside the
+  extent.

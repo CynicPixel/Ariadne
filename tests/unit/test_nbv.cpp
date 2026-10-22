@@ -73,6 +73,10 @@ TEST(Nbv, RaycastIgWallAndHole) {
     EXPECT_NEAR(b.entropy, (b.voxels - b.coverage) * h1 + b.coverage, 1e-9 * b.voxels);
     const IgCounts c = RaycastIg(holed, eye, M_PI, f, nullptr);   // facing away: the unknown beyond the patch
     EXPECT_GT(c.coverage, 0);
+    Box3 patch;   // the same view clipped to the observed patch's extent: nothing unknown is inside it
+    patch.lo = core::Vec3(0, 0, 0), patch.hi = core::Vec3(1.0, 3.0, 2.0);
+    EXPECT_EQ(RaycastIg(holed, eye, M_PI, f, nullptr, patch).coverage, 0);
+    EXPECT_LT(RaycastIg(holed, eye, M_PI, f, nullptr, Box3{}, 8).voxels, c.voxels) << "a 64-ray bundle reaches fewer voxels";
     // The route envelope counts only its own voxels: here everything behind the wall, out to the rays' 2.84 m reach.
     std::unordered_set<int64_t> env;
     for (int x = 21; x < 70; ++x)

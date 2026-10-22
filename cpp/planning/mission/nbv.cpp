@@ -106,25 +106,29 @@ double VoxelEntropy(const TsdfVoxel* v, double w_min) {
 }
 
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
-                   const std::unordered_set<int64_t>* route_env) {
+                   const std::unordered_set<int64_t>* route_env, const Box3& bounds, int grid) {
     IgCounts ig;
+    const int G = grid > 0 ? grid : f.grid;
+    const double w_min = map.Params().w_min, half = 0.5 * map.Voxel();
     const double vox = map.Voxel();
     const core::Vec3 fw(std::cos(yaw), std::sin(yaw), 0), right(std::sin(yaw), -std::cos(yaw), 0), down(0, 0, -1);
     std::unordered_set<int64_t> seen;
-    for (int i = 0; i < f.grid; ++i)
-        for (int j = 0; j < f.grid; ++j) {
-            const double u = (j + 0.5) * f.width / f.grid, v = (i + 0.5) * f.height / f.grid;
+    for (int i = 0; i < G; ++i)
+        for (int j = 0; j < G; ++j) {
+            const double u = (j + 0.5) * f.width / G, v = (i + 0.5) * f.height / G;
             const core::Vec3 d = (fw + ((u - f.cx) / f.fx) * right + ((v - f.cy) / f.fy) * down).normalized();
             const core::Vec3 a = eye / vox, b = (eye + d * f.max_range_m) / vox;
             bool stop = false;
             TraverseVoxels(a, b, [&](int x, int y, int z) {
                 if (stop) return;
                 const Idx3 q{x, y, z};
-                const TsdfVoxel* t = map.Find(q);
-                const uint8_t st = map.State(q);
-                if (seen.insert(Pack(q)).second) {
+                const TsdfVoxel* t = map.Find(q);   // one lookup; State() inlined (D110: unknown iff w <= w_min)
+                const uint8_t st = !t || t->w <= w_min ? kUnknown : (t->sdf < half ? kOccupied : kFree);
+                const core::Vec3 c = map.Centre(q);
+                const bool inside = (c.array() >= bounds.lo.array()).all() && (c.array() <= bounds.hi.array()).all();
+                if (inside && seen.insert(Pack(q)).second) {
                     ++ig.voxels;
-                    ig.entropy += VoxelEntropy(t, map.Params().w_min);
+                    ig.entropy += VoxelEntropy(t, w_min);
                     if (st == kUnknown) {
                         ++ig.coverage;
                         if (route_env && route_env->count(Pack(q))) ++ig.egress;
@@ -137,7 +141,8 @@ IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const 
 }
 
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
-                              const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env) {
+                              const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
+                              const Box3& bounds) {
     std::vector<View> views;
     const double vox = map.Voxel();
     const Idx3 tv = map.ToVoxel(target);
@@ -156,11 +161,12 @@ std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::
             if (blocked) continue;
             View v;
             v.eye = eye, v.cell = c, v.yaw = std::atan2(target.y() - eye.y(), target.x() - eye.x());
-            v.ig = RaycastIg(map, eye, v.yaw, f, route_env);
+            v.ig = RaycastIg(map, eye, v.yaw, f, route_env, bounds, f.rank_grid);   // ranking bundle
             views.push_back(v);
         }
     std::stable_sort(views.begin(), views.end(), [](const View& a, const View& b) { return a.ig.coverage > b.ig.coverage; });
     if (int(views.size()) > sp.keep) views.resize(size_t(sp.keep));
+    for (auto& v : views) v.ig = RaycastIg(map, v.eye, v.yaw, f, route_env, bounds);   // the full bundle for the terms
     return views;
 }
 
@@ -335,7 +341,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
 
     // --- views, raw terms, costs ---------------------------------------------------------------------------------
     for (const auto& t : targets) {
-        for (const View& v : SampleViews(map, g, tm.trav_a, t.p, p.sampler, p.frustum, envp)) {
+        for (const View& v : SampleViews(map, g, tm.trav_a, t.p, p.sampler, p.frustum, envp, in.bounds)) {
             if (!In(dist, v.cell) || !std::isfinite(dist.at<double>(v.cell.r, v.cell.c))) continue;
             TaskCandidate c;
             c.task_id = TaskId(t.src, t.anchor), c.source = t.src;

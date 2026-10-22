@@ -35,6 +35,12 @@ struct RigFrustum {   // the left camera at the spool's 640 x 360 (D90); optical
     int width = 640, height = 360;
     double max_range_m = 2.84;   // mission_v1 depth gate
     int grid = 16;               // grid x grid rays (256: inside arch §21.3's 200-500)
+    int rank_grid = 8;           // the sampler ranks views by coverage on this coarser bundle (64 rays), then the
+                                 // kept views get the full bundle (replay measurement: 5.9 s / plan at 256 everywhere)
+};
+
+struct Box3 {   // world m; IG counts only voxels whose centre is inside (the briefing's extent: grid x [0, z_max])
+    core::Vec3 lo = core::Vec3::Constant(-1e9), hi = core::Vec3::Constant(1e9);
 };
 
 struct IgCounts {
@@ -47,7 +53,7 @@ struct IgCounts {
 /// The frustum bundle from `eye` (world m) looking along `yaw` (rad, world, about +z). Rays stop at (and include)
 /// the first occupied voxel. `route_env` = Pack()ed voxel indices of the route envelope, or null.
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
-                   const std::unordered_set<int64_t>* route_env);
+                   const std::unordered_set<int64_t>* route_env, const Box3& bounds = Box3{}, int grid = -1);
 
 /// Binary entropy (bits) of a known voxel of weight w under D114's mapping; 1 for unknown.
 double VoxelEntropy(const TsdfVoxel* v, double w_min);
@@ -69,7 +75,8 @@ struct View {
 /// FUEL-style views of `target`: in trav_a, line of sight (no occupied voxel farther than one voxel from the
 /// target's), the best `keep` by coverage (ties by sampling order).
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
-                              const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env);
+                              const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
+                              const Box3& bounds = Box3{});
 
 struct PeerKeyframe {
     int agent = 0;
@@ -136,6 +143,7 @@ struct NbvInputs {
     const AliasSource* alias = nullptr;
     bool risk_calibrated = false;              // D112's bar passed: the structural [PROXY] enters C_risk
     double t_s = 0;
+    Box3 bounds;                               // the briefing's extent (rays leaving the building are not gain)
 };
 
 struct NbvPlan {
