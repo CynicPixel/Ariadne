@@ -208,7 +208,13 @@ but the shaded red box renders at (95, 30, 30), so a correct render was rejected
 with a message blaming black frames. The detector now uses channel dominance, and the failure
 message distinguishes a uniform frame from an unrecognised scene.
 
-**NOT verified: the NVIDIA EGL path on g5/g6** `[UNVERIFIED]`. It depends on the NVIDIA Container
+**Verified 2026-10-22 on g4dn.xlarge (Tesla T4, driver 595.91.07; DLAMI base OSS NVIDIA, Ubuntu 24.04):**
+`infra/scripts/sim.sh` printed `render mode: nvidia-egl` and `SIM_SMOKE=PASS` with the unmodified image
+`sha256:8b780f52…` (run `20261022T200422Z-gpu-b04560`, D137). The NVIDIA Container Toolkit was already the docker
+runtime on the DLAMI. A g5/g6 instance has not been tried. One prerequisite on an instance: the shipped tree must
+belong to the image's user (uid 1000), or containers fail EACCES writing into `/work`.
+
+~~**NOT verified: the NVIDIA EGL path on g5/g6** `[UNVERIFIED]`.~~ It depends on the NVIDIA Container
 Toolkit injecting the driver's EGL vendor library via glvnd (`NVIDIA_DRIVER_CAPABILITIES` includes
 `graphics`). No GPU exists here. First task on a g5/g6: `infra/scripts/sim.sh` must print
 `render mode: nvidia-egl` and `SIM_SMOKE=PASS`.
