@@ -48,6 +48,9 @@ df -h / > "$R/df_start.txt"
 
 step "3 [SMOKE-TEST] NVIDIA EGL render path"
 mkdir -p "$R/egl_smoke"
+# The containers run as uid 1000 (ariadne), this script as root: hand them their output dirs (the first relaunch
+# failed here, PermissionError on /out/smoke_first.png, after nvidia-egl had rendered frame 1).
+chown -R "$uid:$gid" "$R/egl_smoke" "$REPO"
 ARIADNE_SMOKE_OUT_HOST="$R/egl_smoke" infra/scripts/sim.sh > "$R/egl_smoke/sim_smoke.log" 2>&1
 smoke_rc=$?
 grep -h -i 'render mode\|SIM_SMOKE' "$R/egl_smoke/sim_smoke.log" | tail -5 > "$R/egl_smoke/summary.txt"
@@ -56,7 +59,8 @@ grep -h -i 'render mode\|SIM_SMOKE' "$R/egl_smoke/sim_smoke.log" | tail -5 > "$R
 
 for s in $SEEDS; do
   SC=build/worldgen/scenes/ci_tiny_hazard_$s REC=build/risk_calib/rec_$s OUT=build/risk_calib/seed_$s
-  mkdir -p "$R/seed_$s" "$OUT"
+  mkdir -p "$R/seed_$s" "$OUT" "$(dirname "$REC")"
+  chown -R "$uid:$gid" "$REPO/build"
   step "4.$s render seed $s"
   t0=$(date +%s)
   ARIADNE_GIT_COMMIT="$COMMIT" ARIADNE_GIT_DIRTY=false \
