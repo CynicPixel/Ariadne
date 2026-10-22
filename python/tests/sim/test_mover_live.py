@@ -5,7 +5,8 @@ ci_tiny seed 0, the live mission with its cameras removed (server only, no rende
      yaw;
   2. a goto into a wall is REFUSED with the envelope reason, and the agent holds;
   3. a hold (0 poses) is accepted and adds no segment;
-  4. the executed-script log's last line is a valid script (contiguous; the commanded segments carry the command id).
+  4. a 3-waypoint follow (a square back toward the entrance) is accepted and GT pose ends at its last waypoint;
+  5. the executed-script log's last line is a valid script (contiguous; the commanded segments carry the command id).
 
 Runs in the sim image with ROS sourced:  infra/scripts/worldgen.sh simtest
 """
@@ -63,14 +64,14 @@ def test_live_commands(world):
     d, sdf, ent = world
     env = dict(os.environ, GZ_SIM_SYSTEM_PLUGIN_PATH="/work/build/sim-plugins", GZ_TRANSPORT_RCVHWM="0",
                GZ_TRANSPORT_SNDHWM="0")
-    gz = subprocess.Popen(["gz", "sim", "-s", "-r", "--iterations", "60000", sdf], cwd=d, env=env,
+    gz = subprocess.Popen(["gz", "sim", "-s", "-r", "--iterations", "120000", sdf], cwd=d, env=env,
                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     try:
         time.sleep(4.0)                                   # past the 2 s start hold (RTF ~1, server only)
         x0, y0 = ent["start_xy_m"]
         yaw0 = math.radians(ent["start_yaw_deg"])
         gx, gy, gyaw = x0 + math.cos(yaw0), y0 + math.sin(yaw0), yaw0 + 0.5
-        states = _echo(STATE, 3, 40)
+        states = _echo(STATE, 4, 90)
         time.sleep(1.0)
         q = f"orientation{{z:{math.sin(gyaw / 2)} w:{math.cos(gyaw / 2)}}}"
         hdr = 'header{stamp{sec:%d} data{key:"frame_id" value:"world"}}'
@@ -79,19 +80,27 @@ def test_live_commands(world):
         _pub(hdr % 5 + f" pose{{position{{x:{x0} y:{y0 + 30.0} z:1.0}}}}")   # 30 m north: through a wall
         time.sleep(1.0)
         _pub(hdr % 6)                                                      # hold
-        out, _ = states.communicate(timeout=40)
+        time.sleep(1.0)
+        # follow: a 0.3 m-wide U beside the goto point, back to the entrance (inside the 1.35 m vestibule); no yaw.
+        lx, ly = -math.sin(yaw0), math.cos(yaw0)
+        fw = [(gx + 0.3 * lx, gy + 0.3 * ly), (x0 + 0.3 * lx, y0 + 0.3 * ly), (x0, y0)]
+        _pub(hdr % 7 + "".join(f" pose{{position{{x:{x} y:{y} z:1.0}} orientation{{w:0}}}}" for x, y in fw))
+        out, _ = states.communicate(timeout=90)
         st = _states(out)
-        assert [s["cmd_stamp_ns"] for s in st] == [4_000_000_000, 5_000_000_000, 6_000_000_000], st
+        assert [s["cmd_stamp_ns"] for s in st] == [4_000_000_000, 5_000_000_000, 6_000_000_000, 7_000_000_000], st
         assert st[0]["accepted"] and st[0]["kind"] == "goto" and st[0]["segments"] >= 2, st[0]
         assert not st[1]["accepted"] and "envelope" in st[1]["reason"], st[1]
         assert st[2]["accepted"] and st[2]["kind"] == "hold" and st[2]["segments"] == 0, st[2]
+        assert st[3]["accepted"] and st[3]["kind"] == "follow" and st[3]["segments"] >= 5, st[3]
+        time.sleep(max(0.0, st[3]["t_end_s"] - st[3]["applied_ns"] * 1e-9) + 2.0)   # RTF ~1, server only
         pose = _echo(POSE, 1, 10).communicate(timeout=15)[0]
         px = float(re.search(r"position \{\s*x: ([-\d.e]+)", pose).group(1))
         py = float(re.search(r"position \{.*?y: ([-\d.e]+)", pose, re.S).group(1))
-        assert math.hypot(px - gx, py - gy) < 1e-6, (px, py, gx, gy)
+        assert math.hypot(px - x0, py - y0) < 1e-6, (px, py, x0, y0)
         last = json.loads(open(os.path.join(d, "mover_agent_0.jsonl")).read().splitlines()[-1])
         segs = last["segments"]
         assert any(s["tag"] == "cmd:4000000000" and s["kind"] == "move" for s in segs)
+        assert sum(s["tag"] == "cmd:7000000000" and s["kind"] == "move" for s in segs) == 3
         for a, b in zip(segs, segs[1:]):
             assert abs(a["t0"] + a["duration"] - b["t0"]) < 1e-9
     finally:

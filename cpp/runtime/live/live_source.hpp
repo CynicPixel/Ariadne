@@ -16,6 +16,11 @@
 //                     over (topic, stamp, payload) in that order: the first replay check.
 //   LiveSimSource     a StereoSource over one agent's image queue. Calibration and extrinsics from the mission
 //                     JSON (a live run has no canonical bag and no /tf_static); lenient pairing (drops counted).
+//                     Agents take turns per frame through a shared lock (D152a): with two estimators calling into
+//                     OpenCV's one parallel_for_ pool at once, one pose in 501 differed between two replays of the same
+//                     recording (PnP inliers 323 vs 322; same tracks and correspondences). [UNVERIFIED] cause: a busy
+//                     pool runs the other caller's job serially, changing stripe partitioning and so the order of
+//                     floating-point reductions. Turn-taking removes the contention whatever the cause.
 // ---------------------------------------------------------------------------
 #include "core/determinism/digests.hpp"
 #include "runtime/datasets/stereo_source.hpp"
@@ -237,9 +242,11 @@ private:
 
 class LiveSimSource : public StereoSource {
 public:
-    LiveSimSource(const std::string& scene, int agent, MessageQueue& images, const GtStore& gt,
+    /// `turn`: held while one frame runs through the estimator (D152a). Every agent's source shares it, so frames are
+    /// processed one at a time, in whatever order, and each OpenCV call sees an idle thread pool.
+    LiveSimSource(const std::string& scene, int agent, MessageQueue& images, const GtStore& gt, std::mutex& turn,
                   const std::string& mission = "live")
-        : agent_(agent), images_(images), gt_(gt) {
+        : agent_(agent), images_(images), gt_(gt), turn_(turn) {
         const YAML::Node sc = YAML::LoadFile(scene + "/scene.json");
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
@@ -308,6 +315,7 @@ public:
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         SimFrameAssembler assembler(map_, uint32_t(agent_), t_left_, t_right_, /*strict=*/false);
         while (auto m = images_.Pop()) {
+            std::lock_guard<std::mutex> lk(turn_);
             if (assembler.Feed(m->topic, m->data->data(), m->data->size(), on_frame) && assembler.emitted() == max_frames) break;
         }
         unpaired_ = assembler.unpaired() + assembler.pending();
@@ -322,6 +330,7 @@ private:
     int agent_;
     MessageQueue& images_;
     const GtStore& gt_;
+    std::mutex& turn_;
     std::string scene_id_, rig_, t_left_, t_right_;
     perception::LensModel lens_;
     perception::LensMap map_;

@@ -7,8 +7,8 @@
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
-# Three containers per run, each named ariadne-live-<id>-{rt,sim,console}; only those are ever stopped, by the
-# exact ids this script started (other sessions share the docker daemon):
+# Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
+# container ids `docker run -d` printed for them (other sessions share the docker daemon):
 #   rt       ariadne/core-dev  ariadne_live --link <run>/link.sock  (listens first)
 #   sim      ariadne/sim       ros2 launch ariadne_sim live_world.launch.py: gz sim PAUSED + RosGzBridge +
 #                              RuntimeLink in one component container; unpaused here once <run>/link.ready exists
@@ -79,44 +79,41 @@ cmd_run() {
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, render: $(render_args | cut -d' ' -f1-2)"
 
   # 1. The runtime listens first.
-  CONTAINERS+=("ariadne-live-$id-rt")
-  docker run -d --name "ariadne-live-$id-rt" -u "$U" -v "$REPO_ROOT":/work -w /work \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" -u "$U" -v "$REPO_ROOT":/work -w /work \
     -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
     -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
     "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
       --mission-config configs/mission/mission_v1.yaml --live-config "$live_cfg" \
-      --out "$run" --link "$run/link.sock" >/dev/null
+      --out "$run" --link "$run/link.sock")")
 
   # 2. gz (paused) + bridge + RuntimeLink.
-  CONTAINERS+=("ariadne-live-$id-sim")
   # shellcheck disable=SC2046
-  docker run -d --name "ariadne-live-$id-sim" -u "$U" $(render_args) -v "$REPO_ROOT":/work -w /work \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-sim" -u "$U" $(render_args) -v "$REPO_ROOT":/work -w /work \
     -e GZ_SIM_SYSTEM_PLUGIN_PATH=/work/build/sim-plugins -e HOME=/tmp \
     -e GZ_TRANSPORT_RCVHWM=0 -e GZ_TRANSPORT_SNDHWM=0 \
     "$SIM_IMAGE" bash -c "source /opt/ros/jazzy/setup.bash && source build/ros2/install/setup.bash && \
-      ros2 launch ariadne_sim live_world.launch.py scene_dir:=/work/$scene run_dir:=/work/$run" >/dev/null
+      ros2 launch ariadne_sim live_world.launch.py scene_dir:=/work/$scene run_dir:=/work/$run")")
 
   # 3. Unpause once every topic is matched end to end.
   local t0; t0=$(date +%s)
   until [ -f "$REPO_ROOT/$run/link.ready" ]; do
-    [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "ariadne-live-$id-sim" 2>&1 | tail -40 >&2; exit 1; }
-    docker inspect -f '{{.State.Running}}' "ariadne-live-$id-sim" | grep -q true || { log "sim container exited"; docker logs "ariadne-live-$id-sim" 2>&1 | tail -40 >&2; exit 1; }
+    [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "${CONTAINERS[1]}" 2>&1 | tail -40 >&2; exit 1; }
+    docker inspect -f '{{.State.Running}}' "${CONTAINERS[1]}" | grep -q true || { log "sim container exited"; docker logs "${CONTAINERS[1]}" 2>&1 | tail -40 >&2; exit 1; }
     sleep 2
   done
   log "link ready: $(cat "$REPO_ROOT/$run/link.ready")"
-  docker exec "ariadne-live-$id-sim" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
+  docker exec "${CONTAINERS[1]}" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
     --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 10000 --req 'pause: false'" >&2
   log "world running"
 
   # 4. Console, fed live, with a probe client so frames are served during the run.
-  CONTAINERS+=("ariadne-live-$id-console")
   local port="${ARIADNE_CONSOLE_PORT:-8080}"
-  docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
     -p "127.0.0.1:$port:8080" -e ARIADNE_LIVE="/work/$run:/work/$scene" "$CONSOLE_IMAGE" \
-    uvicorn operator_console.server:app --host 0.0.0.0 --port 8080 --log-level warning >/dev/null
-  docker exec -d "ariadne-live-$id-console" python3 -c "
+    uvicorn operator_console.server:app --host 0.0.0.0 --port 8080 --log-level warning)")
+  docker exec -d "${CONTAINERS[2]}" python3 -c "
 import asyncio, websockets
 async def main():
     await asyncio.sleep(3)
@@ -125,11 +122,12 @@ async def main():
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
-  local rc; rc="$(docker wait "ariadne-live-$id-rt")"
-  docker logs "ariadne-live-$id-rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
-  docker logs "ariadne-live-$id-sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
+  local rc; rc="$(docker wait "${CONTAINERS[0]}")"
+  docker logs "${CONTAINERS[0]}" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
+  docker logs "${CONTAINERS[1]}" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
   sleep 3   # the console's last poll sees results.yaml and ends its stream
-  docker logs "ariadne-live-$id-console" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  docker logs "${CONTAINERS[2]}" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
   stop_mine
   for c in "${CONTAINERS[@]}"; do docker rm "$c" >/dev/null 2>&1 || true; done
   CONTAINERS=()

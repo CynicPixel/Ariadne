@@ -345,8 +345,9 @@ int main(int argc, char** argv) {
         // --- per-agent estimators: the replay path, unchanged ---------------------------------------------------
         std::thread vo[2];
         std::unique_ptr<live::LiveSimSource> sources[2];
+        std::mutex estimator_turn;   // D152a: one frame at a time through the estimators
         for (int k = 0; k < 2; ++k) {
-            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, "live");
+            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
             vo[k] = std::thread([&, k] {
                 AgentLane& L = lanes[k];
                 tools::StereoVoArgs a = va;
