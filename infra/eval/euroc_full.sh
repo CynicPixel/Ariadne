@@ -50,6 +50,8 @@ DOCKER=(docker run --rm --network host -v "$SRC":/work -v "$DATA":/data:ro -v "$
   -e ARIADNE_GIT_COMMIT="$GIT_COMMIT" -e ARIADNE_GIT_DIRTY=false -e ARIADNE_IMAGE_DIGEST="$(cat "$R/image_id.txt")"
   "$IMAGE")
 mkdir -p "$OUT"
+# The image runs as its own non-root user; the tree arrived as root. Hand the writable dirs to that user.
+chown -R "$(docker run --rm "$IMAGE" id -u):$(docker run --rm "$IMAGE" id -g)" "$SRC" "$OUT"
 t0=$(date +%s)
 "${DOCKER[@]}" bash -c "cmake -S /work -B /work/build/aws -G Ninja -DARIADNE_REQUIRE_OPENCV=ON -DCMAKE_SKIP_RPATH=ON \
     -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent >/dev/null \
