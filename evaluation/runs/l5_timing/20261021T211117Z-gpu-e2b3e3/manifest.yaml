@@ -1,0 +1,11 @@
+# L5 single-process DNN timings (ariadne_dnn_timing), one fresh g4dn.xlarge spot instance; nothing else ran on it.
+tool: ariadne_dnn_timing (cpp/runtime/tools/ariadne_dnn_timing.cpp)
+git_commit: c121961ed902206b31df1297d21f2a3197650943
+binary_built_at: c863e40 (build/docker, image ariadne/core-dev:dev)
+image: ariadne/core-dev:dev sha256:7f39b6f98cc091721294a5d111a4dda374723b6fa50d2097633b02a836a7c9a9 (pushed to ECR for this run only, deleted after)
+payload: SHA256SUMS (binary + exports; verified on the instance: payload_check.txt)
+instance: g4dn.xlarge spot eu-north-1a, Intel Xeon Platinum 8259CL 2.5 GHz, 2 cores x 2 threads (4 vCPU); see lscpu.txt
+cost: ledger_row.csv (1520 s, $0.0826/h, $0.0349)
+command: instance.sh (via infra/scripts/spinup.sh run --profile gpu --max-minutes 40)
+protocol: {warmup: 3, reps: 30, threads: [1, 4] (cv::setNumThreads), one model at a time, one caller}
+load: load_before_t*.txt / load_after_t*.txt (/proc/loadavg; the 1-min value before t1 includes the image pull)

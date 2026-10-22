@@ -1,0 +1,32 @@
+# 3.6 global-descriptor compression rows (RETRIEVAL_3.1_3.6.md §2, D93). Offline: no network re-run.
+tool: python/analysis/retrieval_rows_eval.py
+command: "docker run --rm --network none -u $(id -u):$(id -g) -v $PWD:/w ariadne-analysis:1 python3 -I /w/python/analysis/retrieval_rows_eval.py compression /w/build/a1/place --out /w/evaluation/runs/retrieval_3.6/20261021T212015Z"
+image: ariadne-analysis:1 sha256:f18905a9686ea36028a07e2b04e5e760af422c1d664a07eb7d2fccf9909f289e
+git_commit: c863e40fd23cc29bb7fa8f1fac96e7aa90884863
+git_dirty: true (the script and design were uncommitted at run time; committed together with this directory)
+input: build/a1/place (the D62 dumps, 11 EuRoC flights; manifest per flight there)
+input_sha256:
+  MH_01_easy/ep376.f32: e6a304dd9788359769c28ebf7ed3686a8a5dc64b4213f42dd5cd7bedbec113a9
+  MH_02_easy/ep376.f32: f743982160d5c79b6a309ed0f302b98060ee909b289950e3df1645eefdb8cc94
+  MH_03_medium/ep376.f32: 0f7fd239825695fbf786940ad41cca13c3cae21f85c567bed1ad0caf4709f73f
+  MH_04_difficult/ep376.f32: 4e2069bab05d62db6e793c1418baa80f552bac84940f79708d965e6df0177dfa
+  MH_05_difficult/ep376.f32: 7d1c559e92b822e036faece9104247a1313637b595d900c9c8d3d6284dd3f60a
+  V1_01_easy/ep376.f32: 28a8621457c0385322f81870b6c41270c8d5783e50d738754058c51df9571036
+  V1_02_medium/ep376.f32: b1ec5fcd24f28e39ccdcc6d5b4261d3ee1e2dd49d084d77b2ef6b3f10493eb30
+  V1_03_difficult/ep376.f32: 4636be121fc6862992f58a7aa0925c0c083226f802ecd35b2928f5ae07a5afb5
+  V2_01_easy/ep376.f32: cfbc60c1a70c6145ee8c5604f799804a7701cc93802d523ff7a2f8a6e5b55cb4
+  V2_02_medium/ep376.f32: a074a0d939db788356f715274ea2f02edb645835c57d74deda0c34499f091700
+  V2_03_difficult/ep376.f32: 584cef6fc3d4808f504ccfe3d60f7a587d49aef84b41fac09c02ebf7744365c0
+  MH_01_easy/ep752.f32: bde7c847014fc14a1cee40ccde0754f2f9e9567ea8e3cf5cf1908909af6793c4
+  MH_02_easy/ep752.f32: 8b7c5d301c55c6e66c8ec54e92319778c2f0e688da97638ba4c1b6c9c6cb2141
+  MH_03_medium/ep752.f32: f2cf45106997181613e56b8592c66e1afaca326f8ea3b8cdf55da98f49e2994f
+  MH_04_difficult/ep752.f32: de8bc8f36fea13f43bf14dfe27241c614e1c3ea408e29a25b43a23cf30fef672
+  MH_05_difficult/ep752.f32: 380664dccab1a4fc47a186c633517e8196f46220d958e8c8cd9cd41ceaf223d0
+  V1_01_easy/ep752.f32: 6046d6dd365808af032f700cd77a1bb6a4f938aba6aaabe2b3f37a9949673342
+  V1_02_medium/ep752.f32: aa935949d9b58c8eec350d0c1fe5e805b851fc189ca2f34dd3e43163c9419844
+  V1_03_difficult/ep752.f32: bf28d449f87479c0fc2dc7ffbaacd4382563765d25f6ac3b48322b9474e0a8d6
+  V2_01_easy/ep752.f32: 68d5517e720c906615c7d96a89647a0ee42e887f239afe5cdbbee5e0a7e594c7
+  V2_02_medium/ep752.f32: ededc60d6d75d5c46e539429405ea9e97a5f8ccf44d1181952df71e06510ab52
+  V2_03_difficult/ep752.f32: 33eebb9066e228e425e2f2b2f2a902f6867c0f6e37a7e19404f0ba282d550d43
+protocol: {dist_m: 1.0, angle_deg: 30.0, exclude_s: 30.0, bar_r1: 0.01, pca_fit: other environment (MH <-> V1/V2)}
+bytes: payload only [PROXY] (no FlatBuffers framing; wire.fbs GlobalDescriptor is [float] today)

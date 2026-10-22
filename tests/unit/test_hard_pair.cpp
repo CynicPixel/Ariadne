@@ -5,7 +5,11 @@
 
 #include <gtest/gtest.h>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/dnn.hpp>
+#include <opencv2/features.hpp>
+#include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <set>
@@ -18,8 +22,8 @@ using ariadne::perception::xfeat::Tensor;
 
 namespace {
 
-std::string RefDir() {
-    const char* d = std::getenv("ARIADNE_ALIKED_LG_REF");
+std::string RefDir(const char* var = "ARIADNE_ALIKED_LG_REF") {
+    const char* d = std::getenv(var);
     return d ? d : "";
 }
 bool Required() {
@@ -32,21 +36,25 @@ bool Required() {
         GTEST_SKIP() << "no ALIKED/LightGlue export (set ARIADNE_ALIKED_LG_REF)";                  \
     }
 
-HardPairParams Params(const std::string& dir, const std::string& norm) {
+HardPairParams Params(const std::string& dir, const std::string& norm, cv::Size size = {752, 480}) {
     HardPairParams p;
-    p.aliked_onnx = (fs::path(dir) / "aliked_n16_k1024_752x480.onnx").string();
+    p.aliked_onnx = (fs::path(dir) / ("aliked_n16_k1024_" + std::to_string(size.width) + "x" +
+                                      std::to_string(size.height) + ".onnx")).string();
     p.lightglue_onnx = (fs::path(dir) / "lightglue_aliked.onnx").string();
     p.normalization = norm;
+    p.width = size.width;
+    p.height = size.height;
     return p;
 }
 
 /// HardPairFeatures from a reference pair file's upstream keypoints (stored normalised) and descriptors.
-HardPairFeatures FromRef(const Tensor& kn, const Tensor& d) {
+HardPairFeatures FromRef(const Tensor& kn, const Tensor& d, cv::Size size = {752, 480}) {
     HardPairFeatures f;
-    f.size = cv::Size(752, 480);
+    f.size = size;
     const int n = int(kn.shape[0]);
+    const float s = 0.5f * float(std::max(size.width, size.height)), cx = 0.5f * size.width, cy = 0.5f * size.height;
     for (int i = 0; i < n; ++i) {   // invert upstream's normalisation: px = kn * max(W,H)/2 + (W/2, H/2)
-        f.keypoints.emplace_back(kn.f32[2 * size_t(i)] * 376.0f + 376.0f, kn.f32[2 * size_t(i) + 1] * 376.0f + 240.0f, 1.0f);
+        f.keypoints.emplace_back(kn.f32[2 * size_t(i)] * s + cx, kn.f32[2 * size_t(i) + 1] * s + cy, 1.0f);
     }
     f.descriptors = cv::Mat(n, 128, CV_32F, const_cast<float*>(d.f32.data())).clone();
     return f;
@@ -99,5 +107,55 @@ TEST(HardPair, UpstreamModeReproducesUpstreamMatches) {
                     want.size(), got_cv.size(), shared_cv);
         EXPECT_EQ(got, want);
         EXPECT_GT(got_cv.size(), 0u);
+    }
+}
+
+// The sim rig's RGB path (L3). ExtractRgb on the frame in RGB order is cv::ALIKED on the same frame in BGR (the
+// reference test's input, checked against upstream there) to the byte; the frame in BGR order through ExtractRgb is a
+// different input. Then upstream's sim match set through the wrapper at 1280x720.
+TEST(HardPair, SimRgbPathIsTheReferenceInputAndSeesAChannelSwap) {
+    const std::string dir = RefDir("ARIADNE_ALIKED_LG_SIM_REF");
+    REQUIRE_EXPORT(dir);
+    const cv::Size size(1280, 720);
+    const HardPairMatcher m(Params(dir, "upstream", size));
+    EXPECT_THROW(m.ExtractRgb(cv::Mat(720, 1280, CV_8UC1, cv::Scalar(0))), std::invalid_argument);
+    EXPECT_THROW(m.ExtractRgb(cv::Mat(480, 752, CV_8UC3, cv::Scalar(0))), std::invalid_argument);
+    cv::ALIKED::Params ap;
+    ap.inputSize = size;
+    ap.engine = cv::dnn::ENGINE_NEW;
+    const auto al = cv::ALIKED::create(Params(dir, "upstream", size).aliked_onnx, ap);
+    for (const char* name : {"sim_a0_f200", "sim_a0_f700"}) {
+        const cv::Mat bgr = cv::imread((fs::path(dir) / ("input_" + std::string(name) + ".png")).string(), cv::IMREAD_COLOR);
+        ASSERT_EQ(bgr.size(), size);
+        cv::Mat rgb;
+        cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
+        std::vector<cv::KeyPoint> kp;
+        cv::Mat desc;
+        al->detectAndCompute(bgr, cv::noArray(), kp, desc);
+        const HardPairFeatures f = m.ExtractRgb(rgb), sw = m.ExtractRgb(bgr);
+        ASSERT_EQ(f.keypoints.size(), kp.size());
+        bool same_kp = true;
+        for (size_t i = 0; i < kp.size(); ++i) same_kp &= kp[i].pt == f.keypoints[i].pt && kp[i].response == f.keypoints[i].response;
+        EXPECT_TRUE(same_kp) << name;
+        EXPECT_EQ(cv::norm(desc, f.descriptors, cv::NORM_INF), 0.0) << name;
+        std::set<std::pair<float, float>> a, b;
+        for (const auto& k : f.keypoints) a.insert({k.pt.x, k.pt.y});
+        for (const auto& k : sw.keypoints) b.insert({k.pt.x, k.pt.y});
+        int shared = 0;
+        for (const auto& p : b) shared += int(a.count(p));
+        std::printf("[%s] RGB path = reference input; BGR-swapped input keeps %d of %zu keypoints exactly\n", name, shared,
+                    a.size());
+        EXPECT_LT(shared, int(a.size()) * 9 / 10);
+    }
+    for (const char* pair : {"sim_a0_f200_sim_a0_f205", "sim_a0_f700_sim_a0_f710"}) {
+        const auto ref = LoadAtb((fs::path(dir) / ("ref_pair_" + std::string(pair) + "_k1024.atb")).string());
+        const HardPairFeatures a = FromRef(ref.at("kpts0n"), ref.at("desc0"), size),
+                               b = FromRef(ref.at("kpts1n"), ref.at("desc1"), size);
+        std::set<std::pair<int, int>> want, got;
+        const auto& rm = ref.at("matches").i64;
+        for (size_t i = 0; i + 1 < rm.size(); i += 2) want.insert({int(rm[i]), int(rm[i + 1])});
+        for (const auto& x : m.Match(a, b)) got.insert({x.queryIdx, x.trainIdx});
+        std::printf("[%s] wrapper %zu matches, upstream %zu\n", pair, got.size(), want.size());
+        EXPECT_EQ(got, want);
     }
 }

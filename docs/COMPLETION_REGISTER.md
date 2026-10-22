@@ -48,7 +48,7 @@ identical.
 |---|---|---|
 | Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. **Sim IMU noise operator not built (—).** |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
-| Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, **draft**. ALIKED+LightGlue hard pairs: D63. **Sim-rig exports (1280×720 RGB) for EigenPlaces and ALIKED: not built (—).** |
+| Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, approved 2026-10-21 (exact index default, `cv::ANNIndex` the scale ablation). ALIKED+LightGlue hard pairs: D63. Sim-rig exports (1280×720 RGB): D90 (SMOKE §4t); EigenPlaces sim default size awaits approval. |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73). **Certificate D74: not started (B).** |
 | Edges SE(3); FlatBuffers | done | D14, D81. |
 | Collaboration | partial | Built: two-stage exchange, elected broker with epochs (D81–D83). Not started: spectral λ₂ and vertex cover (3.4). |
@@ -62,10 +62,10 @@ identical.
 |---|---|---|---|
 | L1 | **Live closed-loop runtime:** `ros2/ariadne_{agent,bridge,operator,sim}` hold no source. Gazebo live → bridge → estimator → mission → mover commands. Needed by 4.3/4.4 (NBV acting), 7.1 (agentic actions), 8.1/8.5 (missions, demo). | **not started** | — (must be assigned; arch §5.4, §5.10, D38–D40 note "the bridge stays for live runs") |
 | L2 | Sim IMU noise operator (seeded, consumption-time, like D) | not started | — (2.2 never built it; see `INERTIAL_2.4.md` §5) |
-| L3 | Sim-rig retrieval / hard-pair exports (1280×720 RGB) for EigenPlaces and ALIKED+LightGlue | not started | — (D62/D63 are EuRoC-scoped; needed by the 3.4 plot, 3.5, sim missions) |
-| L4 | Reference-export regeneration as one command (`models.sh eigenplaces`, `aliked-lg`) | partial | A1 (commands documented in PERCEPTION_2.1 §13; the gate's cache copy is local only) |
-| L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | not started | A1 |
-| L6 | DNN per-thread `Net` contract object (§7.4) | partial | A1 (one Net per instance; no shared contract; Phase 7 multithreading needs it) |
+| L3 | Sim-rig retrieval / hard-pair exports (1280×720 RGB) for EigenPlaces and ALIKED+LightGlue | done (D90 draft on the EigenPlaces default size) | A1. `models.sh eigenplaces-sim` / `aliked-lg-sim`, RGB path `DescribeRgb` / `ExtractRgb`, exact vs upstream on recorded sim frames, regeneration bit-exact (SMOKE §4t, PERCEPTION_2.1 §14). Sim retrieval quality → 3.1 |
+| L4 | Reference-export regeneration as one command (`models.sh eigenplaces`, `aliked-lg`) | done | A1. Both subcommands check against sha256s pinned in the script; a full regeneration was bit-exact, 11/11 and 19/19 files (PERCEPTION_2.1 §13, STATUS 2026-10-21 A1) |
+| L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | done on g4dn.xlarge (x86, 2C/4T); demo-machine and m8g numbers open | A1. `ariadne_dnn_timing`, `evaluation/runs/l5_timing/20261021T211117Z-gpu-e2b3e3/` (STATUS 2026-10-21 A1 table). The m8g/COOL timings stay with 7.3 |
+| L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
 | L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
 | L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
@@ -102,7 +102,7 @@ identical.
 
 | item | state | evidence / missing | owner |
 |---|---|---|---|
-| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. **D62 draft** (exact-default deviation). Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4–L6. CLAHE retrieval split not run. | A1 |
+| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
 | 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
@@ -118,12 +118,12 @@ identical.
 
 | item | state | evidence / missing; carries | owner |
 |---|---|---|---|
-| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core is D62 (draft). CLAHE split not done. Carries L3. | — (A1 natural) |
+| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core D62 (approved). CLAHE split built (D92, `enhance`, default none); EuRoC rows: no effect, darkened proxy turned out easier than clean (`evaluation/runs/retrieval_3.1/`). **Open: the §31.5 sim row (dark + co-moving light), needing a sim retrieval eval with revisit GT, which also settles D90's sim size.** L3 done (D90). | A1 |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
 | 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
-| 3.6 descriptor compression rows | not started | | — (A1 natural) |
+| 3.6 descriptor compression rows | done for global descriptors (D93); XFeat local row = stated gap | `evaluation/runs/retrieval_3.6/20261021T212015Z`: fp16/int8 lossless on EuRoC, PCA not worth it; int8 258 B is the wire candidate, **needs a wire.fbs change → 3.2 (M)**. XFeat fp16/int8 row → the first XFeat-on-the-wire config (D60 ships ORB) | A1 |
 | Gate: fault injection + split brain | partial | unit level done (D82). Sim-level after 3.3. | M |
 | Gate: byte table ≤15% | not started | definition fixed (COLLAB_3.2 §7) | M |
 | Gate: ATE vs bytes, ≥2 scenes × 3 seeds | not started | needs 3.3, 3.4, L3 | M |

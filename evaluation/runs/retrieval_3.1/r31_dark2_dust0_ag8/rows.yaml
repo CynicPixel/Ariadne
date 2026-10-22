@@ -1,0 +1,6 @@
+# retrieval_rows_eval: methods (RETRIEVAL_3.1_3.6 §3, D92), base ep376. Generated.
+root: /w/build/a1/r31/dark2_dust0_ag8
+protocol: {dist_m: 1.0, angle_deg: 30.0, exclude_s: 30.0}
+rows:
+  - {method: ep376, row: ep376, bytes: 1024, extra: False, queries: 297, r1: 0.6667, r5: 0.8687, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep376_clahe, row: ep376_clahe, bytes: 1024, extra: False, queries: 297, r1: 0.6801, r5: 0.8653, d_r1: 0.0135, mcnemar_p_r1: 0.4545, admissible: None}

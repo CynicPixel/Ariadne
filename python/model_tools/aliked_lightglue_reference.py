@@ -333,6 +333,7 @@ def main() -> int:
     ap.add_argument("--size", default="752x480")
     ap.add_argument("--k", action="append", type=int, required=True)
     ap.add_argument("--image", action="append", default=[], help="NAME=PATH (gray)")
+    ap.add_argument("--rgb-image", action="append", default=[], help="NAME=PATH (colour PNG; the sim rig, RGB path)")
     ap.add_argument("--pair", action="append", default=[], help="NAME_A,NAME_B")
     ap.add_argument("--upstream-commit", required=True)
     ap.add_argument("--aliked-commit", required=True)
@@ -365,6 +366,14 @@ def main() -> int:
         cv2.imwrite(str(a.out / f"input_{name}.png"), gray)
         f = gray.astype(np.float32) * np.float32(1.0 / 255.0)              # cv::dnn::blobFromImage's scaling
         imgs[name] = np.stack([f, f, f], 0)[None].astype(np.float32)       # gray -> RGB, NCHW
+    for spec in a.rgb_image:
+        name, path = spec.split("=", 1)
+        bgr = cv2.imread(path, cv2.IMREAD_COLOR)                           # BGR in memory, as cv2/cv::imread give it
+        if bgr is None or bgr.shape != (h, w, 3):
+            raise SystemExit(f"cannot read {path} at {w}x{h}x3")
+        cv2.imwrite(str(a.out / f"input_{name}.png"), bgr)
+        f = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB).astype(np.float32) * np.float32(1.0 / 255.0)
+        imgs[name] = f.transpose(2, 0, 1)[None].astype(np.float32)        # RGB, NCHW (upstream's input)
 
     checks = {}
     orig = aliked_mod.DeformableConv2d.forward
@@ -460,6 +469,9 @@ def main() -> int:
         "torch": str(torch.__version__), "torchvision": str(torchvision.__version__), "opencv_python": cv2.__version__,
         "threads": 1, "deterministic": True, "opset": 17,
         "rewrite_checks": checks,
+        **({"preprocessing_rgb": "colour PNG -> RGB order -> x * (1/255) float32, NCHW (HardPairMatcher::ExtractRgb: "
+                                 "RGB -> BGR, then cv::ALIKED's blobFromImage(1/255, swapRB))",
+            "rgb_images": [s.split("=", 1)[0] for s in a.rgb_image]} if a.rgb_image else {}),
         "sha256": {p.name: sha256(p) for p in sorted(a.out.iterdir()) if p.name != "manifest.yaml"},
     }
     (a.out / "manifest.yaml").write_text("# ALIKED + LightGlue reference export (PERCEPTION_2.1 §12). Generated.\n"

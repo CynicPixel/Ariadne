@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <cmath>
 #include <cstdlib>
@@ -46,8 +47,8 @@ std::vector<float> Perturb(const std::vector<float>& v, uint64_t seed, uint64_t 
     return w;
 }
 
-std::string RefDir() {
-    const char* d = std::getenv("ARIADNE_EIGENPLACES_REF");
+std::string RefDir(const char* var = "ARIADNE_EIGENPLACES_REF") {
+    const char* d = std::getenv(var);
     return d ? d : "";
 }
 bool Required() {
@@ -138,4 +139,73 @@ TEST(PlaceRecognizer, PreprocessingAndDescriptorMatchUpstream) {
         }
     }
     EXPECT_EQ(checked, 4);
+}
+
+// The sim rig's RGB path (L3): DescribeRgb on the recorded frame in RGB order reproduces upstream (preprocessing
+// <= 1e-5, cosine >= 0.9999). The same frame in BGR order is a DIFFERENT input (not an error): the guard that an
+// R/B swap anywhere upstream of DescribeRgb would show up here instead of passing silently.
+TEST(PlaceRecognizer, SimRgbPathMatchesUpstreamAndSeesAChannelSwap) {
+    const std::string dir = RefDir("ARIADNE_EIGENPLACES_SIM_REF");
+    if (dir.empty() || !fs::exists(fs::path(dir) / "manifest.yaml")) {
+        if (Required()) FAIL() << "ARIADNE_REQUIRE_MODELS=1 but no sim EigenPlaces export";
+        GTEST_SKIP() << "no sim EigenPlaces export (set ARIADNE_EIGENPLACES_SIM_REF)";
+    }
+    EXPECT_THROW(PlaceRecognizer::PreprocessRgb(cv::Mat(4, 4, CV_8UC1), 4, 4), std::invalid_argument);
+    int checked = 0;
+    for (const auto& [w, h] : {std::pair<int, int>{640, 360}, std::pair<int, int>{1280, 720}}) {
+        const std::string size = std::to_string(w) + "x" + std::to_string(h);
+        PlaceRecognizer rec({(fs::path(dir) / ("eigenplaces_r50_256_" + size + ".onnx")).string(), w, h, "classic"});
+        for (const char* name : {"sim_a0_f200", "sim_a0_f700"}) {
+            const auto ref = xfeat::LoadAtb((fs::path(dir) / (std::string("ref_") + name + "_" + size + ".atb")).string());
+            const cv::Mat bgr = cv::imread((fs::path(dir) / (std::string("input_") + name + ".png")).string(),
+                                           cv::IMREAD_COLOR);
+            ASSERT_EQ(bgr.size(), cv::Size(1280, 720));
+            cv::Mat rgb;
+            cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
+            const cv::Mat blob = PlaceRecognizer::PreprocessRgb(rgb, w, h), swapped = PlaceRecognizer::PreprocessRgb(bgr, w, h);
+            const auto& in = ref.at("input").f32;
+            ASSERT_EQ(blob.total(), in.size());
+            double maxd = 0, maxs = 0;
+            for (size_t i = 0; i < in.size(); ++i) {
+                maxd = std::max(maxd, double(std::fabs(blob.ptr<float>()[i] - in[i])));
+                maxs = std::max(maxs, double(std::fabs(swapped.ptr<float>()[i] - in[i])));
+            }
+            const auto d = rec.DescribeRgb(rgb), ds = rec.DescribeRgb(bgr);
+            double cs = 0, css = 0;
+            for (size_t i = 0; i < d.size(); ++i) {
+                cs += double(d[i]) * ref.at("descriptor").f32[i];
+                css += double(ds[i]) * ref.at("descriptor").f32[i];
+            }
+            std::printf("[%s %s] preprocessing max |diff| %.2e (BGR-swapped %.2e), cosine %.7f (BGR-swapped %.7f)\n", name,
+                        size.c_str(), maxd, maxs, cs, css);
+            EXPECT_LE(maxd, 1e-5);
+            EXPECT_GE(cs, 0.9999);
+            EXPECT_GT(maxs, 0.1);    // the frame has colour: a swap moves the input by far more than float noise
+            EXPECT_LT(css, cs);      // and moves the descriptor
+            ++checked;
+        }
+    }
+    EXPECT_EQ(checked, 4);
+}
+
+// 3.1 retrieval-path enhancement (D92, arch §6.3): CLAHE works on a copy, so the caller's frame (the geometry path's
+// pixels) is bit-unchanged; none is the identity; the setting is the one fixed before the ablation.
+TEST(PlaceRecognizer, ClaheIsRetrievalOnlyAndLeavesTheFrameUntouched) {
+    cv::Mat gray(240, 376, CV_8UC1), rgb(240, 376, CV_8UC3);
+    cv::randu(gray, 10, 40);   // a dark, low-contrast frame
+    cv::randu(rgb, 10, 40);
+    const cv::Mat g0 = gray.clone(), c0 = rgb.clone();
+    const cv::Mat none = PlaceRecognizer::Enhance(gray, "none", false);
+    EXPECT_EQ(none.data, gray.data);   // the identity: no copy, no change
+    const cv::Mat eg = PlaceRecognizer::Enhance(gray, "clahe", false), ec = PlaceRecognizer::Enhance(rgb, "clahe", true);
+    EXPECT_EQ(cv::norm(gray, g0, cv::NORM_INF), 0.0);
+    EXPECT_EQ(cv::norm(rgb, c0, cv::NORM_INF), 0.0);
+    EXPECT_NE(eg.data, gray.data);
+    EXPECT_GT(cv::norm(eg, gray, cv::NORM_INF), 10.0);   // contrast is stretched
+    EXPECT_GT(cv::norm(ec, rgb, cv::NORM_INF), 10.0);
+    cv::Mat ref;
+    cv::createCLAHE(2.0, cv::Size(8, 8))->apply(gray, ref);
+    EXPECT_EQ(cv::norm(eg, ref, cv::NORM_INF), 0.0);   // exactly the fixed setting
+    EXPECT_THROW(PlaceRecognizer::Enhance(gray, "gamma", false), std::invalid_argument);
+    EXPECT_THROW(PlaceRecognizer({"x.onnx", 376, 240, "classic", "gamma"}), std::invalid_argument);
 }

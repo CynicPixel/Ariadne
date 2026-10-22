@@ -1,0 +1,18 @@
+# retrieval_rows_eval: compression (RETRIEVAL_3.1_3.6 §2, D93); PCA fit on the other environment (MH <-> V). Generated.
+root: /w/build/a1/place
+protocol: {dist_m: 1.0, angle_deg: 30.0, exclude_s: 30.0}
+rows:
+  - {method: ep376, row: fp32, bytes: 1024, extra: False, queries: 297, r1: 0.6263, r5: 0.8754, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep376, row: fp16, bytes: 512, extra: False, queries: 297, r1: 0.6263, r5: 0.8754, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep376, row: int8, bytes: 258, extra: False, queries: 297, r1: 0.6263, r5: 0.8754, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep376, row: pca128_fp16, bytes: 256, extra: False, queries: 297, r1: 0.6330, r5: 0.8754, d_r1: 0.0067, mcnemar_p_r1: 0.8036, admissible: True}
+  - {method: ep376, row: pca256_int8, bytes: 258, extra: False, queries: 297, r1: 0.6397, r5: 0.8788, d_r1: 0.0135, mcnemar_p_r1: 0.2891, admissible: True}
+  - {method: ep376, row: pca64_fp16, bytes: 128, extra: True, queries: 297, r1: 0.6397, r5: 0.8721, d_r1: 0.0135, mcnemar_p_r1: 0.5716, admissible: True}
+  - {method: ep376, row: pca128_int8, bytes: 130, extra: True, queries: 297, r1: 0.6397, r5: 0.8754, d_r1: 0.0135, mcnemar_p_r1: 0.4807, admissible: True}
+  - {method: ep752, row: fp32, bytes: 1024, extra: False, queries: 297, r1: 0.6768, r5: 0.9024, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep752, row: fp16, bytes: 512, extra: False, queries: 297, r1: 0.6768, r5: 0.9024, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep752, row: int8, bytes: 258, extra: False, queries: 297, r1: 0.6768, r5: 0.9024, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: True}
+  - {method: ep752, row: pca128_fp16, bytes: 256, extra: False, queries: 297, r1: 0.6633, r5: 0.8653, d_r1: -0.0135, mcnemar_p_r1: 0.4807, admissible: False}
+  - {method: ep752, row: pca256_int8, bytes: 258, extra: False, queries: 297, r1: 0.6835, r5: 0.8822, d_r1: 0.0067, mcnemar_p_r1: 0.7266, admissible: True}
+  - {method: ep752, row: pca64_fp16, bytes: 128, extra: True, queries: 297, r1: 0.6397, r5: 0.8687, d_r1: -0.0370, mcnemar_p_r1: 0.0708, admissible: False}
+  - {method: ep752, row: pca128_int8, bytes: 130, extra: True, queries: 297, r1: 0.6633, r5: 0.8653, d_r1: -0.0135, mcnemar_p_r1: 0.5034, admissible: False}

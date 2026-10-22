@@ -2690,3 +2690,144 @@ metric as `INERTIAL_2.4.md` §4.9.
     alone.
   - **Maintainer's call** whether V1_03 alone justifies building it (register: 2.1 row).
 
+## 2026-10-21 — D62 approved: the exact index is PlaceIndex's default; cv::ANNIndex stays as the scale ablation
+
+**Approved as scoped by the maintainer, 2026-10-21.** This supersedes the "D62 stays DRAFT" line in the 2.1 close-out
+notes above. The D62 entry itself is unchanged.
+
+- **What is approved:** `PlaceIndex` defaults to `exact` (one gemm, deterministic, a few µs at thousands of
+  keyframes). `annoy` (`cv::ANNIndex`) stays behind the same interface as the persistence/scale ablation. The arch
+  line "Use `cv::ANNIndex`" now reads as the ablation, not the default (§6 blockquote).
+- **Why still exact:** the three pinned-source findings in D62 (ids restart at 0 per `addItems`, no add after build,
+  a per-thread seed over `hardware_concurrency()`), and top-1 agreement 297/297 on EuRoC, so exact loses nothing at
+  this scale.
+- **§49 ritual:**
+
+  | step | status |
+  |---|---|
+  | catalogue | `ALGORITHMS.md` §1.6 as-built note (D62) |
+  | arch decision | D62, plus the §6 and §31.4 blockquotes |
+  | ablation matrix | arch §31.4 as-built note: index `exact` (default) vs `annoy`/trees (scale); PERCEPTION_2.1 §11.5 |
+  | benchmark config | `ariadne_place_eval` + `place_recall_eval.py` (PERCEPTION_2.1 §11.5). No `configs/` entry until the first runtime consumer (2.5 / 3.1) |
+  | manifest schema | `ariadne_place_eval`'s manifest records `place_index: [exact, annoy/trees<N>/seed1]`. §28.2's `place_recognition` field exists; a `place_index` field is **deferred to the first runtime consumer**, like D63's hard-pair field |
+- **Open:** Annoy determinism across core counts is still unverified. It matters only if the ablation is promoted.
+
+## 2026-10-22 — D90: sim-rig exports — EigenPlaces and ALIKED-n16 + LightGlue at 1280×720 RGB, with an RGB path
+
+**DRAFT pending the maintainer** on one point: EigenPlaces' sim default size. Everything else follows D62/D63 as
+approved.
+
+- **What:**
+  - Sim-rig exports from the same pinned upstreams and weights as D62/D63, made by `models.sh eigenplaces-sim` /
+    `aliked-lg-sim` and checked against sha256s pinned in the script:
+    - EigenPlaces R50-256 at 1280×720 and 640×360;
+    - ALIKED-n16 K = 1024 at 1280×720;
+    - LightGlue (byte-identical to D63's).
+  - The reference frames are recorded `left_rgb` from the phase-1 bag (`ariadne_frame_dump`).
+  - The wrappers gain an RGB path whose channel order is in the name: `PlaceRecognizer::DescribeRgb`,
+    `HardPairMatcher::ExtractRgb`. Both take RGB order, which is what the sim gives (`StereoFrame::left_rgb`).
+    `ExtractRgb` converts RGB → BGR because `cv::ALIKED` swaps back.
+- **Evidence:** SMOKE §4t.
+  - Exact against upstream at the new size, which re-runs D63's 752×480-only validation of the export rewrites.
+  - The regeneration is bit-exact.
+  - A channel-swap guard shows an R/B swap changes the result instead of passing silently.
+- **Proposed (to approve):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
+  about a quarter of 1280×720. Retrieval quality on sim views is not measured yet; that belongs to 3.1 (sim
+  retrieval). ALIKED runs at the native 1280×720: hard pairs only, so cost matters less than localisation.
+- **Limits:**
+  - Four frames from one scene, with weak colour.
+  - The 640×360 vs 1280×720 recall question is open.
+  - There is no runtime consumer yet (3.1/3.5).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | unchanged: same models as D62/D63 (`ALGORITHMS.md` §1.6 notes) |
+  | arch decision | D90, plus the §7.4 blockquote |
+  | ablation matrix | arch §31.4 sizes (EigenPlaces 640×360 / 1280×720); ALIKED K as D63 |
+  | benchmark config | `models.sh eigenplaces-sim` / `aliked-lg-sim`; no `configs/` entry until a runtime consumer |
+  | manifest schema | each export's `manifest.yaml` (`preprocessing_rgb`, `rgb_images`); `Name()` carries the size |
+
+## 2026-10-22 — D91: the DNN execution contract object — `dnn::PerThread<T>` in every cv::dnn wrapper, and the callers own the parallelism
+
+- **What:**
+  - `perception/dnn/per_thread.hpp`: `PerThread<T>::Local()` returns the calling thread's instance, built by a
+    factory on that thread's first call.
+  - XFeatNet (graphs per size), PlaceRecognizer (Net) and HardPairMatcher (the ALIKED + LightGlue pair) hold their
+    networks in it. One wrapper object can be shared by a worker pool, as §7.4 requires: "the feature worker pool
+    owns N nets loaded from the same file".
+  - `ModelRecord {model, file, engine}` (`Record()` / `Records()`) is what the manifest records about which engine
+    ran.
+- **Second rule, found by the test:** per-thread instances are not enough for byte identity.
+  - Every Net shares OpenCV's single process-wide `parallel_for_` pool. Two concurrent ENGINE_NEW ALIKED forwards at
+    the default pool (8 threads) **intermittently** differed: 462/1024 keypoints by up to 6.1e-5 px, descriptors by
+    up to 1.3e-6, LightGlue scores by up to 4.4e-5, match indices identical.
+  - Sequential runs on another thread: identical.
+  - At `cv::setNumThreads(1)`: identical in every repeat (5 × 4 tests).
+  - So when a wrapper serves several threads, **the parallelism is the callers'**: the runtime sets
+    `cv::setNumThreads(dnn::kPoolOpenCvThreads = 1)` once and records it. It is a process-wide setting, so it is the
+    runtime's call and the library does not set it. A single caller may keep the pool.
+- **Evidence:** `test_dnn_contract`. Two threads are released together on one shared wrapper, and both match a
+  single-thread reference byte for byte, for XFeat (1.1 MB of output), PlaceRecognizer and HardPairMatcher.
+  `PerThread` has its own unit test. The 2.1 wrapper and reference suites still pass (31/31).
+- **Not done:** no runtime pool uses it yet; Phase 7 multithreading and 7.3 COOL are the consumers. The pool rule's
+  cost is unmeasured: N single-threaded nets against one N-threaded net is an L5/7.3 question.
+- **§49:** the arch decision is the §7.4 blockquote. A manifest field (the pool size, `ModelRecord`s) is **deferred to
+  the first runtime consumer**, like D63's.
+
+## 2026-10-22 — D93: global-descriptor compression (3.6) — int8 with a per-vector scale is free on EuRoC; PCA is not worth its shared basis
+
+Design and protocol fixed before the run: `docs/design/RETRIEVAL_3.1_3.6.md` §2. Result: §4.
+
+- **What:** the §17.2 rows (fp32, fp16, int8, PCA→128 fp16, PCA→256 int8, plus PCA→64 fp16 and PCA→128 int8) are
+  scored offline on D62's EuRoC dumps by `python/analysis/retrieval_rows_eval.py compression`. The protocol is
+  §11.5's; PCA is fitted on the other environment.
+- **Result:**
+  - fp32 reproduces D62 exactly.
+  - fp16 and int8 (258 B) give identical hits on all 297 queries, at both sizes.
+  - PCA truncation is admissible at 376×240 but not at 752×480. PCA→256's gain is mean-centring.
+  - All differences are n.s. (McNemar p ≥ 0.07).
+- **Recommendation for the wire (3.2's call, main session):** int8 with a per-vector fp16 scale, 258 B per keyframe
+  against 1024 B. `wire.fbs` `GlobalDescriptor.descriptor` is `[float]`, so this needs a schema change; 3.6 changed
+  no comms file. The bytes here are payload `[PROXY]`.
+- **Limits:**
+  - EuRoC only, with 297 correlated queries.
+  - Sim retrieval rows come with 3.1's sim evaluation.
+  - **Stated gap:** §31.9's XFeat local-descriptor fp16/int8 row is not run. D60 ships ORB (32 B binary) on the wire,
+    so it lands with the first XFeat-on-the-wire configuration (register).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | no new algorithm |
+  | arch decision | D93, plus the §17.2 blockquote |
+  | ablation matrix | §31.9 global rows: done (§4); XFeat row: stated gap |
+  | benchmark config | `retrieval_rows_eval.py compression` with its fixed defaults (bar 0.01) |
+  | manifest | the run directory's `manifest.yaml` (input sha256, image, command) |
+
+## 2026-10-22 — D92: retrieval-path CLAHE (3.1, arch §6.3) — built behind `enhance`, default off; no effect on EuRoC; the deciding row is sim
+
+Design fixed before the run: `docs/design/RETRIEVAL_3.1_3.6.md` §3. Result: §5.
+
+- **What:** `PlaceRecognizerParams.enhance = none | clahe` (clip 2.0, 8×8 tiles; gray directly, RGB on Lab L). It
+  runs inside the recogniser on a copy, so the geometry path's pixels are untouched (unit test). `Name()` and
+  `Record()` carry `+clahe`. `ariadne_place_eval --retrieval-3.1` runs the ablation, with the seeded operator D
+  applied for darkened conditions.
+- **Result (EuRoC, 297 queries):**
+  - CLAHE's ΔR@1 is +0.013, −0.010 and +0.013 on clean / `dark1_dust0` / `dark2_dust0_ag8`. All n.s. (p ≥ 0.45).
+  - The clean dump equals D62's byte for byte.
+  - The darkened proxy is *easier* than clean (0.667 vs 0.626, p = 0.023), cause `[UNVERIFIED]`. So it is not a test
+    of CLAHE in the dark.
+- **Decision:** the default stays `none`. CLAHE is a selectable retrieval-path ablation, never applied to the geometry
+  path.
+- **Remaining part of 3.1:** the §31.5 sim row (dark + co-moving light + retrieval-path enhancement), which needs a sim
+  retrieval evaluation with revisit ground truth. That evaluation also settles D90's 640×360 vs 1280×720 question.
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | CLAHE is OpenCV-native (`cv::createCLAHE`); no new learned model |
+  | arch decision | D92, plus the §6.3 blockquote |
+  | ablation matrix | §31.5 retrieval-path row: EuRoC proxy done (§5), sim row open |
+  | benchmark config | `ariadne_place_eval --retrieval-3.1 [--degradation]` + `retrieval_rows_eval.py methods` |
+  | manifest | `place_recognition` names carry `+clahe`; the tool's manifest records the degradation name, seed and digest |

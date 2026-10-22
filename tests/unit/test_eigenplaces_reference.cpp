@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 using ariadne::perception::xfeat::LoadAtb;
@@ -21,8 +22,8 @@ using ariadne::perception::xfeat::Tensor;
 
 namespace {
 
-std::string RefDir() {
-    const char* d = std::getenv("ARIADNE_EIGENPLACES_REF");
+std::string RefDir(const char* var = "ARIADNE_EIGENPLACES_REF") {
+    const char* d = std::getenv(var);
     return d ? d : "";
 }
 bool Required() {
@@ -57,20 +58,11 @@ double ForwardMs(cv::dnn::Net& net, const cv::Mat& in, cv::Mat& out) {
     return best;
 }
 
-}  // namespace
-
-class EigenPlacesReference : public ::testing::TestWithParam<int> {};
-
-TEST_P(EigenPlacesReference, OnnxThroughCvDnnMatchesUpstream) {
-    const std::string dir = RefDir();
-    if (dir.empty() || !fs::exists(fs::path(dir) / "manifest.yaml")) {
-        if (Required()) FAIL() << "ARIADNE_REQUIRE_MODELS=1 but no EigenPlaces export in ARIADNE_EIGENPLACES_REF";
-        GTEST_SKIP() << "no EigenPlaces export (set ARIADNE_EIGENPLACES_REF)";
-    }
-    const int engine = GetParam();
+// Every ref_*_<size>.atb in dir through the <size> export: cosine >= 0.9999 against upstream's descriptor.
+void CheckExport(const std::string& dir, int engine, const std::vector<std::string>& sizes, int expect) {
     const char* ename = engine == cv::dnn::ENGINE_NEW ? "ENGINE_NEW" : "ENGINE_CLASSIC";
     int checked = 0;
-    for (const char* size : {"752x480", "376x240"}) {
+    for (const std::string& size : sizes) {
         const fs::path onnx = fs::path(dir) / (std::string("eigenplaces_r50_256_") + size + ".onnx");
         cv::dnn::Net net;
         try {
@@ -91,14 +83,37 @@ TEST_P(EigenPlacesReference, OnnxThroughCvDnnMatchesUpstream) {
             const double ms8 = ForwardMs(net, in, out);
             cv::setNumThreads(saved);
             const double cs = Cosine(out, ref.at("descriptor").f32);
-            std::printf("[%s %s %s] cosine %.7f | |d| %.6f | forward %.0f ms (1 thread), %.0f ms (8)\n", ename, size,
+            std::printf("[%s %s %s] cosine %.7f | |d| %.6f | forward %.0f ms (1 thread), %.0f ms (8)\n", ename, size.c_str(),
                         fn.c_str(), cs, cv::norm(out), ms1, ms8);
             EXPECT_EQ(int(out.total()), 256);
             EXPECT_GE(cs, 0.9999) << fn;
             ++checked;
         }
     }
-    EXPECT_EQ(checked, 4);
+    EXPECT_EQ(checked, expect);
+}
+
+}  // namespace
+
+#define REQUIRE_EP_EXPORT(dir, var)                                                         \
+    if ((dir).empty() || !fs::exists(fs::path(dir) / "manifest.yaml")) {                  \
+        if (Required()) FAIL() << "ARIADNE_REQUIRE_MODELS=1 but no EigenPlaces export in " var; \
+        GTEST_SKIP() << "no EigenPlaces export (set " var ")";                             \
+    }
+
+class EigenPlacesReference : public ::testing::TestWithParam<int> {};
+
+TEST_P(EigenPlacesReference, OnnxThroughCvDnnMatchesUpstream) {
+    const std::string dir = RefDir();
+    REQUIRE_EP_EXPORT(dir, "ARIADNE_EIGENPLACES_REF");
+    CheckExport(dir, GetParam(), {"752x480", "376x240"}, 4);
+}
+
+// The sim rig (L3): 1280x720 RGB frames, the native size and the half-size default candidate.
+TEST_P(EigenPlacesReference, SimRigOnnxThroughCvDnnMatchesUpstream) {
+    const std::string dir = RefDir("ARIADNE_EIGENPLACES_SIM_REF");
+    REQUIRE_EP_EXPORT(dir, "ARIADNE_EIGENPLACES_SIM_REF");
+    CheckExport(dir, GetParam(), {"1280x720", "640x360"}, 4);
 }
 
 INSTANTIATE_TEST_SUITE_P(Engines, EigenPlacesReference,

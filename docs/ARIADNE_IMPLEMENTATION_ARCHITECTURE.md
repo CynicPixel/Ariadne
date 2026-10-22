@@ -310,7 +310,7 @@ Implementation consequence:
 
 Use `cv::ANNIndex` for retrieval/index persistence.
 
-> **As built (2.1, D62 — DRAFT: size decided 2026-10-20; the exact-default deviation awaits approval, DECISIONS 2.1 close-out).** `perception/place/`:
+> **As built (2.1, D62, approved 2026-10-21: the exact index is the default; `cv::ANNIndex` is the persistence/scale ablation).** `perception/place/`:
 > - `PlaceRecognizer` runs EigenPlaces R50-256 through `cv::dnn`, one Net per thread;
 > - `PlaceIndex` has two backends, `exact` (one gemm, the default) and `annoy` (`cv::ANNIndex`, rebuilt from the
 >   full matrix when stale, over-fetch then filter, exact rescoring).
@@ -1490,6 +1490,13 @@ treated as a dilemma. It is not. It is an asymmetry, and the architecture should
 The retrieval-path enhancement is ablated separately — one additional row in the illumination ablation matrix
 (§31.5). This is a cheap experiment with a genuinely informative outcome either way.
 
+> **As built (3.1, D92).** `PlaceRecognizerParams.enhance: none | clahe` (clip 2.0, 8×8; Lab L for RGB) runs on a copy
+> inside the recogniser, so the geometry path is untouched. The default is `none`.
+>
+> On EuRoC (297 queries), CLAHE changes R@1 by ≤ 0.013, n.s., under clean and two darkened-proxy conditions. The
+> darkened proxy turned out *easier* than clean, so it does not answer the dark question. The §31.5 sim row does, and
+> it is still open (RETRIEVAL_3.1_3.6 §5).
+
 ---
 
 ## 6.4 Low-light denoising
@@ -1701,6 +1708,15 @@ ablation switch rather than a structural commitment.
 > - one instance per thread.
 >
 > Cost about 0.5 s per extraction and 0.6 s per match (shared CPU), so it serves hard pairs only (C8).
+>
+> **Sim rig (D90, 2026-10-22, SMOKE §4t).** 1280×720 RGB exports for EigenPlaces (1280×720, 640×360) and
+> ALIKED-n16 (K = 1024, 1280×720) are exact against upstream on recorded sim frames. The RGB path is
+> `PlaceRecognizer::DescribeRgb` / `HardPairMatcher::ExtractRgb`, which take RGB order (`StereoFrame::left_rgb`).
+>
+> **Threading as built (D91).** Every wrapper keeps its networks in `dnn::PerThread<T>`, so one wrapper serves a
+> pool. **Second rule:** with several callers, OpenCV's own pool is set to 1 thread, so the parallelism comes from
+> the callers. Concurrent ENGINE_NEW forwards sharing the default pool differ at the 1e-5 level; at 1 thread they are
+> byte-identical (`test_dnn_contract`).
 >
 > **Measured on EuRoC loop candidates** (4815 retrieval candidates, the 1.6 verifier's essential matrix): pose
 > AUC@10° 0.607 vs the ORB placeholder's 0.284, better on 11/11 flights. But 4 confident wrong verifications show
@@ -3063,6 +3079,13 @@ bytes/keyframe
 ```
 
 This is an Ariadne-specific contribution because representation quality and communication cost are jointly optimized.
+
+> **Measured (3.6, D93, EuRoC, RETRIEVAL_3.1_3.6 §4).**
+> - fp16 and int8 with a per-vector scale (258 B) leave every query's top-k hit unchanged against fp32 (1024 B), at
+>   376×240 and at 752×480.
+> - PCA truncation helps nothing at 376×240 and loses up to 0.037 R@1 at 752×480.
+>
+> The wire candidate is int8 at 258 B. It needs a `wire.fbs` change (3.2), since `GlobalDescriptor` is `[float]`.
 
 ---
 
@@ -4490,6 +4513,9 @@ EigenPlaces-256
 MegaLoc reference
 AnyLoc reference
 ```
+
+> **As built (2.1, D62).** Index axis: `exact` (one gemm, the default) vs `annoy` (`cv::ANNIndex`, trees/seed in the
+> manifest), the scale ablation. EigenPlaces-256 is built at 376×240 (default) and 752×480 (PERCEPTION_2.1 §11).
 
 ## 31.5 Illumination
 

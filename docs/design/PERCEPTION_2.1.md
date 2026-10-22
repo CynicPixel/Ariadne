@@ -1550,7 +1550,13 @@ hard-pair cost: rare pairs only (C8).
 
 `infra/scripts/phase1.sh` fails without `.cache/models/eigenplaces_ref/manifest.yaml` and
 `.cache/models/aliked_lg_ref/manifest.yaml`. They were made in this session (outputs under
-`.cache/feat-2.1-perception/models/`, copied to `.cache/models/`). To regenerate them:
+`.cache/feat-2.1-perception/models/`, copied to `.cache/models/`).
+
+**One command each (L4, 2026-10-21):** `infra/scripts/models.sh eigenplaces` and `infra/scripts/models.sh aliked-lg`
+do steps 1–3 below and then check every output against sha256s **pinned in the script** (not against the freshly
+written manifest). `ARIADNE_UPSTREAM` / `ARIADNE_MODELS` redirect the clones and the output. Verified: a full
+regeneration into `.cache/feat-2.1-perception/models_regen/` reproduced all 11 EigenPlaces and all 19
+ALIKED+LightGlue files **bit-exactly**, the ONNX files included (18 s and 2 min). The steps by hand:
 
 **1. Image** (FROM `ariadne-xfeat-ref:1`, which `infra/scripts/models.sh xfeat` builds). Not in `infra/docker/`
 (shared); moving it there is a maintainer ask.
@@ -1602,3 +1608,36 @@ docker run --rm --network none -u $(id -u):$(id -g) -v $PWD/python/model_tools:/
 --gtest_filter='*EigenPlacesReference*:PlaceRecognizer*:AlikedLightGlueReference.*:HardPair.*'` must pass.
 Expected output hashes are in each `manifest.yaml` and in SMOKE §4r / §4s-2. A torch-side re-run should reproduce
 them bit-exactly: 1 thread, deterministic algorithms.
+
+## 14. Sim-rig exports (L3, D90) — 1280×720 RGB
+
+The rig is 1280×720 RGB (arch §1). The D62/D63 exports are fixed at EuRoC's 752×480 gray, so the sim needs its own.
+The method is the same as D62/D63: our export from the pinned upstream, exact against upstream PyTorch on recorded
+frames.
+
+**Frames.** Four `left_rgb` frames of the phase-1 recording, agent 0, frames 200/205/700/710, as the pipeline sees
+them (lens applied, no degradation):
+```sh
+docker run --rm -u $(id -u):$(id -g) -v $PWD:/work -v <REC>/raw:/rec:ro -v <OUT>:/out ariadne/core-dev:dev \
+  /work/build/docker/cpp/runtime/ariadne_frame_dump --rec /rec/rec --scene /rec/scene --agent 0 \
+  --frames 200,205,700,710 --out /out
+```
+`<REC>` = `evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z`. Create `<OUT>` first; a directory docker
+creates is root-owned. PNGs are written in the BGR file convention, so the reader converts to RGB explicitly.
+`models.sh` sha256-checks the four files, then:
+```sh
+ARIADNE_SIM_FRAMES=<OUT> infra/scripts/models.sh eigenplaces-sim   # -> $MODELS/eigenplaces_sim_ref
+ARIADNE_SIM_FRAMES=<OUT> infra/scripts/models.sh aliked-lg-sim     # -> $MODELS/aliked_lg_sim_ref
+```
+**Check:** `ARIADNE_EIGENPLACES_SIM_REF=… ARIADNE_ALIKED_LG_SIM_REF=… ARIADNE_REQUIRE_MODELS=1 test_opencv
+--gtest_filter='*SimRig*:*SimRgb*:AlikedLightGlueSimReference.*'`.
+
+**Channel order** is where this can silently go wrong. Upstream EigenPlaces and ALIKED take RGB, `cv2.imread` returns
+BGR, and `cv::ALIKED` swaps (blobFromImage swapRB). Each wrapper therefore has an RGB-named entry point taking RGB
+order. The tests feed the BGR-ordered frame on purpose and assert the result changes: the input moves by up to 0.77
+and the cosine drops to 0.996–0.998, and ALIKED keeps 0/1024 keypoints exactly.
+
+**Results:** SMOKE §4t, exact on every check. **Open:**
+- EigenPlaces' sim default size: 640×360 is proposed, retrieval on sim views is unmeasured (3.1);
+- one scene, weakly coloured;
+- quiet-host cost (L5).
