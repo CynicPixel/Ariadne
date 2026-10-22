@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // ariadne_tum_vo: the stereo VO pipeline over one TUM RGB-D sequence, sensor depth through a virtual rig
-// (2.6, D90; perception/rgbd/depth_stereo.hpp), scored against the mocap ground truth.
+// (2.6, D100; perception/rgbd/depth_stereo.hpp), scored against the mocap ground truth.
 //
 //   ariadne_tum_vo --sequence DIR --perception-config YAML --slam-config YAML
 //                  --out DIR [--frames N] [--seed S] [--intrinsics calibrated|ros_default]

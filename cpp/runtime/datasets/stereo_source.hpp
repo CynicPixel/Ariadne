@@ -63,7 +63,7 @@ struct StereoFrame {
     int64_t t_ns = 0;
     cv::Mat left, right;   // raw 8-bit gray
     cv::Mat left_rgb;      // raw 8-bit RGB of the left camera (same pixels as `left`); empty if the source has none
-    /// RGB-D sources only (2.6, D90): CV_32F metres registered to `left`'s pixels, 0 = no return. `right` is then
+    /// RGB-D sources only (2.6, D100): CV_32F metres registered to `left`'s pixels, 0 = no return. `right` is then
     /// empty. Empty for stereo sources.
     cv::Mat depth;
 };
@@ -93,7 +93,7 @@ public:
     /// Camera `cam`'s (0 left, 1 right) calibrated flat field for the radiometric stage; empty (K = 1) when the
     /// source has none -- EuRoC publishes none (2.2).
     virtual perception::radiometric::FlatField FlatFieldOf(int /*cam*/) const { return {}; }
-    /// RGB-D sources (2.6, D90): the depth sensor's stated noise model and the virtual rig it is fed through.
+    /// RGB-D sources (2.6, D100): the depth sensor's stated noise model and the virtual rig it is fed through.
     /// Present iff every frame carries `depth` and no `right`. Calibration() is then that virtual rig.
     virtual std::optional<perception::DepthSensorModel> DepthSensor() const { return std::nullopt; }
 };

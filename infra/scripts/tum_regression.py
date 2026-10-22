@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check TUM RGB-D runs against configs/benchmark/tum_regression.yaml (2.6, D90).
+"""Check TUM RGB-D runs against configs/benchmark/tum_regression.yaml (2.6, D100).
 
     infra/scripts/tum_regression.py RUNS_DIR      # RUNS_DIR/<rgbd_dataset_SEQ-*>/results.yaml, newest per sequence
 

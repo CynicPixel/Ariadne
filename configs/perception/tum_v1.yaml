@@ -1,4 +1,4 @@
-# 2.6 (D90): TUM RGB-D perception = euroc_v2 (D60: ORB + LK + lost-mode re-association) verbatim. The stereo:
+# 2.6 (D100): TUM RGB-D perception = euroc_v2 (D60: ORB + LK + lost-mode re-association) verbatim. The stereo:
 # and stereo_match: sections are parsed but unused on an RGB-D source (sensor depth replaces SGBM and the
 # left->right match; cpp/perception/rgbd/depth_stereo.hpp). Pair with configs/slam/tum_v1.yaml.
 name: tum_v1

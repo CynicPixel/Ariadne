@@ -134,7 +134,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     const PerceptionConfig pcfg = LoadPerception(args.perception_config);
     // 2.2: the radiometric front end between the source and the rectifier (a call-through when mode is off).
     runtime::RadiometricSource source(inner_source, pcfg.radiometric);
-    // 2.6 (D90): an RGB-D source feeds sensor depth through a virtual rig (perception/rgbd/depth_stereo.hpp) in
+    // 2.6 (D100): an RGB-D source feeds sensor depth through a virtual rig (perception/rgbd/depth_stereo.hpp) in
     // place of the right image, SGBM and the LK stereo matcher. Stereo sources take the unchanged path.
     const std::optional<DepthSensorModel> depth_model = source.DepthSensor();
     const bool rgbd = depth_model.has_value();
@@ -789,7 +789,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                      std::abs(row_check.a + row_check.b * (rr.width - 1) + row_check.c * (rr.height - 1))})
         << ", matches: " << row_check.matches << "}}\n"
         << "stereo_exposure_match: " << (pcfg.stereo_match.exposure_match ? "true" : "false") << "\n";
-    if (rgbd) {   // 2.6 (D90): only for RGB-D sources, so stereo results stay byte-identical
+    if (rgbd) {   // 2.6 (D100): only for RGB-D sources, so stereo results stay byte-identical
         res << "rgbd_depth: {sigma_z_model: \"k*Z^2 (Khoshelham & Elberink 2012 eq. 7)\", k_per_m: "
             << depth_model->sigma_k_per_m << ", z_min_m: " << depth_model->z_min_m << ", z_max_m: " << depth_model->z_max_m
             << ", max_neighbour_ratio: " << depth_model->max_neighbour_ratio << ", virtual_baseline_m: "

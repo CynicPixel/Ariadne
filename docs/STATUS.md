@@ -4,17 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
-## 2026-10-22 — 2.6 TUM RGB-D: loader, depth path into StereoVo, regression pinned (D90)
+## 2026-10-22 — 2.6 TUM RGB-D: loader, depth path into StereoVo, regression pinned (D100)
 
 - `ariadne_tum_vo` runs the stereo pipeline on TUM, with sensor depth fed through a virtual rig (σ_Z = 1.425e-3·Z²,
   Khoshelham & Elberink eq. 7). EuRoC output is byte-identical (MH_01, 300 frames).
 - **Pinned ATE (m):** fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139. evo agrees to 1e-6 m. **fr1 is not in the
-  published RGB-D class**; fr2/xyz is. Causes are unattributed (D90 lists the candidates).
+  published RGB-D class**; fr2/xyz is. Causes are unattributed (D100 lists the candidates).
 - Tests: `test_opencv` Tum* 7/7, `test_unit` *Config* 20/20.
 
-## 2026-10-21 — Session claims D90–D99 for 2.6 TUM, L2 (sim IMU noise operator) and 3.3 (comms broker node)
+## 2026-10-21 — Session claims D100–D109 for 2.6 TUM, L2 (sim IMU noise operator) and 3.3 (comms broker node)
 
-- Decision IDs **D90–D99** are claimed by this session. D74 stays 2.5's; D80–D89 stay the 3.2 session's.
+- Decision IDs **D100–D109** are claimed by this session: D100 2.6 TUM, D101 L2, D102 3.3. Renumbered 2026-10-22
+  from D90–D99, which collided with A1's D90–D93. D74 stays 2.5's; D80–D89 stay the 3.2 session's.
 - Branches from `main` (aa7dce2): `feat/2.6-tum`, then one branch each for L2 and 3.3.
 
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open

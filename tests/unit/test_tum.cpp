@@ -1,4 +1,4 @@
-// 2.6 (D90): the TUM RGB-D loader and the depth -> virtual-stereo path, on synthetic data.
+// 2.6 (D100): the TUM RGB-D loader and the depth -> virtual-stereo path, on synthetic data.
 #include "perception/rgbd/depth_stereo.hpp"
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "runtime/datasets/tum.hpp"

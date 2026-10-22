@@ -52,7 +52,7 @@ public:
     /// Rectify a left image only, with the same maps (e.g. the colour frame
     /// the reconstruction service needs alongside the gray VO input).
     void RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const;
-    /// The same left map, nearest-neighbour: for a registered depth image (2.6, D90), where interpolating across
+    /// The same left map, nearest-neighbour: for a registered depth image (2.6, D100), where interpolating across
     /// a depth edge would invent depths that exist nowhere.
     void RectifyLeftNearest(const cv::Mat& left, cv::Mat& left_out) const;
 

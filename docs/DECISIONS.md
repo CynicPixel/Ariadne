@@ -2666,7 +2666,7 @@ Design: `docs/design/PERCEPTION_2.1.md` §12. Smoke: `SMOKE_TEST_RESULTS.md` §4
 - **Reference exports:** the regeneration commands for `.cache/models/{eigenplaces_ref,aliked_lg_ref}` are in
   PERCEPTION_2.1 §13.
 
-## 2026-10-22 — D90: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
+## 2026-10-22 — D100: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
 
 - **Loader:** `runtime::TumSource` (`cpp/runtime/datasets/tum.hpp`), with `infra/scripts/fetch_tum.py` (sha256
   pinned). Facts are from the TUM file-format page, read 2026-10-21:

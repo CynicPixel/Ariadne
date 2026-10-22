@@ -1,4 +1,4 @@
-# 2.6 (D90): TUM RGB-D. euroc_v2's values (LOCAL_SLAM_2.3, D51-D57) with: no imu section (TUM has an accelerometer
+# 2.6 (D100): TUM RGB-D. euroc_v2's values (LOCAL_SLAM_2.3, D51-D57) with: no imu section (TUM has an accelerometer
 # only: imu.mode none), the near depth limit of the Kinect, and the triangulation's disparity noise derived in code
 # from the sensor's sigma_Z = k Z^2 model. ba.sigma_px stays EuRoC's calibrated 0.46 [ASSUMPTION: not re-calibrated
 # on TUM]. Pair with configs/perception/tum_v1.yaml.
@@ -8,7 +8,7 @@ triangulation:
   min_depth_m: 0.4              # = the TUM source's DepthSensorModel z_min_m (Kinect v1 near limit)
   max_reprojection_px: 2.0
   sgbm_gate_sigma: 3.0          # §9.6: inconsistent if |Z_tri - Z_sgbm| > 3 sigma
-  disparity_sigma_px: 0.5       # IGNORED on RGB-D: the runner sets k*fx*B from the depth model (D90)
+  disparity_sigma_px: 0.5       # IGNORED on RGB-D: the runner sets k*fx*B from the depth model (D100)
   max_relative_sigma: 0.1       # sigma_Z / Z
 
 pnp:

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// TUM RGB-D (Sturm et al., IROS 2012) as a StereoSource (2.6, D90).
+// TUM RGB-D (Sturm et al., IROS 2012) as a StereoSource (2.6, D100).
 //
 // A sequence directory holds rgb/ and depth/ PNGs listed in rgb.txt / depth.txt ("timestamp filename", seconds
 // since the epoch), and groundtruth.txt ("timestamp tx ty tz qx qy qz qw": the colour camera's optical centre in

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 2.6 (D90): an RGB-D sensor's depth image as StereoVo's stereo evidence.
+// 2.6 (D100): an RGB-D sensor's depth image as StereoVo's stereo evidence.
 //
 // StereoVo triangulates a new landmark from a left point and a right point on
 // a rectified rig of baseline B, then gates the result with sigma_Z (§9.5)
@@ -26,7 +26,7 @@
 // - BA weights the virtual right point at ba.sigma_px (1 px) while the model
 //   implies sigma_d ~ 0.06 px: depth is weighted ~15x looser than the model.
 //   ORB-SLAM2 does the same (one sigma per octave for u_R). Deviation recorded
-//   in D90.
+//   in D100.
 // ---------------------------------------------------------------------------
 #include "perception/stereo/sgbm_stereo.hpp"
 

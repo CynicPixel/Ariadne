@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch ONE TUM RGB-D sequence (2.6, D90).
+"""Fetch ONE TUM RGB-D sequence (2.6, D100).
 
     infra/scripts/fetch_tum.py freiburg1_xyz      # -> .cache/datasets/tum/rgbd_dataset_freiburg1_xyz/{rgb,depth,...}
 
