@@ -5327,6 +5327,11 @@ Particularly valuable because it contains:
 Source:
 - https://arpg.colorado.edu/oivio/
 
+> **As built (5.6, D141, 2026-10-23).** OIVIO could not be obtained (downloads withdrawn; Drive IDs 404). The
+> maintainer approved **Hilti 2023 `site2_robot_3`** as the 5.6 sequence: an onboard co-moving light in a dark room
+> (ALGORITHMS §8.1), OAK-D stereo + IMU, public sparse 3-DoF TLS ground truth, CC BY-NC-SA 3.0. There is no
+> light-power sweep. OIVIO remains preferred if access is granted.
+
 ### VAROS
 
 Use for synthetic moving illumination / scattering with dense ground truth where applicable.

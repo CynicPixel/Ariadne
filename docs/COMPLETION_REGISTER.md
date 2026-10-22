@@ -144,7 +144,7 @@ identical.
 | 5.3 active exposure + lamp co-control | **partial** (A2): D132 controller + Stage 4 + replay `lamp_power`; tests 7/7 incl. closed loop (fixed a blind-metric stall and a limit cycle). Not wired; live `light_config` loop and the overexposure scenario to do. Carries 2.2's Stage 4 |
 | 5.4 degradation configs frozen | **open** (A2): L9 options built (D135: pre-sensor dust, correlated field, lamp airlight; tests 4/4, golden digest unchanged). Decision + freeze wait on one measured pair on a dark recording |
 | 5.5 confined-space worlds, baseline sweep | **partial** (A2): D138 `confined_v1` (20/20 seeds accepted, narrow passages 0.45–0.60 m) + one-pass sweep cameras `rig_stereo_sweep_v1` (right_b04/08/12/20, recorded and verified; worldgen 106/106, v1 byte-identical). Not rendered; SimSource camera selection after the 2.6/L2 merge. Carries EuRoC V1_03 as the dataset regression case (main D86; candidate fix projection-guided re-association) |
-| 5.6 OIVIO real-data validation | **blocked** (A2): official page "downloads temporarily unavailable"; all Drive IDs 404 (2026-10-22). Needs maintainer: email ARPG or approve a substitute (CAVERS is RGB-D, not stereo) |
+| 5.6 real-data validation (OIVIO → **Hilti 2023 site2_robot_3**, D141) | **in progress** (A2): OIVIO unobtainable; substitute approved 2026-10-23 (onboard light, stereo + IMU, public sparse GT). Fetch + loader next |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |

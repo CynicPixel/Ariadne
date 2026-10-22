@@ -3219,3 +3219,29 @@ Config/Degrad 20/20.
   - pre_sensor and the correlated field stay.
   - The 5.4 freeze measures the headlamp model at matched mean veil against Koschmieder, on the dark recording that
     has now been rendered (D137).
+
+## 2026-10-23 — D141: 5.6 validates on Hilti 2023 `site2_robot_3`, not OIVIO (maintainer-approved substitute, §49)
+
+**Why the substitute.** OIVIO (arch §34.2, plan 5.6) cannot be obtained.
+- Its page says trajectory downloads are "temporarily unavailable" and asks people to email the authors.
+- Every sequence's Google Drive ID returns 404 (checked 2026-10-22).
+
+**Which substitute.** ALGORITHMS §8.1 names Hilti 2023 `site2_robot_3` as the only public sequence whose own paper
+confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
+- Data: OAK-D stereo + IMU; open Hugging Face `Hilti-Research/hilti-slam-challenge-2023`, ungated, CC BY-NC-SA 3.0.
+- Ground truth is public (`ground_truth/site2_robot_3.txt`): TLS-surveyed control points, 3-DoF positions only, sparse.
+- The considered alternative, CAVERS (arXiv 2604.15052), is RGB-D only, so it was not taken.
+- Approved by the maintainer 2026-10-23.
+
+**What changes against §34.2 / plan 5.6.**
+- **Not available here:** the 100/50/15 % light-power sweep (OIVIO only).
+- **Metric:** sparse-position error at the control points, Hilti's protocol, not dense ATE.
+- **Report:** names the substitute and the reason.
+- **Unchanged:** the honesty requirement. Report where sim-tuned settings transfer and where they do not.
+- **Still open:** the maintainer may email ARPG for OIVIO access. If it arrives, OIVIO runs as well.
+
+**§49 ritual:**
+- catalogue: ALGORITHMS §8.1, already present;
+- arch decision: this entry plus the as-built note in §34.2;
+- ablation and benchmark config: `configs/benchmark/hilti_5.6.yaml`, written with the loader;
+- manifest: dataset, sequence, sha256 and licence recorded per run, as for EuRoC and TUM.
