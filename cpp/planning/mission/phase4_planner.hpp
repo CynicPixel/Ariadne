@@ -11,12 +11,15 @@
 //                               only goals inside, when one exists (B's semantics); priority_region scales G of
 //                               every task that OBSERVES the region (goal or observed centroid inside, or the
 //                               centroid within the depth gate of it: a region in unexplored space still pulls the
-//                               frontier views that look into it, B's LLM-run lesson); a joint exactly-once pick (greedy: the agent
-//                               with the higher best utility picks first; 4.4 CBBA replaces it).
+//                               frontier views that look into it, B's LLM-run lesson); then the joint
+//                               exactly-once pick by 4.4's allocator (D115: CBBA with L_t = 1 by default, broker
+//                               SGA, or the greedy pick as an ablation row), event-triggered: re-run only when the
+//                               task set or the topology changed.
 //   Route(plan, agent, i, from) A* on the agent's plan space, line-of-sight string-pulled (4-connected chords, so
 //                               no corner is cut), cut at max_command_m; never a raw-cell fallback.
 // Deterministic given its inputs: sim time only, no wall clock in any decision.
 // ---------------------------------------------------------------------------
+#include "planning/mission/allocation.hpp"
 #include "planning/mission/nbv.hpp"
 #include "planning/route/egress.hpp"
 #include "planning/volumetric/esdf.hpp"
@@ -26,6 +29,9 @@
 
 #include <opencv2/core.hpp>
 
+#include "core/serialization/serializer.hpp"
+
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,6 +55,8 @@ struct Phase4Params {
     double refused_radius_m = 0.5;   // B's PlaceholderParams default: a refused goal excludes options this close
     double max_command_m = 3.0;      // B's PlaceholderParams default
     bool risk_calibrated = false;    // D112's bar
+    enum class Allocator { kCbba, kSga, kGreedy } allocator = Allocator::kCbba;   // D115; greedy = ablation row
+    int max_bundle = 1;              // D115 correction: L_t = 1 by default (CBBA = SGA exactly)
 };
 
 /// The region kinds of B's Directive (planning/mission/directives.hpp, feat/ph7-agentic), mirrored field by field.
@@ -64,6 +72,7 @@ struct RegionDirective {
 
 struct Phase4AgentInput {
     bool active = false;
+    bool linked = true;              // can exchange with the other agent this replan (topology for CBBA)
     core::Vec3 position = core::Vec3::Zero();
     double flown_m = 0;
     std::vector<std::pair<double, double>> refused_goals;
@@ -77,8 +86,19 @@ struct Phase4AgentPlan {
     int excluded_refused = 0, excluded_directive = 0;
 };
 
+/// One allocation event, logged identically for every allocator (arch §21.7).
+struct AllocationRecord {
+    std::string method;              // cbba | sga | greedy
+    std::string trigger;             // first | tasks | topology | none (reused the last assignment) | reserve_rule
+    int tasks = 0, rounds = 0;
+    size_t messages = 0, bytes = 0;  // CBBA: TASK_CONSENSUS wire bytes at the serializer
+    double total = 0, optimum = -1;  // auction score; the exact optimum (2 agents), -1 if not computed
+    std::vector<float> scales;       // the common scales (8: five IG terms, path, bandwidth, risk)
+};
+
 struct Phase4Plan {
     double t_s = 0;
+    AllocationRecord allocation;
     TraversabilityMaps maps;
     cv::Mat support;
     EgressReplan egress;
@@ -97,6 +117,13 @@ void MaskKeepOut(int agent, const std::vector<RegionDirective>& dirs, const Grid
 /// Exactly-once greedy joint pick: the agent whose best option has the higher utility picks first (ties: agent 0);
 /// the other takes its best option with a different task_id. -1 = none.
 void JointPick(Phase4Plan* p);
+
+/// D115's auction instance from both agents' options: common scales (max over agents of each term's p90), per agent
+/// and task its best view (by D114 utility), cbar = the D114 value on the common scales net of bandwidth and risk,
+/// d0 = its path, rate = lambda_path / P_path; legs (goal -> goal on the agent's plan space) only when L_t > 1.
+/// `view[a][j]` is the option index of agent a's view of task j (-1 none).
+AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bundle, std::vector<float>* scales,
+                             std::vector<std::vector<int>>* view);
 
 /// Line-of-sight string pulling of a grid path over `plan` (CV_8U): from each kept cell, the farthest later path
 /// cell whose 4-connected chord is all traversable. Returns the kept cells, first and last included.
@@ -126,6 +153,11 @@ private:
     EgressPlanner egress_;
     std::vector<core::Vec3> track_[2];
     bool detected_ = false;
+    void Allocate(const Phase4AgentInput agents[2], Phase4Plan* out);
+    core::WireCodec codec_;
+    std::set<int64_t> last_tasks_;
+    bool last_linked_ = false, allocated_ = false;
+    std::vector<int64_t> last_pick_{-1, -1};   // task ids assigned at the last event
 };
 
 }  // namespace ariadne::planning

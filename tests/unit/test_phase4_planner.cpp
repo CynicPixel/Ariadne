@@ -149,3 +149,58 @@ TEST(Phase4Planner, IntegratePlanRouteSmoke) {
         EXPECT_LE(len, prm.max_command_m + 1e-9);
     }
 }
+
+TEST(Phase4Planner, AuctionUsesCommonScales) {
+    // D115 test 8: agent 0 also holds many weak candidates (which shrink its own p90); the shared task 42, seen with
+    // identical raw terms by both agents, must get the SAME value for both: the scales are common, not per agent.
+    Phase4Plan p;
+    auto Raw = [](int64_t id, double cov, double ent, double path) {
+        TaskCandidate c;
+        c.task_id = id, c.ig_raw = {cov, ent, 0, 0, 0}, c.path_m = path, c.utility = cov;
+        return c;
+    };
+    p.agents[0].nbv.options = {Raw(42, 100, 50, 2)};
+    for (int i = 0; i < 30; ++i) p.agents[0].nbv.options.push_back(Raw(1000 + i, 1, 1, 2));
+    p.agents[1].nbv.options = {Raw(42, 100, 50, 2), Raw(7, 300, 80, 3)};
+    GridFrame g;
+    g.cell = 0.05;
+    std::vector<float> scales;
+    std::vector<std::vector<int>> view;
+    const AuctionInstance in = BuildAuction(p, g, 1, &scales, &view);
+    const size_t j = size_t(std::lower_bound(in.task_ids.begin(), in.task_ids.end(), 42) - in.task_ids.begin());
+    EXPECT_DOUBLE_EQ(in.value[0][j], in.value[1][j]);
+    EXPECT_EQ(scales.size(), 8u);
+    // Common scales: coverage max(p90 agent 0 = 1, p90 agent 1 over {100, 300} = 100) = 100, entropy max(1, 50) = 50,
+    // so value = 100/100 + 50/50 = 2 for both. Per-agent scales would give agent 0 100/1 + 50/1 = 150.
+    EXPECT_DOUBLE_EQ(in.value[0][j], 2.0);
+    EXPECT_FLOAT_EQ(scales[0], 100.f);
+    EXPECT_FLOAT_EQ(scales[1], 50.f);
+}
+
+TEST(Phase4Planner, AllocationIsEventTriggered) {
+    Phase4Briefing b;
+    b.grid.ox = 0, b.grid.oy = 0, b.grid.cell = 0.05, b.grid.cols = 80, b.grid.rows = 80;
+    b.target = {40, 70};
+    b.entrances = {{40, 10}};
+    Phase4Params prm;
+    const int W = 160, H = 90;
+    std::vector<float> Z(size_t(W * H), 2.0f), S(size_t(W * H), 0.02f);
+    DepthFrame f;
+    f.T_W_C.R << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+    f.T_W_C.t = core::Vec3(0.5, 2.0, 1.0);
+    f.fx = 84, f.fy = 84, f.cx = 80, f.cy = 45, f.width = W, f.height = H, f.depth = Z.data(), f.sigma = S.data();
+    Phase4Planner P(b, prm);
+    P.Integrate(0, 0, f);
+    Phase4AgentInput ag[2];
+    ag[0].active = true, ag[0].position = f.T_W_C.t;
+    const Phase4Plan p1 = P.Plan(5.0, ag, {});
+    EXPECT_EQ(p1.allocation.method, "cbba");
+    EXPECT_EQ(p1.allocation.trigger, "first");
+    const Phase4Plan p2 = P.Plan(10.0, ag, {});   // nothing new was observed: same tasks, same topology
+    EXPECT_EQ(p2.allocation.trigger, "none");
+    EXPECT_EQ(p2.allocation.messages, 0u);
+    if (p1.joint[0] >= 0) {
+        ASSERT_GE(p2.joint[0], 0);
+        EXPECT_EQ(p2.agents[0].nbv.options[size_t(p2.joint[0])].task_id, p1.agents[0].nbv.options[size_t(p1.joint[0])].task_id);
+    }
+}

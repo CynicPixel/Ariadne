@@ -1,5 +1,7 @@
 #include "planning/mission/phase4_planner.hpp"
 
+#include "planning/mission/allocation_wire.hpp"
+
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -197,9 +199,126 @@ Phase4Plan Phase4Planner::Plan(double t_s, const Phase4AgentInput agents[2], con
         out.agents[a].plan.setTo(0, out.agents[a].keep_out);   // the escape disc never re-opens a keep_out
         ApplyDirectives(a, dirs, agents[a].refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &out.agents[a]);
     }
-    JointPick(&out);
+    Allocate(agents, &out);
     return out;
 }
+
+AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bundle, std::vector<float>* scales,
+                             std::vector<std::vector<int>>* view) {
+    // Common scales: per term, the max over agents of that agent's p90 (P90Scale over its own options).
+    std::array<double, 8> P{};
+    for (int a = 0; a < 2; ++a) {
+        const auto& o = p.agents[a].nbv.options;
+        for (int k = 0; k < 8; ++k) {
+            std::vector<double> v;
+            for (const auto& c : o) v.push_back(k < 5 ? c.ig_raw[size_t(k)] : (k == 5 ? c.path_m : c.cost[k == 6 ? 1 : 4]));
+            P[size_t(k)] = std::max(P[size_t(k)], P90Scale(v));
+        }
+    }
+    scales->assign(P.begin(), P.end());
+    std::vector<int64_t> ids;   // the union of task ids, sorted (deterministic task order)
+    for (int a = 0; a < 2; ++a)
+        for (const auto& c : p.agents[a].nbv.options)
+            if (c.source != TaskSource::kReturn && c.source != TaskSource::kHold) ids.push_back(c.task_id);
+    std::sort(ids.begin(), ids.end());
+    ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
+    AuctionInstance in;
+    in.n_agents = 2, in.max_bundle = max_bundle, in.task_ids = ids;
+    const size_t N = ids.size();
+    in.value.assign(2, std::vector<double>(N, 0.0));
+    in.d0.assign(2, std::vector<double>(N, 0.0));
+    in.leg.assign(2, std::vector<std::vector<double>>(N, std::vector<double>(N, 0.0)));
+    view->assign(2, std::vector<int>(N, -1));
+    for (int a = 0; a < 2; ++a) {
+        in.rate.push_back(P[5] > 0 ? p.agents[a].nbv.lambda_path / P[5] : 0.0);
+        const auto& o = p.agents[a].nbv.options;
+        for (size_t i = 0; i < o.size(); ++i) {   // options are sorted by utility: the first view of a task is its best
+            const size_t j = size_t(std::lower_bound(ids.begin(), ids.end(), o[i].task_id) - ids.begin());
+            if (j >= N || ids[j] != o[i].task_id || (*view)[size_t(a)][j] >= 0) continue;
+            double g_common = 0;
+            for (int k = 0; k < 5; ++k) g_common += P[size_t(k)] > 0 ? o[i].ig_raw[size_t(k)] / P[size_t(k)] : 0.0;
+            const double cb = P[6] > 0 ? o[i].cost[1] / P[6] : 0.0, cr = P[7] > 0 ? o[i].cost[4] / P[7] : 0.0;
+            in.value[size_t(a)][j] = std::max(0.0, g_common - cb - cr);
+            in.d0[size_t(a)][j] = o[i].path_m;
+            (*view)[size_t(a)][j] = int(i);
+        }
+        if (max_bundle > 1 && !p.agents[a].plan.empty()) {   // goal -> goal legs on the agent's plan space
+            for (size_t j = 0; j < N; ++j) {
+                const int vj = (*view)[size_t(a)][j];
+                if (vj < 0) continue;
+                const auto& gj = o[size_t(vj)].goal_xy;
+                const Cell cj{int(std::floor((gj.second - g.oy) / g.cell)), int(std::floor((gj.first - g.ox) / g.cell))};
+                const cv::Mat d = GridDistances(p.agents[a].plan, cj);
+                for (size_t k = 0; k < N; ++k) {
+                    const int vk = (*view)[size_t(a)][k];
+                    if (vk < 0 || k == j) continue;
+                    const auto& gk = o[size_t(vk)].goal_xy;
+                    const Cell ck{int(std::floor((gk.second - g.oy) / g.cell)), int(std::floor((gk.first - g.ox) / g.cell))};
+                    const double dd = d.at<double>(ck.r, ck.c);
+                    in.leg[size_t(a)][j][k] = std::isfinite(dd) ? dd * g.cell : 1e9;   // unreachable: discounted to ~0
+                }
+            }
+        }
+    }
+    return in;
+}
+
+void Phase4Planner::Allocate(const Phase4AgentInput agents[2], Phase4Plan* out) {
+    AllocationRecord& rec = out->allocation;
+    rec.method = p_.allocator == Phase4Params::Allocator::kCbba ? "cbba"
+                 : p_.allocator == Phase4Params::Allocator::kSga ? "sga" : "greedy";
+    // The hard rule's {return, hold} is outside the auction: such an agent takes its first option.
+    const bool hard0 = out->agents[0].nbv.reserve_rule, hard1 = out->agents[1].nbv.reserve_rule;
+    if (p_.allocator == Phase4Params::Allocator::kGreedy || hard0 || hard1) {
+        JointPick(out);
+        if (hard0) out->joint[0] = out->agents[0].nbv.options.empty() ? -1 : 0;
+        if (hard1) out->joint[1] = out->agents[1].nbv.options.empty() ? -1 : 0;
+        rec.trigger = hard0 || hard1 ? "reserve_rule" : "every_replan";
+        return;
+    }
+    std::vector<std::vector<int>> view;
+    const AuctionInstance in = BuildAuction(*out, b_.grid, p_.max_bundle, &rec.scales, &view);
+    rec.tasks = in.Tasks();
+    const std::set<int64_t> tasks(in.task_ids.begin(), in.task_ids.end());
+    const bool linked = agents[0].active && agents[1].active && agents[0].linked && agents[1].linked;
+    // Event triggers (§21.7): a new or completed task (the task set changed), or a topology change.
+    rec.trigger = !allocated_ ? "first" : (tasks != last_tasks_ ? "tasks" : (linked != last_linked_ ? "topology" : "none"));
+    if (rec.trigger == "none") {   // reuse the last assignment: each agent keeps its task while it still has a view
+        for (int a = 0; a < 2; ++a) {
+            out->joint[a] = -1;
+            const auto& o = out->agents[a].nbv.options;
+            for (size_t i = 0; i < o.size(); ++i)
+                if (o[i].task_id == last_pick_[size_t(a)]) {
+                    out->joint[a] = int(i);
+                    break;
+                }
+        }
+        return;
+    }
+    Allocation al;
+    if (p_.allocator == Phase4Params::Allocator::kSga) {
+        al = SequentialGreedy(in);
+    } else {
+        CbbaParams cp;
+        cp.bytes = WireBytes(codec_, rec.scales);
+        const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
+        al = RunCbba(in, [&](int) { return G; }, cp);
+    }
+    rec.rounds = al.rounds, rec.messages = al.messages, rec.bytes = al.bytes, rec.total = al.total;
+    if (in.n_agents == 2 && in.max_bundle <= 2) rec.optimum = TwoAgentOptimum(in);
+    for (int a = 0; a < 2; ++a) {
+        out->joint[a] = -1;
+        last_pick_[size_t(a)] = -1;
+        if (!agents[a].active) continue;
+        const auto& A = al.agents[size_t(a)];
+        if (A.path.empty()) continue;
+        const int j = A.path.front();   // execute the first task on its path
+        out->joint[a] = view[size_t(a)][size_t(j)];
+        last_pick_[size_t(a)] = in.task_ids[size_t(j)];
+    }
+    last_tasks_ = tasks, last_linked_ = linked, allocated_ = true;
+}
+
 
 std::pair<std::vector<std::pair<double, double>>, double> Phase4Planner::Route(const Phase4Plan& p, int agent, int i,
                                                                               const Cell& from) const {
