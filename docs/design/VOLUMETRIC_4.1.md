@@ -60,6 +60,10 @@ out (queries):
 - **Integration**, per depth sample on a `pixel_stride` grid:
   - Gate exactly as 1.8 does (D45): finite, `0 < Z ≤ max_depth`, `σ ≤ max_sigma`.
   - Walk the ray from the camera centre to `range + τ` (τ = truncation = 3 voxels) with Amanatides–Woo.
+  - **Silhouette guard** (added after test 4 measured it): a ray whose pixel has a 4-neighbour with depth differing
+    by more than τ, or missing, grazes a depth discontinuity. It integrates only its in-front part (s ≥ 0).
+    Otherwise its behind-surface band lands in the free space beyond the edge, the artefact that narrows a doorway
+    seen obliquely. In the test room it cut floating occupied voxels from 112 to 0 (34 one-voxel bleed remain).
   - For each voxel, take the signed distance **along the ray**, `s = range − t_vox`, where `t_vox` is the voxel
     centre's projection on the ray. Clamp to `[−τ, τ]`.
   - **Carving:** voxels well in front of the surface get `s = τ`. That makes "observed free" explicit.
@@ -77,7 +81,10 @@ out (queries):
   is behind it);
 - `free` otherwise.
 
-`w_min = 0.5`: half of one σ_ref-quality observation. This is fixed here and not tuned.
+Unknown is `W = 0` exactly (arch §20.2). *Correction after the first spool run (§7):* the first version used
+`w_min = 0.5`, half of one σ_ref-quality observation. With weights `(σ_ref/σ)²`, a σ = 0.06 m sample weighs 0.028, so
+far voxels needed about 18 observations to count as known, and coverage fell to 0.861. That contradicted the arch's
+definition; it was not a tuned threshold, and both runs are reported.
 
 ### 3.3 ESDF (§20.3), incremental per updated block
 - FH Algorithm 1 along x, then y, then z, on squared distances in voxel units. Sites are blocked voxels (f = 0);
@@ -134,7 +141,8 @@ timing, D45). The L1 live runtime fills the same struct from its estimator. The 
    - Carved voxels are free.
    - Unobserved space stays unknown.
    - `cv::Volume` HashTSDF on the same frames (unit weights, same voxel size and τ) gives a raycast surface within
-     one voxel of ours, the tolerance SMOKE §4u justifies.
+     **two** voxels of ours on ≥ 90 % of rays. *Corrected from one voxel:* the two maps' errors add, and the oracle's
+     own p95 error against truth is 1.35 voxels (ours 0.74).
 5. **Frontiers vs the GT unknown boundary:** on a synthetic map with known free and unknown, they equal brute
    force, and incremental equals full re-detection.
 6. **Determinism:** two integrations of the same frames, in different hash insertion orders, are byte-identical.
@@ -145,3 +153,44 @@ timing, D45). The L1 live runtime fills the same struct from its estimator. The 
   precision, side by side with 1.8's 0.93 / 0.97 / 0.71.
 - Time per keyframe for integration and for the incremental ESDF and frontier update, and memory (blocks), on this
   host (indicative).
+
+## 7. Results (2026-10-23)
+
+**Tests:** 8 new in `tests/unit/test_volumetric.cpp`, all passing; 1.8's 6 planning tests unchanged.
+
+| test | measured |
+|---|---|
+| FH 1D vs brute force (500 random functions with +∞ runs) | exact |
+| ESDF vs brute force, 50 random grids, 1–30 % sites (§37.6) | exact |
+| 2D slice vs `cv::distanceTransform` (DIST_L2, PRECISE) | ≤ 1e-4 |
+| Incremental ESDF vs rebuild (12 keyframes, ≥ 6 incremental) | bit-identical |
+| Known room: occupied floating > 1.5 voxels in open space | 0 (34 one-voxel bleed, 0.06 %) |
+| Known room: free voxels > half a voxel inside structure | 0 |
+| Known room: free voxels that contain a surface (grazing) | 2.17 % (≤ 3 % asserted) |
+| HashTSDF oracle, held-out raycast | agreement within 2 voxels on 93.1 % of rays; ours vs truth p50 0.014 / p95 0.037 m; OpenCV vs truth 0.028 / 0.067 m |
+| Frontiers vs brute force; incremental vs full | identical voxel sets (5749), identical clusters and fans |
+| Determinism | two runs bit-identical, same coarse RLE bytes |
+
+**Known biases, measured:**
+- *Optimistic clearance at grazing incidence.* Along-ray SDF ≥ perpendicular distance, so 2.2 % of free voxels contain
+  a surface. Clearance can be overestimated by at most one voxel (5 cm) there. 4.5 carries it as a route-confidence
+  input, not as a hidden margin.
+- *Pessimistic one-voxel bleed* (D45's artefact, in its TSDF form): 0.06 % of occupied voxels. The 5 cm voxel was
+  chosen to survive it (§1).
+
+**On the 1.7 evidence spool** (`evaluation/runs/volumetric_4.1/`; same keyframes, anchor and merge as 1.8's merged
+run; scored by `volumetric_eval.py`, which reproduces `mission_eval.py`'s 1.8 numbers exactly):
+
+| map | coverage | free precision | occupied precision | false-occupied cells (1 / 2 / 3 cells from GT structure) |
+|---|---|---|---|---|
+| **Phase 4 TSDF (D110)** | **0.942** | **0.979** | **0.865** | 620 (588 / 24 / 8) |
+| 1.8 placeholder (D45) | 0.933 | 0.961 | 0.707 | 793 (756 / 36 / 1) |
+| *first run, `w_min = 0.5` (superseded)* | *0.861* | *0.995* | *0.855* | *527* |
+
+- **Cost** (dev host, shared; 571 keyframes): integrate 14.8 ms mean (p95 30.0), incremental ESDF 43.9 (80.6),
+  frontier update 45.8 (73.2), about 105 ms per keyframe in all. The two agents produce about 2.9 keyframes per
+  second together. ESDF: 565 incremental updates, 6 rebuilds (box growth). Map: 3067 blocks, 12.6 MB.
+- **Coarse layer:** 4320 cells at 0.5 m, 1047 RLE bytes for the whole merged map.
+- **Reading:** occupied precision rises from 0.71 to 0.87 because surfaces come from the SDF zero crossing, not from
+  "the voxel a ray ended in". The false-occupied cells are still almost all one cell from GT structure: the thin-wall
+  convention effect D45 measured.

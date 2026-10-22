@@ -3409,6 +3409,11 @@ ships in the 5.0 release `[VERIFIED web 2026-08-30]` — at **8–10 cm voxels**
 multi-block use, the fallback is a from-scratch voxel-hash TSDF (~600 lines) **with the OpenCV version retained as
 the correctness oracle** — the fallback is a performance decision, never an excuse to skip cross-validation.
 
+> **As built (D110, 2026-10-23).** The fallback is taken: `cv::Volume` exposes no voxel or weight read (SMOKE §4u),
+> so 4.1 is a from-scratch voxel-hash TSDF, with HashTSDF as a test oracle. **The voxel is 5 cm, not 8–10 cm:** on
+> both scenes' GT, a one-cell wall bleed closes agent 1's entrance at ρ_responder for 8 and 10 cm voxels. Unknown is
+> weight 0 exactly (§20.2). Design: `docs/design/VOLUMETRIC_4.1.md`.
+
 ## 20.2 Occupancy
 
 A tri-state derived from TSDF weight and sign:

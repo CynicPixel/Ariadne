@@ -133,7 +133,7 @@ identical.
 
 | item | carries |
 |---|---|
-| 4.1 volumetric (HashTSDF) | HashTSDF API confirmed (SMOKE §4b) |
+| 4.1 volumetric (HashTSDF) | **done in replay (D110, A1):** from-scratch voxel-hash TSDF at 5 cm (`cv::Volume` has no voxel read, SMOKE §4u; it is the oracle), incremental FH ESDF (exact vs brute force, §37.6), 3D frontiers (= brute force; incremental = full), coarse RLE layer. Evidence spool vs 1.8: coverage 0.942 / 0.933, occupied precision 0.865 / 0.707 (`evaluation/runs/volumetric_4.1/`). Open: wired into L1's per-keyframe seam when L1 is committed. |
 | 4.2 traversability / risk at ρ_agent and ρ_responder | |
 | 4.3 NBV (I8) | needs L1 for closed loop |
 | 4.4 allocation (CBBA + broker-greedy) | needs L1 |

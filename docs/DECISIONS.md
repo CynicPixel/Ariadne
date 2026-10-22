@@ -2941,3 +2941,35 @@ verifying agent, so the broker sees pre-gated edges.
 
 **Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
 Both are main's (3.2 / 3.5).
+
+
+## 2026-10-23 — D110: 4.1 volumetric stack — from-scratch voxel-hash TSDF at 5 cm (HashTSDF the oracle), incremental FH ESDF, 3D frontiers, coarse RLE layer
+
+- **What** (`docs/design/VOLUMETRIC_4.1.md`, `cpp/planning/volumetric/{tsdf_map,esdf,frontiers3d}`):
+  - 8³-voxel blocks in a hash; along-ray SDF, clamped to τ = 3 voxels; per-keyframe averaging, then one fusion per
+    voxel, with weights `(σ_ref/σ_Z)²`; a silhouette guard.
+  - Tri-state: unknown = weight 0; occupied = SDF < half a voxel.
+  - ESDF: three FH passes, edge-clearance convention, capped at ρ_responder + 2 voxels. Two fields: egress (unknown
+    blocks) and agent. Recomputed per dirty box (± reach), never globally.
+  - Frontiers in the motion band, 26-connected, with centroid, normal and a 64-ray visible-unknown fan; updated
+    incrementally (FUEL's rule).
+  - Coarse layer: 0.5 m cells, RLE codec.
+- **Why from scratch:** SMOKE §4u. `cv::Volume` has no voxel or weight read and no per-pixel weight. It stays the
+  oracle (a test).
+- **Supersedes the arch's 8–10 cm voxel:** measured on both scenes' GT, a one-cell wall bleed closes agent 1's
+  entrance at ρ_responder for 8 and 10 cm, not for 5 cm.
+- **Evidence:** 8 tests (§7). On the evidence spool vs 1.8: coverage 0.942 / 0.933, free precision 0.979 / 0.961,
+  occupied precision 0.865 / 0.707; about 105 ms per keyframe on the dev host. Corrections made after measuring,
+  each reported: unknown = weight 0 (the first run used `w_min = 0.5`, coverage 0.861); the oracle tolerance is two
+  voxels (the oracle's own p95 error is 1.35 voxels).
+- **Not here:** the live keyframe path (L1's `frontier_mission.hpp` seam, once committed) and the wire field for the
+  coarse summary (3.2's).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | Voxblox (block hash), FH 2012, FUEL (incremental frontiers): `VOLUMETRIC_4.1.md` §1 |
+  | arch decision | D110, plus the §20.1 blockquote |
+  | ablation matrix | 1.8 OctoMap placeholder (D45) vs D110, same spool and scorer |
+  | benchmark config | `configs/mission/mission_v1.yaml` (stride, gates, band); D110 defaults in `TsdfParams` |
+  | manifest schema | `ariadne_volumetric_eval` manifest (`layer: phase4_volumetric`), spool sha256 |

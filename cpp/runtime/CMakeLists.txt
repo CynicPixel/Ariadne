@@ -43,6 +43,10 @@ if(OpenCV_FOUND)
   install(TARGETS ariadne_sim_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 2.1 retrieval evaluation dump (design PERCEPTION_2.1 §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
+  # 4.1 volumetric evaluation on a 1.7 spool (VOLUMETRIC_4.1 §6, D110).
+  add_executable(ariadne_volumetric_eval tools/ariadne_volumetric_eval.cpp)
+  target_link_libraries(ariadne_volumetric_eval PRIVATE ariadne::planning opencv_imgcodecs)
+
   add_executable(ariadne_place_eval tools/ariadne_place_eval.cpp)
   target_link_libraries(ariadne_place_eval PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
 
