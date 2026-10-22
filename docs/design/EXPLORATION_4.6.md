@@ -109,8 +109,10 @@ replanning.
    - The graph route's length equals a reference visibility graph over **all** polygon vertices (no convexity
      filter, every pair tested by brute force), within ε. So a wrong orientation test fails it.
    - It is never longer than the string-pulled A\* path + ε.
-   - ε = 1 cell per bend: the one-cell offset and the discretisation make "≤" inexact by up to a cell at each
-     corner.
+   - ε per bend = 2δ, with δ = offset·√2 cells, the node's distance from its true corner (along the diagonal
+     bisector). By the triangle inequality, passing through the node instead of the corner adds at most 2δ.
+     - That's 2√2 cells per bend at offset 1.
+     - Derived, after a first guess of 1 cell failed on one random map (a 64.17 vs 63.20 route).
 2. **Incremental = full rebuild:** after random local changes, the updated graph's route lengths equal a
    from-scratch build's.
 3. **No edge crosses a blocked cell:** densely sample every edge on random maps.
@@ -142,3 +144,13 @@ Non-blocking points:
   against the ≈ 10 h first stated. Added to NBV_4.3 §5, and B and the maintainer are told.
 - **ci_tiny is about one subspace** at S = 6 m, so its TARE row is nearly local-only; a null result there is not
   over-read.
+
+## 7. Facts from B (2026-10-23)
+
+- **The mover accepts segments through unknown cells.** Its check is against the scene's ground-truth ESDF, not
+  the estimated map. A refusal holds the whole command, and the runtime then excludes goals within
+  `refused_radius_m`.
+- So FAR's attemptable edges are executable. A refusal is the sim's ground-truth physical check standing in for
+  collision ("hit unseen geometry"); it is not perception, and is stated as such.
+- **`linked` is always true in L1 today.** D102's comms model isn't wired into L1, and the trace says so. CBBA's
+  disconnected regimes therefore come from the synthetic tests only.

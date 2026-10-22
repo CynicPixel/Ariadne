@@ -1,6 +1,7 @@
 #include "planning/mission/phase4_planner.hpp"
 
 #include "planning/mission/allocation_wire.hpp"
+#include "planning/route/visibility_graph.hpp"
 
 #include <opencv2/imgproc.hpp>
 
@@ -109,12 +110,7 @@ void JointPick(Phase4Plan* p) {
 std::vector<Cell> StringPull(const cv::Mat& plan, const std::vector<Cell>& path) {
     std::vector<Cell> out;
     if (path.empty()) return out;
-    auto Clear = [&](const Cell& a, const Cell& b) {
-        cv::LineIterator it(plan, cv::Point(a.c, a.r), cv::Point(b.c, b.r), 4);   // 4-connected: no corner cut
-        for (int k = 0; k < it.count; ++k, ++it)
-            if (plan.at<uint8_t>(it.pos()) == 0) return false;
-        return true;
-    };
+    auto Clear = [&](const Cell& a, const Cell& b) { return LineOfSight(plan, a, b); };   // 4-connected, both ways
     size_t i = 0;
     out.push_back(path[0]);
     while (i + 1 < path.size()) {

@@ -94,7 +94,8 @@ if(OpenCV_FOUND)
     unit/test_egress.cpp
     unit/test_nbv.cpp
     unit/test_phase4_planner.cpp
-    unit/test_allocation.cpp)
+    unit/test_allocation.cpp
+    unit/test_visibility_graph.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

@@ -9,10 +9,11 @@ if(OpenCV_FOUND)
     volumetric/traversability.cpp
     route/dstar_lite.cpp
     route/egress.cpp
+    route/visibility_graph.cpp
     mission/nbv.cpp
     mission/phase4_planner.cpp
     mission/allocation.cpp)
   target_include_directories(ariadne_planning PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-  target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc)
+  target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc opencv_geometry)
   add_library(ariadne::planning ALIAS ariadne_planning)
 endif()
