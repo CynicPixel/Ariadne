@@ -265,7 +265,12 @@ void Phase4Planner::Allocate(const Phase4AgentInput agents[2], Phase4Plan* out) 
                  : p_.allocator == Phase4Params::Allocator::kSga ? "sga" : "greedy";
     // The hard rule's {return, hold} is outside the auction: such an agent takes its first option.
     const bool hard0 = out->agents[0].nbv.reserve_rule, hard1 = out->agents[1].nbv.reserve_rule;
-    if (p_.allocator == Phase4Params::Allocator::kGreedy || hard0 || hard1) {
+    // Only the Ariadne row allocates by auction: the auction values are Ariadne's (D114 G on common scales), so a
+    // baseline policy (random, coverage, uncertainty, TARE) fed to it would be re-scored as Ariadne and the §31.6 rows
+    // would collapse. Baselines coordinate by the exactly-once greedy pick over their own ranking.
+    const bool baseline = p_.nbv.policy != NbvPolicy::kAriadne;
+    if (baseline) rec.method = "greedy";
+    if (p_.allocator == Phase4Params::Allocator::kGreedy || baseline || hard0 || hard1) {
         JointPick(out);
         if (hard0) out->joint[0] = out->agents[0].nbv.options.empty() ? -1 : 0;
         if (hard1) out->joint[1] = out->agents[1].nbv.options.empty() ? -1 : 0;

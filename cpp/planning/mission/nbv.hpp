@@ -105,13 +105,14 @@ public:
     virtual std::vector<AliasPlace> Places() const = 0;
 };
 
-enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom };   // NBV_4.3 §5
+enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // NBV_4.3 §5; kTare: 4.6
 
 struct NbvParams {
     SamplerParams sampler;
     RigFrustum frustum;
     NbvPolicy policy = NbvPolicy::kAriadne;
     uint64_t random_seed = 0;
+    double tare_subspace_m = 6.0;              // D116: 12 coarse cells = one horizon width (2 x the depth gate)
     double split_extent_m = 2.0;               // FUEL's PCA split above this AABB extent
     double peer_near_m = 4.0, peer_seen_m = 2.0;
     double rho_r = 0.40, rho_a = 0.20, escape_m = 0.5;   // D158's risk mapping (B, AGENTIC_7)
@@ -153,9 +154,17 @@ struct NbvPlan {
     double lambda_path = 1;
     std::vector<std::string> notes;            // missing producers etc., for the trace
     int targets[5] = {0, 0, 0, 0, 0};          // per generator A..E
+    std::string tare;                          // kTare: "local k" | "global m" | "" (what scheduled the first option)
 };
 
 NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvParams& p);
+
+/// 4.6 (D116) open tour from node 0 over nodes 1..n-1 of a distance matrix: nearest neighbour, then 2-opt until no
+/// improving move. Returns the visiting order (node indices, without 0). Infinite entries are unreachable (last).
+std::vector<int> OpenTour(const std::vector<std::vector<double>>& D);
+/// Its length; and the exact optimum by enumeration (the test oracle, small n only).
+double TourLength(const std::vector<std::vector<double>>& D, const std::vector<int>& order);
+std::vector<int> ExactOpenTour(const std::vector<std::vector<double>>& D);
 
 /// p90 scale of `v` (sorted[floor(0.9 (n - 1))]); the max if that is 0; 0 if all are 0.
 double P90Scale(std::vector<double> v);

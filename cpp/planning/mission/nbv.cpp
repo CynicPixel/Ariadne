@@ -100,6 +100,71 @@ std::unordered_set<int64_t> RouteEnvelope(const TsdfMap& map, const GridFrame& g
 
 }  // namespace
 
+std::vector<int> OpenTour(const std::vector<std::vector<double>>& D);
+double TourLength(const std::vector<std::vector<double>>& D, const std::vector<int>& order);
+
+namespace {
+
+// 4.6 TARE-style scheduling (EXPLORATION_4.6 §1, D116): local horizon first (best view per target inside a box of
+// half-width = the depth gate around the agent, open tour on geodesics within that box), else the global tour over
+// exploring subspaces (best view per subspace as its representative, geodesics on the full plan space). The scheduled
+// view moves to the front; the rest keep their Ariadne order.
+void TareSchedule(const cv::Mat& plan, const GridFrame& g, const Cell& me, const NbvParams& p, NbvPlan* out) {
+    auto& o = out->options;
+    auto CellOfXY = [&](double x, double y) { return Cell{int(std::floor((y - g.oy) / g.cell)), int(std::floor((x - g.ox) / g.cell))}; };
+    const double half = p.frustum.max_range_m;
+    std::vector<int> local;   // best view per task inside the horizon (options are sorted: first = best)
+    std::vector<int64_t> seen;
+    for (size_t i = 0; i < o.size(); ++i) {
+        const Cell c = CellOfXY(o[i].goal_xy.first, o[i].goal_xy.second);
+        if (std::max(std::abs(c.r - me.r), std::abs(c.c - me.c)) * g.cell > half) continue;
+        if (std::find(seen.begin(), seen.end(), o[i].task_id) != seen.end()) continue;
+        seen.push_back(o[i].task_id), local.push_back(int(i));
+    }
+    std::vector<int> reps;
+    cv::Mat space = plan;
+    cv::Rect crop(0, 0, plan.cols, plan.rows);
+    if (!local.empty()) {
+        reps = local;
+        const int H = int(std::ceil(half / g.cell));
+        crop = cv::Rect(me.c - H, me.r - H, 2 * H + 1, 2 * H + 1) & cv::Rect(0, 0, plan.cols, plan.rows);
+        space = plan(crop).clone();
+        out->tare = "local " + std::to_string(local.size());
+    } else {
+        std::vector<std::pair<int, int>> keys;   // exploring subspaces, best view each
+        for (size_t i = 0; i < o.size(); ++i) {
+            const std::pair<int, int> k{int(std::floor(o[i].centroid_xy.first / p.tare_subspace_m)),
+                                        int(std::floor(o[i].centroid_xy.second / p.tare_subspace_m))};
+            if (std::find(keys.begin(), keys.end(), k) != keys.end()) continue;
+            keys.push_back(k), reps.push_back(int(i));
+        }
+        out->tare = "global " + std::to_string(reps.size());
+    }
+    // Distance matrix on geodesics (node 0 = the agent); cells shifted into the crop.
+    std::vector<Cell> pts = {Cell{me.r - crop.y, me.c - crop.x}};
+    for (int i : reps) {
+        const Cell c = CellOfXY(o[size_t(i)].goal_xy.first, o[size_t(i)].goal_xy.second);
+        pts.push_back({c.r - crop.y, c.c - crop.x});
+    }
+    const size_t n = pts.size();
+    std::vector<std::vector<double>> D(n, std::vector<double>(n, 1e12));
+    for (size_t a = 0; a < n; ++a) {
+        const cv::Mat d = GridDistances(space, pts[a]);
+        for (size_t b = 0; b < n; ++b) {
+            const Cell& q = pts[b];
+            if (q.r < 0 || q.c < 0 || q.r >= d.rows || q.c >= d.cols) continue;
+            const double v = d.at<double>(q.r, q.c);
+            if (std::isfinite(v)) D[a][b] = v;
+        }
+    }
+    const std::vector<int> tour = OpenTour(D);
+    if (tour.empty()) return;
+    const int first = reps[size_t(tour[0] - 1)];
+    std::rotate(o.begin(), o.begin() + first, o.begin() + first + 1);   // the scheduled view to the front
+}
+
+}  // namespace
+
 double VoxelEntropy(const TsdfVoxel* v, double w_min) {
     if (!v || v->w <= w_min) return 1.0;
     return Hb(0.5 * std::exp(-double(v->w)));   // free 0.5 e^-w and occupied 1 - 0.5 e^-w have the same entropy
@@ -381,6 +446,9 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
             case NbvPolicy::kCoverageGreedy: c.utility = c.ig_norm[kCoverage]; break;
             case NbvPolicy::kUncertaintyOnly: c.utility = c.ig_norm[kEntropy]; break;
             case NbvPolicy::kRandom: c.utility = rng.NextUniform(); break;
+            case NbvPolicy::kTare: c.utility = c.gain - out.lambda_path * cp - cb - cr; break;   // views ranked as
+                                                                                                  // Ariadne; TARE
+                                                                                                  // reorders below
         }
     }
     std::stable_sort(out.options.begin(), out.options.end(), [](const TaskCandidate& a, const TaskCandidate& b) {
@@ -388,7 +456,54 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
         if (a.path_m != b.path_m) return a.path_m < b.path_m;
         return a.task_id < b.task_id;
     });
+    if (p.policy == NbvPolicy::kTare && !out.options.empty()) TareSchedule(plan, g, me, p, &out);
     return out;
+}
+
+std::vector<int> OpenTour(const std::vector<std::vector<double>>& D) {
+    const int n = int(D.size());
+    std::vector<int> order;
+    std::vector<char> used(size_t(n), 0);
+    used[0] = 1;
+    int cur = 0;
+    for (int step = 1; step < n; ++step) {   // nearest neighbour (ties: lower index)
+        int best = -1;
+        for (int j = 1; j < n; ++j)
+            if (!used[size_t(j)] && (best < 0 || D[size_t(cur)][size_t(j)] < D[size_t(cur)][size_t(best)])) best = j;
+        used[size_t(best)] = 1, order.push_back(best), cur = best;
+    }
+    // 2-opt on the open path 0 -> order: reverse order[i..k] when it shortens; first improvement, until none.
+    auto Len = [&](const std::vector<int>& o) { return TourLength(D, o); };
+    bool improved = true;
+    while (improved) {
+        improved = false;
+        for (size_t i = 0; i + 1 < order.size() && !improved; ++i)
+            for (size_t k = i + 1; k < order.size() && !improved; ++k) {
+                std::vector<int> o = order;
+                std::reverse(o.begin() + std::ptrdiff_t(i), o.begin() + std::ptrdiff_t(k) + 1);
+                if (Len(o) < Len(order) - 1e-12) order = o, improved = true;
+            }
+    }
+    return order;
+}
+
+double TourLength(const std::vector<std::vector<double>>& D, const std::vector<int>& order) {
+    double s = 0;
+    int cur = 0;
+    for (int j : order) s += D[size_t(cur)][size_t(j)], cur = j;
+    return s;
+}
+
+std::vector<int> ExactOpenTour(const std::vector<std::vector<double>>& D) {
+    std::vector<int> o;
+    for (int j = 1; j < int(D.size()); ++j) o.push_back(j);
+    std::vector<int> best = o;
+    double bl = TourLength(D, o);
+    while (std::next_permutation(o.begin(), o.end())) {
+        const double l = TourLength(D, o);
+        if (l < bl) bl = l, best = o;
+    }
+    return best;
 }
 
 }  // namespace ariadne::planning

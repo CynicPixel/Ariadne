@@ -154,3 +154,19 @@ Non-blocking points:
   collision ("hit unseen geometry"); it is not perception, and is stated as such.
 - **`linked` is always true in L1 today.** D102's comms model isn't wired into L1, and the trace says so. CBBA's
   disconnected regimes therefore come from the synthetic tests only.
+
+## 8. As built: TARE scheduling (2026-10-23)
+
+- **Policy:** `NbvPolicy::kTare` (`cpp/planning/mission/nbv.cpp`, `TareSchedule`).
+  - Views are ranked as Ariadne's.
+  - **Local:** the best view per target inside the depth-gate box, then an NN + 2-opt open tour on geodesics within
+    that box.
+  - **Global otherwise:** the best view per exploring 6 m subspace, and a tour on the full plan space's geodesics.
+  - The scheduled view moves to the front; `NbvPlan.tare` records "local k" or "global m".
+- **Tour quality, measured against exact enumeration** (200 random instances, ≤ 8 nodes): NN + 2-opt is at worst
+  1/0.811 ≈ 1.23× the optimum.
+  - Reported, not tuned.
+  - Or-opt or exact local tours are possible refinements, each needing its own row.
+- **Allocation for baseline rows:** only the Ariadne row allocates by auction. The auction's values are Ariadne's,
+  so baseline policies fed to it would be re-scored as Ariadne and the §31.6 rows would collapse. Baselines,
+  including TARE, coordinate by the exactly-once greedy pick over their own ranking.

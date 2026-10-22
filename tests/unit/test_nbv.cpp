@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <random>
 
 using namespace ariadne;
 using namespace ariadne::planning;
@@ -183,4 +184,44 @@ TEST(Nbv, EgressTargetAtLowestSupport) {
     }
     EXPECT_TRUE(found) << "generator E emitted no view";
     EXPECT_EQ(pl.notes.size(), 2u) << "both missing producers are named";
+}
+
+TEST(Nbv, OpenTourAgainstExactOracle) {
+    std::mt19937 rng(416);
+    std::uniform_real_distribution<double> u(0, 10);
+    double worst = 1;
+    for (int trial = 0; trial < 200; ++trial) {
+        const int n = 2 + trial % 7;   // up to 8 nodes incl. the start
+        std::vector<std::pair<double, double>> pts(static_cast<size_t>(n));
+        for (auto& q : pts) q = {u(rng), u(rng)};
+        std::vector<std::vector<double>> D(static_cast<size_t>(n), std::vector<double>(static_cast<size_t>(n)));
+        for (int a = 0; a < n; ++a)
+            for (int b = 0; b < n; ++b) D[size_t(a)][size_t(b)] = std::hypot(pts[size_t(a)].first - pts[size_t(b)].first, pts[size_t(a)].second - pts[size_t(b)].second);
+        const auto h = OpenTour(D), e = ExactOpenTour(D);
+        ASSERT_EQ(int(h.size()), n - 1);
+        const double lh = TourLength(D, h), le = TourLength(D, e);
+        EXPECT_GE(lh, le - 1e-9);
+        if (lh > 0) worst = std::min(worst, le / lh);
+    }
+    std::printf("[tare] NN+2-opt vs exact open tour, 200 instances <= 8 nodes: worst exact/heuristic %.3f\n", worst);
+}
+
+TEST(Nbv, TareSchedulesLocalThenGlobal) {
+    Scene sc(WallMap(true));
+    NbvInputs in = sc.Inputs();
+    AgentState st;
+    st.position = core::Vec3(0.4, 1.5, 1.0);
+    NbvParams p;
+    p.policy = NbvPolicy::kTare;
+    const NbvPlan local = PlanNbv(in, 0, st, p);
+    ASSERT_FALSE(local.options.empty());
+    EXPECT_EQ(local.tare.rfind("local", 0), 0u) << local.tare;
+    const auto& f = local.options.front();
+    EXPECT_LE(std::max(std::abs(f.goal_xy.first - 0.4), std::abs(f.goal_xy.second - 1.5)), p.frustum.max_range_m + 0.05);
+    p.frustum.max_range_m = 0.05;   // a horizon too small to hold any view: the global tour schedules
+    const NbvPlan global = PlanNbv(in, 0, st, p);
+    if (!global.options.empty()) EXPECT_EQ(global.tare.rfind("global", 0), 0u) << global.tare;
+    const NbvPlan again = PlanNbv(in, 0, st, p);   // deterministic
+    ASSERT_EQ(again.options.size(), global.options.size());
+    if (!again.options.empty()) EXPECT_EQ(again.options.front().task_id, global.options.front().task_id);
 }
