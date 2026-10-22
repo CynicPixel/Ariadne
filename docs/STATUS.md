@@ -4,6 +4,16 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
+
+- **GPU session (D137), maintainer-approved:** g4dn.xlarge spot at $0.0858/h, instance `i-09d36054dbc53dab8`, cap
+  150 min. It renders `ci_tiny_dark` (lamp) and `ci_tiny_dark_fixed` (fixed lights). The NVIDIA EGL smoke runs first.
+- **5.5 (D138):** `confined_v1` (20/20 accepted) and one-pass baseline-sweep cameras; v1 output byte-identical.
+- **TUM (D86's condition):** the fr1/xyz target is sourced from Kerl et al. IROS 2013 Table III: 0.014, was 0.017
+  [UNVERIFIED]. On `feat/2.6-tum` at `90d5fc8`; verdict unchanged.
+- **TUM fr1 (D136):** the scoring-side diagnosis rules out a GT clock offset, a depth scale bias and rotation drift. The
+  RGB/depth-offset rerun follows the 2.6 merge.
+
 ## 2026-10-22 — Phase 5 (A2): render probe, lamp calibration, Stage 3, controller, dust options (D130–D135)
 
 - **Probe (SMOKE §4u):**
