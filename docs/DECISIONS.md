@@ -2949,8 +2949,9 @@ linear light at the top and a different one at each level: not the darkness the 
   the GAT assume.
 - Default `linear`: the golden digest, the gate and every pinned result are byte-identical. Phase 5's frozen configs
   (5.4) set `srgb`.
-- **Caveat, not re-run:** the 2.2 radiometric rows (D67–D69) and the 3.1 darkened-proxy rows ran D on encoded values.
-  Their conclusions are about that operator; they are not evidence about linear-light darkness.
+- **Caveat, not re-run:** D runs on SIM frames (the 2.2 radiometric rows, D67–D69) used encoded values. Their
+  conclusions are about that operator, not evidence about linear-light darkness. The 3.1 darkened-proxy rows ran on
+  EuRoC, whose transfer curve this probe says nothing about `[UNVERIFIED]`.
 
 ## 2026-10-22 — D131: lamp photometry as rendered; the rig lamp becomes inverse-square, wide and shadow-casting
 
@@ -3022,6 +3023,20 @@ E = gain_A · p · RID(θ) · cos(inc) / (c′ + r²).
 - The geometry path may consume it (§6.3: calibrated physics); whether features do is a §31.5 row.
 - Synthetic tests: exact albedo recovery on a tilted textured plane; distance and power invariance; invalidity; the
   gain cap.
+- **Normals from stereo depth are the weak link.** The calibration's "cos is in" (D133) describes the light. Dividing
+  by an ESTIMATED cos is a separate estimator choice, so `incidence: calibrated | off` is a parameter.
+- Test: a tilted plane, depth from 10 cm-baseline disparity quantised to 1/16 px plus 0.1 px noise. Median albedo
+  error by normal baseline:
+
+  | normal baseline | median albedo error |
+  |---|---|
+  | 1 px | 88 % |
+  | 3 px | 14 % |
+  | 8 px | 4.8 % |
+  | incidence off (the shading bias) | 11.6 % |
+
+- Default 8 px, calibrated. A plane flatters long baselines (they smear normals across depth edges), so the §31.5 row
+  on renders decides between calibrated and off.
 
 ## 2026-10-22 — D135 `[OPEN — measurement pending dark renders]`: L9 dust fidelity (D9, D11) — options built, decision after one measured pair
 
@@ -3036,6 +3051,19 @@ All opt-in. Defaults are the §5.6 operator, so the golden digest is unchanged. 
   view in underwater imaging), not a uniform glow. It follows the lamp lobe and scales with `lamp_power`. This is what
   makes "more lamp → more veil" a real trade-off for 5.3.
 
-**Recommendation, to confirm by measurement:** freeze dust1–3 with pre_sensor + tau ≈ 1 s of frames + lamp airlight.
-The measurement: on one dark recording, run dark2_dust2 under (post, white, constant) and (pre, correlated, lamp),
-and compare match precision and ATE. The 5.4 freeze waits on it.
+**Decided on physics (no measurement needed):**
+- Dark worlds use `dust_airlight_mode: lamp`. A constant glow in an ambient-0 world has no light source, so it is
+  unphysical.
+
+**To measure, one factor per row, at MATCHED mean veil.**
+- In pre_sensor mode airlight is scaled by `radiance_scale`; post-sensor it is not. Comparing them at equal
+  `dust_airlight` would therefore measure "more fog" (about 16× at dark2), not fidelity. Each row sets the airlight so
+  the mean veil matches.
+- Rows: order (post vs pre) at a fixed field, then tau (0 vs ≈ 1 s of frames) at a fixed order.
+- Metrics: match precision, track length, ATE.
+- Replay is CPU-only once one dark recording exists.
+
+**Before the 5.4 freeze:**
+- The dark0..3 levels are re-specified against lamp-lit renders with `input_transfer: srgb`.
+- With the decode, even `radiance_scale` 1 puts midtones about 2 stops lower than the encoded reading did.
+- The "ambient normal" row uses the same decode, or the matrix would compare two sensor models.

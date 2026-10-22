@@ -124,9 +124,10 @@ ControlDecision Decide(const cv::Mat& gray, const PhotometricState& cur, const E
             cv::min(s * std::exp2(delta), 1.0, c);
             // A candidate the overexposure guard would undo next frame is not a candidate: without this the metric
             // (which barely penalises clipping) and the guard alternate +-0.5 stop forever (found by the closed-loop
-            // test: a limit cycle with 20 % of the frame clipped at one end).
-            if (delta > 0.0 &&
-                cv::countNonZero(c >= p.saturation_level) > p.max_saturated_frac * static_cast<double>(c.total())) {
+            // test: a limit cycle with 20 % of the frame clipped at one end). Counted on the FULL-resolution frame,
+            // as the guard counts it: the area-averaged subsample under-counts clipping and would let the cycle back.
+            if (delta > 0.0 && cv::countNonZero(f >= p.saturation_level * std::exp2(-delta)) >
+                                   p.max_saturated_frac * static_cast<double>(f.total())) {
                 continue;
             }
             const double m = GradientInfoOf(c, p.metric);

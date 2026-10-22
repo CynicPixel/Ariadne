@@ -54,6 +54,16 @@ struct LampCalibration {
 LampCalibration LoadLampCalibration(const std::string& path);
 
 struct FalloffParams {
+    /// calibrated: divide by cos(incidence) when the calibration says the cosine belongs in the model (D133).
+    /// off: never -- the proxy then keeps Lambertian shading. The calibration describes the LIGHT; dividing by an
+    /// cos ESTIMATED from stereo depth is a separate estimator choice, and noisy normals can cost more than the
+    /// shading they remove. A §31.5 row compares the two.
+    std::string incidence = "calibrated";
+    /// Normals from 3D points +-normal_step_px apart: a longer baseline averages out disparity quantisation, at the
+    /// cost of smearing normals across depth edges. 8 from the noisy-stereo test (D134): median albedo error
+    /// 88 % / 14 % / 4.8 % at 1 / 3 / 8 px, against 11.6 % with incidence off. That is a plane, which flatters long
+    /// baselines; the §31.5 row on real renders decides.
+    int normal_step_px = 8;
     double max_gain = 16.0;   // E is floored at max(E) / max_gain before dividing
     double min_rid = 0.05;    // below this the pixel is outside the lamp's lobe: invalid
     double min_cos = 0.15;    // grazing surfaces: incidence too uncertain to divide by

@@ -25,7 +25,8 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   - dark renders, which need GPU approval;
   - 5.5;
   - 5.6, which is blocked: OIVIO is offline.
-- **Caveat (D130):** the 2.2 radiometric rows and the 3.1 darkened-proxy rows ran D on sRGB-encoded values.
+- **Caveat (D130):** the 2.2 radiometric rows ran D on sRGB-encoded sim values. EuRoC's encoding (the 3.1 rows) is
+  `[UNVERIFIED]`.
 
 ## 2026-10-22 — Phase 5 (DVE) opens on `feat/ph5-dve`: session A2 claims D130–D149
 

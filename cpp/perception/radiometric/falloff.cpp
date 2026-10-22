@@ -62,6 +62,12 @@ AlbedoProxy FalloffNormalize(const cv::Mat& gray, const cv::Mat& z, const cv::Ma
     else if (gray.depth() == CV_32F) g = gray;
     else throw std::invalid_argument("FalloffNormalize: gray must be CV_8U or CV_32F");
     if (!(lamp_rel > 0.0)) throw std::invalid_argument("FalloffNormalize: lamp_rel > 0");
+    if (p.incidence != "calibrated" && p.incidence != "off") {
+        throw std::invalid_argument("FalloffNormalize: incidence calibrated | off");
+    }
+    if (p.normal_step_px < 1) throw std::invalid_argument("FalloffNormalize: normal_step_px >= 1");
+    const bool use_cos = lamp.cos_incidence && p.incidence == "calibrated";
+    const int k = p.normal_step_px;
 
     const int h = z.rows, w = z.cols;
     const double fx = K(0, 0), fy = K(1, 1), cx = K(0, 2), cy = K(1, 2);
@@ -89,12 +95,12 @@ AlbedoProxy FalloffNormalize(const cv::Mat& gray, const cv::Mat& z, const cv::Ma
             const double rid = lamp.Rid(theta);
             if (rid < p.min_rid) continue;
             double ci = 1.0;
-            if (lamp.cos_incidence) {
-                // Surface normal from the depth map: cross product of central differences of the 3D points.
-                if (x == 0 || y == 0 || x == w - 1 || y == h - 1) continue;
-                const double zl = zat(x - 1, y), zr = zat(x + 1, y), zu = zat(x, y - 1), zd = zat(x, y + 1);
+            if (use_cos) {
+                // Surface normal from the depth map: cross product of differences of the 3D points k px apart.
+                if (x < k || y < k || x >= w - k || y >= h - k) continue;
+                const double zl = zat(x - k, y), zr = zat(x + k, y), zu = zat(x, y - k), zd = zat(x, y + k);
                 if (zl == 0.0 || zr == 0.0 || zu == 0.0 || zd == 0.0) continue;
-                cv::Vec3d n = (point(x + 1, y, zr) - point(x - 1, y, zl)).cross(point(x, y + 1, zd) - point(x, y - 1, zu));
+                cv::Vec3d n = (point(x + k, y, zr) - point(x - k, y, zl)).cross(point(x, y + k, zd) - point(x, y - k, zu));
                 const double nn = cv::norm(n);
                 if (!(nn > 0.0)) continue;
                 n /= nn;

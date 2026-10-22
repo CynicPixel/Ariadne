@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -99,7 +100,7 @@ TEST(Falloff, UnlitAndUnknownPixelsAreInvalidAndTheGainIsCapped) {
     s.z.at<float>(100, 100) = std::numeric_limits<float>::quiet_NaN();
     const auto out = rm::FalloffNormalize(s.gray, s.z, K, lamp, 1.0, MaxGain(2.0));
     EXPECT_EQ(out.valid.at<uint8_t>(240, 320), 0);
-    EXPECT_EQ(out.valid.at<uint8_t>(240, 321), 0);           // its neighbour has no normal
+    EXPECT_EQ(out.valid.at<uint8_t>(240, 328), 0);           // normal_step_px (8) away: no normal there
     EXPECT_EQ(out.valid.at<uint8_t>(100, 100), 0);
     // The image corner is ~41 deg off the lamp axis at 2 m: outside the lobe.
     EXPECT_EQ(out.valid.at<uint8_t>(0, 0), 0);
@@ -127,4 +128,41 @@ TEST(Falloff, LoadsTheCalibrationYaml) {
     std::ofstream(path, std::ios::app) << "typo_key: 1\n";
     EXPECT_THROW(rm::LoadLampCalibration(path), std::exception);
     std::remove(path.c_str());
+}
+
+// Stereo depth, not perfect depth: disparity at f = 640 px, B = 0.1 m quantised to SGBM's 1/16 px plus 0.1 px noise.
+// Longer normal baselines beat 1 px differences; the numbers go to D134 for the incidence row.
+TEST(Falloff, NoisyStereoDepthNormalsAndTheIncidenceOption) {
+    const auto lamp = Lamp(true);
+    const auto s = Plane(2.0, 0.4, lamp, 1.0);
+    cv::Mat zn = s.z.clone();
+    cv::RNG rng(7);
+    for (int y = 0; y < zn.rows; ++y)
+        for (int x = 0; x < zn.cols; ++x) {
+            const double d = 640.0 * 0.1 / zn.at<float>(y, x) + rng.gaussian(0.1);
+            zn.at<float>(y, x) = static_cast<float>(64.0 / (std::round(d * 16.0) / 16.0));
+        }
+    const auto med_err = [&](const rm::FalloffParams& fp) {
+        const auto out = rm::FalloffNormalize(s.gray, zn, K, lamp, 1.0, fp);
+        std::vector<float> e;
+        for (int y = 0; y < zn.rows; ++y)
+            for (int x = 0; x < zn.cols; ++x)
+                if (out.valid.at<uint8_t>(y, x))
+                    e.push_back(std::abs(out.albedo.at<float>(y, x) / s.albedo.at<float>(y, x) - 1.0f));
+        std::nth_element(e.begin(), e.begin() + e.size() / 2, e.end());
+        return double(e[e.size() / 2]);
+    };
+    auto fp = MaxGain(1e6);
+    fp.normal_step_px = 1;
+    const double k1 = med_err(fp);
+    fp.normal_step_px = 3;
+    const double k3 = med_err(fp);
+    fp.normal_step_px = 8;
+    const double k8 = med_err(fp);
+    fp.incidence = "off";
+    const double off = med_err(fp);
+    std::printf("[ falloff noisy depth ] median |albedo error|: k=1 %.4f  k=3 %.4f  k=8 %.4f  incidence off %.4f\n",
+                k1, k3, k8, off);
+    EXPECT_LT(k3, k1);
+    EXPECT_LT(k8, off);   // with the default step, dividing by the estimated cos beats keeping the shading
 }

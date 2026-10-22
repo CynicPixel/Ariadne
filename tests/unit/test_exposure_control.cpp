@@ -87,8 +87,7 @@ TEST(ExposureControl, BlurCeilingShortensExposureAndKeepsBrightness) {
 }
 
 TEST(ExposureControl, ClosedLoopConvergesWithinTheSlewLimit) {
-    ex::ExposureControlParams p;
-    p.metric.stride = 1;
+    ex::ExposureControlParams p;   // production defaults, including the metric's stride-2 subsample
     const cv::Mat scene = Scene();
     for (double start : {0.004, 40.0}) {   // ~8 stops under, ~5 stops over
         ex::PhotometricState s{0.01, 1.0, 1.0};
