@@ -43,8 +43,15 @@ aws s3 cp "s3://$BUCKET/runs/images/ariadne-sim-$short.tar.zst" - --only-show-er
 got="$(docker image inspect ariadne/sim:dev --format '{{.Id}}')"
 [ "$got" = "$IMAGE_ID" ] || { log "image id $got != $IMAGE_ID"; exit 2; }
 
+# The image runs as its non-root user (ariadne), but spinup unpacks the tree as root: every container that writes into
+# /work (smoke PNGs, plugin builds, recordings) failed with EACCES (run 20261022T195315Z-gpu-820b83; main's D86 hit
+# the same). Hand the tree to the image's uid:gid.
+uid="$(docker run --rm --entrypoint id ariadne/sim:dev -u)"; gid="$(docker run --rm --entrypoint id ariadne/sim:dev -g)"
+mkdir -p build/sim-out build/rec build/out
+chown -R "$uid:$gid" "$PWD"
+log "tree owned by image uid $uid:$gid"
+
 log "GPU smoke"
-mkdir -p build/sim-out
 ARIADNE_SMOKE_OUT_HOST="$PWD/build/sim-out" infra/scripts/sim.sh > "$R/smoke.log" 2>&1 || true
 grep -q 'render mode: nvidia-egl' "$R/smoke.log" && grep -q 'SIM_SMOKE=PASS' "$R/smoke.log" \
   || { log "GPU smoke FAILED (see smoke.log)"; exit 3; }
