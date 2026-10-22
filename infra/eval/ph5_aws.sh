@@ -8,9 +8,10 @@
 # they exist (a spot reclaim skips spinup's end-of-run upload).
 #   1. host tools: docker, python venv (rosbags 0.10.4, numpy, opencv-python-headless 4.10.0.84), the ECR image
 #   2. Hilti site2_robot_3 (pinned HF revision, sha256 checked against the LFS oid) + calibration.zip + ground truth
-#      -> topic list -> one stereo pair + every IMU in EuRoC layout -> tar -> S3. Calibration files go to results.
+#      -> topic list -> one stereo pair + every IMU + exposure + control points in EuRoC layout -> tar -> S3.
+#      Calibration files go to results. HILTI=extras|skip for reruns (below).
 #   3. build ariadne_sim_vo from the shipped tree in the image
-#   4. the dark recordings from S3 -> 4 replay rows (dark lamp / dark fixed x no D / sensor D), agent 0, 1000 frames,
+#   4. the dark recordings from S3 (keys in ph5_dark_manifest.txt) -> 4 replay rows (dark lamp / dark fixed x no D / sensor D), agent 0, 1000 frames,
 #      sim_v1 perception + sim_v2 slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0)
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
@@ -37,8 +38,12 @@ aws ecr get-login-password --region "${AWS_REGION:-eu-north-1}" | docker login -
 docker pull -q "$IMAGE" > /dev/null || { step "pull FAILED"; exit 1; }
 docker image inspect "$IMAGE" --format '{{.Id}}' | tee "$R/image_id.txt"
 
-if [ "${SKIP_HILTI:-0}" = 1 ]; then   # already extracted by an earlier session (its tar is under that commit's prefix)
-  step "2 hilti skipped (SKIP_HILTI=1)"
+# HILTI=full (default): fetch + export images, IMU and side files. extras: fetch, then only the side files (exposure
+# + control points) -- a rerun after a full export that predates them. skip: an earlier session already did it all.
+HILTI="${HILTI:-full}"
+case "$HILTI" in full|extras|skip) ;; *) step "HILTI must be full|extras|skip"; exit 1 ;; esac
+if [ "$HILTI" = skip ]; then
+  step "2 hilti skipped (HILTI=skip)"
 else
 step "2 hilti fetch"
 H="$WORK/hilti"; mkdir -p "$H"
@@ -72,7 +77,19 @@ else:
 PY
 )"
 echo "left $LEFT right $RIGHT" | tee "$R/hilti_pair.txt"
-if [ "$LEFT" != NONE ]; then
+if [ "$LEFT" != NONE ] && [ "$HILTI" = extras ]; then
+  step "2c hilti side files"
+  X="$WORK/site2_robot_3_extras"
+  (cd "$SRC/python" && /opt/venv/bin/python -m dataset_tools.hilti.to_asl export "$H/site2_robot_3.bag" "$X" \
+     --left "$LEFT" --right "$RIGHT" --no-images) > "$R/hilti_extras.txt" 2>&1 || step "hilti side files FAILED"
+  mkdir -p "$R/hilti_extras/cam0" "$R/hilti_extras/cam1"
+  cp "$X/gcp.csv" "$R/hilti_extras/" && cp "$X/mav0/cam0/exposure.csv" "$R/hilti_extras/cam0/" \
+    && cp "$X/mav0/cam1/exposure.csv" "$R/hilti_extras/cam1/" && cp "$R/hilti_pair.txt" "$R/hilti_extras/" \
+    && tar -C "$R" -czf "$WORK/site2_robot_3_extras.tar.gz" hilti_extras \
+    && aws s3 cp "$WORK/site2_robot_3_extras.tar.gz" "$DEST/site2_robot_3_extras.tar.gz" --only-show-errors \
+    && step "hilti side files uploaded"
+  rm -rf "$X"
+elif [ "$LEFT" != NONE ]; then
   step "2c hilti export"
   (cd "$SRC/python" && /opt/venv/bin/python -m dataset_tools.hilti.to_asl export "$H/site2_robot_3.bag" \
      "$WORK/site2_robot_3_asl" --left "$LEFT" --right "$RIGHT") > "$R/hilti_export.txt" 2>&1 \
@@ -102,9 +119,13 @@ docker run --rm --network host -v "$SRC":/work -w /work "$IMAGE" bash -c "cmake 
 echo "build_seconds $(( $(date +%s) - t0 ))" >> "$R/steps.txt"
 
 step "4 recordings"
-for n in ci_tiny_dark_0 ci_tiny_dark_fixed_0; do
-  aws s3 cp --recursive "$DARK_PREFIX/$n" "$WORK/$n" --only-show-errors || { step "fetch $n FAILED"; exit 1; }
-done
+# By key from the committed manifest: the instance role may GetObject but not ListBucket, so --recursive fails.
+grep -v '^#' "$SRC/infra/eval/ph5_dark_manifest.txt" | awk '{print $2}' \
+  | xargs -P 8 -I{} aws s3 cp "$DARK_PREFIX/{}" "$WORK/{}" --only-show-errors || { step "fetch recordings FAILED"; exit 1; }
+grep -v '^#' "$SRC/infra/eval/ph5_dark_manifest.txt" | while read -r bytes key; do
+  [ "$(stat -c %s "$WORK/$key" 2>/dev/null)" = "$bytes" ] || echo "size mismatch $key"
+done > "$R/fetch_check.txt"
+[ -s "$R/fetch_check.txt" ] && { step "fetch recordings: size mismatch (fetch_check.txt)"; exit 1; }
 chown -R "$(docker run --rm "$IMAGE" id -u):$(docker run --rm "$IMAGE" id -g)" "$WORK"
 step "4b replays"
 N=$(nproc); PER=$(( N / 2 ))
