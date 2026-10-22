@@ -3191,3 +3191,31 @@ because Zhang's value was not transcribed. A closed-loop test settles it without
 
 Tests: test_opencv ExposureControl/Falloff/DegradationSrgb 14/14, test_numerical Degradation 25/25, test_unit
 Config/Degrad 20/20.
+
+## 2026-10-23 — D139: the headlamp dust model in D (replaces D135's lamp airlight as the physics; ALGORITHMS §10.2)
+
+`dust_model: headlamp` (opt-in; it requires `dust_order: pre_sensor` explicitly, because it is light in the medium).
+- **Direct:** the rendered, lamp-lit scene is attenuated out and back, J·e^{−2β_D·range}. Range is computed from GT
+  z-depth along the pixel ray [ASSUMPTION: gz `depth_camera` stores z].
+- **Backscatter:** single scattering of the carried lamp along each pixel ray,
+  S·∫_{near}^{range} RID(θ)/|s·u − L|²·e^{−β_B(s + |s·u − L|)} ds, normalised by the coaxial on-axis infinite-range
+  value.
+  - β_D (`dust_beta`) and β_B (`dust_beta_backscatter`) are separate coefficients (Akkaynak & Treibitz, CVPR 2018).
+  - L, the lamp centre in the camera frame, is a parameter: §10.2's lamp-offset lever becomes a replay sweep.
+  - Limit, stated: a replay sweep moves only the veil, not the recorded direct light or shadows.
+  - The local particulate field scales both terms.
+- **Deterministic:** the integral depends on pixel and range only, so it is tabulated once per call on an 8 px grid
+  × 96 geometric range nodes (0.02–60 m), with DetExp/DetSqrt and a literal node ratio. Lookups are a binary search
+  plus bilinear interpolation; there is no libm on the per-pixel path.
+- **Tests** (test_numerical Degradation 31/31; the golden digest is unchanged, so the default is byte-identical):
+  - the veil is near-field dominated (wall at 0.5 m vs 5 m: within 10 %, where the daylight model grows > 7×);
+  - a 0.30 m lamp offset cuts the on-axis veil to < 20 % of coaxial;
+  - the 96-node table matches a 200k-node libm integral to < 3 % at 0.3, 1 and 3 m;
+  - the direct term is exactly e^{−2βd};
+  - output is byte-identical across row bands;
+  - the config is strict.
+- **D135 now:**
+  - `dust_airlight_mode: lamp` remains only as the daylight-shape negative-control row.
+  - pre_sensor and the correlated field stay.
+  - The 5.4 freeze measures the headlamp model at matched mean veil against Koschmieder, on the dark recording that
+    has now been rendered (D137).

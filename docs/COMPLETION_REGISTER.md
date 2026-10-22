@@ -68,7 +68,7 @@ identical.
 | L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
 | L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
-| L9 | I6 dust model fidelity (D9, D11) | **options built; decision open** (→ 5.4) | A2: D135. Measurement pending dark renders |
+| L9 | I6 dust model fidelity (D9, D11) | **model built; decision open** (→ 5.4) | A2: D135 options + D139 headlamp model (ALGORITHMS §10.2: round-trip attenuation, near-field backscatter, lamp offset; tests 31/31, golden unchanged). Measurement on the D137 dark recording pending |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
 ---

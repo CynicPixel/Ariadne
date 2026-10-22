@@ -2,6 +2,7 @@
 // gate that rests on it.
 #include "perception/degradation/degradation.hpp"
 
+#include "perception/degradation/degradation_config.hpp"
 #include "perception/degradation/degradation_digest.hpp"
 #include <gtest/gtest.h>
 
@@ -431,4 +432,115 @@ TEST(DegradationFidelity, LampAirlightFollowsTheLobeAndThePower) {
     EXPECT_EQ(full.At(0, 0, 0), 0);                    // corner: 54 deg off axis, unlit
     p.lamp_power = 0.5;
     EXPECT_NEAR(Degrade(black, far, p, 1, 0).At(100, 100, 0), 64, 1);
+}
+
+// --- D139: the headlamp dust model (ALGORITHMS §10.2) ------------------------
+
+namespace {
+DegradationParams HeadlampParams() {
+    DegradationParams p = NullParams();
+    p.enable_dust = true;
+    p.dust_model = DustModel::kHeadlamp;
+    p.dust_order = DustOrder::kPreSensor;
+    p.dust_beta = 0.1;
+    p.dust_beta_backscatter = 0.1;
+    p.dust_backscatter = 0.4;
+    p.dust_field_strength = 0.0;
+    p.dust_lamp_focal_px = 100.0;
+    p.dust_lamp_cos_inner = 0.906;   // 25 deg half-angle
+    p.dust_lamp_cos_outer = 0.766;   // 40 deg
+    return p;
+}
+
+// The same integral, finely and with libm (test-only reference): trapezoid on 200k log-spaced nodes.
+double FineVeil(const DegradationParams& p, double ux, double uy, double uz, double lx, double ly, double lz,
+                double range) {
+    const int n = 200000;
+    const double a = std::log(p.dust_near_m), b = std::log(range);
+    double acc = 0.0, prev_s = 0.0, prev_f = 0.0;
+    for (int i = 0; i <= n; ++i) {
+        const double s = std::exp(a + (b - a) * i / n);
+        const double vx = s * ux - lx, vy = s * uy - ly, vz = s * uz - lz;
+        const double r2 = vx * vx + vy * vy + vz * vz, r = std::sqrt(r2);
+        const double f = detail::HeadlampVeil::Lobe(p, vz / r) / r2 * std::exp(-p.dust_beta_backscatter * (s + r));
+        if (i > 0) acc += 0.5 * (prev_f + f) * (s - prev_s);
+        prev_s = s;
+        prev_f = f;
+    }
+    return acc;
+}
+}  // namespace
+
+// §10.2 consequence 1: the veil is near-field dominated. Going from a wall at 0.5 m to one at 5 m barely changes it,
+// whereas the daylight model's 1 - exp(-beta d) grows ~8x over the same span.
+TEST(DegradationHeadlamp, VeilIsNearFieldDominated) {
+    const auto p = HeadlampParams();
+    detail::HeadlampVeil v(p, 201, 201);
+    const double near = v.At(100, 100, 0.5), far = v.At(100, 100, 5.0);
+    EXPECT_GT(near, 0.9 * far);
+    EXPECT_LE(near, far);
+    const double kos_ratio = (1.0 - std::exp(-0.1 * 5.0)) / (1.0 - std::exp(-0.1 * 0.5));
+    EXPECT_GT(kos_ratio, 7.0);
+}
+
+// §10.2's hardware lever: moving the lamp off the optical axis removes the near-field lobe.
+TEST(DegradationHeadlamp, LampOffsetLowersTheVeil) {
+    auto p = HeadlampParams();
+    const double coax = detail::HeadlampVeil(p, 201, 201).At(100, 100, 3.0);
+    p.dust_lamp_x_m = 0.30;
+    const double off = detail::HeadlampVeil(p, 201, 201).At(100, 100, 3.0);
+    EXPECT_NEAR(coax, 1.0, 0.05);   // the coaxial on-axis reference is ~1 by construction (range 3 m vs ~60 m)
+    EXPECT_LT(off, 0.2 * coax);
+}
+
+// The 96-node table against a 200k-node libm integral: the deterministic quadrature is accurate.
+TEST(DegradationHeadlamp, TabulatedIntegralMatchesAFineReference) {
+    auto p = HeadlampParams();
+    p.dust_lamp_x_m = 0.05;
+    p.dust_lamp_y_m = -0.02;
+    p.dust_lamp_z_m = 0.02;
+    detail::HeadlampVeil v(p, 201, 201);   // grid nodes at multiples of 8 px: (96, 96) is a node
+    const double ref = FineVeil(p, 0, 0, 1, 0, 0, 0, 59.0);
+    for (double range : {0.3, 1.0, 3.0}) {
+        const double rx = (96 - 100.0) / 100.0, ry = (96 - 100.0) / 100.0, inv = 1.0 / std::sqrt(rx * rx + ry * ry + 1);
+        const double fine = FineVeil(p, rx * inv, ry * inv, inv, 0.05, -0.02, 0.02, range) / ref;
+        EXPECT_NEAR(v.NodeAt(12, 12, range), fine, 0.03 * fine + 1e-4) << "range " << range;
+    }
+}
+
+// The direct term is the round trip: with no backscatter and no noise, J exp(-2 beta range).
+TEST(DegradationHeadlamp, DirectAttenuationIsOutAndBack) {
+    auto p = HeadlampParams();
+    p.dust_backscatter = 0.0;
+    const ImageU8 in = Flat(201, 201, 200);
+    const ImageF32 d = FlatDepth(201, 201, 2.0f);
+    const ImageU8 out = Degrade(in, d, p, 1, 0);
+    // The centre pixel: range = z = 2 m.
+    EXPECT_EQ(out.At(100, 100, 0), static_cast<uint8_t>(std::lround(200.0 * std::exp(-0.1 * 2.0 * 2.0))));
+}
+
+TEST(DegradationHeadlamp, DeterministicAndBandSplitInvariant) {
+    auto p = HeadlampParams();
+    p.enable_shot_noise = true;
+    p.read_noise_electrons = 2.0;
+    p.dust_field_strength = 0.5;
+    p.dust_lamp_x_m = 0.05;
+    const ImageU8 in = Ramp(160, 120, 3);
+    const ImageF32 d = FlatDepth(160, 120, 1.5f);
+    const ImageU8 a = Degrade(in, d, p, 9, 4);
+    EXPECT_EQ(a.data, Degrade(in, d, p, 9, 4).data);
+    EXPECT_EQ(a.data, DegradeParallel(in, d, p, 9, 4, 3).data);
+}
+
+TEST(DegradationHeadlamp, ConfigIsStrict) {
+    const std::string base =
+        "name: t\nradiance_scale: 1.0\nenable_dust: true\ndust_beta: 0.1\ndust_model: headlamp\n"
+        "dust_beta_backscatter: 0.1\ndust_backscatter: 0.3\ndust_lamp_focal_px: 640\n"
+        "dust_lamp_cos_inner: 0.906\ndust_lamp_cos_outer: 0.766\ndust_lamp_in_camera_m: [0.05, -0.02, 0.02]\n";
+    auto missing_order = StrictConfig::FromString(base);
+    EXPECT_THROW(ParseDegradation(missing_order), ConfigError);   // headlamp needs dust_order pre_sensor
+    auto ok = StrictConfig::FromString(base + "dust_order: pre_sensor\n");
+    const auto d = ParseDegradation(ok);
+    EXPECT_EQ(d.params.dust_model, DustModel::kHeadlamp);
+    EXPECT_DOUBLE_EQ(d.params.dust_lamp_y_m, -0.02);
 }

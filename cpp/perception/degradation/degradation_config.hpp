@@ -86,6 +86,19 @@ inline void ValidateDegradation(const NamedDegradation& d) {
         fail("dust_airlight_mode lamp needs dust_lamp_focal_px > 0 and 0 < dust_lamp_cos_outer < "
              "dust_lamp_cos_inner <= 1");
     }
+    if (p.dust_model == DustModel::kHeadlamp) {
+        if (!p.enable_dust) fail("dust_model headlamp needs enable_dust");
+        if (p.dust_order != DustOrder::kPreSensor) {
+            fail("dust_model headlamp is light in the medium: set dust_order pre_sensor explicitly");
+        }
+        if (p.dust_backscatter < 0.0 || p.dust_beta_backscatter < 0.0 || !(p.dust_near_m > 0.0)) {
+            fail("headlamp: dust_backscatter >= 0, dust_beta_backscatter >= 0, dust_near_m > 0");
+        }
+        if (!(p.dust_lamp_focal_px > 0.0 && p.dust_lamp_cos_outer > 0.0 &&
+              p.dust_lamp_cos_outer < p.dust_lamp_cos_inner && p.dust_lamp_cos_inner <= 1.0)) {
+            fail("headlamp needs dust_lamp_focal_px > 0 and 0 < dust_lamp_cos_outer < dust_lamp_cos_inner <= 1");
+        }
+    }
     if (p.poisson_exact_max_lambda <= 0.0 || p.poisson_exact_max_lambda > 50.0) {
         fail("poisson_exact_max_lambda must be in (0, 50]; beyond that Knuth's"
              " loop hits its iteration cap and silently truncates the count");
@@ -161,6 +174,22 @@ inline NamedDegradation ParseDegradation(StrictConfig& config) {
     p.dust_lamp_cos_outer = config.Optional<double>("dust_lamp_cos_outer", 0.0);
     p.dust_lamp_focal_px = config.Optional<double>("dust_lamp_focal_px", 0.0);
     p.lamp_power = config.Optional<double>("lamp_power", 1.0);
+    const std::string model = config.Optional<std::string>("dust_model", "koschmieder");
+    if (model == "headlamp") {
+        p.dust_model = DustModel::kHeadlamp;
+    } else if (model != "koschmieder") {
+        throw ConfigError("degradation config '" + out.name + "': dust_model must be koschmieder or headlamp");
+    }
+    p.dust_beta_backscatter = config.Optional<double>("dust_beta_backscatter", 0.0);
+    p.dust_backscatter = config.Optional<double>("dust_backscatter", 0.0);
+    p.dust_near_m = config.Optional<double>("dust_near_m", p.dust_near_m);
+    const auto lamp = config.Optional<std::vector<double>>("dust_lamp_in_camera_m", {0.0, 0.0, 0.0});
+    if (lamp.size() != 3) {
+        throw ConfigError("degradation config '" + out.name + "': dust_lamp_in_camera_m is [x, y, z] (optical frame)");
+    }
+    p.dust_lamp_x_m = lamp[0];
+    p.dust_lamp_y_m = lamp[1];
+    p.dust_lamp_z_m = lamp[2];
     config.RequireAllConsumed();
     ValidateDegradation(out);
     return out;

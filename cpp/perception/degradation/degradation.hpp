@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -72,6 +73,13 @@ enum class InputTransfer {
 enum class DustOrder {
     kPostSensor,   // §5.6 as written: composited after quantization (the default)
     kPreSensor,    // on radiance, before shot noise: attenuation removes photons, airlight adds them (and their noise)
+};
+
+/// Which participating-medium model the dust stage uses (D139).
+enum class DustModel {
+    kKoschmieder,  // I = J t + A (1 - t), t = exp(-beta d): the daylight model of §5.6 (the default)
+    kHeadlamp,     // ALGORITHMS §10.2: round-trip attenuation of the lamp-lit scene plus single-scatter backscatter of
+                   // the carried lamp along each pixel's ray (near-field dominated; lamp offset is a parameter)
 };
 
 /// What the medium's added radiance is (D135).
@@ -152,6 +160,21 @@ struct DegradationParams {
     /// neglected: backscatter is a near-field veil along the view ray.
     double dust_lamp_cos_inner = 0.0, dust_lamp_cos_outer = 0.0, dust_lamp_focal_px = 0.0;
 
+    // --- Headlamp dust model (D139; ALGORITHMS §10.2, after Akkaynak & Treibitz CVPR 2018/2019) -------------
+    // Direct: the rendered (lamp-lit) scene J is attenuated out and back, J exp(-2 beta_D range), beta_D = dust_beta.
+    // Backscatter, single scatter, phase function folded into the strength:
+    //   B(px) = S * Int_{near}^{range} RID(theta(s)) / |s u - L|^2 * exp(-beta_B (s + |s u - L|)) ds  / B_ref
+    // u = the pixel's unit ray, L = the lamp centre, theta = the angle from the lamp axis (+z). B_ref is the same
+    // integral for a COAXIAL lamp on the optical axis over an infinitely deep scene, so `dust_backscatter` reads as
+    // "the veil a coaxial lamp would make on axis", and offsetting the lamp physically lowers the veil.
+    // Always pre-sensor (it is light): requires dust_order pre_sensor. Lamp offset in D moves only the veil; the
+    // render's direct lighting and shadows stay as recorded (a stated limit of a replay sweep).
+    DustModel dust_model = DustModel::kKoschmieder;
+    double dust_beta_backscatter = 0.0;   // beta_B, per metre
+    double dust_backscatter = 0.0;        // S: coaxial on-axis saturated veil, normalised radiance at lamp_power 1
+    double dust_near_m = 0.02;            // particles nearer than this (lens housing) do not scatter into the image
+    double dust_lamp_x_m = 0.0, dust_lamp_y_m = 0.0, dust_lamp_z_m = 0.0;   // lamp centre, camera optical frame
+
     // --- Replay lamp actuator (5.3, D132) ----------------------------------
     /// Lamp power relative to the recording's. With the lamp the only light and a linear(ised) render, scene
     /// radiance is exactly proportional to it (SMOKE §4u), so replay scales stage 1 by it; it also scales kLamp
@@ -211,15 +234,8 @@ inline double LampLobe(const DegradationParams& p, double r2_px) {
     return (c - p.dust_lamp_cos_outer) / (p.dust_lamp_cos_inner - p.dust_lamp_cos_outer);
 }
 
-/// Transmission through the participating medium at one pixel.
-///   t = exp(-beta_local * depth),  beta_local modulated by a smooth field.
-inline double DustTransmission(const DegradationParams& p, uint64_t seed,
-                               uint64_t frame_id, int x, int y, double depth) {
-    // Invalid or unknown depth: apply no attenuation rather than inventing a
-    // distance. A recording with holes must not silently become foggier there.
-    if (!(depth > 0.0)) return 1.0;
-
-    double beta = p.dust_beta;
+/// The local particulate density multiplier in [1 - strength, 1 + strength] (1 for a homogeneous medium).
+inline double DustFieldMultiplier(const DegradationParams& p, uint64_t seed, uint64_t frame_id, int x, int y) {
     if (p.dust_field_strength > 0.0 && p.dust_field_octaves > 0) {
         // frame_id is passed through unmodified and the stage travels in
         // salt_base, so the dust field uses the same keying discipline as every
@@ -245,13 +261,102 @@ inline double DustTransmission(const DegradationParams& p, uint64_t seed,
             n = Clamp01(0.5 + dev);
         }
         // n in [0,1] -> multiplier in [1-strength, 1+strength]
-        beta *= 1.0 + p.dust_field_strength * (2.0 * n - 1.0);
+        return 1.0 + p.dust_field_strength * (2.0 * n - 1.0);
     }
+    return 1.0;
+}
+
+/// Transmission through the participating medium at one pixel.
+///   t = exp(-beta_local * depth),  beta_local modulated by a smooth field.
+inline double DustTransmission(const DegradationParams& p, uint64_t seed,
+                               uint64_t frame_id, int x, int y, double depth) {
+    // Invalid or unknown depth: apply no attenuation rather than inventing a
+    // distance. A recording with holes must not silently become foggier there.
+    if (!(depth > 0.0)) return 1.0;
+
+    const double beta = p.dust_beta * DustFieldMultiplier(p, seed, frame_id, x, y);
     if (beta <= 0.0) return 1.0;
 
     const double t = DetExp(-beta * depth);
     return t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
 }
+
+/// The headlamp backscatter integral (D139), tabulated once per call: it depends on the pixel and the range only, so
+/// a coarse pixel grid x geometric range nodes holds it, and per-pixel lookups use no transcendental at all. Nodes
+/// and weights come from IEEE arithmetic plus DetExp/DetSqrt: same bytes on every platform.
+struct HeadlampVeil {
+    static constexpr int kStep = 8;            // coarse grid spacing, px (the veil is smooth across the image)
+    static constexpr int kNodes = 96;          // range nodes, geometric from dust_near_m
+    static constexpr double kRatio = 1.0879;   // 1.0879^95 ~ 2980: 0.02 m -> ~60 m (a literal: no pow at run time)
+    int gw = 0, gh = 0;
+    double cx = 0.0, cy = 0.0;
+    std::vector<double> s;     // range nodes
+    std::vector<double> cum;   // gw * gh * kNodes cumulative integrals, normalised by the coaxial reference
+
+    static double Lobe(const DegradationParams& p, double cos_theta) {
+        if (cos_theta >= p.dust_lamp_cos_inner) return 1.0;
+        if (cos_theta <= p.dust_lamp_cos_outer) return 0.0;
+        return (cos_theta - p.dust_lamp_cos_outer) / (p.dust_lamp_cos_inner - p.dust_lamp_cos_outer);
+    }
+    /// Cumulative trapezoid integral along the unit ray u from a lamp at l, into out[0..kNodes).
+    void Integrate(const DegradationParams& p, double ux, double uy, double uz, double lx, double ly, double lz,
+                   double* out) const {
+        double prev_f = 0.0, acc = 0.0;
+        for (int k = 0; k < kNodes; ++k) {
+            const double vx = s[k] * ux - lx, vy = s[k] * uy - ly, vz = s[k] * uz - lz;
+            const double r2 = vx * vx + vy * vy + vz * vz;
+            const double r = DetSqrt(r2);
+            const double f = r2 > 0.0 ? Lobe(p, vz / r) / r2 * DetExp(-p.dust_beta_backscatter * (s[k] + r)) : 0.0;
+            if (k > 0) acc += 0.5 * (prev_f + f) * (s[k] - s[k - 1]);
+            out[k] = acc;
+            prev_f = f;
+        }
+    }
+    HeadlampVeil(const DegradationParams& p, int width, int height) {
+        s.resize(kNodes);
+        s[0] = p.dust_near_m;
+        for (int k = 1; k < kNodes; ++k) s[k] = s[k - 1] * kRatio;
+        cx = 0.5 * (width - 1);
+        cy = 0.5 * (height - 1);
+        gw = (width - 1) / kStep + 2;
+        gh = (height - 1) / kStep + 2;
+        // The coaxial on-axis reference: a lamp at the camera centre, the optical-axis pixel, the whole range.
+        std::vector<double> ref(kNodes);
+        Integrate(p, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, ref.data());
+        const double norm = ref[kNodes - 1] > 0.0 ? 1.0 / ref[kNodes - 1] : 0.0;
+        cum.resize(static_cast<size_t>(gw) * gh * kNodes);
+        const double f = p.dust_lamp_focal_px;
+        for (int gy = 0; gy < gh; ++gy)
+            for (int gx = 0; gx < gw; ++gx) {
+                const double rx = (gx * kStep - cx) / f, ry = (gy * kStep - cy) / f;
+                const double inv = 1.0 / DetSqrt(rx * rx + ry * ry + 1.0);
+                double* c = &cum[(static_cast<size_t>(gy) * gw + gx) * kNodes];
+                Integrate(p, rx * inv, ry * inv, inv, p.dust_lamp_x_m, p.dust_lamp_y_m, p.dust_lamp_z_m, c);
+                for (int k = 0; k < kNodes; ++k) c[k] *= norm;
+            }
+    }
+    /// Normalised veil at grid node (gx, gy) for a scene at `range` metres.
+    double NodeAt(int gx, int gy, double range) const {
+        const double* c = &cum[(static_cast<size_t>(gy) * gw + gx) * kNodes];
+        if (range <= s[0]) return 0.0;
+        if (range >= s[kNodes - 1]) return c[kNodes - 1];
+        const int k = static_cast<int>(std::upper_bound(s.begin(), s.end(), range) - s.begin());   // s[k-1] < range <= s[k]
+        const double w = (range - s[k - 1]) / (s[k] - s[k - 1]);
+        return c[k - 1] + w * (c[k] - c[k - 1]);
+    }
+    /// Bilinear in pixel position.
+    double At(int x, int y, double range) const {
+        const int gx = x / kStep, gy = y / kStep;
+        const double fx = static_cast<double>(x - gx * kStep) / kStep, fy = static_cast<double>(y - gy * kStep) / kStep;
+        return (1.0 - fy) * ((1.0 - fx) * NodeAt(gx, gy, range) + fx * NodeAt(gx + 1, gy, range)) +
+               fy * ((1.0 - fx) * NodeAt(gx, gy + 1, range) + fx * NodeAt(gx + 1, gy + 1, range));
+    }
+    /// The range along the pixel's ray for a z-depth (GT depth is z, not range [ASSUMPTION: gz depth_camera]).
+    double Range(const DegradationParams& p, int x, int y, double z) const {
+        const double rx = (x - cx) / p.dust_lamp_focal_px, ry = (y - cy) / p.dust_lamp_focal_px;
+        return z * DetSqrt(rx * rx + ry * ry + 1.0);
+    }
+};
 
 }  // namespace detail
 
@@ -276,9 +381,11 @@ namespace detail {
 /// same bytes.
 inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
                         const DegradationParams& params, uint64_t seed,
-                        uint64_t frame_id, int y0, int y1, ImageU8& out) {
+                        uint64_t frame_id, int y0, int y1, ImageU8& out,
+                        const HeadlampVeil* veil = nullptr) {
     const bool use_dust =
         params.enable_dust && !depth_gt.Empty() && SameExtent(input, depth_gt);
+    const bool headlamp = use_dust && params.dust_model == DustModel::kHeadlamp && veil != nullptr;
 
     // Normalization for the vignette radius: 1.0 at the image corner.
     const double cx = 0.5 * (input.width - 1);
@@ -303,10 +410,20 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
             const double vignette = detail::VignetteFactor(
                 (dx * dx + dy * dy) * inv_corner_r2, params.vignette_strength);
 
-            const double transmission =
-                use_dust ? detail::DustTransmission(params, seed, frame_id, x, y,
-                                                    depth_gt.At(x, y))
-                         : 1.0;
+            double transmission = 1.0, veil_radiance = 0.0;
+            if (headlamp) {
+                const double z = depth_gt.At(x, y);
+                if (z > 0.0) {   // unknown depth: no dust at all, as in the daylight model
+                    const double range = veil->Range(params, x, y, z);
+                    const double m = detail::DustFieldMultiplier(params, seed, frame_id, x, y);
+                    const double t = DetExp(-params.dust_beta * m * 2.0 * range);   // out and back
+                    transmission = t < 0.0 ? 0.0 : (t > 1.0 ? 1.0 : t);
+                    veil_radiance = params.dust_backscatter * m * params.lamp_power * params.radiance_scale *
+                                    veil->At(x, y, range);
+                }
+            } else if (use_dust) {
+                transmission = detail::DustTransmission(params, seed, frame_id, x, y, depth_gt.At(x, y));
+            }
             const double airlight =
                 params.dust_airlight_mode == DustAirlight::kLamp
                     ? params.dust_airlight * params.lamp_power * detail::LampLobe(params, dx * dx + dy * dy)
@@ -319,7 +436,9 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
                                       ? kSrgbToLinear[v]
                                       : static_cast<double>(v) * (1.0 / 255.0);
                 radiance *= radiance_gain;
-                if (pre_dust) {
+                if (headlamp) {
+                    radiance = radiance * transmission + veil_radiance;   // D139: the medium acts on light
+                } else if (pre_dust) {
                     // D135: the medium acts on light. Airlight is light from the same lamp, so it is dimmed by the
                     // same darkness scale as the scene it veils.
                     radiance = radiance * transmission + airlight * params.radiance_scale * (1.0 - transmission);
@@ -364,7 +483,7 @@ inline void DegradeRows(const ImageU8& input, const ImageF32& depth_gt,
 
                 // Stage 7: dust compositing, I = J*t + A*(1-t).
                 double value = quantized;
-                if (use_dust && !pre_dust) {
+                if (use_dust && !pre_dust && !headlamp) {
                     value = quantized * transmission +
                             airlight * (1.0 - transmission);
                     value = detail::Clamp01(value);
@@ -384,7 +503,10 @@ inline ImageU8 Degrade(const ImageU8& input, const ImageF32& depth_gt,
                        uint64_t frame_id) {
     ImageU8 out(input.width, input.height, input.channels);
     if (input.Empty()) return out;
-    detail::DegradeRows(input, depth_gt, params, seed, frame_id, 0, input.height, out);
+    std::unique_ptr<detail::HeadlampVeil> veil;
+    if (params.enable_dust && params.dust_model == DustModel::kHeadlamp)
+        veil = std::make_unique<detail::HeadlampVeil>(params, input.width, input.height);
+    detail::DegradeRows(input, depth_gt, params, seed, frame_id, 0, input.height, out, veil.get());
     return out;
 }
 
@@ -404,11 +526,14 @@ inline ImageU8 DegradeParallel(const ImageU8& input, const ImageF32& depth_gt,
     ImageU8 out(input.width, input.height, input.channels);
     if (input.Empty()) return out;
     const int n = std::max(1, std::min(threads, input.height));
+    std::unique_ptr<detail::HeadlampVeil> veil;
+    if (params.enable_dust && params.dust_model == DustModel::kHeadlamp)
+        veil = std::make_unique<detail::HeadlampVeil>(params, input.width, input.height);
     std::vector<std::thread> pool;
     for (int t = 0; t < n; ++t) {
         const int y0 = input.height * t / n, y1 = input.height * (t + 1) / n;
         pool.emplace_back([&, y0, y1] {
-            detail::DegradeRows(input, depth_gt, params, seed, frame_id, y0, y1, out);
+            detail::DegradeRows(input, depth_gt, params, seed, frame_id, y0, y1, out, veil.get());
         });
     }
     for (std::thread& th : pool) th.join();
