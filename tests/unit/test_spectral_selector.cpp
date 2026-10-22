@@ -177,7 +177,7 @@ TEST(SpectralSelector, ExactOracleUnderSharedCost) {
             worst = std::min(worst, got / opt);
         }
     }
-    std::printf("oracle: %d instances with a connected optimum; greedy/optimum mean %.4f, worst %.4f; bound present "
+    std::printf("oracle: %d instances with a connected optimum; selected/optimum mean %.4f, worst %.4f; bound present "
                 "on %d\n", ratio_n, ratio_sum / std::max(1, ratio_n), worst, with_bound);
     EXPECT_GT(with_bound, 0);
 }

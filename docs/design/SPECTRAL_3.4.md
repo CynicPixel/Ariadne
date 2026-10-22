@@ -77,7 +77,13 @@ pending: they are re-scored next round as the graph changes, and dropped after `
    taken in order of similarity per marginal cost until one component remains or the budget is spent.
 2. **Greedy.** Pick argmax_e gain_e / Δcost_e, where Δcost_e is the bytes of the endpoints not yet held or selected.
    Add it, then recompute the Fiedler space (warm). Stop when nothing affordable has positive gain.
-3. **Dual bound** (MAC §IV-D, adapted to shared costs):
+3. **1-swap refinement** (arch §16.2's "local refinement", `refine_passes`, default 2):
+   - Replace one selected candidate by one unselected; keep the best swap that stays in budget, stays connected and
+     raises λ₂; refill greedily.
+   - Cost: |S|·|C| Fiedler solves per pass, so it is measured on the sim before the default is kept.
+   - Oracle, 60 instances: selected/optimum mean 0.936 → 0.970, worst 0.533 → 0.650. The misses came mostly from the
+     bootstrap's bridge choice (similarity per byte, blind to λ₂).
+4. **Dual bound** (MAC §IV-D, adapted to shared costs):
    - At the greedy set x, with supergradient g, solve
      `max gᵀs` subject to `s_e ≤ y_k` for each needed endpoint k of e, `Σ_k bytes_k y_k ≤ B`, `0 ≤ s, y ≤ 1`.
      This is `cv::solveLP` with s and y stacked. It is the LP relaxation of the true shared-cost feasible set, so it
@@ -85,6 +91,8 @@ pending: they are re-scored next round as the graph changes, and dropped after `
    - bound = λ₂(x) + gᵀ(s* − x) ≥ λ₂(x*) by concavity.
    - Reported: `lambda2`, `bound`, `gap = bound − lambda2`. If the LP is not SINGLE/MULTI, the bound is reported
      **absent**, never guessed.
+   - **Measured:** valid on 60/60 oracle instances, but loose: 1.3–6.4× the optimum on these small graphs, the
+     usual LP-relaxation gap. It is reported as a bound, never as a tightness claim.
 
 ## 5. Cost model (§15.7, COLLAB_3.2 §7)
 

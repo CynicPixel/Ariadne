@@ -57,6 +57,7 @@ struct SelectorParams {
     double tolerance = 1e-9;            // Ritz residual / ||L||
     double degenerate_rel = 1e-6;       // lambda_i within this (relative) of lambda_2: one cluster (§3)
     bool bound = true;                  // the dual bound (one LP)
+    int refine_passes = 2;              // 1-swap local refinement after greedy (arch §16.2); 0 = greedy only
 };
 
 /// lambda_2 and an orthonormal basis of its (possibly repeated) eigenspace, of one connected graph.
@@ -78,6 +79,7 @@ struct SelectionReport {
     double lambda2 = 0;                 // of the final graph (0 if disconnected)
     std::optional<double> bound;        // >= the optimum's lambda_2; absent when not computable (stated)
     int solves = 0, iterations = 0;     // Fiedler solves and their total iterations
+    int swaps = 0;                      // improving swaps applied by the refinement
 };
 
 namespace spectral_detail {
@@ -241,58 +243,120 @@ inline SelectionReport SelectSpectral(const SelectionProblem& P, const SelectorP
     // means nothing on a disconnected graph, arch §16.2; a pick can make a node held and a bridge affordable later).
     // Otherwise greedy on lambda_2, per connected component (one that cannot be joined is still improved).
     std::map<int, Eigen::MatrixXd> warm;   // keyed by the component's smallest node
-    for (;;) {
-        UnionFind uf(P.n);
-        for (const GraphEdge& e : edges) uf.Join(e.a, e.b);
-        std::optional<size_t> bridge;
-        for (size_t k = 0; k < m; ++k) {
-            const CandidateEdge& e = P.candidates[k];
-            if (!affordable(k) || uf.Find(e.a) == uf.Find(e.b)) continue;
-            if (!bridge || better(e.kappa, delta_cost(e), e.id, P.candidates[*bridge].kappa,
-                                  delta_cost(P.candidates[*bridge]), P.candidates[*bridge].id))
-                bridge = k;
-        }
-        if (bridge) {
-            take(*bridge);
-            ++rep.bootstrap;
-            continue;
-        }
-        std::map<int, std::vector<int>> comps;
-        for (int i = 0; i < P.n; ++i) comps[uf.Find(i)].push_back(i);
-        std::optional<size_t> best;
-        double best_gain = 0;
-        for (const auto& [root, nodes] : comps) {
-            if (nodes.size() < 2) continue;
-            bool any = false;
-            for (size_t k = 0; k < m && !any; ++k)
-                any = affordable(k) && uf.Find(P.candidates[k].a) == root;
-            if (!any) continue;
-            std::vector<int> local(size_t(P.n), -1);
-            for (size_t i = 0; i < nodes.size(); ++i) local[size_t(nodes[i])] = int(i);
-            std::vector<GraphEdge> sub;
-            for (const GraphEdge& e : edges)
-                if (local[size_t(e.a)] >= 0) sub.push_back({local[size_t(e.a)], local[size_t(e.b)], e.kappa});
-            const SparseMat L = Laplacian(int(nodes.size()), sub);
-            const auto w = warm.find(root);
-            const FiedlerSpace F = SolveFiedler(L, prm, w != warm.end() ? &w->second : nullptr);
-            warm[root] = F.block;
-            ++rep.solves;
-            rep.iterations += F.iterations;
-            const double eps = 1e-12 * std::max(F.lambda2, 1e-300);
+    auto fill = [&]() {
+        for (;;) {
+            UnionFind uf(P.n);
+            for (const GraphEdge& e : edges) uf.Join(e.a, e.b);
+            std::optional<size_t> bridge;
             for (size_t k = 0; k < m; ++k) {
                 const CandidateEdge& e = P.candidates[k];
-                if (!affordable(k) || uf.Find(e.a) != root) continue;
-                const double gain = e.kappa * (F.V.row(local[size_t(e.a)]) - F.V.row(local[size_t(e.b)])).squaredNorm();
-                if (gain <= eps) continue;
-                if (!best || better(gain, delta_cost(e), e.id, best_gain, delta_cost(P.candidates[*best]),
-                                    P.candidates[*best].id)) {
-                    best = k;
-                    best_gain = gain;
+                if (!affordable(k) || uf.Find(e.a) == uf.Find(e.b)) continue;
+                if (!bridge || better(e.kappa, delta_cost(e), e.id, P.candidates[*bridge].kappa,
+                                      delta_cost(P.candidates[*bridge]), P.candidates[*bridge].id))
+                    bridge = k;
+            }
+            if (bridge) {
+                take(*bridge);
+                ++rep.bootstrap;
+                continue;
+            }
+            std::map<int, std::vector<int>> comps;
+            for (int i = 0; i < P.n; ++i) comps[uf.Find(i)].push_back(i);
+            std::optional<size_t> best;
+            double best_gain = 0;
+            for (const auto& [root, nodes] : comps) {
+                if (nodes.size() < 2) continue;
+                bool any = false;
+                for (size_t k = 0; k < m && !any; ++k)
+                    any = affordable(k) && uf.Find(P.candidates[k].a) == root;
+                if (!any) continue;
+                std::vector<int> local(size_t(P.n), -1);
+                for (size_t i = 0; i < nodes.size(); ++i) local[size_t(nodes[i])] = int(i);
+                std::vector<GraphEdge> sub;
+                for (const GraphEdge& e : edges)
+                    if (local[size_t(e.a)] >= 0) sub.push_back({local[size_t(e.a)], local[size_t(e.b)], e.kappa});
+                const SparseMat L = Laplacian(int(nodes.size()), sub);
+                const auto w = warm.find(root);
+                const FiedlerSpace F = SolveFiedler(L, prm, w != warm.end() ? &w->second : nullptr);
+                warm[root] = F.block;
+                ++rep.solves;
+                rep.iterations += F.iterations;
+                const double eps = 1e-12 * std::max(F.lambda2, 1e-300);
+                for (size_t k = 0; k < m; ++k) {
+                    const CandidateEdge& e = P.candidates[k];
+                    if (!affordable(k) || uf.Find(e.a) != root) continue;
+                    const double gain = e.kappa * (F.V.row(local[size_t(e.a)]) - F.V.row(local[size_t(e.b)])).squaredNorm();
+                    if (gain <= eps) continue;
+                    if (!best || better(gain, delta_cost(e), e.id, best_gain, delta_cost(P.candidates[*best]),
+                                        P.candidates[*best].id)) {
+                        best = k;
+                        best_gain = gain;
+                    }
                 }
             }
+            if (!best) break;
+            take(*best);
         }
-        if (!best) break;
-        take(*best);
+    };
+    fill();
+
+    // 2b. 1-swap refinement (arch §16.2 "greedy/local refinement"): greedy's first choices, the bridge above all, can
+    // be poor (oracle, §7). Try replacing one selected candidate by one unselected; keep the best swap that stays in
+    // budget, keeps the graph connected and raises lambda_2; refill greedily; at most refine_passes passes.
+    auto rebuild = [&](const std::vector<size_t>& keep) {
+        std::fill(chosen.begin(), chosen.end(), 0);
+        for (int i = 0; i < P.n; ++i) held[size_t(i)] = P.node_bytes[size_t(i)] <= 0.0;
+        edges = P.fixed;
+        rep.bytes = 0;
+        rep.selected.clear();
+        for (size_t k : keep) take(k);
+    };
+    auto lambda2_of = [&](const std::vector<size_t>& sel, double* bytes) -> double {
+        std::vector<char> h(size_t(P.n), 0);
+        for (int i = 0; i < P.n; ++i) h[size_t(i)] = P.node_bytes[size_t(i)] <= 0.0;
+        std::vector<GraphEdge> e = P.fixed;
+        double c = 0;
+        for (size_t k : sel) {
+            const CandidateEdge& x = P.candidates[k];
+            for (int j : {x.a, x.b})
+                if (!h[size_t(j)]) c += P.node_bytes[size_t(j)], h[size_t(j)] = 1;
+            e.push_back({x.a, x.b, x.kappa});
+        }
+        *bytes = c;
+        if (c > P.budget_bytes) return -1.0;
+        UnionFind uf(P.n);
+        int comps = P.n;
+        for (const GraphEdge& x : e) comps -= uf.Join(x.a, x.b);
+        if (comps != 1) return -1.0;
+        const auto w = warm.find(0);
+        const FiedlerSpace F = SolveFiedler(Laplacian(P.n, e), prm, w != warm.end() ? &w->second : nullptr);
+        ++rep.solves;
+        rep.iterations += F.iterations;
+        return F.lambda2;
+    };
+    for (int pass = 0; pass < prm.refine_passes; ++pass) {
+        std::vector<size_t> sel;
+        for (size_t k = 0; k < m; ++k)
+            if (chosen[k]) sel.push_back(k);
+        double bytes = 0;
+        const double base = lambda2_of(sel, &bytes);
+        if (base < 0.0) break;   // disconnected: nothing to refine against
+        double best = base * (1.0 + 1e-9);
+        std::optional<std::pair<size_t, size_t>> swap;
+        for (size_t i = 0; i < sel.size(); ++i)
+            for (size_t k = 0; k < m; ++k) {
+                if (chosen[k]) continue;
+                std::vector<size_t> trial = sel;
+                trial[i] = k;
+                const double l2 = lambda2_of(trial, &bytes);
+                if (l2 > best) best = l2, swap = std::make_pair(i, k);
+            }
+        if (!swap) break;
+        sel[swap->first] = swap->second;
+        std::sort(sel.begin(), sel.end(), [&](size_t x, size_t y) { return P.candidates[x].id < P.candidates[y].id; });
+        rebuild(sel);
+        fill();
+        ++rep.swaps;
     }
 
     // 3. Final lambda_2 and the dual bound (connected graphs only; otherwise both are stated absent / 0).
