@@ -1,0 +1,5 @@
+image 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:d86-coredev-04d8a7c58de1
+git_commit d4a8a9c
+slam euroc_v2_loops
+perception euroc_v2
+par 2

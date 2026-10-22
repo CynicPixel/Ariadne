@@ -102,16 +102,16 @@ identical.
 
 | item | state | evidence / missing | owner |
 |---|---|---|---|
-| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
+| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85). D86: V1_03 is not won't-fix; it is carried to 5.5 as the degraded-vision regression case, with this as the candidate fix. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
-| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
-| 2.5 robust back end | done except the planted-outlier gate wording (maintainer) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). Large SE-Sync certificate run done 2026-10-22: 4/5 certified, rim not (D74). The broker wiring of D76 is M (3.2/3.5). | B |
+| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. **Carry (D87):** the VO graph has a disconnected prefix when the window solve is skipped before inertial init (MH_04: 33 keyframes, MH_05: 77). Loop closure now drops candidates into it; the fix on the VO side is open because an uninformative bridge edge would weaken PCM. The same chain feeds the 3.2 broker through CollabNode. | M |
+| 2.5 robust back end | done (gate wording accepted, D86) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). Large SE-Sync certificate run done 2026-10-22 (the D86 item 3 blocker): 4/5 certified with f = Table 1; **rim not certified** — a parity gap for M to weigh under D86 item 3. The broker wiring of D76 is M (3.2/3.5). | B |
 | 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
 | Gate: FD Jacobian suite | done | | |
-| Gate: oracle 100/100; certificate certified / not certified | **partial** | Oracle done (D52). Certified (D74): low-noise 10/10; garage (f 1.26252 vs Table 1 1.263), tinyGrid3D, smallGrid3D; sphere2500, torus3D, cubicle, grid3D (every f = Table 1 to 4 s.f.). **rim: not certified** (λ_min −0.233 at η 1e-10‖M‖; f matches Table 1; reported, not re-tuned). Evidence: `evaluation/runs/2.5/certificate_sesync/`. Planted outliers kept in the cost: **4/10 not certified, 6/10 certified**. That is reported per PHASE2_PLAN §3, not tuned. The plan wording "not certified on planted-outlier graphs" is not met as worded: maintainer call. A stationary non-global point and a perturbed point: not certified. | B |
+| Gate: oracle 100/100; certificate certified / not certified | **partial** | Oracle done (D52). Certified (D74): low-noise 10/10; garage (f 1.26252 vs Table 1 1.263), tinyGrid3D, smallGrid3D; sphere2500, torus3D, cubicle, grid3D (every f = Table 1 to 4 s.f.). **rim: not certified** (λ_min −0.233 at η 1e-10‖M‖; f matches Table 1; reported, not re-tuned). Evidence: `evaluation/runs/2.5/certificate_sesync/`. Planted outliers kept in the cost: **4/10 not certified, 6/10 certified**. That is reported per PHASE2_PLAN §3, not tuned. The plan wording is accepted as "certified fraction reported" (D86 item 3). A stationary non-global point and a perturbed point: not certified. | B |
 | Gate: outlier ramp with breakpoint | done | D75, `evaluation/runs/2.5/outlier_ramp/`: aliasing groups. PCM → GNC breakpoint 90 % (groups of 10) / 70 % (two growing groups). GNC only: none. Success, ATE and runtime are plotted. | B |
-| Gate: EuRoC VIO in class; TUM regression pinned | partial | EuRoC done: the combined run averages 0.120, 9/11 in class (D85). TUM: —. | M / — |
+| Gate: EuRoC VIO in class; TUM regression pinned | EuRoC done | VIO 0.120, 9/11 (D85, reproduced on AWS, D87). **Full system with loops on (D87): 0.066, 10/11 in class; at or better than ORB-SLAM3 on 7/11; V1_03 0.288 is the outlier.** Loop FIFO deadlock fixed (D87). TUM: pinned (D86), on condition the fr1/xyz target is sourced (A2). | M / A2 |
 | Exit run (full, fresh render, clean tree) | not started | after the items above | M |
 
 ## Phase 3 (opened early, D80)
@@ -143,14 +143,14 @@ identical.
 | 5.2 falloff normalisation (Stage 3) | from 2.2 |
 | 5.3 active exposure + lamp co-control | **carries 2.2's Stage 4 exposure normalisation** |
 | 5.4 degradation configs frozen | carries L9 (I6 dust fidelity) |
-| 5.5 confined-space worlds, baseline sweep | |
-| 5.6 OIVIO real-data validation | |
+| 5.5 confined-space worlds, baseline sweep | D86: EuRoC V1_03 (fast motion, 92 lost frames, 0.329) is the dataset regression case; projection-guided re-association is the candidate fix. |
+| 5.6 real-data low-light validation | D89 (supersedes D88): UMA-VI `IllChange` x5 (Zenodo 7809282, open; stereo + IMU; end-drift metric, start/end GT only) primary; EuRoC MH_04/MH_05/V1_03 full-GT companion. OIVIO gone, ViViD++ needs a request. Real low light and illumination changes, not lamp-in-darkness. Owner A2. |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |
 | 6.4 console full spec | |
 | 7.1 MCP + Bedrock orchestrator | Bedrock model chosen (D84: Nova 2 Lite, DeepSeek V3.2). Needs L1. |
 | 7.2 classical-planner ablation | |
-| 7.3 COOL benchmark | **blocked by 0.2 arm64 + 0.3 trial**. Carries L5, L6. |
+| 7.3 COOL benchmark | **blocked by 0.2 arm64 + 0.3 trial**. Carries L5, L6. D86: the thread setting is decided explicitly and recorded in the manifest; D91's pool=1 is never process-wide in the timed runtime. |
 | 7.4 SQS / ASG sweeps, S3, budget alarms | |
 | 8.1–8.6 missions, failure campaign, sweeps, report, video, submission | need L1 (live demo), 7.x |
