@@ -63,6 +63,8 @@ if(OpenCV_FOUND)
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
     unit/test_radiometric_stage.cpp
+    unit/test_exposure_control.cpp
+    unit/test_falloff.cpp
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp

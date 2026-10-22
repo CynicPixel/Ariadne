@@ -19,6 +19,8 @@ if(OpenCV_FOUND)
     stereo/stereo_lk_matcher.cpp
     features/xfeat/xfeat_net.cpp
     radiometric/radiometric_stage.cpp
+    radiometric/falloff.cpp
+    exposure_control/exposure_controller.cpp
     features/xfeat_engine.cpp
     place/place_recognizer.cpp
     association/landmark_reassociation.cpp
