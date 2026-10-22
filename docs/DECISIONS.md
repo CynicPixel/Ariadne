@@ -2949,9 +2949,14 @@ linear light at the top and a different one at each level: not the darkness the 
   the GAT assume.
 - Default `linear`: the golden digest, the gate and every pinned result are byte-identical. Phase 5's frozen configs
   (5.4) set `srgb`.
-- **Caveat, not re-run:** D runs on SIM frames (the 2.2 radiometric rows, D67–D69) used encoded values. Their
-  conclusions are about that operator, not evidence about linear-light darkness. The 3.1 darkened-proxy rows ran on
-  EuRoC, whose transfer curve this probe says nothing about `[UNVERIFIED]`.
+- **Caveat, not re-run:** D runs on SIM frames (the 2.2 radiometric rows, D67–D69) used encoded values.
+  - **What stands:** the gate decisions. D's noise is affine in D's own output whatever the input encoding, so the
+    GAT fits and the on/off calls are unaffected.
+  - **What changes:** the meaning of the darkness labels. `dark3` on encoded values is not the linear-light darkness
+    its name says.
+  - **EuRoC is untouched by this probe.** The 3.1 darkened-proxy rows, and RADIOMETRIC_2.2's `[UNVERIFIED]`
+    companded-response note, concern EuRoC's camera. A sim render measurement cannot close them, so the note stays
+    open.
 
 ## 2026-10-22 — D131: lamp photometry as rendered; the rig lamp becomes inverse-square, wide and shadow-casting
 
@@ -2983,6 +2988,13 @@ SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp cali
 - **Fallbacks, stated:** > 2 % clipped → step down at the slew limit (clipped pixels hide how far over they are);
   no gradient above δ in any candidate (many stops under or over) → step toward mid-grey. The second was found by the
   closed-loop test: from 8 stops under, Shim's metric is 0 everywhere and a pure-metric controller never moves.
+  **Not a new finding:** ALGORITHMS §9.4, read from Zhang et al. ICRA 2017, already says M_shim is "better, still
+  not robust", and that a gradient-percentile metric wins 13 of 18 datasets. The stall and the limit cycle below are
+  that documented weakness. **Comparator row (§6.5):** `metric: percentile` (the p-th percentile of gradient
+  magnitude, Zhang's M_perc; our grid search needs no smooth approximation).
+- **Deviation under §49, flagged for the maintainer:** arch §6.5 has the lamp "optimizing the same objective plus an
+  energy cost term". D132 spends one brightness decision in a FIXED cost order (lamp → t → gain), which is the
+  limiting case of an energy cost below the noise cost of gain. A continuous energy-weighted split is not built.
   The same test found a limit cycle: the metric barely penalises clipping, so it stepped up into 20 % clipped and the
   guard stepped back, ±0.5 stop forever. Candidates whose synthesised frame would trip the guard are now excluded.
   Closed loop from 8 stops under and 5 over: settles within 5 % of the best clip-limited metric, |step| ≤ 0.25.
@@ -2997,7 +3009,9 @@ SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp cali
 
 `python -m dataset_tools.lamp_calib render|fit`: a matte grey plane (SDF diffuse 0.5) under the rig's lamp at 15 known
 poses: 0.75–4.5 m × {fronto-parallel, yaw 30°, pitch −25°}. Tilts make incidence differ from the lamp angle, which is
-what separates the lobe from cos(incidence) (Park et al., CVPR 2014). Fit: for a fixed c′, I(c′ + r²)/[cos inc] is a
+what separates the lobe from cos(incidence) (Park et al., CVPR 2014 — read at abstract level only). c′ is not only a
+renderer artefact: ALGORITHMS §14.2 (DarkGS/NeLiS, IROS 2024) measured real lamps departing from 1/r² at close range
+and fitted a Lorentzian term, which is this model's form. So c′ stays a fitted parameter on real data. Fit: for a fixed c′, I(c′ + r²)/[cos inc] is a
 function of θ alone, whose per-θ median is A·RID. c′ minimises the across-pose spread (golden-section search). There
 is no initialisation to get wrong. The lamp pose is the rig's (sim truth); the procedure calibrates what the renderer
 adds.
@@ -3047,13 +3061,17 @@ All opt-in. Defaults are the §5.6 operator, so the golden digest is unchanged. 
 - `dust_field_tau_frames: N` (D11 option b): the field blends the epoch fields at frame/N and frame/N + 1, normalised so
   that its variance does not pulse. `dust_drift_px_per_frame` adds advection. Test: frame-to-frame change is under ¼ of
   the white field's.
-- `dust_airlight_mode: lamp`: in an ambient-0 world the veil is backscatter of the carried lamp (the Jaffe–McGlamery
-  view in underwater imaging), not a uniform glow. It follows the lamp lobe and scales with `lamp_power`. This is what
-  makes "more lamp → more veil" a real trade-off for 5.3.
+- `dust_airlight_mode: lamp`: the veil follows the lamp lobe and scales with `lamp_power`. **Superseded as physics
+  (preflight, 2026-10-23):** it keeps the daylight shape A·(1 − e^{−βd}), so the veil grows with scene depth. ALGORITHMS
+  §10.2 (after Akkaynak & Treibitz, CVPR 2018/2019) gives the headlamp model:
+  - **direct term:** out-and-back attenuation, e^{−2β_D d};
+  - **backscatter:** an integral along the ray, ∫ I_L(θ)/r² β_B e^{−2β_B r} dr. It is dominated by the near field,
+    saturates within tens of cm, and is nearly depth-independent beyond. β_D and β_B are two separate coefficients.
+  - The lamp offset sets where the cone enters the view, and §10.2 calls it the highest-value variable in the corpus.
+  - **Replacement:** `dust_model: headlamp` (D139).
 
-**Decided on physics (no measurement needed):**
-- Dark worlds use `dust_airlight_mode: lamp`. A constant glow in an ambient-0 world has no light source, so it is
-  unphysical.
+**Retracted 2026-10-23:** "dark worlds use `dust_airlight_mode: lamp`, decided on physics". That model is the wrong
+physics (above). Dark worlds will use the D139 headlamp model once it is built and tested.
 
 **To measure, one factor per row, at MATCHED mean veil.**
 - In pre_sensor mode airlight is scaled by `radiance_scale`; post-sensor it is not. Comparing them at equal
@@ -3131,3 +3149,7 @@ Maintainer-approved 2026-10-23.
   `t_B_camera_m`. That change is in `stereo_source.hpp`, so it lands after the 2.6/L2 merge.
 - §9.4's validator already exists (`perception_config.hpp`, `MinObservableRange`). The B = 20 cm row needs
   `num_disparities` 512, or it must declare its blind zone.
+- **Confound to report with the sweep:** every sweep camera sits to the right of the left camera, while the lamp
+  stays at the body centre. The lamp is centred between the cameras only at the 10 cm main pair. ALGORITHMS §10.7
+  flags asymmetric lamp placement as a stereo photometric-consistency problem. In the lit `confined_v1` render the
+  effect is absent (the zone lights are fixed); in a dark sweep it confounds baseline with lamp asymmetry.

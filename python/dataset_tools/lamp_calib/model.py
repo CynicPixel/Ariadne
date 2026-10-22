@@ -8,7 +8,8 @@ Model (SMOKE §4u measured the renderer's law; D131):
   r        distance from the lamp centre to the surface point x
   theta    angle between the lamp axis and (x - lamp)
   cos(inc) Lambertian incidence at x; the bracket is the "cosine lobe decision" of plan 5.1, decided by held-out fit
-  c'       a near-field term the renderer adds (0.5 m^2 for SDF attenuation (0, 0, 1)); 0 for a physical lamp
+  c'       a near-field term: the renderer adds ~0.5 m^2 for SDF attenuation (0, 0, 1), and real lamps need the same
+           Lorentzian term at close range (ALGORITHMS §14.2, DarkGS/NeLiS), so it is always fitted
   RID      relative radiant intensity, 1 on the axis, stored as a table over theta (the renderer's lobe is a flat top
            plus roll-off, not cos^mu)
 

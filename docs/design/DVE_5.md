@@ -2,7 +2,16 @@
 
 Session A2, branch `feat/ph5-dve` (from `main` f8c7030). Decisions D130–D149. Status is dated in `docs/STATUS.md`.
 
-## 1. What the preflight established (before any design)
+## 1. What the preflight established
+
+**Order, honestly:**
+- The literature pass, the OpenCV-native check and the render probe below came first.
+- The ALGORITHMS.md survey (§9, §10, §13–14, §17–18) and the advisor review did NOT. They were done on 2026-10-23,
+  after D130–D138 were committed, at the maintainer's prompt. They changed:
+  - D135 (D139);
+  - Stage 3 (D140);
+  - the D132 framing;
+  - the 5.6 substitute.
 
 **Literature.**
 - Exposure metric: Shim et al. 2014/2018 (arXiv 1708.07338, eq. 1 transcribed). Comparator: Zhang, Forster &
