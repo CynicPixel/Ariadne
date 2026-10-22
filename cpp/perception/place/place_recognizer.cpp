@@ -16,6 +16,7 @@ namespace {
 PlaceRecognizerParams Checked(const PlaceRecognizerParams& p) {
     if (p.engine != "classic" && p.engine != "new") throw std::invalid_argument("PlaceRecognizer: engine classic|new");
     if (p.width <= 0 || p.height <= 0) throw std::invalid_argument("PlaceRecognizer: size");
+    if (p.enhance != "none" && p.enhance != "clahe") throw std::invalid_argument("PlaceRecognizer: enhance none|clahe");
     return p;
 }
 }  // namespace
@@ -68,10 +69,33 @@ cv::Mat PlaceRecognizer::PreprocessRgb(const cv::Mat& rgb, int width, int height
     return blob;
 }
 
-std::vector<float> PlaceRecognizer::Describe(const cv::Mat& gray) const { return Run(Preprocess(gray, p_.width, p_.height)); }
+cv::Mat PlaceRecognizer::Enhance(const cv::Mat& image, const std::string& enhance, bool rgb) {
+    if (enhance == "none") return image;
+    if (enhance != "clahe") throw std::invalid_argument("PlaceRecognizer: enhance none|clahe");
+    const cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+    cv::Mat out;
+    if (!rgb) {
+        if (image.type() != CV_8UC1) throw std::invalid_argument("PlaceRecognizer: expected CV_8UC1");
+        clahe->apply(image, out);
+        return out;
+    }
+    if (image.type() != CV_8UC3) throw std::invalid_argument("PlaceRecognizer: expected CV_8UC3 (RGB)");
+    cv::Mat lab;
+    cv::cvtColor(image, lab, cv::COLOR_RGB2Lab);
+    std::vector<cv::Mat> ch;
+    cv::split(lab, ch);
+    clahe->apply(ch[0], ch[0]);   // lightness only: hue and saturation stay
+    cv::merge(ch, lab);
+    cv::cvtColor(lab, out, cv::COLOR_Lab2RGB);
+    return out;
+}
+
+std::vector<float> PlaceRecognizer::Describe(const cv::Mat& gray) const {
+    return Run(Preprocess(Enhance(gray, p_.enhance, false), p_.width, p_.height));
+}
 
 std::vector<float> PlaceRecognizer::DescribeRgb(const cv::Mat& rgb) const {
-    return Run(PreprocessRgb(rgb, p_.width, p_.height));
+    return Run(PreprocessRgb(Enhance(rgb, p_.enhance, true), p_.width, p_.height));
 }
 
 std::vector<float> PlaceRecognizer::Run(const cv::Mat& blob) const {
@@ -89,12 +113,14 @@ std::vector<float> PlaceRecognizer::Run(const cv::Mat& blob) const {
 }
 
 dnn::ModelRecord PlaceRecognizer::Record() const {
-    return {"eigenplaces_r50_256@" + std::to_string(p_.width) + "x" + std::to_string(p_.height), p_.onnx,
-            "cv_dnn_" + p_.engine};
+    return {"eigenplaces_r50_256@" + std::to_string(p_.width) + "x" + std::to_string(p_.height) +
+                (p_.enhance == "none" ? "" : "+" + p_.enhance),
+            p_.onnx, "cv_dnn_" + p_.engine};
 }
 
 std::string PlaceRecognizer::Name() const {
-    return "eigenplaces_r50_256@" + std::to_string(p_.width) + "x" + std::to_string(p_.height) + "/cv_dnn_" + p_.engine;
+    return "eigenplaces_r50_256@" + std::to_string(p_.width) + "x" + std::to_string(p_.height) +
+           (p_.enhance == "none" ? "" : "+" + p_.enhance) + "/cv_dnn_" + p_.engine;
 }
 
 }  // namespace ariadne::perception

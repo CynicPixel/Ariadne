@@ -23,6 +23,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **L6 done (D91):** `dnn::PerThread<T>` in every cv::dnn wrapper. The two-thread test found that concurrent
   ENGINE_NEW forwards sharing OpenCV's default pool drift at the 1e-5 level, so the contract's second rule is OpenCV
   pool = 1 when several callers share a wrapper. Under it the test is byte-identical, 5/5 repeats.
+- **3.1, EuRoC part (D92):** CLAHE on the retrieval path is built behind `enhance` (default `none`). On EuRoC it has no
+  measurable effect (ΔR@1 ≤ 0.013, n.s.) under clean and two darkened-proxy conditions. The darkened proxy is
+  *easier* than clean (p = 0.023, cause unverified), so the dark question stays with the §31.5 sim row, which is open.
 - **L5 done:** quiet-host timings, single process, p50/p95 over 30 reps after 3 warm-ups. Measured on a fresh
   **g4dn.xlarge** (Xeon Platinum 8259CL 2.5 GHz: 4 vCPU = 2 cores × 2 hyper-threads, so `threads 4` includes HT),
   nothing else running. This is **not the dev box and not m8g**: the demo-machine budget stays open unless the demo

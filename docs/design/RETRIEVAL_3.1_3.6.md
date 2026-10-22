@@ -111,3 +111,25 @@ are the extra curve points.
 **So:** the wire candidate is **int8 with a per-vector scale, 258 B** (fp16 at 512 B if the schema prefers a float
 type). PCA is not worth a shared basis at this scale. Every difference here is within noise on 297 correlated
 queries.
+
+## 5. 3.1 result on EuRoC (2026-10-22, `evaluation/runs/retrieval_3.1/`)
+
+The regression holds: the clean `ep376.f32` equals D62's dump byte for byte on 11/11 flights. 297 queries per
+condition, on the same samples throughout.
+
+| condition | ep376 R@1 / R@5 | ep376 + CLAHE R@1 / R@5 | ΔR@1 (McNemar p) |
+|---|---|---|---|
+| clean | 0.626 / 0.875 | 0.640 / 0.865 | +0.013 (0.50) |
+| `dark1_dust0` | 0.667 / 0.865 | 0.657 / 0.869 | −0.010 (0.65) |
+| `dark2_dust0_ag8` | 0.667 / 0.869 | 0.680 / 0.865 | +0.013 (0.45) |
+
+**Reading:**
+- **CLAHE has no measurable effect** on retrieval on EuRoC: |Δ| ≤ 4 queries, with changing sign.
+- **Unexpected:** the darkened proxy retrieves *better* than clean: 0.667 vs 0.626 (McNemar p = 0.023, optimistic
+  because the queries are correlated). The cause is `[UNVERIFIED]`. One candidate is the operator's tone and
+  vignetting on gamma-encoded EuRoC frames (D assumes linear radiance). Either way, darkened EuRoC is **not** a
+  harder retrieval condition for EigenPlaces at 376×240. So it cannot show whether CLAHE helps in the dark, and this
+  result says nothing about that question.
+- **So:** `enhance` stays `none` by default. CLAHE is kept as the selectable ablation (`enhance: clahe`). The question
+  CLAHE exists for is answered only by the §31.5 sim row: real darkness with a co-moving lamp, where falloff and
+  noise are physical. That row is the remaining part of 3.1.

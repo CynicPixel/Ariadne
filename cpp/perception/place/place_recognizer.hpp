@@ -41,6 +41,10 @@ struct PlaceRecognizerParams {
     std::string onnx;            // eigenplaces_r50_256_<W>x<H>.onnx
     int width = 376, height = 240;
     std::string engine = "classic";   // classic | new (cv::dnn ENGINE_CLASSIC / ENGINE_NEW; both exact, SMOKE §4r)
+    // Retrieval-path enhancement (arch §6.3, D92): none | clahe. CLAHE (clip 2.0, 8x8 tiles, fixed before the 3.1
+    // ablation) on a COPY at the input resolution, before the resize: gray directly, RGB on Lab's L channel. The
+    // caller's frame is never modified, so the geometry path keeps its calibrated-only pixels.
+    std::string enhance = "none";
 };
 
 class PlaceRecognizer {
@@ -55,6 +59,8 @@ public:
     /// The exact network input: 1 x 3 x H x W CV_32F (NCHW).
     static cv::Mat Preprocess(const cv::Mat& gray, int width, int height);
     static cv::Mat PreprocessRgb(const cv::Mat& rgb, int width, int height);
+    /// The retrieval-path enhancement alone (a new image; the input is untouched). none returns the input itself.
+    static cv::Mat Enhance(const cv::Mat& image, const std::string& enhance, bool rgb);
 
     /// Manifest id, e.g. "eigenplaces_r50_256@376x240/cv_dnn_classic".
     std::string Name() const;

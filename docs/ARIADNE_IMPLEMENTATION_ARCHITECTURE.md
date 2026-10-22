@@ -1490,6 +1490,13 @@ treated as a dilemma. It is not. It is an asymmetry, and the architecture should
 The retrieval-path enhancement is ablated separately — one additional row in the illumination ablation matrix
 (§31.5). This is a cheap experiment with a genuinely informative outcome either way.
 
+> **As built (3.1, D92).** `PlaceRecognizerParams.enhance: none | clahe` (clip 2.0, 8×8; Lab L for RGB) runs on a copy
+> inside the recogniser, so the geometry path is untouched. The default is `none`.
+>
+> On EuRoC (297 queries), CLAHE changes R@1 by ≤ 0.013, n.s., under clean and two darkened-proxy conditions. The
+> darkened proxy turned out *easier* than clean, so it does not answer the dark question. The §31.5 sim row does, and
+> it is still open (RETRIEVAL_3.1_3.6 §5).
+
 ---
 
 ## 6.4 Low-light denoising

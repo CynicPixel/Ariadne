@@ -13,8 +13,15 @@
 //
 // Writes: samples.csv, <method>.f32 (N x 256 float32, row i = sample i), annoy_<method>.csv, timing.yaml,
 // manifest.yaml.
+//
+// --retrieval-3.1 (RETRIEVAL_3.1_3.6.md §3, D92): the CLAHE ablation instead. Methods ep376 and ep376_clahe only
+// (no ep752, meanbit or annoy), optionally on frames darkened by the seeded operator D (--degradation YAML, --seed;
+// applied to the left frame at consumption time, frame id = the stream index; a darkened-EuRoC [PROXY]).
 // ---------------------------------------------------------------------------
 #include "collaboration/retrieval/mean_bit_descriptor.hpp"
+#include "perception/degradation/degradation.hpp"
+#include "perception/degradation/degradation_config.hpp"
+#include "perception/degradation/degradation_digest.hpp"
 #include "perception/features/orb_engine.hpp"
 #include "perception/perception_config.hpp"
 #include "perception/place/place_index.hpp"
@@ -29,7 +36,9 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -43,6 +52,9 @@ struct Args {
     int every = 20;
     double exclude_s = 30.0;
     int annoy_trees = 10;
+    bool retrieval31 = false;
+    std::string degradation;
+    uint64_t seed = 20261022;
 };
 
 Args Parse(int argc, char** argv) {
@@ -60,12 +72,17 @@ Args Parse(int argc, char** argv) {
         else if (k == "--every") a.every = std::stoi(next());
         else if (k == "--exclude-s") a.exclude_s = std::stod(next());
         else if (k == "--annoy-trees") a.annoy_trees = std::stoi(next());
+        else if (k == "--retrieval-3.1") a.retrieval31 = true;
+        else if (k == "--degradation") a.degradation = next();
+        else if (k == "--seed") a.seed = std::stoull(next());
         else throw std::runtime_error("unknown argument " + k);
     }
     if (a.sequence.empty() || a.perception_config.empty() || a.export_dir.empty() || a.out.empty()) {
         throw std::runtime_error("usage: ariadne_place_eval --sequence DIR --perception-config YAML --export DIR "
-                                 "--out DIR [--every 20] [--exclude-s 30] [--annoy-trees 10]");
+                                 "--out DIR [--every 20] [--exclude-s 30] [--annoy-trees 10] "
+                                 "[--retrieval-3.1 [--degradation YAML] [--seed N]]");
     }
+    if (!a.degradation.empty() && !a.retrieval31) throw std::runtime_error("--degradation needs --retrieval-3.1");
     return a;
 }
 
@@ -85,6 +102,10 @@ int main(int argc, char** argv) {
                                            376, 240, "classic"});
         perception::PlaceRecognizer ep752({(fs::path(a.export_dir) / "eigenplaces_r50_256_752x480.onnx").string(),
                                            752, 480, "classic"});
+        const perception::PlaceRecognizer ep376c({(fs::path(a.export_dir) / "eigenplaces_r50_256_376x240.onnx").string(),
+                                                  376, 240, "classic", "clahe"});
+        std::optional<perception::NamedDegradation> deg;
+        if (!a.degradation.empty()) deg = perception::LoadDegradation(a.degradation);
         const std::vector<runtime::TimedPose> gt = source.GroundTruth();
         const core::SE3 T_B_C = source.T_B_C0();
 
@@ -93,7 +114,8 @@ int main(int argc, char** argv) {
             core::Vec3 c, axis;
         };
         std::vector<Sample> samples;
-        const std::vector<std::string> methods = {"ep376", "ep752", "meanbit"};
+        const std::vector<std::string> methods = a.retrieval31 ? std::vector<std::string>{"ep376", "ep376_clahe"}
+                                                               : std::vector<std::string>{"ep376", "ep752", "meanbit"};
         std::map<std::string, std::vector<std::vector<float>>> desc;
         std::map<std::string, double> ms_sum;
         source.ForEachFrame(0, [&](const runtime::StereoFrame& f) {
@@ -107,6 +129,22 @@ int main(int argc, char** argv) {
             if (!best || std::llabs(best->t_ns - f.t_ns) > 10000000LL) return;   // 10 ms
             const core::SE3 T_W_C = best->T * T_B_C;
             samples.push_back({f.t_ns, T_W_C.t, T_W_C.R * core::Vec3(0, 0, 1)});
+            if (a.retrieval31) {
+                cv::Mat left = f.left;
+                if (deg) {
+                    core::ImageU8 in(left.cols, left.rows, 1);
+                    for (int r = 0; r < left.rows; ++r) std::memcpy(&in.data[size_t(r) * left.cols], left.ptr(r), left.cols);
+                    const core::ImageU8 out = perception::Degrade(in, deg->params, a.seed, f.id);
+                    left = cv::Mat(left.rows, left.cols, CV_8UC1, const_cast<uint8_t*>(out.data.data())).clone();
+                }
+                auto t0 = std::chrono::steady_clock::now();
+                desc["ep376"].push_back(ep376.Describe(left));
+                ms_sum["ep376"] += Ms(t0);
+                t0 = std::chrono::steady_clock::now();
+                desc["ep376_clahe"].push_back(ep376c.Describe(left));
+                ms_sum["ep376_clahe"] += Ms(t0);
+                return;
+            }
             auto t0 = std::chrono::steady_clock::now();
             desc["ep376"].push_back(ep376.Describe(f.left));
             ms_sum["ep376"] += Ms(t0);
@@ -135,6 +173,7 @@ int main(int argc, char** argv) {
         for (const auto& m : methods) {
             std::ofstream f(fs::path(a.out) / (m + ".f32"), std::ios::binary);
             for (const auto& d : desc[m]) f.write(reinterpret_cast<const char*>(d.data()), std::streamsize(d.size() * 4));
+            if (a.retrieval31) continue;   // exact only
             // annoy top-5 under the time filter, one row per query: index, then up to 5 sample indices.
             perception::PlaceIndex ann(256, perception::PlaceIndex::Backend::kAnnoy, a.annoy_trees, 1);
             for (size_t i = 0; i < desc[m].size(); ++i) ann.Add(i, desc[m][i]);
@@ -169,9 +208,12 @@ int main(int argc, char** argv) {
                << "\ngit_dirty: " << (std::getenv("ARIADNE_GIT_DIRTY") ? std::getenv("ARIADNE_GIT_DIRTY") : "UNRECORDED")
                << "\nimage_digest: "
                << (std::getenv("ARIADNE_IMAGE_DIGEST") ? std::getenv("ARIADNE_IMAGE_DIGEST") : "UNRECORDED")
-               << "\nperception_config: " << pc.name << "\nplace_recognition: [" << ep376.Name() << ", " << ep752.Name()
-               << ", meanbit_orb_placeholder]\nplace_index: [exact (in place_recall_eval.py), annoy/trees"
-               << a.annoy_trees << "/seed1]\n"
+               << "\nperception_config: " << pc.name << "\nplace_recognition: [" << ep376.Name() << ", "
+               << (a.retrieval31 ? ep376c.Name() : ep752.Name() + ", meanbit_orb_placeholder")
+               << "]\nplace_index: [exact (in place_recall_eval.py)"
+               << (a.retrieval31 ? std::string("") : ", annoy/trees" + std::to_string(a.annoy_trees) + "/seed1") << "]\n"
+               << "degradation: " << (deg ? deg->name : std::string("none")) << "\ndegradation_seed: " << a.seed << '\n'
+               << "degradation_digest: " << (deg ? std::to_string(perception::DegradeDigest()) : std::string("none")) << '\n'
                << "eigenplaces_commit: " << em["commit"].as<std::string>()
                << "\neigenplaces_weights_sha256: " << em["weights_sha256"].as<std::string>()
                << "\nevery: " << a.every << "\nexclude_s: " << a.exclude_s << '\n';

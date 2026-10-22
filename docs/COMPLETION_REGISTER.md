@@ -118,7 +118,7 @@ identical.
 
 | item | state | evidence / missing; carries | owner |
 |---|---|---|---|
-| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core is D62 (approved 2026-10-21). CLAHE split not done. Carries L3. | A1 |
+| 3.1 EigenPlaces retrieval + CLAHE split | partial | Core D62 (approved). CLAHE split built (D92, `enhance`, default none); EuRoC rows: no effect, darkened proxy turned out easier than clean (`evaluation/runs/retrieval_3.1/`). **Open: the §31.5 sim row (dark + co-moving light), needing a sim retrieval eval with revisit GT, which also settles D90's sim size.** L3 done (D90). | A1 |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
 | 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |

@@ -187,3 +187,25 @@ TEST(PlaceRecognizer, SimRgbPathMatchesUpstreamAndSeesAChannelSwap) {
     }
     EXPECT_EQ(checked, 4);
 }
+
+// 3.1 retrieval-path enhancement (D92, arch §6.3): CLAHE works on a copy, so the caller's frame (the geometry path's
+// pixels) is bit-unchanged; none is the identity; the setting is the one fixed before the ablation.
+TEST(PlaceRecognizer, ClaheIsRetrievalOnlyAndLeavesTheFrameUntouched) {
+    cv::Mat gray(240, 376, CV_8UC1), rgb(240, 376, CV_8UC3);
+    cv::randu(gray, 10, 40);   // a dark, low-contrast frame
+    cv::randu(rgb, 10, 40);
+    const cv::Mat g0 = gray.clone(), c0 = rgb.clone();
+    const cv::Mat none = PlaceRecognizer::Enhance(gray, "none", false);
+    EXPECT_EQ(none.data, gray.data);   // the identity: no copy, no change
+    const cv::Mat eg = PlaceRecognizer::Enhance(gray, "clahe", false), ec = PlaceRecognizer::Enhance(rgb, "clahe", true);
+    EXPECT_EQ(cv::norm(gray, g0, cv::NORM_INF), 0.0);
+    EXPECT_EQ(cv::norm(rgb, c0, cv::NORM_INF), 0.0);
+    EXPECT_NE(eg.data, gray.data);
+    EXPECT_GT(cv::norm(eg, gray, cv::NORM_INF), 10.0);   // contrast is stretched
+    EXPECT_GT(cv::norm(ec, rgb, cv::NORM_INF), 10.0);
+    cv::Mat ref;
+    cv::createCLAHE(2.0, cv::Size(8, 8))->apply(gray, ref);
+    EXPECT_EQ(cv::norm(eg, ref, cv::NORM_INF), 0.0);   // exactly the fixed setting
+    EXPECT_THROW(PlaceRecognizer::Enhance(gray, "gamma", false), std::invalid_argument);
+    EXPECT_THROW(PlaceRecognizer({"x.onnx", 376, 240, "classic", "gamma"}), std::invalid_argument);
+}

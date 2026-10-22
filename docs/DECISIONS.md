@@ -2780,3 +2780,30 @@ Design and protocol fixed before the run: `docs/design/RETRIEVAL_3.1_3.6.md` §2
   | ablation matrix | §31.9 global rows: done (§4); XFeat row: stated gap |
   | benchmark config | `retrieval_rows_eval.py compression` with its fixed defaults (bar 0.01) |
   | manifest | the run directory's `manifest.yaml` (input sha256, image, command) |
+
+## 2026-10-22 — D92: retrieval-path CLAHE (3.1, arch §6.3) — built behind `enhance`, default off; no effect on EuRoC; the deciding row is sim
+
+Design fixed before the run: `docs/design/RETRIEVAL_3.1_3.6.md` §3. Result: §5.
+
+- **What:** `PlaceRecognizerParams.enhance = none | clahe` (clip 2.0, 8×8 tiles; gray directly, RGB on Lab L). It
+  runs inside the recogniser on a copy, so the geometry path's pixels are untouched (unit test). `Name()` and
+  `Record()` carry `+clahe`. `ariadne_place_eval --retrieval-3.1` runs the ablation, with the seeded operator D
+  applied for darkened conditions.
+- **Result (EuRoC, 297 queries):**
+  - CLAHE's ΔR@1 is +0.013, −0.010 and +0.013 on clean / `dark1_dust0` / `dark2_dust0_ag8`. All n.s. (p ≥ 0.45).
+  - The clean dump equals D62's byte for byte.
+  - The darkened proxy is *easier* than clean (0.667 vs 0.626, p = 0.023), cause `[UNVERIFIED]`. So it is not a test
+    of CLAHE in the dark.
+- **Decision:** the default stays `none`. CLAHE is a selectable retrieval-path ablation, never applied to the geometry
+  path.
+- **Remaining part of 3.1:** the §31.5 sim row (dark + co-moving light + retrieval-path enhancement), which needs a sim
+  retrieval evaluation with revisit ground truth. That evaluation also settles D90's 640×360 vs 1280×720 question.
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | CLAHE is OpenCV-native (`cv::createCLAHE`); no new learned model |
+  | arch decision | D92, plus the §6.3 blockquote |
+  | ablation matrix | §31.5 retrieval-path row: EuRoC proxy done (§5), sim row open |
+  | benchmark config | `ariadne_place_eval --retrieval-3.1 [--degradation]` + `retrieval_rows_eval.py methods` |
+  | manifest | `place_recognition` names carry `+clahe`; the tool's manifest records the degradation name, seed and digest |
