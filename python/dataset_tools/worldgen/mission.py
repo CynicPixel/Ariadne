@@ -147,6 +147,9 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict) -> str:
     cams = camera_poses(rig)
     lamp = rig["lamp"]
     lx, ly, lz = lamp["in_body_m"]
+    # D131: optional keys; their defaults reproduce rig v1's SDF byte for byte.
+    att_c, att_l, att_q = lamp.get("attenuation", (0.2, 0.0, 0.05))
+    shadows = "true" if lamp.get("cast_shadows", 0) else "false"
     es = scene_json["esdf"]
     g = es["cell_m"]
     ox, oy = (round(v / g) for v in es["origin_m"])
@@ -163,10 +166,11 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict) -> str:
         + f'        <light type="spot" name="lamp"><pose>{_f(lx)} {_f(ly)} {_f(lz)} 0 0 0</pose>'
           f'<direction>1 0 0</direction><intensity>{_f(lamp["intensity"])}</intensity>'
           f'<diffuse>1 1 1 1</diffuse><specular>0.2 0.2 0.2 1</specular>'
-          f'<attenuation><range>20</range><constant>0.2</constant><linear>0.0</linear><quadratic>0.05</quadratic></attenuation>'
+          f'<attenuation><range>{_f(lamp["range_m"]) if "range_m" in lamp else "20"}</range><constant>{_f(att_c)}</constant>'
+          f'<linear>{_f(att_l)}</linear><quadratic>{_f(att_q)}</quadratic></attenuation>'
           f'<spot><inner_angle>{_f(math.radians(lamp["inner_deg"]))}</inner_angle>'
           f'<outer_angle>{_f(math.radians(lamp["outer_deg"]))}</outer_angle><falloff>1.0</falloff></spot>'
-          f'<cast_shadows>false</cast_shadows></light>\n'
+          f'<cast_shadows>{shadows}</cast_shadows></light>\n'
         + '      </link>\n'
         + f'      <plugin filename="ariadne_kinematic_mover" name="ariadne::sim::KinematicMover">\n'
           f'        <frame_id>{body}</frame_id><gravity>{_f(9.80665)}</gravity>'
