@@ -65,7 +65,13 @@ git -C "$REPO" status --porcelain > "$R/git_status.txt"
 
 step "4 premerge (JOBS=$JOBS)"
 t0=$(date +%s)
-(cd "$REPO" && ARIADNE_SKIP_DEV_BUILD=1 ARIADNE_BUILD_JOBS="$JOBS" infra/scripts/phase1.sh --premerge) \
+# Run the gate as the image's uid, like on the workstation: phase1.sh creates the gate directories on the host and
+# the dev container (uid 1000) writes into them, so as root they would be root-owned and unwritable (run 222331Z).
+U="$(getent passwd "$uid" | cut -d: -f1)"
+[ -n "$U" ] || { useradd -m -u "$uid" gate; U=gate; }
+usermod -aG docker "$U"
+runuser -u "$U" -- env HOME="$(getent passwd "$U" | cut -d: -f6)" ARIADNE_SKIP_DEV_BUILD=1 ARIADNE_BUILD_JOBS="$JOBS" \
+  bash -c "cd '$REPO' && git config --global --add safe.directory '$REPO' && infra/scripts/phase1.sh --premerge" \
   > "$R/phase1.log" 2>&1
 rc=$?
 echo "premerge_exit $rc seconds $(( $(date +%s) - t0 ))" >> "$R/steps.txt"
