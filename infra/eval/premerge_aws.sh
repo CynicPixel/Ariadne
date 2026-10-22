@@ -58,7 +58,9 @@ df -h / > "$R/df.txt"
 # The dev image runs as its own non-root user; root-run containers (recon, analysis, console) write anyway.
 uid="$(docker run --rm ariadne/core-dev:dev id -u)"; gid="$(docker run --rm ariadne/core-dev:dev id -g)"
 chown -R "$uid:$gid" "$REPO"
-git config --global --add safe.directory "$REPO"
+# user-data runs as root without $HOME, so --global never applies: system-wide, and give git a HOME anyway.
+export HOME="${HOME:-/root}"
+git config --system --add safe.directory "$REPO"
 git -C "$REPO" status --porcelain > "$R/git_status.txt"
 
 step "4 premerge (JOBS=$JOBS)"
