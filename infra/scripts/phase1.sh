@@ -70,6 +70,9 @@ log "0. build + full ctest"
 # ARIADNE_REQUIRE_MODELS=1. Produced offline by python/model_tools/{eigenplaces,aliked_lightglue}_reference.py.
 [ -f .cache/models/eigenplaces_ref/manifest.yaml ] || die "no EigenPlaces export in .cache/models/eigenplaces_ref (D62)"
 [ -f .cache/models/aliked_lg_ref/manifest.yaml ] || die "no ALIKED+LightGlue export in .cache/models/aliked_lg_ref (D63)"
+# ...and the sim-rig exports of D90 (L3; infra/scripts/models.sh eigenplaces-sim / aliked-lg-sim), required the same way.
+[ -f .cache/models/eigenplaces_sim_ref/manifest.yaml ] || die "no sim EigenPlaces export (run: infra/scripts/models.sh eigenplaces-sim)"
+[ -f .cache/models/aliked_lg_sim_ref/manifest.yaml ] || die "no sim ALIKED+LightGlue export (run: infra/scripts/models.sh aliked-lg-sim)"
 # Build and ctest parallelism: 2 by default. The 15 GB host crashed at 8 (2026-10-21); raise only deliberately.
 JOBS="${ARIADNE_BUILD_JOBS:-2}"
 cmd "$S/core.sh dev    # configure, build, full ctest (--parallel $JOBS), with ARIADNE_REQUIRE_MODELS=1"
@@ -77,6 +80,8 @@ $S/core.sh dev bash -c "cmake -S /work -B /work/build/docker -G Ninja -DARIADNE_
   -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-docker >/dev/null && cmake --build /work/build/docker --parallel $JOBS \
   && ARIADNE_XFEAT_REF=/work/.cache/models/xfeat_ref ARIADNE_PGO_ORACLE=/work/.cache/oracle/pgo ARIADNE_REQUIRE_MODELS=1 \
      ARIADNE_EIGENPLACES_REF=/work/.cache/models/eigenplaces_ref ARIADNE_ALIKED_LG_REF=/work/.cache/models/aliked_lg_ref \
+     ARIADNE_EIGENPLACES_SIM_REF=/work/.cache/models/eigenplaces_sim_ref \
+     ARIADNE_ALIKED_LG_SIM_REF=/work/.cache/models/aliked_lg_sim_ref \
      ctest --test-dir /work/build/docker --output-on-failure --parallel $JOBS" > "$BIG/ctest.log" 2>&1 \
   || { tail -30 "$BIG/ctest.log"; die "build or ctest failed"; }
 grep -E "tests passed|tests failed" "$BIG/ctest.log" > "$G/ctest.txt"

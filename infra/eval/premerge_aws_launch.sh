@@ -30,8 +30,8 @@ stage() {
   git bundle create "$W/repo.bundle" HEAD 2>/dev/null
   # The dev image from this tree's Dockerfile, under a private tag (the shared :dev tag moves with other sessions).
   DOCKER_BUILDKIT=1 docker build -q -f infra/docker/core.Dockerfile --target dev -t ariadne/core-dev:m-premerge . >/dev/null
-  local ins=(.cache/models/xfeat_ref .cache/models/eigenplaces_ref .cache/models/aliked_lg_ref .cache/oracle/pgo
-             build/render_cache)
+  local ins=(.cache/models/xfeat_ref .cache/models/eigenplaces_ref .cache/models/aliked_lg_ref
+             .cache/models/eigenplaces_sim_ref .cache/models/aliked_lg_sim_ref .cache/oracle/pgo build/render_cache)
   find "${ins[@]}" -type f -print0 | sort -z | xargs -0 sha256sum > "$W/inputs.SHA256SUMS"
   local sums=build/recording_ci_tiny_0.SHA256SUMS   # once per recording, locally cached
   [ -s "$sums" ] || (cd "$REC" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$sums"
