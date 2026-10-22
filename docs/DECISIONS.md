@@ -3255,9 +3255,9 @@ and S3 → EC2 are fast and in-region. Maintainer-approved 2026-10-23.
 **Session** (`infra/eval/ph5_aws.sh`, spinup `--profile cpux86 --type c7i.2xlarge`; the profile is main's D86
 `cpux86`, carried over).
 
-**Image.** The ECR dev image `ariadne-core:d86-coredev-04d8a7c58de1`, main's D86 image. It is NOT the local
-`ariadne/core-dev:dev` (91643838…) the unit tests ran on: pushing that image over this link would take hours. The
-image id is recorded per run.
+**Image.** ECR `ariadne-core:rc-ariadne-core-dev-91643838031ab6cbda6a`, the same image as the local
+`ariadne/core-dev:dev` the unit tests ran on (pushed 2026-10-22 21:01). The first launch asked for
+`d86-coredev-04d8a7c58de1`, a tag that exists only locally: pull failed after 70 s, $0.0013.
 
 **Hilti.**
 - Fetched from the pinned HF revision, each file sha256-checked against its LFS oid.
