@@ -150,7 +150,7 @@ identical.
 | 6.3 merge pruning, affine exposure | |
 | 6.4 console full spec | |
 | 7.1 MCP + Bedrock orchestrator | **partial (B)** | Option B (maintainer, 2026-10-23): A1 keeps the planner (4.3–4.6); B builds the seams (`AGENTIC_7.md` §0/§0b). Done: `MissionPlanner` interface (`runtime/live/planner.hpp`, A1 building against it); operator directives as recorded inputs + console REST; joint LLM chooser with C++ validation (in-set, exactly-once, §23 gate with console-written approval), OpenCV-rendered images; MCP server (mcp 2.3.0, 8 tools incl. `observe_image`, `propose_directive`; text-only twin for the DeepSeek fallback, which is TEXT-only on Bedrock); Bedrock orchestrator. Verified without Bedrock: scripted fake orchestrator 9/9 replans; refactor traces identical. **Not done:** orchestrator image + live.sh wiring, botocore Stubber test, any real Bedrock call (spend approval), a live LLM run, a human approval round-trip (needs the maintainer at the console; the gate never fires on ci_tiny, risk <= 0.49). |
-| 7.2 classical-planner ablation Config switch exists (`chooser: classical`); the comparison runs are not done. |
+| 7.2 classical-planner ablation | Config switch exists (`chooser: classical`, same binary and planner, §25.3); the comparison runs are not done. |
 | 7.3 COOL benchmark | **blocked by 0.2 arm64 + 0.3 trial**. Carries L5, L6. D86: the thread setting is decided explicitly and recorded in the manifest; D91's pool=1 is never process-wide in the timed runtime. |
 | 7.4 SQS / ASG sweeps, S3, budget alarms | |
 | 8.1–8.6 missions, failure campaign, sweeps, report, video, submission | need L1 (live demo), 7.x |
