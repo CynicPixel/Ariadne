@@ -11,6 +11,10 @@
 // Parameters: bridge_config (the YAML the bridge loads), socket_path, ready_file, skip_topics (string array).
 // Readiness: when every forwarded topic has a publisher and every command topic a subscriber, a #ready frame goes
 // to the runtime and ready_file is written; the launcher unpauses the world only then.
+// Lockstep (D165): a service entry of the YAML (ros_gz_interfaces/srv/ControlWorld, bridged to /world/<w>/control)
+// gives a client; a "#run_to" frame from the runtime (int64 sim ns, little-endian) becomes a request with only
+// run_to_sim_time set: gz runs to that time and pauses itself. The answer goes back as "#run_to_ack" JSON with the sim
+// clock at the moment of the request (/clock, subscribed here, not forwarded): the time the world was paused at.
 // ---------------------------------------------------------------------------
 #include "runtime/live/link_frame.hpp"
 
@@ -19,6 +23,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/serialization.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <ros_gz_interfaces/srv/control_world.hpp>
 #include <rosgraph_msgs/msg/clock.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -51,6 +56,18 @@ public:
         RCLCPP_INFO(get_logger(), "connected to the runtime at %s", socket_path.c_str());
 
         for (const auto& e : YAML::LoadFile(config)) {
+            if (e["service_name"]) {
+                const std::string type = e["ros_type_name"].as<std::string>();
+                if (type != "ros_gz_interfaces/srv/ControlWorld") {
+                    throw std::runtime_error("RuntimeLink: unsupported service type " + type);
+                }
+                control_ = create_client<ros_gz_interfaces::srv::ControlWorld>(e["service_name"].as<std::string>());
+                clock_sub_ = create_subscription<rosgraph_msgs::msg::Clock>(
+                    "/clock", rclcpp::QoS(10), [this](const rosgraph_msgs::msg::Clock::SharedPtr m) {
+                        clock_ns_ = int64_t(m->clock.sec) * 1000000000 + m->clock.nanosec;
+                    });
+                continue;
+            }
             const std::string topic = e["ros_topic_name"].as<std::string>();
             const std::string type = e["ros_type_name"].as<std::string>();
             const std::string dir = e["direction"].as<std::string>();
@@ -119,6 +136,10 @@ private:
         live::LinkFrame f;
         try {
             while (!stop_ && live::ReadFrame(fd_, f)) {
+                if (f.topic == "#run_to") {
+                    RunTo(f);
+                    continue;
+                }
                 const auto it = cmd_pubs_.find(f.topic);
                 if (it == cmd_pubs_.end()) {
                     RCLCPP_ERROR(get_logger(), "runtime sent a frame for unknown topic '%s'", f.topic.c_str());
@@ -138,8 +159,27 @@ private:
         }
     }
 
+    void RunTo(const live::LinkFrame& f) {
+        int64_t t = 0;
+        if (!control_ || f.payload.size() != sizeof t) {
+            RCLCPP_ERROR(get_logger(), "#run_to without a control service, or a bad payload");
+            return;
+        }
+        std::memcpy(&t, f.payload.data(), sizeof t);
+        auto req = std::make_shared<ros_gz_interfaces::srv::ControlWorld::Request>();
+        req->world_control.run_to_sim_time.sec = int32_t(t / 1000000000);
+        req->world_control.run_to_sim_time.nanosec = uint32_t(t % 1000000000);
+        const int64_t paused = clock_ns_.load();
+        control_->async_send_request(req, [this, t, paused](rclcpp::Client<ros_gz_interfaces::srv::ControlWorld>::SharedFuture r) {
+            const std::string s = "{\"run_to_ns\":" + std::to_string(t) + ",\"paused_clock_ns\":" + std::to_string(paused) +
+                                  ",\"accepted\":" + (r.get()->success ? "true" : "false") + "}";
+            Send("#run_to_ack", reinterpret_cast<const uint8_t*>(s.data()), s.size());
+        });
+    }
+
     void CheckReady() {
         if (ready_) return;
+        if (control_ && !control_->service_is_ready()) return;
         std::ostringstream js;
         js << "{\"forwarded\":[";
         for (size_t i = 0; i < forwarded_.size(); ++i) {
@@ -193,6 +233,9 @@ private:
     std::vector<rclcpp::SubscriptionBase::SharedPtr> subs_;
     std::map<std::string, rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr> cmd_pubs_;
     std::thread reader_;
+    rclcpp::Client<ros_gz_interfaces::srv::ControlWorld>::SharedPtr control_;   // lockstep only
+    rclcpp::Subscription<rosgraph_msgs::msg::Clock>::SharedPtr clock_sub_;
+    std::atomic<int64_t> clock_ns_{-1};
     rclcpp::TimerBase::SharedPtr ready_timer_, stats_timer_;
 };
 

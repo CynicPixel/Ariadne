@@ -59,6 +59,7 @@ struct LiveConfig {
     double autonomous_threshold = 1.01;   // §23 risk gate (AGENTIC_7 D158); > 1 = no gate
     double llm_timeout_s = 0;              // chooser llm: wall seconds to wait for the orchestrator
     bool face_frontier = true;
+    bool lockstep = false;                 // D165: gz paused at every barrier until the commands are applied
     int hold_back_ms = 3000;
 };
 
@@ -77,6 +78,7 @@ LiveConfig LoadLive(const std::string& path) {
     c.refused_radius_m = n["command"]["refused_radius_m"].as<double>();
     c.hold_back_ms = n["reorder"]["hold_back_ms"].as<int>();
     c.telemetry_hz = n["telemetry_hz"].as<double>();
+    if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
@@ -278,7 +280,7 @@ int main(int argc, char** argv) {
         fs::create_directories(run_dir / "raw");
         Lines trace(run_dir / "trace.jsonl"), commands(run_dir / "commands.jsonl"),
             mover_state(run_dir / "mover_state.jsonl"), telemetry(run_dir / "telemetry.jsonl"),
-            link_log(run_dir / "link.jsonl");
+            link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl");
 
         // --- topics (mission_live.json) -------------------------------------------------------------------
         const YAML::Node mj = YAML::LoadFile(scene + "/mission_live.json");
@@ -304,6 +306,7 @@ int main(int argc, char** argv) {
         // The mover's answers (D153b): (agent, command stamp) -> accepted. Part of the recorded input, so the wait for
         // them below is deterministic in replay.
         std::map<std::pair<int, int64_t>, bool> answers;
+        std::map<std::pair<int, int64_t>, int64_t> applied_at;   // the mover's applied_ns per answer (lockstep log)
         bool input_done = false;
         std::mutex progress_mu;
         std::condition_variable progress_cv;
@@ -317,6 +320,17 @@ int main(int argc, char** argv) {
             fd = live::ListenAndAccept(link_path);
             std::printf("ariadne_live: link up\n");
         }
+        // D165 lockstep: ask gz to run to sim time t and pause there (RuntimeLink -> ControlWorld.run_to_sim_time).
+        // resume_gen tells the reader the coming silence-then-burst is a requested pause, not a stalled topic.
+        std::atomic<uint64_t> resume_gen{0};
+        auto RunTo = [&](int64_t t) {
+            if (!is_live || !lc.lockstep) return;
+            ++resume_gen;
+            std::lock_guard<std::mutex> lk(send_mu);
+            if (!live::WriteFrame(fd, "#run_to", reinterpret_cast<const uint8_t*>(&t), sizeof t)) {
+                throw std::runtime_error("live: the ROS edge closed the link");
+            }
+        };
         auto SendCommand = [&](int agent, const runtime::ros_cdr::PoseArray& m) {
             if (!is_live) return;
             const auto bytes = runtime::ros_cdr::EncodePoseArray(m);
@@ -366,6 +380,7 @@ int main(int argc, char** argv) {
                 {
                     std::lock_guard<std::mutex> lk(progress_mu);
                     answers[{agent, int64_t(num("cmd_stamp_ns"))}] = js.find("\"accepted\":true") != std::string::npos;
+                    applied_at[{agent, int64_t(num("cmd_stamp_ns"))}] = int64_t(num("applied_ns"));
                 }
                 progress_cv.notify_all();
                 mover_state.Put("{\"agent\":" + std::to_string(agent) + ",\"seq\":" + std::to_string(m.seq) +
@@ -380,12 +395,19 @@ int main(int argc, char** argv) {
             reader = std::thread([&] {
                 live::Reorderer ro(timed, std::chrono::milliseconds(lc.hold_back_ms));
                 live::LinkFrame f;
+                uint64_t seen_gen = 0;
                 try {
                     while (live::ReadFrame(fd, f)) {
                         if (f.topic[0] == '#') {
-                            link_log.Put("{\"control\":\"" + f.topic + "\",\"payload\":" +
-                                         std::string(f.payload.begin(), f.payload.end()) + "}");
+                            const std::string payload(f.payload.begin(), f.payload.end());
+                            link_log.Put("{\"control\":\"" + f.topic + "\",\"payload\":" + payload + "}");
+                            if (f.topic == "#ready") RunTo(replan_ns);   // lockstep: the world starts at the runtime's word
+                            if (f.topic == "#run_to_ack") lockstep_log.Put("{\"ack\":" + payload + "}");
                             continue;
+                        }
+                        if (const uint64_t g = resume_gen.load(); g != seen_gen) {
+                            seen_gen = g;
+                            ro.Refresh();   // the silence before this burst was a requested pause, not a stall
                         }
                         live::StreamMessage m;
                         m.topic = f.topic;
@@ -558,6 +580,7 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            const auto barrier_wall = std::chrono::steady_clock::now();
             // Keyframes stamped before T, merged across agents in (t, agent, id) order.
             std::vector<KfRec> batch;
             for (auto& L : lanes) {
@@ -931,6 +954,7 @@ int main(int argc, char** argv) {
                             direct[k]->kind + "\"}";
             }
             // Phase 3: the command for each pick (the same code for every chooser).
+            bool sent_at_T[2] = {false, false};
             for (int k = 0; k < 2; ++k) {
                 Pending& pd = P[k];
                 if (!pd.active) continue;
@@ -977,6 +1001,33 @@ int main(int argc, char** argv) {
                              std::to_string(cmd.poses.size()) + "}");
                 SendCommand(k, cmd);
                 ++commands_sent;
+                sent_at_T[k] = true;
+            }
+            // D165 lockstep: the world is paused at T; the commands are applied at T (the mover takes them while
+            // paused) and answered BEFORE the world resumes. Every barrier resumes to T + replan, the last one too
+            // (frames past end_s close the lanes).
+            if (is_live && lc.lockstep) {
+                int64_t at[2] = {-1, -1};
+                bool all = false;
+                {
+                    std::unique_lock<std::mutex> lk(progress_mu);
+                    all = progress_cv.wait_for(lk, std::chrono::seconds(30), [&] {
+                        if (input_done) return true;
+                        for (int k = 0; k < 2; ++k) if (sent_at_T[k] && !answers.count({k, T})) return false;
+                        return true;
+                    });
+                    for (int k = 0; k < 2; ++k) {
+                        const auto a = applied_at.find({k, T});
+                        if (a != applied_at.end()) at[k] = a->second;
+                    }
+                }
+                if (!all) ++answer_timeouts;
+                const double paused_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - barrier_wall).count();
+                lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + std::to_string(at[0]) + "," +
+                                 std::to_string(at[1]) + "],\"answered\":" + (all ? "true" : "false") +
+                                 ",\"wall_paused_s\":" + std::to_string(paused_s) + ",\"resume_to_ns\":" +
+                                 std::to_string(T + replan_ns) + "}");
+                RunTo(T + replan_ns);
             }
         }
         // End of the run: every agent holds.
@@ -1003,7 +1054,8 @@ int main(int argc, char** argv) {
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
-            << "\ncommands_decided: " << commands_sent << "\nreorder_released_on_timeout: " << reorder_timeouts
+            << "\ncommands_decided: " << commands_sent << "\nlockstep: " << (lc.lockstep ? "true" : "false")
+            << "\nreorder_released_on_timeout: " << reorder_timeouts
             << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
             << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";
         for (int k = 0; k < 2; ++k) {

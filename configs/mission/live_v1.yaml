@@ -23,6 +23,8 @@ command:
 risk_gate:
   autonomous_threshold: 1.01 # §23 gate OFF for the L1 runs (risk is computed and traced, never gates): L1 predates
                              # the agentic layer; the 7.x configs set it
+lockstep: false              # D165: true = gz paused at every barrier until the commands are applied (ARIADNE_LOCKSTEP=1
+                             # in live.sh sets it in the run's recorded config); false = the world runs free
 reorder:
   hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
 telemetry_hz: 5.0            # console pose rate, in sim time

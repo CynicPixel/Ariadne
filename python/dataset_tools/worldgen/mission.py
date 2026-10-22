@@ -206,7 +206,7 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict, script=None, live: boo
         + '      </plugin>\n    </model>\n')
 
 
-def bridge_entries(n_agents: int, depth: bool, live: bool = False) -> list:
+def bridge_entries(n_agents: int, depth: bool, live: bool = False, world: str = "") -> list:
     out = [{"ros_topic_name": "/clock", "gz_topic_name": "/clock", "ros_type_name": "rosgraph_msgs/msg/Clock",
             "gz_type_name": "gz.msgs.Clock", "direction": "GZ_TO_ROS"}]
     for k in range(n_agents):
@@ -237,6 +237,10 @@ def bridge_entries(n_agents: int, depth: bool, live: bool = False) -> list:
             out.append({"ros_topic_name": lt["mover_state"], "gz_topic_name": lt["mover_state"],
                         "ros_type_name": "std_msgs/msg/String", "gz_type_name": "gz.msgs.StringMsg",
                         "direction": "GZ_TO_ROS"})
+    if live:
+        # D165 lockstep: the world-control service (run_to_sim_time), called by RuntimeLink on the runtime's request.
+        out.append({"service_name": f"/world/{world}/control", "ros_type_name": "ros_gz_interfaces/srv/ControlWorld",
+                    "gz_req_type_name": "gz.msgs.WorldControl", "gz_rep_type_name": "gz.msgs.Boolean"})
     return out
 
 
@@ -273,7 +277,7 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default", l
         f.write(world)
     depth = bool(rig["depth"]["enabled"])
     with open(os.path.join(scene_dir, f"bridge_{name}.yaml"), "w", newline="\n") as f:
-        yaml.safe_dump(bridge_entries(len(scripts), depth, live), f, sort_keys=False)
+        yaml.safe_dump(bridge_entries(len(scripts), depth, live, f"scene_{scene.scene_id}"), f, sort_keys=False)
     cams = camera_poses(rig)
     manifest = {
         "mission": name, "scene_id": scene.scene_id, "rig": rig, "rig_path": rig_path,

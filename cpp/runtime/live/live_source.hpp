@@ -141,6 +141,13 @@ public:
 
     long released_on_timeout() const { return timeouts_; }
 
+    /// Every timed topic counts as heard from now (D165 lockstep): after a pause the runtime asked for, the silence was
+    /// requested, not a stall, so the hold-back (wall time) restarts instead of releasing the first burst on timeout.
+    void Refresh() {
+        const auto now = std::chrono::steady_clock::now();
+        for (auto& [t, l] : latest_) l.wall = now;
+    }
+
 private:
     template <typename F>
     void Drain(std::chrono::steady_clock::time_point now, F&& release) {

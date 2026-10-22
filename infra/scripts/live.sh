@@ -6,6 +6,7 @@
 #   infra/scripts/live.sh compose PRESET SEED RTF  scene + mission_live.* -> build/live/scenes/<preset>_<seed>
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
 #                                                  config: ARIADNE_LIVE_CONFIG (default configs/mission/live_v1.yaml)
+#                                                  ARIADNE_LOCKSTEP=1: lockstep (D165), recorded in the run's config
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
@@ -98,7 +99,8 @@ cmd_run() {
   mkdir -p "$REPO_ROOT/$run"
   local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con orch=""
   # The config this run used, always recorded beside it: replay reads it (chooser, gate, end_s).
-  sed "${end_s:+s/^end_s: .*/end_s: $end_s/}" "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
+  sed -e "${end_s:+s/^end_s: .*/end_s: $end_s/}" -e "${ARIADNE_LOCKSTEP:+s/^lockstep: .*/lockstep: true/}" \
+    "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
   live_cfg="$run/live_config.yaml"
   trap 'stop_mine' EXIT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
@@ -139,9 +141,13 @@ cmd_run() {
     sleep 2
   done
   log "link ready: $(cat "$REPO_ROOT/$run/link.ready")"
-  docker exec "$sim" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
-    --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 10000 --req 'pause: false'" >&2
-  log "world running"
+  if grep -q '^lockstep: *true' "$REPO_ROOT/$live_cfg"; then
+    log "lockstep (D165): the runtime runs the world barrier to barrier"
+  else
+    docker exec "$sim" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
+      --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 10000 --req 'pause: false'" >&2
+    log "world running"
+  fi
 
   # 4. Console, fed live, with a probe client so frames are served during the run.
   local port="${ARIADNE_CONSOLE_PORT:-8080}"

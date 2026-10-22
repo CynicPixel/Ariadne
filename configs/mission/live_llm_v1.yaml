@@ -27,6 +27,8 @@ risk_gate:
 llm:
   timeout_s: 120.0           # D163: wall seconds for the orchestrator's answer. request_human_approval may block 60 s
                              # (the operator's window) plus model latency; AGENTIC_7's 20 s predates that tool
+lockstep: false              # D165: true = gz paused at every barrier until the commands are applied (ARIADNE_LOCKSTEP=1
+                             # in live.sh sets it in the run's recorded config); false = the world runs free
 reorder:
   hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
 telemetry_hz: 5.0            # console pose rate, in sim time
