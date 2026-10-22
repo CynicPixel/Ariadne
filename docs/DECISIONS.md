@@ -3067,3 +3067,45 @@ All opt-in. Defaults are the §5.6 operator, so the golden digest is unchanged. 
 - The dark0..3 levels are re-specified against lamp-lit renders with `input_transfer: srgb`.
 - With the decode, even `radiance_scale` 1 puts midtones about 2 stops lower than the encoded reading did.
 - The "ambient normal" row uses the same decode, or the matrix would compare two sensor models.
+
+## 2026-10-23 — D136: TUM fr1 follow-up (D100) — scoring-side diagnosis; the RGB/depth-offset rerun is next
+
+Analysis of the pinned D100 outputs only (`estimate_body.tum` against `groundtruth.txt`; no rerun).
+
+| Check | fr1_xyz | fr1_desk | fr2_xyz | Reading |
+|---|---|---|---|---|
+| ATE, SE(3), as pinned | 49.6 mm | 58.1 mm | 13.9 mm | — |
+| best estimate↔GT time shift (±60 ms) | 49.5 mm at +10 ms | 55.3 mm at +35 ms | 13.9 mm at 0 | a GT clock offset is not the cause |
+| Sim(3) ATE (scale) | 46.9 mm, s 0.919 | 58.0 mm, s 1.002 | 9.8 mm, s 0.974 | no global scale bias explains fr1 |
+| median 1 s ‖Δest‖/‖Δgt‖ | 0.994 | 0.992 | 1.026 | local scale is right; a depth-scale error is ruled out |
+| orientation error, first-frame aligned | 1.1 → 2.6° | 1.6–2.8° | 0.4–1.7° | no large rotation drift |
+| 1 s translation RPE | 10.7 mm | 16.2 mm | 2.7 mm | fr1 drifts 4–6× faster per second |
+| RGB↔depth stamp gap (median / p90) | 7.3 / 13.0 ms | 11.9 / 16.4 ms | 8.3 / 14.6 ms | the gaps are similar; the motion is not |
+| GT speed, median (100 ms window) | 0.33 m/s, 14°/s | 0.48 m/s, 28°/s | 0.06 m/s, 4°/s | fr1 moves 5–8× faster |
+
+- The residual over time is U-shaped (fr1_desk: 100 → 22 → 67 mm by eighths) and does not rise with instantaneous
+  speed. So it is accumulated drift, not per-frame noise.
+- **The RGB/depth-offset hypothesis is still open.**
+  - Size: a depth frame 7–12 ms stale at fr1's speeds misplaces points by about v·Δt ≈ 2–6 mm, plus about ω·Δt ≈
+    0.1–0.3° of rotation (~2–6 mm at 1 m). That is a biased per-frame depth, which could integrate into the measured
+    1 s RPE.
+  - Test: rerun fr1 with the depth association tightened (`max_dt` 20 → 5 ms; frames without a close depth are
+    dropped) and with depth warped to the RGB stamp by the previous frame's velocity.
+  - Where the flag goes: `--depth-max-dt-ms` on the TUM tool. It lands after `feat/2.6-tum` merges, not as a commit
+    to that branch mid-merge.
+
+## 2026-10-23 — D137: the first GPU render session — ci_tiny_dark + its fixed-light twin on g4dn spot
+
+Maintainer-approved 2026-10-23.
+- **Script:** `infra/scripts/remote_dark_render.sh`, through `spinup.sh --profile gpu` (spot, `--max-minutes 150`).
+- **Image:** the exact local sim image `sha256:8b780f52…`, uploaded as zstd (735 MB) to `runs/images/`, the only
+  prefix the instance role may read. The instance checks the image id before rendering.
+- **GPU smoke first:** the NVIDIA EGL path has never run (SMOKE §4); the session stops if the smoke fails.
+- **Recordings:**
+  - `ci_tiny_dark` seed 0 + `rig_stereo_v2` (lamp);
+  - `ci_tiny_dark_fixed` seed 0 + `rig_stereo_v1`: ambient 0 and the zone point lights, no lamp (§31.5 "dark +
+    fixed light").
+  - Both share ci_tiny seed 0's geometry and trajectories (only the lighting fields differ), so the existing
+    ci_tiny_0 recording is their "ambient normal" row.
+- **Upload:** each recording goes to `runs/ph5-dark/<commit>/` as soon as it finishes, because a spot reclaim skips
+  spinup's end-of-run upload.
