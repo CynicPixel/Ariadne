@@ -4,6 +4,19 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — 7.1–7.2 redirected to option B (maintainer): seams around Phase 4; proposal to A1
+
+- **Maintainer, 2026-10-23: "go with B".** A1 keeps 4.3–4.6 (NBV, CBBA consensus, route graph). Session B builds the
+  seams: a planner interface in the live runtime, operator directives, and the LLM at task level
+  (`docs/design/AGENTIC_7.md` §0b).
+- **Proposal to A1 (object before either side builds on it):** the live runtime feeds the 4.1 `MissionInput`
+  contract through an adapter (`live::KeyframeInput`); planners implement `Integrate(keyframe)` +
+  `Plan(context) -> PlanOutput` (per-agent task + route or hold or **continue**, ranked joint alternatives,
+  escalations); directives (`priority_region`, `keep_out`, `assign`, `explore`, `goto`, `hold`/`release`) are
+  recorded inputs applied at replan ticks. The current 1.8 + standoff logic becomes `PlaceholderPlanner` (ablation).
+
+---
+
 ## 2026-10-23 — L1 live closed-loop runtime: done on the local host (session B, `feat/live-runtime`)
 
 - **2.5 tail (D74):** the large SE-Sync graphs ran: sphere, torus, cubicle, grid3D certified (f = Table 1); **rim not
