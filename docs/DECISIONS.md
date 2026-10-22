@@ -3153,3 +3153,41 @@ Maintainer-approved 2026-10-23.
   stays at the body centre. The lamp is centred between the cameras only at the 10 cm main pair. ALGORITHMS §10.7
   flags asymmetric lamp placement as a stereo photometric-consistency problem. In the lit `confined_v1` render the
   effect is absent (the zone lights are fixed); in a dark sweep it confounds baseline with lamp asymmetry.
+
+## 2026-10-23 — D140: Stage 3 uses OpenCV's normals and enforces a feature mask (preflight corrections to D134)
+
+The ALGORITHMS survey and the advisor review (2026-10-23) changed D134 in two ways.
+
+**1. Normals: `cv::depthTo3d` + `cv::RgbdNormals`** (ptcloud, OpenCV 5.0.0, `opencv_ptcloud` linked into
+`perception_opencv`). The OpenCV-native check had missed this; D134's hand-rolled cross product is removed because it
+loses. Median albedo error on the noisy-stereo tilted plane of `test_falloff` (10 cm baseline, 1/16 px quantisation
++ 0.1 px noise):
+
+| normals | median albedo error |
+|---|---|
+| **RgbdNormals FALS, window 7 (default)** | **3.9 %** |
+| RgbdNormals LINEMOD, window 5 or 7 (diff threshold 0.05 m) | 4.4 % |
+| D134 hand-rolled cross product, 8 px (removed) | 4.8 % |
+| RgbdNormals SRI, window 7 | 5.9 % |
+| RgbdNormals FALS, window 5 | 7.9 % |
+| RgbdNormals CROSS_PRODUCT (1 px neighbours) | 189 % |
+| no incidence correction | 11.6 % |
+
+- **Pinned-API trap:** OpenCV 5.0.0's `RgbdNormals::create(rows, cols, depth, K, window, diff_threshold, method)`
+  takes `diff_threshold` BEFORE `method`. Passing the method in that slot silently ran FALS for every method; it was
+  found because all methods gave identical numbers.
+- LINEMOD's threshold is in depth units: its default 50 assumes millimetres, so it is set to 0.05 m for metric depth.
+- A plane flatters every method. The §31.5 render row decides between FALS and LINEMOD.
+
+**2. No camera-fixed edges (ALGORITHMS §17.4).**
+- Invalid pixels (outside the lobe, no depth, grazing incidence) now hold the median valid albedo, not 0.
+- `AlbedoProxy::feature_mask` (valid, eroded by `feature_margin_px` 8, with the image border counted as invalid) is
+  the mask every detector or descriptor on the proxy must use.
+- The lobe edge and depth holes move WITH the camera. A detector firing on them makes keypoints that track perfectly
+  and describe nothing in the world.
+
+**Also (D132):** `metric: percentile` is built: Zhang's M_perc, the §6.5 comparator row. Its p is `[ASSUMPTION]` 0.5,
+because Zhang's value was not transcribed. A closed-loop test settles it without clipping.
+
+Tests: test_opencv ExposureControl/Falloff/DegradationSrgb 14/14, test_numerical Degradation 25/25, test_unit
+Config/Degrad 20/20.

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 namespace ariadne::perception::exposure {
 namespace {
@@ -29,6 +30,14 @@ double GradientInfoOf(const cv::Mat& f, const GradientInfoParams& p) {
     cv::Sobel(f, gy, CV_32F, 0, 1, 3);
     cv::magnitude(gx, gy, mag);
     // Unscaled 3x3 Sobel gives 4 across a full 0 -> 1 step: divide by 4 so m is in [0, 1] (clamped for diagonals).
+    if (p.metric == "percentile") {
+        std::vector<float> v(mag.begin<float>(), mag.end<float>());
+        if (v.empty()) return 0.0;
+        const size_t k = std::min(v.size() - 1, static_cast<size_t>(p.percentile * static_cast<double>(v.size())));
+        std::nth_element(v.begin(), v.begin() + k, v.end());
+        return std::min(1.0, v[k] / 4.0);
+    }
+    if (p.metric != "shim") throw std::invalid_argument("exposure: metric shim | percentile");
     const double n = std::log(p.lambda * (1.0 - p.delta) + 1.0);
     double sum = 0.0;
     for (int y = 0; y < mag.rows; ++y) {

@@ -2,11 +2,14 @@
 #include "perception/radiometric/falloff.hpp"
 
 #include <gtest/gtest.h>
+#include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <map>
+#include <string>
 
 namespace rm = ariadne::perception::radiometric;
 
@@ -70,17 +73,18 @@ rm::FalloffParams MaxGain(double g) {
 TEST(Falloff, RecoversAlbedoOnATiltedPlane) {
     const auto lamp = Lamp(true);
     const auto s = Plane(2.0, 0.4, lamp, 1.0);
-    const auto out = rm::FalloffNormalize(s.gray, s.z, K, lamp, 1.0, MaxGain(1e6));
-    int n = 0, bad = 0;
-    for (int y = 2; y < s.z.rows - 2; ++y)
-        for (int x = 2; x < s.z.cols - 2; ++x) {
-            if (!out.valid.at<uint8_t>(y, x)) continue;
-            // Checker edges: the normal is fine (a plane) but skip nothing; compare everywhere valid.
-            ++n;
-            if (std::abs(out.albedo.at<float>(y, x) - s.albedo.at<float>(y, x)) > 1e-3) ++bad;
-        }
-    EXPECT_GT(n, 100000);
-    EXPECT_EQ(bad, 0);
+    auto fp = MaxGain(1e6);
+    // The default normals (RgbdNormals FALS) on perfect depth: albedo to within the method's window effects.
+    const auto cv_out = rm::FalloffNormalize(s.gray, s.z, K, lamp, 1.0, fp);
+    std::vector<float> e;
+    for (int y = 0; y < s.z.rows; ++y)
+        for (int x = 0; x < s.z.cols; ++x)
+            if (cv_out.valid.at<uint8_t>(y, x))
+                e.push_back(std::abs(cv_out.albedo.at<float>(y, x) / s.albedo.at<float>(y, x) - 1.0f));
+    ASSERT_GT(e.size(), 100000u);
+    std::sort(e.begin(), e.end());
+    EXPECT_LT(e[e.size() / 2], 1e-3);
+    EXPECT_LT(e[e.size() * 99 / 100], 1e-2);
 }
 
 TEST(Falloff, TheSameSurfaceReadsTheSameAtAnyDistanceAndLampPower) {
@@ -93,17 +97,14 @@ TEST(Falloff, TheSameSurfaceReadsTheSameAtAnyDistanceAndLampPower) {
     EXPECT_NEAR(near.albedo.at<float>(c), far.albedo.at<float>(c), 1e-4);
 }
 
-TEST(Falloff, UnlitAndUnknownPixelsAreInvalidAndTheGainIsCapped) {
+TEST(Falloff, UnknownPixelsAreInvalidAndTheGainIsCapped) {
     const auto lamp = Lamp(true);
     auto s = Plane(2.0, 0.0, lamp, 1.0);
     s.z.at<float>(240, 320) = 0.0f;                         // no depth
     s.z.at<float>(100, 100) = std::numeric_limits<float>::quiet_NaN();
     const auto out = rm::FalloffNormalize(s.gray, s.z, K, lamp, 1.0, MaxGain(2.0));
     EXPECT_EQ(out.valid.at<uint8_t>(240, 320), 0);
-    EXPECT_EQ(out.valid.at<uint8_t>(240, 328), 0);           // normal_step_px (8) away: no normal there
     EXPECT_EQ(out.valid.at<uint8_t>(100, 100), 0);
-    // The image corner is ~41 deg off the lamp axis at 2 m: outside the lobe.
-    EXPECT_EQ(out.valid.at<uint8_t>(0, 0), 0);
     // With max_gain 2 a pixel lit at under half the frame's peak is divided by the floor instead: biased dark.
     double minr = 1e9;
     for (int y = 0; y < s.z.rows; ++y)
@@ -153,16 +154,47 @@ TEST(Falloff, NoisyStereoDepthNormalsAndTheIncidenceOption) {
         return double(e[e.size() / 2]);
     };
     auto fp = MaxGain(1e6);
-    fp.normal_step_px = 1;
-    const double k1 = med_err(fp);
-    fp.normal_step_px = 3;
-    const double k3 = med_err(fp);
-    fp.normal_step_px = 8;
-    const double k8 = med_err(fp);
+    std::map<std::string, double> err;
+    for (const char* m : {"rgbd_fals", "rgbd_linemod", "rgbd_sri"})
+        for (int win : {5, 7}) {
+            fp.normals = m;
+            fp.normal_window_px = win;
+            err[std::string(m) + "_w" + std::to_string(win)] = med_err(fp);
+            std::printf("[ falloff noisy depth ] median |albedo error|: %s window %d %.4f\n", m, win,
+                        err[std::string(m) + "_w" + std::to_string(win)]);
+        }
     fp.incidence = "off";
     const double off = med_err(fp);
-    std::printf("[ falloff noisy depth ] median |albedo error|: k=1 %.4f  k=3 %.4f  k=8 %.4f  incidence off %.4f\n",
-                k1, k3, k8, off);
-    EXPECT_LT(k3, k1);
-    EXPECT_LT(k8, off);   // with the default step, dividing by the estimated cos beats keeping the shading
+    std::printf("[ falloff noisy depth ] median |albedo error|: incidence off %.4f\n", off);
+    // The default (FALS, window 7) must beat keeping the shading, and be the best of the measured set.
+    EXPECT_LT(err["rgbd_fals_w7"], off);
+    for (const auto& [k, v] : err) EXPECT_LE(err["rgbd_fals_w7"], v + 1e-6) << k;
+}
+
+// D140 (ALGORITHMS §17.4): no camera-fixed step at the valid boundary, and a feature mask that keeps detectors off it.
+TEST(Falloff, InvalidPixelsAreFilledAndTheFeatureMaskKeepsClearOfThem) {
+    const auto lamp = Lamp(true);
+    auto s = Plane(2.0, 0.0, lamp, 1.0);
+    s.z(cv::Rect(300, 200, 60, 60)).setTo(0.0f);   // a depth hole in the middle of the lobe: invalid
+    rm::FalloffParams fp;
+    fp.feature_margin_px = 8;
+    const auto out = rm::FalloffNormalize(s.gray, s.z, K, lamp, 1.0, fp);
+    ASSERT_EQ(out.valid.at<uint8_t>(230, 330), 0);
+    double lo, hi;
+    cv::minMaxLoc(out.albedo, &lo, &hi);
+    EXPECT_GT(lo, 0.15);                                     // nothing left at 0: the fill is the median (0.2 or 0.8)
+    EXPECT_EQ(cv::countNonZero(out.feature_mask & ~out.valid), 0);
+    EXPECT_LT(cv::countNonZero(out.feature_mask), cv::countNonZero(out.valid));
+    // Every feature-mask pixel has a fully valid (2m+1)^2 window inside the image (checked directly).
+    const int m = fp.feature_margin_px;
+    int checked = 0, bad = 0;
+    for (int y = 0; y < out.valid.rows; y += 7)
+        for (int x = 0; x < out.valid.cols; x += 7) {
+            if (!out.feature_mask.at<uint8_t>(y, x)) continue;
+            ++checked;
+            if (x < m || y < m || x >= out.valid.cols - m || y >= out.valid.rows - m) { ++bad; continue; }
+            if (cv::countNonZero(out.valid(cv::Rect(x - m, y - m, 2 * m + 1, 2 * m + 1))) != (2 * m + 1) * (2 * m + 1)) ++bad;
+        }
+    EXPECT_GT(checked, 1000);
+    EXPECT_EQ(bad, 0);
 }

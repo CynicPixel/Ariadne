@@ -118,6 +118,21 @@ TEST(ExposureControl, ClosedLoopConvergesWithinTheSlewLimit) {
     }
 }
 
+// The §6.5 comparator (D132): Zhang's percentile metric drives the same loop into the clip-limited range.
+TEST(ExposureControl, PercentileMetricAlsoSettlesWithoutClipping) {
+    ex::ExposureControlParams p;
+    p.metric.metric = "percentile";
+    const cv::Mat scene = Scene();
+    ex::PhotometricState s{0.01, 1.0, 1.0};
+    s.lamp = p.lamp_min;
+    s.gain = 0.01 * kNominal / (s.exposure_s * s.lamp);   // ~0.2 stop under the lamp floor: very dark
+    for (int k = 0; k < 40; ++k) s = ex::Decide(Capture(scene, s.Brightness() / kNominal), s, p, 0.0, 680.0).next;
+    const auto d = ex::Decide(Capture(scene, s.Brightness() / kNominal), s, p, 0.0, 680.0);
+    EXPECT_LE(d.saturated_frac, p.max_saturated_frac);
+    EXPECT_GT(d.metric, 0.0);
+    EXPECT_LE(std::abs(d.step_stops), 0.25);
+}
+
 TEST(ExposureControl, OverexposureStepsDownAtTheSlewLimit) {
     ex::ExposureControlParams p;
     ex::PhotometricState s{0.01, 4.0, 1.0};
