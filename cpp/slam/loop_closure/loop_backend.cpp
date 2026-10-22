@@ -125,6 +125,18 @@ LoopEventRecord LoopBackend::OnCandidates(const std::vector<LoopCandidate>& cand
         rc.gnc_inlier = std::find(gnc.inliers.begin(), gnc.inliers.end(), e) != gnc.inliers.end();
         rc.gnc_weight = g_.edges()[e].gnc_weight;
     }
+    if (p_.certificate.enabled) {   // D74: read-only on the mirror, so the flag never changes the trajectory
+        t0 = std::chrono::steady_clock::now();
+        rec.certificate_ran = true;
+        try {
+            const CertificateReport c = CertifyPoseGraph(g_, anchor_, p_.certificate);
+            rec.certified = c.certified;
+            rec.certificate_verdict = c.verdict;
+        } catch (const std::exception& ex) {   // e.g. a split active graph, a singular Laplacian: nothing certified
+            rec.certificate_verdict = std::string("not run: ") + ex.what();
+        }
+        rec.ms_certificate = MsSince(t0);
+    }
     return rec;
 }
 

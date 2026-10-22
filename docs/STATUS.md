@@ -4,6 +4,27 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
+
+- **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.
+- **D74 certificate, behind `loop_closure.certificate` (off).**
+  - Certified: low-noise graphs 10/10; garage (f 1.26252 vs SE-Sync Table 1's 1.263, f − f* ≤ 0.024 %); tinyGrid3D;
+    smallGrid3D.
+  - Not certified: a stationary non-global point, and a perturbed point.
+  - **Open:** the large SE-Sync graphs (sphere, torus, grid3D, cubicle, rim) are not run yet: heavy, the maintainer is
+    asked first.
+  - **Gate wording:** with planted outliers kept in the cost, 6/10 certify, so "not certified on planted-outlier
+    graphs" holds for only 4/10. This is reported, not tuned (PHASE2_PLAN §3). After GNC, 10/10 certify.
+- **D75 outlier ramp with perceptual-aliasing groups.**
+  - PCM → GNC breakpoint: **90 %** (groups of 10), **70 %** (two growing groups). That is PCM's maximum-clique limit.
+  - GNC alone: no breakpoint, at ~10× the runtime.
+  - Evidence in `evaluation/runs/2.5/outlier_ramp/`. The generator is reusable for 3.5.
+- **D76 for main.** `RobustJointSolve` (`cpp/slam/robust/joint_robust.hpp`) runs PCM → chordal re-init → GNC on a
+  JointId graph; `GravityOptions::shared` gives one gravity for all agents (the yaw-only gauge). Handoff:
+  `ROBUST_BACKEND_2.5.md` §11.
+
+---
+
 ## 2026-10-21 — A1 (perception) opens its register close-out; D90–D95 claimed
 
 - **Scope (COMPLETION_REGISTER, owner A1), in order:** D62 approval, L4 `models.sh eigenplaces|aliked-lg`, L3

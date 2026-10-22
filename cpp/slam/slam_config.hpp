@@ -118,7 +118,8 @@ struct ImuParams {
 
 /// Intra-agent loop closure (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): retrieval -> verifier -> degeneracy gate
 /// -> PCM -> GNC on a mirror of the VO graph. OFF without a `loop_closure:` section, so existing configs and their
-/// outputs are unchanged; a `loop_closure:` section must name every key. Read-only towards the VO.
+/// outputs are unchanged; a `loop_closure:` section must name every key except the optional `certificate`.
+/// Read-only towards the VO.
 struct LoopClosureParams {
     bool enabled = false;
     int orb_features = 500;          // per keyframe, stored for verification (memory: ~26 KB per keyframe)
@@ -131,6 +132,9 @@ struct LoopClosureParams {
     bool noise_model = false;
     double noise_k_t = 1.0, noise_floor_t_m = 0.0, noise_k_r = 1.0, noise_floor_r_rad = 0.0;
     bool gravity_priors = false;   // D73 part 2c: the VO's GRAVITY_PRIOR edges in the mirror's solves
+    // D74: certify every solved loop event's mirror for the chordal surrogate (robust/certificate.hpp). Optional
+    // key, off when absent: a verification artifact, read-only towards the mirror, never on by default.
+    bool certificate = false;
 };
 
 struct SlamConfig {
@@ -309,6 +313,7 @@ inline SlamConfig ParseSlam(StrictConfig& config) {
         c.loop_closure.noise_k_r = q.Require<double>("noise_k_r");
         c.loop_closure.noise_floor_r_rad = q.Require<double>("noise_floor_r_rad");
         c.loop_closure.gravity_priors = q.Require<bool>("gravity_priors");
+        c.loop_closure.certificate = q.Optional<bool>("certificate", false);
         q.RequireAllConsumed();
         const auto& L = c.loop_closure;
         if (L.orb_features < 50 || L.exclude_recent < 0 || !(L.exclude_seconds >= 0.0) ||
