@@ -2984,3 +2984,26 @@ Table II). Nothing here is from memory.
 6. the phase-gate full run.
 
 Items 3, 5 and 6 are heavy: the maintainer is asked before each.
+
+## 2026-10-23 — D88: 5.6's real-data low-light check uses EuRoC's dark flights; OIVIO dropped (maintainer)
+
+**Context.** Plan 5.6 validates the degraded-vision path on OIVIO. On 2026-10-22 the official page said "downloads
+temporarily unavailable", and every Drive ID returned 404 (A2, `feat/ph5-dve`). The candidate substitute, CAVERS, is
+RGB-D, not stereo, so it does not match the rig.
+
+**Decision (maintainer, 2026-10-23).** "its not that deep, darkening is already a stretch goal ... go with Euroc's
+dark flights."
+- 5.6's real-data check runs on EuRoC's dark, fast flights: MH_04_difficult, MH_05_difficult and V1_03_difficult.
+- They are real stereo + IMU with ground truth, at our rig's modality. V1_03 is already the D86 regression case.
+- OIVIO is not pursued.
+
+**Claims, stated.** EuRoC's dark flights are low-light handheld/MAV footage under ambient light, **not** a
+co-mounted lamp in total darkness. They validate the low-light robustness of the pipeline on real sensors. The lamp
+falloff and active-exposure claims (5.2/5.3) rest on the sim (5.1 calibration) alone, and are written that way.
+
+**§49:**
+- catalogue: `ALGORITHMS.md` dataset note;
+- arch: the arch decision is this entry;
+- ablation matrix: the 5.6 row names the three flights;
+- benchmark config: A2's 5.6 config lists the flights;
+- manifest: unchanged, since the dataset is already recorded by name.
