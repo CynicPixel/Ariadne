@@ -48,6 +48,21 @@
   .controls { display: flex; gap: 8px; align-items: center; }
   select, button { font: inherit; font-size: .8rem; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; }
   button:focus-visible, select:focus-visible { outline: 2px solid var(--agent0); outline-offset: 2px; }
+  /* Operator panel (live runs only): approvals, LLM proposals, directives (arch §23, §29.3; AGENTIC_7 §0b). */
+  #operator[hidden] { display: none; }
+  .card { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; margin: 0 0 8px; font-size: .8rem; }
+  .card.urgent { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+  .card .row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .card .why { color: var(--muted); margin: 4px 0; overflow-wrap: anywhere; }
+  .card .act { display: flex; gap: 8px; margin-top: 6px; }
+  .empty { color: var(--muted); font-size: .8rem; margin: 0 0 8px; }
+  button.go { border-color: var(--ok); color: var(--ok); } button.no { border-color: var(--target); color: var(--target); }
+  form.dir { display: grid; grid-template-columns: 6.5rem 1fr; gap: 6px 8px; align-items: center; font-size: .8rem; }
+  form.dir input, form.dir select { font: inherit; font-size: .8rem; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; min-width: 0; }
+  form.dir .full { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  h3 { font-size: .75rem; margin: 12px 0 6px; color: var(--muted); font-weight: 600; }
+  canvas.pick { cursor: crosshair; }
   @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
 </head>
@@ -77,6 +92,41 @@
     </div>
   </section>
   <div style="display:grid; gap:16px; align-content:start; min-width:0">
+    <section id="operator" hidden aria-label="Operator">
+      <h2>Operator</h2>
+      <div class="note" style="margin:-4px 0 10px">Everything here is a recorded input: the runtime takes it at its next replan and a replay re-applies it.
+        Operator <input id="who" size="10" value="operator" aria-label="operator name" style="font:inherit;font-size:.75rem"></div>
+      <h3>Approvals waiting (risk above the autonomous threshold)</h3>
+      <div id="approvals"><p class="empty">none</p></div>
+      <h3>LLM proposals (take effect only if you confirm)</h3>
+      <div id="proposals"><p class="empty">none</p></div>
+      <h3>New directive</h3>
+      <form class="dir" id="dirform" autocomplete="off" novalidate>
+        <label for="d-kind">kind</label>
+        <select id="d-kind">
+          <option value="priority_region">priority_region: favour a region</option>
+          <option value="keep_out">keep_out: never send agents there</option>
+          <option value="explore">explore: agent explores a region</option>
+          <option value="assign">assign: agent works a region</option>
+          <option value="goto">goto: agent drives to a point</option>
+          <option value="hold">hold: agent stops</option>
+          <option value="release">release: agent back to autonomy</option>
+        </select>
+        <label for="d-agent">agent</label>
+        <select id="d-agent"><option value="-1">all</option><option value="0">0</option><option value="1">1</option></select>
+        <label for="d-weight" data-for="priority_region">weight</label>
+        <input id="d-weight" data-for="priority_region" type="number" step="0.5" min="0.5" value="3">
+        <label for="d-budget" data-for="explore">time budget s</label>
+        <input id="d-budget" data-for="explore" type="number" step="5" min="0" value="0">
+        <label for="d-text">note</label>
+        <input id="d-text" placeholder="your words (recorded)">
+        <div class="full"><span class="note" id="d-shape">click the map to draw a polygon</span>
+          <button type="button" id="d-clear">Clear shape</button></div>
+        <div class="full"><button type="submit" class="go" id="d-send">Send directive</button><span class="note" id="d-msg"></span></div>
+      </form>
+      <h3>Recorded directives</h3>
+      <ol class="timeline" id="directives" style="max-height:22vh"></ol>
+    </section>
     <section>
       <h2>Bytes on the wire</h2>
       <div id="gauges"></div>
@@ -91,7 +141,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let meta, ws, slab = null, frameCache = null, trails = {0: [], 1: []}, maxBytes = {};
+let lastFrame = null, meta, ws, slab = null, frameCache = null, trails = {0: [], 1: []}, maxBytes = {};
 const canvas = $("map"), ctx = canvas.getContext("2d");
 
 function w2c(x, y) {   // world metres -> canvas pixels (north up)
@@ -144,6 +194,8 @@ function draw(f) {
     ctx.save(); ctx.translate(u, v); ctx.rotate(-a.yaw); ctx.fillStyle = color;
     ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill(); ctx.restore();
   }
+  lastFrame = f;
+  if (op.live) overlay(f.t_s);
 }
 
 function gauges(f) {
@@ -188,12 +240,179 @@ async function start() {
   trails = {0: [], 1: []}; frameCache = null; slab = null; $("timeline").innerHTML = "";
   meta = meta || await (await fetch("/api/meta")).json();
   canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
-  $("source").textContent = `replay · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+  op.live = meta.chain.collab_run === "live";
+  $("source").textContent = `${op.live ? "live" : "replay"} · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+  if (op.live) operatorStart();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry?speed=${$("speed").value}`);
   const queue = [];
   let busy = false;
   ws.onmessage = async (m) => { queue.push(JSON.parse(m.data)); if (busy) return; busy = true; while (queue.length) await onFrame(queue.shift()); busy = false; };
 }
+
+// --- Operator panel (live runs only). The runtime is the authority: these calls only drop files it reads at its next
+// replan (directives) or verifies itself (approvals); nothing here changes what the planner computes.
+const op = {live: false, shape: [], recorded: [], proposals: [], approvals: [], timer: null};
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const REGION = new Set(["priority_region", "keep_out", "assign", "explore"]);
+const AGENT_LEVEL = new Set(["hold", "goto", "assign", "explore", "release"]);
+const who = () => encodeURIComponent($("who").value.trim() || "operator");
+try { const w = localStorage.getItem("ariadne.operator"); if (w) $("who").value = w; } catch (e) {}
+$("who").addEventListener("change", () => { try { localStorage.setItem("ariadne.operator", $("who").value); } catch (e) {} });
+
+function c2w(ev) {   // a click on the canvas -> world metres (inverse of w2c)
+  const r = canvas.getBoundingClientRect(), g = meta.grid, s = canvas.width / g.cols;
+  const u = (ev.clientX - r.left) * canvas.width / r.width, v = (ev.clientY - r.top) * canvas.height / r.height;
+  return [+(u / s * g.cell_m + g.origin_m[0]).toFixed(2), +((canvas.height - v) / s * g.cell_m + g.origin_m[1]).toFixed(2)];
+}
+
+// The directives in force at t (mirrors planning/mission/directives.hpp ActiveDirectives; display only).
+function inForce(all, t) {
+  const T = t * 1e9, out = [];
+  for (const d of all) {
+    if (d.effective_ns < 0 || d.effective_ns > T) continue;
+    if (d.kind === "cancel") { const i = out.findIndex((x) => x.id === d.target); if (i >= 0) out.splice(i, 1); continue; }
+    if (AGENT_LEVEL.has(d.kind)) {
+      for (let i = out.length - 1; i >= 0; --i) if (out[i].agent === d.agent && AGENT_LEVEL.has(out[i].kind)) out.splice(i, 1);
+      if (d.kind === "release") continue;
+    }
+    if (d.kind === "explore" && d.time_budget_s > 0 && T >= d.effective_ns + d.time_budget_s * 1e9) continue;
+    out.push(d);
+  }
+  return out;
+}
+
+function overlay(t) {
+  const poly = (pts, color, dash, fill) => {
+    if (!pts || pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.beginPath();
+    pts.forEach(([x, y], i) => { const [u, v] = w2c(x, y); i ? ctx.lineTo(u, v) : ctx.moveTo(u, v); });
+    if (pts.length > 2) ctx.closePath();
+    if (fill) { ctx.globalAlpha = 0.18; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.stroke(); ctx.restore();
+  };
+  const mark = (x, y, color, r) => { const [u, v] = w2c(x, y); ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.stroke(); ctx.restore(); };
+  const colour = {keep_out: css("--target"), priority_region: css("--ok"), explore: css("--agent0"), assign: css("--agent0")};
+  for (const d of inForce(op.recorded, t)) {
+    if (REGION.has(d.kind)) poly(d.polygon, d.agent === 1 && d.kind !== "keep_out" ? css("--agent1") : colour[d.kind], [], true);
+    if (d.kind === "goto") mark(d.x, d.y, css(d.agent ? "--agent1" : "--agent0"), 6);
+  }
+  for (const pr of op.proposals) poly(pr.polygon, css("--warn"), [6, 4], false);
+  for (const a of op.approvals) { const g = a.intended_action.goal_xy_m; if (g) mark(g[0], g[1], css("--warn"), 10); }
+  if (op.shape.length) {
+    poly(op.shape, css("--ink"), [], false);
+    for (const [x, y] of op.shape) { const [u, v] = w2c(x, y); ctx.fillStyle = css("--ink"); ctx.fillRect(u - 3, v - 3, 6, 6); }
+  }
+}
+const redraw = () => { if (lastFrame) draw(lastFrame); };
+
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : null});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+function renderApprovals() {
+  const box = $("approvals"), now = Date.now() / 1000;
+  if (!op.approvals.length) { box.innerHTML = '<p class="empty">none</p>'; return; }
+  box.innerHTML = op.approvals.map((a) => {
+    const ia = a.intended_action, left = Math.max(0, Math.round(a.requested_unix_s + 60 - now));
+    const alt = a.alternative_action.hold ? "hold" : `candidate ${a.alternative_action.candidate}`;
+    return `<div class="card urgent"><div class="row"><b>agent ${esc(a.agent)}</b><span>candidate ${esc(ia.candidate)} · ${esc(ia.path_m?.toFixed?.(1))} m</span>
+      <span>risk <b>${esc(a.risk_score?.toFixed?.(2))}</b></span><span class="note">${left} s left</span></div>
+      <div class="why">risk: ${esc(a.risk_reason)}</div><div class="why">orchestrator: ${esc(a.orchestrator_reason)}</div>
+      <div class="why">if rejected: ${esc(alt)} · goal ringed on the map</div>
+      <div class="act"><button class="go" data-aid="${esc(a.approval_id)}" data-v="approved">Approve</button>
+      <button class="no" data-aid="${esc(a.approval_id)}" data-v="rejected">Reject</button></div></div>`;
+  }).join("");
+}
+
+function renderProposals() {
+  const box = $("proposals");
+  if (!op.proposals.length) { box.innerHTML = '<p class="empty">none</p>'; return; }
+  box.innerHTML = op.proposals.map((d) => `<div class="card"><div class="row"><b>${esc(d.kind)}</b>
+      <span>agent ${d.agent < 0 ? "all" : esc(d.agent)}</span>${d.kind === "priority_region" ? `<span>weight ${esc(d.weight)}</span>` : ""}
+      ${d.time_budget_s ? `<span>${esc(d.time_budget_s)} s</span>` : ""}<span class="note">dashed on the map</span></div>
+      <div class="why">${esc(d.text)}</div>
+      <div class="act"><button class="go" data-pid="${esc(d.id)}" data-v="confirm">Confirm</button>
+      <button class="no" data-pid="${esc(d.id)}" data-v="reject">Reject</button></div></div>`).join("");
+}
+
+function renderRecorded(rec, rejected) {
+  const t = lastFrame ? lastFrame.t_s : Infinity, live = new Set(inForce(rec, t).map((d) => d.id));
+  $("directives").innerHTML = rec.map((d) => {
+    const undo = !live.has(d.id) ? "" : AGENT_LEVEL.has(d.kind)
+      ? `<button data-undo="release" data-agent="${esc(d.agent)}">Release</button>`
+      : `<button data-undo="cancel" data-target="${esc(d.id)}">Cancel</button>`;
+    return `<li><span class="t">${(d.effective_ns / 1e9).toFixed(1)} s</span><span>${esc(d.kind)}${d.agent >= 0 ? ` · agent ${esc(d.agent)}` : ""}
+      · <span class="note">${esc(d.author)}</span>${live.has(d.id) ? "" : ' <span class="note">(ended)</span>'} ${undo}
+      ${d.text ? `<div class="why">${esc(d.text)}</div>` : ""}</span></li>`;
+  }).join("") + rejected.map((r) => `<li><span class="t">refused</span><span class="note">${esc(r.file)}: ${esc(r.error ?? JSON.stringify(r))}</span></li>`).join("");
+}
+
+async function operatorPoll() {
+  try {
+    const [ap, pr, dr] = await Promise.all(["/api/approvals", "/api/directives/proposed", "/api/directives"].map((u) => fetch(u).then((r) => r.ok ? r.json() : null)));
+    if (ap) { op.approvals = ap; renderApprovals(); }
+    if (pr) { op.proposals = pr; renderProposals(); }
+    if (dr) { op.recorded = dr.recorded; renderRecorded(dr.recorded, dr.rejected); }
+    redraw();
+  } catch (e) { $("d-msg").textContent = `poll: ${e.message}`; }
+}
+
+function formShape() {   // show only the fields the chosen kind uses; say what a map click does
+  const k = $("d-kind").value;
+  document.querySelectorAll("#dirform [data-for]").forEach((el) => { el.hidden = el.dataset.for !== k; });
+  $("d-shape").textContent = REGION.has(k) ? `polygon: ${op.shape.length} point(s) — click the map to add` :
+    k === "goto" ? (op.shape.length ? `goal (${op.shape[op.shape.length - 1].join(", ")}) — click to move` : "click the map to set the goal") : "no shape needed";
+  canvas.classList.toggle("pick", REGION.has(k) || k === "goto");
+}
+
+function operatorStart() {
+  $("operator").hidden = false;
+  formShape();
+  if (!op.timer) op.timer = setInterval(operatorPoll, 1000);
+  operatorPoll();
+}
+
+canvas.addEventListener("click", (ev) => {
+  if (!op.live) return;
+  const k = $("d-kind").value;
+  if (REGION.has(k)) op.shape.push(c2w(ev)); else if (k === "goto") op.shape = [c2w(ev)]; else return;
+  formShape(); redraw();
+});
+$("d-clear").addEventListener("click", () => { op.shape = []; formShape(); redraw(); });
+$("d-kind").addEventListener("change", () => { if (!REGION.has($("d-kind").value)) op.shape = op.shape.slice(-1); formShape(); redraw(); });
+
+$("dirform").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const k = $("d-kind").value, agent = +$("d-agent").value, d = {kind: k, agent, text: $("d-text").value.trim()};
+  // the same rules ParseDirective enforces, said before sending rather than as a refusal later
+  if (REGION.has(k)) { if (op.shape.length < 3) return void ($("d-msg").textContent = "draw a polygon of 3 or more points"); d.polygon = op.shape; }
+  if (k === "goto") { if (!op.shape.length) return void ($("d-msg").textContent = "click the map to set the goal"); [d.x, d.y] = op.shape[op.shape.length - 1]; }
+  if (["assign", "explore", "goto", "hold", "release"].includes(k) && agent < 0) return void ($("d-msg").textContent = `${k} needs one agent`);
+  if (k === "priority_region") { d.weight = +$("d-weight").value; if (!(d.weight > 0)) return void ($("d-msg").textContent = "weight must be > 0"); }
+  if (k === "explore") { d.time_budget_s = +$("d-budget").value; if (!(d.time_budget_s >= 0)) return void ($("d-msg").textContent = "time budget must be >= 0"); }
+  try {
+    const r = await post("/api/directive", d);
+    $("d-msg").textContent = `sent ${r.id}; takes effect at the next replan`;
+    op.shape = []; $("d-text").value = ""; formShape(); operatorPoll();
+  } catch (e) { $("d-msg").textContent = `refused: ${e.message}`; }
+});
+
+$("operator").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || b.id === "d-send" || b.id === "d-clear") return;
+  b.disabled = true;
+  try {
+    if (b.dataset.aid) await post(`/api/approval/${encodeURIComponent(b.dataset.aid)}/${b.dataset.v}?operator=${who()}`);
+    else if (b.dataset.pid) await post(`/api/directives/proposed/${encodeURIComponent(b.dataset.pid)}/${b.dataset.v}?operator=${who()}`);
+    else if (b.dataset.undo === "cancel") await post("/api/directive", {kind: "cancel", target: b.dataset.target});
+    else if (b.dataset.undo === "release") await post("/api/directive", {kind: "release", agent: +b.dataset.agent});
+    operatorPoll();
+  } catch (e) { $("d-msg").textContent = `refused: ${e.message}`; b.disabled = false; }
+});
 $("restart").addEventListener("click", start);
 $("speed").addEventListener("change", start);
 const at = new URLSearchParams(location.search).get("at");   // static view of one mission time (no WebSocket)

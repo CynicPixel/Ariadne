@@ -198,3 +198,12 @@ def approve(aid: str, verdict: str, operator: str = "operator") -> JSONResponse:
     (a / f"{aid}.json").write_text(_json.dumps({"verdict": verdict, "operator": operator,
                                                 "wall_unix_s": round(_time.time(), 3)}))
     return JSONResponse({"approval_id": aid, "verdict": verdict})
+
+
+@app.get("/api/directives")
+def recorded() -> JSONResponse:
+    """The directives the runtime took, as it recorded them (stamped effective_ns; what replay re-applies), and the
+    ones it refused at intake (parse errors), so the operator sees why a directive did nothing."""
+    src = _live_src()
+    rd = lambda n: [_json.loads(l) for l in (src / n).read_text().splitlines() if l.strip()] if (src / n).exists() else []
+    return JSONResponse({"recorded": rd("directives.jsonl"), "rejected": rd("directives_rejected.jsonl")})

@@ -45,3 +45,12 @@ def test_directive_proposal_and_approval(tmp_path, monkeypatch):
     assert c.post("/api/approval/t5000ms-a0-c1/approved?operator=maintainer").json()["verdict"] == "approved"
     assert json.loads((run / "approvals" / "t5000ms-a0-c1.json").read_text())["verdict"] == "approved"
     assert c.get("/api/approvals").json() == []
+
+
+def test_recorded_directives_and_refusals(tmp_path, monkeypatch):
+    c, run = _client(tmp_path, monkeypatch)
+    assert c.get("/api/directives").json() == {"recorded": [], "rejected": []}
+    (run / "directives.jsonl").write_text(json.dumps({"id": "op-1", "kind": "hold", "agent": 0, "effective_ns": 5e9}) + "\n")
+    (run / "directives_rejected.jsonl").write_text(json.dumps({"file": "1-op-2.json", "t_ns": 5e9, "error": "polygon"}) + "\n")
+    r = c.get("/api/directives").json()
+    assert [d["id"] for d in r["recorded"]] == ["op-1"] and r["rejected"][0]["file"] == "1-op-2.json"
