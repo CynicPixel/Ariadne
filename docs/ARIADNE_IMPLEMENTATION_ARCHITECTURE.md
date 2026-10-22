@@ -1712,6 +1712,9 @@ ablation switch rather than a structural commitment.
 > **Sim rig (D90, 2026-10-22, SMOKE §4t).** 1280×720 RGB exports for EigenPlaces (1280×720, 640×360) and
 > ALIKED-n16 (K = 1024, 1280×720) are exact against upstream on recorded sim frames. The RGB path is
 > `PlaceRecognizer::DescribeRgb` / `HardPairMatcher::ExtractRgb`, which take RGB order (`StereoFrame::left_rgb`).
+> **EigenPlaces' sim default is 640×360** (settled 2026-10-22 by the sim retrieval evaluation,
+> `RETRIEVAL_SIM_D90.md`): on 61 revisit queries of the clean ci_tiny recording both sizes give R@1 0.705, and
+> 1280×720 costs 4×.
 >
 > **Threading as built (D91).** Every wrapper keeps its networks in `dnn::PerThread<T>`, so one wrapper serves a
 > pool. **Second rule:** with several callers, OpenCV's own pool is set to 1 thread, so the parallelism comes from

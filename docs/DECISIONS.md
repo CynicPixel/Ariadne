@@ -2714,8 +2714,9 @@ notes above. The D62 entry itself is unchanged.
 
 ## 2026-10-22 — D90: sim-rig exports — EigenPlaces and ALIKED-n16 + LightGlue at 1280×720 RGB, with an RGB path
 
-**DRAFT pending the maintainer** on one point: EigenPlaces' sim default size. Everything else follows D62/D63 as
-approved.
+**Settled 2026-10-22** by the sim retrieval evaluation (`docs/design/RETRIEVAL_SIM_D90.md`, rule fixed before the
+run): EigenPlaces' sim default is **640×360**. Everything else follows D62/D63 as approved. The maintainer's
+approval of the size was replaced by that pre-registered rule, as the Phase 4 brief asked; it is re-openable.
 
 - **What:**
   - Sim-rig exports from the same pinned upstreams and weights as D62/D63, made by `models.sh eigenplaces-sim` /
@@ -2731,12 +2732,16 @@ approved.
   - Exact against upstream at the new size, which re-runs D63's 752×480-only validation of the export rewrites.
   - The regeneration is bit-exact.
   - A channel-swap guard shows an R/B swap changes the result instead of passing silently.
-- **Proposed (to approve):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
-  about a quarter of 1280×720. Retrieval quality on sim views is not measured yet; that belongs to 3.1 (sim
-  retrieval). ALIKED runs at the native 1280×720: hard pairs only, so cost matters less than localisation.
+- **Default (settled):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
+  a quarter of 1280×720 (L5: 312 vs 1280 ms p50; here 331 vs 1297 ms on the dev host). ALIKED runs at the native
+  1280×720: hard pairs only, so cost matters less than localisation.
+- **Measured (clean ci_tiny recording, RETRIEVAL_SIM_D90 §5):** 61 revisit queries after motion thinning, all of them
+  agent 0's (33 intra-agent, 28 against agent 1's database). Pooled R@1 is **0.705 at both sizes** (McNemar p = 1.0),
+  R@5 0.885 vs 0.869. The rule kept 640×360 unless 1280×720 won with p < 0.05; it did not. With 61 queries from
+  one small scene, this is "no evidence that full resolution helps", not "they are equal".
 - **Limits:**
   - Four frames from one scene, with weak colour.
-  - The 640×360 vs 1280×720 recall question is open.
+  - The size question was settled on one clean scene only; the dark-scene row (§31.5) is carried to 5.1.
   - There is no runtime consumer yet (3.1/3.5).
 - **§49:**
 
