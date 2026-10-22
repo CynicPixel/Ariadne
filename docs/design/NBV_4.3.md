@@ -33,8 +33,8 @@ NbvPlanner::Plan(inputs, agent) -> std::vector<TaskCandidate>   (sorted by utili
   - `SelectionProblem` has `n` nodes, `fixed` `GraphEdge{a, b, kappa}`, `candidates` `CandidateEdge{id, a, b,
     kappa}`, `node_bytes` and a budget;
   - `SolveFiedler` / `SelectionReport.lambda2` give λ₂.
-- **The oracle is a planning-side interface over plain numbers:** `double Gain(int agent_node, int peer_node, double
-  kappa)`.
+- **The oracle is a planning-side interface over plain numbers:** `double Gain(int agent, int64_t peer_kf_id)`.
+  As built, the adapter maps (agent, keyframe) to the broker's graph nodes.
   - It holds no collaboration type, so planning keeps its core-only dependency rule.
   - A runtime adapter implements it as λ₂(G ∪ {e}) − λ₂(G) with 3.4's `SolveFiedler`, on the broker's pose graph
     (`fixed`), with kappa the predicted retrieval similarity.

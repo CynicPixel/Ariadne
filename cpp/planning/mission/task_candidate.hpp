@@ -22,6 +22,8 @@ enum class TaskSource : char {
     kConnectivity = 'C',   // bridge two disconnected map regions / a peer's trajectory
     kAlias = 'D',          // alias-resolution view
     kEgress = 'E',         // validate the egress route's clearance / obstruction
+    kReturn = 'R',         // §21.4 hard rule: return to the nearest briefed entrance (supervisor event)
+    kHold = 'H',           // §21.4 hard rule: hold position
 };
 
 /// §21.3 IG terms, in this order (raw, then normalised by the running p90 over the candidate set).

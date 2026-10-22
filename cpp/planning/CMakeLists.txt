@@ -8,7 +8,8 @@ if(OpenCV_FOUND)
     volumetric/frontiers3d.cpp
     volumetric/traversability.cpp
     route/dstar_lite.cpp
-    route/egress.cpp)
+    route/egress.cpp
+    mission/nbv.cpp)
   target_include_directories(ariadne_planning PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
   target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc)
   add_library(ariadne::planning ALIAS ariadne_planning)
