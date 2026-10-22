@@ -120,6 +120,29 @@ EGL path of `ariadne/sim` has never run, so it is a `[SMOKE-TEST]` gate first, r
 CPU is the budget, not GPU: the GT depth cameras are off in the live world (the estimator never sees them), and the
 world's real-time factor is set from the smoke's measurement.
 
+**D165 — lockstep (2026-10-23; A1's 4.3 gate, maintainer's choice via A1).** Unpaused, gz keeps running while
+the runtime plans and chooses, so a command lands ~1.7 s of sim time after its barrier (measured `applied_ns −
+stamp`) and that lag depends on wall latency: two live runs of one seed differ. `lockstep: true` in the live config:
+- **gz does the pausing, sim-side.** `[SMOKE-TEST §4w: the bridge forwards run_to_sim_time; /clock stops at T exactly]` The runtime asks for `WorldControl.run_to_sim_time = T` (gz-msgs10 field 7; gz-sim8
+  `SimulationRunner::SetRunToSimTime`): gz runs to T and pauses itself, independent of how far behind the runtime's
+  processing is. The call is the `/world/<w>/control` service, bridged by `ros_gz_bridge` 1.0.24
+  (`ros_gz_interfaces/srv/ControlWorld` ↔ `gz.msgs.WorldControl`/`gz.msgs.Boolean`, one service entry in the bridge
+  YAML), called by RuntimeLink when the runtime sends a `#run_to` control frame (int64 ns). No ROS or gz type in the
+  core: the frame carries a number. RuntimeLink answers `#run_to_ack` with the sim clock at the moment of the request
+  (the paused time; `/clock`, subscribed locally, not forwarded) and the service's verdict.
+- **The barrier needs a frame at T.** `[SMOKE-TEST §4w: paused at T, the frame at T is delivered, none after; a world starting paused has no t = 0 frame]` Measured on the first LLM run: the cameras tick every 50 ms exactly, and a frame
+  is stamped at every 5 s barrier (1801 frames, all 18 barrier stamps present), so a world paused at T has delivered
+  everything the barrier waits for.
+- **Zero lag, not "one step".** `[UNVERIFIED: systems run while paused]` The mover now takes queued commands in `PreUpdate` even while paused (gz-sim calls
+  systems while paused; motion still advances only when unpaused), so a command sent at barrier T is applied at sim
+  time T and answered. The runtime waits for both answers BEFORE asking for `run_to T + replan`: every command's
+  `applied_ns` equals its barrier in lockstep. Unpaused runs are unchanged (the next update applies it, as before).
+- **Logged per barrier** in `lockstep.jsonl`: T, `paused_sim_ns` (clock when the next run_to was requested),
+  `applied_sim_ns` per agent, `resume_to_ns`, the wall seconds the world spent paused. The figure states the lag from
+  these, never assumes it.
+- live.sh does not unpause a lockstep run: the runtime's first `run_to` (after `#ready`) starts it. Replay is
+  unchanged: it consumes the recording, which is the same in either mode.
+
 ## 3. Acceptance (register L1)
 
 1. One live two-agent run: decisions are executed (`executed: true`), each command id appears in the mover's state

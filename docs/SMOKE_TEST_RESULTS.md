@@ -804,3 +804,26 @@ bit-exact: 11/11 and 12/12 files. `lightglue_aliked.onnx` is byte-identical to t
 **Cost:** indicative only, shared host (load 2–5). EigenPlaces classic is 1.9 s (1280×720) and 0.46 s (640×360) on
 1 thread, 0.76 s and 0.17–0.23 s on 8. ALIKED at 1280×720 is 1.6–2.4 s per frame and LightGlue about 0.95 s per pair,
 both at the default pool. Quiet-host numbers are L5.
+
+## 4w. Lockstep through `ros_gz_bridge`: `run_to_sim_time` stops gz exactly at T, with the frame at T `[SMOKE-TEST]` 2026-10-23
+
+Gates D165 (LIVE_RUNTIME_L1). Sim image `ariadne/sim:dev` (ROS 2 Jazzy, `ros_gz_bridge` 1.0.24, gz-sim8, gz-msgs10),
+Mesa llvmpipe, scene `ci_tiny_0` (`mission_live.sdf`), world started paused (`gz sim -s --headless-rendering`).
+Bridge YAML: `/clock` and `/ariadne/agent_0/left/image_raw` gz→ROS, plus one service entry
+`{service_name: /world/<w>/control, ros_type_name: ros_gz_interfaces/srv/ControlWorld, gz_req_type_name:
+gz.msgs.WorldControl, gz_rep_type_name: gz.msgs.Boolean}`; the bridge logs "Creating ROS->GZ service bridge".
+A probe node (rclpy) calls the service with only `world_control.run_to_sim_time` set, then watches `/clock` until it
+has not moved for 15 s of wall time.
+
+| request | service result | `/clock` stopped at | frames received | frame stamped AT T | frames after T |
+|---|---|---|---|---|---|
+| run_to 2 s | true | 2 000 000 000 ns | 40 | yes | 0 |
+| run_to 4 s | true | 4 000 000 000 ns | 80 | yes | 0 |
+
+- The bridge copies `run_to_sim_time` (a plain `pause: false` would have run free): gz pauses itself at T exactly.
+- The 20 Hz camera's frame at T is published before the pause, so a barrier at T has its frame.
+- A world that STARTS paused publishes no frame at t = 0 (first frame 0.05 s): lockstep runs have one frame fewer per
+  agent than unpaused ones (1800 vs 1801 over 90 s).
+- Not covered here: systems' `PreUpdate` while paused (the mover taking a command at paused time T) — needs the mover
+  rebuild; checked separately before D165's zero-lag claim is made.
+Re-run (~2 min): `infra/scripts/tests/lockstep_smoke/run.sh` (header has the docker command; probe.py beside it).
