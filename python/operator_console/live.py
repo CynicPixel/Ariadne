@@ -11,6 +11,7 @@ the evidence that the console was fed during the run, not afterwards.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,9 @@ class LiveRun:
     egress: list | None = None
     events: list = field(default_factory=list)       # (t_s, kind, text)
     ended: bool = False
+    # poll() is called from the event loop (websockets) AND from FastAPI's thread pool: one reader at a time, or two
+    # threads advance `offset` past each other and a half line reaches json.loads (it killed every stream on 2026-10-23)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def src(self) -> Path | None:
         """The directory ariadne_live writes: `run` itself, or its one subdirectory holding telemetry.jsonl (live.sh
@@ -53,6 +57,10 @@ class LiveRun:
                 "snapshots": len(self.snapshots), "live": True}
 
     def poll(self) -> None:
+        with self._lock:
+            self._poll()
+
+    def _poll(self) -> None:
         src = self.src()
         if src is None:
             return

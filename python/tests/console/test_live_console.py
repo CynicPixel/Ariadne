@@ -51,3 +51,41 @@ def test_live_frames_follow_the_telemetry(tmp_path, monkeypatch):
         assert msgs[-1].get("end") is True
     log = [json.loads(l) for l in (outer / "console_frames.jsonl").read_text().splitlines()]
     assert [r["seq"] for r in log][:2] == [0, 1] and log[1]["t_s"] == 5.2
+
+
+def test_concurrent_polls_never_split_a_line(tmp_path):
+    # The stream and the operator endpoints used to poll from the event loop and the thread pool at once: two readers
+    # advanced the shared offset past each other, json.loads got half a line, and every open stream died (2026-10-23).
+    import threading
+    from operator_console.live import LiveRun
+    run, scene = tmp_path / "run", tmp_path / "scene"
+    run.mkdir()
+    _scene(scene)
+    tel = run / "telemetry.jsonl"
+    tel.write_text("")
+    lv = LiveRun(run, scene)
+    n, errors, done = 3000, [], threading.Event()
+
+    def writer():
+        with open(tel, "a") as f:
+            for i in range(n):
+                line = json.dumps({"type": "mover_state", "agent": 0, "state": {
+                    "applied_ns": i * 1000000, "accepted": True, "kind": "follow", "segments": 1, "t_end_s": 0.0}}) + "\n"
+                f.write(line[:17]); f.flush()          # a line arrives in pieces, as the runtime's writes may
+                f.write(line[17:]); f.flush()
+        done.set()
+
+    def reader():
+        try:
+            while not done.is_set():
+                lv.poll()
+            lv.poll()
+        except Exception as e:  # noqa: BLE001
+            errors.append(repr(e))
+
+    ts = [threading.Thread(target=writer)] + [threading.Thread(target=reader) for _ in range(4)]
+    for t in ts: t.start()
+    for t in ts: t.join()
+    lv.poll()
+    assert errors == []
+    assert len(lv.events) == n                         # every line once: none lost, none read twice

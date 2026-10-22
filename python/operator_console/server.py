@@ -25,8 +25,9 @@ _live = None
 _live_log = None
 
 
-def live():
-    """The live run, or None when serving a replay chain."""
+def live(poll: bool = True):
+    """The live run, or None when serving a replay chain. poll=False: the run directory is all the caller needs (the
+    operator endpoints); the telemetry tail is advanced only by the streams."""
     global _live, _live_log
     if "ARIADNE_LIVE" not in os.environ:
         return None
@@ -34,7 +35,8 @@ def live():
         run, scene = os.environ["ARIADNE_LIVE"].split(":")
         _live = LiveRun(Path(run), Path(scene))
         _live_log = FrameLog(Path(run))
-    _live.poll()
+    if poll:
+        _live.poll()
     return _live
 
 
@@ -134,7 +136,7 @@ _DIRECTIVE_KINDS = {"priority_region", "keep_out", "assign", "explore", "goto", 
 
 
 def _live_src():
-    lv = live()
+    lv = live(poll=False)
     if lv is None or lv.src() is None:
         raise HTTPException(409, "no live run")
     return lv.src()
