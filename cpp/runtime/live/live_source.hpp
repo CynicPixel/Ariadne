@@ -255,6 +255,13 @@ public:
         std::stable_sort(v.begin(), v.end(), [](const TimedPose& a, const TimedPose& b) { return a.t_ns < b.t_ns; });
         return v;
     }
+    /// Ground-truth path length (m, 3D) over the poses stamped at or before `until_ns`: the rig's executed motion.
+    double PathLength(int64_t until_ns) const {
+        const auto v = Snapshot();
+        double L = 0;
+        for (size_t i = 1; i < v.size() && v[i].t_ns <= until_ns; ++i) L += (v[i].T.t - v[i - 1].T.t).norm();
+        return L;
+    }
 
 private:
     mutable std::mutex mu_;

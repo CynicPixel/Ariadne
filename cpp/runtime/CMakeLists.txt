@@ -78,7 +78,7 @@ if(OpenCV_FOUND)
   # ROS edge's Unix socket or a recording of a live run. ROS-free.
   add_executable(ariadne_live tools/ariadne_live.cpp)
   target_link_libraries(ariadne_live PRIVATE
-    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_imgproc
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv ariadne::planning opencv_imgcodecs opencv_imgproc
     opencv_features)
   find_package(Threads REQUIRED)
   target_link_libraries(ariadne_live PRIVATE Threads::Threads)

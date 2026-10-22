@@ -42,6 +42,8 @@ struct PlanContext {
     int64_t T = 0;
     bool active[2] = {false, false};                                       // agent has an estimated pose before T
     Cell at[2];                                                            // its cell
+    core::Vec3 position[2] = {core::Vec3::Zero(), core::Vec3::Zero()};     // its estimated position in W
+    double flown_m[2] = {0, 0};   // metres flown to T: the ground-truth path length (the rig's executed motion)
     std::vector<std::pair<int, std::pair<double, double>>> refused_goals;  // the mover's refusals (agent, goal xy)
     std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
 };
@@ -72,7 +74,20 @@ struct PlanOutput {
     mis::ReplanMaps maps;              // map summary: slab, egress route, frontiers (console, LLM images)
     AgentOptions agents[2];
     int joint[2] = {-1, -1};           // the allocated picks (exactly-once across agents)
+    std::string trace_json = "{}";     // the planner's own record for the trace (which planner, allocation event, ...)
 };
+
+/// The task id of agent k's option i (-1 for hold): the exactly-once identity, for any planner.
+inline int64_t TaskOf(const PlanOutput& p, int k, int i) { return i >= 0 ? p.agents[k].options[size_t(i)].task_id : -1; }
+
+/// Agent k's best-ranked option whose task is not `taken` and whose risk is within the gate; -1 if none.
+inline int OtherTask(const PlanOutput& p, int k, int64_t taken, double threshold) {
+    const auto& v = p.agents[k].options;
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (v[i].risk <= threshold && v[i].task_id != taken) return int(i);
+    }
+    return -1;
+}
 
 class MissionPlanner {
 public:
@@ -283,15 +298,9 @@ public:
         return {path, yaw};
     }
 
-    static int64_t ClusterOf(const PlanOutput& p, int k, int i) { return i >= 0 ? p.agents[k].options[size_t(i)].task_id : -1; }
+    static int64_t ClusterOf(const PlanOutput& p, int k, int i) { return TaskOf(p, k, i); }
     /// The nearest option of agent k at or below the threshold whose task is not `taken`; -1 if none (A1: OtherTask).
-    int OtherCluster(const PlanOutput& p, int k, int64_t taken) const {
-        const auto& v = p.agents[k].options;
-        for (size_t i = 0; i < v.size(); ++i) {
-            if (v[i].risk <= p_.autonomous_threshold && v[i].task_id != taken) return int(i);
-        }
-        return -1;
-    }
+    int OtherCluster(const PlanOutput& p, int k, int64_t taken) const { return OtherTask(p, k, taken, p_.autonomous_threshold); }
 
 private:
     mis::MissionConfig mc_;

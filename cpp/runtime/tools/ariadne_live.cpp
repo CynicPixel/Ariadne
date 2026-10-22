@@ -23,6 +23,7 @@
 #include "planning/mission/frontier_mission.hpp"
 #include "runtime/live/link_frame.hpp"
 #include "runtime/live/live_source.hpp"
+#include "runtime/live/a1_planner.hpp"
 #include "runtime/live/planner.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
@@ -40,6 +41,7 @@
 #include <deque>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -233,7 +235,7 @@ std::string JsonEscape(const std::string& s) {
 int main(int argc, char** argv) {
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
-            directives_path;
+            directives_path, planner_cfg_path;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -250,6 +252,7 @@ int main(int argc, char** argv) {
             else if (k == "--chooser-socket") chooser_socket = v;   // chooser llm, live
             else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
             else if (k == "--directives") directives_path = v;      // replay: the live run's directives.jsonl
+            else if (k == "--planner-config") planner_cfg_path = v;  // A1's Phase 4 planner (mission_v2.yaml); else 1.8
             else if (k == "--seed") va.seed = std::stoull(v);
             else throw std::invalid_argument("unknown argument " + k);
         }
@@ -271,7 +274,20 @@ int main(int argc, char** argv) {
         pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
         pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
         pp.eps_cells = lc.eps_cells, pp.max_command_m = lc.max_command_m;
-        live::PlaceholderPlanner planner(mc, brief, pp);   // A1's Phase 4 planner implements the same interface
+        // The mission planner behind the seam: A1's Phase 4 planner with --planner-config, else the 1.8 placeholder
+        // (the ablation's row). The scene's worldgen seed is the run seed mixed into the random policy's seed.
+        std::unique_ptr<live::MissionPlanner> planner;
+        std::string planner_name = "placeholder_1.8";
+        if (planner_cfg_path.empty()) {
+            planner = std::make_unique<live::PlaceholderPlanner>(mc, brief, pp);
+        } else {
+            const uint64_t run_seed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
+            std::string policy;
+            const auto p4 = live::LoadPhase4Params(planner_cfg_path, mc, lc.refused_radius_m, lc.max_command_m, lc.escape_m,
+                                                   run_seed, &policy);
+            planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold);
+            planner_name = "a1_phase4:" + policy;
+        }
         const int64_t end_ns = int64_t(std::llround(lc.end_s * 1e9));
         const int64_t replan_ns = int64_t(std::llround(mc.replan_s * 1e9));
         if (lc.lockstep && end_ns % replan_ns != 0) {   // the last barrier must BE the end (its holds go out paused)
@@ -597,7 +613,7 @@ int main(int argc, char** argv) {
                 return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
             });
             for (const KfRec& r : batch) {
-                rays += planner.Integrate(live::KeyframeInput{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
+                rays += planner->Integrate(live::KeyframeInput{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
                                                               r.Z, r.S, r.fx, r.fy, r.cx, r.cy});
                 ++integrated[r.agent];
             }
@@ -635,11 +651,13 @@ int main(int argc, char** argv) {
                         const core::SE3 Tw = brief.T_W_O[size_t(k)] * it->second;
                         ctx.active[k] = true;
                         ctx.at[k] = brief.ToCell(Tw.t.x(), Tw.t.y());
+                        ctx.position[k] = Tw.t;
                         break;
                     }
                 }
             }
-            const live::PlanOutput plan_out = planner.Plan(ctx);
+            for (int k = 0; k < 2; ++k) ctx.flown_m[k] = lanes[k].gt.PathLength(T);
+            const live::PlanOutput plan_out = planner->Plan(ctx);
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
@@ -719,6 +737,7 @@ int main(int argc, char** argv) {
                 vision << ",\"agent_xy_m\":" << Xy(T_W_C.t.x(), T_W_C.t.y()) << ",\"agent_cell\":[" << ac.r << ","
                        << ac.c << "]}";
                 o << "\"vision\":" << vision.str() << ",";
+                if (plan_out.trace_json != "{}") o << "\"planner\":" << plan_out.trace_json << ",";
                 Pending& pd = P[k];
                 pd.active = true;
                 pd.ac = ac;
@@ -799,8 +818,8 @@ int main(int argc, char** argv) {
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
             int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
             std::string choice[2], pick_reason[2] = {"classical choice", "classical choice"};
-            const auto other_cluster = [&](int k, int64_t taken) { return planner.OtherCluster(plan_out, k, taken); };
-            const auto cluster_of = [&](int k, int i) { return live::PlaceholderPlanner::ClusterOf(plan_out, k, i); };
+            const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
+            const auto cluster_of = [&](int k, int i) { return live::TaskOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
                 for (auto& c : choice) c = ",\"choice\":{\"source\":\"classical\"}";
             } else if (!is_live && chooser_socket.empty()) {
@@ -980,7 +999,7 @@ int main(int argc, char** argv) {
                     const auto g = plan_out.agents[k].options[size_t(pick)].goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
-                    const auto [path, face_yaw] = planner.Route(plan_out, k, pick, pd.ac);
+                    const auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
                     if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {
                         runtime::ros_cdr::Pose p;
@@ -1070,6 +1089,7 @@ int main(int argc, char** argv) {
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
             << "\ncommands_decided: " << commands_sent << "\nlockstep: " << (lc.lockstep ? "true" : "false")
+            << "\nplanner: " << planner_name
             << "\nreorder_released_on_timeout: " << reorder_timeouts
             << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
             << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";

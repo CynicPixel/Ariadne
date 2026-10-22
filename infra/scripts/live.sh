@@ -7,6 +7,8 @@
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
 #                                                  config: ARIADNE_LIVE_CONFIG (default configs/mission/live_v1.yaml)
 #                                                  ARIADNE_LOCKSTEP=1: lockstep (D165), recorded in the run's config
+#                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: A1's Phase 4
+#                                                  planner (copied into the run as planner_config.yaml; replay uses it)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
@@ -102,6 +104,11 @@ cmd_run() {
   sed -e "${end_s:+s/^end_s: .*/end_s: $end_s/}" -e "${ARIADNE_LOCKSTEP:+s/^lockstep: .*/lockstep: true/}" \
     "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
   live_cfg="$run/live_config.yaml"
+  local planner=()
+  if [ -n "${ARIADNE_PLANNER_CONFIG:-}" ]; then
+    cp "$REPO_ROOT/$ARIADNE_PLANNER_CONFIG" "$REPO_ROOT/$run/planner_config.yaml"
+    planner=(--planner-config "$run/planner_config.yaml")
+  fi
   trap 'stop_mine' EXIT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, config $live_cfg, render: $(render_args | cut -d' ' -f1-2)"
@@ -121,7 +128,7 @@ cmd_run() {
     "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
       --mission-config configs/mission/mission_v1.yaml --live-config "$live_cfg" \
-      --out "$run" --link "$run/link.sock" "${chooser[@]}")")
+      --out "$run" --link "$run/link.sock" "${chooser[@]}" "${planner[@]}")")
   rt="${CONTAINERS[-1]}"
 
   # 2. gz (paused) + bridge + RuntimeLink.
@@ -186,6 +193,7 @@ cmd_replay() {
   # model is never called in replay, AGENTIC_7 D161).
   local extra=(--directives "$run/$live_dir/directives.jsonl")
   grep -q '^chooser: *llm' "$REPO_ROOT/$cfg" && extra+=(--decisions "$run/$live_dir/trace.jsonl")
+  [ -f "$REPO_ROOT/$run/planner_config.yaml" ] && extra+=(--planner-config "$run/planner_config.yaml")
   for i in 1 2; do
     docker run --rm --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
       --scene "$scene" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
