@@ -2936,3 +2936,51 @@ verifying agent, so the broker sees pre-gated edges.
 
 **Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
 Both are main's (3.2 / 3.5).
+
+## 2026-10-22 — D86: Phase 2 acceptances, delegated to M (EuRoC 9/11, TUM fr1, D74 wording, D91 pool rule, D90 size)
+
+**Delegation.** The maintainer asked M to decide, with an advisor review, and gave this criterion: "we SHOULD NOT
+COMPROMISE ON QUALITY AND ROBUSTNESS to a reasonable degree, if we are at par with sota lit mostly im good to go".
+Each verdict below is held to that criterion against the PHASE2_PLAN §1 reference table (ORB-SLAM3 T-RO 2021
+Table II). Nothing here is from memory.
+
+1. **EuRoC 9/11 (D85): accepted as the VIO gate.** The gate bar (average ≤ 0.138) is met at 0.120.
+   - **The parity statement, exact:** VIO only, 0.120 sits beside Kimera (0.119) and below VINS-Fusion (0.138). It is
+     not at BASALT (0.051) or ORB-SLAM3 (0.035, full SLAM). So it is inside the published stereo-inertial range, at
+     the weak end, not "state of the art".
+   - V2_02 misses by 10 mm, which is inside D85's own ±10 mm single-run spread. V1_03 (0.329, 92 lost frames) is the
+     one real miss.
+   - **V1_03 is not closed as won't-fix.** It is fast motion with lost tracking, which is this project's core
+     robustness case. It becomes the regression case for Phase 5's degraded-vision work, with projection-guided
+     re-association (D85's trigger) as the candidate fix. Register: 2.1 and 5.x rows.
+   - **The full-system run is owed.** With loops on (D73 2b), three flights already sit at ORB-SLAM3's level:
+     MH_01 0.021 (ORB-SLAM3 0.036), V1_01 0.038 (0.038), V1_02 0.025 (0.014). No 11-flight loops-on run exists.
+     The SOTA-parity claim may only be made from that run, which is the like-for-like comparison with ORB-SLAM3.
+     It is a gate item for Phase 2 (heavy, so the maintainer is asked before it runs).
+2. **TUM fr1 (A2's D100 after renumbering): accepted as "regression pinned"**, which is the gate's wording.
+   - The fr1 rows are a cross-class comparison: ORB-SLAM2's RGB-D rows are full SLAM; ours is VO with loops off.
+     The deployed rig is stereo, not RGB-D, so this does not block.
+   - **Condition:** the fr1/xyz target (0.017) is tagged [UNVERIFIED]. It is sourced from the cited table, or its
+     in-class verdict is dropped, before the number is cited anywhere. Owner: A2.
+3. **D74's gate wording: accepted as "certified fraction reported".** A certificate proves optimality of the given
+   cost, not that the cost is outlier-free. The wound-ring test covers the intent of the original wording: a
+   strictly worse stationary point is not certified.
+   - **Blocks the Phase 2 checkmark:** parity with SE-Sync is shown only on parking-garage (Table 1) and two small
+     grids. sphere, torus, grid3D, cubicle and rim must land (B, about 2 h) before D74 or Phase 2 is marked done.
+4. **D91: per-thread instances accepted; the process-wide pool rule is accepted only for shared-wrapper DNN use.**
+   `cv::setNumThreads(1)` also throttles the always-on per-frame pipeline (remap, pyramids, LK), which is what the
+   COOL benchmark measures (INV2).
+   - **Carry to 7.3:** the benchmark's thread setting is decided explicitly and recorded in its manifest, and pool=1
+     is never set process-wide in the runtime that the benchmark times.
+5. **D90's sim size: accepted as provisional (640×360), to be settled by data.** The sim retrieval evaluation reports
+   a 640×360 vs 1280×720 recall row, and the default follows that row. Owner: A1 (3.1).
+
+**What the Phase 2 checkmark now waits on, in order:**
+1. the merged-main build and push;
+2. A2's merge;
+3. the integrated premerge;
+4. B's SE-Sync large graphs;
+5. the 11-flight EuRoC run with loops on;
+6. the phase-gate full run.
+
+Items 3, 5 and 6 are heavy: the maintainer is asked before each.
