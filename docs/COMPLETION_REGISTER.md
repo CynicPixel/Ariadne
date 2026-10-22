@@ -133,8 +133,8 @@ identical.
 
 | item | carries |
 |---|---|
-| 4.1 volumetric (HashTSDF) | **done in replay (D110, A1):** from-scratch voxel-hash TSDF at 5 cm (`cv::Volume` has no voxel read, SMOKE §4u; it is the oracle), incremental FH ESDF (exact vs brute force, §37.6), 3D frontiers (= brute force; incremental = full), coarse RLE layer. Evidence spool vs 1.8: coverage 0.942 / 0.933, occupied precision 0.865 / 0.707 (`evaluation/runs/volumetric_4.1/`). Open: wired into L1's per-keyframe seam when L1 is committed. |
-| 4.2 traversability / risk at ρ_agent and ρ_responder | |
+| 4.1 volumetric (HashTSDF) | **done in replay (D110, A1):** from-scratch voxel-hash TSDF at 5 cm (`cv::Volume` has no voxel read, SMOKE §4u; it is the oracle), incremental FH ESDF (exact vs brute force, §37.6), 3D frontiers (= brute force; incremental = full), coarse RLE layer. Evidence spool vs 1.8: coverage 0.942 / 0.933, occupied precision 0.865 / 0.707 (`evaluation/runs/volumetric_4.1/`). Open: wired into L1's per-keyframe seam when L1 is committed. **ESDF clearance convention corrected 2026-10-23** (it was optimistic on diagonals; `PHASE4_PREFLIGHT.md` §5). |
+| 4.2 traversability / risk at ρ_agent and ρ_responder | **partial (D111, A1):** egress = observed column ∧ 3D occupied capsule, agent = altitude-band capsule; evidence spool precision 1.000, recall 0.900, both starts reach the target (1.8: 1.000 / 0.898), strict 3D reported (0.354, target closed) (`evaluation/runs/traversability_4.2/`). **Open: risk proxy calibration against GT zones** (worldgen hazard geometry + renders; GPU spend to be asked); Voxblox half-voxel inflation (P2). |
 | 4.3 NBV (I8) | needs L1 for closed loop |
 | 4.4 allocation (CBBA + broker-greedy) | needs L1 |
 | 4.5 egress (D* Lite, 5th-percentile confidence) | |

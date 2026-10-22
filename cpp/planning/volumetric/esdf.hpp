@@ -2,27 +2,27 @@
 // ---------------------------------------------------------------------------
 // 4.1 ESDF for clearance (arch §20.3; design VOLUMETRIC_4.1 §3.3, D110).
 //
-// Exact 3D Euclidean distance transform by three separable passes of
-// Felzenszwalb & Huttenlocher's 1D lower-envelope transform ("Distance
-// Transforms of Sampled Functions", Theory of Computing 8, 2012, Algorithm 1):
-// the squared distance to the nearest site is the lower envelope of parabolas
-// (q - p)^2 + f(p), one rooted at each sample p; computing it along x, then y,
-// then z gives the 3D squared EDT exactly (squared distance is separable).
-// Sites are blocked voxels (f = 0), others +inf; +inf samples are skipped when
-// the envelope is built (the paper's intersection formula is undefined for them).
+// Clearance = distance from a voxel centre to the NEAREST POINT of a blocked voxel
+// (its cube), the convention of the scene GT and of 1.8 (worldgen raster._edt_to,
+// planning::EdgeClearance): per axis an offset of D voxels contributes
+// max(|D| - 1/2, 0), and d^2 is the sum of the squares. (D110 as first committed
+// used edt * voxel - voxel / 2, exact only along an axis and optimistic on
+// diagonals: it produced 4 false egress claims at GT clearance 0.395 m, corrected.)
 //
-// Clearance = distance from a voxel centre to the nearest blocked voxel's EDGE
-// (edt * voxel - voxel / 2; the GT's and D45's convention), capped at d_max.
+// Felzenszwalb & Huttenlocher's lower envelope (arch §20.3) is exact for the
+// centre-to-centre metric only; the cube metric is (2|D| - 1)^2 / 4 per axis, so
+// each axis pass is an exact windowed min-convolution over the capped reach
+// k = ceil(d_max / voxel) + 1 (a true distance <= d_max has every axis offset
+// <= d_max / voxel + 1/2). Separable like FH: x, then y, then z. Stored as 4 d^2
+// (an integer) in uint16, min(., 65535).
+//
 // Two fields: egress (blocked = occupied or unknown: "observed free", D45) and
-// agent (blocked = occupied).
+// agent (blocked = occupied). Capped at d_max.
 //
 // Incremental, never global per keyframe: with a capped field a change at a
 // voxel moves only voxels within d_max of it, so an update recomputes the box
-// dirty (+) d_max reading sites from dirty (+) 2 d_max and writes back only the
-// inner box. Exact for the capped field (bit-equal to a rebuild; tested).
-// Stored per voxel as min(squared EDT, 255) in voxel units (uint8): exact for any
-// d_max <= (sqrt(255) - 0.5) voxel; recomputed in x-y tiles, each reading sites
-// from its own k-voxel margin, so memory stays at the tile scale.
+// dirty (+) k, each x-y tile reading sites from its own k margin, and writes back
+// only the box. Exact for the capped field (bit-equal to a rebuild; tested).
 // ---------------------------------------------------------------------------
 #include "planning/volumetric/tsdf_map.hpp"
 
@@ -31,12 +31,15 @@
 
 namespace ariadne::planning {
 
-/// FH Algorithm 1 on n samples of f (stride apart), squared Euclidean, into out (same stride). +inf allowed.
-/// v and z are scratch of size >= n and n + 1.
-void DistanceTransform1D(const double* f, int n, size_t stride, double* out, int* v, double* z);
+constexpr int32_t kEdgeInf = 1 << 28;
 
-/// Squared EDT (voxel units) of a dense nx*ny*nz grid (x fastest); +inf where there is no site at all.
-std::vector<double> SquaredEdt3D(const std::vector<uint8_t>& blocked, int nx, int ny, int nz);
+/// One axis pass: out[q] = min over |D| <= reach of in[q + D] + (2|D| - 1)^2 (D != 0), in[q] (D = 0); n samples,
+/// stride apart; kEdgeInf = no site. Values are 4 d^2 (voxel units).
+void EdgeMinConvolution1D(const int32_t* in, int n, size_t stride, int reach, int32_t* out);
+
+/// 4 x squared cube-edge distance (voxel units) of a dense nx*ny*nz grid (x fastest), exact for distances whose
+/// every axis offset is <= reach (kEdgeInf beyond). Blocked voxels are 0.
+std::vector<int32_t> EdgeDistanceSq4(const std::vector<uint8_t>& blocked, int nx, int ny, int nz, int reach);
 
 class Esdf {
 public:
@@ -61,7 +64,7 @@ public:
 private:
     void Recompute(const TsdfMap& map, Idx3 out_lo, Idx3 out_hi);   // tiled; sites from each tile (+) k
     void RecomputeTile(const TsdfMap& map, Idx3 site_lo, Idx3 site_hi, Idx3 out_lo, Idx3 out_hi);
-    double Clear(uint8_t d2) const;
+    double Clear(uint16_t q4) const;
     size_t At(const Idx3& v) const {
         return size_t(v.x - lo_.x) + size_t(dims_.x) * (size_t(v.y - lo_.y) + size_t(dims_.y) * size_t(v.z - lo_.z));
     }
@@ -72,7 +75,7 @@ private:
     double vox_, d_max_, pad_m_;
     int k_;   // ceil(d_max / voxel) + 1: the reach of a capped change, in voxels
     Idx3 lo_, dims_;
-    std::vector<uint8_t> egress_, agent_;   // min(squared EDT, 255), voxel units
+    std::vector<uint16_t> egress_, agent_;   // min(4 d^2, 65535), voxel units (cube-edge convention)
     size_t last_updated_ = 0;
 };
 

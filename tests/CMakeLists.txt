@@ -89,7 +89,8 @@ if(OpenCV_FOUND)
     unit/test_hard_pair.cpp
     unit/test_loop_verify_geometry.cpp
     unit/test_dnn_contract.cpp
-    unit/test_volumetric.cpp)
+    unit/test_volumetric.cpp
+    unit/test_traversability.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

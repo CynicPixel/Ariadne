@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
+#include "planning/volumetric/traversability.hpp"
 #include "planning/volumetric/tsdf_map.hpp"
 
 #include <opencv2/core.hpp>
@@ -227,6 +228,64 @@ int main(int argc, char** argv) {
         }
         fs::create_directories(out);
         cv::imwrite((fs::path(out) / "slab.png").string(), slab);
+        // 4.2 (D111): the capsule traversability at both rho and the [PROXY] risk, on the same grid.
+        planning::GridFrame gf;
+        gf.ox = ox, gf.oy = oy, gf.cell = cell, gf.cols = cols, gf.rows = rows;
+        planning::TravParams trp;
+        trp.responder.rho = rho_r;
+        trp.agent.rho = cfg["clearance"]["rho_agent_m"].as<double>();
+        auto t_trav = std::chrono::steady_clock::now();
+        const planning::TraversabilityMaps tm = planning::ComputeTraversability(map, esdf, gf, trp);
+        const double trav_ms = Ms(t_trav);
+        cv::imwrite((fs::path(out) / "trav_responder.png").string(), tm.trav_r);
+        cv::imwrite((fs::path(out) / "trav_agent.png").string(), tm.trav_a);
+        cv::imwrite((fs::path(out) / "trav_responder_strict3d.png").string(), tm.trav_r_strict);
+        cv::Mat risk16;
+        tm.risk.convertTo(risk16, CV_16U, 65535.0);
+        cv::imwrite((fs::path(out) / "risk_proxy.png").string(), risk16);
+        tm.overhang.convertTo(risk16, CV_16U, 65535.0);
+        cv::imwrite((fs::path(out) / "risk_overhang.png").string(), risk16);
+        tm.unsupported.convertTo(risk16, CV_16U, 65535.0);
+        cv::imwrite((fs::path(out) / "risk_unsupported.png").string(), risk16);
+        double risk_max;
+        cv::minMaxLoc(tm.risk, nullptr, &risk_max);
+        std::string risk_where;   // per term: max and its world xy (diagnosis of the [PROXY]'s response)
+        for (const auto& [name, m] : {std::pair{"overhang", &tm.overhang}, std::pair{"unsupported", &tm.unsupported}}) {
+            double mx;
+            cv::Point at;
+            cv::minMaxLoc(*m, nullptr, &mx, nullptr, &at);
+            char buf[160];
+            std::snprintf(buf, sizeof buf, "%s%s: {max: %.3f, at_xy_m: [%.3f, %.3f], cells_over_0.2: %d}",
+                          risk_where.empty() ? "" : ", ", name, mx, ox + (at.x + 0.5) * cell, oy + (at.y + 0.5) * cell,
+                          cv::countNonZero(*m > 0.2));
+            risk_where += buf;
+        }
+        // Diagnostics (D111 §5): the responder capsule with unknown treated as free (agent field), per axis height,
+        // so the cause of a closed column can be split into "unobserved" vs "occupied", and at which height.
+        {
+            const int zl = int(std::floor(trp.responder.axis_lo / cell)), zh = int(std::floor(trp.responder.axis_hi / cell));
+            cv::Mat occ_only(rows, cols, CV_8U), bind_z(rows, cols, CV_8U, cv::Scalar(255));
+            const int cx0 = int(std::lround(ox / cell)), cy0 = int(std::lround(oy / cell));
+            for (int r = 0; r < rows; ++r)
+                for (int c = 0; c < cols; ++c) {
+                    bool ok = true;
+                    for (int z = zl; z <= zh; ++z) {
+                        if (esdf.Agent({cx0 + c, cy0 + r, z}) < trp.responder.rho - 1e-9) ok = false;
+                        if (bind_z.at<uint8_t>(r, c) == 255 && esdf.Egress({cx0 + c, cy0 + r, z}) < trp.responder.rho - 1e-9)
+                            bind_z.at<uint8_t>(r, c) = uint8_t(z - zl);   // lowest axis voxel that closes the column
+                    }
+                    occ_only.at<uint8_t>(r, c) = ok;
+                }
+            cv::imwrite((fs::path(out) / "diag_trav_responder_occupied_only.png").string(), occ_only);
+            cv::imwrite((fs::path(out) / "diag_bind_z.png").string(), bind_z);
+            // Unknown voxels per z layer, 0 .. 1.9 m, for every column of the grid (the evaluator masks by GT-free).
+            cv::Mat unk(rows * 38, cols, CV_8U);
+            for (int z = 0; z < 38; ++z)
+                for (int r = 0; r < rows; ++r)
+                    for (int c = 0; c < cols; ++c)
+                        unk.at<uint8_t>(z * rows + r, c) = map.State({cx0 + c, cy0 + r, z}) == planning::kUnknown;
+            cv::imwrite((fs::path(out) / "diag_unknown_by_layer.png").string(), unk);
+        }
         const planning::CoarseLayer coarse = planning::BuildCoarse(map);
         const size_t rle = planning::EncodeCoarseRle(coarse).size();
         std::ofstream res(fs::path(out) / "results.yaml");
@@ -243,7 +302,10 @@ int main(int argc, char** argv) {
             << "ms_per_keyframe:\n"
             << "  integrate: {mean: " << s_int.Mean() << ", p95: " << s_int.Pct(0.95) << "}\n"
             << "  esdf_update: {mean: " << s_esdf.Mean() << ", p95: " << s_esdf.Pct(0.95) << "}\n"
-            << "  frontier_update: {mean: " << s_fr.Mean() << ", p95: " << s_fr.Pct(0.95) << "}\n";
+            << "  frontier_update: {mean: " << s_fr.Mean() << ", p95: " << s_fr.Pct(0.95) << "}\n"
+            << "traversability: {ms: " << trav_ms << ", responder_cells: " << cv::countNonZero(tm.trav_r)
+            << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
+            << "risk_terms: {" << risk_where << "}\n";
         std::ofstream man(fs::path(out) / "manifest.yaml");
         std::string cmd;
         for (int i = 0; i < argc; ++i) cmd += (i ? " " : "") + std::string(argv[i]);

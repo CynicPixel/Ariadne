@@ -5,8 +5,9 @@ if(OpenCV_FOUND)
   add_library(ariadne_planning STATIC
     volumetric/tsdf_map.cpp
     volumetric/esdf.cpp
-    volumetric/frontiers3d.cpp)
+    volumetric/frontiers3d.cpp
+    volumetric/traversability.cpp)
   target_include_directories(ariadne_planning PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
-  target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core)
+  target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc)
   add_library(ariadne::planning ALIAS ariadne_planning)
 endif()

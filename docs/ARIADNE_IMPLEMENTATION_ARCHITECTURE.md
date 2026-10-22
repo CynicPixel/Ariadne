@@ -3412,7 +3412,9 @@ the correctness oracle** — the fallback is a performance decision, never an ex
 > **As built (D110, 2026-10-23).** The fallback is taken: `cv::Volume` exposes no voxel or weight read (SMOKE §4u),
 > so 4.1 is a from-scratch voxel-hash TSDF, with HashTSDF as a test oracle. **The voxel is 5 cm, not 8–10 cm:** on
 > both scenes' GT, a one-cell wall bleed closes agent 1's entrance at ρ_responder for 8 and 10 cm voxels. Unknown is
-> weight 0 exactly (§20.2). Design: `docs/design/VOLUMETRIC_4.1.md`.
+> weight 0 exactly (§20.2). **§20.3 as built:** clearance is centre to the nearest point of a blocked cube (the GT's
+> convention), by exact windowed min-convolutions. FH's parabolas are centre-to-centre, so they do not give it.
+> Design: `docs/design/VOLUMETRIC_4.1.md`.
 
 ## 20.2 Occupancy
 
@@ -3455,6 +3457,11 @@ where **ρ is the consumer cross-section radius, and it is a first-class paramet
 ρ_agent      = 0.15–0.25 m    (agent motion planning)
 ρ_responder  = 0.40 m default, config   (the egress product)
 ```
+
+> **As built (D111, 2026-10-23).** Egress traversability at ρ_responder = an observed column (D45's rule, with
+> clearance to non-free columns ≥ ρ) **and** a standing-body capsule on the occupied-only 3D field. A capsule on the
+> unknown-as-blocked field would be stricter, but the rig cannot observe a standing body's volume: on the evidence
+> spool it closes the target. The structural risk proxy is built, and **uncalibrated** until the GT-zone scenes exist.
 
 **Every egress claim in the report and in the demo is computed at `ρ_responder`.** An agent-passable void is not a
 human-passable route, and conflating the two is the single easiest embarrassment to preempt — a judge asking "can
@@ -3752,6 +3759,10 @@ C(x) =
 ### Executable form
 
 **Graph:** a 26-connected lattice over free voxels (§20.2) with `ESDF ≥ ρ_responder` (§20.5).
+
+> **As built (D111):** a 2.5D 8-connected lattice over the egress-traversable columns of §20.5's capsule rule. A
+> responder walks on the floor, and a 3D lattice would route through the air above props. The 3D obstacle test lives
+> in the capsule.
 
 **Edge cost:**
 

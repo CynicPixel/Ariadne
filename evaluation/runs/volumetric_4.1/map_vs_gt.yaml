@@ -1,6 +1,10 @@
 # volumetric_eval (VOLUMETRIC_4.1 §6). Generated.
-slab: build/a1/vol41/slab.png
+slab: build/a1/vol42/slab.png
 baseline: /data/code/Ariadne/evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z/slab.png
 rows:
   phase4_tsdf: {'coverage': 0.9417737982091942, 'free_precision': 0.9791959224007906, 'occupied_precision': 0.8647764449291166, 'false_occupied_cells': 620, 'false_occupied_distance_cells': {1: 588, 2: 24, 3: 8, '>3': 0}}
   placeholder_1.8: {'coverage': 0.9330198589365214, 'free_precision': 0.9607004893123874, 'occupied_precision': 0.7070557813077207, 'false_occupied_cells': 793, 'false_occupied_distance_cells': {1: 756, 2: 36, 3: 1, '>3': 0}}
+trav_responder_vs_gt:
+  phase4_hybrid (the product): {'claimed': 11100, 'precision': 1.0, 'recall': 0.8999513539808659, 'false_claims': 0, 'start_to_target': [True, True]}
+  phase4_strict_3d: {'claimed': 4367, 'precision': 1.0, 'recall': 0.3540619425976974, 'false_claims': 0, 'start_to_target': [False, False]}
+  placeholder_1.8: {'claimed': 11072, 'precision': 1.0, 'recall': 0.8976812064212746, 'false_claims': 0, 'start_to_target': [True, True]}

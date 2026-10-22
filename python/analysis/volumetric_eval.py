@@ -18,6 +18,9 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dataset_tools"))
+from worldgen.raster import TRAV_EPS_M, _edt_to  # noqa: E402  (the GT's clearance convention, one implementation)
+
 UNKNOWN, FREE, OCC = 0, 1, 2
 
 
@@ -68,22 +71,78 @@ def metrics(slab: np.ndarray, gtfree: np.ndarray) -> dict:
             "false_occupied_cells": int(occ_false.sum()), "false_occupied_distance_cells": hist}
 
 
+def read_png_auto(p: Path) -> np.ndarray:
+    return read_png_u8(p)
+
+
+def edge_clearance_ok(blocked: np.ndarray, rho: float, g: float) -> np.ndarray:
+    """1.8's 2D rule (planning::EdgeClearance + Traversable), via worldgen's own GT convention (raster._edt_to:
+    centre to the nearest point of a blocked square), imported, not re-derived."""
+    cap = int(np.ceil((rho + 2 * g) / g))
+    return _edt_to(blocked, cap) * g >= rho - TRAV_EPS_M
+
+
+def connected(trav: np.ndarray, a, b) -> bool:
+    """8-connected flood from a to b on trav (row, col)."""
+    if not (trav[a] and trav[b]):
+        return False
+    seen = np.zeros_like(trav, dtype=bool)
+    stack = [a]
+    seen[a] = True
+    while stack:
+        y, x = stack.pop()
+        if (y, x) == b:
+            return True
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                yy, xx = y + dy, x + dx
+                if 0 <= yy < trav.shape[0] and 0 <= xx < trav.shape[1] and trav[yy, xx] and not seen[yy, xx]:
+                    seen[yy, xx] = True
+                    stack.append((yy, xx))
+    return False
+
+
+def trav_metrics(trav: np.ndarray, gt: np.ndarray, starts=(), target=None) -> dict:
+    tp = int((trav & gt).sum())
+    return {"claimed": int(trav.sum()), "precision": tp / max(int(trav.sum()), 1), "recall": tp / max(int(gt.sum()), 1),
+            "false_claims": int((trav & ~gt).sum()),
+            "start_to_target": [connected(trav, tuple(s), tuple(target)) for s in starts] if target is not None else []}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", type=Path, required=True)
     ap.add_argument("--slab", type=Path, required=True)
     ap.add_argument("--baseline", type=Path)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--rho-responder", type=float, default=0.40)
     a = ap.parse_args()
-    gtfree = np.load(a.scene / "scene_gt.npz")["free"].astype(bool)
+    gt = np.load(a.scene / "scene_gt.npz")
+    gtfree = gt["free"].astype(bool)
     rows = {"phase4_tsdf": metrics(read_png_u8(a.slab), gtfree)}
     if a.baseline:
         rows["placeholder_1.8"] = metrics(read_png_u8(a.baseline), gtfree)
+    # 4.2: responder traversability vs GT trav_responder (invariant 4: precision is what a claim must protect).
+    trav_rows = {}
+    gtr, st, tg = gt["trav_responder"].astype(bool), [tuple(x) for x in gt["start_cells"]], tuple(gt["target_cell"])
+    for name, f in (("phase4_hybrid (the product)", "trav_responder.png"), ("phase4_strict_3d", "trav_responder_strict3d.png")):
+        if (a.slab.parent / f).exists():
+            trav_rows[name] = trav_metrics(read_png_u8(a.slab.parent / f).astype(bool), gtr, st, tg)
+    if a.baseline:
+        base = read_png_u8(a.baseline)
+        b = (base == FREE) & edge_clearance_ok(base != FREE, a.rho_responder, float(gt["grid_m"]))
+        trav_rows["placeholder_1.8"] = trav_metrics(b, gtr, st, tg)
+    for k, m in trav_rows.items():
+        print(f"{k:28s} trav_responder: claimed {m['claimed']}  precision {m['precision']:.4f}  recall {m['recall']:.3f}  "
+              f"false claims {m['false_claims']}  start->target {m['start_to_target']}")
     a.out.mkdir(parents=True, exist_ok=True)
     y = ["# volumetric_eval (VOLUMETRIC_4.1 §6). Generated.", f"slab: {a.slab}", f"baseline: {a.baseline}", "rows:"]
     for k, m in rows.items():
         print(f"{k:16s} coverage {m['coverage']:.3f}  free precision {m['free_precision']:.3f}  occupied precision "
               f"{m['occupied_precision']:.3f}  false-occupied {m['false_occupied_cells']} by distance {m['false_occupied_distance_cells']}")
+        y.append(f"  {k}: {m}")
+    y.append("trav_responder_vs_gt:")
+    for k, m in trav_rows.items():
         y.append(f"  {k}: {m}")
     (a.out / "map_vs_gt.yaml").write_text("\n".join(y) + "\n")
     return 0

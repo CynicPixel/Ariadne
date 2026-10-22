@@ -7,3 +7,4 @@ ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mis
 python3 -I python/analysis/volumetric_eval.py --scene SCENE --slab OUT/slab.png --baseline BASELINE --out OUT
 # first_run_wmin0.5/: the same run with the first design's w_min = 0.5 (unknown below half a sigma_ref observation),
 # kept because it was measured before the definition was corrected to arch §20.2's "unknown = weight 0".
+# 2026-10-23: results/manifest/map_vs_gt/slab regenerated with the corrected ESDF convention (D110 correction); map metrics unchanged, ESDF timings changed.

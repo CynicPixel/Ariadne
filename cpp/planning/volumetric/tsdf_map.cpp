@@ -31,6 +31,14 @@ const TsdfVoxel* TsdfMap::Find(const Idx3& v) const {
     return it == blocks_.end() ? nullptr : &it->second.v[size_t(Offset(v, b))];
 }
 
+void TsdfMap::SetVoxel(const Idx3& v, const TsdfVoxel& x) {
+    const Idx3 b = BlockOf(v);
+    const int64_t bk = Pack(b);
+    auto [it, fresh] = blocks_.try_emplace(bk);
+    if (fresh) block_index_.emplace(bk, b);
+    it->second.v[size_t(Offset(v, b))] = x;
+}
+
 uint8_t TsdfMap::State(const Idx3& v) const {
     const TsdfVoxel* x = Find(v);
     if (!x || x->w <= p_.w_min) return kUnknown;

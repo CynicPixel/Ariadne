@@ -9,6 +9,8 @@ frontier_clusters_final: 15
 frontier_rejected_small: 115
 coarse: {cells: 4320, rle_bytes: 1110}
 ms_per_keyframe:
-  integrate: {mean: 14.7811, p95: 29.9551}
-  esdf_update: {mean: 43.8667, p95: 80.6463}
-  frontier_update: {mean: 45.8052, p95: 73.2352}
+  integrate: {mean: 22.5863, p95: 54.7252}
+  esdf_update: {mean: 80.5678, p95: 144.031}
+  frontier_update: {mean: 59.8427, p95: 96.6558}
+traversability: {ms: 514.588, responder_cells: 11100, agent_cells: 51261, risk_proxy_max: 0.2454}   # [PROXY] risk, uncalibrated
+risk_terms: {overhang: {max: 0.080, at_xy_m: [4.625, -0.475], cells_over_0.2: 0}, unsupported: {max: 0.230, at_xy_m: [5.325, 1.825], cells_over_0.2: 1061}}

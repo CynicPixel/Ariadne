@@ -2949,8 +2949,14 @@ Both are main's (3.2 / 3.5).
   - 8³-voxel blocks in a hash; along-ray SDF, clamped to τ = 3 voxels; per-keyframe averaging, then one fusion per
     voxel, with weights `(σ_ref/σ_Z)²`; a silhouette guard.
   - Tri-state: unknown = weight 0; occupied = SDF < half a voxel.
-  - ESDF: three FH passes, edge-clearance convention, capped at ρ_responder + 2 voxels. Two fields: egress (unknown
-    blocks) and agent. Recomputed per dirty box (± reach), never globally.
+  - ESDF: distance to the nearest point of a blocked cube (the GT's and D45's convention), by three exact windowed
+    min-convolution passes, capped at ρ_responder + 2 voxels. Two fields: egress (unknown blocks) and agent.
+    Recomputed per dirty box (± reach), never globally.
+  - **Correction (2026-10-23):** as first committed (`f3eb6bb`), clearance was `edt·v − v/2` on an FH
+    (centre-to-centre) transform, mislabelled as the GT convention. It is optimistic on diagonals, gave 4 false
+    egress claims at GT clearance 0.395 m, and the brute-force test had copied it. The map metrics are unaffected
+    (they read the TSDF slab). The 5 cm decision was re-run with worldgen's `_edt_to` and survives. The preflight
+    was incomplete: `docs/design/PHASE4_PREFLIGHT.md`.
   - Frontiers in the motion band, 26-connected, with centroid, normal and a 64-ray visible-unknown fan; updated
     incrementally (FUEL's rule).
   - Coarse layer: 0.5 m cells, RLE codec.
@@ -2968,8 +2974,44 @@ Both are main's (3.2 / 3.5).
 
   | step | status |
   |---|---|
-  | catalogue | Voxblox (block hash), FH 2012, FUEL (incremental frontiers): `VOLUMETRIC_4.1.md` §1 |
+  | catalogue | Voxblox (block hash, weighting, projective error), nvblox, FIESTA, FH 2012, FUEL: `VOLUMETRIC_4.1.md` §1, `PHASE4_PREFLIGHT.md` §2; **`ALGORITHMS.md` entry owed** |
   | arch decision | D110, plus the §20.1 blockquote |
   | ablation matrix | 1.8 OctoMap placeholder (D45) vs D110, same spool and scorer |
   | benchmark config | `configs/mission/mission_v1.yaml` (stride, gates, band); D110 defaults in `TsdfParams` |
   | manifest schema | `ariadne_volumetric_eval` manifest (`layer: phase4_volumetric`), spool sha256 |
+
+
+## 2026-10-23 — D111: 4.2 traversability at ρ_agent / ρ_responder — egress = observed column ∧ 3D occupied capsule; structural risk [PROXY] built, uncalibrated
+
+**Partial: traversability is done in replay; the risk proxy is not calibrated.**
+
+- **What** (`docs/design/TRAVERSABILITY_4.2.md`, `cpp/planning/volumetric/traversability.{hpp,cpp}`):
+  - **Egress at ρ_responder** (the product, invariant 4) is the intersection of two tests:
+    - D45's observed-column rule on 4.1's TSDF slab, with 1.8's `EdgeClearance` ≥ ρ;
+    - a standing-body capsule (axis 0.45–1.40 m) on the occupied-only 3D field.
+  - **Agent at ρ_agent:** a capsule over the flying rig's 0.8–1.2 m altitude band on the agent field.
+  - **Risk `[PROXY]`:** saturating counts of down-facing undersides and of mass over open columns, in a 1 m disc,
+    in the 1.8–2.4 m band.
+  - Outputs on the briefing grid: traversability, per-column clearance, risk.
+- **Supersedes arch §22.1's 26-connected 3D lattice:** 2.5D, because a responder walks on a flat floor. The 3D test
+  survives as the capsule.
+- **Why not strict 3D:** the rig cannot observe a standing body's volume. On the evidence spool the strict rule has
+  recall 0.354 and closes the target. Reported, not the product.
+- **Evidence:** 5 tests, with independent brute force. On the evidence spool: precision 1.000, recall 0.900,
+  starts → target both, against 1.8's 1.000 / 0.898 / both (`evaluation/runs/traversability_4.2/`).
+- **Changed after measuring:**
+  - the strict → hybrid rule (advisor review);
+  - the clearance convention (D110's correction);
+  - the support test (before any calibration data existed).
+- **Open:**
+  - risk calibration against GT zones (worldgen hazards + renders; GPU spend to be asked);
+  - Voxblox's half-voxel inflation (P2), decided separately.
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | STEP (risk map as cost), GBPlanner2 (ground beneath edges): `TRAVERSABILITY_4.2.md` §1; **`ALGORITHMS.md` entry owed** |
+  | arch decision | D111, plus the §20.5 / §22.1 blockquotes |
+  | ablation matrix | strict 3D vs hybrid vs 1.8, same spool and scorer |
+  | benchmark config | `TravParams` defaults; ρ from `configs/mission/mission_v1.yaml` |
+  | manifest schema | `ariadne_volumetric_eval` results (`traversability`, `risk_terms`) |

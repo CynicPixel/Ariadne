@@ -9,9 +9,12 @@ modified: it stays the ablation baseline.
 
 **OpenCV-native (SMOKE §4u).** `cv::Volume(HashTSDF)` integrates and raycasts. It has no voxel or weight read and no
 per-pixel weight, so tri-state, ESDF and frontiers cannot be built on it. That is §20.1's fallback case: a
-from-scratch voxel-hash TSDF, with `cv::Volume` HashTSDF as the **oracle** (§5). `cv::distanceTransform` is 2D only,
-so the 3D ESDF is from scratch too. It is checked against a brute-force oracle, and 2D slices of it against
-`cv::distanceTransform(DIST_L2, DIST_MASK_PRECISE)`.
+from-scratch voxel-hash TSDF, with `cv::Volume` HashTSDF as the **oracle** (§5). `cv::distanceTransform` is 2D only
+and measures centre to centre, so the 3D ESDF is from scratch too. It is checked against a brute-force
+nearest-point-of-cube oracle, and 2D slices of it against 1.8's `planning::EdgeClearance`.
+
+> **This preflight was incomplete; see `PHASE4_PREFLIGHT.md`.** Primary sources were read after the first commit.
+> They changed nothing in the TSDF itself, but the ESDF's clearance convention was wrong as first committed (§3.3).
 
 **Literature (2026-10-22).**
 - **Voxblox** (Oleynikova et al., IROS 2017, [arXiv:1611.03631](https://arxiv.org/abs/1611.03631)): TSDF in a
@@ -27,7 +30,9 @@ so the 3D ESDF is from scratch too. It is checked against a brute-force oracle, 
 - **OctoMap / 1.8 (D45):** the ray-walk (Amanatides & Woo 1987) and the σ depth gates are reused unchanged.
 
 **Measured before choosing the voxel size** (GT of `ci_tiny_0` and `maze_medium_0`, rasterised conservatively; the
-ρ_responder lattice and its start→target connectivity, edge-clearance convention):
+ρ_responder lattice and its start→target connectivity; **re-run 2026-10-23 with worldgen's own `_edt_to` and the
+GT's `free` mask** (props included), which reproduces GT `trav_responder` exactly at 5 cm. The first run used a wrong
+clearance formula and walls only; the table did not change):
 
 | voxel | no bleed: start0 / start1 | one-cell wall bleed (D45's measured artefact): start0 / start1 |
 |---|---|---|
@@ -87,12 +92,19 @@ far voxels needed about 18 observations to count as known, and coverage fell to 
 definition; it was not a tuned threshold, and both runs are reported.
 
 ### 3.3 ESDF (§20.3), incremental per updated block
-- FH Algorithm 1 along x, then y, then z, on squared distances in voxel units. Sites are blocked voxels (f = 0);
-  others are +∞. The paper's `(f(q)+q²) − (f(v)+v²)` is undefined for +∞, so +∞ samples are skipped when the
-  envelope is built (an all-+∞ line stays +∞).
-- **Clearance** is the distance from a voxel centre to the nearest blocked voxel's **edge**: `edt·voxel − voxel/2`.
-  This is the GT's and D45's convention. It is capped at `d_max = ρ_responder + 2·voxel` (0.50 m), since nothing
-  downstream reads more.
+- **Clearance** is the distance from a voxel centre to the **nearest point of a blocked voxel's cube**: per axis an
+  offset of Δ voxels contributes `max(|Δ| − ½, 0)`, and d² is the sum of the squares. This is the GT's and D45's
+  convention (worldgen `raster._edt_to`, `planning::EdgeClearance`). It is capped at `d_max = ρ_responder + 2·voxel`
+  (0.50 m), since nothing downstream reads more.
+- **Correction (2026-10-23).** As first committed (`f3eb6bb`), clearance was `edt·voxel − voxel/2` on a
+  centre-to-centre FH transform, and this design called that the GT's convention. It is only along an axis; on
+  diagonals it is optimistic. It produced 4 false egress claims at GT clearance 0.395 m. The brute-force test had
+  copied the same formula, so it passed. Found by the advisor review, `PHASE4_PREFLIGHT.md` §5.
+- **Transform:** FH's lower envelope is exact for centre-to-centre distance only. The cube metric is `(2|Δ| − 1)²/4`
+  per axis, still separable. Each axis pass (x, then y, then z) is an exact **windowed min-convolution** over the
+  capped reach `k = ⌈d_max/v⌉ + 1 = 11`: a true distance ≤ d_max has every axis offset ≤ `d_max/v + ½`. The passes
+  are stored as `4d²`, an integer, in uint16. A deviation from arch §20.3's "FH three-pass", for exactness in the
+  GT's convention.
 - **Two fields:** egress (blocked = occupied ∪ unknown: "observed, not merely not contradicted", D45) and agent
   (blocked = occupied).
 - **Incremental:** after a keyframe, the dirty set is the blocks it touched. With a capped field, a change at a voxel
@@ -131,10 +143,11 @@ timing, D45). The L1 live runtime fills the same struct from its estimator. The 
 
 ## 5. Tests (in the commit)
 
-1. **FH 1D:** against brute force on random sampled functions, including `+∞` runs.
+1. **1D min-convolution:** against brute force (the distance to each sample's segment, by clamping) on random inputs,
+   including empty runs.
 2. **ESDF vs brute-force oracle (§37.6, exit gate):** 50 random 3D grids with obstacle densities from 1 % to 30 %.
-   Exact in voxel units (squared distances are integers); one 2D slice also against `cv::distanceTransform`
-   (≤ 1e-4).
+   The oracle finds the nearest point of each cube by clamping, independently of the implementation's formula.
+   Exact (4d² is an integer). One 2D slice is also checked against 1.8's `EdgeClearance` (≤ 1e-12).
 3. **Incremental ESDF:** after 30 random block edits, equal bit for bit to a global recompute.
 4. **TSDF on a known scene:** a box room rendered to synthetic depth from several poses.
    - The occupied voxels lie within one voxel of the true walls.
@@ -160,9 +173,9 @@ timing, D45). The L1 live runtime fills the same struct from its estimator. The 
 
 | test | measured |
 |---|---|
-| FH 1D vs brute force (500 random functions with +∞ runs) | exact |
-| ESDF vs brute force, 50 random grids, 1–30 % sites (§37.6) | exact |
-| 2D slice vs `cv::distanceTransform` (DIST_L2, PRECISE) | ≤ 1e-4 |
+| 1D min-convolution vs brute force (500 random inputs with empty runs) | exact |
+| ESDF vs brute-force nearest point of cube, 50 random grids, 1–30 % sites (§37.6) | exact |
+| 2D slice vs 1.8's `EdgeClearance` | ≤ 1e-12 |
 | Incremental ESDF vs rebuild (12 keyframes, ≥ 6 incremental) | bit-identical |
 | Known room: occupied floating > 1.5 voxels in open space | 0 (34 one-voxel bleed, 0.06 %) |
 | Known room: free voxels > half a voxel inside structure | 0 |
@@ -187,9 +200,13 @@ run; scored by `volumetric_eval.py`, which reproduces `mission_eval.py`'s 1.8 nu
 | 1.8 placeholder (D45) | 0.933 | 0.961 | 0.707 | 793 (756 / 36 / 1) |
 | *first run, `w_min = 0.5` (superseded)* | *0.861* | *0.995* | *0.855* | *527* |
 
-- **Cost** (dev host, shared; 571 keyframes): integrate 14.8 ms mean (p95 30.0), incremental ESDF 43.9 (80.6),
-  frontier update 45.8 (73.2), about 105 ms per keyframe in all. The two agents produce about 2.9 keyframes per
-  second together. ESDF: 565 incremental updates, 6 rebuilds (box growth). Map: 3067 blocks, 12.6 MB.
+- **Cost** (dev host, shared; 571 keyframes; corrected ESDF): integrate 22.6 ms mean (p95 54.7), incremental ESDF
+  80.6 (144.0), frontier update 59.8 (96.7), about 163 ms per keyframe in all. The two agents produce about 2.9
+  keyframes per second together, so the budget is about 340 ms. The first run, with the wrong FH metric, measured
+  14.8 / 43.9 / 45.8 ms at lower host load: the windowed transform costs more, and the host was shared. ESDF: 565
+  incremental updates, 6 rebuilds (box growth). Map: 3067 blocks, 12.6 MB.
+- **The map metrics in the table above do not depend on the ESDF** (they read the TSDF slab), so the correction
+  leaves them unchanged.
 - **Coarse layer:** 4320 cells at 0.5 m, 1047 RLE bytes for the whole merged map.
 - **Reading:** occupied precision rises from 0.71 to 0.87 because surfaces come from the SDF zero crossing, not from
   "the voxel a ray ended in". The false-occupied cells are still almost all one cell from GT structure: the thin-wall

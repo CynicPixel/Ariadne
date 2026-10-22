@@ -2,12 +2,12 @@
 // exit-gate oracle) and cv::distanceTransform, the incremental ESDF against a rebuild, the TSDF on a known room and
 // against OpenCV's HashTSDF (the §20.1 oracle), frontiers against brute force and incremental against full,
 // determinism, and the coarse RLE codec.
+#include "planning/volumetric/clearance.hpp"
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
 #include "planning/volumetric/tsdf_map.hpp"
 
 #include <gtest/gtest.h>
-#include <opencv2/geometry/2d.hpp>   // cv::DIST_L2 (moved out of imgproc in OpenCV 5)
 #include <opencv2/imgproc.hpp>
 #include <opencv2/ptcloud/volume.hpp>
 #include <opencv2/ptcloud/volume_settings.hpp>
@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <random>
 #include <iterator>
@@ -124,8 +125,10 @@ TsdfParams RoomParams() {
     return p;
 }
 
-std::vector<double> BruteEdt(const std::vector<uint8_t>& b, int nx, int ny, int nz) {
-    std::vector<double> out(b.size(), kInf);
+// Independent oracle: distance from voxel centre q to the nearest POINT of each blocked voxel's cube, found by
+// clamping q into the cube (not the implementation's per-axis formula). Returns 4 d^2 (exact: half-integer offsets).
+std::vector<int64_t> BruteEdgeSq4(const std::vector<uint8_t>& b, int nx, int ny, int nz) {
+    std::vector<int64_t> out(b.size(), std::numeric_limits<int64_t>::max());
     std::vector<Idx3> sites;
     for (int z = 0; z < nz; ++z)
         for (int y = 0; y < ny; ++y)
@@ -134,8 +137,13 @@ std::vector<double> BruteEdt(const std::vector<uint8_t>& b, int nx, int ny, int 
     for (int z = 0; z < nz; ++z)
         for (int y = 0; y < ny; ++y)
             for (int x = 0; x < nx; ++x) {
-                double m = kInf;
-                for (const auto& s : sites) m = std::min(m, double((x - s.x) * (x - s.x) + (y - s.y) * (y - s.y) + (z - s.z) * (z - s.z)));
+                int64_t m = std::numeric_limits<int64_t>::max();
+                for (const auto& s : sites) {
+                    const double px = std::clamp(double(x), s.x - 0.5, s.x + 0.5), py = std::clamp(double(y), s.y - 0.5, s.y + 0.5),
+                                 pz = std::clamp(double(z), s.z - 0.5, s.z + 0.5);
+                    const double d2 = (x - px) * (x - px) + (y - py) * (y - py) + (z - pz) * (z - pz);
+                    m = std::min(m, int64_t(std::llround(4 * d2)));
+                }
                 out[size_t(x + nx * (y + ny * z))] = m;
             }
     return out;
@@ -143,24 +151,26 @@ std::vector<double> BruteEdt(const std::vector<uint8_t>& b, int nx, int ny, int 
 
 }  // namespace
 
-TEST(Volumetric, FelzenszwalbOneDimensionalMatchesBruteForceIncludingInfiniteRuns) {
+TEST(Volumetric, EdgeMinConvolutionMatchesBruteForceIncludingEmptyRuns) {
     std::mt19937 rng(7);
     for (int trial = 0; trial < 500; ++trial) {
         const int n = 1 + int(rng() % 40);
-        std::vector<double> f(static_cast<size_t>(n)), out(static_cast<size_t>(n));
-        for (auto& x : f) x = (rng() % 3 == 0) ? kInf : double(rng() % 50);
-        std::vector<int> v(size_t(n) + 1);
-        std::vector<double> z(size_t(n) + 2);
-        DistanceTransform1D(f.data(), n, 1, out.data(), v.data(), z.data());
+        std::vector<int32_t> f(static_cast<size_t>(n)), out(static_cast<size_t>(n));
+        for (auto& x : f) x = (rng() % 3 == 0) ? kEdgeInf : int32_t(rng() % 200);
+        EdgeMinConvolution1D(f.data(), n, 1, n, out.data());
         for (int q = 0; q < n; ++q) {
-            double m = kInf;
-            for (int p = 0; p < n; ++p) m = std::min(m, double(q - p) * (q - p) + f[size_t(p)]);
+            int64_t m = kEdgeInf;   // in[p] + 4 * (distance from q to the segment [p - 1/2, p + 1/2])^2
+            for (int p = 0; p < n; ++p) {
+                if (f[size_t(p)] >= kEdgeInf) continue;
+                const double c = std::clamp(double(q), p - 0.5, p + 0.5);
+                m = std::min<int64_t>(m, f[size_t(p)] + std::llround(4 * (q - c) * (q - c)));
+            }
             ASSERT_EQ(out[size_t(q)], m) << "trial " << trial << " q " << q;
         }
     }
 }
 
-TEST(Volumetric, EsdfMatchesBruteForceOracleOnRandomGrids) {   // §37.6
+TEST(Volumetric, EsdfMatchesBruteForceNearestPointOfCubeOnRandomGrids) {   // §37.6
     std::mt19937 rng(11);
     for (int g = 0; g < 50; ++g) {
         const int nx = 6 + int(rng() % 9), ny = 6 + int(rng() % 9), nz = 3 + int(rng() % 9);
@@ -168,28 +178,32 @@ TEST(Volumetric, EsdfMatchesBruteForceOracleOnRandomGrids) {   // §37.6
         std::vector<uint8_t> b(size_t(nx * ny * nz));
         std::uniform_real_distribution<double> U(0, 1);
         for (auto& x : b) x = U(rng) < density;
-        const auto fast = SquaredEdt3D(b, nx, ny, nz), brute = BruteEdt(b, nx, ny, nz);
-        for (size_t i = 0; i < b.size(); ++i) ASSERT_EQ(fast[i], brute[i]) << "grid " << g << " voxel " << i;
+        const int reach = std::max({nx, ny, nz});   // uncapped: the whole grid
+        const auto fast = EdgeDistanceSq4(b, nx, ny, nz, reach);
+        const auto brute = BruteEdgeSq4(b, nx, ny, nz);
+        for (size_t i = 0; i < b.size(); ++i) {
+            const int64_t bf = brute[i] == std::numeric_limits<int64_t>::max() ? kEdgeInf : brute[i];
+            ASSERT_EQ(int64_t(fast[i]), bf) << "grid " << g << " voxel " << i;
+        }
     }
 }
 
-TEST(Volumetric, EsdfSliceMatchesOpenCvPreciseDistanceTransform) {
+TEST(Volumetric, EsdfSliceEqualsThePlaceholdersEdgeClearance) {   // the 1.8 / GT convention, a separate implementation
     std::mt19937 rng(3);
     const int nx = 97, ny = 61;
+    const double vox = 0.05, cap = 0.50;
     std::vector<uint8_t> b(size_t(nx * ny));
-    cv::Mat src(ny, nx, CV_8U);
+    cv::Mat mask(ny, nx, CV_8U);
     for (int y = 0; y < ny; ++y)
-        for (int x = 0; x < nx; ++x) {
-            b[size_t(x + nx * y)] = rng() % 25 == 0;
-            src.at<uint8_t>(y, x) = b[size_t(x + nx * y)] ? 0 : 255;   // OpenCV: distance to the nearest ZERO pixel
-        }
-    cv::Mat d;
-    cv::distanceTransform(src, d, cv::DIST_L2, cv::DIST_MASK_PRECISE, CV_32F);
-    const auto e = SquaredEdt3D(b, nx, ny, 1);
+        for (int x = 0; x < nx; ++x) mask.at<uint8_t>(y, x) = b[size_t(x + nx * y)] = rng() % 25 == 0;
+    const cv::Mat ref = EdgeClearance(mask, vox, cap);
+    const int reach = int(std::ceil(cap / vox)) + 1;
+    const auto e = EdgeDistanceSq4(b, nx, ny, 1, reach);
     double worst = 0;
     for (int y = 0; y < ny; ++y)
-        for (int x = 0; x < nx; ++x) worst = std::max(worst, std::abs(std::sqrt(e[size_t(x + nx * y)]) - d.at<float>(y, x)));
-    EXPECT_LE(worst, 1e-4);
+        for (int x = 0; x < nx; ++x)
+            worst = std::max(worst, std::abs(std::min(cap, std::sqrt(e[size_t(x + nx * y)] / 4.0) * vox) - ref.at<double>(y, x)));
+    EXPECT_LE(worst, 1e-12);
 }
 
 TEST(Volumetric, TsdfOnAKnownRoomCarvesFreeAndPlacesSurfacesWithinAVoxel) {

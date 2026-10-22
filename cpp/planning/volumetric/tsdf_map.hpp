@@ -89,6 +89,8 @@ public:
     std::vector<Idx3> Integrate(const DepthFrame& f);
 
     const TsdfVoxel* Find(const Idx3& v) const;
+    /// Writes one voxel directly (tests with exact SDFs, offline import); allocates its block. Not a fusion.
+    void SetVoxel(const Idx3& v, const TsdfVoxel& x);
     uint8_t State(const Idx3& v) const;   // kUnknown / kFree / kOccupied (§20.2)
     double Voxel() const { return p_.voxel; }
     const TsdfParams& Params() const { return p_; }
