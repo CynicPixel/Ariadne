@@ -146,6 +146,24 @@ class Routes:
 
 
 @dataclass(frozen=True)
+class Hazards:
+    """Structural hazards above a standing responder (design RISK_ZONES_4.2, D112): they threaten a route without
+    blocking it, so GT traversability is unchanged. Opt-in: at the defaults (no hazards) this section is left out of
+    Preset.to_canonical(), so every existing preset digest and scene id is unchanged."""
+    cantilevers: tuple[int, int] = (0, 0)       # per scene
+    cant_projection_m: Range = (0.8, 1.6)       # out from the wall
+    cant_width_m: Range = (1.0, 2.0)            # along the wall
+    cant_thickness_m: Range = (0.15, 0.25)
+    cant_underside_m: Range = (1.95, 2.25)
+    hung: tuple[int, int] = (0, 0)              # per scene
+    hung_side_m: Range = (0.4, 0.8)
+    hung_height_m: Range = (0.2, 0.35)
+    hung_underside_m: Range = (1.95, 2.15)
+    gap_m: float = 0.3                          # between hazards
+    zone_margin_m: float = 0.5                  # GT risk_zone = footprint dilated by this [ASSUMPTION: debris fall]
+
+
+@dataclass(frozen=True)
 class Search:
     max_attempts: int = 200
 
@@ -167,9 +185,13 @@ class Preset:
     motion: Motion = field(default_factory=Motion)
     routes: Routes = field(default_factory=Routes)
     search: Search = field(default_factory=Search)
+    hazards: Hazards = field(default_factory=Hazards)
 
     def to_canonical(self) -> dict:
-        return dataclasses.asdict(self)
+        d = dataclasses.asdict(self)
+        if self.hazards == Hazards():   # opt-in section: absent at its default, so pre-D112 digests are unchanged
+            del d["hazards"]
+        return d
 
     def digest(self) -> str:
         blob = json.dumps(self.to_canonical(), sort_keys=True, separators=(",", ":"))
@@ -179,7 +201,8 @@ class Preset:
 _SECTION_TYPES = {"lattice": Lattice, "rooms": Rooms, "corridors": Corridors, "topology": Topology,
                   "entrances": Entrances, "target": Target, "clearance": Clearance,
                   "structure": Structure, "props": Props, "appearance": Appearance,
-                  "lighting": Lighting, "motion": Motion, "routes": Routes, "search": Search}
+                  "lighting": Lighting, "motion": Motion, "routes": Routes, "search": Search,
+                  "hazards": Hazards}
 
 
 def _coerce(cls, name, value, default):
@@ -245,6 +268,28 @@ def _range(where, r, lo=None, hi=None):
 
 def validate(p: Preset) -> None:
     g = p.structure.grid_m
+    hz = p.hazards
+    if hz != Hazards() and (hz.cantilevers[1] > 0 or hz.hung[1] > 0):
+        _validate_hazards(p, hz, g)
+    _validate_rest(p, g)
+
+
+def _validate_hazards(p: Preset, hz: Hazards, g: float) -> None:
+    for name in ("cantilevers", "hung"):
+        r = getattr(hz, name)
+        if not 0 <= r[0] <= r[1] <= 8:
+            raise PresetError(f"hazards.{name}: need 0 <= lo <= hi <= 8")
+    for name in ("cant_projection_m", "cant_width_m", "cant_thickness_m", "hung_side_m", "hung_height_m"):
+        _range(f"hazards.{name}", getattr(hz, name), lo=g)
+    # Above a standing responder (1.8 m, design TRAVERSABILITY_4.2) and under the lowest ceiling.
+    top = p.structure.wall_height_m[0] - 0.1
+    _range("hazards.cant_underside_m", hz.cant_underside_m, lo=1.9, hi=top - hz.cant_thickness_m[1])
+    _range("hazards.hung_underside_m", hz.hung_underside_m, lo=1.9, hi=top - hz.hung_height_m[1])
+    if not (hz.gap_m >= 0 and hz.zone_margin_m >= 0):
+        raise PresetError("hazards: gap_m and zone_margin_m must be >= 0")
+
+
+def _validate_rest(p: Preset, g: float) -> None:
     if not 0.01 <= g <= 0.1:
         raise PresetError("structure.grid_m must be in [0.01, 0.1]")
     L = p.lattice

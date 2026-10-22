@@ -17,6 +17,7 @@ import numpy as np
 from . import GENERATOR_VERSION
 from .assets import load_charuco
 from .furnish import place_boards, place_props
+from .hazards import place_hazards
 from .routes import gate, opportunities, schedule
 from .layout import Layout, Reject, S_HEIGHT, S_TARGET, build_base, complete_for_target
 from .params import Preset
@@ -52,6 +53,7 @@ class Scene:
     structure_free: np.ndarray | None = None   # rooms/passages/vestibules only (walls come from it)
     props: list = field(default_factory=list)
     boards: list = field(default_factory=list)   # furnish.BoardPlacement per entrance
+    hazards: list = field(default_factory=list)  # hazards.Hazard (D112); empty unless the preset asks
     wall_height_m: float = 0.0
     scripts: list = field(default_factory=list)   # routes.AgentScript per agent
     start_delays_s: list = field(default_factory=list)   # per-agent extra initial hold
@@ -161,7 +163,7 @@ def evaluate(base: Layout) -> Scene:
         scene = Scene(preset=P, seed=L.seed, attempt=L.attempt, layout=L, grid=grid, free=free,
                       esdf_m=e, trav_agent=trav_a, trav_responder=trav_r, target_room=room,
                       target_cell=tc, start_cells=starts, structure_free=structure, props=props,
-                      boards=boards, wall_height_m=_wall_height(L))
+                      boards=boards, wall_height_m=_wall_height(L), hazards=place_hazards(L))
         for k, s_ in enumerate(starts):
             dr = d_start[k][tc]
             da = geodesic(trav_a, s_, g)[0][tc]

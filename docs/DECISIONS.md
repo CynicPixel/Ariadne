@@ -3015,3 +3015,35 @@ Both are main's (3.2 / 3.5).
   | ablation matrix | strict 3D vs hybrid vs 1.8, same spool and scorer |
   | benchmark config | `TravParams` defaults; ρ from `configs/mission/mission_v1.yaml` |
   | manifest schema | `ariadne_volumetric_eval` results (`traversability`, `risk_terms`) |
+
+
+## 2026-10-23 — D112: worldgen structural hazards (cantilever slabs, hung masses) with GT risk zones, for calibrating D111's risk proxy
+
+- **What** (`docs/design/RISK_ZONES_4.2.md`, `python/dataset_tools/worldgen/hazards.py`):
+  - An opt-in preset section `hazards`. Its own Philox stream (`S_HAZARDS = 40`) places cantilever slabs (held by a
+    room wall) and hung masses, with undersides ≥ 1.95 m: above a standing responder, so they threaten a route
+    without blocking it.
+  - Six-face meshes, bottom included (`K_HAZARD`).
+  - `scene_gt.npz` gains `hazard_footprint` and `risk_zone` (footprint ⊕ 0.5 m, `[ASSUMPTION]` a debris-fall
+    margin); `scene.json` gains `hazards`.
+  - New preset `configs/worldgen/ci_tiny_hazard.yaml` (ci_tiny + 2–3 cantilevers + 1–2 hung masses).
+- **Why these two:** the US&R collapse patterns (secondary sources, §1 of the design). Cantilever collapse is "the
+  most dangerous type of collapse to operate in". Lean-to and V slabs reach the floor and would need a 3D GT
+  traversability: out of v1, stated.
+- **Existing scenes unchanged, proven:**
+  - at its default the section is left out of `Preset.to_canonical()`, so all four preset digests equal their
+    pre-D112 values (pinned in `test_hazards.py`);
+  - every golden scene-directory digest still matches (`test_golden.py`);
+  - a no-hazard scene's `scene_gt.npz` gains no layers.
+- **Tests:** 112/112 worldgen tests. The new ones:
+  - digests;
+  - a twin check: `ci_tiny_hazard` seed 0 has the same attempt, `free`, `esdf`, `trav_*`, starts, target and
+    scripts as `ci_tiny` seed 0, since the streams are keyed by (seed, attempt, site);
+  - placement constraints;
+  - outward faces, with the bottom normal at −z;
+  - the GT margin by hand.
+- **Scenes:** seeds 0 / 1 / 2 have 5 / 4 / 5 hazards (scene ids `f232a40b77b3538f`, `d0ab877b3a06fc04`,
+  `3406f0792c57a975`).
+- **Next:** render on AWS g4dn (maintainer, 2026-10-23), run the Phase 1 estimator chain to a spool, then the 4.1
+  map, then calibration by the protocol fixed in the design §3: the threshold on seed 0, the report on seeds 1–2,
+  and AUC ≥ 0.75 to enter planning.
