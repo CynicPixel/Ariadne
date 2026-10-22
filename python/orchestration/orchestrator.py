@@ -22,6 +22,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -42,6 +43,13 @@ SYSTEM = (
     "the same cluster when another is available, keep risk low, and remember the mission: find a route a human "
     "responder can use. A candidate whose risk exceeds the threshold needs request_human_approval first; if the "
     "verdict is not 'approved', pick another candidate or hold. Keep each reason to one sentence.")
+
+
+def mcp_params(ddir: Path, text_only: bool) -> StdioServerParameters:
+    """The MCP server as a stdio subprocess. mcp's stdio client passes only HOME/LOGNAME/PATH/SHELL/TERM/USER to it
+    (DEFAULT_INHERITED_ENV_VARS, mcp 2.3.0), so PYTHONPATH is dropped: run it from python/ with this interpreter."""
+    return StdioServerParameters(command=sys.executable, cwd=str(Path(__file__).resolve().parents[1]),
+                                 args=["-m", "orchestration.mcp_server", str(ddir)] + (["--text-only"] if text_only else []))
 
 
 def tool_config(tools) -> dict:
@@ -138,9 +146,7 @@ async def serve(args) -> None:
     ddir.mkdir(parents=True, exist_ok=True)
     br = boto3.client("bedrock-runtime", region_name="eu-north-1",
                       config=Config(retries={"max_attempts": 2, "mode": "standard"}, read_timeout=60))
-    mm = StdioServerParameters(command="python", args=["-m", "orchestration.mcp_server", str(ddir)])
-    tx = StdioServerParameters(command="python", args=["-m", "orchestration.mcp_server", str(ddir), "--text-only"])
-    async with Client(mm) as m_mm, Client(tx) as m_tx:
+    async with Client(mcp_params(ddir, False)) as m_mm, Client(mcp_params(ddir, True)) as m_tx:
         mcps = {"multimodal": m_mm, "text": m_tx}
         cfgs = {k: tool_config((await c.list_tools()).tools) for k, c in mcps.items()}
         (ddir / "tools.json").write_text(json.dumps(cfgs, indent=1))

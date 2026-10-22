@@ -5,6 +5,7 @@
 #   infra/scripts/live.sh build                    sim side: the mover plugin + ros2/ (colcon) in ariadne/sim
 #   infra/scripts/live.sh compose PRESET SEED RTF  scene + mission_live.* -> build/live/scenes/<preset>_<seed>
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
+#                                                  config: ARIADNE_LIVE_CONFIG (default configs/mission/live_v1.yaml)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
@@ -14,6 +15,10 @@
 #                              RuntimeLink in one component container; unpaused here once <run>/link.ready exists
 #   console  ariadne-console   ARIADNE_LIVE=<run>:<scene> uvicorn, 127.0.0.1:${ARIADNE_CONSOLE_PORT:-8080};
 #                              a probe client keeps a WebSocket open so frames are served (and logged) during the run
+#   orch     ariadne-orchestrator  only with `chooser: llm` (AGENTIC_7 D156): the Bedrock tool loop + MCP servers,
+#                              listening on <run>/chooser.sock BEFORE the runtime starts (it connects, waiting <= 60 s).
+#                              Credentials: the current session exported to a mode-600 env file that is deleted as
+#                              soon as docker has read it (aws.sh's pattern for Terraform); short-lived, never logged.
 # Render: NVIDIA EGL when the docker NVIDIA runtime exists (the AWS g4dn host), else Mesa llvmpipe (slow; smoke only).
 # Parallelism: the builds use 2 jobs (the dev host crashed above that).
 # ---------------------------------------------------------------------------
@@ -24,6 +29,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SIM_IMAGE="${ARIADNE_SIM_IMAGE:-ariadne/sim:dev}"
 CORE_IMAGE="${ARIADNE_CORE_IMAGE:-ariadne/core-dev:dev}"
 CONSOLE_IMAGE="${ARIADNE_CONSOLE_IMAGE:-ariadne-console:1}"
+ORCH_IMAGE="${ARIADNE_ORCH_IMAGE:-ariadne-orchestrator:1}"
 JOBS="${ARIADNE_BUILD_JOBS:-2}"
 U="$(id -u):$(id -g)"
 log() { printf '[live %s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
@@ -63,20 +69,47 @@ stop_mine() {
   for c in "${CONTAINERS[@]}"; do docker stop -t 10 "$c" >/dev/null 2>&1 || true; done
 }
 
+start_orchestrator() {   # -> appends its container id; returns once <run>/chooser.sock exists
+  local id="$1" run="$2" envfile awscli=(aws)
+  command -v aws >/dev/null || awscli=("$REPO_ROOT/infra/scripts/aws.sh" aws)   # the dev host has no aws install
+  envfile="$(mktemp)"; chmod 600 "$envfile"
+  if ! "${awscli[@]}" configure export-credentials --format env-no-export > "$envfile" 2>/dev/null; then
+    rm -f "$envfile"; log "no AWS credentials for Bedrock (infra/scripts/aws.sh login)"; exit 1
+  fi
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-orch" --memory=1g --memory-swap=1g -u "$U" -e HOME=/tmp \
+    --env-file "$envfile" -v "$REPO_ROOT":/work -w /work/python "$ORCH_IMAGE" \
+    python -m orchestration.orchestrator --socket "/work/$run/chooser.sock" --dir "/work/$run/decisions")")
+  rm -f "$envfile"
+  orch="${CONTAINERS[-1]}"
+  local t0; t0=$(date +%s)
+  until [ -S "$REPO_ROOT/$run/chooser.sock" ]; do
+    docker inspect -f '{{.State.Running}}' "$orch" | grep -q true || { log "orchestrator exited"; docker logs "$orch" 2>&1 | tail -20 >&2; exit 1; }
+    [ $(( $(date +%s) - t0 )) -lt 60 ] || { log "orchestrator not listening after 60 s"; exit 1; }
+    sleep 1
+  done
+  log "orchestrator: $(docker logs "$orch" 2>&1 | tail -1)"
+}
+
 cmd_run() {
   local scene="$1" out="$2" end_s="${3:-}"
   [ -f "$REPO_ROOT/$scene/mission_live.sdf" ] || { log "no $scene/mission_live.sdf (live.sh compose)"; exit 2; }
   local id; id="$(date -u +%Y%m%dT%H%M%SZ)-$(head -c2 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   local run="$out/live-$id"
   mkdir -p "$REPO_ROOT/$run"
-  local live_cfg=configs/mission/live_v1.yaml
-  if [ -n "$end_s" ]; then
-    sed "s/^end_s: .*/end_s: $end_s/" "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
-    live_cfg="$run/live_config.yaml"
-  fi
+  local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con orch=""
+  # The config this run used, always recorded beside it: replay reads it (chooser, gate, end_s).
+  sed "${end_s:+s/^end_s: .*/end_s: $end_s/}" "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
+  live_cfg="$run/live_config.yaml"
   trap 'stop_mine' EXIT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
-  log "run $id: scene $scene, world '$world', end ${end_s:-config} s, render: $(render_args | cut -d' ' -f1-2)"
+  log "run $id: scene $scene, world '$world', end ${end_s:-config} s, config $live_cfg, render: $(render_args | cut -d' ' -f1-2)"
+
+  # 0. chooser llm: the orchestrator listens first.
+  local chooser=()
+  if grep -q '^chooser: *llm' "$REPO_ROOT/$live_cfg"; then
+    start_orchestrator "$id" "$run"
+    chooser=(--chooser-socket "$run/chooser.sock")
+  fi
 
   # 1. The runtime listens first.
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work \
@@ -86,7 +119,8 @@ cmd_run() {
     "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
       --mission-config configs/mission/mission_v1.yaml --live-config "$live_cfg" \
-      --out "$run" --link "$run/link.sock")")
+      --out "$run" --link "$run/link.sock" "${chooser[@]}")")
+  rt="${CONTAINERS[-1]}"
 
   # 2. gz (paused) + bridge + RuntimeLink.
   # shellcheck disable=SC2046
@@ -95,16 +129,17 @@ cmd_run() {
     -e GZ_TRANSPORT_RCVHWM=0 -e GZ_TRANSPORT_SNDHWM=0 \
     "$SIM_IMAGE" bash -c "source /opt/ros/jazzy/setup.bash && source build/ros2/install/setup.bash && \
       ros2 launch ariadne_sim live_world.launch.py scene_dir:=/work/$scene run_dir:=/work/$run")")
+  sim="${CONTAINERS[-1]}"
 
   # 3. Unpause once every topic is matched end to end.
   local t0; t0=$(date +%s)
   until [ -f "$REPO_ROOT/$run/link.ready" ]; do
-    [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "${CONTAINERS[1]}" 2>&1 | tail -40 >&2; exit 1; }
-    docker inspect -f '{{.State.Running}}' "${CONTAINERS[1]}" | grep -q true || { log "sim container exited"; docker logs "${CONTAINERS[1]}" 2>&1 | tail -40 >&2; exit 1; }
+    [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
+    docker inspect -f '{{.State.Running}}' "$sim" | grep -q true || { log "sim container exited"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
     sleep 2
   done
   log "link ready: $(cat "$REPO_ROOT/$run/link.ready")"
-  docker exec "${CONTAINERS[1]}" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
+  docker exec "$sim" bash -c "source /opt/ros/jazzy/setup.bash && gz service -s /world/$world/control \
     --reqtype gz.msgs.WorldControl --reptype gz.msgs.Boolean --timeout 10000 --req 'pause: false'" >&2
   log "world running"
 
@@ -113,7 +148,8 @@ cmd_run() {
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
     -p "127.0.0.1:$port:8080" -e ARIADNE_LIVE="/work/$run:/work/$scene" "$CONSOLE_IMAGE" \
     uvicorn operator_console.server:app --host 0.0.0.0 --port 8080 --log-level warning)")
-  docker exec -d "${CONTAINERS[2]}" python3 -c "
+  con="${CONTAINERS[-1]}"
+  docker exec -d "$con" python3 -c "
 import asyncio, websockets
 async def main():
     await asyncio.sleep(3)
@@ -122,11 +158,12 @@ async def main():
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
-  local rc; rc="$(docker wait "${CONTAINERS[0]}")"
-  docker logs "${CONTAINERS[0]}" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
-  docker logs "${CONTAINERS[1]}" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
+  local rc; rc="$(docker wait "$rt")"
+  docker logs "$rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
+  docker logs "$sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
   sleep 3   # the console's last poll sees results.yaml and ends its stream
-  docker logs "${CONTAINERS[2]}" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  [ -z "$orch" ] || docker logs "$orch" > "$REPO_ROOT/$run/orchestrator.log" 2>&1 || true
   printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
   stop_mine
   for c in "${CONTAINERS[@]}"; do docker rm "$c" >/dev/null 2>&1 || true; done

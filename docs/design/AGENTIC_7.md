@@ -132,7 +132,7 @@ ariadne_live (C++)                         orchestrator (python/orchestration, P
 
 **D156 — where the LLM sits: a chooser process, not inside the C++ runtime.** `ariadne_live` gets
 `chooser: llm`: at each replan it writes one JSON decision request per agent to `<run>/chooser.sock` and waits up to
-`timeout_s` (config, 20 s wall) for the answer. Out of set, malformed, timeout or a dead orchestrator → the classical
+`timeout_s` (config, 20 s wall; 120 s in the live config, D163) for the answer. Out of set, malformed, timeout or a dead orchestrator → the classical
 choice, with the reason logged (`fallback`). The C++ side validates; the LLM cannot inject a pose. The runtime stays
 ROS-free and AWS-free (CLAUDE.md §3: no AWS SDK type in any algorithm library).
 
@@ -184,6 +184,19 @@ seeds, replan cadence and candidate generator. Compared per run: coverage of the
 ∩ GT free), time to first valid egress route, path length driven, approvals requested, fallbacks, wall time per
 decision. Reported over seeds with variance (live runs are not bit-deterministic, §5.9); a loss for the LLM is
 reported, not buried (invariant 7).
+
+**D163 — the live wiring (2026-10-23).** `infra/scripts/live.sh run` with `ARIADNE_LIVE_CONFIG=configs/mission/live_llm_v1.yaml`
+(live_v1 + `chooser: llm`, the D158 threshold 0.5, `llm.timeout_s` 120) starts `ariadne-orchestrator:1`
+(`infra/docker/orchestrator.Dockerfile`: the console's base by digest, boto3/botocore 1.43.118, mcp 2.3.0) BEFORE the
+runtime; the runtime connects to `<run>/chooser.sock`. **Timeout 120 s, not D156's 20 s:** `request_human_approval`
+blocks up to 60 s (the operator's window) and a turn makes several model calls; 20 s would turn every approval into
+a classical fallback. Credentials: the session's short-lived keys exported to a mode-600 env file, deleted once docker
+has read it (aws.sh's Terraform pattern). Every run records its config beside it (`live_config.yaml`), so replay uses
+the same chooser and gate. **Fixed before any real call:** mcp's stdio client passes only HOME/LOGNAME/PATH/SHELL/
+TERM/USER to the server process (`DEFAULT_INHERITED_ENV_VARS`), which dropped `PYTHONPATH`; the servers now start from
+`python/` with the orchestrator's interpreter. Tested without Bedrock (`python/tests/orchestration/
+test_orchestrator_stub.py`, botocore Stubber, real MCP servers): inspect → approval → assign on Nova; throttled Nova →
+DeepSeek with the text-only tool list; no assign → null answer and no fallback. 3/3.
 
 ## 3. Acceptance
 
