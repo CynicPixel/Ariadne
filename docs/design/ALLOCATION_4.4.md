@@ -159,3 +159,20 @@ Sharpening points, all adopted:
 
 The remaining choice is the time-discounted DMG score itself (§3). It is the paper's own form, with D114's λ_path
 and the common scales: no new constant.
+
+## 10. Correction (2026-10-23, measured before any commit of code)
+
+- **§1's "CBBA = SGA" holds exactly at L_t = 1 only.** At L_t = 2 a stale second-slot bid can make them differ
+  (ALGORITHMS §22.3.1, correction). The first test sweep found it on 1 of 60 instances. The advisor's three
+  separating checks then confirmed the mechanism:
+  - L_t = 1: 2000 / 2000 equal, no tail release;
+  - L_t = 2: 5 / 1000 diverge, all with eq. 6 tail releases;
+  - a hand-built B–A–C instance reproduces the worked outcome.
+- **Default L_t = 1** (inside arch §21.7's 1–2):
+  - CBBA then equals SGA exactly, so the "auction vs broker-greedy" row measures communication only;
+  - Theorems 1–2 apply as stated.
+- **L_t = 2 is a reported row:** divergence rate, and score against SGA and against the optimum.
+- **Tests split by what is provable:**
+  - L_t = 1: exact equality and the N_min·D bound;
+  - L_t = 2: converged, conflict-free, divergence only with tail releases, and ≥ 50 % of brute force, labelled
+    empirical.

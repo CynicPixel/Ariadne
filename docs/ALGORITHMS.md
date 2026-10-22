@@ -3434,6 +3434,16 @@ The tasks added after the outbid one are released, because their marginal scores
 - **Consequence for 4.4:** under DMG, CBBA and a broker's centralized sequential greedy give the **same
   assignment**. Their difference is communication: bytes, rounds and robustness to a lost broker. It is not
   solution quality, so §21.7's "both logged identically" can be checked as an exact equality.
+- **Correction (2026-10-23, measured; `tests/unit/test_allocation.cpp`): the equality holds exactly at L_t = 1, not
+  always at L_t = 2.**
+  - **The mechanism:** a second-slot bid placed on top of a first task the bidder later loses (eq. 6 then releases
+    it) can outbid a peer. The peer's bundle fills with a lower task, and Algorithm 3 never revisits it, since it
+    adds only while |b_i| < L_t.
+  - **Measured:** L_t = 1, 2000 / 2000 random instances equal SGA, with zero tail releases. L_t = 2, 5 / 1000
+    diverge, every one with an eq. 6 tail release; worst CBBA/optimum 0.618.
+  - A hand-built three-agent instance pins it.
+  - At L_t = 2, Theorem 1(2)'s round bound and Theorem 2's 50 % are therefore **empirical**: they held on every
+    instance, but are not guaranteed.
 
 ### 22.4 Routing (4.5 egress, 4.6 exploration-time)
 

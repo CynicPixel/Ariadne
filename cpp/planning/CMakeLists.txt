@@ -10,7 +10,8 @@ if(OpenCV_FOUND)
     route/dstar_lite.cpp
     route/egress.cpp
     mission/nbv.cpp
-    mission/phase4_planner.cpp)
+    mission/phase4_planner.cpp
+    mission/allocation.cpp)
   target_include_directories(ariadne_planning PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
   target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc)
   add_library(ariadne::planning ALIAS ariadne_planning)

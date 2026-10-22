@@ -3128,3 +3128,7 @@ Both are main's (3.2 / 3.5).
   never claimed.
 - **Replay** exercises only the connected two-agent case. The disconnection and staleness regimes come from the
   synthetic tests and live L1.
+
+- **D115 correction (2026-10-23):** "CBBA = SGA under DMG" is exact at **L_t = 1** (2000 / 2000) but not at L_t = 2
+  (5 / 1000 diverge through a stale second-slot bid, each with an eq. 6 tail release; a hand-built instance pins
+  it). **Default L_t = 1.** L_t = 2 is a reported row, and its round and 50 % bounds are empirical there.
