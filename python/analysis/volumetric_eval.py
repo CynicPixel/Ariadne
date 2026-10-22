@@ -25,7 +25,8 @@ UNKNOWN, FREE, OCC = 0, 1, 2
 
 
 def read_png_u8(p: Path) -> np.ndarray:
-    """Minimal 8-bit grayscale PNG reader (what cv::imwrite writes for CV_8U); filters 0-4."""
+    """Minimal grayscale PNG reader (what cv::imwrite writes for CV_8U and CV_16U); filters 0-4. 8-bit -> uint8,
+    16-bit (big-endian samples) -> uint16."""
     b = p.read_bytes()
     assert b[:8] == b"\x89PNG\r\n\x1a\n", p
     i, idat, w, h = 8, b"", 0, 0
@@ -34,19 +35,22 @@ def read_png_u8(p: Path) -> np.ndarray:
         d = b[i + 8:i + 8 + n]
         if t == b"IHDR":
             w, h, depth, ctype = struct.unpack(">IIBB", d[:10])
-            assert depth == 8 and ctype == 0, (depth, ctype)
+            assert depth in (8, 16) and ctype == 0, (depth, ctype)
         elif t == b"IDAT":
             idat += d
         i += 12 + n
     raw = zlib.decompress(idat)
-    out = np.zeros((h, w), np.uint8)
-    prev = np.zeros(w, np.int32)
+    bpp = depth // 8                      # bytes per pixel (grayscale)
+    stride = w * bpp
+    out = np.zeros((h, stride), np.uint8)
+    prev = np.zeros(stride, np.int32)
     for r in range(h):
-        f, line = raw[r * (w + 1)], np.frombuffer(raw[r * (w + 1) + 1:(r + 1) * (w + 1)], np.uint8).astype(np.int32)
-        cur = np.zeros(w, np.int32)
-        for c in range(w):
-            a = cur[c - 1] if c else 0
-            up, ul = prev[c], (prev[c - 1] if c else 0)
+        f = raw[r * (stride + 1)]
+        line = np.frombuffer(raw[r * (stride + 1) + 1:(r + 1) * (stride + 1)], np.uint8).astype(np.int32)
+        cur = np.zeros(stride, np.int32)
+        for c in range(stride):
+            a = cur[c - bpp] if c >= bpp else 0
+            up, ul = prev[c], (prev[c - bpp] if c >= bpp else 0)
             if f == 0: x = line[c]
             elif f == 1: x = line[c] + a
             elif f == 2: x = line[c] + up
@@ -56,7 +60,9 @@ def read_png_u8(p: Path) -> np.ndarray:
                 x = line[c] + (a if pa <= pb and pa <= pc else (up if pb <= pc else ul))
             cur[c] = x & 0xFF
         out[r], prev = cur, cur
-    return out
+    if bpp == 1:
+        return out
+    return (out[:, 0::2].astype(np.uint16) << 8) | out[:, 1::2]
 
 
 def metrics(slab: np.ndarray, gtfree: np.ndarray) -> dict:

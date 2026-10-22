@@ -57,7 +57,7 @@ LIVE_COVERAGE_MIN = 0.99            # below this the live cross-check is too thi
 # it is listed here with the reason it is harmless. A rig parameter gz silently
 # ignored (SMOKE §4n: lens distortion under ogre2) must never pass unnoticed again.
 GZ_WARNING_ALLOWLIST = {
-    r"OBJLoader\.cc:\d+\] Missing material for shape\[(wall|prop|floor|ceiling|board)_[0-9a-f]+\]":
+    r"OBJLoader\.cc:\d+\] Missing material for shape\[(wall|prop|floor|ceiling|board|hazard)_[0-9a-f]+\]":
         "worldgen OBJs carry no .mtl; the SDF <material> supplies the texture (renders verified, SMOKE 4h/4j)",
     r"Ogre2Camera::SetVisibilityMask: Mask bits c0000000 are set but will be ignored":
         "gz-sensors' default all-ones visibility mask touches ogre2's reserved bits; no scene uses visibility flags",

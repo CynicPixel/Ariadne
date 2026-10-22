@@ -13,6 +13,7 @@ Reference catalogue for reimplementation. Sourced from five parallel deep-resear
 | 2b | Feed-forward pointmap SLAM & multi-agent 3DGS | ✅ §3 |
 | 2c | Partitioned / distributed 3DGS (merge mechanisms) | ✅ §4 |
 | 3 | Active perception, NBV, multi-robot task allocation | ❌ **Rate-limited twice — still owed** |
+| 3a | Volumetric mapping for planning (TSDF, ESDF, frontiers, traversability) | ✅ §21 (2026-10-23, Phase 4.1/4.2; primary text) |
 | 4 | Degraded visual environments + DARPA SubT | ✅ **§9–§20** — illumination §9 · dust/confined §10 · burst §11 · event+thermal §12 · enhancement §13 · HDR/noise §14 · modalities §15 · night data §16 · aliasing §17 · co-moving-light data §18 · ASTM protocol §19 · **DARPA SubT §20** |
 | 4b | **Datasets & benchmarks** | ✅ §6, §8 |
 | 5 | Distributed optimization, pose-graph consensus, robust estimation | ✅ §7 |
@@ -3309,3 +3310,34 @@ CERBERUS documented a failure mode that maps directly onto Ariadne's drone + gro
 | ⛔ | Reimplementing CompSLAM, Super Odometry, LAMP or Wildcat | >2 months each | **Read, don't build.** Take the wrapper (§12.4b), not the system |
 
 ⚠️ **Honesty ledger for §20:** fieldrobotics.net was inaccessible (403) so all quotes are from arXiv preprints with DOIs cross-verified via OpenAlex; the two **DARPA-side after-action papers were located but not read** (paywalled); **Team Coordinated Robotics** could not be found at all; and `arpg/marble` and `csiro-robotics/wildcat` are **not publicly available** despite being cited as such in the T-RO survey.
+
+---
+
+## 21. Volumetric mapping for planning — TSDF, ESDF, frontiers, traversability (Phase 4.1 / 4.2)
+
+Added 2026-10-23, from primary text: the papers were downloaded and read, sections cited (`docs/design/PHASE4_PREFLIGHT.md`). Consumed by D110 (4.1) and D111 (4.2).
+
+| Method | Venue | What Ariadne takes | What it does not |
+|---|---|---|---|
+| **Voxblox** (Oleynikova et al.) | IROS 2017, [arXiv:1611.03631](https://arxiv.org/abs/1611.03631) | 8³-voxel block hash; weighted TSDF fusion; merged raycasting (one update per voxel per scan); **eq. 5 weighting**: `1/z²` in front, a linear drop-off behind the surface to 0 at δ = 4v (after Bylow et al.); the projective-distance error `r_p = d sin θ − d` and the rule *"increase the safety distance by half of one voxel"* | its quasi-Euclidean ESDF wavefront |
+| **nvblox** (Millane et al.) | 2023, [arXiv:2311.00626](https://arxiv.org/abs/2311.00626) | sites = voxels within ε of the TSDF zero crossing; full Euclidean ESDF; an ESDF updated slower than the sensor rate is acceptable; no depth interpolation across foreground–background edges | projection-mapping integration (Voxblox: it aliases at large voxel/pixel ratios); its GPU parallel banding |
+| **FIESTA** (Han et al.) | IROS 2019, [arXiv:1903.02144](https://arxiv.org/abs/1903.02144) | separate insert and delete queues for an incremental ESDF (the design comparison) | occupancy-based, "near-optimal" distances |
+| **Felzenszwalb & Huttenlocher** | Theory of Computing 8:415–428, 2012 | Algorithm 1, the exact 1D lower envelope, for the **centre-to-centre** metric | not the cube-edge metric: Ariadne's clearance convention (centre to the nearest point of a blocked cube, the GT's) needs `(2|Δ|−1)²/4` per axis, an exact windowed min-convolution (D110 correction) |
+| **FUEL** (Zhou et al.) | RA-L 2021, [arXiv:2010.11561](https://arxiv.org/abs/2010.11561) | the frontier information structure is updated only where space was newly observed (D110's incremental frontiers) | its hierarchical planner (Domain 3) |
+| **OctoMap** (Hornung et al.) | Auton. Robots 2013 | the 1.8 placeholder's sensor model (D45), kept as the ablation baseline | — |
+| **STEP** (Fan et al.) | JPL / DARPA SubT, [arXiv:2303.01614](https://arxiv.org/abs/2303.01614) (abstract) | a risk map consumed as a planning cost, not a binary gate | its slope and step terms (flat floors here) |
+| **GBPlanner2** (Kulkarni et al.) | CERBERUS 2022 (secondary) | traversable ground beneath every edge: the 4.2 capsule's observed-column half | its sampling planner (Domain 3) |
+
+**OpenCV 5 adjacency** (checked in the installed headers, SMOKE §4u):
+- `cv::Volume` (TSDF / HashTSDF / ColorTSDF): integrate and raycast only, with no voxel or weight read. Used as the
+  4.1 test oracle.
+- `cv::distanceTransform`: 2D and centre-to-centre.
+- `cv::RgbdNormals` and `cv::findPlanes` (`ptcloud/depth.hpp`): the candidate plane-based overhang term for 4.2
+  (pending calibration).
+- `cv::triangleRasterizeDepth`: mesh → depth, for GT-geometry test depth.
+- `cv::Octree`: points, not occupancy.
+
+**Owed in Domain 3** (before 4.3–4.6): NBV and information gain (Isler et al. ICRA 2016; Delmerico et al. 2018);
+exploration (TARE RSS 2021, GBPlanner, RACER T-RO 2023); allocation (CBBA T-RO 2009 and successors, grouping
+auctions); routing (FAR IROS 2022, D* Lite AAAI 2002). All from primary text.
+
