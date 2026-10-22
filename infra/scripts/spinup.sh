@@ -61,13 +61,19 @@ profile_defaults() {
       TYPE="${TYPE:-g4dn.xlarge}"
       AMI_PARAM="/aws/service/deeplearning/ami/x86_64/base-oss-nvidia-driver-gpu-ubuntu-24.04/latest/ami-id"
       ROOT_GB=0 ;;   # 0 = the AMI's own snapshot size (75 GB for this DLAMI)
+    cpux86)
+      # x86 CPU work that needs the amd64 ariadne images (no arm64 image until plan 0.2): Ubuntu 24.04 amd64.
+      # c7i.4xlarge = 16 vCPU (8 cores x 2), 32 GiB. (Same profile as main's 65672e9, D86.)
+      TYPE="${TYPE:-c7i.4xlarge}"
+      AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
+      ROOT_GB=80 ;;
     cool)
       # The COOL Marketplace AMI (Ubuntu 24.04, Graviton4; D28: product aajkmdd4qo3r7yhqg61a7aah9). Needs an active
       # Marketplace subscription, else launch fails with an opt-in error. Root sized for a native OpenCV build.
       TYPE="${TYPE:-c8g.4xlarge}"
       AMI_ID="ami-0a302ff85af8d8764"
       ROOT_GB=40 ;;
-    *) die "unknown profile '$1' (cpu | gpu | cool)" ;;
+    *) die "unknown profile '$1' (cpu | cpux86 | gpu | cool)" ;;
   esac
 }
 

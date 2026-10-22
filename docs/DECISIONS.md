@@ -3245,3 +3245,40 @@ confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
 - arch decision: this entry plus the as-built note in §34.2;
 - ablation and benchmark config: `configs/benchmark/hilti_5.6.yaml`, written with the loader;
 - manifest: dataset, sequence, sha256 and licence recorded per run, as for EuRoC and TUM.
+
+## 2026-10-23 — D142: Phase 5 CPU work runs next to the data on AWS; the no-dust lighting rows first
+
+**Why AWS.** This host's link measured about 1.9 MB/s total, shared with another session's 12 GB upload. At that
+rate the two dark recordings (25 GB) plus Hilti `site2_robot_3` (35 GB) would take about 9 h. Hugging Face → EC2
+and S3 → EC2 are fast and in-region. Maintainer-approved 2026-10-23.
+
+**Session** (`infra/eval/ph5_aws.sh`, spinup `--profile cpux86 --type c7i.2xlarge`; the profile is main's D86
+`cpux86`, carried over).
+
+**Image.** The ECR dev image `ariadne-core:d86-coredev-04d8a7c58de1`, main's D86 image. It is NOT the local
+`ariadne/core-dev:dev` (91643838…) the unit tests ran on: pushing that image over this link would take hours. The
+image id is recorded per run.
+
+**Hilti.**
+- Fetched from the pinned HF revision, each file sha256-checked against its LFS oid.
+- `python -m dataset_tools.hilti.to_asl` exports one stereo pair (auto-picked as the first `left`/`right` image
+  topic twin; the full topic list goes to results) plus every IMU topic, in EuRoC layout, with `calibration.zip`.
+- Only that extract comes back.
+- The converter was tested on a synthetic ROS1 bag. Its topic names were invented: the real bag's topics are unknown
+  until the session lists them.
+
+**Replays.** Four rows, agent 0, 1000 frames, sim_v1 perception + sim_v2 slam. These are the configs of D69's lit
+rows (ATE 3 mm clean) on the same ci_tiny seed-0 trajectories.
+
+| row | recording | D |
+|---|---|---|
+| dark + co-moving lamp | `ci_tiny_dark_0` | none / `lampdark_sensor_v0` |
+| dark + fixed light | `ci_tiny_dark_fixed_0` | none / `lampdark_sensor_v0` |
+
+`lampdark_sensor_v0`: the sRGB decode plus the 2.2 camera (shot + read noise, PRNU, vignette), radiance_scale 1. The
+darkness is the render's. It is not a frozen 5.4 level.
+
+**Dust rows deferred.** `SimSource` refuses dust: D needs GT depth for both cameras, and the recordings carry depth
+for the left one only. The fix is to warp left GT depth into the right camera (z-buffered, holes left without dust)
+before D. It touches `stereo_source.hpp`, so it lands after the 2.6/L2 merge or in an isolated helper. Then the
+D135/D139 rows run.
