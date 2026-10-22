@@ -145,6 +145,12 @@ stamp`) and that lag depends on wall latency: two live runs of one seed differ. 
   more. Holds today: cameras 20 Hz, IMU and GT 200 Hz (the mover publishes both when `ns % period == 0`), and both
   periods divide the 5 s replan (measured: a frame and a GT sample at every barrier of the first LLM run). A sensor
   whose period does not divide `replan_s` breaks lockstep.
+- **Result (2026-10-23, `evaluation/runs/L1/lockstep_ci_tiny_20s`):** two live lockstep runs of ci_tiny seed 0
+  (20 s, classical, llvmpipe) are byte-identical: consumed stream, estimates, trace, mover answers; every command
+  applied at its barrier, gz paused at T exactly (0 ns), pauses ≤ 0.1 s wall. Two defects the check found on the
+  way: the end-of-run holds raced the last resume (now sent paused, stamp end + 1 ns; `end_s` must be a multiple of
+  the replan period in lockstep), and the CDR alignment padding was uninitialised memory (RuntimeLink zeroes its
+  buffers). Scope stated there: one renderer, one scene, classical chooser.
 - live.sh does not unpause a lockstep run: the runtime's first `run_to` (after `#ready`) starts it. Replay is
   unchanged: it consumes the recording, which is the same in either mode.
 

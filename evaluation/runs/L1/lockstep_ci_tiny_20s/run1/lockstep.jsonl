@@ -1,0 +1,9 @@
+{"ack":{"run_to_ns":5000000000,"paused_clock_ns":-1,"accepted":true}}
+{"T_ns":5000000000,"applied_ns":[5000000000,5000000000],"answered":true,"wall_paused_s":0.098437,"resume_to_ns":10000000000}
+{"ack":{"run_to_ns":10000000000,"paused_clock_ns":5000000000,"accepted":true}}
+{"T_ns":10000000000,"applied_ns":[10000000000,10000000000],"answered":true,"wall_paused_s":0.042237,"resume_to_ns":15000000000}
+{"ack":{"run_to_ns":15000000000,"paused_clock_ns":10000000000,"accepted":true}}
+{"T_ns":15000000000,"applied_ns":[15000000000,15000000000],"answered":true,"wall_paused_s":0.033166,"resume_to_ns":20000000000}
+{"ack":{"run_to_ns":20000000000,"paused_clock_ns":15000000000,"accepted":true}}
+{"T_ns":20000000000,"applied_ns":[20000000000,20000000000],"answered":true,"wall_paused_s":0.051592,"resume_to_ns":25000000000}
+{"ack":{"run_to_ns":25000000000,"paused_clock_ns":20000000000,"accepted":true}}

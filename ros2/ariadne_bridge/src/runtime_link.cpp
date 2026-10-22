@@ -32,6 +32,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <atomic>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -99,13 +100,24 @@ private:
     template <typename T>
     void SubscribeTyped(const std::string& topic) {
         auto ser = std::make_shared<rclcpp::Serialization<T>>();
+        // One buffer per topic, ZEROED before each serialization: the CDR serializer skips alignment padding (e.g. the
+        // bytes between frame_id and the next 8-byte field), so a fresh buffer carries whatever memory held there and
+        // two live runs of one seed recorded different bytes for identical messages (D165 check, 2026-10-23). Message
+        // sizes are constant per topic, so after the first message the zeroed buffer is never reallocated; the first
+        // one is serialized, zeroed and serialized again. The callback is never re-entered (one callback group).
+        auto sm = std::make_shared<rclcpp::SerializedMessage>();
         // Deep enough that a slow socket write does not overflow the intra-process buffer during a stall;
         // any loss still shows as a stamp-grid gap in the runtime's per-topic accounting.
         subs_.push_back(create_subscription<T>(topic, rclcpp::QoS(500).reliable(),
-                                               [this, topic, ser](const typename T::SharedPtr m) {
-                                                   rclcpp::SerializedMessage sm;
-                                                   ser->serialize_message(m.get(), &sm);
-                                                   const auto& r = sm.get_rcl_serialized_message();
+                                               [this, topic, ser, sm](const typename T::SharedPtr m) {
+                                                   auto& r = sm->get_rcl_serialized_message();
+                                                   const size_t cap = r.buffer_capacity;
+                                                   if (cap) std::memset(r.buffer, 0, cap);
+                                                   ser->serialize_message(m.get(), sm.get());
+                                                   if (r.buffer_capacity != cap) {   // grown: fresh memory, redo
+                                                       std::memset(r.buffer, 0, r.buffer_capacity);
+                                                       ser->serialize_message(m.get(), sm.get());
+                                                   }
                                                    Send(topic, r.buffer, r.buffer_length);
                                                }));
         received_[topic] = 0;

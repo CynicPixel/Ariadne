@@ -274,6 +274,9 @@ int main(int argc, char** argv) {
         live::PlaceholderPlanner planner(mc, brief, pp);   // A1's Phase 4 planner implements the same interface
         const int64_t end_ns = int64_t(std::llround(lc.end_s * 1e9));
         const int64_t replan_ns = int64_t(std::llround(mc.replan_s * 1e9));
+        if (lc.lockstep && end_ns % replan_ns != 0) {   // the last barrier must BE the end (its holds go out paused)
+            throw std::invalid_argument("lockstep: end_s must be a multiple of the replan period");
+        }
 
         const fs::path run_dir = fs::path(out) / (brief.scene_id + (is_live ? "-live-" : "-replay-") + tools::UtcNow("%Y%m%dT%H%M%SZ"));
         fs::create_directories(run_dir / "snapshots");
@@ -1007,13 +1010,25 @@ int main(int argc, char** argv) {
             // paused) and answered BEFORE the world resumes. Every barrier resumes to T + replan, the last one too
             // (frames past end_s close the lanes).
             if (is_live && lc.lockstep) {
+                std::vector<std::pair<int, int64_t>> wait_for;   // (agent, command stamp) answers to have before resuming
+                for (int k = 0; k < 2; ++k) if (sent_at_T[k]) wait_for.push_back({k, T});
+                if (T == end_ns) {   // the end of the run: every agent holds, applied at end_s while still paused
+                    for (int k = 0; k < 2; ++k) {
+                        runtime::ros_cdr::PoseArray hold;   // stamp end + 1 ns: a separate answer from this barrier's
+                        hold.header.stamp.sec = int32_t((end_ns + 1) / 1000000000);
+                        hold.header.stamp.nanosec = uint32_t((end_ns + 1) % 1000000000);
+                        hold.header.frame_id = "world";
+                        SendCommand(k, hold);
+                        wait_for.push_back({k, end_ns + 1});
+                    }
+                }
                 int64_t at[2] = {-1, -1};
                 bool all = false;
                 {
                     std::unique_lock<std::mutex> lk(progress_mu);
                     all = progress_cv.wait_for(lk, std::chrono::seconds(30), [&] {
                         if (input_done) return true;
-                        for (int k = 0; k < 2; ++k) if (sent_at_T[k] && !answers.count({k, T})) return false;
+                        for (const auto& w : wait_for) if (!answers.count(w)) return false;
                         return true;
                     });
                     for (int k = 0; k < 2; ++k) {
@@ -1030,8 +1045,8 @@ int main(int argc, char** argv) {
                 RunTo(T + replan_ns);
             }
         }
-        // End of the run: every agent holds.
-        if (is_live) {
+        // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
+        if (is_live && !lc.lockstep) {
             for (int k = 0; k < 2; ++k) {
                 runtime::ros_cdr::PoseArray hold;
                 hold.header.stamp.sec = int32_t(end_ns / 1000000000);
