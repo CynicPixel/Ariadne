@@ -2877,7 +2877,29 @@ a non-certified planted-outlier graph a full shift would pass at 0.61× the redu
   | tinyGrid3D | — | — | certified |
   | smallGrid3D | — | — | certified |
 
-  Sphere, torus, grid3D, cubicle and rim are pending (the user is asked first: heavy).
+- **The large SE-Sync graphs (2026-10-22, maintainer-approved; `evaluation/runs/2.5/certificate_sesync/`).** One
+  container each, in order, hard memory cap, cgroup `memory.peak`. grid3D ran only after the projection rule written
+  into the manifest beforehand (≈ 12 kB per edge on the first four, ×10 for 3D-lattice fill → < 6 GB) passed.
+
+  | graph | nodes / edges | f | Table 1 | verdict | f − f* ≤ | LM its, max\|grad_R\| | peak | wall |
+  |---|---|---|---|---|---|---|---|---|
+  | sphere2500 | 2500 / 4949 | 1687.01 | 1.687e3 | **certified** | 1.1e-3 | 72, 7.4e-5 | 79 MB | 20 s |
+  | torus3D | 5000 / 9048 | 24227 | 2.423e4 | **certified** | 3.6e-3 | 200 (cap), 2.9e-2 | 152 MB | 180 s |
+  | cubicle | 5750 / 16869 | 717.126 | 7.171e2 | **certified** | 2.9e-2 | 30, 1.9e-5 | 215 MB | 16 s |
+  | rim | 10195 / 29743 | 5460.9 | 5.461e3 | **not certified** | — | 56, 2.4e-4 | 348 MB | 89 s |
+  | grid3D | 8000 / 22236 | 84319 | 8.432e4 | **certified** | 0.13 | 200 (cap), 2.3 | 616 MB | 7176 s |
+
+  - Every objective reproduces Table 1 to its 4 significant figures.
+  - **torus3D and grid3D stopped at the LM iteration cap** with a gradient far from zero, and still certify. That is
+    valid: the bound comes from weak duality (S ⪰ 0 at the multipliers Λ of the point reached), not from
+    stationarity. A non-stationary point simply gets a looser bound (grid3D: 0.13, 1.5e-4 % of f).
+  - **rim is not certified, and its test assertion is red** (gtest exit 1). λ_min ≤ −0.233 at η = 1e-10‖M‖∞
+    (9.8e-6). The η that would pass is 0.977 ≈ 1e-5‖M‖∞. The objective matches Table 1, so this is most likely an
+    under-converged Λ (gradient 2.4e-4 after 56 iterations) rather than a non-global point, but that is not shown.
+    Verdict: **unknown, not wrong**. Neither η nor the LM budget was changed after seeing it: that would be tuning
+    to pass.
+  - Cost: grid3D's two hours are the Lanczos and Cholesky passes of the 200-iteration refinement on 22 k edges. The
+    runtime path never certifies graphs this size (the flag is off and the loop backend's graphs are small).
 
 **Planted outliers, reported, not tuned** (PHASE2_PLAN §3):
 - 3 uniform SE(3) loops kept in a 60-node cost: **6/10 certified**, from each of the truth, dead-reckoning and chordal
