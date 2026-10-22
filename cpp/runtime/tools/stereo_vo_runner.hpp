@@ -731,16 +731,28 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(m);
 
     std::ofstream res(run_dir / "results.yaml");
+    // A sequence without dense GT (Hilti 2023: sparse control points only, D141) has nothing to align: the metric
+    // structs then hold their zero defaults, which must not read as a 0 m error. Those fields print null, and the
+    // sequence is scored by its own protocol from estimate_body.tum (analysis.hilti_score).
+    const bool dense_gt = !gt_poses.empty();
+    const auto gt_num = [dense_gt](double v) {
+        std::ostringstream o;
+        if (dense_gt) o << v;
+        else o << "null";
+        return o.str();
+    };
     res << "# " << args.tool << " results. Generated; do not hand-edit.\n"
         << "sequence: " << source.RunName() << "\nframes: " << n << "\n"
+        << "dense_gt: " << (dense_gt ? "true" : "false  # ATE/RPE fields are null: score with the dataset's protocol")
+        << "\n"
         << "associated_poses: " << e.size() << "  # nearest GT within 0.01 s (evo default)\n"
-        << "gt_path_length_m: " << gt_length << "\n"
-        << "ate_se3: {rmse_m: " << ate.rmse << ", mean_m: " << ate.mean << ", max_m: " << ate.max
-        << ", rotation_rmse_rad: " << ate_rot.rmse << "}\n"
+        << "gt_path_length_m: " << gt_num(gt_length) << "\n"
+        << "ate_se3: {rmse_m: " << gt_num(ate.rmse) << ", mean_m: " << gt_num(ate.mean) << ", max_m: "
+        << gt_num(ate.max) << ", rotation_rmse_rad: " << gt_num(ate_rot.rmse) << "}\n"
         << "ate_rmse_percent_of_path: " << (gt_length > 0 ? 100.0 * ate.rmse / gt_length : -1.0) << "\n"
-        << "sim3_scale: " << sim3.scale << "  # 1.0 = no scale drift; stereo is metric\n"
-        << "rpe_1s: {translation_rmse_m: " << rpe.translation.rmse << ", rotation_rmse_rad: " << rpe.rotation.rmse
-        << "}\n"
+        << "sim3_scale: " << gt_num(sim3.scale) << "  # 1.0 = no scale drift; stereo is metric\n"
+        << "rpe_1s: {translation_rmse_m: " << gt_num(rpe.translation.rmse) << ", rotation_rmse_rad: "
+        << gt_num(rpe.rotation.rmse) << "}\n"
         << "vo: {lost_frames: " << lost << ", keyframes: " << keyframes << ", ba_runs: " << ba_runs
         << ", ba_mean_cost_ratio: " << (ba_runs ? ba_cost_ratio_sum / ba_runs : -1.0)
         << ", landmarks_alive_at_end: " << vo.landmark_count()
@@ -770,8 +782,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     if (scfg.ba.backend == "window") {
         if (loops) {
-            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << ate_loop.rmse
-                << ", ate_rotation_rmse_rad: " << ate_loop_rot.rmse << "}\n";
+            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << gt_num(ate_loop.rmse)
+                << ", ate_rotation_rmse_rad: " << gt_num(ate_loop_rot.rmse) << "}\n";
             loops->WriteOutputs(run_dir.string(),
                                 // Interpolated between the bracketing GT samples (<= 20 ms apart), not the nearest one:
                                 // nearest-sample timing error would otherwise count as loop error (design §8).
@@ -789,8 +801,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                                 },
                                 res);
         }
-        res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
-            << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
+        res << "keyframe_refined: {ate_rmse_m: " << gt_num(ate_kf.rmse) << ", ate_rotation_rmse_rad: "
+            << gt_num(ate_kf_rot.rmse) << ", rpe_1s_translation_rmse_m: " << gt_num(rpe_kf.translation.rmse)
             << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
         res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
             << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed

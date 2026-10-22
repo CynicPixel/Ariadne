@@ -103,9 +103,12 @@ public:
         cam1_ = LoadEurocCamera((mav_ / "cam1/sensor.yaml").string());
         pairs_ = PairByTimestamp(ParseEurocImageCsv(ReadTextFile((mav_ / "cam0/data.csv").string()), "cam0"),
                                  ParseEurocImageCsv(ReadTextFile((mav_ / "cam1/data.csv").string()), "cam1"));
-        for (const auto& g : ParseEurocGroundTruth(
-                 ReadTextFile((mav_ / "state_groundtruth_estimate0/data.csv").string()), "groundtruth")) {
-            gt_.push_back({g.t_ns, g.T_W_B});
+        // Optional: an EuRoC-layout export of a dataset with only sparse GT (Hilti 2023, D141) has no
+        // state_groundtruth_estimate0; the source then reports no GT and the runner scores nothing densely.
+        if (std::filesystem::exists(GtCsv())) {
+            for (const auto& g : ParseEurocGroundTruth(ReadTextFile(GtCsv()), "groundtruth")) {
+                gt_.push_back({g.t_ns, g.T_W_B});
+            }
         }
     }
     std::string RunName() const override { return seq_.filename().string(); }
@@ -117,8 +120,8 @@ public:
         return ParseEurocImuNoise(ReadTextFile((mav_ / "imu0/sensor.yaml").string()), "imu0/sensor.yaml");
     }
     std::vector<GroundTruthInertial> GroundTruthInertialStates() const override {
-        return ParseEurocGroundTruthInertial(ReadTextFile((mav_ / "state_groundtruth_estimate0/data.csv").string()),
-                                             "groundtruth");
+        if (!std::filesystem::exists(GtCsv())) return {};
+        return ParseEurocGroundTruthInertial(ReadTextFile(GtCsv()), "groundtruth");
     }
     std::string CameraConfig() const override { return "euroc_cam0_cam1"; }
     std::string BagChecksum() const override {
@@ -147,6 +150,7 @@ public:
     }
 
 private:
+    std::string GtCsv() const { return (mav_ / "state_groundtruth_estimate0/data.csv").string(); }
     std::filesystem::path seq_, mav_;
     EurocCamera cam0_, cam1_;
     StereoPairs pairs_;
@@ -251,6 +255,7 @@ public:
         c.fv = lens_.fy;
         c.cu = lens_.cx;
         c.cv = lens_.cy;
+        c.model = perception::DistortionModel::kRadtan;   // the D41 lens is Brown-Conrady
         c.dist = {lens_.k1, lens_.k2, lens_.p1, lens_.p2};
         perception::RawStereoCalibration s;
         s.left = s.right = c;   // identical lenses (rig_stereo_v1)
