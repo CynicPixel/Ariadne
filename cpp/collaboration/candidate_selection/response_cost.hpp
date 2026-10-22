@@ -15,12 +15,24 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <string>
 #include <utility>
 
 namespace ariadne::collaboration {
 
+/// COLLAB_3.2 §7: the compression ratio of MATCH_RESPONSE, per feature encoding (ORB and int8 XFeat compress
+/// differently), calibrated on runs disjoint from the gate runs. A run without a calibration for the encoding it uses
+/// prices at ratio 1.0 (an upper bound) and is labelled uncalibrated: it is excluded from the I6 gate.
 struct ResponseCostModel {
-    double response_ratio = 1.0;   // transmitted / payload for MATCH_RESPONSE; 1.0 = uncalibrated (an upper bound)
+    std::map<uint16_t, double> response_ratio;   // feature_bytes -> transmitted / payload
+    std::string calibration_run;                 // the disjoint run(s) the ratios came from (manifest)
+    bool Calibrated(uint16_t feature_bytes) const {
+        return !calibration_run.empty() && response_ratio.count(feature_bytes);
+    }
+    double Ratio(uint16_t feature_bytes) const {
+        const auto it = response_ratio.find(feature_bytes);
+        return Calibrated(feature_bytes) ? it->second : 1.0;
+    }
 };
 
 /// Per class: the byte gate is per class (COLLAB_3.2 §7), so the two halves are kept apart.
@@ -32,6 +44,8 @@ struct FetchCost {
 class FetchCostPredictor {
 public:
     FetchCostPredictor(const core::WireCodec& codec, ResponseCostModel m) : codec_(codec), m_(m) {}
+
+    bool Calibrated(uint16_t feature_bytes) const { return m_.Calibrated(feature_bytes); }
 
     FetchCost Predict(uint32_t n_features, uint16_t feature_bytes) const {
         const auto key = std::make_pair(n_features, feature_bytes);
@@ -50,7 +64,7 @@ public:
         const core::Timestamp ts{1'000'000'000};
         const uint64_t seq = (1ull << 40) | 1ull;   // a reliable-class sequence (incarnation << 40 | n)
         const uint64_t payload = codec_.EncodeFeatureResponse(f, a, a, ts, seq).record.payload_bytes;
-        const double transmitted = std::min(double(payload), std::ceil(m_.response_ratio * double(payload)));
+        const double transmitted = std::min(double(payload), std::ceil(m_.Ratio(feature_bytes) * double(payload)));
         const double response = Framed(transmitted);
         core::MatchRequestValue r{~0ull, 0, ~0ull, 0};
         const double request = double(codec_.EncodeMatchRequest(r, a, a, ts, seq).record.wire_bytes);

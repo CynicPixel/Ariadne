@@ -36,11 +36,13 @@
 #include <Eigen/Geometry>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -141,10 +143,12 @@ struct NodeParams {
     double solve_interval_s = 2.0;
     // 3.4 selection (only with hooks.select): a token bucket of predicted fetch bytes, refilled at budget_bytes_per_s
     // and capped at budget_burst_bytes, spent once per selection_interval_s.
-    double selection_interval_s = 1.0;
+    double selection_interval_s = 5.0;       // Swarm-SLAM inter_robot_detection_period_sec default (cslam)
     double budget_bytes_per_s = 20000.0;
     double budget_burst_bytes = 200000.0;
-    double candidate_ttl_s = 120.0;          // a pending candidate never selected by then is dropped (counted)
+    double candidate_ttl_s = 120.0;          // [ASSUMPTION] a pending candidate never selected by then is dropped
+                                             // (counted); retrieval proposes a pair once, so this is final. The sim
+                                             // runs decide it (D170).
     ResponseCostModel response_cost;
     uint32_t default_features = 800;         // the price of a keyframe whose descriptor did not advertise its size
     uint16_t default_feature_bytes = 32;
@@ -165,6 +169,10 @@ struct NodeStats {
     // 3.4: selection rounds, candidates selected / dropped unselected, predicted first-transmission bytes per class
     uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
+    uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
+    uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
+    uint64_t max_pending = 0;             // largest candidate pool handed to the policy
+    double select_ms_total = 0, select_ms_max = 0;   // policy wall time per round (not used for decisions)
 };
 
 using EdgeKey = std::tuple<AgentId, uint64_t, AgentId, uint64_t>;
@@ -198,7 +206,11 @@ public:
     CollabNode(AgentId self, std::vector<AgentId> fleet, const core::WireCodec& codec, core::ByteLedger& ledger,
                NodeHooks hooks, NodeParams p = {})
         : self_(self), fleet_(std::move(fleet)), codec_(codec), ep_(self, codec, ledger, p.endpoint),
-          mem_(self, p.membership), hooks_(std::move(hooks)), p_(p), cost_(codec, p.response_cost) {}
+          mem_(self, p.membership), hooks_(std::move(hooks)), p_(p), cost_(codec, p.response_cost) {
+        // 3.4: a policy without similarities would weigh every candidate 1, silently "spectral on topology only".
+        if (hooks_.select && !hooks_.similarity)
+            throw std::invalid_argument("CollabNode: NodeHooks::select needs NodeHooks::similarity");
+    }
 
     // --- application input ---
 
@@ -537,21 +549,23 @@ private:
             }
         }
         if (pending_.empty()) return;
-        // Nodes: every keyframe known, ordered (agent, keyframe): consecutive ones of an agent are its odometry chain.
-        std::map<KeyframeRef, int> idx;
-        for (const auto& [k, g] : descriptor_db_) idx.emplace(k, 0);
+        // Nodes and odometry as Swarm-SLAM builds them (cslam algebraic_connectivity_maximization.py, fill_odometry):
+        // every keyframe id 0..max seen per agent, consecutive ids joined at the fixed weight 1. Gaps in what the
+        // broker has seen are full chains, not one collapsed edge.
+        std::map<AgentId, uint64_t> max_kf;
+        auto see = [&](const KeyframeRef& k) { max_kf[k.agent] = std::max(max_kf[k.agent], k.keyframe); };
+        for (const auto& [k, g] : descriptor_db_) see(k);
         for (const auto& [a, g] : snapshots_)
-            for (const auto& n : g.nodes) idx.emplace(KeyframeRef{a, n.keyframe}, 0);
-        for (const auto& [pr, c] : pending_) idx.emplace(pr.first, 0), idx.emplace(pr.second, 0);
+            for (const auto& n : g.nodes) see({a, n.keyframe});
+        for (const auto& [pr, c] : pending_) see(pr.first), see(pr.second);
+        std::map<KeyframeRef, int> idx;
         SelectionProblem P;
-        P.n = int(idx.size());
-        int i = 0;
-        for (auto& [k, v] : idx) v = i++;
-        const KeyframeRef* prev = nullptr;
-        for (const auto& [k, v] : idx) {
-            if (prev && prev->agent == k.agent) P.fixed.push_back({v - 1, v, 1.0});
-            prev = &k;
-        }
+        for (const auto& [a, mk] : max_kf)
+            for (uint64_t kf = 0; kf <= mk; ++kf) {
+                idx.emplace(KeyframeRef{a, kf}, P.n);
+                if (kf > 0) P.fixed.push_back({P.n - 1, P.n, 1.0});
+                ++P.n;
+            }
         for (const auto& [key, e] : broker_edges_) {
             const auto a = idx.find({e.agent_a, e.keyframe_a}), b = idx.find({e.agent_b, e.keyframe_b});
             if (a != idx.end() && b != idx.end() && e.agent_a != e.agent_b) P.fixed.push_back({a->second, b->second, 1.0});
@@ -559,29 +573,38 @@ private:
         auto fetch_cost = [&](const KeyframeRef& k) {
             const auto d = descriptor_db_.find(k);
             const bool adv = d != descriptor_db_.end() && d->second.n_features > 0;
-            return cost_.Predict(adv ? d->second.n_features : p_.default_features,
-                                 adv ? d->second.feature_bytes : p_.default_feature_bytes);
+            return std::make_pair(cost_.Predict(adv ? d->second.n_features : p_.default_features,
+                                                adv ? d->second.feature_bytes : p_.default_feature_bytes),
+                                  std::make_pair(adv, cost_.Calibrated(adv ? d->second.feature_bytes
+                                                                           : p_.default_feature_bytes)));
         };
         auto held = [&](const KeyframeRef& k) { return k.agent == self_ || features_.count(k) || requests_.count(k); };
         P.node_bytes.assign(size_t(P.n), 0.0);
         for (const auto& [k, v] : idx)
-            if (!held(k)) P.node_bytes[size_t(v)] = fetch_cost(k).total();
+            if (!held(k)) P.node_bytes[size_t(v)] = fetch_cost(k).first.total();
         std::map<uint64_t, std::pair<KeyframeRef, KeyframeRef>> by_id;
         for (const auto& [pr, c] : pending_) {
             P.candidates.push_back({c.id, idx.at(pr.first), idx.at(pr.second), c.kappa});
             by_id.emplace(c.id, pr);
         }
         P.budget_bytes = tokens_;
+        stats_.max_pending = std::max<uint64_t>(stats_.max_pending, pending_.size());
+        const auto w0 = std::chrono::steady_clock::now();
         SelectionReport r = hooks_.select(P);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w0).count();
+        stats_.select_ms_total += ms;
+        stats_.select_ms_max = std::max(stats_.select_ms_max, ms);
         ++stats_.selection_rounds;
         for (uint64_t id : r.selected) {
             const auto pr = by_id.at(id);
             pending_.erase(pr);
             for (const KeyframeRef& end : {pr.first, pr.second}) {
                 if (!held(end)) {
-                    const FetchCost c = fetch_cost(end);
+                    const auto [c, flags] = fetch_cost(end);
                     stats_.predicted_request_bytes += c.request;
                     stats_.predicted_response_bytes += c.response;
+                    stats_.unadvertised_prices += !flags.first;
+                    stats_.uncalibrated_prices += !flags.second;
                 }
                 RequestFeatures(end, t);
             }

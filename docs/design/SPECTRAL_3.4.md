@@ -10,8 +10,16 @@ sim integration of 3.2 over 3.3's CommsNode right after (the Phase 3 gate rows w
   - picks the size-B candidate subset maximising λ₂ of a weighted Laplacian;
   - weights: fixed edges κ = 1, candidates κ = retrieval similarity;
   - procedure: relax, solve, round; bootstrap greedily until the robots' graphs are connected.
-  - [UNVERIFIED this session: its exact graph construction in the `cslam` submodule. The crawl failed on a
-    saturated uplink; retry and record any deviation in §8.]
+  - **Verified from source** (`lajoiepy/cslam`, `algebraic_connectivity_maximization.py`, MIT, read 2026-10-23):
+    - nodes are every keyframe id 0..max seen per robot, with odometry inferred between consecutive ids at
+      `fixed_weight = 1.0` (`fill_odometry`);
+    - verified candidates move to the fixed edges at that weight (`candidate_edges_to_fixed`);
+    - selected candidates leave the pool and are never re-proposed (`remove_candidate_edges`,
+      `already_considered_matches`); in-flight ones are **not** counted as edges;
+    - robots with no fixed link get their highest-similarity candidate first (`connection_biased_greedy_selection`);
+    - the budget is a candidate count per `inter_robot_detection_period_sec = 5` (`loop_closure_detection_node.py`),
+      with vertex cover applied after selection.
+    - Ours prices bytes instead (arch §16.3).
 - **MAC** (Doherty, Papalia, Huang, Rosen, Englot, Leonard, arXiv 2403.19879; IROS 2022 arXiv 2203.13897):
   - Frank-Wolfe on the Boolean relaxation; the supergradient is g_e = κ_e (v[a] − v[b])²;
   - rounding: nearest or Madow;
@@ -45,13 +53,20 @@ pending: they are re-scored next round as the graph changes, and dropped after `
 
 ## 2. The candidate graph (arch §16.1)
 
-- **Nodes:** every keyframe the broker knows of, for all members.
+- **Nodes:** Swarm-SLAM's construction. Every keyframe id 0..max seen per member, consecutive ids joined at κ = 1, so
+  gaps in what the broker has seen are full chains.
+  - This **assumes odometry across D87's startup prefix**, where the VO skipped exit edges (registered carry, 2.4
+    row). It is Swarm-SLAM's convention too; not fixed here.
 - **Fixed edges:**
-  - odometry, from each agent's pose graph;
-  - intra-agent loops;
-  - inter-agent edges already accepted.
-
-  All have κ = 1 (Swarm-SLAM's convention: no noise model crosses the wire for this).
+  - that odometry;
+  - inter-agent edges already accepted (`broker_edges_`), κ = 1.
+  - **Not intra-agent loops.** λ₂ bounds the error of the graph actually solved (MAC §III-D), and agent snapshots
+    carry odometry only (`g.edges = odometry_`). The candidate graph holds exactly the edges the broker solve
+    consumes. (Corrected 2026-10-23; an earlier draft listed loops.)
+- **In-flight candidates** (selected, not yet verified) are not edges, as in Swarm-SLAM.
+  - The sim runs measure how often a selection lands next to an in-flight candidate. In-flight-as-edges becomes an
+    ablation only if that is material (advisor).
+- **Selection period:** 5 s, Swarm-SLAM's default. It is a manifest field.
 - **Candidate edges:** κ_e = the retrieval similarity s_e ∈ (0, 1].
 - **Objective:** λ₂(L_fixed + Σ_{e∈S} κ_e L_e), the full graph (no reduction).
 
@@ -126,6 +141,12 @@ pending: they are re-scored next round as the graph changes, and dropped after `
 7. Budget: the selected cost is ≤ B always; nothing affordable is left with positive gain.
 
 ## 8. Stated gaps (as-built vs locked wording)
+
+- **D-optimal (tree-connectivity) objective:** a candidate ablation, deferred until the three gate arms have numbers.
+  - Tian, Khosoussi & How (IJRR 2021, arXiv 1907.04904) give provable guarantees (submodular) under joint byte and
+    compute budgets.
+  - MAC's comparison found Greedy ESP (D-optimal) and MAC near-identical in quality, MAC 2–3 orders faster.
+  - The gain is log(1 + κ_e · R_eff(a, b)), one LDLT solve per candidate with the factorisation already held.
 
 - **Vertex cover:** verification is at the broker, so every non-broker endpoint is fetched. The direction choice of
   Giamou et al. (send the one keyframe to the agent holding five) is not built. On the sim runs, the count of

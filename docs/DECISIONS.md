@@ -3257,6 +3257,68 @@ field except timings.
 - **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
   exists.
 
+
+## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
+
+Design: `docs/design/SPECTRAL_3.4.md`. Code:
+- `cpp/collaboration/candidate_selection/{selection,spectral_selector,response_cost}.hpp`;
+- `CollabNode::MaybeSelect`.
+
+Branch `feat/3.4-spectral`.
+
+**Decision.**
+- **Objective:** λ₂ of the broker's candidate graph, built Swarm-SLAM's way (verified from the `cslam` source). Nodes
+  are keyframe ids 0..max per agent, joined by odometry at κ = 1. Accepted inter-agent edges are fixed at κ = 1;
+  candidates take κ = retrieval similarity. No intra-agent loops, because snapshots carry none to the solve.
+- **Solver: §49 substitution.** Arch §16 says LOBPCG or shifted Lanczos. This uses block inverse iteration on L⁺
+  (grounded SimplicialLDLT), with Rayleigh–Ritz and warm starts. A near-repeated λ₂ is treated as one cluster (for
+  determinism).
+- **Selection:**
+  - a connectivity bootstrap, re-checked after every pick;
+  - greedy by κ‖Vᵀ(e_a − e_b)‖² per marginal byte;
+  - then a bounded 1-swap refinement (arch §16.2's "local refinement").
+- **Bound:** MAC's post-hoc dual bound over an LP relaxation of the **shared-cost** feasible set (`cv::solveLP`). It
+  is reported per run and absent if the LP fails.
+- **Cost:**
+  - an exact payload via the codec, from the appended `GlobalDescriptor.n_features` / `feature_bytes`;
+  - the calibrated per-encoding compression ratio of COLLAB_3.2 §7, from disjoint runs (uncalibrated runs are
+    labelled and excluded from I6);
+  - the codec's own framing.
+- **Budget:** a token bucket of predicted bytes over a 5 s selection period (Swarm-SLAM's period; its budget is a
+  count, ours bytes per arch §16.3).
+- **Policy:** `NodeHooks::select`. Unset gives today's request-everything behaviour (the "similarity" baseline);
+  `SelectBySimilarity` is "greedy"; `SelectSpectral` is "spectral". A policy requires `NodeHooks::similarity`.
+
+**Evidence (unit, synthetic):**
+- selector 6/6: the solver matches dense eigen cold and warm, and a repeated λ₂ is detected;
+- exact oracle under the shared cost, 60 instances:
+  - bound valid 60/60, but loose, 1.3–6.4× the optimum;
+  - selected/optimum mean 0.970, worst 0.650 (greedy alone: 0.936 / 0.533);
+- protocol 60/60, including:
+  - **v1 `GlobalDescriptor` bytes identical to `5bc95a9`**: a golden from the pre-change tree, 1142 B;
+  - on a scene disjoint from the calibration: response prediction error 7.2%, request 0.29% (gate ≤ 15%);
+  - the calibrated bucket is spent, not idle: 269 KB sent of 380 KB allowed.
+- The synthetic descriptors compress to 0.21; real ORB is nearly incompressible, so **the I6 evidence is the sim
+  runs**, not this.
+
+**Stated gaps:**
+- The vertex-cover direction choice (broker-side verification fetches every remote endpoint).
+- The 0..max chain assumes odometry across D87's prefix.
+- `candidate_ttl_s` 120 is an [ASSUMPTION] and `refine_passes` 2 is unmeasured at scale. Both are decided by the sim
+  runs, with stats `max_pending` and `select_ms_*`.
+- The D-optimal ablation is deferred (design §8).
+- The real gate harness must sum predictions over every node that acted as broker.
+
+**§49:**
+
+| step | status |
+|---|---|
+| catalogue | `ALGORITHMS.md` §1.4 M2/M3 (Swarm-SLAM, MAC, Giamou/Tian); D170 adds the as-built note |
+| arch decision | this entry; arch §16 blockquote pending with the merge (the solver substitution, the refinement, the bound) |
+| ablation matrix | policy {similarity, greedy, spectral}; `refine_passes`; D-optimal (deferred) |
+| benchmark config | the budget sweep (`budget_bytes_per_s`) for the ATE-vs-bytes plot: with the 3.2 sim integration |
+| manifest | policy, `budget_bytes_per_s` / `budget_burst_bytes`, `selection_interval_s`, `refine_passes`, response ratio + calibration run; emitted by the runtime once wired |
+
 ## 2026-10-23 — D172: Phase 2 full gate on AWS — 53/54; the 54th was the D55 reference's own dirty flag; `report.yaml` re-pinned
 
 **The run.** `phase1.sh` in full mode on clean commit b59a77d, on AWS (cpux86 spot, 32 min), with a fresh Kaggle
