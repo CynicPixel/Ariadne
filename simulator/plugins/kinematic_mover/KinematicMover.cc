@@ -103,9 +103,11 @@ public:
     }
 
     void PreUpdate(const gz::sim::UpdateInfo& info, gz::sim::EntityComponentManager& ecm) override {
-        if (info.paused) return;
         const int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count();
+        // Commands are taken even while paused (D165 lockstep: a command sent at the barrier T is applied AT T and
+        // answered before the runtime resumes the world); motion below advances only when running.
         if (live_) ApplyCommands(ns);
+        if (info.paused) return;
         const MoverSample m = SampleAt(cfg_, ns);
         const Vec5& s = m.state.pose;
         const gz::math::Pose3d pose(s[0], s[1], s[2], 0.0, s[4], s[3]);

@@ -824,6 +824,6 @@ has not moved for 15 s of wall time.
 - The 20 Hz camera's frame at T is published before the pause, so a barrier at T has its frame.
 - A world that STARTS paused publishes no frame at t = 0 (first frame 0.05 s): lockstep runs have one frame fewer per
   agent than unpaused ones (1800 vs 1801 over 90 s).
-- Not covered here: systems' `PreUpdate` while paused (the mover taking a command at paused time T) — needs the mover
-  rebuild; checked separately before D165's zero-lag claim is made.
+- Systems' `PreUpdate` while paused (the mover taking a command at paused time T): covered by
+  `python/tests/sim/test_mover_live.py::test_command_taken_while_paused` (applied_ns = 0 in a world paused at 0).
 Re-run (~2 min): `infra/scripts/tests/lockstep_smoke/run.sh` (header has the docker command; probe.py beside it).

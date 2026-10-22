@@ -109,3 +109,30 @@ def test_live_commands(world):
             gz.wait(timeout=10)
         except subprocess.TimeoutExpired:
             gz.kill()
+
+
+def test_command_taken_while_paused(world):
+    # D165 lockstep: the runtime sends a barrier's commands while gz is PAUSED at T and waits for the answers before
+    # resuming. The mover must take the command at paused time T (applied_ns == T) and answer, and not move.
+    d, sdf, ent = world
+    env = dict(os.environ, GZ_SIM_SYSTEM_PLUGIN_PATH="/work/build/sim-plugins", GZ_TRANSPORT_RCVHWM="0",
+               GZ_TRANSPORT_SNDHWM="0")
+    gz = subprocess.Popen(["gz", "sim", "-s", sdf], cwd=d, env=env,             # no -r: starts paused at t = 0
+                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    try:
+        time.sleep(4.0)
+        x0, y0 = ent["start_xy_m"]
+        yaw0 = math.radians(ent["start_yaw_deg"])
+        states = _echo(STATE, 1, 30)
+        poses = _echo(POSE, 1, 30)
+        time.sleep(1.0)
+        hdr = 'header{stamp{sec:%d} data{key:"frame_id" value:"world"}}'
+        _pub(hdr % 9 + f" pose{{position{{x:{x0 + math.cos(yaw0)} y:{y0 + math.sin(yaw0)} z:1.0}} orientation{{w:0}}}}")
+        out, _ = states.communicate(timeout=30)
+        st = _states(out)
+        assert len(st) == 1 and st[0]["cmd_stamp_ns"] == 9_000_000_000, st
+        assert st[0]["accepted"] and st[0]["applied_ns"] == 0, st[0]       # taken at the paused time, not later
+        poses.kill()
+    finally:
+        gz.terminate()
+        gz.wait(timeout=20)

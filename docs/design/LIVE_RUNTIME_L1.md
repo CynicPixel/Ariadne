@@ -133,7 +133,7 @@ stamp`) and that lag depends on wall latency: two live runs of one seed differ. 
 - **The barrier needs a frame at T.** `[SMOKE-TEST §4w: paused at T, the frame at T is delivered, none after; a world starting paused has no t = 0 frame]` Measured on the first LLM run: the cameras tick every 50 ms exactly, and a frame
   is stamped at every 5 s barrier (1801 frames, all 18 barrier stamps present), so a world paused at T has delivered
   everything the barrier waits for.
-- **Zero lag, not "one step".** `[UNVERIFIED: systems run while paused]` The mover now takes queued commands in `PreUpdate` even while paused (gz-sim calls
+- **Zero lag, not "one step".** `[TESTED: test_mover_live.py::test_command_taken_while_paused, applied_ns = the paused time]` The mover now takes queued commands in `PreUpdate` even while paused (gz-sim calls
   systems while paused; motion still advances only when unpaused), so a command sent at barrier T is applied at sim
   time T and answered. The runtime waits for both answers BEFORE asking for `run_to T + replan`: every command's
   `applied_ns` equals its barrier in lockstep. Unpaused runs are unchanged (the next update applies it, as before).
