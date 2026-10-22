@@ -177,4 +177,4 @@ in `ariadne_volumetric_eval`, and `python/analysis/egress_eval.py`. Evidence: `e
   hazard seeds and the L1 obstacle-after-route scenario (8.x).
 - **Open:**
   - the risk-aware rows (w_r) wait for D112's calibration;
-  - the hazard seeds' spools wait for the AWS renders (the first launch failed on an S3 prefix; fix uncommitted).
+  - the hazard seeds' spools wait for the AWS renders (the first launch failed on an S3 prefix; fixed in `66eac61`, relaunched).

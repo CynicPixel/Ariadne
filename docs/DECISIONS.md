@@ -3073,3 +3073,35 @@ Both are main's (3.2 / 3.5).
   so the switch is a no-op (byte-identical support).
 - **Calibration:** degenerate (all valid, confidence 0.900–0.902), reported as degenerate.
 - **Exit-gate reroute:** open; no run-level instance yet.
+
+## 2026-10-23 — D114: 4.3 NBV design (generators A–E, a shared FUEL viewpoint sampler, 256-ray IG, p90 self-normalisation, one path cost, the energy-reserve rule); gate on lockstep L1
+
+- **What** (`docs/design/NBV_4.3.md`):
+  - **Generators A–E** feed one cylindrical viewpoint sampler (FUEL): radii 1.0 / 1.5 / 2.0 m, 16 azimuths,
+    z = 1.0 m; kept if in `trav_a` with line of sight; best 2 per target.
+  - **IG:** a 256-ray frustum bundle to 2.84 m.
+    - Δcoverage: unknown voxels;
+    - Δentropy: with p_occ = ½e^(−w) for free voxels and 1 − ½e^(−w) for occupied, the weight's unit being one
+      σ_ref observation;
+    - Δegress: unknown voxels in the route envelope;
+    - Δpose_connectivity: a planning-side `ConnectivityOracle`, the Δλ₂ of 3.4's selector through a runtime
+      adapter;
+    - Δloop_disambiguation: `AliasSource`.
+  - **Normalisation:** each term by its candidate-set p90, and G = the sum.
+  - **Costs:** the path-proportional costs (motion, time, energy) are counted once, as
+    λ_path(t) = (1 + λ_e(t) + λ_t(t))/3 ∈ [1, 5/3], with the arch's cubic schedules. Bandwidth and risk are
+    p90-normalised with λ = 1.
+  - **Hard rule:** if E_remaining < 1.3·E(return), only {return, hold}, as a supervisor event.
+- **Why:**
+  - arch §21.2–§21.4 as written, except cost normalisation, an extension flagged in the design: without it every
+    λ⁰ is unit-bearing;
+  - counting the costs once avoids the hidden 3× motion weight that per-term normalisation of ∝-path costs would
+    create.
+- **Measured before adoption:** Δentropy is not saturated on the evidence-spool map (known-voxel w p50 0.74–0.83;
+  mean H 0.61–0.66 bit; a third over 0.9 bit).
+- **Conflict surfaced:** two §21.3 producers are absent on this branch. 3.4's spectral gain is unmerged
+  (feat/3.4-spectral), and §17.3's alias flags don't exist anywhere. Those terms are 0, with the reason in the trace,
+  until they land. They're never a stand-in value.
+- **Gate:** the coverage-vs-budget ablation has pre-registered axes (§5). It runs on **lockstep L1** (maintainer):
+  B builds a gz pause at each barrier, so runs are reproducible per seed. The replay decision log tests the
+  machinery only.

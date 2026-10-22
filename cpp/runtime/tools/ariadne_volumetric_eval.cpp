@@ -353,6 +353,36 @@ int main(int argc, char** argv) {
                         unk.at<uint8_t>(z * rows + r, c) = map.State({cx0 + c, cy0 + r, z}) == planning::kUnknown;
             cv::imwrite((fs::path(out) / "diag_unknown_by_layer.png").string(), unk);
         }
+        // NBV_4.3 §3 check (no GT): known-voxel weight quantiles, and the binary entropy each would carry under the
+        // proposed p_occ (free 0.5 e^-w, occupied 1 - 0.5 e^-w), so a saturated Delta-entropy is caught before adoption.
+        std::string wq;
+        {
+            std::vector<float> wf, wo;
+            map.ForEachBlock([&](const planning::Idx3& bi, const planning::TsdfBlock& b) {
+                for (int i = 0; i < planning::kBlockVoxels; ++i) {
+                    const auto& v = b.v[size_t(i)];
+                    if (v.w <= tp.w_min) continue;
+                    (v.sdf < 0.5 * tp.voxel ? wo : wf).push_back(v.w);
+                }
+                (void)bi;
+            });
+            auto H = [](double p) { return p <= 0 || p >= 1 ? 0.0 : -(p * std::log2(p) + (1 - p) * std::log2(1 - p)); };
+            for (auto [name, vv] : {std::pair{"free", &wf}, std::pair{"occupied", &wo}}) {
+                std::sort(vv->begin(), vv->end());
+                auto Q = [&](double q) { return vv->empty() ? 0.0 : double((*vv)[size_t(q * double(vv->size() - 1))]); };
+                double hsum = 0, hlo = 0;
+                for (float w : *vv) {
+                    const double h = H(0.5 * std::exp(-double(w)));
+                    hsum += h, hlo += h > 0.9;
+                }
+                char buf[320];
+                std::snprintf(buf, sizeof buf, "%s%s: {n: %zu, w_p10: %.4g, w_p50: %.4g, w_p90: %.4g, w_max: %.4g, "
+                              "H_mean_bits: %.4f, frac_H_over_0.9: %.4f}", wq.empty() ? "" : ", ", name, vv->size(), Q(0.1),
+                              Q(0.5), Q(0.9), Q(1.0), vv->empty() ? 0.0 : hsum / double(vv->size()),
+                              vv->empty() ? 0.0 : hlo / double(vv->size()));
+                wq += buf;
+            }
+        }
         const planning::CoarseLayer coarse = planning::BuildCoarse(map);
         const size_t rle = planning::EncodeCoarseRle(coarse).size();
         std::ofstream res(fs::path(out) / "results.yaml");
@@ -373,6 +403,7 @@ int main(int argc, char** argv) {
             << "traversability: {ms: " << trav_ms << ", responder_cells: " << cv::countNonZero(tm.trav_r)
             << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
             << "risk_terms: {" << risk_where << "}\n";
+        res << "known_weights: {" << wq << "}   # NBV_4.3 §3 entropy-saturation check\n";
         if (egress_on) {
             // §7 range check (no GT): support along the final route. Flat (spread < 0.1) => the band fallback.
             std::vector<float> sv;
