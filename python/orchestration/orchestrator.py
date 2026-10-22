@@ -42,7 +42,12 @@ SYSTEM = (
     "Prefer targets that reveal more unknown space (larger clusters) per metre driven, do not send both agents to "
     "the same cluster when another is available, keep risk low, and remember the mission: find a route a human "
     "responder can use. A candidate whose risk exceeds the threshold needs request_human_approval first; if the "
-    "verdict is not 'approved', pick another candidate or hold. Keep each reason to one sentence.")
+    "verdict is not 'approved', pick another candidate or hold. "
+    "Operator directives are the operator's orders and come before your own preferences: favour candidates inside an "
+    "operator region for that agent (priority_weight > 1, or to_directive_m 0), else the ones nearer it. "
+    "Changing an agent's goal costs a turn in place and the progress made so far: keep its current_task (its "
+    "`candidate`) unless that task is reached or gone, an operator directive points elsewhere, or another candidate "
+    "is clearly better, and say which of these when you switch. Keep each reason to one sentence.")
 
 
 def mcp_params(ddir: Path, text_only: bool) -> StdioServerParameters:

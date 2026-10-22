@@ -89,26 +89,55 @@ struct PlaceholderParams {
     double autonomous_threshold = 1.01, eps_cells = 1.0, max_command_m = 3.0;
 };
 
-/// The A* path to `goal`, simplified (approxPolyDP, every chord re-checked on the traversable grid), in W, without
-/// the start cell, cut at max_m. Empty if no path.
+/// True if every cell the 8-connected segment a-b visits is traversable.
+inline bool ChordFree(const cv::Mat& trav, cv::Point a, cv::Point b) {
+    cv::LineIterator it(trav, a, b, 8);
+    for (int k = 0; k < it.count; ++k, ++it) {
+        if (trav.at<uint8_t>(it.pos()) == 0) return false;
+    }
+    return true;
+}
+
+/// Appends the vertices that replace pts[i..j] after pts[i]: the chord itself if it is free, else the two halves split
+/// at the cell farthest from the chord (Douglas-Peucker's split point), each refined the same way. Terminates: a chord
+/// between consecutive A* cells is free (A* stepped between them).
+inline void RefineChord(const cv::Mat& trav, const std::vector<cv::Point>& pts, size_t i, size_t j, std::vector<cv::Point>& out) {
+    if (j <= i + 1 || ChordFree(trav, pts[i], pts[j])) {
+        out.push_back(pts[j]);
+        return;
+    }
+    const cv::Point2d a = pts[i], d = cv::Point2d(pts[j]) - a;
+    const double n = std::max(1e-9, std::hypot(d.x, d.y));
+    size_t m = i + 1;
+    double best = -1;
+    for (size_t k = i + 1; k < j; ++k) {
+        const cv::Point2d v = cv::Point2d(pts[k]) - a;
+        const double dist = std::abs(d.x * v.y - d.y * v.x) / n;
+        if (dist > best) best = dist, m = k;
+    }
+    RefineChord(trav, pts, i, m, out);
+    RefineChord(trav, pts, m, j, out);
+}
+
+/// The A* path to `goal`, simplified (approxPolyDP; a chord that crosses a non-traversable cell is split where it
+/// deviates most and refined, never replaced by the raw cells), in W, without the start cell, cut at max_m. Empty if
+/// no path. Before 2026-10-23 one failing chord replaced the WHOLE path by its 5 cm cells (a 2.6 m path became 45
+/// waypoints and 85 s of turn-and-move segments in the first LLM run); with every chord free the output is unchanged.
 inline std::vector<std::pair<double, double>> CommandPath(const mis::Briefing& b, const cv::Mat& trav, const Cell& from,
                                                           const Cell& goal, double eps_cells, double max_m) {
     const planning::GridPath p = planning::AStar(trav, from, {goal});
     if (!p.found || p.cells.size() < 2) return {};
-    std::vector<cv::Point> pts, simp;
+    std::vector<cv::Point> pts, dp;
     for (const auto& c : p.cells) pts.emplace_back(c.c, c.r);
-    cv::approxPolyDP(pts, simp, eps_cells, false);
-    bool chords_ok = true;
-    for (size_t i = 1; i < simp.size() && chords_ok; ++i) {
-        cv::LineIterator it(trav, simp[i - 1], simp[i], 8);
-        for (int k = 0; k < it.count; ++k, ++it) {
-            if (trav.at<uint8_t>(it.pos()) == 0) {
-                chords_ok = false;
-                break;
-            }
-        }
+    cv::approxPolyDP(pts, dp, eps_cells, false);
+    // approxPolyDP returns a subsequence of pts (in order; an A* path never repeats a cell): recover the indices
+    std::vector<size_t> idx;
+    for (size_t k = 0, q = 0; k < dp.size(); ++k) {
+        while (q < pts.size() && pts[q] != dp[k]) ++q;
+        idx.push_back(q);
     }
-    if (!chords_ok) simp = pts;   // never shortcut through a non-traversable cell
+    std::vector<cv::Point> simp{pts.front()};
+    for (size_t k = 1; k < idx.size(); ++k) RefineChord(trav, pts, idx[k - 1], idx[k], simp);
     std::vector<std::pair<double, double>> out;
     auto [px, py] = b.CellCentre(Cell{simp[0].y, simp[0].x});
     double left = max_m;

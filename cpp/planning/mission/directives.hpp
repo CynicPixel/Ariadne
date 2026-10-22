@@ -13,7 +13,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -46,6 +48,19 @@ struct Directive {
             if ((yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) in = !in;
         }
         return in;
+    }
+    /// Distance (m) from (px, py) to the region: 0 inside, else to the nearest polygon edge.
+    double Distance(double px, double py) const {
+        if (Covers(px, py)) return 0;
+        double best = std::numeric_limits<double>::infinity();
+        for (size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+            const auto [ax, ay] = polygon[j];
+            const auto [bx, by] = polygon[i];
+            const double dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+            const double u = L2 > 0 ? std::clamp(((px - ax) * dx + (py - ay) * dy) / L2, 0.0, 1.0) : 0.0;
+            best = std::min(best, std::hypot(ax + u * dx - px, ay + u * dy - py));
+        }
+        return best;
     }
 };
 

@@ -198,6 +198,26 @@ TERM/USER to the server process (`DEFAULT_INHERITED_ENV_VARS`), which dropped `P
 test_orchestrator_stub.py`, botocore Stubber, real MCP servers): inspect → approval → assign on Nova; throttled Nova →
 DeepSeek with the text-only tool list; no assign → null answer and no fallback. 3/3.
 
+**D164 — what the chooser sees beyond the candidates (2026-10-23, after the first real Bedrock run).** That run
+(`maze_short` seed 6, 90 s, Nova 2 Lite, 18 replans, every pick valid, no fallback) showed two gaps in the request,
+not in the model:
+1. *No memory.* Each replan is a fresh conversation and the planner renumbers clusters, so agent 1 was sent north,
+   south, west, east on successive replans and spent t = 20–50 s turning in place (0.5 m net). The request now carries
+   per agent `current_task`: the goal its last command serves, since when, the chooser's reason, the straight-line
+   distance left, and `candidate` = the option whose goal lies within `refused_radius_m` of it (the radius the
+   refused-goal rule already uses; no new knob), else −1. A pick within that radius continues the task (`since`
+   kept). The prompt says a switch costs a turn and must name its cause. **No hysteresis rule in C++:** commitment
+   is the Phase 4 planner's (A1, CBBA bundles, arch §21.7); the classical chooser keeps its 1.8 behaviour.
+2. *Directives invisible.* The operator drew seven `priority_region`s; the planner reweights only candidates INSIDE a
+   region, none of agent 1's ever was, and the request had no directive field, so Nova could not act on them. The
+   request now has the active directives, and each candidate the region directives covering its goal, the product of
+   their priority weights and `to_directive_m` (distance to the nearest region for that agent; 0 inside), all
+   computed by the core (`Directive::Distance`). The prompt ranks operator directives above the model's preferences.
+The trace carries `current_task` (without the reason: replay has no answer text, and live = replay must hold) and the
+per-candidate directive facts. Same run, also found and fixed: `CommandPath` replaced the whole path by its raw A*
+cells when one simplified chord clipped an obstacle (45 waypoints, 85 s for 2.6 m); the console's streams died when
+the operator endpoints and the websockets polled the telemetry tail concurrently (D154 fix).
+
 ## 3. Acceptance
 
 1. A live two-agent run with `chooser: llm` in which the trace shows, per decision: vision facts → MCP tool calls →

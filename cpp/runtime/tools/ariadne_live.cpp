@@ -526,6 +526,14 @@ int main(int argc, char** argv) {
         size_t integrated[2] = {0, 0}, rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
+        // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
+        // whose goal lies within refused_radius_m of it CONTINUES it (since_ns kept); anything else starts a new one.
+        struct CurrentTask {
+            bool set = false;
+            double gx = 0, gy = 0;
+            int64_t since_ns = 0;
+            std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
+        } current[2];
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
@@ -696,23 +704,59 @@ int main(int argc, char** argv) {
                 std::ostringstream cj;
                 cj.precision(6);
                 cj << "[";
+                // The current task, and the option that continues it (nearest goal within refused_radius_m).
+                int continues = -1;
+                double cont_d = lc.refused_radius_m;
+                for (size_t i = 0; current[k].set && i < ao.options.size(); ++i) {
+                    const double d = std::hypot(ao.options[i].goal_xy.first - current[k].gx,
+                                                ao.options[i].goal_xy.second - current[k].gy);
+                    if (d < cont_d) cont_d = d, continues = int(i);
+                }
+                std::ostringstream task;
+                task.precision(6);
+                if (!current[k].set) {
+                    task << "null";
+                } else {
+                    task << "{\"goal_xy_m\":" << Xy(current[k].gx, current[k].gy) << ",\"since_t_s\":"
+                         << current[k].since_ns * 1e-9 << ",\"straight_line_m\":"
+                         << std::hypot(current[k].gx - T_W_C.t.x(), current[k].gy - T_W_C.t.y())
+                         << ",\"candidate\":" << continues;
+                }
                 for (size_t i = 0; i < ao.options.size(); ++i) {
                     const auto& t = ao.options[i];   // the seam's fields only (A1's TaskCandidate names)
                     const double r = t.risk;
                     pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
+                    // Operator intent at this goal (§0b): the region directives for this agent covering it, the product
+                    // of their priority weights, the distance to the nearest one (0 inside; null if none is active).
+                    std::string covering;
+                    double weight = 1, to_dir = std::numeric_limits<double>::infinity();
+                    for (const auto& d : active) {
+                        if (d.kind != "priority_region" && d.kind != "explore" && d.kind != "assign") continue;
+                        if (d.agent >= 0 && d.agent != k) continue;
+                        const double dd = d.Distance(t.goal_xy.first, t.goal_xy.second);
+                        to_dir = std::min(to_dir, dd);
+                        if (dd == 0) {
+                            covering += (covering.empty() ? "\"" : ",\"") + JsonEscape(d.id) + "\"";
+                            if (d.kind == "priority_region") weight *= d.weight;
+                        }
+                    }
                     cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << t.task_id << ",\"path_m\":"
                        << t.path_m << ",\"goal_xy_m\":" << Xy(t.goal_xy.first, t.goal_xy.second) << ",\"standoff_m\":"
                        << t.standoff_m << ",\"centroid_xy_m\":" << Xy(t.centroid_xy.first, t.centroid_xy.second)
                        << ",\"cells\":" << t.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << t.risk_reason
-                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false") << "}";
+                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false")
+                       << ",\"directives\":[" << covering << "],\"priority_weight\":" << weight << ",\"to_directive_m\":";
+                    if (std::isfinite(to_dir)) cj << to_dir; else cj << "null";
+                    cj << "}";
                 }
                 cj << "]";
                 o << "\"candidates\":" << cj.str() << ",\"candidates_total\":" << pd.cands.size()
                   << ",\"excluded_refused\":" << excluded_refused << ",\"excluded_near\":" << excluded_near
                   << ",\"excluded_directive\":" << ao.excluded_directive << ",\"directives\":[";
                 for (size_t i = 0; i < ao.applied.size(); ++i) o << (i ? "," : "") << "\"" << JsonEscape(ao.applied[i]) << "\"";
-                o << "],\"autonomous_threshold\":" << lc.autonomous_threshold << ",\"classical_choice\":" << pd.classical
+                o << "],\"current_task\":" << task.str() << (current[k].set ? "}" : "")
+                  << ",\"autonomous_threshold\":" << lc.autonomous_threshold << ",\"classical_choice\":" << pd.classical
                   << ",";
                 pd.head = o.str();
                 {
@@ -721,13 +765,14 @@ int main(int argc, char** argv) {
                     q << "{\"agent\":" << k << ",\"vision\":" << vision.str() << ",\"estimator\":{\"frames\":"
                       << frames << ",\"keyframes\":" << kfs << ",\"since_last_keyframe_s\":"
                       << (last_kf < 0 ? -1.0 : (T - last_kf) * 1e-9) << "},\"candidates\":" << cj.str()
-                      << ",\"classical_choice\":" << pd.classical;
+                      << ",\"classical_choice\":" << pd.classical << ",\"current_task\":" << task.str();
+                    if (current[k].set) q << ",\"reason\":\"" << JsonEscape(current[k].reason) << "\"}";
                     pd.agent_json = q.str();
                 }
             }
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
             int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
-            std::string choice[2];
+            std::string choice[2], pick_reason[2] = {"classical choice", "classical choice"};
             const auto other_cluster = [&](int k, int64_t taken) { return planner.OtherCluster(plan_out, k, taken); };
             const auto cluster_of = [&](int k, int i) { return live::PlaceholderPlanner::ClusterOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
@@ -783,7 +828,9 @@ int main(int argc, char** argv) {
                   << "\",\"egress\":{\"found\":" << (maps.egress.found ? "true" : "false") << ",\"length_m\":"
                   << maps.egress.length_cells * brief.gs.cell << ",\"exit\":" << maps.egress.goal_index
                   << ",\"clearance_m\":" << rho_r << "},\"autonomous_threshold\":" << lc.autonomous_threshold
-                  << ",\"approvals_dir\":\"" << fs::absolute(run_dir / "approvals").string() << "\",\"agents\":[";
+                  << ",\"approvals_dir\":\"" << fs::absolute(run_dir / "approvals").string() << "\",\"directives\":[";
+                for (size_t i = 0; i < active.size(); ++i) q << (i ? "," : "") << mis::DirectiveJson(active[i]);
+                q << "],\"agents\":[";
                 bool first = true;
                 for (int k = 0; k < 2; ++k) {
                     if (!P[k].active) continue;
@@ -833,6 +880,7 @@ int main(int argc, char** argv) {
                         if (e["agent"] && e["agent"].as<int>() == k) {
                             want[k] = e["candidate"] ? e["candidate"].as<int>() : -2;
                             approval_id[k] = e["approval_id"] ? e["approval_id"].as<std::string>() : "";
+                            if (e["reason"]) pick_reason[k] = e["reason"].as<std::string>();
                         }
                     }
                     if (want[k] < -1 || want[k] >= int(P[k].cands.size())) {
@@ -850,6 +898,7 @@ int main(int argc, char** argv) {
                         if (!approved) source[k] = "fallback", validation[k] = "above the risk threshold without an approval";
                     }
                     if (source[k] == "orchestrator") picks[k] = want[k];
+                    else pick_reason[k] = "fallback: " + validation[k];
                 }
                 if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 && source[1] == "orchestrator" &&
                     cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
@@ -899,7 +948,11 @@ int main(int argc, char** argv) {
                     p.orientation = {0, 0, std::sin(0.5 * direct[k]->yaw), std::cos(0.5 * direct[k]->yaw)};
                     cmd.poses.push_back(p);
                     last_goal[k] = {direct[k]->x, direct[k]->y};
+                    current[k] = {true, direct[k]->x, direct[k]->y, T, "operator goto " + direct[k]->id};
                 } else if (pick >= 0) {
+                    const auto g = plan_out.agents[k].options[size_t(pick)].goal_xy;
+                    const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
+                    current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
                     const auto [path, face_yaw] = planner.Route(plan_out, k, pick, pd.ac);
                     if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {

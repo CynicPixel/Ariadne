@@ -83,14 +83,20 @@ def query_route(decision_id: str) -> dict:
 
 @server.tool(description="Both agents' candidate actions, computed by the deterministic planner: frontier clusters "
                          "reachable at the agent's clearance, each with cluster id, path length, cluster size (unknown "
-                         "boundary seen: an information proxy), risk in [0,1] with its reason, and whether it needs "
-                         "human approval. Candidate -1 means hold. `classical_choice` is what the classical planner "
-                         "would pick. Do not send both agents to the same cluster when another one is available.")
+                         "boundary seen: an information proxy), risk in [0,1] with its reason, whether it needs human "
+                         "approval, and the operator's intent at its goal (`directives` covering it, `priority_weight`, "
+                         "`to_directive_m` = distance to the nearest operator region for this agent, 0 inside). "
+                         "Candidate -1 means hold. `classical_choice` is what the classical planner would pick. "
+                         "`current_task` is the goal the agent is driving to now (null if none): when it was chosen, "
+                         "why, the straight-line distance left, and `candidate` = the index that continues it (-1 if "
+                         "it is no longer a candidate). Cluster ids and indices are renumbered every replan; match by "
+                         "goal, not id. `operator_directives` are the operator's standing orders. Do not send both "
+                         "agents to the same cluster when another one is available.")
 def list_candidates(decision_id: str) -> dict:
     r = _req(decision_id)
-    return {"autonomous_threshold": r["autonomous_threshold"],
-            "agents": [{"agent": a["agent"], "candidates": a["candidates"], "classical_choice": a["classical_choice"]}
-                       for a in r["agents"]]}
+    return {"autonomous_threshold": r["autonomous_threshold"], "operator_directives": r.get("directives", []),
+            "agents": [{"agent": a["agent"], "current_task": a.get("current_task"), "candidates": a["candidates"],
+                        "classical_choice": a["classical_choice"]} for a in r["agents"]]}
 
 
 @server.tool(description="Ask the human operator to approve one agent's candidate whose risk exceeds the autonomous "

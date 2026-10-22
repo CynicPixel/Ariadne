@@ -68,6 +68,7 @@ if(OpenCV_FOUND)
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
     unit/test_live_link.cpp
+    unit/test_live_planner.cpp
     unit/test_planning.cpp
     unit/test_xfeat_reference.cpp
     unit/test_pgo_levmarq.cpp
