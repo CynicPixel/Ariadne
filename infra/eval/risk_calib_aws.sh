@@ -59,7 +59,8 @@ for s in $SEEDS; do
   mkdir -p "$R/seed_$s" "$OUT"
   step "4.$s render seed $s"
   t0=$(date +%s)
-  infra/scripts/sim_record.sh "$SC" "$REC" > "$R/seed_$s/sim_record.log" 2>&1 || fail "sim_record seed $s"
+  ARIADNE_GIT_COMMIT="$COMMIT" ARIADNE_GIT_DIRTY=false \
+    infra/scripts/sim_record.sh "$SC" "$REC" > "$R/seed_$s/sim_record.log" 2>&1 || fail "sim_record seed $s"
   echo "render_wall_s $(( $(date +%s) - t0 ))" >> "$R/seed_$s/timing.txt"
   cp "$REC/recording.json" "$R/seed_$s/" 2>/dev/null
   cp "$REC/logs/gz_recorder.json" "$R/seed_$s/" 2>/dev/null

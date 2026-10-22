@@ -12,7 +12,7 @@ Reference catalogue for reimplementation. Sourced from five parallel deep-resear
 | 2a | Classic 3DGS-SLAM systems | ✅ §2 |
 | 2b | Feed-forward pointmap SLAM & multi-agent 3DGS | ✅ §3 |
 | 2c | Partitioned / distributed 3DGS (merge mechanisms) | ✅ §4 |
-| 3 | Active perception, NBV, multi-robot task allocation | ❌ **Rate-limited twice — still owed** |
+| 3 | Active perception, NBV, multi-robot task allocation | ✅ §22 (2026-10-23; primary text except where marked) |
 | 3a | Volumetric mapping for planning (TSDF, ESDF, frontiers, traversability) | ✅ §21 (2026-10-23, Phase 4.1/4.2; primary text) |
 | 4 | Degraded visual environments + DARPA SubT | ✅ **§9–§20** — illumination §9 · dust/confined §10 · burst §11 · event+thermal §12 · enhancement §13 · HDR/noise §14 · modalities §15 · night data §16 · aliasing §17 · co-moving-light data §18 · ASTM protocol §19 · **DARPA SubT §20** |
 | 4b | **Datasets & benchmarks** | ✅ §6, §8 |
@@ -3337,7 +3337,61 @@ Added 2026-10-23, from primary text: the papers were downloaded and read, sectio
 - `cv::triangleRasterizeDepth`: mesh → depth, for GT-geometry test depth.
 - `cv::Octree`: points, not occupancy.
 
-**Owed in Domain 3** (before 4.3–4.6): NBV and information gain (Isler et al. ICRA 2016; Delmerico et al. 2018);
-exploration (TARE RSS 2021, GBPlanner, RACER T-RO 2023); allocation (CBBA T-RO 2009 and successors, grouping
-auctions); routing (FAR IROS 2022, D* Lite AAAI 2002). All from primary text.
+**Domain 3 (NBV, exploration, allocation, routing):** §22.
+
+---
+
+## 22. Domain 3 — active perception / NBV, exploration, multi-agent allocation, routing (Phase 4.3–4.6)
+
+Added 2026-10-23. Papers were downloaded and their method sections read, except where marked *secondary*. This closes
+the domain owed since the start (rate-limited twice) and since D45.
+
+### 22.1 Next-best-view and information gain (4.3)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **Isler et al.**, *An Information Gain Formulation for Active Volumetric 3D Reconstruction* | ICRA 2016 (*secondary*: via SEE's related work and abstracts; no open PDF found) | per-voxel IG from occupancy probability, visibility (rays stop at occupied) and distance; variants weight unobserved voxels and "rear side" voxels | §21.3's `Δcoverage` (unknown voxels hit by a 200–500-ray frustum bundle) and `Δentropy` (occupancy entropy along the same rays) are this family |
+| **Delmerico et al.**, *A Comparison of Volumetric Information Gain Metrics for Active 3D Object Reconstruction* | Auton. Robots 42(2), 2018, DOI 10.1007/s10514-017-9634-0 (*secondary*: abstract and summaries; no open PDF) | the first comparative study. Counting unobserved voxels, and weighting unobserved voxels near observed surfaces, did best | supports §21.3's choice of an unknown-count term over a pure-entropy term; Ariadne self-normalises per term (p90), so the terms are never compared in raw units |
+| **SEE** (Border & Gammell) | IJRR 2023, [arXiv:2207.13684](https://arxiv.org/abs/2207.13684) | measurement-direct NBV on a density representation; frontier points with shared visibility; also the field's own survey: raycast visibility evaluation is the cost bottleneck | the ray budget per candidate (200–500) is §21.3's answer to that cost |
+
+### 22.2 Exploration planning (4.3 candidates, 4.6 scheduling)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **TARE** (Cao, Zhu, Choset, Zhang) | RSS 2021, [PDF](https://frc.ri.cmu.edu/~zhangji/publications/RSS_2021.pdf) | Two levels. In a **local planning horizon**, sample a minimum viewpoint set covering the uncovered surfaces (`|p_s − p_v| ≤ D` plus an orientation bound) and solve a TSP through them. At the **global** level, sparse subspaces (cubes) marked exploring / explored / unexplored, with a TSP over them; the two paths join at the horizon boundary | 4.6: D110's 0.5 m coarse layer is the global subspace grid; the local layer is 4.3's candidates and a short TSP |
+| **FUEL** (Zhou et al.) | RA-L 2021, [arXiv:2010.11561](https://arxiv.org/abs/2010.11561) | A **frontier information structure** per cluster: cells, AABB, the mean, viewpoints sampled in cylindrical coordinates around the cluster, and connection costs to all other clusters. Large clusters split by PCA. Incremental update by AABB intersection. A global ATSP over clusters, then local viewpoint refinement, then a min-time trajectory | 4.1 already takes the incremental rule; 4.3's generator A takes the per-cluster viewpoint sampling and the PCA split |
+| **GBPlanner / GBPlanner2** (Dang et al. 2020; Kulkarni et al. 2022) | JFR / CERBERUS (*secondary*: the CERBERUS system papers) | a local RRG for gain, a global graph for relocation and return home; GBPlanner2 checks traversable ground under every edge | the return-home relocation mirrors §21.4's hard energy rule; ground under edges is D111's observed column |
+| **RACER** (Zhou, Xu, Shen) | T-RO 39(3), 2023, [arXiv:2209.08533](https://arxiv.org/abs/2209.08533) | multi-UAV: an **online hgrid decomposition** of unknown space; allocation by **pairwise interaction** over asynchronous, unreliable communication, with per-pair timestamps; coverage paths and workload balance as a **CVRP** | the comms-constrained comparator for 4.4: pairwise, asynchronous, timestamped. CBBA is the arch's choice (§21.7); RACER's pairwise hgrid is the documented alternative if CBBA's consensus traffic does not fit the byte budget |
+
+### 22.3 Multi-agent allocation (4.4)
+
+| Method | Source | Content | Ariadne |
+|---|---|---|---|
+| **CBBA** (Choi, Brunet, How) | T-RO 25(4):912–926, 2009, DOI 10.1109/TRO.2009.2022423 (*abstract*; the T-RO PDF was not reachable: MIT DSpace serves HTML, CORE a Cloudflare challenge) | bundle construction by marginal score under diminishing marginal gain (DMG); consensus on winning bids, winners and timestamps; conflict-free convergence with a worst-case guarantee under DMG | §21.7: bundles of 1–2, event-triggered. **The receiver/sender action table (update / reset / leave) must be transcribed from the paper itself before 4.4 code**: owed, with a request to the maintainer for the PDF |
+| **HRCA**, a CBBA variant | ACC 2011 ([PDF](https://skoge.folk.ntnu.no/prost/proceedings/acc11/data/papers/1172.pdf)) | read: CBBA's two phases, the DMG condition, a marginal score with insertion `⊕_n`, the `update / reset / leave` action names and a two-bidder rule table (its own, not CBBA's) | confirms the shape of the rules; not a substitute for Table I |
+| **GACA** (grouping auction-consensus) | [arXiv:2608.15884](https://arxiv.org/abs/2608.15884) | nearest-neighbour task grouping before allocation; group-level claim, acquire and contest actions; a per-agent conflict graph resolved by component; timestamps to compensate for communication discrepancies | §21.7's "experimental extension"; Ariadne's spatial clustering step plays the same role |
+| **Exact optimum** | `cv::solveLP` (OpenCV core, `optim.hpp`) | the assignment LP is integral (totally unimodular), so the simplex gives the optimal assignment | **4.4's oracle:** CBBA and broker-greedy are graded against the exact optimum on every logged round |
+
+### 22.4 Routing (4.5 egress, 4.6 exploration-time)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **D\* Lite** (Koenig & Likhachev) | AAAI 2002, Figure 3 transcribed from the rendered page | CalculateKey, UpdateVertex and ComputeShortestPath as transcribed in `EGRESS_4.5.md`; search from the goal; `k_m` for a moving start | 4.5: egress over D111's lattice; the start is fixed, so `k_m` = 0 |
+| **FAR Planner** (Yang, Cao, Zhu, Oh, Zhang) | IROS 2022, [arXiv:2110.09460](https://arxiv.org/abs/2110.09460) | polygons from edge points around obstacles; a **two-layer** dynamically updated global visibility graph; "attemptable" routing through unknown space with fast replanning; reported 12–47 % less travel time than A* / D* Lite baselines | 4.6, the exploration-time router and §31.6's comparator. OpenCV-native polygon extraction: `findContours` + `approxPolyDP` on the 2D slab, visibility by `LineIterator` |
+
+### 22.5 Traversal and risk (4.2)
+
+See §21: STEP (risk as a CVaR cost map), GBPlanner2 (ground beneath edges). No published TSDF-based structural
+collapse-risk proxy was found. D111's proxy is ours and is calibrated against D112's GT zones.
+
+### 22.6 OpenCV 5 adjacency for Phase 4 (installed headers, 2026-10-23)
+
+- `cv::solveLP`: the exact allocation oracle.
+- `cv::partition` (equivalence classes by predicate) and `cv::kmeans`: task clustering (§21.7).
+- `cv::findContours`, `cv::approxPolyDP`, `cv::pointPolygonTest`, `cv::convexHull`: FAR polygons.
+- `cv::LineIterator`: line of sight on the grid.
+- `cv::Subdiv2D`: Delaunay / Voronoi graphs (a candidate topology for the coarse layer).
+- `cv::connectedComponents`: 2D clusters.
+
+**No** OpenCV graph search, TSP or auction exists. Those are from scratch, with oracles.
 

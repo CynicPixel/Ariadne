@@ -16,13 +16,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${ARIADNE_SIM_IMAGE:-ariadne/sim:dev}"
 scene="${1:?scene dir}"; out="${2:?output recording dir}"; shift 2
-dirty=false
-[ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ] && dirty=true
+# A copy of the tree without .git (spinup.sh on AWS) passes ARIADNE_GIT_COMMIT / ARIADNE_GIT_DIRTY instead.
+commit="${ARIADNE_GIT_COMMIT:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
+dirty="${ARIADNE_GIT_DIRTY:-false}"
+[ -z "${ARIADNE_GIT_DIRTY:-}" ] && [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ] && dirty=true
 render=(-e ARIADNE_RENDER_MODE=mesa-llvmpipe -e LIBGL_ALWAYS_SOFTWARE=1 -e GALLIUM_DRIVER=llvmpipe)
 if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q '"nvidia"'; then
   render=(--gpus all -e ARIADNE_RENDER_MODE=nvidia-egl)
 fi
 exec docker run --rm --init "${render[@]}" -v "$REPO_ROOT":/work -w /work \
-  -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" -e ARIADNE_GIT_DIRTY="$dirty" \
+  -e ARIADNE_GIT_COMMIT="$commit" -e ARIADNE_GIT_DIRTY="$dirty" \
   -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$IMAGE" --format '{{.Id}}')" \
   --entrypoint bash "$IMAGE" -lc "source /opt/ros/jazzy/setup.bash && python3 infra/scripts/sim_record.py --scene $scene --out $out $*"
