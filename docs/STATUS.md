@@ -4,6 +4,21 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — L1 live closed-loop runtime: done on the local host (session B, `feat/live-runtime`)
+
+- **2.5 tail (D74):** the large SE-Sync graphs ran: sphere, torus, cubicle, grid3D certified (f = Table 1); **rim not
+  certified** (reported, not re-tuned). `evaluation/runs/2.5/certificate_sesync/`.
+- **L1 acceptance** (`evaluation/runs/L1/local_llvmpipe_45s`, `1bb27f9`): two agents live, decide → move → observe
+  (13 commands accepted, 0 refused, GT motion 2.82 / 5.08 m under command), the recording replayed twice = live,
+  console fed live. Local Mesa llvmpipe, RTF ≈ 0.14. D150–D155, D152a, D153b.
+- **Found by the runs:** two estimators on one OpenCV pool broke replay determinism in 1 pose of 501 (D152a: turns);
+  goals ON frontier cells were refused 10/10 by the mover's GT envelope (D153b: standoff goals); the console tailed
+  the wrong directory (D154 fix). Each is in the decision log with its measurement.
+- **Not done:** the AWS GPU live run (`live_aws.sh` built, images in ECR; the spend needs the maintainer's go-ahead,
+  and NVIDIA EGL in the sim image is an open SMOKE). Next: 7.1–7.2 (`docs/design/AGENTIC_7.md`, D156–D162).
+
+---
+
 ## 2026-10-22 — Session B opens L1 (live closed-loop runtime), then 7.1–7.2; D150–D169 claimed
 
 - **Decision IDs D150–D169 are claimed by session B**, before any of them is written.

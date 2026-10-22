@@ -35,7 +35,7 @@ identical.
 | HG2 | meaningful AWS component | **partial, at risk** | Today only tests-only spin-ups (D27) and Bedrock, which works but has no consumer (D84). The real component lands in 7.1 (Bedrock orchestrator), 7.3 (COOL on m8g), 7.4 (SQS sweeps) and GPU gsplat (6.x): all not started. |
 | INV1 | both hard gates | see HG1, HG2 | |
 | INV2 | COOL Arm-vs-Arm, same binary, loader switch | **blocked by 0.2 / 0.3** | There is no arm64 OpenCV 5 build (I3b OPEN). The COOL trial has not started (7 days, can't be paused). |
-| INV3 | the agentic claim rests only on the runtime loop | not started | 7.1. Also needs the **live closed-loop runtime (L1)** to act. |
+| INV3 | the agentic claim rests only on the runtime loop | partial | The runtime loop exists and acts (L1: vision → decision → mover action, traced in `trace.jsonl` with `executed: true`; classical chooser). The LLM chooser + MCP tools + approval are 7.1 (design `AGENTIC_7.md`, D156–D162). |
 | INV4 | egress at ρ_responder | done (placeholder) | 1.8 uses ρ_responder 0.40 m (D45). Full spec is 4.5. |
 | INV5 | datasets before simulator | partial | EuRoC done (D53–D60). **TUM not started** (2.6). OIVIO is 5.6. |
 | INV6 | bytes counted at the serializer | done | D14, D82. The ≤15% byte-table gate is a Phase 3 exit item. Carries **I5**: §15.7 per-element table (node 65.8 B vs 28 B) never amended (D12). |
@@ -60,7 +60,7 @@ identical.
 
 | id | item | state | owner |
 |---|---|---|---|
-| L1 | **Live closed-loop runtime:** `ros2/ariadne_{agent,bridge,operator,sim}` hold no source. Gazebo live → bridge → estimator → mission → mover commands. Needed by 4.3/4.4 (NBV acting), 7.1 (agentic actions), 8.1/8.5 (missions, demo). | **not started** | — (must be assigned; arch §5.4, §5.10, D38–D40 note "the bridge stays for live runs") |
+| L1 | **Live closed-loop runtime:** Gazebo live → `ros_gz_bridge` → estimator → mission → mover commands. Needed by 4.3/4.4 (NBV acting), 7.1 (agentic actions), 8.1/8.5 (missions, demo). | **done (local llvmpipe); AWS GPU run not done** | D150–D155, D152a, D153b; `docs/design/LIVE_RUNTIME_L1.md`. `ros2/ariadne_bridge` (RuntimeLink composed with RosGzBridge, intra-process) + `ros2/ariadne_sim`; `ariadne_live` (ROS-free, the replay estimator path; `ariadne_mission` and `ariadne_sim_vo` byte-identical after the shared-code extraction); mover goto/follow/hold; console live mode. **Acceptance** (`evaluation/runs/L1/local_llvmpipe_45s`, `1bb27f9`): two agents, 18 decisions, 13 commands accepted and 0 refused, GT motion 2.82 / 5.08 m under command, estimated distance to goal 2.30 → 0.63 m within 5 s; recording replayed twice = live (PASS); console 1729 frames to 45 s sim time. RTF ≈ 0.14 (no GPU on the dev host). `live_aws.sh` built, images in ECR, not run (spend approval; NVIDIA EGL is an open SMOKE). Not exercised: live IMU (sim_v1 has no IMU mode), live inter-agent merge. Not taken (main): gravity priors in agent subgraphs, `RobustJointSolve` in `SolveMultiAgent`. | B |
 | L2 | Sim IMU noise operator (seeded, consumption-time, like D) | not started | — (2.2 never built it; see `INERTIAL_2.4.md` §5) |
 | L3 | Sim-rig retrieval / hard-pair exports (1280×720 RGB) for EigenPlaces and ALIKED+LightGlue | done (D90 draft on the EigenPlaces default size) | A1. `models.sh eigenplaces-sim` / `aliked-lg-sim`, RGB path `DescribeRgb` / `ExtractRgb`, exact vs upstream on recorded sim frames, regeneration bit-exact (SMOKE §4t, PERCEPTION_2.1 §14). Sim retrieval quality → 3.1 |
 | L4 | Reference-export regeneration as one command (`models.sh eigenplaces`, `aliked-lg`) | done | A1. Both subcommands check against sha256s pinned in the script; a full regeneration was bit-exact, 11/11 and 19/19 files (PERCEPTION_2.1 §13, STATUS 2026-10-21 A1) |
@@ -94,7 +94,7 @@ identical.
 |---|---|---|
 | 1.1 world + SDF rig + bridge YAML | done | D38–D40 (bridge YAML exists; **live use is L1**) |
 | 1.2 kinematic mover, 2 agents | done | D38 |
-| 1.3 MCAP recording; "from the bag **as well as live**" | partial | Bag path done. **Live: L1.** |
+| 1.3 MCAP recording; "from the bag **as well as live**" | done | Bag path done. Live: L1 (D150–D152) — the live runtime records exactly what it consumed (`inputs.mcap`) and its replay reproduces the run (`evaluation/runs/L1`). |
 | 1.4–1.10 | done | D42–D47 |
 | Gate (I1, §4 contracts, protocol idempotency) | done | D48. Premerge 2026-10-21 PASS. |
 

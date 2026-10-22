@@ -1,0 +1,66 @@
+{
+ "checks": {
+  "replay1.agent0": true,
+  "replay1.agent1": true,
+  "replay1.consumed": true,
+  "replay1.mover_state_sha256": true,
+  "replay1.trace_records": true,
+  "replay1.trace_sha256": true,
+  "replay1==replay2": true,
+  "replay2.agent0": true,
+  "replay2.agent1": true,
+  "replay2.consumed": true,
+  "replay2.mover_state_sha256": true,
+  "replay2.trace_records": true,
+  "replay2.trace_sha256": true
+ },
+ "live": {
+  "agent0": {
+   "estimate_body_sha256": "24701e0fd37d68efeeb27a4ce6c1b7cc558e4d45a740e05748395f7e06943fb4",
+   "frames": 901,
+   "keyframes": 106
+  },
+  "agent1": {
+   "estimate_body_sha256": "c64d4b53643d5f7ee0bca2f5cda7d03b9c3d944f2889b1053f605317fdaa947b",
+   "frames": 901,
+   "keyframes": 64
+  },
+  "consumed": "{messages: 43261, digest_fnv1a64: 'dd1602c8d1102da2'}",
+  "mover_state_sha256": "ba72396dcb36e67ae7d3b1be9a8e5a434f0fadfa95dfd98a4e559f33438637f5",
+  "trace_records": 18,
+  "trace_sha256": "c4819d308fe448b3db7ee4b514b1fc022b743599025e1f33abe9d81f5e228dc5"
+ },
+ "replay1": {
+  "agent0": {
+   "estimate_body_sha256": "24701e0fd37d68efeeb27a4ce6c1b7cc558e4d45a740e05748395f7e06943fb4",
+   "frames": 901,
+   "keyframes": 106
+  },
+  "agent1": {
+   "estimate_body_sha256": "c64d4b53643d5f7ee0bca2f5cda7d03b9c3d944f2889b1053f605317fdaa947b",
+   "frames": 901,
+   "keyframes": 64
+  },
+  "consumed": "{messages: 43261, digest_fnv1a64: 'dd1602c8d1102da2'}",
+  "mover_state_sha256": "ba72396dcb36e67ae7d3b1be9a8e5a434f0fadfa95dfd98a4e559f33438637f5",
+  "trace_records": 18,
+  "trace_sha256": "c4819d308fe448b3db7ee4b514b1fc022b743599025e1f33abe9d81f5e228dc5"
+ },
+ "replay2": {
+  "agent0": {
+   "estimate_body_sha256": "24701e0fd37d68efeeb27a4ce6c1b7cc558e4d45a740e05748395f7e06943fb4",
+   "frames": 901,
+   "keyframes": 106
+  },
+  "agent1": {
+   "estimate_body_sha256": "c64d4b53643d5f7ee0bca2f5cda7d03b9c3d944f2889b1053f605317fdaa947b",
+   "frames": 901,
+   "keyframes": 64
+  },
+  "consumed": "{messages: 43261, digest_fnv1a64: 'dd1602c8d1102da2'}",
+  "mover_state_sha256": "ba72396dcb36e67ae7d3b1be9a8e5a434f0fadfa95dfd98a4e559f33438637f5",
+  "trace_records": 18,
+  "trace_sha256": "c4819d308fe448b3db7ee4b514b1fc022b743599025e1f33abe9d81f5e228dc5"
+ },
+ "verdict": "PASS"
+}
