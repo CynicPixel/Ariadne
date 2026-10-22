@@ -65,10 +65,16 @@ inline int64_t PeekStamp(const std::string& type, const std::vector<uint8_t>& b)
 
 class MessageQueue {
 public:
+    /// capacity 0 = unbounded. Bounded: Push blocks while full (backpressure; order is unchanged, only pacing). The
+    /// replay reader outruns the estimators (~0.85 s per keyframe), and an unbounded queue held a whole recording's
+    /// decoded RGB: a 45 s replay was OOM-killed at 7.4 GB RSS (2026-10-23).
+    explicit MessageQueue(size_t capacity = 0) : cap_(capacity) {}
     void Push(StreamMessage m) {
         {
-            std::lock_guard<std::mutex> lk(mu_);
+            std::unique_lock<std::mutex> lk(mu_);
+            if (cap_) space_.wait(lk, [&] { return q_.size() < cap_ || closed_; });
             q_.push_back(std::move(m));
+            max_depth_ = std::max(max_depth_, q_.size());
         }
         cv_.notify_one();
     }
@@ -79,6 +85,8 @@ public:
         if (q_.empty()) return std::nullopt;
         StreamMessage m = std::move(q_.front());
         q_.pop_front();
+        lk.unlock();
+        space_.notify_one();
         return m;
     }
     void Close() {
@@ -87,11 +95,17 @@ public:
             closed_ = true;
         }
         cv_.notify_all();
+        space_.notify_all();
+    }
+    size_t max_depth() const {
+        std::lock_guard<std::mutex> lk(mu_);
+        return max_depth_;
     }
 
 private:
-    std::mutex mu_;
-    std::condition_variable cv_;
+    size_t cap_ = 0, max_depth_ = 0;
+    mutable std::mutex mu_;
+    std::condition_variable cv_, space_;
     std::deque<StreamMessage> q_;
     bool closed_ = false;
 };

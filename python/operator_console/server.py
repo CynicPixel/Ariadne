@@ -118,3 +118,83 @@ async def telemetry(ws: WebSocket, speed: float = 10.0) -> None:
         await ws.close()
     except WebSocketDisconnect:
         return
+
+
+# --- operator authority, live runs only (design AGENTIC_7 §0b; arch §23, §29.3) --------------------------------------
+# Directives are written to the runtime's directives_inbox/; ariadne_live takes them at its next replan barrier, stamps
+# them and records them (directives.jsonl), so a replay applies the same ones. Approvals are written where the runtime
+# verifies them itself (approvals/<id>.json). LLM proposals wait in directives_proposed/ until a person confirms.
+import json as _json
+import time as _time
+import uuid as _uuid
+
+from fastapi import Body
+
+_DIRECTIVE_KINDS = {"priority_region", "keep_out", "assign", "explore", "goto", "hold", "release", "cancel"}
+
+
+def _live_src():
+    lv = live()
+    if lv is None or lv.src() is None:
+        raise HTTPException(409, "no live run")
+    return lv.src()
+
+
+def _inbox(src, d: dict, author: str) -> dict:
+    if d.get("kind") not in _DIRECTIVE_KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(_DIRECTIVE_KINDS)}")
+    d = dict(d, author=author, wall_unix_s=round(_time.time(), 3))
+    d.setdefault("id", f"op-{_uuid.uuid4().hex[:8]}")
+    box = src / "directives_inbox"
+    box.mkdir(exist_ok=True)
+    tmp = box / f".{d['id']}.tmp"
+    tmp.write_text(_json.dumps(d))
+    tmp.rename(box / f"{int(_time.time() * 1e9)}-{d['id']}.json")   # atomic: the runtime never reads half a file
+    return d
+
+
+@app.post("/api/directive")
+def post_directive(d: dict = Body(...)) -> JSONResponse:
+    return JSONResponse(_inbox(_live_src(), d, "operator"))
+
+
+@app.get("/api/directives/proposed")
+def proposed() -> JSONResponse:
+    src = _live_src()
+    return JSONResponse([_json.loads(p.read_text()) for p in sorted((src / "directives_proposed").glob("*.json"))]
+                        if (src / "directives_proposed").exists() else [])
+
+
+@app.post("/api/directives/proposed/{pid}/{verdict}")
+def confirm(pid: str, verdict: str, operator: str = "operator") -> JSONResponse:
+    src = _live_src()
+    p = src / "directives_proposed" / f"{pid}.json"
+    if not p.exists() or verdict not in ("confirm", "reject"):
+        raise HTTPException(404, "no such proposal, or verdict not confirm|reject")
+    d = _json.loads(p.read_text())
+    p.rename(p.with_suffix(f".{verdict}ed"))
+    if verdict == "reject":
+        return JSONResponse({"rejected": pid})
+    return JSONResponse(_inbox(src, {k: v for k, v in d.items() if k not in ("author", "wall_unix_s")},
+                               f"llm-proposed/confirmed-by:{operator}"))
+
+
+@app.get("/api/approvals")
+def approvals() -> JSONResponse:
+    a = _live_src() / "approvals"
+    out = []
+    for r in sorted(a.glob("*.request.json")) if a.exists() else []:
+        aid = r.name[: -len(".request.json")]
+        if not (a / f"{aid}.json").exists():
+            out.append(_json.loads(r.read_text()))
+    return JSONResponse(out)
+
+
+@app.post("/api/approval/{aid}/{verdict}")
+def approve(aid: str, verdict: str, operator: str = "operator") -> JSONResponse:
+    a = _live_src() / "approvals"
+    if verdict not in ("approved", "rejected") or not (a / f"{aid}.request.json").exists():
+        raise HTTPException(404, "no such pending request, or verdict not approved|rejected")
+    (a / f"{aid}.json").write_text(_json.dumps({"verdict": verdict, "operator": operator,
+                                                "wall_unix_s": round(_time.time(), 3)}))
+    return JSONResponse({"approval_id": aid, "verdict": verdict})

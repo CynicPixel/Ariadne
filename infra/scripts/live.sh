@@ -79,7 +79,7 @@ cmd_run() {
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, render: $(render_args | cut -d' ' -f1-2)"
 
   # 1. The runtime listens first.
-  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" -u "$U" -v "$REPO_ROOT":/work -w /work \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work \
     -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
     -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
@@ -137,12 +137,17 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
 
 cmd_replay() {
   local run="$1" scene="$2" i
+  local cfg; cfg="$( [ -f "$REPO_ROOT/$run/live_config.yaml" ] && echo "$run/live_config.yaml" || echo configs/mission/live_v1.yaml)"
+  local live_dir; live_dir="$(cd "$REPO_ROOT/$run" && ls -d */inputs.mcap | head -1 | xargs dirname)"
+  # The recorded inputs beyond the sensors: operator directives always; the LLM's choices when chooser is llm (the
+  # model is never called in replay, AGENTIC_7 D161).
+  local extra=(--directives "$run/$live_dir/directives.jsonl")
+  grep -q '^chooser: *llm' "$REPO_ROOT/$cfg" && extra+=(--decisions "$run/$live_dir/trace.jsonl")
   for i in 1 2; do
-    docker run --rm -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
+    docker run --rm --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
       --scene "$scene" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
-      --mission-config configs/mission/mission_v1.yaml \
-      --live-config "$( [ -f "$REPO_ROOT/$run/live_config.yaml" ] && echo "$run/live_config.yaml" || echo configs/mission/live_v1.yaml)" \
-      --out "$run/replay$i" --replay "$run/$(cd "$REPO_ROOT/$run" && ls -d */inputs.mcap | head -1)" \
+      --mission-config configs/mission/mission_v1.yaml --live-config "$cfg" \
+      --out "$run/replay$i" --replay "$run/$live_dir/inputs.mcap" "${extra[@]}" \
       > "$REPO_ROOT/$run/replay$i.log" 2>&1
   done
   python3 "$REPO_ROOT/python/analysis/live_replay_check.py" "$REPO_ROOT/$run"

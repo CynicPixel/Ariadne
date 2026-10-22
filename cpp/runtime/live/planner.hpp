@@ -1,0 +1,259 @@
+#pragma once
+// ---------------------------------------------------------------------------
+// The live runtime's planner seam (design AGENTIC_7 §0b, option B). Phase 4's planner (A1: NBV 4.3, CBBA 4.4,
+// route graph 4.5/4.6) implements MissionPlanner; until it lands, PlaceholderPlanner is the 1.8 layer plus the L1
+// standoff rule (D153b), an ablation baseline under the standing rule. Everything here is deterministic.
+//
+//   Integrate(keyframe)   one keyframe's depth into the planner's map. KeyframeInput mirrors A1's
+//                         planning::MissionInput keyframe (feat/ph4-mission, VOLUMETRIC_4.1 §4); swap = one adapter.
+//   Plan(context)         Plane E's products for this replan: per agent the ranked task options (each with risk and
+//                         the reason for it), the per-agent classical pick and the joint (allocated) pick, and the
+//                         map summary the console and the LLM's images are drawn from.
+//   Route(agent, option)  the waypoints to execute an option, computed by the planner, never by the chooser.
+// The chooser (classical | LLM) picks among options; the runtime validates; the mover executes Route().
+// ---------------------------------------------------------------------------
+#include "planning/mission/directives.hpp"
+#include "planning/mission/frontier_mission.hpp"
+
+#include <opencv2/imgproc.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace ariadne::runtime::live {
+
+namespace mis = planning::mission;
+using planning::Cell;
+
+/// One keyframe for the map, at the spool's scale (A1's MissionInput keyframe carries the same fields).
+struct KeyframeInput {
+    int agent = 0;
+    uint64_t id = 0;
+    int64_t t_ns = 0;
+    core::SE3 T_W_C;          // world <- camera
+    cv::Mat Z, S;             // CV_32F depth and sigma (m)
+    double fx = 0, fy = 0, cx = 0, cy = 0;
+};
+
+struct PlanContext {
+    int64_t T = 0;
+    bool active[2] = {false, false};                                       // agent has an estimated pose before T
+    Cell at[2];                                                            // its cell
+    std::vector<std::pair<int, std::pair<double, double>>> refused_goals;  // the mover's refusals (agent, goal xy)
+    std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
+};
+
+struct TaskOption {
+    mis::Candidate c;
+    double risk = 0;          // §23, in [0, 1]
+    std::string risk_reason;
+};
+
+struct AgentOptions {
+    std::vector<TaskOption> options;   // eligible, nearest first
+    int classical = -1;                // the nearest option at or below the risk threshold, per agent
+    int excluded_refused = 0, excluded_near = 0, excluded_directive = 0;
+    std::vector<std::string> applied;  // ids of the directives that shaped these options
+    cv::Mat plan;                      // the planning space the routes use
+};
+
+struct PlanOutput {
+    mis::ReplanMaps maps;              // map summary: slab, egress route, frontiers (console, LLM images)
+    AgentOptions agents[2];
+    int joint[2] = {-1, -1};           // the allocated picks (exactly-once across agents)
+};
+
+class MissionPlanner {
+public:
+    virtual ~MissionPlanner() = default;
+    virtual size_t Integrate(const KeyframeInput& k) = 0;
+    virtual PlanOutput Plan(const PlanContext& ctx) = 0;
+    /// Waypoints (x, y) for agent's option i, and the final yaw (facing the task), from the planner's own space.
+    virtual std::pair<std::vector<std::pair<double, double>>, double> Route(const PlanOutput& p, int agent, int i,
+                                                                           const Cell& from) const = 0;
+};
+
+struct PlaceholderParams {
+    double min_goal_m = 1.0, escape_m = 0.5, max_standoff_m = 2.0, refused_radius_m = 0.5;
+    double autonomous_threshold = 1.01, eps_cells = 1.0, max_command_m = 3.0;
+};
+
+/// The A* path to `goal`, simplified (approxPolyDP, every chord re-checked on the traversable grid), in W, without
+/// the start cell, cut at max_m. Empty if no path.
+inline std::vector<std::pair<double, double>> CommandPath(const mis::Briefing& b, const cv::Mat& trav, const Cell& from,
+                                                          const Cell& goal, double eps_cells, double max_m) {
+    const planning::GridPath p = planning::AStar(trav, from, {goal});
+    if (!p.found || p.cells.size() < 2) return {};
+    std::vector<cv::Point> pts, simp;
+    for (const auto& c : p.cells) pts.emplace_back(c.c, c.r);
+    cv::approxPolyDP(pts, simp, eps_cells, false);
+    bool chords_ok = true;
+    for (size_t i = 1; i < simp.size() && chords_ok; ++i) {
+        cv::LineIterator it(trav, simp[i - 1], simp[i], 8);
+        for (int k = 0; k < it.count; ++k, ++it) {
+            if (trav.at<uint8_t>(it.pos()) == 0) {
+                chords_ok = false;
+                break;
+            }
+        }
+    }
+    if (!chords_ok) simp = pts;   // never shortcut through a non-traversable cell
+    std::vector<std::pair<double, double>> out;
+    auto [px, py] = b.CellCentre(Cell{simp[0].y, simp[0].x});
+    double left = max_m;
+    for (size_t i = 1; i < simp.size() && left > 1e-9; ++i) {
+        auto [x, y] = b.CellCentre(Cell{simp[i].y, simp[i].x});
+        const double d = std::hypot(x - px, y - py);
+        if (d > left) {
+            x = px + (x - px) * left / d;
+            y = py + (y - py) * left / d;
+        }
+        out.emplace_back(x, y);
+        left -= std::min(d, left);
+        px = x, py = y;
+    }
+    return out;
+}
+
+/// PLACEHOLDER (ablation baseline): 1.8 frontiers, standoff goals (D153b), bottleneck risk (D158), greedy
+/// exactly-once allocation. Its parameters are placeholder knobs, not part of the seam.
+class PlaceholderPlanner : public MissionPlanner {
+public:
+    PlaceholderPlanner(const mis::MissionConfig& mc, const mis::Briefing& b, const PlaceholderParams& p)
+        : mc_(mc), b_(b), p_(p), map_(mc, b) {}
+
+    size_t Integrate(const KeyframeInput& k) override {
+        return map_.Integrate(k.T_W_C, k.Z, k.S, k.fx, k.fy, k.cx, k.cy);
+    }
+
+    PlanOutput Plan(const PlanContext& ctx) override {
+        PlanOutput out;
+        out.maps = map_.Replan();
+        const double rho_a = mc_.rho_a, rho_r = mc_.rho_r;
+        for (int k = 0; k < 2; ++k) {
+            if (!ctx.active[k]) continue;
+            AgentOptions& ao = out.agents[k];
+            const Cell ac = ctx.at[k];
+            ao.plan = map_.PlanSpace(out.maps, ac, p_.escape_m);
+            std::vector<mis::Candidate> cands;
+            for (const auto& c : map_.StandoffCandidates(out.maps, ao.plan, ac, p_.max_standoff_m)) {
+                const auto [gx, gy] = b_.CellCentre(c.goal);
+                bool refused = false;
+                for (const auto& [ra, rg] : ctx.refused_goals) {
+                    refused = refused || (ra == k && std::hypot(rg.first - gx, rg.second - gy) < p_.refused_radius_m);
+                }
+                if (refused) ++ao.excluded_refused;
+                else if (c.path_cells * b_.gs.cell < p_.min_goal_m) ++ao.excluded_near;
+                else cands.push_back(c);
+            }
+            // Directives (operator / confirmed LLM proposals): keep_out removes, assign / explore restrict to their
+            // region when it holds an option, priority_region divides the path cost by its weight (task value x w).
+            std::vector<double> cost;
+            {
+                std::vector<mis::Candidate> kept;
+                for (const auto& c : cands) {
+                    const auto [gx, gy] = b_.CellCentre(c.goal);
+                    bool out_ = false;
+                    for (const auto& d : ctx.directives) {
+                        if (d.kind == "keep_out" && (d.agent < 0 || d.agent == k) && d.Covers(gx, gy)) out_ = true;
+                    }
+                    if (out_) ++ao.excluded_directive;
+                    else kept.push_back(c);
+                }
+                for (const auto& d : ctx.directives) {
+                    if (d.kind == "keep_out" && (d.agent < 0 || d.agent == k)) ao.applied.push_back(d.id);
+                    if ((d.kind == "assign" || d.kind == "explore") && d.agent == k) {
+                        std::vector<mis::Candidate> in;
+                        for (const auto& c : kept) {
+                            const auto [gx, gy] = b_.CellCentre(c.goal);
+                            if (d.Covers(gx, gy)) in.push_back(c);
+                        }
+                        if (!in.empty()) {
+                            ao.excluded_directive += int(kept.size() - in.size());
+                            kept = in;
+                            ao.applied.push_back(d.id);
+                        }
+                    }
+                }
+                std::vector<std::pair<double, size_t>> order;
+                for (size_t i = 0; i < kept.size(); ++i) {
+                    const auto [gx, gy] = b_.CellCentre(kept[i].goal);
+                    double w = 1.0;
+                    for (const auto& d : ctx.directives) {
+                        if (d.kind == "priority_region" && (d.agent < 0 || d.agent == k) && d.Covers(gx, gy)) {
+                            w = std::max(w, d.weight);
+                            if (std::find(ao.applied.begin(), ao.applied.end(), d.id) == ao.applied.end()) ao.applied.push_back(d.id);
+                        }
+                    }
+                    order.emplace_back(kept[i].path_cells / w, i);
+                }
+                std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                cands.clear();
+                for (const auto& [cst, i] : order) cands.push_back(kept[i]);
+            }
+            // §23 risk (D158): the widest way to ARRIVE within escape_m of the goal (the standoff goal itself sits at
+            // rho_agent from unknown space by construction), against what a responder needs.
+            const cv::Mat B = map_.Bottleneck(out.maps, ao.plan, ac, p_.escape_m);
+            const int rad = int(std::ceil(p_.escape_m / b_.gs.cell));
+            for (const auto& c : cands) {
+                double bott = -1;
+                for (int dy = -rad; dy <= rad; ++dy) {
+                    for (int dx = -rad; dx <= rad; ++dx) {
+                        const int y = c.goal.r + dy, x = c.goal.c + dx;
+                        if (dx * dx + dy * dy > rad * rad || y < 0 || x < 0 || y >= B.rows || x >= B.cols) continue;
+                        bott = std::max(bott, B.at<double>(y, x));
+                    }
+                }
+                TaskOption o;
+                o.c = c;
+                o.risk = std::isfinite(bott) ? std::clamp((rho_r - bott) / (rho_r - rho_a), 0.0, 1.0) : 0.0;
+                std::ostringstream why;
+                why.precision(3);
+                if (std::isfinite(bott)) why << "narrowest unavoidable gap " << bott << " m; a responder needs " << rho_r << " m";
+                else why << "goal inside the agent's own escape disc";
+                o.risk_reason = why.str();
+                if (ao.classical < 0 && o.risk <= p_.autonomous_threshold) ao.classical = int(ao.options.size());
+                ao.options.push_back(o);
+            }
+        }
+        // Allocation (placeholder for A1's CBBA, 4.4): greedy, agent 0 first, exactly-once (ALGORITHMS line 1165).
+        out.joint[0] = out.agents[0].classical;
+        out.joint[1] = out.agents[1].classical;
+        if (ctx.active[0] && ctx.active[1] && out.joint[0] >= 0 && out.joint[1] >= 0 &&
+            ClusterOf(out, 0, out.joint[0]) == ClusterOf(out, 1, out.joint[1])) {
+            const int alt = OtherCluster(out, 1, ClusterOf(out, 0, out.joint[0]));
+            if (alt >= 0) out.joint[1] = alt;
+        }
+        return out;
+    }
+
+    std::pair<std::vector<std::pair<double, double>>, double> Route(const PlanOutput& p, int agent, int i,
+                                                                   const Cell& from) const override {
+        const auto& o = p.agents[agent].options[size_t(i)];
+        auto path = CommandPath(b_, p.agents[agent].plan, from, o.c.goal, p_.eps_cells, p_.max_command_m);
+        double yaw = 0;
+        if (!path.empty()) yaw = std::atan2(o.c.centroid_y - path.back().second, o.c.centroid_x - path.back().first);
+        return {path, yaw};
+    }
+
+    static int ClusterOf(const PlanOutput& p, int k, int i) { return i >= 0 ? p.agents[k].options[size_t(i)].c.cluster : -1; }
+    /// The nearest option of agent k at or below the threshold whose cluster is not `taken`; -1 if none.
+    int OtherCluster(const PlanOutput& p, int k, int taken) const {
+        const auto& v = p.agents[k].options;
+        for (size_t i = 0; i < v.size(); ++i) {
+            if (v[i].risk <= p_.autonomous_threshold && v[i].c.cluster != taken) return int(i);
+        }
+        return -1;
+    }
+
+private:
+    mis::MissionConfig mc_;
+    mis::Briefing b_;
+    PlaceholderParams p_;
+    mis::FrontierMap map_;
+};
+
+}  // namespace ariadne::runtime::live

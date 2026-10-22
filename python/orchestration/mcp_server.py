@@ -127,6 +127,26 @@ def request_human_approval(decision_id: str, agent: int, candidate: int, reason:
     return {"approval_id": aid, "verdict": "timeout"}
 
 
+@server.tool(description="Propose an operator directive from the operator's words or from what you see: kind is "
+                         "priority_region | keep_out | assign | explore (polygon = [[x,y],...] in metres, the map "
+                         "frame) or hold | release (agent). It takes effect ONLY after a person confirms it in the "
+                         "console; say why in `text`.")
+def propose_directive(decision_id: str, kind: str, text: str, agent: int = -1, polygon: list[list[float]] | None = None,
+                      weight: float = 1.0, time_budget_s: float = 0.0) -> dict:
+    r = _req(decision_id)
+    if kind not in ("priority_region", "keep_out", "assign", "explore", "hold", "release"):
+        return {"proposed": False, "detail": "kind not allowed for proposals"}
+    if kind in ("priority_region", "keep_out", "assign", "explore") and (not polygon or len(polygon) < 3):
+        return {"proposed": False, "detail": "polygon needs >= 3 [x, y] points"}
+    run = Path(r["approvals_dir"]).parent
+    pid = f"llm-{decision_id}-{int(time.time() * 1000) % 100000}"
+    d = {"id": pid, "kind": kind, "agent": agent, "polygon": polygon or [], "weight": weight,
+         "time_budget_s": time_budget_s, "text": text}
+    (run / "directives_proposed").mkdir(exist_ok=True)
+    (run / "directives_proposed" / f"{pid}.json").write_text(json.dumps(d))
+    return {"proposed": True, "id": pid, "status": "awaiting operator confirmation"}
+
+
 @server.tool(description="The decision: one entry per agent, {agent, candidate (-1 = hold), reason, approval_id "
                          "(only for a candidate that needed approval)}. Call exactly once, last.")
 def assign(decision_id: str, assignments: list[dict]) -> dict:

@@ -23,6 +23,7 @@
 #include "planning/mission/frontier_mission.hpp"
 #include "runtime/live/link_frame.hpp"
 #include "runtime/live/live_source.hpp"
+#include "runtime/live/planner.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
 #include "runtime/manifest/opencv_identity.hpp"
@@ -102,7 +103,7 @@ cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHa
 }
 
 struct AgentLane {
-    live::MessageQueue images;
+    live::MessageQueue images{64};   // ~64 x 2.8 MB per agent at most (bounded: see MessageQueue)
     live::GtStore gt;
     std::mutex mu;
     std::deque<KfRec> kfs;                               // delivered by the VO thread, consumed by the mission
@@ -138,43 +139,6 @@ std::string Xy(double x, double y) {
 
 double YawOfCamera(const core::SE3& T_W_C) {   // heading of the optical axis (z) in the horizontal plane
     return std::atan2(T_W_C.R(1, 2), T_W_C.R(0, 2));
-}
-
-/// The A* path to `goal`, simplified (approxPolyDP, every chord re-checked on the traversable grid), in W, without
-/// the start cell, cut at max_m. Empty if no path.
-std::vector<std::pair<double, double>> CommandPath(const mis::Briefing& b, const cv::Mat& trav, const Cell& from,
-                                                   const Cell& goal, double eps_cells, double max_m) {
-    const planning::GridPath p = planning::AStar(trav, from, {goal});
-    if (!p.found || p.cells.size() < 2) return {};
-    std::vector<cv::Point> pts, simp;
-    for (const auto& c : p.cells) pts.emplace_back(c.c, c.r);
-    cv::approxPolyDP(pts, simp, eps_cells, false);
-    bool chords_ok = true;
-    for (size_t i = 1; i < simp.size() && chords_ok; ++i) {
-        cv::LineIterator it(trav, simp[i - 1], simp[i], 8);
-        for (int k = 0; k < it.count; ++k, ++it) {
-            if (trav.at<uint8_t>(it.pos()) == 0) {
-                chords_ok = false;
-                break;
-            }
-        }
-    }
-    if (!chords_ok) simp = pts;   // never shortcut through a non-traversable cell
-    std::vector<std::pair<double, double>> out;
-    auto [px, py] = b.CellCentre(Cell{simp[0].y, simp[0].x});
-    double left = max_m;
-    for (size_t i = 1; i < simp.size() && left > 1e-9; ++i) {
-        auto [x, y] = b.CellCentre(Cell{simp[i].y, simp[i].x});
-        const double d = std::hypot(x - px, y - py);
-        if (d > left) {
-            x = px + (x - px) * left / d;
-            y = py + (y - py) * left / d;
-        }
-        out.emplace_back(x, y);
-        left -= std::min(d, left);
-        px = x, py = y;
-    }
-    return out;
 }
 
 /// chooser: llm, live (AGENTIC_7 D156): one JSON line per decision request to the orchestrator's Unix socket; answers
@@ -266,7 +230,8 @@ std::string JsonEscape(const std::string& s) {
 
 int main(int argc, char** argv) {
     try {
-        std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path;
+        std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
+            directives_path;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -282,6 +247,7 @@ int main(int argc, char** argv) {
             else if (k == "--replay") replay_path = v;
             else if (k == "--chooser-socket") chooser_socket = v;   // chooser llm, live
             else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
+            else if (k == "--directives") directives_path = v;      // replay: the live run's directives.jsonl
             else if (k == "--seed") va.seed = std::stoull(v);
             else throw std::invalid_argument("unknown argument " + k);
         }
@@ -299,7 +265,11 @@ int main(int argc, char** argv) {
                                                               : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
         const mis::Briefing brief = mis::LoadBriefing(scene, mc, 2, "live");
-        mis::FrontierMap map(mc, brief);
+        live::PlaceholderParams pp;   // the placeholder planner's knobs (live config), not part of the seam
+        pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
+        pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
+        pp.eps_cells = lc.eps_cells, pp.max_command_m = lc.max_command_m;
+        live::PlaceholderPlanner planner(mc, brief, pp);   // A1's Phase 4 planner implements the same interface
         const int64_t end_ns = int64_t(std::llround(lc.end_s * 1e9));
         const int64_t replan_ns = int64_t(std::llround(mc.replan_s * 1e9));
 
@@ -541,6 +511,18 @@ int main(int argc, char** argv) {
             chooser = std::make_unique<ChooserLink>(chooser_socket);
         }
         int replans = 0, commands_sent = 0, answer_timeouts = 0;
+        // Operator directives (AGENTIC_7 §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
+        // replan barrier in name order, stamped and appended to directives.jsonl. Replay: that file, verbatim.
+        std::vector<mis::Directive> directives;
+        if (!directives_path.empty()) {
+            std::ifstream f(directives_path);
+            for (std::string line; std::getline(f, line);) {
+                if (!line.empty()) directives.push_back(mis::ParseDirective(YAML::Load(line)));
+            }
+        }
+        if (is_live) fs::create_directories(run_dir / "directives_inbox");
+        Lines directives_log(run_dir / "directives.jsonl"), directives_rejected(run_dir / "directives_rejected.jsonl");
+        if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
         size_t integrated[2] = {0, 0}, rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
@@ -581,10 +563,50 @@ int main(int argc, char** argv) {
                 return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
             });
             for (const KfRec& r : batch) {
-                rays += map.Integrate(brief.T_W_O[size_t(r.agent)] * r.T_O_C, r.Z, r.S, r.fx, r.fy, r.cx, r.cy);
+                rays += planner.Integrate(live::KeyframeInput{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
+                                                              r.Z, r.S, r.fx, r.fy, r.cx, r.cy});
                 ++integrated[r.agent];
             }
-            const mis::ReplanMaps maps = map.Replan();
+            if (is_live) {
+                std::vector<fs::path> inbox;
+                for (const auto& e : fs::directory_iterator(run_dir / "directives_inbox")) {
+                    if (e.path().extension() == ".json") inbox.push_back(e.path());
+                }
+                std::sort(inbox.begin(), inbox.end());
+                for (const auto& f : inbox) {
+                    try {
+                        YAML::Node n = YAML::LoadFile(f.string());
+                        n["effective_ns"] = T;
+                        const mis::Directive d = mis::ParseDirective(n);
+                        directives.push_back(d);
+                        directives_log.Put(mis::DirectiveJson(d));
+                        telemetry.Put("{\"type\":\"directive\",\"t_s\":" + std::to_string(T * 1e-9) + ",\"directive\":" + mis::DirectiveJson(d) + "}");
+                        fs::rename(f, fs::path(f.string() + ".applied"));
+                    } catch (const std::exception& e) {
+                        directives_rejected.Put("{\"file\":\"" + JsonEscape(f.filename().string()) + "\",\"t_ns\":" +
+                                                std::to_string(T) + ",\"error\":\"" + JsonEscape(e.what()) + "\"}");
+                        fs::rename(f, fs::path(f.string() + ".rejected"));
+                    }
+                }
+            }
+            const std::vector<mis::Directive> active = mis::ActiveDirectives(directives, T);
+            live::PlanContext ctx;
+            ctx.T = T;
+            ctx.directives = active;
+            ctx.refused_goals = refused_goals;
+            for (int k = 0; k < 2; ++k) {
+                std::lock_guard<std::mutex> lk(lanes[k].mu);
+                for (auto it = lanes[k].cams.rbegin(); it != lanes[k].cams.rend(); ++it) {
+                    if (it->first < T) {
+                        const core::SE3 Tw = brief.T_W_O[size_t(k)] * it->second;
+                        ctx.active[k] = true;
+                        ctx.at[k] = brief.ToCell(Tw.t.x(), Tw.t.y());
+                        break;
+                    }
+                }
+            }
+            const live::PlanOutput plan_out = planner.Plan(ctx);
+            const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
             cv::imwrite((run_dir / snap).string(), maps.slab);
@@ -666,57 +688,32 @@ int main(int argc, char** argv) {
                 Pending& pd = P[k];
                 pd.active = true;
                 pd.ac = ac;
-                // Standoff candidates over the conservative plan space (D153b), minus goals the mover refused before,
-                // minus those nearer than min_goal_m (never presented: AGENTIC_7 review).
-                pd.plan = map.PlanSpace(maps, ac, lc.escape_m);
-                int excluded_refused = 0, excluded_near = 0;
-                for (const auto& c : map.StandoffCandidates(maps, pd.plan, ac, lc.max_standoff_m)) {
-                    const auto [gx, gy] = brief.CellCentre(c.goal);
-                    bool refused = false;
-                    for (const auto& [ra, rg] : refused_goals) {
-                        refused = refused || (ra == k && std::hypot(rg.first - gx, rg.second - gy) < lc.refused_radius_m);
-                    }
-                    if (refused) ++excluded_refused;
-                    else if (c.path_cells * brief.gs.cell < lc.min_goal_m) ++excluded_near;
-                    else pd.cands.push_back(c);
-                }
-                // §23 risk (D158): the narrowest gap the agent cannot avoid on the way, against what a responder needs.
-                const cv::Mat B = map.Bottleneck(maps, pd.plan, ac, lc.escape_m);
+                // The planner's options (seam: AGENTIC_7 §0b), rendered into the trace and the LLM request.
+                const live::AgentOptions& ao = plan_out.agents[k];
+                pd.plan = ao.plan;
+                pd.classical = ao.classical;
+                const int excluded_refused = ao.excluded_refused, excluded_near = ao.excluded_near;
                 std::ostringstream cj;
                 cj.precision(6);
                 cj << "[";
-                for (size_t i = 0; i < pd.cands.size(); ++i) {
-                    const auto& c = pd.cands[i];
-                    // The widest way to ARRIVE within escape_m of the goal: the standoff goal itself sits at rho_agent
-                    // from unknown space BY CONSTRUCTION, so its own clearance measures the placement rule, not a gap
-                    // (first check, L1 45 s recording: all 58 candidates 0.875-0.925, bottleneck = the goal cell).
-                    double bott = -1;
-                    const int rad = int(std::ceil(lc.escape_m / brief.gs.cell));
-                    for (int dy = -rad; dy <= rad; ++dy) {
-                        for (int dx = -rad; dx <= rad; ++dx) {
-                            const int y = c.goal.r + dy, x = c.goal.c + dx;
-                            if (dx * dx + dy * dy > rad * rad || y < 0 || x < 0 || y >= B.rows || x >= B.cols) continue;
-                            bott = std::max(bott, B.at<double>(y, x));
-                        }
-                    }
-                    const double r = std::isfinite(bott) ? std::clamp((rho_r - bott) / (rho_r - rho_a), 0.0, 1.0) : 0.0;
+                for (size_t i = 0; i < ao.options.size(); ++i) {
+                    const auto& c = ao.options[i].c;
+                    const double r = ao.options[i].risk;
+                    pd.cands.push_back(c);
                     pd.risk.push_back(r);
-                    if (pd.classical < 0 && r <= lc.autonomous_threshold) pd.classical = int(i);
                     const auto [gx, gy] = brief.CellCentre(c.goal);
-                    std::ostringstream why;
-                    why.precision(3);
-                    if (std::isfinite(bott)) why << "narrowest unavoidable gap " << bott << " m; a responder needs " << rho_r << " m";
-                    else why << "goal inside the agent's own escape disc";
                     cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << c.cluster << ",\"path_m\":"
                        << c.path_cells * brief.gs.cell << ",\"goal_xy_m\":" << Xy(gx, gy) << ",\"standoff_m\":"
                        << c.standoff_m << ",\"centroid_xy_m\":" << Xy(c.centroid_x, c.centroid_y) << ",\"cells\":"
-                       << c.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << why.str() << "\",\"needs_approval\":"
-                       << (r > lc.autonomous_threshold ? "true" : "false") << "}";
+                       << c.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << ao.options[i].risk_reason
+                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false") << "}";
                 }
                 cj << "]";
                 o << "\"candidates\":" << cj.str() << ",\"candidates_total\":" << pd.cands.size()
                   << ",\"excluded_refused\":" << excluded_refused << ",\"excluded_near\":" << excluded_near
-                  << ",\"autonomous_threshold\":" << lc.autonomous_threshold << ",\"classical_choice\":" << pd.classical
+                  << ",\"excluded_directive\":" << ao.excluded_directive << ",\"directives\":[";
+                for (size_t i = 0; i < ao.applied.size(); ++i) o << (i ? "," : "") << "\"" << JsonEscape(ao.applied[i]) << "\"";
+                o << "],\"autonomous_threshold\":" << lc.autonomous_threshold << ",\"classical_choice\":" << pd.classical
                   << ",";
                 pd.head = o.str();
                 {
@@ -730,22 +727,10 @@ int main(int argc, char** argv) {
                 }
             }
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
-            int picks[2] = {P[0].classical, P[1].classical};
+            int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
             std::string choice[2];
-            // Exactly-once (ALGORITHMS line 1165): agent 1 does not take agent 0's cluster while another eligible one
-            // below the threshold exists. Applied to the classical pick, and to the LLM's in validation below.
-            const auto other_cluster = [&](int k, int taken_cluster) {
-                for (size_t i = 0; i < P[k].cands.size(); ++i) {
-                    if (P[k].risk[i] <= lc.autonomous_threshold && P[k].cands[i].cluster != taken_cluster) return int(i);
-                }
-                return -1;
-            };
-            const auto cluster_of = [&](int k, int i) { return i >= 0 ? P[k].cands[size_t(i)].cluster : -1; };
-            if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 &&
-                cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
-                const int alt = other_cluster(1, cluster_of(0, picks[0]));
-                if (alt >= 0) picks[1] = alt;
-            }
+            const auto other_cluster = [&](int k, int taken) { return planner.OtherCluster(plan_out, k, taken); };
+            const auto cluster_of = [&](int k, int i) { return live::PlaceholderPlanner::ClusterOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
                 for (auto& c : choice) c = ",\"choice\":{\"source\":\"classical\"}";
             } else if (!is_live && chooser_socket.empty()) {
@@ -886,6 +871,17 @@ int main(int argc, char** argv) {
                     choice[k] = c.str();
                 }
             }
+            // Operator authority (§23): hold / goto override whatever was chosen; recorded like every directive.
+            const mis::Directive* direct[2] = {nullptr, nullptr};
+            for (const auto& d : active) {
+                if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < 2) direct[d.agent] = &d;
+            }
+            for (int k = 0; k < 2; ++k) {
+                if (!P[k].active || !direct[k]) continue;
+                picks[k] = -1;
+                choice[k] = ",\"choice\":{\"source\":\"operator\",\"directive\":\"" + JsonEscape(direct[k]->id) + "\",\"kind\":\"" +
+                            direct[k]->kind + "\"}";
+            }
             // Phase 3: the command for each pick (the same code for every chooser).
             for (int k = 0; k < 2; ++k) {
                 Pending& pd = P[k];
@@ -898,9 +894,14 @@ int main(int argc, char** argv) {
                 cmd.header.stamp.sec = int32_t(T / 1000000000);
                 cmd.header.stamp.nanosec = uint32_t(T % 1000000000);
                 cmd.header.frame_id = "world";
-                if (pick >= 0) {
-                    const auto& c = pd.cands[size_t(pick)];
-                    const auto path = CommandPath(brief, pd.plan, pd.ac, c.goal, lc.eps_cells, lc.max_command_m);
+                if (direct[k] && direct[k]->kind == "goto") {   // last resort (CERBERUS): the mover's envelope still checks it
+                    runtime::ros_cdr::Pose p;
+                    p.position = {direct[k]->x, direct[k]->y, brief.entry_z[size_t(k)]};
+                    p.orientation = {0, 0, std::sin(0.5 * direct[k]->yaw), std::cos(0.5 * direct[k]->yaw)};
+                    cmd.poses.push_back(p);
+                    last_goal[k] = {direct[k]->x, direct[k]->y};
+                } else if (pick >= 0) {
+                    const auto [path, face_yaw] = planner.Route(plan_out, k, pick, pd.ac);
                     if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {
                         runtime::ros_cdr::Pose p;
@@ -909,9 +910,7 @@ int main(int argc, char** argv) {
                         cmd.poses.push_back(p);
                     }
                     if (!cmd.poses.empty() && lc.face_frontier) {
-                        const auto& last = cmd.poses.back().position;
-                        const double yaw = std::atan2(c.centroid_y - last.y, c.centroid_x - last.x);
-                        cmd.poses.back().orientation = {0, 0, std::sin(0.5 * yaw), std::cos(0.5 * yaw)};
+                        cmd.poses.back().orientation = {0, 0, std::sin(0.5 * face_yaw), std::cos(0.5 * face_yaw)};
                     }
                 }
                 const std::string result = cmd.poses.empty() ? "hold" : "go";
@@ -957,7 +956,8 @@ int main(int argc, char** argv) {
             << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";
         for (int k = 0; k < 2; ++k) {
             res << "  - {agent: " << k << ", frames: " << lanes[k].frames << ", keyframes: " << lanes[k].keyframes
-                << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k] << "}\n";
+                << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k]
+                << ", image_queue_max_depth: " << lanes[k].images.max_depth() << "}\n";
         }
         res << "rays: " << rays << "\n";
         res.close();

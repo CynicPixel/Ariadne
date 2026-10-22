@@ -59,6 +59,8 @@ def summary(d: Path) -> dict:
     s["trace_sha256"] = hashlib.sha256("\n".join(trace).encode()).hexdigest()
     s["trace_records"] = len(trace)
     s["mover_state_sha256"] = sha(d / "mover_state.jsonl")
+    if (d / "directives.jsonl").exists():   # operator directives are recorded inputs (AGENTIC_7 §0b)
+        s["directives_sha256"] = sha(d / "directives.jsonl")
     return s
 
 
