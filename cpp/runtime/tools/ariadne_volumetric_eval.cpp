@@ -23,6 +23,10 @@
 // planned on the same schedule (Plan, both agents once active, linked after the merge); per replan one line in
 // phase4_allocation.jsonl: its CBBA event (trigger, rounds, messages, TASK_CONSENSUS wire bytes), and on the SAME
 // auction instance the totals of CBBA, broker SGA, the greedy joint pick and the exact optimum.
+// --route-compare 1 (4.6, EXPLORATION_4.6 §3, D116; with --egress 1): at every egress replan, on the same
+// rho_responder traversable set, D* Lite SHORTEST (all weights 0, incremental), the FAR-style visibility graph
+// (incremental update + query) and a fresh A* (oracle): each structure's own update and query time only (the shared
+// map work is excluded), Euclidean length of each executed polyline (lattice paths string-pulled), validity.
 // --support-band restricts support to voxel layers with centre z in [LO, HI] m (the §7 fallback).
 //
 // Writes slab.png (uint8 0 unknown / 1 free / 2 occupied, row 0 = south), results.yaml, manifest.yaml.
@@ -32,6 +36,7 @@
 #include "planning/mission/allocation_wire.hpp"
 #include "planning/mission/phase4_planner.hpp"
 #include "planning/route/egress.hpp"
+#include "planning/route/visibility_graph.hpp"
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
 #include "planning/volumetric/traversability.hpp"
@@ -110,7 +115,7 @@ double Ms(std::chrono::steady_clock::time_point t0) {
 int main(int argc, char** argv) {
     try {
         std::string spool_dir, scene_dir, config_path, out;
-        bool egress_on = false, nbv_on = false, phase4_on = false;
+        bool egress_on = false, nbv_on = false, phase4_on = false, compare_on = false;
         double band_lo = -1e9, band_hi = 1e9;
         for (int i = 1; i + 1 < argc; i += 2) {
             const std::string k = argv[i], v = argv[i + 1];
@@ -121,6 +126,7 @@ int main(int argc, char** argv) {
             else if (k == "--egress") egress_on = v == "1";
             else if (k == "--nbv") nbv_on = v == "1";
             else if (k == "--phase4") phase4_on = v == "1";
+            else if (k == "--route-compare") compare_on = v == "1";
             else if (k == "--support-band") {
                 if (std::sscanf(v.c_str(), "%lf,%lf", &band_lo, &band_hi) != 2 || !(band_hi > band_lo)) {
                     throw std::invalid_argument("--support-band LO,HI");
@@ -249,6 +255,10 @@ int main(int argc, char** argv) {
         for (const auto& e : scene["entrances"]) exits.push_back(ToCell(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>()));
         const planning::EgressWeights ew;   // w_u = w_c = 1, w_r = 0: the risk proxy is uncalibrated (D112 pending)
         planning::EgressPlanner egress(target, exits, cell);
+        planning::EgressPlanner egress_short(target, exits, cell);   // §3 comparator: all weights 0 (length only)
+        planning::VisibilityGraph far_graph;
+        std::ofstream cmp_log;
+        if (compare_on) fs::create_directories(out), cmp_log.open(fs::path(out) / "route_compare.jsonl");
         std::ofstream eg_log;
         if (egress_on || nbv_on || phase4_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
         std::ofstream nbv_log;
@@ -292,6 +302,41 @@ int main(int argc, char** argv) {
             const cv::Mat support = planning::BodySupport(map, gf, trp.responder, band_lo, band_hi);
             const cv::Mat pen = planning::EgressPenalty(m.clear_r, support, m.risk, ew);
             const planning::EgressReplan r = egress.Replan(m.trav_r, pen, support, m.risk);
+            if (compare_on) {
+                auto PolyLen = [&](const std::vector<planning::Cell>& q) {
+                    double L = 0;
+                    for (size_t i = 1; i < q.size(); ++i) L += std::hypot(double(q[i].r - q[i - 1].r), double(q[i].c - q[i - 1].c));
+                    return L * cell;
+                };
+                auto Valid = [&](const std::vector<planning::Cell>& q) {
+                    for (size_t i = 1; i < q.size(); ++i)
+                        if (!planning::LineOfSight(m.trav_r, q[i - 1], q[i])) return false;
+                    return true;
+                };
+                const cv::Mat zero = cv::Mat::zeros(m.trav_r.size(), CV_32F);
+                auto t1 = std::chrono::steady_clock::now();
+                const planning::EgressReplan ds = egress_short.Replan(m.trav_r, zero, support, cv::Mat());
+                const double ms_ds = Ms(t1);
+                t1 = std::chrono::steady_clock::now();
+                const size_t los = far_graph.Update(m.trav_r);
+                const double ms_far_upd = Ms(t1);
+                t1 = std::chrono::steady_clock::now();
+                const planning::VisRoute fr_r = far_graph.Query(target, exits);
+                const double ms_far_q = Ms(t1);
+                t1 = std::chrono::steady_clock::now();
+                const planning::GridPath as = planning::AStar(m.trav_r, target, exits);
+                const double ms_as = Ms(t1);
+                const auto ds_pull = ds.found ? planning::StringPull(m.trav_r, ds.cells) : std::vector<planning::Cell>{};
+                const auto as_pull = as.found ? planning::StringPull(m.trav_r, as.cells) : std::vector<planning::Cell>{};
+                cmp_log << "{\"t_s\":" << double(t_ns - kfs.front().t_ns) * 1e-9 << ",\"dstar_short\":{\"found\":" << ds.found
+                        << ",\"ms\":" << ms_ds << ",\"expanded\":" << ds.expanded << ",\"lattice_m\":" << ds.length_m
+                        << ",\"pulled_m\":" << PolyLen(ds_pull) << ",\"valid\":" << Valid(ds_pull) << "},\"far\":{\"found\":"
+                        << fr_r.found << ",\"update_ms\":" << ms_far_upd << ",\"query_ms\":" << ms_far_q << ",\"los_tests\":" << los
+                        << ",\"nodes\":" << far_graph.Nodes().size() << ",\"edges\":" << far_graph.Edges() << ",\"length_m\":"
+                        << fr_r.length_cells * cell << ",\"valid\":" << Valid(fr_r.cells) << "},\"astar\":{\"found\":" << as.found
+                        << ",\"ms\":" << ms_as << ",\"expanded\":" << as.expanded << ",\"lattice_m\":" << as.length_cells * cell
+                        << ",\"pulled_m\":" << PolyLen(as_pull) << "}}\n";
+            }
             s_replan.Add(Ms(w0));
             const double ts = double(t_ns - kfs.front().t_ns) * 1e-9;
             if (r.found && first_valid_s < 0) first_valid_s = ts;

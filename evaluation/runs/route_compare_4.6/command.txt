@@ -1,0 +1,5 @@
+# 4.6 §31.6 route-query comparator (docs/design/EXPLORATION_4.6.md §3, D116). Dev host, one process, 2026-10-23.
+# Same rho_responder traversable set per replan: D* Lite SHORTEST (all weights 0, incremental), FAR-style
+# visibility graph (incremental update + query), fresh A* (oracle). Only each structure's own update/query is timed.
+# SPOOL / SCENE as evaluation/runs/egress_4.5/command.txt. Binary: working tree over 9c03b6b.
+ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT --egress 1 --support-band -0.31,2.31 --route-compare 1

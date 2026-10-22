@@ -170,3 +170,22 @@ Non-blocking points:
 - **Allocation for baseline rows:** only the Ariadne row allocates by auction. The auction's values are Ariadne's,
   so baseline policies fed to it would be re-scored as Ariadne and the §31.6 rows would collapse. Baselines,
   including TARE, coordinate by the exactly-once greedy pick over their own ranking.
+
+## 9. §31.6 comparator, as measured (2026-10-23; `evaluation/runs/route_compare_4.6/`)
+
+Evidence spool, 40 replans. A route exists from 145 s, so 12 replans route; all three structures find the same
+ones, and every route is valid (each segment re-checked by symmetric line of sight).
+
+| Row | Length (12 routed replans) | Own time per replan |
+|---|---|---|
+| D\* Lite, shortest (incremental) | lattice 4.441 m, string-pulled 4.403 m | mean 0.46 ms, max 1.36 |
+| FAR-style graph | **4.403 m** (any-angle) | update mean 0.7 ms (max 3.9), query 0.01 ms; ≤ 31 nodes; mean 65 line-of-sight tests |
+| A\* fresh (oracle) | lattice 4.441 m, string-pulled 4.403 m | mean 0.04 ms |
+
+- **FAR's any-angle length equals the string-pulled lattice paths**, 0.9 % shorter than the raw 8-connected
+  lattice.
+- **On this spool the split costs nothing measurable.** Every structure takes milliseconds.
+- **A fresh A\* is the fastest:** the route is short (≈ 90 cells) and nearly straight, so incremental bookkeeping
+  doesn't pay here. That is stated, not over-read.
+- The comparison only discriminates on larger or more cluttered scenes (maze_short, the hazard seeds), and on
+  frequent local changes. Those rows come with their spools.
