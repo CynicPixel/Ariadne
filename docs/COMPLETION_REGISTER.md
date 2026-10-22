@@ -46,7 +46,7 @@ identical.
 
 | area | state | evidence / missing |
 |---|---|---|
-| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. **Sim IMU noise operator not built (—).** |
+| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp lit in `rig_stereo_v2` (D131, 5.1); v1 stays inert. **Sim IMU noise operator not built (—)** (built on `feat/l2-sim-imu-noise`, D101). |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
 | Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, approved 2026-10-21 (exact index default, `cv::ANNIndex` the scale ablation). ALIKED+LightGlue hard pairs: D63. Sim-rig exports (1280×720 RGB): D90 (SMOKE §4t); EigenPlaces sim default size awaits approval. |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73), certificate behind a flag (D74). |
@@ -68,7 +68,7 @@ identical.
 | L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
 | L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
-| L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
+| L9 | I6 dust model fidelity (D9, D11) | **options built; decision open** (→ 5.4) | A2: D135. Measurement pending dark renders |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
 ---
@@ -139,12 +139,12 @@ identical.
 | 4.4 allocation (CBBA + broker-greedy) | needs L1 |
 | 4.5 egress (D* Lite, 5th-percentile confidence) | |
 | 4.6 TARE / FAR scheduling | Domain 3 survey owed (D45) |
-| 5.1 dark worlds, lamp calibration | |
-| 5.2 falloff normalisation (Stage 3) | from 2.2 |
-| 5.3 active exposure + lamp co-control | **carries 2.2's Stage 4 exposure normalisation** |
-| 5.4 degradation configs frozen | carries L9 (I6 dust fidelity) |
+| 5.1 dark worlds, lamp calibration | **partial** (A2): lamp probe SMOKE §4u; D130 sRGB, D131 lamp. `ci_tiny_dark` + `rig_stereo_v2` (v1 worldgen byte-identical; 4 s dark recording PASSED). Calibration done (D133, `lamp_calib_v2.yaml`; cos-incidence in, held-out 0.048 vs 0.167). Full dark renders: GPU session not yet approved |
+| 5.2 falloff normalisation (Stage 3) | **partial** (A2): D134 `falloff.{hpp,cpp}`, synthetic tests 4/4. Not wired into the runner (waits on the 2.6/L2 merge); §31.5 rows need dark renders |
+| 5.3 active exposure + lamp co-control | **partial** (A2): D132 controller + Stage 4 + replay `lamp_power`; tests 7/7 incl. closed loop (fixed a blind-metric stall and a limit cycle). Not wired; live `light_config` loop and the overexposure scenario to do. Carries 2.2's Stage 4 |
+| 5.4 degradation configs frozen | **open** (A2): L9 options built (D135: pre-sensor dust, correlated field, lamp airlight; tests 4/4, golden digest unchanged). Decision + freeze wait on one measured pair on a dark recording |
 | 5.5 confined-space worlds, baseline sweep | |
-| 5.6 OIVIO real-data validation | |
+| 5.6 OIVIO real-data validation | **blocked** (A2): official page "downloads temporarily unavailable"; all Drive IDs 404 (2026-10-22). Needs maintainer: email ARPG or approve a substitute (CAVERS is RGB-D, not stereo) |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |

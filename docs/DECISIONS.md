@@ -2969,3 +2969,73 @@ SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp cali
   poses.
 - **Shadows.** World `<shadows>true</shadows>`, lamp `cast_shadows true`; dark worlds drop the zone point lights and set
   ambient 0. Verified to render on llvmpipe.
+
+## 2026-10-22 — D132: 5.3 exposure + lamp co-controller; Stage 4 normalisation; the replay lamp actuator
+
+`perception/exposure_control/` (arch §6.5), CPU-only so far, not yet wired into a runner:
+- **Objective:** Shim, Lee & Kweon (IROS 2014; arXiv 1708.07338 eq. 1, transcribed): mean over pixels of
+  log(λ(m − δ) + 1)/N for m ≥ δ, δ = 0.06, λ = 10³ (the paper's values). Candidates at ±0.5 stop (0.125 grid) are
+  synthesised by scaling the linear frame and clipping (Zhang, Forster & Scaramuzza, ICRA 2017, with a known response),
+  not Shim's γ-mapping, which stands in for an unknown response. Ours is known: linear, D's model (D130).
+- **One brightness decision, spent by cost:** brighter = lamp (to its energy budget) → exposure (to the blur ceiling
+  t ≤ blur_px / (f |ω|), §10.5) → gain; darker = the reverse. Slew ≤ 0.5 stop per decision (§6.5).
+- **Fallbacks, stated:** > 2 % clipped → step down at the slew limit (clipped pixels hide how far over they are);
+  no gradient above δ in any candidate (many stops under or over) → step toward mid-grey. The second was found by the
+  closed-loop test: from 8 stops under, Shim's metric is 0 everywhere and a pure-metric controller never moves.
+  The same test found a limit cycle: the metric barely penalises clipping, so it stepped up into 20 % clipped and the
+  guard stepped back, ±0.5 stop forever. Candidates whose synthesised frame would trip the guard are now excluded.
+  Closed loop from 8 stops under and 5 over: settles within 5 % of the best clip-limited metric, |step| ≤ 0.25.
+- **Stage 4:** `NormalizeExposure` scales a linear image by (t₀g₀)/(tg). Lamp power is not divided there; Stage 3
+  owns P.
+- **Replay:** the decision drives D's `exposure`/`analog_gain` and the new `lamp_power` (a radiance scale). With
+  ambient 0 and a decoded render, lamp power is exactly a radiance scale (SMOKE §4u). The approximations that remain:
+  pre-render clipping and quantisation, the lamp's shadows (unchanged by power), and exposure time adding no motion
+  blur in D. The live-vs-replay comparison (exit gate) measures them.
+
+## 2026-10-22 — D133: 5.1 lamp calibration procedure, executed for rig_stereo_v2
+
+`python -m dataset_tools.lamp_calib render|fit`: a matte grey plane (SDF diffuse 0.5) under the rig's lamp at 15 known
+poses: 0.75–4.5 m × {fronto-parallel, yaw 30°, pitch −25°}. Tilts make incidence differ from the lamp angle, which is
+what separates the lobe from cos(incidence) (Park et al., CVPR 2014). Fit: for a fixed c′, I(c′ + r²)/[cos inc] is a
+function of θ alone, whose per-θ median is A·RID. c′ minimises the across-pose spread (golden-section search). There
+is no initialisation to get wrong. The lamp pose is the rig's (sim truth); the procedure calibrates what the renderer
+adds.
+
+Result, `configs/sim/lamp_calib_v2.yaml` (568 k samples):
+- gain_A 1.952 at intensity 6. That is 0.325 per unit intensity; SMOKE §4u measured 0.327.
+- c′ = 0.543 m² (§4u: ≈ 0.5).
+- RID flat to ±0.5 % out to 25°, rolling off to 0.04 at 39.5°.
+- **Cosine decision (plan 5.1): Lambertian incidence is IN.** Held-out log-RMS is 0.048 with it and 0.167 without.
+- All-pose log-RMS 0.052, dominated by 8-bit quantisation in the dim tail.
+
+## 2026-10-22 — D134: 5.2 Stage 3 falloff normalisation → albedo proxy
+
+`perception/radiometric/falloff.{hpp,cpp}`: albedo = I · albedo_ref / max(E, E_max/max_gain), with
+E = gain_A · p · RID(θ) · cos(inc) / (c′ + r²).
+- r and θ are taken from the lamp centre (T_C_L, rotated into the rectified frame), not the camera.
+- Normals come from depth central differences.
+- Depth is the estimator's (the §9.6 contract: SGBM or RGB-D); never GT in production. A GT-depth row is an
+  upper-bound ablation only.
+- Pixels outside the lobe (RID < 0.05), without depth, or at grazing incidence (cos < 0.15) are invalid. Unlit pixels
+  have no albedo to recover.
+- Placement: after rectification and stereo, so it cannot feed SGBM.
+- The geometry path may consume it (§6.3: calibrated physics); whether features do is a §31.5 row.
+- Synthetic tests: exact albedo recovery on a tilted textured plane; distance and power invariance; invalidity; the
+  gain cap.
+
+## 2026-10-22 — D135 `[OPEN — measurement pending dark renders]`: L9 dust fidelity (D9, D11) — options built, decision after one measured pair
+
+All opt-in. Defaults are the §5.6 operator, so the golden digest is unchanged. Options:
+- `dust_order: pre_sensor` (D9 option c): the medium acts on radiance before shot noise. Test: over a black scene in
+  dense dust, post-sensor airlight has zero variance, while pre-sensor airlight has shot-noise variance at the same
+  mean.
+- `dust_field_tau_frames: N` (D11 option b): the field blends the epoch fields at frame/N and frame/N + 1, normalised so
+  that its variance does not pulse. `dust_drift_px_per_frame` adds advection. Test: frame-to-frame change is under ¼ of
+  the white field's.
+- `dust_airlight_mode: lamp`: in an ambient-0 world the veil is backscatter of the carried lamp (the Jaffe–McGlamery
+  view in underwater imaging), not a uniform glow. It follows the lamp lobe and scales with `lamp_power`. This is what
+  makes "more lamp → more veil" a real trade-off for 5.3.
+
+**Recommendation, to confirm by measurement:** freeze dust1–3 with pre_sensor + tau ≈ 1 s of frames + lamp airlight.
+The measurement: on one dark recording, run dark2_dust2 under (post, white, constant) and (pre, correlated, lamp),
+and compare match precision and ATE. The 5.4 freeze waits on it.

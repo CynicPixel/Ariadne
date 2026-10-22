@@ -4,6 +4,29 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — Phase 5 (A2): render probe, lamp calibration, Stage 3, controller, dust options (D130–D135)
+
+- **Probe (SMOKE §4u):**
+  - the sim RGB is sRGB-encoded (D130: D gets an opt-in decode);
+  - the lamp falls off as 1/(c′ + r²), and the shipped rig was nearly flat;
+  - SDF spot angles are full-cone;
+  - the lobe is flat-topped;
+  - shadows work on llvmpipe (D131).
+- **Built:**
+  - `ci_tiny_dark` + `rig_stereo_v2` (v1 worldgen byte-identical);
+  - lamp calibration executed (D133);
+  - Stage 3 albedo proxy (D134);
+  - exposure + lamp co-controller, Stage 4, replay `lamp_power` (D132);
+  - L9 dust options (D135).
+- **Tests:** test_numerical Degradation 25/25 (golden digest unchanged), test_unit Config/Degrad 20/20, test_opencv
+  ExposureControl/Falloff/DegradationSrgb 11/11.
+- **Not done:**
+  - runner wiring: waits on the 2.6/L2 merge, which touches the same seams;
+  - dark renders, which need GPU approval;
+  - 5.5;
+  - 5.6, which is blocked: OIVIO is offline.
+- **Caveat (D130):** the 2.2 radiometric rows and the 3.1 darkened-proxy rows ran D on sRGB-encoded values.
+
 ## 2026-10-22 — Phase 5 (DVE) opens on `feat/ph5-dve`: session A2 claims D130–D149
 
 - **Decision IDs D130–D149 are claimed by session A2** for Phase 5 (5.1–5.6 and the exit gate), the 3.1 sim dark
