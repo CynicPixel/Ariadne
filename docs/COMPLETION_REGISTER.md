@@ -105,7 +105,7 @@ identical.
 | 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85). D86: V1_03 is not won't-fix; it is carried to 5.5 as the degraded-vision regression case, with this as the candidate fix. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
-| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
+| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. **Carry (D87):** the VO graph has a disconnected prefix when the window solve is skipped before inertial init (MH_04: 33 keyframes, MH_05: 77). Loop closure now drops candidates into it; the fix on the VO side is open because an uninformative bridge edge would weaken PCM. The same chain feeds the 3.2 broker through CollabNode. | M |
 | 2.5 robust back end | done except the large SE-Sync certificate run and the planted-outlier gate wording (maintainer) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). The certificate on sphere/torus/grid3D/cubicle/rim waits on the maintainer (heavy run). The broker wiring of D76 is M (3.2/3.5). | B |
 | 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
 | Gate: FD Jacobian suite | done | | |

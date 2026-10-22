@@ -206,6 +206,28 @@ TEST(LoopBackend, BrokenChainThrows) {
     EXPECT_THROW(be.Sync(vo), std::logic_error);
 }
 
+// D87 (EuRoC MH_04/MH_05 on AWS): the VO emits no exit edge for keyframes whose window solve was skipped before
+// inertial init, so the mirror's chain starts later than keyframe 0. A loop to one of those keyframes is never Ready;
+// the runtime's FIFO used to wait on it forever (0 loop events on both flights). Unreachable() names them.
+TEST(LoopBackend, KeyframesBeforeTheAnchorAreUnreachable) {
+    PoseGraph vo;
+    for (uint64_t k = 0; k < 12; ++k) {
+        PoseNode n;
+        n.keyframe = k;
+        vo.AddNode(n);
+    }
+    const Mat6 odo = Diag(0.01, 0.004);
+    LoopBackend be;
+    EXPECT_FALSE(be.Unreachable(2)) << "nothing is final before the first exit edge";
+    for (uint64_t k = 5; k < 9; ++k) vo.AddEdge(OdometryEdge(k, k + 1, SE3(), odo));   // 0-4 never got an exit edge
+    be.Sync(vo);
+    EXPECT_EQ(be.anchor(), 5u);
+    for (uint64_t k : {0, 2, 4}) EXPECT_TRUE(be.Unreachable(k)) << k;
+    for (uint64_t k : {5, 9}) EXPECT_FALSE(be.Unreachable(k)) << k << " is mirrored";
+    EXPECT_FALSE(be.Unreachable(10)) << "10 is still in the window: it will become Ready";
+    EXPECT_FALSE(be.Ready(9, 2));
+}
+
 TEST(LoopRetrieval, ExclusionThresholdAndOrder) {
     RetrievalParams p;
     p.exclude_recent = 5;

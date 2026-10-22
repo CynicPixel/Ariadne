@@ -80,6 +80,11 @@ public:
     /// Both keyframes are in the mirror (their odometry is final).
     bool Ready(uint64_t a, uint64_t b) const { return g_.nodes().count(a) && g_.nodes().count(b); }
 
+    /// The keyframe can never be mirrored: the mirror grows forward from its anchor (the first final odometry edge)
+    /// and a gap after the anchor throws in Sync, so an unmirrored keyframe before the anchor never will be. The VO
+    /// leaves such a prefix when its window solve is skipped before inertial init (D87).
+    bool Unreachable(uint64_t k) const { return seeded_ && k < anchor_ && !g_.nodes().count(k); }
+
     /// Gate every candidate, add the survivors, then PCM + GNC once for the batch. Candidates not Ready() throw.
     LoopEventRecord OnCandidates(const std::vector<LoopCandidate>& cands, int64_t t_ns);
 

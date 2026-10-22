@@ -40,6 +40,7 @@ class IntraLoopClosure {
 public:
     struct Funnel {
         int keyframes = 0, retrieved = 0, verified = 0, gate_passed = 0, events = 0, unprocessed_at_end = 0;
+        int unmirrorable = 0;   // verified candidates dropped: a keyframe before the mirror's anchor (D87)
     };
     struct Proposal {   // every retrieval proposal, verified or not (recall)
         uint64_t a = 0, b = 0;
@@ -264,7 +265,8 @@ public:
                 << queries_with_revisit << ", retrieval_hits: " << hits << ", retrieved: " << funnel.retrieved
                 << ", verified: " << funnel.verified << ", gate_passed: " << funnel.gate_passed
                 << ", events: " << funnel.events << ", solved_events: " << solved << ", fast_path: " << fast
-                << ", unprocessed_at_end: " << funnel.unprocessed_at_end << ", labelled: " << labelled
+                << ", unprocessed_at_end: " << funnel.unprocessed_at_end << ", unmirrorable: " << funnel.unmirrorable
+                << ", mirror_anchor_kf: " << backend_.anchor() << ", labelled: " << labelled
                 << ", labelled_good: " << good << ", labelled_bad: " << bad << ", gnc_inliers_final_events: " << gnc_in
                 << ", gnc_inliers_bad: " << gnc_in_bad << ", latency_mean_s: " << (events.empty() ? 0.0 : lat / events.size())
                 << ", latency_max_s: " << lat_max << ", pcm_pair_stat_good_pairs: " << pair_good.size()
@@ -297,7 +299,18 @@ private:
     };
     void Drain(int64_t now_ns) {
         while (!pending_.empty()) {
-            const Pending& p = pending_.front();
+            Pending& p = pending_.front();
+            // A candidate the mirror can never hold would block this FIFO for the rest of the run (D87: MH_04/MH_05
+            // closed 0 loops). Drop those candidates only; the query's others still run.
+            const auto dead = std::remove_if(p.cands.begin(), p.cands.end(), [&](const slam::LoopCandidate& c) {
+                return backend_.Unreachable(c.a) || backend_.Unreachable(c.b);
+            });
+            funnel.unmirrorable += int(p.cands.end() - dead);
+            p.cands.erase(dead, p.cands.end());
+            if (p.cands.empty()) {
+                pending_.pop_front();
+                continue;
+            }
             bool ready = true;
             for (const auto& c : p.cands) ready = ready && backend_.Ready(c.a, c.b);
             if (!ready) break;   // FIFO: events run in query order

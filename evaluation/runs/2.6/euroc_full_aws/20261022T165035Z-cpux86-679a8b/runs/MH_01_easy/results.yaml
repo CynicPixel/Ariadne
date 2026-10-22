@@ -1,0 +1,24 @@
+# ariadne_euroc_vo results. Generated; do not hand-edit.
+sequence: MH_01_easy
+frames: 3682
+associated_poses: 3638  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 80.5145
+ate_se3: {rmse_m: 0.0678574, mean_m: 0.0599928, max_m: 0.177031, rotation_rmse_rad: 0.0394001}
+ate_rmse_percent_of_path: 0.0842798
+sim3_scale: 1.00297  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.0121535, rotation_rmse_rad: 0.00167579}
+vo: {lost_frames: 0, keyframes: 717, ba_runs: 716, ba_mean_cost_ratio: 0.800029, landmarks_alive_at_end: 85, graph_edges: 707, graph_version: 7904}
+stereo_match_valid_fraction: 0.679827
+triangulation: {candidates: 109150, created: 28982, no_stereo: 62956, nonpositive_disparity: 0, depth_range: 502, reprojection: 0, sgbm_inconsistent: 1637, uncertain: 15073}
+timing_ms: {track_mean: 13.0432, vo_track_mean: 5.68503, keyframe_mean: 50.2535, opencv_threads: 8}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.137719, b: -3.71817e-06, c: 4.52917e-05, matches: 271, mad_px: 0.101469, slopes_fitted: true, keyframe: 1, attempts: 2, residual_after: {measured: true, a_px: 0.0708562, b: -1.51552e-05, c: -0.000648596, max_abs_dy_px: 0.251203, matches: 134}}
+stereo_exposure_match: true
+loop_closed_keyframe_refined: {ate_rmse_m: 0.0207028, ate_rotation_rmse_rad: 0.0215009}
+loop_closure: {keyframes: 717, queries_with_gt_revisit: 245, retrieval_hits: 152, retrieved: 1987, verified: 336, gate_passed: 218, events: 145, solved_events: 96, fast_path: 89, unprocessed_at_end: 6, labelled: 302, labelled_good: 156, labelled_bad: 146, gnc_inliers_final_events: 177, gnc_inliers_bad: 59, latency_mean_s: 2.40976, latency_max_s: 7.30224, pcm_pair_stat_good_pairs: 6903, pcm_pair_stat_good_median: 2.12419, pcm_pair_stat_good_mean: 2.90788}  # descriptor: mean-bit PLACEHOLDER; pair stat ~6 if covariances are honest
+keyframe_refined: {ate_rmse_m: 0.0675642, ate_rotation_rmse_rad: 0.0394728, rpe_1s_translation_rmse_m: 0.0109684}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 486, observations: 2663070, invalid_at_entry: 0, chi2_failed: 57584, chi2_failed_fraction: 0.0216232, keyframe_observations_rejected: 42459, culled: 28443, exit_edges: 707, keyframes_held: 0, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 9273, landmarks_ill_conditioned_at_solution: 336, marginal_degenerate: 0, inlier_sigma_px: 0.304278}
+imu: {mode: full, seed_lk: false, stationary_start: false, gyro_bias_final: [-0.00245627, 0.0217015, 0.0775814], bias_samples: 200, lk_seeded_frames: 0, gravity_err_deg_vs_gt: {median: 1.49086, p90: 3.30468, max: 9.83714}}
+imu_full: {initialized: true, init_attempts: 1, init_refused: 0, init_t_s: 1.55, init: {gravity_norm_unconstrained: 9.63051, chi2_per_dof: 0.829377, condition: 24062, rotation_rms_deg: 0.0414652, last_refusal: ""}, init_vs_gt: {gravity_angle_deg: 0.0887413, v_rms_m_s: 0.0333227, bg_err: 0.00140217, ba_err: 0.0251706, bg_gt_norm: 0.0813936, ba_gt_norm: 0.158236}, inertial_solves: 707, v0_held: 0, inertial_chi2_per_dof: 0.857085, repropagated: 38, bias_prior: {marginal: 707, carried: 0}, lost_inertial_frames: 0, tilt_correction_deg: {sum: 0, max: 0}, gravity_err_deg_vs_gt: {median: 0.426238, p90: 0.796907, final: 0.357216}, refinements: [{t_s: 6.55, keyframes: 32, ok: true, gravity_change_deg: 0.880039, chi2_per_dof: 0.800201, gravity_norm_unconstrained: 9.60112, why: ""}, {t_s: 16.55, keyframes: 88, ok: true, gravity_change_deg: 0.815149, chi2_per_dof: 0.691414, gravity_norm_unconstrained: 9.81505, why: ""}]}
+gravity_prior: {source: attitude, stride_keyframes: 10, edges: 72, candidates: {attitude: {n: 70, failed: 0, nees_mean: 0.955562, nees_median: 0.434163, nees_p90: 2.47858, angle_median_deg: 1.51567, angle_p90_deg: 3.62342}, pose: {n: 70, failed: 0, nees_mean: 3.49372, nees_median: 2.87163, nees_p90: 7.65205, angle_median_deg: 0.443078, angle_p90_deg: 0.796907}, query: {n: 70, failed: 0, nees_mean: 6.28803, nees_median: 5.22507, nees_p90: 12.9981, angle_median_deg: 0.459754, angle_p90_deg: 0.804809}, query_free_ba: {n: 70, failed: 0, nees_mean: 3.24127, nees_median: 1.9136, nees_p90: 7.51844, angle_median_deg: 2.72992, angle_p90_deg: 13.1543}}}
+lost: {motion: bridge, reanchor: every_frame, segments: 0, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 0, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}
+reassociation: {mode: lost_window, descriptor: latest_keyframe, admit_bridged: false, trigger_correspondences: 30, runs: 2, accepted: 2, relabeled: 5, matched: 13, runs_without_candidates: 0, run_ms_mean: 3.72601, keyframe_describe_ms_mean: 0.845672}
