@@ -27,6 +27,8 @@
 // issued (as broker) or adopted, keyed by the full epoch, with a digest over
 // the wire-encoded values.
 // ---------------------------------------------------------------------------
+#include "collaboration/candidate_selection/response_cost.hpp"
+#include "collaboration/candidate_selection/selection.hpp"
 #include "collaboration/protocol/membership.hpp"
 #include "collaboration/protocol/transport.hpp"
 #include "core/math/lie.hpp"
@@ -119,6 +121,12 @@ struct NodeHooks {
                                                const KeyframeRef& b, const core::FeatureResponseValue& fb)>
         verify;
     std::function<SolveOutput(const SolveInput&)> solve;
+    /// Broker, 3.4 (D170): retrieval similarity of a candidate pair, in (0, 1]: the candidate edge's weight. 1 if unset.
+    std::function<double(const KeyframeRef& query, const KeyframeRef& candidate)> similarity;
+    /// Broker, 3.4: the selection policy over pending candidates under the byte budget. UNSET = request every
+    /// candidate as it appears (the Phase-1 behaviour: the "similarity" baseline, and the default). SelectBySimilarity
+    /// is the "greedy" baseline; SelectSpectral (spectral_selector.hpp, links OpenCV) is the policy.
+    std::function<SelectionReport(const SelectionProblem&)> select;
 };
 
 struct NodeParams {
@@ -131,6 +139,15 @@ struct NodeParams {
     uint64_t snapshot_every_keyframes = 10;
     double snapshot_max_interval_s = 10.0;
     double solve_interval_s = 2.0;
+    // 3.4 selection (only with hooks.select): a token bucket of predicted fetch bytes, refilled at budget_bytes_per_s
+    // and capped at budget_burst_bytes, spent once per selection_interval_s.
+    double selection_interval_s = 1.0;
+    double budget_bytes_per_s = 20000.0;
+    double budget_burst_bytes = 200000.0;
+    double candidate_ttl_s = 120.0;          // a pending candidate never selected by then is dropped (counted)
+    ResponseCostModel response_cost;
+    uint32_t default_features = 800;         // the price of a keyframe whose descriptor did not advertise its size
+    uint16_t default_feature_bytes = 32;
 };
 
 /// One estimate as issued (broker) or adopted (member), for the §6 harness.
@@ -145,6 +162,9 @@ struct EstimateRecord {
 struct NodeStats {
     uint64_t frame_rejects = 0, stale_estimates = 0, requests_sent = 0, requests_given_up = 0;
     uint64_t edges_verified = 0, candidates = 0, solves = 0, broker_changes = 0;
+    // 3.4: selection rounds, candidates selected / dropped unselected, predicted first-transmission bytes per class
+    uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
+    double predicted_request_bytes = 0, predicted_response_bytes = 0;
 };
 
 using EdgeKey = std::tuple<AgentId, uint64_t, AgentId, uint64_t>;
@@ -178,7 +198,7 @@ public:
     CollabNode(AgentId self, std::vector<AgentId> fleet, const core::WireCodec& codec, core::ByteLedger& ledger,
                NodeHooks hooks, NodeParams p = {})
         : self_(self), fleet_(std::move(fleet)), codec_(codec), ep_(self, codec, ledger, p.endpoint),
-          mem_(self, p.membership), hooks_(std::move(hooks)), p_(p) {}
+          mem_(self, p.membership), hooks_(std::move(hooks)), p_(p), cost_(codec, p.response_cost) {}
 
     // --- application input ---
 
@@ -234,6 +254,7 @@ public:
         if (!mem_.IsBroker()) MaybeSnapshot(t);
         // 4. broker duties
         if (mem_.IsBroker()) {
+            MaybeSelect(t);
             RetryRequests(t);
             MaybeSolve(t);
         }
@@ -246,6 +267,8 @@ public:
     const Membership& membership() const { return mem_; }
     const Endpoint& endpoint() const { return ep_; }
     const NodeStats& stats() const { return stats_; }
+    /// The last 3.4 selection round's report (broker only; empty before the first).
+    const std::optional<SelectionReport>& last_selection() const { return last_selection_; }
     const std::optional<EstimateRecord>& adopted() const { return adopted_; }
     const std::map<core::EpochValue, EstimateRecord, bool (*)(const core::EpochValue&, const core::EpochValue&)>&
     issued() const {
@@ -483,12 +506,91 @@ private:
         if (!descriptor_db_.emplace(q, g).second || !hooks_.retrieve) return;
         for (const KeyframeRef& c : hooks_.retrieve(q, descriptor_db_)) {
             if (c.agent == q.agent) continue;
-            const auto pair = std::minmax(q, c);
+            const std::pair<KeyframeRef, KeyframeRef> pair = std::minmax(q, c);
+            if (hooks_.select) {   // 3.4: queue it; MaybeSelect decides under the budget
+                if (candidates_.count(pair) || pending_.count(pair)) continue;
+                ++stats_.candidates;
+                pending_.emplace(pair, Pending{++pending_id_, hooks_.similarity ? hooks_.similarity(q, c) : 1.0, t});
+                continue;
+            }
             if (!candidates_.insert(pair).second) continue;
             ++stats_.candidates;
             for (const KeyframeRef& end : {q, c}) RequestFeatures(end, t);
             TryVerify(pair.first, pair.second, t);
         }
+    }
+
+    /// 3.4 (design SPECTRAL_3.4): every selection_interval_s, hand the pending candidates, the broker's keyframe graph
+    /// and the predicted fetch bytes to the policy; request what it selects; charge the predicted bytes per class.
+    void MaybeSelect(core::Timestamp t) {
+        if (!hooks_.select) return;
+        if (last_select_ && (t - *last_select_).toSeconds() < p_.selection_interval_s) return;
+        const double dt = last_select_ ? (t - *last_select_).toSeconds() : p_.selection_interval_s;
+        last_select_ = t;
+        tokens_ = std::min(p_.budget_burst_bytes, tokens_ + p_.budget_bytes_per_s * dt);
+        for (auto it = pending_.begin(); it != pending_.end();) {
+            if ((t - it->second.since).toSeconds() >= p_.candidate_ttl_s) {
+                ++stats_.candidates_expired;
+                it = pending_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (pending_.empty()) return;
+        // Nodes: every keyframe known, ordered (agent, keyframe): consecutive ones of an agent are its odometry chain.
+        std::map<KeyframeRef, int> idx;
+        for (const auto& [k, g] : descriptor_db_) idx.emplace(k, 0);
+        for (const auto& [a, g] : snapshots_)
+            for (const auto& n : g.nodes) idx.emplace(KeyframeRef{a, n.keyframe}, 0);
+        for (const auto& [pr, c] : pending_) idx.emplace(pr.first, 0), idx.emplace(pr.second, 0);
+        SelectionProblem P;
+        P.n = int(idx.size());
+        int i = 0;
+        for (auto& [k, v] : idx) v = i++;
+        const KeyframeRef* prev = nullptr;
+        for (const auto& [k, v] : idx) {
+            if (prev && prev->agent == k.agent) P.fixed.push_back({v - 1, v, 1.0});
+            prev = &k;
+        }
+        for (const auto& [key, e] : broker_edges_) {
+            const auto a = idx.find({e.agent_a, e.keyframe_a}), b = idx.find({e.agent_b, e.keyframe_b});
+            if (a != idx.end() && b != idx.end() && e.agent_a != e.agent_b) P.fixed.push_back({a->second, b->second, 1.0});
+        }
+        auto fetch_cost = [&](const KeyframeRef& k) {
+            const auto d = descriptor_db_.find(k);
+            const bool adv = d != descriptor_db_.end() && d->second.n_features > 0;
+            return cost_.Predict(adv ? d->second.n_features : p_.default_features,
+                                 adv ? d->second.feature_bytes : p_.default_feature_bytes);
+        };
+        auto held = [&](const KeyframeRef& k) { return k.agent == self_ || features_.count(k) || requests_.count(k); };
+        P.node_bytes.assign(size_t(P.n), 0.0);
+        for (const auto& [k, v] : idx)
+            if (!held(k)) P.node_bytes[size_t(v)] = fetch_cost(k).total();
+        std::map<uint64_t, std::pair<KeyframeRef, KeyframeRef>> by_id;
+        for (const auto& [pr, c] : pending_) {
+            P.candidates.push_back({c.id, idx.at(pr.first), idx.at(pr.second), c.kappa});
+            by_id.emplace(c.id, pr);
+        }
+        P.budget_bytes = tokens_;
+        SelectionReport r = hooks_.select(P);
+        ++stats_.selection_rounds;
+        for (uint64_t id : r.selected) {
+            const auto pr = by_id.at(id);
+            pending_.erase(pr);
+            for (const KeyframeRef& end : {pr.first, pr.second}) {
+                if (!held(end)) {
+                    const FetchCost c = fetch_cost(end);
+                    stats_.predicted_request_bytes += c.request;
+                    stats_.predicted_response_bytes += c.response;
+                }
+                RequestFeatures(end, t);
+            }
+            candidates_.insert(pr);
+            ++stats_.candidates_selected;
+            TryVerify(pr.first, pr.second, t);
+        }
+        tokens_ = std::max(0.0, tokens_ - r.bytes);
+        last_selection_ = std::move(r);
     }
 
     void RequestFeatures(const KeyframeRef& k, core::Timestamp t) {
@@ -687,6 +789,18 @@ private:
     size_t held_count_ = 0;
     std::map<core::EpochValue, EstimateRecord, bool (*)(const core::EpochValue&, const core::EpochValue&)> issued_{
         &CollabNode::EpochLess};
+    // 3.4 selection (soft broker state, like the above)
+    struct Pending {
+        uint64_t id = 0;
+        double kappa = 1.0;
+        core::Timestamp since;
+    };
+    FetchCostPredictor cost_;
+    std::map<std::pair<KeyframeRef, KeyframeRef>, Pending> pending_;
+    uint64_t pending_id_ = 0;
+    double tokens_ = 0.0;
+    std::optional<core::Timestamp> last_select_;
+    std::optional<SelectionReport> last_selection_;
 };
 
 }  // namespace ariadne::collaboration

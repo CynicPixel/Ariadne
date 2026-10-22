@@ -10,6 +10,7 @@
 
 #include <cmath>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -37,6 +38,7 @@ struct Scenario {
     double omega = 0.25;          // rad/s along the loop
     double overlap_m = 0.8;
     size_t keypoints = 200;       // feature response size: ~6 datagrams
+    bool advertise_features = false;   // 3.4: descriptors carry n_features / feature_bytes
 
     /// Agent a's camera in the world at time t.
     core::SE3 T_World_C(size_t a, double t) const {
@@ -145,14 +147,20 @@ struct Swarm {
     std::vector<std::unique_ptr<CollabNode>> nodes;
     uint64_t next_kf = 0;
 
-    Swarm(Scenario s, LinkState link, uint64_t seed, DatagramFaults df = {}) : sc(s) {
+    Swarm(Scenario s, LinkState link, uint64_t seed, DatagramFaults df = {}, NodeParams np = {},
+          const std::function<void(NodeHooks&)>& customize = {})
+        : sc(s) {
         base = std::make_unique<ScriptedLinkModel>(link);
         plan = std::make_unique<FaultPlan>(*base);
         net = std::make_unique<Network>(*plan, seed, df);
         std::vector<AgentId> fleet;
         for (size_t a = 0; a < sc.agents; ++a) fleet.push_back(AgentId(a));
         for (size_t a = 0; a < sc.agents; ++a)
-            nodes.push_back(std::make_unique<CollabNode>(AgentId(a), fleet, FragCodec(), ledger, sc.Hooks(a)));
+        {
+            NodeHooks h = sc.Hooks(a);
+            if (customize) customize(h);
+            nodes.push_back(std::make_unique<CollabNode>(AgentId(a), fleet, FragCodec(), ledger, std::move(h), np));
+        }
     }
 
     void Step(core::Timestamp t) {
@@ -163,6 +171,7 @@ struct Swarm {
                 core::GlobalDescriptorValue g;
                 g.keyframe_id = next_kf;
                 g.descriptor.assign(256, 0.0f);
+                if (sc.advertise_features) g.n_features = uint32_t(sc.keypoints), g.feature_bytes = 32;
                 std::optional<OdometryEdge> odo;
                 if (next_kf > 0) {
                     odo = OdometryEdge{next_kf - 1,
