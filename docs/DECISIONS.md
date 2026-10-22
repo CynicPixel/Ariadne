@@ -3105,3 +3105,26 @@ Both are main's (3.2 / 3.5).
 - **Gate:** the coverage-vs-budget ablation has pre-registered axes (§5). It runs on **lockstep L1** (maintainer):
   B builds a gz pause at each barrier, so runs are reproducible per seed. The replay decision log tests the
   machinery only.
+
+## 2026-10-23 — D115: 4.4 allocation = CBBA (L_t ≤ 2, event-triggered) and broker SGA on a time-discounted DMG score with common auction scales
+
+- **What** (`docs/design/ALLOCATION_4.4.md`; the paper transcribed in ALGORITHMS §22.3.1):
+  - **Algorithms:** CBBA (Algorithm 3, Table I, eq. 6 release), run only on a new task, a completed task, or a
+    topology change. Broker sequential greedy (SGA) on the same inputs. Both logged identically.
+  - **Score:** S_i(p) = Σ_j c̄_ij · exp(−λ_path · d_ij(p) / P_path).
+    - c̄_ij = the D114 value net of bandwidth and risk;
+    - d_ij(p) = the geodesic distance along the path;
+    - P = common scales: the max over agents of each term's p90, frozen per allocation event.
+- **Why:**
+  - **DMG holds** (paper eqs. 11–12, triangle inequality on geodesics). D114's linear U is not DMG for two-task
+    bundles, because an insertion shrinks a neighbour's detour.
+  - **Under DMG, Theorem 1 makes CBBA's assignment equal SGA's.** So the arch's "auction vs broker-greedy" row
+    measures communication (rounds, messages, bytes), not quality, and "logged identically" becomes an exact test.
+  - **Common scales make bids comparable across agents.** Per-agent p90s would not.
+- **Oracle:** exact every round. L_t = 1 by `cv::solveLP` (total unimodularity). L_t = 2 with N_u = 2 by a sorted
+  disjoint scan.
+- **Wire:** `TaskConsensus` (MessageClass TASK_CONSENSUS = 10 already exists) is to be added with the master
+  session, which holds open 3.4 edits to `wire.fbs`. Until then the bytes come from a test codec, labelled, and are
+  never claimed.
+- **Replay** exercises only the connected two-agent case. The disconnection and staleness regimes come from the
+  synthetic tests and live L1.
