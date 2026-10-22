@@ -149,6 +149,9 @@ The targets per generator:
   never a single run). Scalar: area under the coverage-budget curve. The regime is declared on the figure.
 - **The claim is "Ariadne ≥ every baseline at every budget fraction".** It's tested per scene. A loss is reported
   as a loss.
+- **Added 2026-10-23 (EXPLORATION_4.6 review), before any run:** the §31.6 row **TARE-inspired** (D116). That makes
+  6 policies × 2 scenes × 3 seeds = 36 lockstep runs, ≈ 14 h on llvmpipe (≈ 22 min each).
+  - On ci_tiny (about one 6 m subspace) the TARE row is nearly local-only, so a null result there is not over-read.
 
 All four share the same generators, sampler and costs, so the comparison isolates the scoring:
 - **random:** a uniform choice among reachable candidates (seeded Philox stream);

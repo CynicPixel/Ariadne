@@ -1,6 +1,6 @@
 # 4.6 TARE-style coarse/fine scheduling and a FAR-style visibility graph for agent motion (A1)
 
-Status: **draft for review** (advisor), before any code. Decision: D116. Arch §21.5, §21.6, §22.3 (the split),
+Status: **reviewed** (advisor 2026-10-23, §6), before any code. Decision: D116. Arch §21.5, §21.6, §22.3 (the split),
 §31.6 (planner rows and the route-query comparator). ALGORITHMS §22.2 (TARE, FAR, read in primary text).
 
 ## 0. What 4.6 owes
@@ -32,9 +32,13 @@ Status: **draft for review** (advisor), before any code. Decision: D116. Arch §
 - **Local layer:** the 4.3 views whose goal lies inside the agent's local horizon, a square of half-width = the
   depth gate (2.84 m) around the agent.
 - **Scheduling:**
-  1. If the local horizon holds views, cover them: the greedy set-cover over their targets, then the shortest
-     open tour from the agent (exact enumeration up to 8 views, else nearest-neighbour + 2-opt). The goal is the
-     first view on that tour.
+  1. If the local horizon holds views: take the best view per local target, by D114 utility, then the open tour
+     from the agent over those views.
+     - **No set cover.** In 4.3 each view belongs to exactly one target, so covering the local targets reduces to
+       one view per target (advisor review).
+     - **Solver:** nearest-neighbour + 2-opt, always. Exact enumeration is the test oracle only, with the gap
+       reported. There is no size threshold to tune.
+     - The goal is the first view on that tour.
   2. Otherwise, take the global tour over the exploring subspaces' centres from the agent (the same TSP), and go to
      the best view inside the first subspace on it.
 - **Distances** are ρ_agent geodesics (`GridDistances` on the plan space), never Euclidean, so a tour never
@@ -51,8 +55,14 @@ replanning.
 **Ariadne's adaptation**, on the 2D plan space at ρ_agent (§22.6 OpenCV adjacency):
 - **Obstacles:** connected components of not-traversable cells, by `cv::findContours` (`RETR_CCOMP`, so holes
   count), simplified by `cv::approxPolyDP` with ε = 1 cell.
-- **Graph vertices:** the convex polygon vertices, i.e. corners a shortest path can bend around (reflex vertices
-  never lie on a shortest path). Each is offset by one cell into free space.
+- **Graph vertices:** the polygon vertices that bulge into free space, i.e. corners a shortest path can bend around.
+  Corners that open toward free space never lie on a shortest path.
+  - **Orientation (advisor review):** `findContours` with `RETR_CCOMP` returns outer contours and holes with
+    opposite winding. The free-space enclosure is a hole, so a single cross-product sign would keep exactly the
+    wrong corners there.
+  - Each vertex is therefore classified by its interior angle on the **blocked** side: kept iff that angle is
+    < 180°, with the sign test flipped for hole contours.
+  - Each kept vertex is offset by one cell into free space, along the bisector.
 - **Edges:** pairs of vertices with line of sight, by 4-connected `cv::LineIterator` on the plan space, with the
   same no-corner-cut rule as `Route`. The edge cost is Euclidean length.
 - **Dynamic update:**
@@ -73,9 +83,13 @@ replanning.
 
 | Row | Structure | Query |
 |---|---|---|
-| D\* Lite (production egress) | D113's ρ_responder lattice | target → exits, incremental |
-| FAR-style graph | plan space at ρ_responder (for this row only, so the two answer the same question) | target → exits |
+| D\* Lite, **shortest** (all weights 0, EGRESS_4.5 §2's ablation row) | D113's ρ_responder lattice | target → exits, incremental |
+| FAR-style graph | the same ρ_responder traversable set, as polygons (this row only, so the two answer one question) | target → exits |
 | A\* on the lattice | the same lattice | fresh search (the oracle) |
+| D\* Lite, weighted (production, w_u = w_c = 1) | the same lattice | reported separately: it minimises cost, not length, so it is never graded on length (advisor review) |
+
+- **Latency counts only each structure's own update and query.** ComputeTraversability + BodySupport (≈ 0.5 s)
+  are shared by every row and excluded, or the split's cost would be buried under them (advisor review).
 
 - **Columns:**
   - update ms per replan, and query ms;
@@ -90,15 +104,20 @@ replanning.
 
 ## 4. Tests
 
-1. **Visibility graph = exact shortest any-angle path on polygonal maps:** random rectangles, start and goal; the
-   graph route's length equals a reference visibility-graph shortest path built by brute force (every vertex pair
-   tested) within ε. It is never longer than the string-pulled A\* path + ε.
+1. **Visibility graph = exact shortest any-angle path on polygonal maps:** random rectangles, holes included,
+   with start and goal.
+   - The graph route's length equals a reference visibility graph over **all** polygon vertices (no convexity
+     filter, every pair tested by brute force), within ε. So a wrong orientation test fails it.
+   - It is never longer than the string-pulled A\* path + ε.
+   - ε = 1 cell per bend: the one-cell offset and the discretisation make "≤" inexact by up to a cell at each
+     corner.
 2. **Incremental = full rebuild:** after random local changes, the updated graph's route lengths equal a
    from-scratch build's.
 3. **No edge crosses a blocked cell:** densely sample every edge on random maps.
 4. **Attemptable edges only when asked, and flagged.**
 5. **TARE scheduling:**
-   - with local views present, the goal is the first view of the exact shortest open tour on small instances;
+   - with local views present, the goal is the first view of the NN + 2-opt tour. On small instances, the tour's
+     length is compared with exact enumeration and the gap reported;
    - with none, the goal lies in the first subspace of the global tour;
    - deterministic.
 6. **Subspace states on a hand map:** exploring / explored / unexplored.
@@ -109,8 +128,17 @@ replanning.
   (machinery evidence, as §7 of NBV_4.3).
 - **Gate:** the TARE row in the lockstep L1 ablation (NBV_4.3 §5's pre-registered axes).
 
-## 6. Open points for review
+## 6. Review (advisor, 2026-10-23)
 
-1. S = 12 coarse cells and a horizon half-width of 2.84 m, both derived from the depth gate.
-2. Convex vertices offset by one cell, and ε = 1 cell for `approxPolyDP`.
-3. Running the FAR comparator row at ρ_responder so it answers the same query as D\* Lite.
+Blocking points, all adopted:
+1. The comparator grades on the shortest-path D\* Lite row and times only each structure's own work (§3).
+2. No degenerate set cover; NN + 2-opt always, with exact enumeration as the oracle (§1).
+3. Vertex selection is orientation-aware; the reference uses all vertices; ε is defined per bend (§2, §4).
+
+Non-blocking points:
+- **Attemptable FAR routes:** kept to the comparator and exploration logging until B confirms the mover accepts
+  segments through unknown space. `Route` never emits one before that.
+- **Gate cost:** the TARE row makes 6 policies × 2 scenes × 3 seeds = 36 lockstep runs, ≈ 14 h on llvmpipe
+  against the ≈ 10 h first stated. Added to NBV_4.3 §5, and B and the maintainer are told.
+- **ci_tiny is about one subspace** at S = 6 m, so its TARE row is nearly local-only; a null result there is not
+  over-read.
