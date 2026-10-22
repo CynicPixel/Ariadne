@@ -19,12 +19,18 @@
 // (pose = its latest keyframe, flown = summed keyframe displacement, peers = the other agent's keyframes); one JSON
 // line per (replan, agent) in nbv_decisions.jsonl: targets per generator, notes, timing, the top 10 options. The
 // trajectory is the spool's: this logs what the planner WOULD choose (machinery evidence, not policy value).
+// --phase4 1 (4.4, ALLOCATION_4.4 §8, D115): the real planning::Phase4Planner fed the same keyframes (Integrate) and
+// planned on the same schedule (Plan, both agents once active, linked after the merge); per replan one line in
+// phase4_allocation.jsonl: its CBBA event (trigger, rounds, messages, TASK_CONSENSUS wire bytes), and on the SAME
+// auction instance the totals of CBBA, broker SGA, the greedy joint pick and the exact optimum.
 // --support-band restricts support to voxel layers with centre z in [LO, HI] m (the §7 fallback).
 //
 // Writes slab.png (uint8 0 unknown / 1 free / 2 occupied, row 0 = south), results.yaml, manifest.yaml.
 // The spool reading duplicates ariadne_mission's; it moves onto L1's shared briefing/spool library when that lands.
 // ---------------------------------------------------------------------------
 #include "planning/mission/nbv.hpp"
+#include "planning/mission/allocation_wire.hpp"
+#include "planning/mission/phase4_planner.hpp"
 #include "planning/route/egress.hpp"
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
@@ -43,6 +49,7 @@
 #include <fstream>
 #include <limits>
 #include <map>
+#include <memory>
 #include <regex>
 #include <string>
 #include <vector>
@@ -103,7 +110,7 @@ double Ms(std::chrono::steady_clock::time_point t0) {
 int main(int argc, char** argv) {
     try {
         std::string spool_dir, scene_dir, config_path, out;
-        bool egress_on = false, nbv_on = false;
+        bool egress_on = false, nbv_on = false, phase4_on = false;
         double band_lo = -1e9, band_hi = 1e9;
         for (int i = 1; i + 1 < argc; i += 2) {
             const std::string k = argv[i], v = argv[i + 1];
@@ -113,6 +120,7 @@ int main(int argc, char** argv) {
             else if (k == "--out") out = v;
             else if (k == "--egress") egress_on = v == "1";
             else if (k == "--nbv") nbv_on = v == "1";
+            else if (k == "--phase4") phase4_on = v == "1";
             else if (k == "--support-band") {
                 if (std::sscanf(v.c_str(), "%lf,%lf", &band_lo, &band_hi) != 2 || !(band_hi > band_lo)) {
                     throw std::invalid_argument("--support-band LO,HI");
@@ -193,6 +201,8 @@ int main(int argc, char** argv) {
         std::vector<Kf> held;
         std::vector<core::Vec3> track[2];
         double flown[2] = {0, 0};
+        std::unique_ptr<planning::Phase4Planner> p4;
+        std::ofstream p4_log;
         auto Integrate = [&](const Kf& k) {
             const core::SE3 T_W_C = T_W_O0 * (k.agent == 0 ? k.T_O_C : T_O0_O1 * k.T_O_C);
             if (!track[k.agent].empty()) flown[k.agent] += (T_W_C.t - track[k.agent].back()).norm();
@@ -205,6 +215,7 @@ int main(int argc, char** argv) {
             auto t0 = std::chrono::steady_clock::now();
             const std::vector<planning::Idx3> dirty = map.Integrate(f);
             s_int.Add(Ms(t0));
+            if (p4) p4->Integrate(k.agent, k.t_ns, f);   // the real Phase4Planner, fed the identical frame (untimed)
             t0 = std::chrono::steady_clock::now();
             if (esdf.Empty()) esdf.Rebuild(map), ++rebuilds;
             else if (esdf.Update(map, dirty)) ++incremental;
@@ -239,9 +250,27 @@ int main(int argc, char** argv) {
         const planning::EgressWeights ew;   // w_u = w_c = 1, w_r = 0: the risk proxy is uncalibrated (D112 pending)
         planning::EgressPlanner egress(target, exits, cell);
         std::ofstream eg_log;
-        if (egress_on || nbv_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
+        if (egress_on || nbv_on || phase4_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
         std::ofstream nbv_log;
         if (nbv_on) nbv_log.open(fs::path(out) / "nbv_decisions.jsonl");
+        if (phase4_on) {
+            planning::Phase4Briefing pb;
+            pb.grid = gf, pb.target = target, pb.entrances = exits, pb.z_max_m = cfg["grid"]["z_max_m"].as<double>();
+            planning::Phase4Params pp;
+            pp.tsdf = tp;
+            pp.trav = trp;
+            if (!kfs.empty()) {
+                pp.nbv.frustum.fx = kfs[0].fx, pp.nbv.frustum.fy = kfs[0].fy, pp.nbv.frustum.cx = kfs[0].cx;
+                pp.nbv.frustum.cy = kfs[0].cy, pp.nbv.frustum.width = kfs[0].w, pp.nbv.frustum.height = kfs[0].h;
+            }
+            pp.nbv.frustum.max_range_m = tp.max_depth;
+            pp.nbv.rho_r = rho_r, pp.nbv.rho_a = trp.agent.rho;
+            p4 = std::make_unique<planning::Phase4Planner>(pb, pp);
+            fs::create_directories(out);
+            p4_log.open(fs::path(out) / "phase4_allocation.jsonl");
+        }
+        Stats s_p4;
+        const core::WireCodec p4_codec;
         Stats s_nbv;
         planning::NbvParams nbp;   // replay: no energy budget or mission clock (the hard rule cannot fire; stated)
         nbp.rho_r = rho_r, nbp.rho_a = trp.agent.rho;
@@ -283,6 +312,57 @@ int main(int argc, char** argv) {
                 fresh_cost = fresh.Cost(), fresh_expanded = fresh.Expanded();
             }
             last_route = r, last_support = support;
+            if (p4) {
+                planning::Phase4AgentInput ag[2];
+                for (int a = 0; a < 2; ++a) {
+                    ag[a].active = !track[a].empty();
+                    if (ag[a].active) ag[a].position = track[a].back(), ag[a].flown_m = flown[a];
+                }
+                ag[0].linked = ag[1].linked = ag[0].active && ag[1].active;   // agent 1 integrates only after the merge
+                const auto t1 = std::chrono::steady_clock::now();
+                const planning::Phase4Plan P = p4->Plan(ts, ag, {});
+                const double ms = Ms(t1);
+                s_p4.Add(ms);
+                // The rows, on the SAME auction instance (ALLOCATION_4.4 §4/§8): CBBA, broker SGA, greedy, optimum.
+                std::vector<float> sc;
+                std::vector<std::vector<int>> view;
+                const planning::AuctionInstance in = planning::BuildAuction(P, gf, 1, &sc, &view);
+                planning::CbbaParams cp;
+                cp.bytes = planning::WireBytes(p4_codec, sc);
+                const bool linked = ag[0].linked;
+                const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
+                const planning::Allocation cb = planning::RunCbba(in, [&](int) { return G; }, cp);
+                const planning::Allocation sg = planning::SequentialGreedy(in);
+                planning::Phase4Plan Pg = P;
+                planning::JointPick(&Pg);
+                double greedy = 0;
+                for (int a = 0; a < 2; ++a) {
+                    if (Pg.joint[a] < 0) continue;
+                    for (int j = 0; j < in.Tasks(); ++j)
+                        if (view[size_t(a)][size_t(j)] == Pg.joint[a]) greedy += planning::PathScore(in, a, {j});
+                }
+                const double opt = in.Tasks() ? planning::TwoAgentOptimum(in) : 0.0;
+                p4_log << "{\"t_s\":" << ts << ",\"plan_ms\":" << ms << ",\"active\":[" << ag[0].active << "," << ag[1].active
+                       << "],\"linked\":" << linked << ",\"options\":[" << P.agents[0].nbv.options.size() << ","
+                       << P.agents[1].nbv.options.size() << "],\"event\":{\"method\":\"" << P.allocation.method
+                       << "\",\"trigger\":\"" << P.allocation.trigger << "\",\"rounds\":" << P.allocation.rounds
+                       << ",\"messages\":" << P.allocation.messages << ",\"bytes\":" << P.allocation.bytes << "},\"tasks\":"
+                       << in.Tasks() << ",\"cbba\":{\"total\":" << cb.total << ",\"rounds\":" << cb.rounds << ",\"messages\":"
+                       << cb.messages << ",\"bytes\":" << cb.bytes << "},\"sga\":" << sg.total << ",\"greedy\":" << greedy
+                       << ",\"optimum\":" << opt << ",\"cbba_eq_sga\":" << (cb.winner == sg.winner) << ",\"joint\":[";
+                for (int a = 0; a < 2; ++a) {
+                    const int i = P.joint[a];
+                    p4_log << (a ? "," : "");
+                    if (i < 0) {
+                        p4_log << "null";
+                        continue;
+                    }
+                    const auto& o = P.agents[a].nbv.options[size_t(i)];
+                    p4_log << "{\"src\":\"" << char(o.source) << "\",\"task_id\":" << o.task_id << ",\"goal\":["
+                           << o.goal_xy.first << "," << o.goal_xy.second << "]}";
+                }
+                p4_log << "]}\n";
+            }
             if (nbv_on) {
                 const planning::CoarseLayer coarse_now = planning::BuildCoarse(map);
                 for (int a = 0; a < 2; ++a) {
@@ -320,7 +400,7 @@ int main(int argc, char** argv) {
         };
         int64_t next_replan = kfs.front().t_ns + int64_t(cfg["replan_period_s"].as<double>() * 1e9);
         for (const auto& k : kfs) {
-            while ((egress_on || nbv_on) && k.t_ns >= next_replan) {
+            while ((egress_on || nbv_on || phase4_on) && k.t_ns >= next_replan) {
                 Replan(next_replan, false);
                 next_replan += int64_t(cfg["replan_period_s"].as<double>() * 1e9);
             }
@@ -335,7 +415,7 @@ int main(int argc, char** argv) {
             }
             Integrate(k);
         }
-        if (egress_on || nbv_on) Replan(kfs.back().t_ns, true);
+        if (egress_on || nbv_on || phase4_on) Replan(kfs.back().t_ns, true);
 
         // --- slab on the briefing grid (1.8's rule, same band) -------------------------------------------------------
         const int zv0 = int(std::floor(z_lo / tp.voxel)), zv1 = int(std::floor(z_hi / tp.voxel));
@@ -458,6 +538,7 @@ int main(int argc, char** argv) {
             << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
             << "risk_terms: {" << risk_where << "}\n";
         res << "known_weights: {" << wq << "}   # NBV_4.3 §3 entropy-saturation check\n";
+        if (phase4_on) res << "phase4: {replans: " << s_p4.ms.size() << ", plan_ms: {mean: " << s_p4.Mean() << ", p95: " << s_p4.Pct(0.95) << "}}\n";
         if (nbv_on) res << "nbv: {replans_x_agents: " << s_nbv.ms.size() << ", ms: {mean: " << s_nbv.Mean() << ", p95: " << s_nbv.Pct(0.95) << "}}\n";
         if (egress_on) {
             // §7 range check (no GT): support along the final route. Flat (spread < 0.1) => the band fallback.

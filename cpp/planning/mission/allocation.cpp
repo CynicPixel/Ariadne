@@ -161,8 +161,10 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
     std::vector<AgentState> st(static_cast<size_t>(U));
     for (auto& a : st) a.y.assign(size_t(N), 0), a.z.assign(size_t(N), -1), a.s.assign(size_t(U), 0);
     Allocation out;
-    int stable = 0;
     for (int t = 1; t <= prm.max_rounds; ++t) {
+        // Converged = a whole round (build, exchange, release) in which no agent's y, z or bundle changed. Agreement
+        // across agents is NOT required: agents in different components (a disconnected link) cannot agree.
+        std::vector<AgentState> before = st;
         for (int i = 0; i < U; ++i) BuildBundle(in, i, &st[size_t(i)]);
         const auto G = graph(t);
         std::vector<CbbaMessage> snap(static_cast<size_t>(U));
@@ -170,11 +172,8 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
             snap[size_t(k)].sender = k, snap[size_t(k)].task_ids = in.task_ids;
             snap[size_t(k)].y = st[size_t(k)].y, snap[size_t(k)].z = st[size_t(k)].z, snap[size_t(k)].s = st[size_t(k)].s;
         }
-        bool changed = false;
         for (int i = 0; i < U; ++i) {
             AgentState& me = st[size_t(i)];
-            const std::vector<double> y0 = me.y;
-            const std::vector<int> z0 = me.z;
             for (int k = 0; k < U; ++k) {
                 if (k == i || !G[size_t(i)][size_t(k)]) continue;
                 const CbbaMessage& m = snap[size_t(k)];
@@ -204,14 +203,13 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
             }
             me.s = s_new;
             out.tail_releases += Release(i, &me);
-            changed |= me.y != y0 || me.z != z0;
         }
         out.rounds = t;
-        // Converged: every agent agrees on (y, z), and a round passed with no change.
-        bool agree = true;
-        for (int i = 1; i < U && agree; ++i) agree = st[size_t(i)].z == st[0].z && st[size_t(i)].y == st[0].y;
-        stable = (!changed && agree) ? stable + 1 : 0;
-        if (stable >= 1) {
+        bool changed = false;
+        for (int i = 0; i < U && !changed; ++i)
+            changed = st[size_t(i)].y != before[size_t(i)].y || st[size_t(i)].z != before[size_t(i)].z ||
+                      st[size_t(i)].b != before[size_t(i)].b;
+        if (!changed) {
             out.converged = true;
             break;
         }

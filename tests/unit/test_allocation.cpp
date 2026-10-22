@@ -276,3 +276,14 @@ TEST(Cbba, WireBytesAtTheSerializer) {
     EXPECT_EQ(c.bytes, c.messages * one) << "every message has the same shape here";
     std::printf("[cbba] TASK_CONSENSUS wire bytes for 6 tasks, 2 agents: %zu (test codec %zu)\n", one, TestCodecBytes(m));
 }
+
+TEST(Cbba, ConvergesWithoutAgreementAcrossComponents) {
+    // Two agents with no link: each converges on its own view (a disconnected fleet cannot agree); rounds stay small.
+    std::mt19937 rng(11);
+    const AuctionInstance in = RandomInstance(rng, 2, 5, 1);
+    const std::vector<std::vector<int>> none = {{0, 0}, {0, 0}};
+    const Allocation c = RunCbba(in, [&](int) { return none; }, CbbaParams{});
+    EXPECT_TRUE(c.converged);
+    EXPECT_LE(c.rounds, 2);
+    EXPECT_EQ(c.messages, 0u);
+}
