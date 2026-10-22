@@ -1,0 +1,9 @@
+=== 2026-10-22T19:35:48Z 0 host
+=== 2026-10-22T19:35:48Z 1 docker + image
+=== 2026-10-22T19:36:19Z 2 fetch EuRoC
+=== 2026-10-22T19:40:44Z 3 build
+build_seconds 83
+=== 2026-10-22T19:42:29Z 4 flights (PAR=2)
+=== 2026-10-22T19:57:42Z 5 collect
+flights_ok 11
+=== 2026-10-22T19:57:42Z done

@@ -3045,3 +3045,58 @@ the decision". So D88's choice of EuRoC as the primary is reverted.
 - ablation matrix: the 5.6 row names the 5 sequences and the 3 EuRoC flights;
 - benchmark config: a 5.6 config;
 - manifest: the dataset name plus the Zenodo file md5 (the record ships `checksum.md5`).
+
+## 2026-10-23 — D87: the full-system EuRoC run (11 flights, loops on) on AWS; the loop FIFO deadlock found and fixed
+
+**Run.** `infra/eval/euroc_full.sh` via `spinup.sh --profile cpux86`: a fresh c7i.4xlarge spot instance with the
+dev image from ECR (`sha256:04d8a7c5…`).
+- EuRoC is fetched from ETH; all 11 sha256 match the local provenance.
+- A clean build, then two flights at a time on disjoint 8-CPU sets (8 OpenCV threads each, as locally).
+- Configs `euroc_v2` (perception) and `euroc_v2_loops` (slam).
+- Metric: keyframe-refined ATE (D57).
+- Evidence: `evaluation/runs/2.6/euroc_full_aws/` (run 1 at d4a8a9c, run 2 at 36709eb).
+- Cost: $0.015 (failed attempt) + $0.049 + $0.044.
+
+**Determinism.** The VIO column reproduces D85 to 4 decimals on all 11 flights (average 0.1202) on a fresh x86 host
+with a clean build. Between runs 1 and 2, the 9 flights the fix does not touch are identical in every results.yaml
+field except timings.
+
+**Bug (run 1).** MH_04 and MH_05 closed 0 loops: about 1000 verified candidates each, `events: 0`,
+`unprocessed_at_end` about 350.
+- **Cause:**
+  - Before inertial init, the VO skips the window solve when no keyframe is free or landmarks are too few. Each
+    skip loses that exit edge.
+  - So the loop mirror (seeded by the first final odometry edge) starts at keyframe 33 on MH_04 and 77 on MH_05.
+  - A gap after the anchor would throw in `Sync`, so these are startup prefixes only.
+  - Both flights start and end in the same place, so the first candidates point into the prefix. They never become
+    `Ready`, and `Drain`'s FIFO waited on them for the rest of the run.
+- **Fix (36709eb):**
+  - `LoopBackend::Unreachable(k)` = seeded ∧ k < anchor ∧ not mirrored, which is exact for the reason above.
+  - `Drain` drops those candidates only (the query's others still run) and counts them (`unmirrorable`,
+    `mirror_anchor_kf` in results.yaml).
+  - Unit test `LoopBackend.KeyframesBeforeTheAnchorAreUnreachable`.
+- **Not done, registered (2.4 row, owner M):** the VO-side prefix itself. An uninformative bridge edge would let PCM
+  pass almost any pair spanning it. The same chain feeds the 3.2 broker.
+
+**Result (run 2, keyframe-refined ATE in m):**
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 | avg |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| VIO (loops off) | 0.068 | 0.044 | 0.099 | 0.223 | 0.140 | 0.054 | 0.047 | 0.329 | 0.039 | 0.110 | 0.169 | 0.120 |
+| **full system (loops on)** | **0.021** | **0.028** | **0.033** | **0.046** | **0.044** | 0.038 | 0.027 | 0.288 | **0.030** | 0.071 | 0.097 | **0.066** |
+| ORB-SLAM3 (T-RO 2021 Table II) | 0.036 | 0.033 | 0.035 | 0.051 | 0.082 | 0.038 | 0.014 | 0.024 | 0.032 | 0.014 | 0.024 | 0.035 |
+| class worst (PHASE2_PLAN) | 0.166 | 0.152 | 0.125 | 0.280 | 0.284 | 0.076 | 0.110 | 0.120 | 0.070 | 0.100 | 0.190 | 0.138 |
+
+- **MH_04 and MH_05 after the fix:**
+  - MH_04: 272 events, 408 candidates dropped as unmirrorable, 0 bad loops among the GNC inliers.
+  - MH_05: 155 events, 536 dropped, 0 bad inliers.
+- **The statement, exact:**
+  - The full system is at or better than ORB-SLAM3 on 7/11 flights (all five MH, V1_01 and V2_01).
+  - The average is 0.066: between BASALT (0.051, VIO, 10 flights) and Kimera (0.119); not at ORB-SLAM3 (0.035).
+  - It is in the stereo-inertial class on 10/11 flights.
+  - V1_03 is the outlier: 0.288, 12× ORB-SLAM3. Without it the average is 0.043.
+  - V1_02, V2_02 and V2_03 are 2–5× ORB-SLAM3.
+  - All are single runs, seed 1.
+- **What this changes:**
+  - D86 item 1's "owed" run is done. The SOTA comparison is stated as above, not as parity.
+  - V1_03 stays the 5.x regression case (D86, D89).
