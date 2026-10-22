@@ -697,15 +697,14 @@ int main(int argc, char** argv) {
                 cj.precision(6);
                 cj << "[";
                 for (size_t i = 0; i < ao.options.size(); ++i) {
-                    const auto& c = ao.options[i].c;
-                    const double r = ao.options[i].risk;
-                    pd.cands.push_back(c);
+                    const auto& t = ao.options[i];   // the seam's fields only (A1's TaskCandidate names)
+                    const double r = t.risk;
+                    pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
-                    const auto [gx, gy] = brief.CellCentre(c.goal);
-                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << c.cluster << ",\"path_m\":"
-                       << c.path_cells * brief.gs.cell << ",\"goal_xy_m\":" << Xy(gx, gy) << ",\"standoff_m\":"
-                       << c.standoff_m << ",\"centroid_xy_m\":" << Xy(c.centroid_x, c.centroid_y) << ",\"cells\":"
-                       << c.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << ao.options[i].risk_reason
+                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << t.task_id << ",\"path_m\":"
+                       << t.path_m << ",\"goal_xy_m\":" << Xy(t.goal_xy.first, t.goal_xy.second) << ",\"standoff_m\":"
+                       << t.standoff_m << ",\"centroid_xy_m\":" << Xy(t.centroid_xy.first, t.centroid_xy.second)
+                       << ",\"cells\":" << t.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << t.risk_reason
                        << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false") << "}";
                 }
                 cj << "]";
@@ -729,7 +728,7 @@ int main(int argc, char** argv) {
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
             int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
             std::string choice[2];
-            const auto other_cluster = [&](int k, int taken) { return planner.OtherCluster(plan_out, k, taken); };
+            const auto other_cluster = [&](int k, int64_t taken) { return planner.OtherCluster(plan_out, k, taken); };
             const auto cluster_of = [&](int k, int i) { return live::PlaceholderPlanner::ClusterOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
                 for (auto& c : choice) c = ",\"choice\":{\"source\":\"classical\"}";

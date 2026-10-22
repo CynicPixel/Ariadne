@@ -46,10 +46,18 @@ struct PlanContext {
     std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
 };
 
+/// What the runtime reads of a task option. Field names follow A1's planning::TaskCandidate
+/// (cpp/planning/mission/task_candidate.hpp, feat/ph4-mission e2e538d), so A1's adapter is a field copy.
 struct TaskOption {
-    mis::Candidate c;
-    double risk = 0;          // §23, in [0, 1]
+    int64_t task_id = -1;                 // stable task identity (exactly-once); placeholder: the frontier cluster id
+    std::pair<double, double> goal_xy{};  // world metres
+    double goal_yaw = 0;                  // facing the task (radians)
+    double path_m = 0, standoff_m = 0;
+    std::pair<double, double> centroid_xy{};
+    int cells = 0;                        // information proxy
+    double risk = 0;                      // §23, in [0, 1]
     std::string risk_reason;
+    mis::Candidate c;                     // PlaceholderPlanner's own (grid cell goal for Route); not read by the runtime
 };
 
 struct AgentOptions {
@@ -209,6 +217,13 @@ public:
                 }
                 TaskOption o;
                 o.c = c;
+                o.task_id = c.cluster;
+                o.goal_xy = b_.CellCentre(c.goal);
+                o.goal_yaw = std::atan2(c.centroid_y - o.goal_xy.second, c.centroid_x - o.goal_xy.first);
+                o.path_m = c.path_cells * b_.gs.cell;
+                o.standoff_m = c.standoff_m;
+                o.centroid_xy = {c.centroid_x, c.centroid_y};
+                o.cells = c.cells;
                 o.risk = std::isfinite(bott) ? std::clamp((rho_r - bott) / (rho_r - rho_a), 0.0, 1.0) : 0.0;
                 std::ostringstream why;
                 why.precision(3);
@@ -239,12 +254,12 @@ public:
         return {path, yaw};
     }
 
-    static int ClusterOf(const PlanOutput& p, int k, int i) { return i >= 0 ? p.agents[k].options[size_t(i)].c.cluster : -1; }
-    /// The nearest option of agent k at or below the threshold whose cluster is not `taken`; -1 if none.
-    int OtherCluster(const PlanOutput& p, int k, int taken) const {
+    static int64_t ClusterOf(const PlanOutput& p, int k, int i) { return i >= 0 ? p.agents[k].options[size_t(i)].task_id : -1; }
+    /// The nearest option of agent k at or below the threshold whose task is not `taken`; -1 if none (A1: OtherTask).
+    int OtherCluster(const PlanOutput& p, int k, int64_t taken) const {
         const auto& v = p.agents[k].options;
         for (size_t i = 0; i < v.size(); ++i) {
-            if (v[i].risk <= p_.autonomous_threshold && v[i].c.cluster != taken) return int(i);
+            if (v[i].risk <= p_.autonomous_threshold && v[i].task_id != taken) return int(i);
         }
         return -1;
     }
