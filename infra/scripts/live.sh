@@ -9,6 +9,8 @@
 #                                                  ARIADNE_LOCKSTEP=1: lockstep (D165), recorded in the run's config
 #                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: A1's Phase 4
 #                                                  planner (copied into the run as planner_config.yaml; replay uses it)
+#                                                  ARIADNE_SHADOW_MAP_CONFIG=configs/mission/mission_v2.yaml: a Phase 4
+#                                                  TSDF on the same keyframes -> snapshots/p4slab_<ms>.png (any planner)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
@@ -109,6 +111,10 @@ cmd_run() {
     cp "$REPO_ROOT/$ARIADNE_PLANNER_CONFIG" "$REPO_ROOT/$run/planner_config.yaml"
     planner=(--planner-config "$run/planner_config.yaml")
   fi
+  if [ -n "${ARIADNE_SHADOW_MAP_CONFIG:-}" ]; then   # one map for every row (snapshots/p4slab_<ms>.png)
+    cp "$REPO_ROOT/$ARIADNE_SHADOW_MAP_CONFIG" "$REPO_ROOT/$run/shadow_map_config.yaml"
+    planner+=(--shadow-map-config "$run/shadow_map_config.yaml")
+  fi
   trap 'stop_mine' EXIT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, config $live_cfg, render: $(render_args | cut -d' ' -f1-2)"
@@ -194,6 +200,7 @@ cmd_replay() {
   local extra=(--directives "$run/$live_dir/directives.jsonl")
   grep -q '^chooser: *llm' "$REPO_ROOT/$cfg" && extra+=(--decisions "$run/$live_dir/trace.jsonl")
   [ -f "$REPO_ROOT/$run/planner_config.yaml" ] && extra+=(--planner-config "$run/planner_config.yaml")
+  [ -f "$REPO_ROOT/$run/shadow_map_config.yaml" ] && extra+=(--shadow-map-config "$run/shadow_map_config.yaml")
   for i in 1 2; do
     docker run --rm --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
       --scene "$scene" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \

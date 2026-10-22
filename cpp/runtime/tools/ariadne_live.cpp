@@ -235,7 +235,7 @@ std::string JsonEscape(const std::string& s) {
 int main(int argc, char** argv) {
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
-            directives_path, planner_cfg_path;
+            directives_path, planner_cfg_path, shadow_cfg_path;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -253,6 +253,7 @@ int main(int argc, char** argv) {
             else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
             else if (k == "--directives") directives_path = v;      // replay: the live run's directives.jsonl
             else if (k == "--planner-config") planner_cfg_path = v;  // A1's Phase 4 planner (mission_v2.yaml); else 1.8
+            else if (k == "--shadow-map-config") shadow_cfg_path = v;   // one map for every row: p4slab snapshots
             else if (k == "--seed") va.seed = std::stoull(v);
             else throw std::invalid_argument("unknown argument " + k);
         }
@@ -287,6 +288,19 @@ int main(int argc, char** argv) {
                                                    run_seed, &policy);
             planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold);
             planner_name = "a1_phase4:" + policy;
+        }
+        // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
+        // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
+        // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
+        std::unique_ptr<planning::Phase4Planner> shadow;
+        planning::TravParams shadow_trav;
+        planning::GridFrame shadow_grid;
+        if (!shadow_cfg_path.empty()) {
+            std::string unused;
+            const auto sp = live::LoadPhase4Params(shadow_cfg_path, mc, lc.refused_radius_m, lc.max_command_m, lc.escape_m, 0, &unused);
+            const auto sb = live::Phase4BriefFrom(mc, brief);
+            shadow = std::make_unique<planning::Phase4Planner>(sb, sp);
+            shadow_trav = sp.trav, shadow_grid = sb.grid;
         }
         const int64_t end_ns = int64_t(std::llround(lc.end_s * 1e9));
         const int64_t replan_ns = int64_t(std::llround(mc.replan_s * 1e9));
@@ -613,8 +627,10 @@ int main(int argc, char** argv) {
                 return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
             });
             for (const KfRec& r : batch) {
-                rays += planner->Integrate(live::KeyframeInput{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
-                                                              r.Z, r.S, r.fx, r.fy, r.cx, r.cy});
+                const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
+                                             r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
+                rays += planner->Integrate(ki);
+                if (shadow) shadow->Integrate(ki.agent, ki.t_ns, live::ToDepthFrame(ki));
                 ++integrated[r.agent];
             }
             if (is_live) {
@@ -662,6 +678,11 @@ int main(int argc, char** argv) {
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
             cv::imwrite((run_dir / snap).string(), maps.slab);
+            if (shadow) {
+                const std::string p4 = "snapshots/p4slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
+                cv::imwrite((run_dir / p4).string(),
+                            planning::ComputeTraversability(shadow->Map(), shadow->Distance(), shadow_grid, shadow_trav).slab);
+            }
             {
                 std::ostringstream o;
                 o.precision(6);
@@ -1089,7 +1110,7 @@ int main(int argc, char** argv) {
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
             << "\ncommands_decided: " << commands_sent << "\nlockstep: " << (lc.lockstep ? "true" : "false")
-            << "\nplanner: " << planner_name
+            << "\nplanner: " << planner_name << "\nshadow_map: " << (shadow ? "p4slab (Phase 4 TSDF)" : "none")
             << "\nreorder_released_on_timeout: " << reorder_timeouts
             << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
             << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";

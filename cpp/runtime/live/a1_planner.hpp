@@ -69,22 +69,36 @@ inline planning::Phase4Params LoadPhase4Params(const std::string& path, const mi
     return p;
 }
 
+/// The runtime's keyframe as Phase 4's depth frame (views into the keyframe's depth and sigma; no copy).
+inline planning::DepthFrame ToDepthFrame(const KeyframeInput& k) {
+    planning::DepthFrame f;
+    f.T_W_C = k.T_W_C;
+    f.fx = k.fx, f.fy = k.fy, f.cx = k.cx, f.cy = k.cy;
+    f.width = k.Z.cols, f.height = k.Z.rows;
+    f.depth = k.Z.ptr<float>();
+    f.sigma = k.S.empty() ? nullptr : k.S.ptr<float>();
+    f.row_stride = k.Z.step1();
+    return f;
+}
+
+/// The runtime's briefing as Phase 4's.
+inline planning::Phase4Briefing Phase4BriefFrom(const mis::MissionConfig& mc, const mis::Briefing& b) {
+    planning::Phase4Briefing pb;
+    pb.grid.ox = b.gs.origin_x, pb.grid.oy = b.gs.origin_y, pb.grid.cell = b.gs.cell;
+    pb.grid.cols = b.gs.nx, pb.grid.rows = b.gs.ny;
+    pb.target = b.target;
+    pb.entrances = b.exits;
+    pb.z_max_m = mc.z_max;
+    return pb;
+}
+
 class A1Planner : public MissionPlanner {
 public:
     A1Planner(const mis::MissionConfig& mc, const mis::Briefing& b, const planning::Phase4Params& p, std::string policy,
               double autonomous_threshold)
-        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold), planner_(Brief(mc, b), p) {}
+        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold), planner_(Phase4BriefFrom(mc, b), p) {}
 
-    size_t Integrate(const KeyframeInput& k) override {
-        planning::DepthFrame f;
-        f.T_W_C = k.T_W_C;
-        f.fx = k.fx, f.fy = k.fy, f.cx = k.cx, f.cy = k.cy;
-        f.width = k.Z.cols, f.height = k.Z.rows;
-        f.depth = k.Z.ptr<float>();
-        f.sigma = k.S.empty() ? nullptr : k.S.ptr<float>();
-        f.row_stride = k.Z.step1();
-        return planner_.Integrate(k.agent, k.t_ns, f);
-    }
+    size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
 
     PlanOutput Plan(const PlanContext& ctx) override {
         planning::Phase4AgentInput in[2];
@@ -157,15 +171,6 @@ public:
     }
 
 private:
-    static planning::Phase4Briefing Brief(const mis::MissionConfig& mc, const mis::Briefing& b) {
-        planning::Phase4Briefing pb;
-        pb.grid.ox = b.gs.origin_x, pb.grid.oy = b.gs.origin_y, pb.grid.cell = b.gs.cell;
-        pb.grid.cols = b.gs.nx, pb.grid.rows = b.gs.ny;
-        pb.target = b.target;
-        pb.entrances = b.exits;
-        pb.z_max_m = mc.z_max;
-        return pb;
-    }
     mis::Briefing b_;
     std::string policy_;
     double threshold_;
