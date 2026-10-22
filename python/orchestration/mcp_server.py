@@ -1,0 +1,152 @@
+"""The MCP tool surface over Ariadne's deterministic core (design AGENTIC_7 §0, D157; arch §25.2). mcp 2.3.0, stdio.
+
+  python -m orchestration.mcp_server DECISION_DIR [--text-only]
+
+One decision request per replan covers both agents (§0 change 1, Co-NavGPT's joint assignment). ariadne_live writes it
+to DECISION_DIR/<decision_id>.json: per agent the map facts built from keyframe depth, the estimator's state and the
+candidate set the planner proved reachable (with the deterministic §23 risk); the egress route at rho_responder; the
+paths of the images it rendered with OpenCV. Every tool is a view of that request, plus two actions:
+request_human_approval (§23) and assign (the decision). The LLM computes nothing numeric and cannot add a candidate
+(§25.1); assign only records indices, which the C++ runtime validates again.
+
+--text-only drops observe_image: the fallback model (DeepSeek V3.2 on Bedrock) accepts TEXT input only (checked with
+bedrock get-foundation-model, 2026-10-23). Not exposed (no capability in this loop yet; not stubbed): estimate_pose,
+compute_depth, retrieve_place_candidates, verify_loop, request_peer_observation, allocate_task, request_rendezvous.
+"""
+from __future__ import annotations
+
+import json
+import sys
+import time
+from pathlib import Path
+
+from mcp.server.mcpserver import Image, MCPServer
+
+DIR = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(".")
+TEXT_ONLY = "--text-only" in sys.argv
+APPROVAL_TIMEOUT_S = 60.0   # ariadne_live's llm.timeout_s must exceed this plus model latency (live config)
+server = MCPServer("ariadne-core", instructions=(
+    "Ariadne mission tools. Every value comes from the deterministic perception/SLAM/planning core at this replan. "
+    "Inspect with the query tools, then call assign exactly once with one candidate per agent. A candidate whose "
+    "risk exceeds the threshold needs request_human_approval first."))
+
+
+def _req(decision_id: str) -> dict:
+    p = DIR / f"{decision_id}.json"
+    if not p.exists():
+        raise ValueError(f"unknown decision_id {decision_id!r}")
+    return json.loads(p.read_text())
+
+
+def _agent(r: dict, agent: int) -> dict:
+    for a in r["agents"]:
+        if a["agent"] == agent:
+            return a
+    raise ValueError(f"agent {agent} has no decision at this replan")
+
+
+@server.tool(description="Map facts for one agent at this replan, built from keyframe stereo depth: observed free, "
+                         "occupied and unknown cell counts, frontier clusters, keyframes integrated, the agent's "
+                         "estimated position.")
+def observe_map(decision_id: str, agent: int) -> dict:
+    return _agent(_req(decision_id), agent)["vision"]
+
+
+if not TEXT_ONLY:
+    @server.tool(description="Look at an image. what='map': the shared map rendered from keyframe depth (white = "
+                             "observed free, black = occupied, grey = unknown; blue line = responder egress route; "
+                             "circles = agents; labels aN:cK = agent N's candidate K). what='keyframe': the agent's "
+                             "latest camera keyframe (left camera, rectified).")
+    def observe_image(decision_id: str, what: str, agent: int = 0) -> Image:
+        r = _req(decision_id)
+        if what == "map":
+            return Image(path=r["map_png"])
+        if what == "keyframe":
+            p = _agent(r, agent).get("keyframe_png")
+            if not p:
+                raise ValueError(f"agent {agent} has no keyframe yet")
+            return Image(path=p)
+        raise ValueError("what must be 'map' or 'keyframe'")
+
+
+@server.tool(description="One agent's visual odometry state: frames, keyframes, and seconds since the last keyframe. "
+                         "Few keyframes or a long gap mean a less certain pose.")
+def query_uncertainty(decision_id: str, agent: int) -> dict:
+    return _agent(_req(decision_id), agent)["estimator"]
+
+
+@server.tool(description="The egress route for a human responder (0.40 m clearance) on the current map: found or "
+                         "not, length, which exit. Exploration that finds this route serves the mission.")
+def query_route(decision_id: str) -> dict:
+    return _req(decision_id)["egress"]
+
+
+@server.tool(description="Both agents' candidate actions, computed by the deterministic planner: frontier clusters "
+                         "reachable at the agent's clearance, each with cluster id, path length, cluster size (unknown "
+                         "boundary seen: an information proxy), risk in [0,1] with its reason, and whether it needs "
+                         "human approval. Candidate -1 means hold. `classical_choice` is what the classical planner "
+                         "would pick. Do not send both agents to the same cluster when another one is available.")
+def list_candidates(decision_id: str) -> dict:
+    r = _req(decision_id)
+    return {"autonomous_threshold": r["autonomous_threshold"],
+            "agents": [{"agent": a["agent"], "candidates": a["candidates"], "classical_choice": a["classical_choice"]}
+                       for a in r["agents"]]}
+
+
+@server.tool(description="Ask the human operator to approve one agent's candidate whose risk exceeds the autonomous "
+                         "threshold (§23). Blocks until the operator answers or the request times out. Returns the "
+                         "verdict (approved, rejected or timeout) and the approval_id to pass to assign.")
+def request_human_approval(decision_id: str, agent: int, candidate: int, reason: str) -> dict:
+    r = _req(decision_id)
+    a = _agent(r, agent)
+    if not 0 <= candidate < len(a["candidates"]):
+        return {"verdict": "invalid", "detail": "candidate index out of range"}
+    aid = f"{decision_id}-a{agent}-c{candidate}"
+    adir = Path(r["approvals_dir"])
+    adir.mkdir(parents=True, exist_ok=True)
+    c = a["candidates"][candidate]
+    alt = a["classical_choice"]
+    packet = {  # §23 HUMAN_APPROVAL_REQUEST
+        "approval_id": aid, "decision_id": decision_id, "t_s": r["t_s"], "agent": agent,
+        "map_snapshot": r["map_png"], "agent_position_xy_m": a["vision"].get("agent_xy_m"),
+        "intended_action": {"candidate": candidate, "cluster": c["cluster"], "goal_xy_m": c["goal_xy_m"],
+                            "path_m": c["path_m"]},
+        "evidence": {"cluster_cells": c["cells"], "standoff_m": c["standoff_m"], "keyframe": a.get("keyframe_png")},
+        "uncertainty": a["estimator"], "predicted_benefit": f"{c['cells']} frontier cells",
+        "risk_score": c["risk"], "risk_reason": c["risk_reason"],
+        "alternative_action": {"candidate": alt} if alt >= 0 else {"hold": True},
+        "orchestrator_reason": reason, "requested_unix_s": time.time()}
+    (adir / f"{aid}.request.json").write_text(json.dumps(packet, indent=1))
+    deadline = time.time() + APPROVAL_TIMEOUT_S
+    while time.time() < deadline:
+        v = adir / f"{aid}.json"
+        if v.exists():
+            d = json.loads(v.read_text())
+            return {"approval_id": aid, "verdict": d.get("verdict"), "operator": d.get("operator")}
+        time.sleep(0.5)
+    return {"approval_id": aid, "verdict": "timeout"}
+
+
+@server.tool(description="The decision: one entry per agent, {agent, candidate (-1 = hold), reason, approval_id "
+                         "(only for a candidate that needed approval)}. Call exactly once, last.")
+def assign(decision_id: str, assignments: list[dict]) -> dict:
+    r = _req(decision_id)
+    agents = {a["agent"]: a for a in r["agents"]}
+    seen, clean = set(), []
+    for e in assignments:
+        k, c = int(e.get("agent", -9)), int(e.get("candidate", -9))
+        if k not in agents or k in seen:
+            return {"recorded": False, "detail": f"agent {k} is not decided at this replan, or is listed twice"}
+        if not -1 <= c < len(agents[k]["candidates"]):
+            return {"recorded": False, "detail": f"agent {k}: candidate {c} is out of range; assign again"}
+        seen.add(k)
+        clean.append({"agent": k, "candidate": c, "reason": str(e.get("reason", ""))[:300],
+                      "approval_id": str(e.get("approval_id", ""))})
+    if seen != set(agents):
+        return {"recorded": False, "detail": f"assign every agent: {sorted(agents)}"}
+    (DIR / f"{decision_id}.choice.json").write_text(json.dumps({"assignments": clean}))
+    return {"recorded": True}
+
+
+if __name__ == "__main__":
+    server.run("stdio")

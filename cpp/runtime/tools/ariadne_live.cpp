@@ -55,6 +55,8 @@ struct LiveConfig {
     std::string name, chooser;
     double end_s = 0, max_command_m = 0, eps_cells = 1, telemetry_hz = 5, min_goal_m = 0, escape_m = 0,
            max_standoff_m = 0, refused_radius_m = 0;
+    double autonomous_threshold = 1.01;   // §23 risk gate (AGENTIC_7 D158); > 1 = no gate
+    double llm_timeout_s = 0;              // chooser llm: wall seconds to wait for the orchestrator
     bool face_frontier = true;
     int hold_back_ms = 3000;
 };
@@ -74,7 +76,9 @@ LiveConfig LoadLive(const std::string& path) {
     c.refused_radius_m = n["command"]["refused_radius_m"].as<double>();
     c.hold_back_ms = n["reorder"]["hold_back_ms"].as<int>();
     c.telemetry_hz = n["telemetry_hz"].as<double>();
-    if (c.chooser != "classical") throw std::invalid_argument("live config: chooser must be classical (7.1 adds more)");
+    if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
+    c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
+    if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
     if (!(c.end_s > 0) || !(c.max_command_m > 0) || !(c.telemetry_hz > 0)) throw std::invalid_argument("live config: bad values");
     return c;
 }
@@ -103,6 +107,8 @@ struct AgentLane {
     std::mutex mu;
     std::deque<KfRec> kfs;                               // delivered by the VO thread, consumed by the mission
     std::vector<std::pair<int64_t, core::SE3>> cams;     // every frame's T_O_C (rectified left camera)
+    std::vector<int64_t> kf_times;                       // every keyframe's stamp (estimator facts for the chooser)
+    cv::Mat last_rgb;                                    // the latest keyframe's rectified RGB (observe_image)
     int64_t progress = -1;                               // stamp of the last frame the estimator finished
     bool done = false;
     size_t frames = 0, keyframes = 0, unpaired = 0;
@@ -171,11 +177,96 @@ std::vector<std::pair<double, double>> CommandPath(const mis::Briefing& b, const
     return out;
 }
 
+/// chooser: llm, live (AGENTIC_7 D156): one JSON line per decision request to the orchestrator's Unix socket; answers
+/// come back as JSON lines keyed by decision_id, in any order.
+class ChooserLink {
+public:
+    explicit ChooserLink(const std::string& path) : fd_(live::Connect(path, std::chrono::seconds(60))) {
+        reader_ = std::thread([this] {
+            std::string buf;
+            char tmp[4096];
+            for (;;) {
+                const ssize_t n = ::recv(fd_, tmp, sizeof tmp, 0);
+                if (n <= 0) break;
+                buf.append(tmp, size_t(n));
+                size_t nl;
+                while ((nl = buf.find('\n')) != std::string::npos) {
+                    std::string line = buf.substr(0, nl);
+                    buf.erase(0, nl + 1);
+                    try {
+                        const std::string id = YAML::Load(line)["decision_id"].as<std::string>();
+                        std::lock_guard<std::mutex> lk(mu_);
+                        answers_[id] = std::move(line);
+                    } catch (const std::exception&) {
+                    }
+                    cv_.notify_all();
+                }
+            }
+            std::lock_guard<std::mutex> lk(mu_);
+            closed_ = true;
+            cv_.notify_all();
+        });
+    }
+    ~ChooserLink() {
+        ::shutdown(fd_, SHUT_RDWR);
+        reader_.join();
+        ::close(fd_);
+    }
+    void Send(const std::string& line) {
+        const std::string l = line + "\n";
+        if (::send(fd_, l.data(), l.size(), MSG_NOSIGNAL) != ssize_t(l.size())) throw std::runtime_error("chooser: send");
+    }
+    /// The raw answer line, or "" on timeout / closed link.
+    std::string Wait(const std::string& id, std::chrono::steady_clock::time_point until) {
+        std::unique_lock<std::mutex> lk(mu_);
+        cv_.wait_until(lk, until, [&] { return answers_.count(id) || closed_; });
+        const auto it = answers_.find(id);
+        return it == answers_.end() ? "" : it->second;
+    }
+
+private:
+    int fd_;
+    std::thread reader_;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    std::map<std::string, std::string> answers_;
+    bool closed_ = false;
+};
+
+/// chooser: llm, replay (AGENTIC_7 D161): the live trace's choices, keyed by (t_s text, agent): the chosen index and the
+/// raw `"choice":{...}` tail, re-emitted verbatim. The model is never called in replay.
+std::map<std::pair<std::string, int>, std::pair<int, std::string>> LoadRecordedChoices(const std::string& trace) {
+    std::map<std::pair<std::string, int>, std::pair<int, std::string>> out;
+    std::ifstream f(trace);
+    if (!f) throw std::runtime_error("replay: cannot open the live trace " + trace);
+    std::string line;
+    while (std::getline(f, line)) {
+        const YAML::Node n = YAML::Load(line);
+        if (!n["choice"]) continue;
+        const auto p = line.find(",\"choice\":");
+        std::ostringstream t;
+        t.precision(10);
+        t << n["t_s"].as<double>();
+        out[{t.str(), n["agent"].as<int>()}] = {n["chosen"].as<int>(), line.substr(p, line.size() - 1 - p)};
+    }
+    return out;
+}
+
+std::string JsonEscape(const std::string& s) {
+    std::string o;
+    for (char ch : s) {
+        if (ch == '"' || ch == '\\') o += '\\';
+        if (ch == '\n') o += "\\n";
+        else o += ch;
+    }
+    return o;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
-        std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path;
+        std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -189,6 +280,8 @@ int main(int argc, char** argv) {
             else if (k == "--out") out = v;
             else if (k == "--link") link_path = v;
             else if (k == "--replay") replay_path = v;
+            else if (k == "--chooser-socket") chooser_socket = v;   // chooser llm, live
+            else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
             else if (k == "--seed") va.seed = std::stoull(v);
             else throw std::invalid_argument("unknown argument " + k);
         }
@@ -199,6 +292,11 @@ int main(int argc, char** argv) {
         }
         const bool is_live = !link_path.empty();
         const LiveConfig lc = LoadLive(live_cfg_path);
+        if (lc.chooser == "llm" && is_live && chooser_socket.empty()) throw std::invalid_argument("chooser llm needs --chooser-socket");
+        if (lc.chooser == "llm" && !is_live && decisions_path.empty() == chooser_socket.empty())
+            throw std::invalid_argument("chooser llm replay needs --decisions (the live trace) or --chooser-socket (a test)");
+        const auto recorded = lc.chooser == "llm" && !decisions_path.empty() ? LoadRecordedChoices(decisions_path)
+                                                              : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
         const mis::Briefing brief = mis::LoadBriefing(scene, mc, 2, "live");
         mis::FrontierMap map(mc, brief);
@@ -396,6 +494,8 @@ int main(int argc, char** argv) {
                     r.cx = 0.5 * (b.K.cx + 0.5) - 0.5;
                     r.cy = 0.5 * (b.K.cy + 0.5) - 0.5;
                     std::lock_guard<std::mutex> lk(L.mu);
+                    L.kf_times.push_back(r.t_ns);
+                    L.last_rgb = b.rgb.clone();
                     L.kfs.push_back(std::move(r));
                     ++L.keyframes;
                 };
@@ -435,6 +535,11 @@ int main(int argc, char** argv) {
         }
 
         // --- the mission: barrier -> integrate -> replan -> candidates -> choose -> command ----------------------
+        std::unique_ptr<ChooserLink> chooser;
+        if (lc.chooser == "llm" && !chooser_socket.empty()) {   // live; or replay against a test orchestrator
+            fs::create_directories(run_dir / "approvals");
+            chooser = std::make_unique<ChooserLink>(chooser_socket);
+        }
         int replans = 0, commands_sent = 0, answer_timeouts = 0;
         size_t integrated[2] = {0, 0}, rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
@@ -501,6 +606,21 @@ int main(int argc, char** argv) {
                 telemetry.Put(o.str());
             }
             ++replans;
+            // Phase 1, per agent: the deterministic layer's candidate set, its risk (§23), the classical choice.
+            struct Pending {
+                bool active = false;
+                std::string head;                  // the trace record up to (not including) "chosen"
+                Cell ac;
+                cv::Mat plan;
+                std::vector<mis::Candidate> cands;   // ELIGIBLE only (path >= min_goal_m), nearest first
+                std::vector<double> risk;
+                int classical = -1;
+                std::string agent_json;            // this agent's part of the joint request (without the closing brace)
+            } P[2];
+            const double rho_a = mc.rho_a, rho_r = mc.rho_r;
+            const int free_cells = cv::countNonZero(maps.slab == planning::kFree),
+                      occ_cells = cv::countNonZero(maps.slab == planning::kOccupied),
+                      unknown_cells = int(maps.slab.total()) - free_cells - occ_cells;
             for (int k = 0; k < 2; ++k) {
                 std::ostringstream o;
                 o.precision(10);
@@ -510,6 +630,8 @@ int main(int argc, char** argv) {
                 // The vision-derived inputs of this decision: the map built from keyframe depth, the agent's estimate.
                 bool have_pose = false;
                 core::SE3 T_O_C;
+                size_t frames = 0, kfs = 0;
+                int64_t last_kf = -1;
                 {
                     std::lock_guard<std::mutex> lk(lanes[k].mu);
                     for (auto it = lanes[k].cams.rbegin(); it != lanes[k].cams.rend(); ++it) {
@@ -519,59 +641,266 @@ int main(int argc, char** argv) {
                             break;
                         }
                     }
+                    for (const auto& [t, Tc] : lanes[k].cams) frames += t < T;
+                    for (int64_t t : lanes[k].kf_times) {
+                        if (t < T) ++kfs, last_kf = t;
+                    }
                 }
-                o << "\"vision\":{\"keyframes_integrated\":[" << integrated[0] << "," << integrated[1] << "],\"rays\":"
-                  << rays << ",\"frontier_clusters\":" << maps.frontiers.clusters.size() << ",\"rejected_small\":"
-                  << maps.frontiers.rejected_small << ",\"egress_found\":" << (maps.egress.found ? "true" : "false");
+                std::ostringstream vision;
+                vision.precision(10);
+                vision << "{\"keyframes_integrated\":[" << integrated[0] << "," << integrated[1] << "],\"rays\":" << rays
+                       << ",\"free_cells\":" << free_cells << ",\"occupied_cells\":" << occ_cells << ",\"unknown_cells\":"
+                       << unknown_cells << ",\"frontier_clusters\":" << maps.frontiers.clusters.size()
+                       << ",\"rejected_small\":" << maps.frontiers.rejected_small << ",\"egress_found\":"
+                       << (maps.egress.found ? "true" : "false") << ",\"snapshot_png\":\"" << snap << "\"";
                 if (!have_pose) {
-                    o << "},\"result\":\"no decision: no frame yet\"}";
+                    o << "\"vision\":" << vision.str() << "},\"result\":\"no decision: no frame yet\"}";
                     trace.Put(o.str());
                     continue;
                 }
                 const core::SE3 T_W_C = brief.T_W_O[size_t(k)] * T_O_C;
                 const Cell ac = brief.ToCell(T_W_C.t.x(), T_W_C.t.y());
-                o << ",\"agent_xy_m\":" << Xy(T_W_C.t.x(), T_W_C.t.y()) << ",\"agent_cell\":[" << ac.r << "," << ac.c
-                  << "]},";
-                // Standoff candidates over the conservative plan space (D153b), minus goals the mover refused before.
-                const cv::Mat plan = map.PlanSpace(maps, ac, lc.escape_m);
-                std::vector<mis::Candidate> cands;
-                int excluded_refused = 0;
-                for (const auto& c : map.StandoffCandidates(maps, plan, ac, lc.max_standoff_m)) {
+                vision << ",\"agent_xy_m\":" << Xy(T_W_C.t.x(), T_W_C.t.y()) << ",\"agent_cell\":[" << ac.r << ","
+                       << ac.c << "]}";
+                o << "\"vision\":" << vision.str() << ",";
+                Pending& pd = P[k];
+                pd.active = true;
+                pd.ac = ac;
+                // Standoff candidates over the conservative plan space (D153b), minus goals the mover refused before,
+                // minus those nearer than min_goal_m (never presented: AGENTIC_7 review).
+                pd.plan = map.PlanSpace(maps, ac, lc.escape_m);
+                int excluded_refused = 0, excluded_near = 0;
+                for (const auto& c : map.StandoffCandidates(maps, pd.plan, ac, lc.max_standoff_m)) {
                     const auto [gx, gy] = brief.CellCentre(c.goal);
                     bool refused = false;
                     for (const auto& [ra, rg] : refused_goals) {
                         refused = refused || (ra == k && std::hypot(rg.first - gx, rg.second - gy) < lc.refused_radius_m);
                     }
                     if (refused) ++excluded_refused;
-                    else cands.push_back(c);
+                    else if (c.path_cells * brief.gs.cell < lc.min_goal_m) ++excluded_near;
+                    else pd.cands.push_back(c);
                 }
-                o << "\"candidates\":[";
-                for (size_t i = 0; i < cands.size() && i < 5; ++i) {
-                    const auto& c = cands[i];
+                // §23 risk (D158): the narrowest gap the agent cannot avoid on the way, against what a responder needs.
+                const cv::Mat B = map.Bottleneck(maps, pd.plan, ac, lc.escape_m);
+                std::ostringstream cj;
+                cj.precision(6);
+                cj << "[";
+                for (size_t i = 0; i < pd.cands.size(); ++i) {
+                    const auto& c = pd.cands[i];
+                    // The widest way to ARRIVE within escape_m of the goal: the standoff goal itself sits at rho_agent
+                    // from unknown space BY CONSTRUCTION, so its own clearance measures the placement rule, not a gap
+                    // (first check, L1 45 s recording: all 58 candidates 0.875-0.925, bottleneck = the goal cell).
+                    double bott = -1;
+                    const int rad = int(std::ceil(lc.escape_m / brief.gs.cell));
+                    for (int dy = -rad; dy <= rad; ++dy) {
+                        for (int dx = -rad; dx <= rad; ++dx) {
+                            const int y = c.goal.r + dy, x = c.goal.c + dx;
+                            if (dx * dx + dy * dy > rad * rad || y < 0 || x < 0 || y >= B.rows || x >= B.cols) continue;
+                            bott = std::max(bott, B.at<double>(y, x));
+                        }
+                    }
+                    const double r = std::isfinite(bott) ? std::clamp((rho_r - bott) / (rho_r - rho_a), 0.0, 1.0) : 0.0;
+                    pd.risk.push_back(r);
+                    if (pd.classical < 0 && r <= lc.autonomous_threshold) pd.classical = int(i);
                     const auto [gx, gy] = brief.CellCentre(c.goal);
-                    o << (i ? "," : "") << "{\"cluster\":" << c.cluster << ",\"path_m\":" << c.path_cells * brief.gs.cell
-                      << ",\"goal_xy_m\":" << Xy(gx, gy) << ",\"standoff_m\":" << c.standoff_m
-                      << ",\"centroid_xy_m\":" << Xy(c.centroid_x, c.centroid_y) << ",\"cells\":" << c.cells << "}";
+                    std::ostringstream why;
+                    why.precision(3);
+                    if (std::isfinite(bott)) why << "narrowest unavoidable gap " << bott << " m; a responder needs " << rho_r << " m";
+                    else why << "goal inside the agent's own escape disc";
+                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << c.cluster << ",\"path_m\":"
+                       << c.path_cells * brief.gs.cell << ",\"goal_xy_m\":" << Xy(gx, gy) << ",\"standoff_m\":"
+                       << c.standoff_m << ",\"centroid_xy_m\":" << Xy(c.centroid_x, c.centroid_y) << ",\"cells\":"
+                       << c.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << why.str() << "\",\"needs_approval\":"
+                       << (r > lc.autonomous_threshold ? "true" : "false") << "}";
                 }
-                o << "],\"candidates_total\":" << cands.size() << ",\"excluded_refused\":" << excluded_refused << ",";
-                // Chooser (classical): the nearest reachable cluster; none -> hold.
+                cj << "]";
+                o << "\"candidates\":" << cj.str() << ",\"candidates_total\":" << pd.cands.size()
+                  << ",\"excluded_refused\":" << excluded_refused << ",\"excluded_near\":" << excluded_near
+                  << ",\"autonomous_threshold\":" << lc.autonomous_threshold << ",\"classical_choice\":" << pd.classical
+                  << ",";
+                pd.head = o.str();
+                {
+                    std::ostringstream q;
+                    q.precision(10);
+                    q << "{\"agent\":" << k << ",\"vision\":" << vision.str() << ",\"estimator\":{\"frames\":"
+                      << frames << ",\"keyframes\":" << kfs << ",\"since_last_keyframe_s\":"
+                      << (last_kf < 0 ? -1.0 : (T - last_kf) * 1e-9) << "},\"candidates\":" << cj.str()
+                      << ",\"classical_choice\":" << pd.classical;
+                    pd.agent_json = q.str();
+                }
+            }
+            // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
+            int picks[2] = {P[0].classical, P[1].classical};
+            std::string choice[2];
+            // Exactly-once (ALGORITHMS line 1165): agent 1 does not take agent 0's cluster while another eligible one
+            // below the threshold exists. Applied to the classical pick, and to the LLM's in validation below.
+            const auto other_cluster = [&](int k, int taken_cluster) {
+                for (size_t i = 0; i < P[k].cands.size(); ++i) {
+                    if (P[k].risk[i] <= lc.autonomous_threshold && P[k].cands[i].cluster != taken_cluster) return int(i);
+                }
+                return -1;
+            };
+            const auto cluster_of = [&](int k, int i) { return i >= 0 ? P[k].cands[size_t(i)].cluster : -1; };
+            if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 &&
+                cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
+                const int alt = other_cluster(1, cluster_of(0, picks[0]));
+                if (alt >= 0) picks[1] = alt;
+            }
+            if (lc.chooser == "classical") {
+                for (auto& c : choice) c = ",\"choice\":{\"source\":\"classical\"}";
+            } else if (!is_live && chooser_socket.empty()) {
+                std::ostringstream t;
+                t.precision(10);
+                t << ts;
+                for (int k = 0; k < 2; ++k) {
+                    if (!P[k].active) continue;
+                    const auto it = recorded.find({t.str(), k});
+                    if (it == recorded.end()) throw std::runtime_error("replay: no recorded choice at t=" + t.str());
+                    picks[k] = it->second.first;
+                    choice[k] = it->second.second;
+                }
+            } else {
+                // The joint request: both agents' facts and candidates, plus the images the model may look at, all
+                // rendered here with OpenCV (the orchestrator image has no OpenCV).
+                const std::string did = "t" + std::to_string(T / 1000000) + "ms";
+                const fs::path ddir = run_dir / "decisions";
+                fs::create_directories(ddir);
+                cv::Mat img;
+                cv::Mat lut(1, 256, CV_8UC3, cv::Scalar(128, 128, 128));
+                lut.at<cv::Vec3b>(planning::kFree) = {255, 255, 255};
+                lut.at<cv::Vec3b>(planning::kOccupied) = {0, 0, 0};
+                cv::Mat slab3;
+                cv::cvtColor(maps.slab, slab3, cv::COLOR_GRAY2BGR);
+                cv::LUT(slab3, lut, img);
+                cv::flip(img, img, 0);   // row 0 = south in the grid; north up in the picture
+                const int scale = 3;
+                cv::resize(img, img, cv::Size(), scale, scale, cv::INTER_NEAREST);
+                const auto px = [&](const Cell& c) { return cv::Point(c.c * scale + scale / 2, (maps.slab.rows - 1 - c.r) * scale + scale / 2); };
+                for (size_t i = 1; i < maps.egress.cells.size(); ++i)
+                    cv::line(img, px(maps.egress.cells[i - 1]), px(maps.egress.cells[i]), {255, 80, 0}, 2);
+                const cv::Scalar col[2] = {{0, 0, 230}, {0, 160, 0}};
+                for (int k = 0; k < 2; ++k) {
+                    if (!P[k].active) continue;
+                    for (size_t i = 0; i < P[k].cands.size(); ++i) {
+                        const cv::Point g = px(P[k].cands[i].goal);
+                        cv::drawMarker(img, g, col[k], cv::MARKER_TILTED_CROSS, 10, 2);
+                        cv::putText(img, "a" + std::to_string(k) + ":c" + std::to_string(i), g + cv::Point(5, -5),
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.4, col[k], 1, cv::LINE_AA);
+                    }
+                    cv::circle(img, px(P[k].ac), 7, col[k], cv::FILLED);
+                    cv::putText(img, "agent " + std::to_string(k), px(P[k].ac) + cv::Point(9, 4), cv::FONT_HERSHEY_SIMPLEX,
+                                0.45, col[k], 1, cv::LINE_AA);
+                }
+                const fs::path map_png = fs::absolute(ddir / (did + "_map.png"));
+                cv::imwrite(map_png.string(), img);
+                std::ostringstream q;
+                q.precision(10);
+                q << "{\"decision_id\":\"" << did << "\",\"t_s\":" << ts << ",\"map_png\":\"" << map_png.string()
+                  << "\",\"egress\":{\"found\":" << (maps.egress.found ? "true" : "false") << ",\"length_m\":"
+                  << maps.egress.length_cells * brief.gs.cell << ",\"exit\":" << maps.egress.goal_index
+                  << ",\"clearance_m\":" << rho_r << "},\"autonomous_threshold\":" << lc.autonomous_threshold
+                  << ",\"approvals_dir\":\"" << fs::absolute(run_dir / "approvals").string() << "\",\"agents\":[";
+                bool first = true;
+                for (int k = 0; k < 2; ++k) {
+                    if (!P[k].active) continue;
+                    std::string kf_png;
+                    {
+                        std::lock_guard<std::mutex> lk(lanes[k].mu);
+                        if (!lanes[k].last_rgb.empty()) {
+                            kf_png = fs::absolute(ddir / (did + "_a" + std::to_string(k) + "_kf.png")).string();
+                            cv::Mat half, bgr;
+                            cv::resize(lanes[k].last_rgb, half, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+                            if (half.channels() == 3) cv::cvtColor(half, bgr, cv::COLOR_RGB2BGR);
+                            else bgr = half;
+                            cv::imwrite(kf_png, bgr);
+                        }
+                    }
+                    q << (first ? "" : ",") << P[k].agent_json << ",\"keyframe_png\":"
+                      << (kf_png.empty() ? "null" : "\"" + kf_png + "\"") << "}";
+                    first = false;
+                }
+                q << "]}";
+                chooser->Send(q.str());
+                const std::string ans = chooser->Wait(did, std::chrono::steady_clock::now() +
+                                                                std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                YAML::Node assigned;
+                std::string top_problem;
+                if (ans.empty()) {
+                    top_problem = "timeout or no orchestrator";
+                } else {
+                    try {
+                        assigned = YAML::Load(ans)["assignments"];
+                        if (!assigned || assigned.IsNull()) top_problem = "no assignment recorded";
+                    } catch (const std::exception& e) {
+                        top_problem = std::string("malformed answer: ") + e.what();
+                    }
+                }
+                // Per agent: a bad pick for one agent does not discard the other's.
+                int want[2] = {-2, -2};
+                std::string approval_id[2], validation[2], source[2], approval_raw[2];
+                for (int k = 0; k < 2; ++k) {
+                    if (!P[k].active) continue;
+                    source[k] = "orchestrator", validation[k] = "ok";
+                    if (!top_problem.empty()) {
+                        source[k] = "fallback", validation[k] = top_problem;
+                        continue;
+                    }
+                    for (const auto& e : assigned) {
+                        if (e["agent"] && e["agent"].as<int>() == k) {
+                            want[k] = e["candidate"] ? e["candidate"].as<int>() : -2;
+                            approval_id[k] = e["approval_id"] ? e["approval_id"].as<std::string>() : "";
+                        }
+                    }
+                    if (want[k] < -1 || want[k] >= int(P[k].cands.size())) {
+                        source[k] = "fallback", validation[k] = "missing or out of the candidate set";
+                    } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold) {
+                        const std::string expect = did + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
+                        std::ifstream f(run_dir / "approvals" / (expect + ".json"));
+                        approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
+                        bool approved = false;
+                        try {
+                            approved = !approval_raw[k].empty() && approval_id[k] == expect &&
+                                       YAML::Load(approval_raw[k])["verdict"].as<std::string>() == "approved";
+                        } catch (const std::exception&) {
+                        }
+                        if (!approved) source[k] = "fallback", validation[k] = "above the risk threshold without an approval";
+                    }
+                    if (source[k] == "orchestrator") picks[k] = want[k];
+                }
+                if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 && source[1] == "orchestrator" &&
+                    cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
+                    const int alt = other_cluster(1, cluster_of(0, picks[0]));
+                    if (alt >= 0) {
+                        picks[1] = alt;
+                        source[1] = "fallback", validation[1] = "same cluster as agent 0 while another was eligible";
+                    }
+                }
+                for (int k = 0; k < 2; ++k) {
+                    if (!P[k].active) continue;
+                    std::ostringstream c;
+                    c << ",\"choice\":{\"source\":\"" << source[k] << "\",\"decision_id\":\"" << did
+                      << "\",\"validation\":\"" << JsonEscape(validation[k]) << "\",\"approval\":"
+                      << (approval_raw[k].empty() ? "null" : "\"" + JsonEscape(approval_raw[k]) + "\"")
+                      << (k == 0 ? std::string(",\"answer\":") + (ans.empty() ? "null" : ans) : std::string(",\"answer\":\"see agent 0's record\""))
+                      << "}";
+                    choice[k] = c.str();
+                }
+            }
+            // Phase 3: the command for each pick (the same code for every chooser).
+            for (int k = 0; k < 2; ++k) {
+                Pending& pd = P[k];
+                if (!pd.active) continue;
+                const int pick = picks[k];
+                std::ostringstream o;
+                o.precision(10);
+                o << pd.head;
                 runtime::ros_cdr::PoseArray cmd;
                 cmd.header.stamp.sec = int32_t(T / 1000000000);
                 cmd.header.stamp.nanosec = uint32_t(T % 1000000000);
                 cmd.header.frame_id = "world";
-                std::string result = "hold";
-                // Classical chooser: the nearest candidate at least min_goal_m away (the nearest one overall is the
-                // band under the agent; live_v1.yaml).
-                int pick = -1;
-                for (size_t i = 0; i < cands.size(); ++i) {
-                    if (cands[i].path_cells * brief.gs.cell >= lc.min_goal_m) {
-                        pick = int(i);
-                        break;
-                    }
-                }
                 if (pick >= 0) {
-                    const auto& c = cands[size_t(pick)];
-                    const auto path = CommandPath(brief, plan, ac, c.goal, lc.eps_cells, lc.max_command_m);
+                    const auto& c = pd.cands[size_t(pick)];
+                    const auto path = CommandPath(brief, pd.plan, pd.ac, c.goal, lc.eps_cells, lc.max_command_m);
                     if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {
                         runtime::ros_cdr::Pose p;
@@ -584,16 +913,13 @@ int main(int argc, char** argv) {
                         const double yaw = std::atan2(c.centroid_y - last.y, c.centroid_x - last.x);
                         cmd.poses.back().orientation = {0, 0, std::sin(0.5 * yaw), std::cos(0.5 * yaw)};
                     }
-                    result = cmd.poses.empty() ? "hold" : "go";
-                    o << "\"chosen\":" << pick << ",\"min_goal_m\":" << lc.min_goal_m << ",";
-                } else {
-                    o << "\"chosen\":-1,";
                 }
-                o << "\"result\":\"" << result << "\",\"command\":{\"stamp_ns\":" << T << ",\"topic\":\""
-                  << cmd_topic.at(k) << "\",\"kind\":\""
+                const std::string result = cmd.poses.empty() ? "hold" : "go";
+                o << "\"chosen\":" << pick << ",\"min_goal_m\":" << lc.min_goal_m << ",\"result\":\"" << result
+                  << "\",\"command\":{\"stamp_ns\":" << T << ",\"topic\":\"" << cmd_topic.at(k) << "\",\"kind\":\""
                   << (cmd.poses.empty() ? "hold" : cmd.poses.size() == 1 ? "goto" : "follow") << "\",\"waypoints_xy_m\":[";
                 for (size_t i = 0; i < cmd.poses.size(); ++i) o << (i ? "," : "") << Xy(cmd.poses[i].position.x, cmd.poses[i].position.y);
-                o << "]}}";
+                o << "]}" << choice[k] << "}";
                 trace.Put(o.str());
                 telemetry.Put("{\"type\":\"decision\",\"record\":" + o.str() + "}");
                 commands.Put("{\"agent\":" + std::to_string(k) + ",\"stamp_ns\":" + std::to_string(T) + ",\"poses\":" +

@@ -28,6 +28,7 @@
 
 #include <cmath>
 #include <limits>
+#include <queue>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -127,6 +128,7 @@ inline Briefing LoadBriefing(const std::string& scene_dir, const MissionConfig& 
 struct ReplanMaps {
     cv::Mat slab, support, trav_r, trav_a;
     cv::Mat trav_safe;   // free AND clearance to anything NOT observed free >= rho_agent (live goals; L1 D153b)
+    cv::Mat clr_free;    // CV_64F clearance (m) to anything NOT observed free, capped at rho_responder + 2 cells
     GridPath egress, agent_route;
     FrontierSet frontiers;
 };
@@ -179,6 +181,7 @@ public:
         r.trav_r = Traversable(free, clr_egress, cfg_.rho_r);
         r.trav_a = Traversable(free, clr_agent, cfg_.rho_a);
         r.trav_safe = Traversable(free, clr_egress, cfg_.rho_a);
+        r.clr_free = clr_egress;
         r.support = grid_.SlabSupport(z0_, z1_, r.slab);
         r.egress = AStar(r.trav_r, b_.target, b_.exits);
         r.agent_route = AStar(r.trav_a, b_.target, b_.exits);
@@ -256,6 +259,45 @@ public:
         }
         std::stable_sort(out.begin(), out.end(), [](const Candidate& a, const Candidate& b) { return a.path_cells < b.path_cells; });
         return out;
+    }
+
+    /// The §23 risk input (design AGENTIC_7 D158): for every cell, the WIDEST way to it from `from` over `plan` =
+    /// max over paths of the narrowest clr_free on the path (a maximin / bottleneck Dijkstra, 8-connected with the
+    /// A* corner rule). The agent's own escape disc counts as unbounded: it is where the agent already is, not a gap
+    /// it must pass. A shortest path hugs walls at exactly the allowed clearance, so its minimum clearance would
+    /// saturate the risk on every turn; the bottleneck measures the narrowest gap that CANNOT be avoided. CV_64F,
+    /// -1 = unreachable.
+    cv::Mat Bottleneck(const ReplanMaps& r, const cv::Mat& plan, const Cell& from, double escape_m) const {
+        const int H = plan.rows, W = plan.cols;
+        cv::Mat B(H, W, CV_64F, cv::Scalar(-1.0));
+        auto ok = [&](int y, int x) { return y >= 0 && x >= 0 && y < H && x < W && plan.at<uint8_t>(y, x); };
+        if (!ok(from.r, from.c)) return B;
+        const double esc = escape_m / b_.gs.cell, inf = std::numeric_limits<double>::infinity();
+        auto clr = [&](int y, int x) {
+            return std::hypot(y - from.r, x - from.c) <= esc ? inf : r.clr_free.at<double>(y, x);
+        };
+        using Node = std::pair<double, int64_t>;
+        std::priority_queue<Node> open;   // max-heap on the bottleneck
+        B.at<double>(from.r, from.c) = inf;
+        open.emplace(inf, int64_t(from.r) * W + from.c);
+        static const int dr[8] = {0, 0, 1, -1, 1, 1, -1, -1}, dc[8] = {1, -1, 0, 0, 1, -1, 1, -1};
+        while (!open.empty()) {
+            const auto [g, u] = open.top();
+            open.pop();
+            const int uy = int(u / W), ux = int(u % W);
+            if (g < B.at<double>(uy, ux)) continue;
+            for (int k = 0; k < 8; ++k) {
+                const int y = uy + dr[k], x = ux + dc[k];
+                if (!ok(y, x)) continue;
+                if (k >= 4 && (!ok(uy + dr[k], ux) || !ok(uy, ux + dc[k]))) continue;
+                const double nb = std::min(g, clr(y, x));
+                if (nb > B.at<double>(y, x)) {
+                    B.at<double>(y, x) = nb;
+                    open.emplace(nb, int64_t(y) * W + x);
+                }
+            }
+        }
+        return B;
     }
 
     const OccupancyGrid& grid() const { return grid_; }

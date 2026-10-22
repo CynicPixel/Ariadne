@@ -20,6 +20,9 @@ command:
   max_standoff_m: 2.0        # a cluster with no safe cell within this distance is not a candidate (~2/3 of the
                              # 2.84 m carving range: the frontier stays inside what one keyframe can map)
   refused_radius_m: 0.5      # a goal within this of a goal the mover refused (same agent) is not re-chosen
+risk_gate:
+  autonomous_threshold: 1.01 # §23 gate OFF for the L1 runs (risk is computed and traced, never gates): L1 predates
+                             # the agentic layer; the 7.x configs set it
 reorder:
   hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
 telemetry_hz: 5.0            # console pose rate, in sim time
