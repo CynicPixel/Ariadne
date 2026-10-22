@@ -37,6 +37,9 @@ aws ecr get-login-password --region "${AWS_REGION:-eu-north-1}" | docker login -
 docker pull -q "$IMAGE" > /dev/null || { step "pull FAILED"; exit 1; }
 docker image inspect "$IMAGE" --format '{{.Id}}' | tee "$R/image_id.txt"
 
+if [ "${SKIP_HILTI:-0}" = 1 ]; then   # already extracted by an earlier session (its tar is under that commit's prefix)
+  step "2 hilti skipped (SKIP_HILTI=1)"
+else
 step "2 hilti fetch"
 H="$WORK/hilti"; mkdir -p "$H"
 oid() { curl -s "https://huggingface.co/api/datasets/Hilti-Research/hilti-slam-challenge-2023/paths-info/$REV" \
@@ -85,13 +88,15 @@ else
 fi
 rm -rf "$H" "$WORK/site2_robot_3_asl"   # free the disk for the recordings
 df -h / > "$R/df_after_hilti.txt"
+fi
 
 step "3 build"
+# Not under /work/.cache: in a worktree .cache is a symlink to the main checkout's, shipped dangling (2026-10-22).
 chown -R "$(docker run --rm "$IMAGE" id -u):$(docker run --rm "$IMAGE" id -g)" "$SRC" "$OUT"
 t0=$(date +%s)
 docker run --rm --network host -v "$SRC":/work -w /work "$IMAGE" bash -c "cmake -S /work -B /work/build/aws -G Ninja \
     -DARIADNE_REQUIRE_OPENCV=ON -DCMAKE_SKIP_RPATH=ON -DCMAKE_BUILD_TYPE=Release \
-    -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent >/dev/null \
+    -DFETCHCONTENT_BASE_DIR=/work/build/fetchcontent >/dev/null \
   && cmake --build /work/build/aws --target ariadne_sim_vo --parallel $(nproc)" > "$R/build.log" 2>&1 \
   || { step "build FAILED"; tail -40 "$R/build.log"; exit 1; }
 echo "build_seconds $(( $(date +%s) - t0 ))" >> "$R/steps.txt"
