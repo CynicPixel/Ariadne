@@ -1,0 +1,17 @@
+Running main() from /data/code/Ariadne/.cache/feat-2.5-robust-backend/fetchcontent/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = Certificate.SeSyncBenchmarkGraphs
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from Certificate
+[ RUN      ] Certificate.SeSyncBenchmarkGraphs
+grid3D             8000 nodes  22236 edges: f 84319 (chordal init 87252; Table 1 84320.000000), 200 its, max|grad_R| 2.3e+00, ||M|| 5.41e+04, eta_min 5.41e-06, abs-eta certified | certified for the isotropic chordal surrogate (eta 5.41e-06 = 1e-10 ||M||; f - f* <= 0.13, 0.00015% of f = 84319) | 7175.9 s
+[       OK ] Certificate.SeSyncBenchmarkGraphs (7176297 ms)
+[----------] 1 test from Certificate (7176297 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (7176297 ms total)
+[  PASSED  ] 1 test.
+exit 0 wall_ms 7176393
+memory.peak_bytes 616235008
+oom_kill 0
+docker exit 0

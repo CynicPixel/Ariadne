@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ariadne_bridge</name>
+  <version>0.1.0</version>
+  <description>The ROS edge of the Ariadne live runtime (design LIVE_RUNTIME_L1 D150): RuntimeLink relays the bridged
+    Gazebo topics to the ROS-free runtime as CDR bytes over a Unix socket, and the runtime's commands back.</description>
+  <maintainer email="noreply@example.invalid">Ariadne</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>rosgraph_msgs</depend>
+  <depend>yaml-cpp</depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>

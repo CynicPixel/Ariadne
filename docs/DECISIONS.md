@@ -2877,7 +2877,29 @@ a non-certified planted-outlier graph a full shift would pass at 0.61× the redu
   | tinyGrid3D | — | — | certified |
   | smallGrid3D | — | — | certified |
 
-  Sphere, torus, grid3D, cubicle and rim are pending (the user is asked first: heavy).
+- **The large SE-Sync graphs (2026-10-22, maintainer-approved; `evaluation/runs/2.5/certificate_sesync/`).** One
+  container each, in order, hard memory cap, cgroup `memory.peak`. grid3D ran only after the projection rule written
+  into the manifest beforehand (≈ 12 kB per edge on the first four, ×10 for 3D-lattice fill → < 6 GB) passed.
+
+  | graph | nodes / edges | f | Table 1 | verdict | f − f* ≤ | LM its, max\|grad_R\| | peak | wall |
+  |---|---|---|---|---|---|---|---|---|
+  | sphere2500 | 2500 / 4949 | 1687.01 | 1.687e3 | **certified** | 1.1e-3 | 72, 7.4e-5 | 79 MB | 20 s |
+  | torus3D | 5000 / 9048 | 24227 | 2.423e4 | **certified** | 3.6e-3 | 200 (cap), 2.9e-2 | 152 MB | 180 s |
+  | cubicle | 5750 / 16869 | 717.126 | 7.171e2 | **certified** | 2.9e-2 | 30, 1.9e-5 | 215 MB | 16 s |
+  | rim | 10195 / 29743 | 5460.9 | 5.461e3 | **not certified** | — | 56, 2.4e-4 | 348 MB | 89 s |
+  | grid3D | 8000 / 22236 | 84319 | 8.432e4 | **certified** | 0.13 | 200 (cap), 2.3 | 616 MB | 7176 s |
+
+  - Every objective reproduces Table 1 to its 4 significant figures.
+  - **torus3D and grid3D stopped at the LM iteration cap** with a gradient far from zero, and still certify. That is
+    valid: the bound comes from weak duality (S ⪰ 0 at the multipliers Λ of the point reached), not from
+    stationarity. A non-stationary point simply gets a looser bound (grid3D: 0.13, 1.5e-4 % of f).
+  - **rim is not certified, and its test assertion is red** (gtest exit 1). λ_min ≤ −0.233 at η = 1e-10‖M‖∞
+    (9.8e-6). The η that would pass is 0.977 ≈ 1e-5‖M‖∞. The objective matches Table 1, so this is most likely an
+    under-converged Λ (gradient 2.4e-4 after 56 iterations) rather than a non-global point, but that is not shown.
+    Verdict: **unknown, not wrong**. Neither η nor the LM budget was changed after seeing it: that would be tuning
+    to pass.
+  - Cost: grid3D's two hours are the Lanczos and Cholesky passes of the 200-iteration refinement on 22 k edges. The
+    runtime path never certifies graphs this size (the flag is off and the loop backend's graphs are small).
 
 **Planted outliers, reported, not tuned** (PHASE2_PLAN §3):
 - 3 uniform SE(3) loops kept in a 60-node cost: **6/10 certified**, from each of the truth, dead-reckoning and chordal
@@ -3100,3 +3122,75 @@ field except timings.
 - **What this changes:**
   - D86 item 1's "owed" run is done. The SOTA comparison is stated as above, not as parity.
   - V1_03 stays the 5.x regression case (D86, D89).
+
+## 2026-10-23 — D150–D155: the live closed-loop runtime (L1)
+
+**Context.** Register row L1: every Ariadne result came from a recording, and the mission's decisions were logged,
+never executed. Design and alternatives: `docs/design/LIVE_RUNTIME_L1.md` (arch §5.4, §5.8–§5.10, §25.1, §29).
+Each decision below is summarised there with its reasons; the evidence is filled in from the runs.
+
+- **D150 — ROS stops at one relay.** gz → `ros_gz_bridge::RosGzBridge` (the 1.1 bridge YAML plus the command and
+  mover-state entries) → `ariadne_bridge::RuntimeLink`, both loaded into ONE component container with intra-process
+  comms (the bridge's own launch action composes it this way; no DDS hop, where D40's losses were). RuntimeLink
+  serializes each typed message to CDR and writes `(topic, bytes)` frames to a Unix socket; `ariadne_live` (core
+  image, ROS-free) decodes them with `runtime/replay/ros_cdr`, the bag decoder. No ROS type enters `cpp/`; the sim
+  image still has no OpenCV and the core image no ROS. Packages: `ros2/ariadne_bridge`, `ros2/ariadne_sim`.
+  No custom ROS interfaces: commands are `geometry_msgs/PoseArray` ↔ `gz.msgs.Pose_V`, state `std_msgs/String` ↔
+  `gz.msgs.StringMsg` (header stamp and frame_id verified to pass through the bridge, 2026-10-22).
+- **D151 — goto / follow / hold on the kinematic mover.** PoseArray in `world`: 0 poses = hold, 1 = goto,
+  N = follow; header stamp = the command id; a zero quaternion = no final yaw. The mover appends segments planned by
+  `core/trajectory/command_planner.hpp` (turn to face, move, optional final turn; motion.py's `plan_profile` and
+  routes.py's clearance-scaled speed: the `PlanProfile` test reproduces every turn and move of the Python golden
+  scripts exactly). A new command replaces every segment not yet started; the one in progress finishes (all end at
+  rest). The scene ESDF at ρ_agent is checked first; a violation refuses the command and the agent holds. Every
+  command is answered on `mover_state`; the executed script is logged with exact doubles (`mover_agent_<k>.jsonl`)
+  so canonical IMU/GT can be regenerated later (D39). Test: `python/tests/sim/test_mover_live.py` (real plugin in
+  gz: goto accepted and reached, a goto through a wall refused with the envelope reason, hold accepted).
+- **D152 — the recording is what was consumed.** Arrivals are reordered by header stamp behind a watermark over the
+  timed topics (hold-back 3 s, timeouts counted) and every released message is written to `inputs.mcap` with log
+  time = release sequence, so a replay sees the consumed order even where stamps tie. `ariadne_live --replay` feeds
+  it through the same code; the first check is an FNV-1a digest over (topic, stamp, payload). A stereo frame whose
+  partner never arrives is dropped and counted in live mode (`SimFrameAssembler`, lenient); bags keep the strict
+  rule. "Reproduces" was defined before the run: `python/analysis/live_replay_check.py`.
+- **D153 — the mission runs incrementally on a sim-time barrier.** The 1.8 layer moved into
+  `planning/mission/frontier_mission.hpp`; `ariadne_mission` calls it with **byte-identical outputs** (trace, routes,
+  slab, support, snapshots, results; merged and both single-agent modes, committed spool, old vs new binary). Live,
+  a replan at sim time T waits until both estimators have passed T. The deterministic layer lists every frontier
+  cluster reachable at ρ_agent (the candidates, nearest first: element 0 is 1.8's choice) and a chooser picks one
+  (`classical` now: the nearest one at least `min_goal_m` = 1.0 m away, because the first live smoke showed the
+  nearest cluster is always the band under the agent, path 0 m, so 1.8's rule executed never moves; 7.1 adds the
+  orchestrator, validated against the set). The pick becomes a follow along the A*
+  path (approxPolyDP, every chord re-checked, cut at 3 m), ending facing the cluster. Each agent is anchored by its
+  own briefed entry pose; the map merge is Phase 3's.
+- **D154 — console fed live.** `ariadne_live` appends `telemetry.jsonl`; the console server's live mode
+  (`ARIADNE_LIVE=run:scene`) tails it and serves the replay frame schema, logging every frame it sends
+  (`console_frames.jsonl`). Test: `python/tests/console/test_live_console.py` (telemetry appended while the socket
+  is open reaches the client; the stream ends when the run does — this test found an end-of-stream bug, fixed).
+- **D155 — where live runs execute.** Built: `live_aws.sh` (one g4dn.xlarge spot, the whole D84 quota, through
+  `spinup.sh` and its three brakes; images in ECR tagged by image id, pushed 2026-10-23; locally built binaries as a
+  checksummed S3 payload). **Not run:** the launch needs the maintainer's go-ahead for the spend, and the NVIDIA EGL
+  path of the sim image is still an open `[SMOKE-TEST]`. **The acceptance runs below are local, Mesa llvmpipe, RTF
+  ≈ 0.14** (no GPU on the dev host). The register's acceptance does not depend on the GPU; a real-time-factor-1 demo
+  does.
+- **D152a — the estimators take turns, one frame at a time** (a process-wide lock in `LiveSimSource`). Found by the
+  replay check of a 25 s run: replay 1 equalled the live run, replay 2 differed on agent 0 in ONE pose of 501 (frame
+  158, 0.1 mm; same tracks and correspondences, PnP inliers 323 vs 322). `[UNVERIFIED]` cause: two estimators
+  calling into OpenCV's one `parallel_for_` pool at once; a busy pool changes stripe partitioning and so the order of
+  floating-point reductions. With turns, three replays of the same recording all equal the live run. Sequential tools
+  (sim_collab) never had two pipelines at once.
+- **D153b — standoff goals; the previous outcome is an input.** The 30 s acceptance run on `943a558` closed the loop
+  at t = 5 s (both gotos accepted; each agent's ESTIMATED distance to its goal 2.50 → 0.86 m within 5 s), then the
+  mover refused 10/10 follows: the goal was the frontier cell itself, and a frontier borders unknown space that is
+  often an unseen wall, invisible to a planner that only avoids OBSERVED occupancy. The mission re-chose the refused
+  target at every replan. Now: goals lie in `trav_safe` (free with ρ_agent clearance to anything not observed free),
+  as near the cluster as that allows (≤ 2 m), reached over `trav_safe` plus an escape radius of 0.5 m around the
+  agent; each replan first waits for the mover's answer to the previous command (in the recording, so deterministic
+  in replay; a live wait is bounded at 30 s and counted) and never re-chooses a goal within 0.5 m of a refused one.
+  Checked before any new live run: on the SAME recorded observations, all 9 new command paths clear the GT ESDF at
+  ρ_agent (minimum 0.275 m), where the old ones were refused. `ariadne_mission` is untouched (byte-identical again).
+- **D154 fix.** The first acceptance run's console served 1012 frames over 204 s of wall time, every one at sim time
+  0: `live.sh` pointed it at the outer run directory, the runtime writes one level down. The console now resolves
+  the runtime's directory; the test uses the real layout.
+
+**Unchanged, checked.** `SimSource` after the frame-assembly extraction: `ariadne_sim_vo` on the d41 bag gives
+sha-identical `estimate_body.tum` for both agents, old binary vs new.

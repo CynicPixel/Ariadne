@@ -1,0 +1,45 @@
+ariadne_live: waiting for the ROS edge on build/live/runs/live-20261022T200212Z-4158/link.sock
+ariadne_live: link up
+sim-live/aadffb8df5790ca0/agent0: 0 frames; rig fx=671.54 B=0.1000; gt samples 0
+sim-live/aadffb8df5790ca0/agent1: 0 frames; rig fx=671.54 B=0.1000; gt samples 0
+  frame 0: tracks 189, status 0, keyframes 1
+  stereo row refinement at keyframe 0: dy = -0.235 +0.00030 x +0.00015 y px (115 matches, MAD 0.087 px)
+  frame 0: tracks 200, status 0, keyframes 1
+  stereo row refinement at keyframe 1: dy = +0.039 -0.00009 x +0.00001 y px (268 matches, MAD 0.065 px)
+  frame 500: tracks 473, status 1, keyframes 31
+  frame 500: tracks 229, status 1, keyframes 48
+run written to build/live/runs/live-20261022T200212Z-4158/aadffb8df5790ca0-live-20261022T200213Z/raw/aadffb8df5790ca0-agent1-20261022T200805Z
+manifest missing required fields: 0
+# ariadne_live/agent1 results. Generated; do not hand-edit.
+sequence: aadffb8df5790ca0-agent1
+frames: 901
+associated_poses: 901  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 5.07971
+ate_se3: {rmse_m: 0.00229897, mean_m: 0.00216061, max_m: 0.00468142, rotation_rmse_rad: 0.0022629}
+ate_rmse_percent_of_path: 0.0452578
+sim3_scale: 1.00098  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00114734, rotation_rmse_rad: 0.000354339}
+vo: {lost_frames: 0, keyframes: 64, ba_runs: 63, ba_mean_cost_ratio: 0.332853, landmarks_alive_at_end: 497, graph_edges: 63, graph_version: 127}
+stereo_match_valid_fraction: 0.86917
+triangulation: {candidates: 8330, created: 5545, no_stereo: 2752, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 33, uncertain: 0}
+timing_ms: {track_mean: 44.8437, vo_track_mean: 6.45485, keyframe_mean: 334.722, opencv_threads: 8}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.0385663, b: -8.71026e-05, c: 1.27523e-05, matches: 268, mad_px: 0.065431, slopes_fitted: true, keyframe: 1, attempts: 2, residual_after: {measured: true, a_px: -0.00473622, b: 1.80681e-06, c: 4.16479e-05, max_abs_dy_px: 0.0275195, matches: 181}}
+stereo_exposure_match: true
+run written to build/live/runs/live-20261022T200212Z-4158/aadffb8df5790ca0-live-20261022T200213Z/raw/aadffb8df5790ca0-agent0-20261022T200810Z
+manifest missing required fields: 0
+# ariadne_live/agent0 results. Generated; do not hand-edit.
+sequence: aadffb8df5790ca0-agent0
+frames: 901
+associated_poses: 901  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 2.82118
+ate_se3: {rmse_m: 0.00210824, mean_m: 0.00194452, max_m: 0.00470058, rotation_rmse_rad: 0.00953358}
+ate_rmse_percent_of_path: 0.0747291
+sim3_scale: 1.00065  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.000921953, rotation_rmse_rad: 0.000557603}
+vo: {lost_frames: 8, keyframes: 106, ba_runs: 97, ba_mean_cost_ratio: 0.324093, landmarks_alive_at_end: 493, graph_edges: 105, graph_version: 211}
+stereo_match_valid_fraction: 0.721155
+triangulation: {candidates: 13797, created: 5941, no_stereo: 7830, nonpositive_disparity: 0, depth_range: 1, reprojection: 0, sgbm_inconsistent: 19, uncertain: 6}
+timing_ms: {track_mean: 40.9136, vo_track_mean: 6.3895, keyframe_mean: 334.481, opencv_threads: 8}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.235308, b: 0.000298699, c: 0.000147865, matches: 115, mad_px: 0.0871978, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.177371, b: -0.000207909, c: -0.000182877, max_abs_dy_px: 0.220033, matches: 237}}
+stereo_exposure_match: true
+ariadne_live[live]: 9 replans, 18 decisions, consumed 43261 messages (digest dd1602c8d1102da2) -> build/live/runs/live-20261022T200212Z-4158/aadffb8df5790ca0-live-20261022T200213Z

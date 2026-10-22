@@ -4,6 +4,37 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — L1 live closed-loop runtime: done on the local host (session B, `feat/live-runtime`)
+
+- **2.5 tail (D74):** the large SE-Sync graphs ran: sphere, torus, cubicle, grid3D certified (f = Table 1); **rim not
+  certified** (reported, not re-tuned). `evaluation/runs/2.5/certificate_sesync/`.
+- **L1 acceptance** (`evaluation/runs/L1/local_llvmpipe_45s`, `1bb27f9`): two agents live, decide → move → observe
+  (13 commands accepted, 0 refused, GT motion 2.82 / 5.08 m under command), the recording replayed twice = live,
+  console fed live. Local Mesa llvmpipe, RTF ≈ 0.14. D150–D155, D152a, D153b.
+- **Found by the runs:** two estimators on one OpenCV pool broke replay determinism in 1 pose of 501 (D152a: turns);
+  goals ON frontier cells were refused 10/10 by the mover's GT envelope (D153b: standoff goals); the console tailed
+  the wrong directory (D154 fix). Each is in the decision log with its measurement.
+- **Not done:** the AWS GPU live run (`live_aws.sh` built, images in ECR; the spend needs the maintainer's go-ahead,
+  and NVIDIA EGL in the sim image is an open SMOKE). Next: 7.1–7.2 (`docs/design/AGENTIC_7.md`, D156–D162).
+
+---
+
+## 2026-10-22 — Session B opens L1 (live closed-loop runtime), then 7.1–7.2; D150–D169 claimed
+
+- **Decision IDs D150–D169 are claimed by session B**, before any of them is written.
+- **Scope, in order:**
+  - the 2.5 tail: the large SE-Sync certificate graphs (D74, maintainer-approved);
+  - **L1**, on `feat/live-runtime`: live Gazebo → `ros_gz_bridge` → the replay estimator path; mission decisions → the
+    kinematic mover's goto / follow / hold; the console fed live. Acceptance: one live two-agent run that closes
+    the loop, and a recording of it whose replay reproduces the estimator outputs.
+  - **7.1–7.2**, on `feat/ph7-agentic`: the MCP tool surface, the Bedrock orchestrator (D84), and the classical
+    ablation as "skip the choose step".
+- **Not taken:** the gravity-prior plumbing into agent subgraphs and the `RobustJointSolve` call in `SolveMultiAgent`
+  (main session).
+- **Live runs use AWS GPU** (one g4dn.xlarge spot, the D84 quota). The host has no GPU.
+
+---
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.

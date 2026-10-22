@@ -13,6 +13,13 @@ Writes into the SCENE directory (relative mesh/texture/ESDF paths resolve there)
 gz cameras look along the sensor link's +x with image-right = -y and image-down = -z;
 the ROS optical frame is x right, y down, z forward. So R_B_optical has columns
 (x_opt, y_opt, z_opt) = (-y_B, -z_B, +x_B).
+
+write_live_mission (design LIVE_RUNTIME_L1 D151) composes mission_live.*: each agent
+starts with only the stationary hold at its entrance, and its mover takes commands
+(<live> block); the bridge YAML gains the command (ROS -> GZ, PoseArray -> Pose_V) and
+mover-state (GZ -> ROS, StringMsg -> String) entries; the GT depth cameras are off
+(the estimator never sees them, and live runs are CPU-bound); the world's real-time
+factor is a parameter (measured, not guessed).
 """
 from __future__ import annotations
 
@@ -140,8 +147,27 @@ def _segments(script) -> str:
     return "".join(out)
 
 
-def agent_xml(scene, k: int, rig: dict, scene_json: dict) -> str:
-    sc = scene.scripts[k]
+def live_topics(k: int) -> dict:
+    ns = f"/ariadne/agent_{k}"
+    return {"cmd": f"{ns}/cmd", "mover_state": f"{ns}/mover_state"}
+
+
+def _live_xml(scene, k: int) -> str:
+    """The mover's <live> block: topics, the executed-script log (relative = gz's working directory),
+    and the worldgen Motion limits the command planner obeys (routes.py's rules)."""
+    M = scene.preset.motion
+    t = live_topics(k)
+    v_lk = M.lk_budget_px / (M.focal_px * M.frame_dt_s)
+    w_max = min(M.omega_max_radps, M.lk_budget_px / (2.0 * M.focal_px * M.frame_dt_s))
+    return (f'        <live><cmd_topic>{t["cmd"]}</cmd_topic><state_topic>{t["mover_state"]}</state_topic>'
+            f'<log_file>mover_agent_{k}.jsonl</log_file>'
+            f'<v_cap>{_f(M.v_cap_mps)}</v_cap><a_max>{_f(M.a_max_mps2)}</a_max>'
+            f'<omega_max>{_f(w_max)}</omega_max><alpha_max>{_f(M.alpha_max_radps2)}</alpha_max>'
+            f'<v_lk_per_m>{_f(v_lk)}</v_lk_per_m><ceiling_m>{_f(scene.wall_height_m)}</ceiling_m></live>\n')
+
+
+def agent_xml(scene, k: int, rig: dict, scene_json: dict, script=None, live: bool = False) -> str:
+    sc = script if script is not None else scene.scripts[k]
     x, y, z, yaw, pitch = sc.segments[0].start
     t = topics(k)
     cams = camera_poses(rig)
@@ -176,10 +202,11 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict) -> str:
           f'        <esdf><file>{es["file"]}</file><rows>{es["rows"]}</rows><cols>{es["cols"]}</cols>'
           f'<cell_m>{_f(g)}</cell_m><origin_x_cells>{ox}</origin_x_cells><origin_y_cells>{oy}</origin_y_cells></esdf>\n'
           f'        <script>\n' + _segments(sc) + '        </script>\n'
+        + (_live_xml(scene, k) if live else '')
         + '      </plugin>\n    </model>\n')
 
 
-def bridge_entries(n_agents: int, depth: bool) -> list:
+def bridge_entries(n_agents: int, depth: bool, live: bool = False) -> list:
     out = [{"ros_topic_name": "/clock", "gz_topic_name": "/clock", "ros_type_name": "rosgraph_msgs/msg/Clock",
             "gz_type_name": "gz.msgs.Clock", "direction": "GZ_TO_ROS"}]
     for k in range(n_agents):
@@ -202,28 +229,56 @@ def bridge_entries(n_agents: int, depth: bool) -> list:
                 e["subscriber_queue"] = 1000
                 e["publisher_queue"] = 1000
             out.append(e)
+        if live:
+            lt = live_topics(k)
+            out.append({"ros_topic_name": lt["cmd"], "gz_topic_name": lt["cmd"],
+                        "ros_type_name": "geometry_msgs/msg/PoseArray", "gz_type_name": "gz.msgs.Pose_V",
+                        "direction": "ROS_TO_GZ"})
+            out.append({"ros_topic_name": lt["mover_state"], "gz_topic_name": lt["mover_state"],
+                        "ros_type_name": "std_msgs/msg/String", "gz_type_name": "gz.msgs.StringMsg",
+                        "direction": "GZ_TO_ROS"})
     return out
 
 
-def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default") -> dict:
+def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default", live: bool = False,
+                  rtf: float = 1.0) -> dict:
     rig = load_rig(rig_path)
+    scripts = scene.scripts
+    if live:
+        # Live: the stationary start hold only (the commands append the rest); no GT depth camera.
+        from .routes import AgentScript, Segment
+        rig = dict(rig, depth=dict(rig["depth"], enabled=0))
+        holds = []
+        for k, sc in enumerate(scene.scripts):
+            first = sc.segments[0]
+            if first.kind != "hold":
+                raise MissionError("live: agent %d's script does not start with a hold" % k)
+            holds.append(AgentScript(k, [Segment("hold", 0.0, first.profile, first.duration, first.start,
+                                                 first.start, "hold:start")]))
+        scripts = holds
     scene_json = json.load(open(os.path.join(scene_dir, "scene.json")))
     if scene_json["scene_id"] != scene.scene_id:
         raise MissionError("scene directory does not hold this scene")
     model_xml = open(os.path.join(scene_dir, "model_inline.xml")).read()
-    agents = "".join(agent_xml(scene, k, rig, scene_json) for k in range(len(scene.scripts)))
+    agents = "".join(agent_xml(scene, k, rig, scene_json, scripts[k], live) for k in range(len(scripts)))
     world = world_xml(scene, model_xml, extra=agents)
+    if live:
+        if not rtf > 0:
+            raise MissionError("live: rtf must be > 0")
+        if "<real_time_factor>1.0</real_time_factor>" not in world:
+            raise MissionError("live: the world's real_time_factor element was not found")
+        world = world.replace("<real_time_factor>1.0</real_time_factor>", f"<real_time_factor>{_f(rtf)}</real_time_factor>", 1)
     world = world.replace("<physics name=\"1ms\"", "<gravity>0 0 -9.80665</gravity>\n    <physics name=\"1ms\"", 1)
     with open(os.path.join(scene_dir, f"mission_{name}.sdf"), "w", newline="\n") as f:
         f.write(world)
     depth = bool(rig["depth"]["enabled"])
     with open(os.path.join(scene_dir, f"bridge_{name}.yaml"), "w", newline="\n") as f:
-        yaml.safe_dump(bridge_entries(len(scene.scripts), depth), f, sort_keys=False)
+        yaml.safe_dump(bridge_entries(len(scripts), depth, live), f, sort_keys=False)
     cams = camera_poses(rig)
     manifest = {
         "mission": name, "scene_id": scene.scene_id, "rig": rig, "rig_path": rig_path,
         "world_file": f"mission_{name}.sdf", "bridge_file": f"bridge_{name}.yaml",
-        "duration_s": max(s.duration for s in scene.scripts),
+        "duration_s": max(s.duration for s in scripts),
         "gravity_mps2": 9.80665,
         "frames": {"world": "world (scene frame: origin lattice SW corner, x east, y north, z up)",
                    "body": "agent_<k>/base_link = IMU frame: x forward, y left, z up",
@@ -236,13 +291,17 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default") -
         "camera_info_convention": "gz camera_info states cx = W/2, cy = H/2; the pixel-centre truth is "
                                   "(W-1)/2, (H-1)/2 (SMOKE 4n). Its D is [0]*5: the render is pinhole.",
         "lens": dict(rig["lens"], applied="read time, perception/degradation/lens.hpp (D41)"),
-        "agents": [{"agent": k, "topics": topics(k), "frame_id": f"agent_{k}/base_link",
-                    "script_duration_s": s.duration, "start_delay_s": scene.start_delays_s[k]
-                    if k < len(scene.start_delays_s) else 0.0}
-                   for k, s in enumerate(scene.scripts)],
+        "agents": [dict({"agent": k, "topics": topics(k), "frame_id": f"agent_{k}/base_link",
+                         "script_duration_s": s.duration, "start_delay_s": scene.start_delays_s[k]
+                         if k < len(scene.start_delays_s) else 0.0},
+                        **({"live_topics": live_topics(k), "mover_log": f"mover_agent_{k}.jsonl"} if live else {}))
+                   for k, s in enumerate(scripts)],
         "imu": {"period_ns": rig["imu"]["period_ns"], "noise": "none (clean); consumption-time operator, D37",
                 "orientation_field": "identity, NOT measured: consumers must ignore it"},
     }
+    if live:
+        manifest["live"] = {"real_time_factor": rtf, "commands": "PoseArray in world: 0 poses hold, 1 goto, N follow; "
+                            "header.stamp = command id; zero quaternion = no final yaw (D151)"}
     with open(os.path.join(scene_dir, f"mission_{name}.json"), "w", newline="\n") as f:
         json.dump(manifest, f, indent=1, sort_keys=True)
         f.write("\n")

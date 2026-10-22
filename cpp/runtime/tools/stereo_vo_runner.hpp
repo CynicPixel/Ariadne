@@ -125,6 +125,9 @@ struct StereoVoArgs {
     /// frame, the VO receives no tracks (as in a lamp failure); after each one the tracks return under FRESH ids, as
     /// after a real loss with no re-association. The tracker itself runs on, so later frames are unaffected otherwise.
     std::vector<std::pair<double, double>> outages;
+    /// Live sources (design LIVE_RUNTIME_L1 D152) receive their ground truth during the run: when set, scoring uses
+    /// what this returns after the last frame instead of GroundTruth() at the start. GT never reaches the estimator.
+    std::function<std::vector<runtime::TimedPose>()> late_ground_truth;
 };
 
 /// The 1.4 + 1.5 pipeline over any StereoSource: rectify -> LK tracker ->
@@ -163,7 +166,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     std::vector<double> t_conf;   // 2.1 §10: right-matcher + WLS per stereo pass (stereo.confidence = wls only)
 
-    const std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
+    std::vector<runtime::TimedPose> gt_poses = source.GroundTruth();
     const int n_planned = args.frames > 0 ? std::min<int>(args.frames, static_cast<int>(source.FrameCount()))
                                           : static_cast<int>(source.FrameCount());
     std::printf("%s: %d frames; rig fx=%.2f B=%.4f; gt samples %zu\n", source.SceneName().c_str(), n_planned, rr.fx,
@@ -630,6 +633,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                                       static_cast<int>(tr.status), keyframes);
         ++i;
     }));
+    if (args.late_ground_truth) gt_poses = args.late_ground_truth();
 
     // --- Scoring ---------------------------------------------------------------
     const std::vector<int> assoc = runtime::AssociateNearest(est_body, gt_poses);

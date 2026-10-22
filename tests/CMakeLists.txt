@@ -20,7 +20,8 @@ add_executable(test_numerical
   numerical/test_window_ba_inertial.cpp
   numerical/test_inertial_init.cpp
   numerical/test_gravity_prior.cpp
-  numerical/test_scripted.cpp)
+  numerical/test_scripted.cpp
+  numerical/test_command_planner.cpp)
 target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
   yaml-cpp::yaml-cpp GTest::gtest_main)
 target_compile_definitions(test_numerical PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -66,6 +67,7 @@ if(OpenCV_FOUND)
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
+    unit/test_live_link.cpp
     unit/test_planning.cpp
     unit/test_xfeat_reference.cpp
     unit/test_pgo_levmarq.cpp
