@@ -1,0 +1,32 @@
+# 5.6 real-data validation (D141: Hilti 2023 site2_robot_3 replaces OIVIO; D143: equidistant cameras). Fixed
+# 2026-10-23, BEFORE any VO measurement on the sequence. Question (plan 5.6): where do sim-tuned settings transfer to
+# a real dark sequence with a co-moving light, and where do they not. Every row consumes identical pixels.
+name: hilti_5_6_v1
+
+sequence:
+  dataset: Hilti SLAM Challenge 2023 (CC BY-NC-SA 3.0; HF Hilti-Research/hilti-slam-challenge-2023 @ 8e2a7a2d)
+  bag: rosbags/site2_robot_3.bag   # sha256 == LFS oid, checked on extraction (results/hilti_sha256.txt)
+  export: s3://ariadne-836505524290-eun1/runs/ph5-aws/e3bc7f6524f2584f6ba5e6f4a5d056484342d0f1/site2_robot_3_asl.tar.zst
+  export_sha256: 78d2c3bfa118906e6bb5c8186eb5baf302994879315699b85d2b5445d6df3aec
+  side_files: s3://ariadne-836505524290-eun1/runs/ph5-aws/380c900bc45e4a8f7b98032b2ce62d2819b9f286/site2_robot_3_extras.tar.gz
+  cameras: /oak_cam_front/{left,right}/image_raw   # OAK-D Pro W, 1280x800 @ 10 Hz, equidistant, B 0.0751 m
+  imu: /imu/data   # Xsens MTi-670 @ 200 Hz = body
+  calibration: calibration_robot (Kalibr) -> sensor.yaml by python -m dataset_tools.hilti.sensor_yaml
+  frames: 3592     # all of them; GCPs span 1674219506.35 .. 1674219786.95 (280 s)
+
+tool: ariadne_euroc_vo   # EuRoC-layout source; no dense GT -> results.yaml dense_gt: false
+seed: 1
+rows:   # perception + slam, unchanged from their own tuning: this is a transfer test, nothing is re-tuned for Hilti
+  sim_tuned: {perception: sim_v1, slam: sim_v2}            # D69's lit-sim rows
+  euroc_tuned: {perception: euroc_v2, slam: euroc_v2}      # LOCAL_SLAM_2.3 §10 rows
+  euroc_tuned_radiometric: {perception: euroc_rad_auto, slam: euroc_v2}   # 2.2 gate decides on real dark noise
+
+scoring:   # python -m analysis.hilti_score estimate_body.tum site2_robot_3_gt.txt --gcp gcp.csv --calib calibration_robot
+  protocol: Hilti 2023 per-GCP points (<0.5/1/3/6/10/40 cm -> 20/10/6/5/3/1, else 0), score 100 * sum / (20 * 5)
+  predicted_point: T_W_I(t) T_I_L p_L   # GCP measured by the robot's LiDAR (frame rslidar), Kalibr T_lidar_imu
+  alignment: [fit (SE(3) Umeyama on all reached GCPs), loo (leave-one-out)]
+  limitations: [5 GCPs only, 3-DoF; alignment uses the scored points (fit) or 4 of 5 (loo); no dense ATE exists]
+
+not_available_here: [OIVIO light-power sweep 100/50/15 %]
+metrics: [hilti.fit.score_0_100, hilti.loo.score_0_100, hilti.fit.error_m, hilti.unreached, vo.lost_frames,
+          vo.keyframes, stereo_match_valid_fraction, radiometric.decision]
