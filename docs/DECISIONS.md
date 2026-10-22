@@ -2936,3 +2936,36 @@ verifying agent, so the broker sees pre-gated edges.
 
 **Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
 Both are main's (3.2 / 3.5).
+
+## 2026-10-22 — D130: the sim render is sRGB-encoded; D gains an sRGB decode (opt-in, default unchanged)
+
+SMOKE §4u: gz-sim8/ogre2 R8G8B8 frames are sRGB-encoded (lamp ×2 gives pixel ×1.38; the L16 camera is the same render
+decoded, linear, ×2.00). D (arch §5.6) reads `input/255` as linear radiance, so every D run so far scaled, Poissoned and
+quantized **encoded** values. A dark config's `radiance_scale` 0.06 on encoded values is a 0.06^2.2 ≈ 0.002 change in
+linear light at the top and a different one at each level: not the darkness the config name claims.
+
+- `DegradationParams.input_transfer: linear | srgb`. `srgb` decodes (IEC 61966-2-1 piecewise) before stage 1. D's output
+  stays linear raw: the sensor model is a linear machine-vision camera, which is what the §6.2 Poisson–Gaussian fit and
+  the GAT assume.
+- Default `linear`: the golden digest, the gate and every pinned result are byte-identical. Phase 5's frozen configs
+  (5.4) set `srgb`.
+- **Caveat, not re-run:** the 2.2 radiometric rows (D67–D69) and the 3.1 darkened-proxy rows ran D on encoded values.
+  Their conclusions are about that operator; they are not evidence about linear-light darkness.
+
+## 2026-10-22 — D131: lamp photometry as rendered; the rig lamp becomes inverse-square, wide and shadow-casting
+
+SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp calibration (5.1, §5.3) fit THAT law:
+
+  I(x) = A · RID(θ) · albedo · cos(incidence) / (c′ + r²),   r, θ from the lamp centre and axis (T_C_L)
+
+- **Attenuation.** The rig shipped (constant 0.2, quadratic 0.05): c′ ≈ 10 m², nearly flat to 3 m, nothing like a real
+  lamp. Set (0, 0, 1), which renders c′ ≈ 0.5 m²: inverse-square beyond ~1.5 m. c′ is a renderer artefact; the
+  calibration estimates it and Stage 3 uses the calibrated value, so the code does not assume 0.
+- **Cone.** SDF spot angles are FULL cone angles. §5.3's "inner/outer cone 25°/40°" is read as half-angles (a headlamp
+  that lights the ~86° camera view), so the SDF gets 50°/80°. As shipped the lamp lit only the central ~40°.
+- **Lobe ("cosine lobe decision", plan 5.1).** Within the inner cone the RID is flat (±0.6 %); Lambertian incidence
+  contributes exactly one cos. The calibration stores the RID as a table over θ (flat top + roll-off), not cos^μ.
+  Separating RID from incidence needs tilted planes (Park et al., CVPR 2014), so the calibration renders several plane
+  poses.
+- **Shadows.** World `<shadows>true</shadows>`, lamp `cast_shadows true`; dark worlds drop the zone point lights and set
+  ambient 0. Verified to render on llvmpipe.
