@@ -74,6 +74,8 @@ def main(argv=None) -> int:
         p.add_argument("--out", required=True)
         if name == "generate":
             p.add_argument("--rig", default=None, help="also compose mission_default.* for this rig")
+            p.add_argument("--live-rtf", type=float, default=None,
+                           help="with --rig: also compose mission_live.* (D151) at this real-time factor")
     args = ap.parse_args(argv)
 
     preset = load_preset(args.preset)
@@ -101,6 +103,8 @@ def main(argv=None) -> int:
         if args.rig:
             from .mission import write_mission
             write_mission(s, args.out, args.rig)
+            if args.live_rtf is not None:
+                write_mission(s, args.out, args.rig, name="live", live=True, rtf=args.live_rtf)
         _write_json(os.path.join(args.out, "manifest.json"),
                     _manifest(args, preset, {"seed": args.seed, "scene_id": s.scene_id}))
     else:
