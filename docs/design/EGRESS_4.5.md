@@ -1,6 +1,6 @@
 # 4.5 Egress (I12) — ρ_responder lattice, D* Lite replanning, 5th-percentile route confidence (A1)
 
-Status: design reviewed (advisor, 2026-10-23; §8), before any code. Decision: D113. Arch §22.1–§22.3, invariant 4. Consumes D110
+Status: built and measured on the evidence spool (§9); design reviewed by advisor before code (§8). Decision: D113. Arch §22.1–§22.3, invariant 4. Consumes D110
 (the map) and D111 (egress traversability, clearance, risk). The 1.8 egress (A* on the slab, D45) stays as the
 ablation baseline.
 
@@ -109,6 +109,18 @@ along the route"). On the 1.8 baseline the same statistic used its slab support 
   - Pre-registered: the support definition used for the calibration rows is the one fixed by this range check, made
     before any validity is computed.
   - Implementation: per z-layer known-masks, convolved with the capsule disc (`cv::filter2D`), not a per-column loop.
+- **Range check, as run (2026-10-23, before any GT scoring):** on the evidence spool the final route's support is
+  min 0.900, median 0.981, max 1.000, so the **spread is 0.0999 < 0.1 and the rule fires** (advisor: the rule is the
+  number, not its parenthetical; a support pinned at 0.90–1.00 cannot rank routes, whatever the cause). The band is
+  derived from recorded geometry only, not from what spreads support:
+  - The rig flies at 0.8–1.2 m (TravParams agent band, worldgen motion 1.0 ± 0.2 m), with a vertical half-FOV of 28°.
+    A voxel counts only within the depth gate `max_depth_m` = 2.84 m (mission_v1).
+  - At the gate range a camera covers ±2.84·tan 28° = ±1.51 m. Over the altitude band that's z ∈ [1.2 − 1.51,
+    0.8 + 1.51] = [−0.31, 2.31] m.
+  - That contains the whole envelope (layers 0.05–1.80 m), so **the observable band equals the full envelope, and
+    the switch is a no-op.**
+  - The calibration rows run with `--support-band -0.31,2.31`, numerically identical to the full envelope (checked).
+    No second fallback; if the calibration is degenerate, it's reported as degenerate (§5).
 - **Exit-gate reroute (review point d):** every reroute in the replan loop is logged with its cause. If none occurs on
   the spools, the gate's "obstacle discovered after route reroutes" stays **open**. Test 5 proves the mechanism and
   does not stand in for a run.
@@ -127,3 +139,42 @@ along the route"). On the 1.8 baseline the same statistic used its slab support 
 3. **A consistent heuristic with many exits:** seeded rhs and the octile from the target (§1); a test with a
    non-nearest cheapest exit (§6).
 4. **The gate's reroute must be a run-level instance**, not the unit test: adopted (§7).
+
+## 9. As built and measured (2026-10-23, D113)
+
+Code: `cpp/planning/route/dstar_lite.{hpp,cpp}`, `cpp/planning/route/egress.{hpp,cpp}`, the `--egress 1` replan loop
+in `ariadne_volumetric_eval`, and `python/analysis/egress_eval.py`. Evidence: `evaluation/runs/egress_4.5/`.
+
+- **Tests** (`tests/unit/test_egress.cpp`, 7, plus the 13 volumetric and traversability tests, all pass):
+  - D* Lite equals a fresh multi-source Dijkstra, exactly, on 6 random 40×50 maps × 30 rounds of 1–12 random cell
+    flips or cost changes, driven through `Update`'s diff and 3×3 path. All 180 rounds had a route. Expanded:
+    17,564 incremental vs 132,932 for the fresh searches (7.6×).
+  - The cheapest exit wins over the octile-nearest one.
+  - The corner rule holds.
+  - No route cell is ever non-traversable (40 random maps).
+  - An obstacle on the route reroutes it, equal to a fresh search; with both doors closed, no route is reported.
+    A penalty-only change raises no obstacle trigger.
+  - The penalty terms check by hand, and body support matches a brute-force voxel count.
+- **Bug found by the first replay and fixed before scoring:** `new_obstacle` fired on every replan. It flagged any
+  changed cell that was non-traversable, including cells that were never traversable and only had their penalty
+  change. It now requires a column that left `trav_r`.
+- **Evidence spool, every 5 s of mission time** (40 replans, about 0.5 s each, nearly all of it spent recomputing
+  D111's maps):
+
+  | | first route | first GT-valid route | routes found / GT-valid | final route | final vs GT geodesic | confidence |
+  |---|---|---|---|---|---|---|
+  | 4.5 D* Lite (support band [−0.31, 2.31]) | 145 s | 145 s | 12 / 12 | exit 1, 4.441 m | 1.0000 | p5 support 0.900–0.902 |
+  | 1.8 A* (D45 baseline) | 145 s | 145 s | 12 / 12 | exit 1, 4.441 m | 1.0000 | slab support 1.0 |
+
+  - The final route is GT-optimal for both: equal length, every cell in GT `trav_responder`.
+  - On this clean scene the weighted cost (w_u = w_c = 1) does not move the route off the geodesic.
+  - Run level: the final incremental cost equals a fresh D* Lite on the final grids (96.9721 cells). All 40
+    replans expanded 771 vertices together, against 342 for one fresh search.
+- **Confidence calibration: degenerate, reported as such (§5).** All 12 routes are valid, and confidence spans
+  0.900–0.902. No second fallback was added.
+- **Exit gate "obstacle discovered after route reroutes": open.** No reroute occurred on the spool: `new_obstacle`
+  fired on 11 replans, none of them on a route cell. Test 5 proves the mechanism. Run-level instances go to the
+  hazard seeds and the L1 obstacle-after-route scenario (8.x).
+- **Open:**
+  - the risk-aware rows (w_r) wait for D112's calibration;
+  - the hazard seeds' spools wait for the AWS renders (the first launch failed on an S3 prefix; fix uncommitted).

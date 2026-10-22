@@ -3047,3 +3047,29 @@ Both are main's (3.2 / 3.5).
 - **Next:** render on AWS g4dn (maintainer, 2026-10-23), run the Phase 1 estimator chain to a spool, then the 4.1
   map, then calibration by the protocol fixed in the design §3: the threshold on seed 0, the report on seeds 1–2,
   and AUC ≥ 0.75 to enter planning.
+
+## 2026-10-23 — D113: 4.5 egress = D* Lite on D111's ρ_responder lattice, many-exit backward search, 5th-percentile body-support confidence
+
+- **What** (`docs/design/EGRESS_4.5.md`, `cpp/planning/route/`):
+  - **Search:** Koenig & Likhachev Fig. 3 (transcribed). The search runs from the exits, each seeded rhs = 0, to
+    the fixed target. k_m = 0, and h = octile(target, ·), which is consistent because every edge costs ≥ its length.
+  - **Lattice:** 1.8's, 8-connected with the corner rule. A non-traversable column has no edge (invariant 4 as a
+    constraint).
+  - **Edge cost:** |x−y|·(1 + mean endpoint penalty), with penalty = w_u(1 − support) + w_r·risk +
+    w_c·max(0, ρ_safe − clearance)/ρ_safe. The weights are 1 / 0 / 1, fixed a priori; w_r stays 0 until D112's
+    calibration passes.
+  - **Support** = the observed fraction of the ρ-capsule body envelope.
+  - **Replan:** every changed cell re-runs UpdateVertex on its 3×3 block.
+- **Why:**
+  - arch §22.1/§22.3 name D* Lite;
+  - the map changes under a fixed plan, and each replan touches only the vertices whose costs changed;
+  - the 1.8 A* stays as the ablation baseline (unchanged).
+- **Measured:**
+  - tests: D* Lite = fresh Dijkstra exactly on 180 random flip rounds (7.6× fewer expansions);
+  - evidence spool: 12/12 routes GT-valid and the final route GT-optimal, the same as 1.8 (both first route at 145 s);
+  - incremental = fresh at the final replan.
+- **Pre-registered range check fired** (support spread 0.0999 < 0.1). The geometric observable band
+  ([−0.31, 2.31] m, from altitude 0.8–1.2 m, half-FOV 28° and the 2.84 m depth gate) contains the whole envelope,
+  so the switch is a no-op (byte-identical support).
+- **Calibration:** degenerate (all valid, confidence 0.900–0.902), reported as degenerate.
+- **Exit-gate reroute:** open; no run-level instance yet.

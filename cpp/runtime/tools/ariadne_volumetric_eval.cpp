@@ -9,10 +9,18 @@
 // python/analysis/volumetric_eval.py scores it exactly as mission_eval.py scores 1.8's slab.
 //
 //   ariadne_volumetric_eval --spool DIR --scene DIR --config configs/mission/mission_v1.yaml --out DIR
+//                           [--egress 1 [--support-band LO,HI]]
+//
+// --egress 1 (4.5, design EGRESS_4.5 §7, D113): every replan_period_s of mission time (1.8's schedule: t0 + k T,
+// then once after the last keyframe), D111's maps -> body support -> the §22.1 penalty -> EgressPlanner (D* Lite,
+// target -> any briefed entrance at rho_responder). One JSON line per replan in egress_routes.jsonl; the final
+// route's support range in results.yaml (the §7 pre-registered range check, read before any GT scoring).
+// --support-band restricts support to voxel layers with centre z in [LO, HI] m (the §7 fallback).
 //
 // Writes slab.png (uint8 0 unknown / 1 free / 2 occupied, row 0 = south), results.yaml, manifest.yaml.
 // The spool reading duplicates ariadne_mission's; it moves onto L1's shared briefing/spool library when that lands.
 // ---------------------------------------------------------------------------
+#include "planning/route/egress.hpp"
 #include "planning/volumetric/esdf.hpp"
 #include "planning/volumetric/frontiers3d.hpp"
 #include "planning/volumetric/traversability.hpp"
@@ -90,12 +98,20 @@ double Ms(std::chrono::steady_clock::time_point t0) {
 int main(int argc, char** argv) {
     try {
         std::string spool_dir, scene_dir, config_path, out;
+        bool egress_on = false;
+        double band_lo = -1e9, band_hi = 1e9;
         for (int i = 1; i + 1 < argc; i += 2) {
             const std::string k = argv[i], v = argv[i + 1];
             if (k == "--spool") spool_dir = v;
             else if (k == "--scene") scene_dir = v;
             else if (k == "--config") config_path = v;
             else if (k == "--out") out = v;
+            else if (k == "--egress") egress_on = v == "1";
+            else if (k == "--support-band") {
+                if (std::sscanf(v.c_str(), "%lf,%lf", &band_lo, &band_hi) != 2 || !(band_hi > band_lo)) {
+                    throw std::invalid_argument("--support-band LO,HI");
+                }
+            }
             else throw std::invalid_argument("unknown argument " + k);
         }
         if (spool_dir.empty() || scene_dir.empty() || config_path.empty() || out.empty()) {
@@ -198,7 +214,62 @@ int main(int argc, char** argv) {
             s_fr.Add(Ms(t0));
             ++integrated[k.agent];
         };
+        // --- 4.5 egress replans (EGRESS_4.5 §4/§7) ----------------------------------------------------------------
+        planning::GridFrame gf;
+        gf.ox = ox, gf.oy = oy, gf.cell = cell, gf.cols = cols, gf.rows = rows;
+        planning::TravParams trp;
+        trp.responder.rho = rho_r;
+        trp.agent.rho = cfg["clearance"]["rho_agent_m"].as<double>();
+        auto ToCell = [&](double x, double y) {   // 1.8's (ariadne_mission)
+            return planning::Cell{int(std::floor((y - oy) / cell)), int(std::floor((x - ox) / cell))};
+        };
+        const planning::Cell target = ToCell(scene["target_xy_m"][0].as<double>(), scene["target_xy_m"][1].as<double>());
+        std::vector<planning::Cell> exits;
+        for (const auto& e : scene["entrances"]) exits.push_back(ToCell(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>()));
+        const planning::EgressWeights ew;   // w_u = w_c = 1, w_r = 0: the risk proxy is uncalibrated (D112 pending)
+        planning::EgressPlanner egress(target, exits, cell);
+        std::ofstream eg_log;
+        if (egress_on) fs::create_directories(out), eg_log.open(fs::path(out) / "egress_routes.jsonl");
+        double first_valid_s = -1;
+        int replans = 0, reroutes = 0;
+        Stats s_replan;
+        planning::EgressReplan last_route;
+        double fresh_cost = -1;
+        size_t fresh_expanded = 0, incremental_expanded = 0;
+        cv::Mat last_support;
+        auto Replan = [&](int64_t t_ns, bool final_replan) {
+            const auto w0 = std::chrono::steady_clock::now();
+            const planning::TraversabilityMaps m = planning::ComputeTraversability(map, esdf, gf, trp);
+            const cv::Mat support = planning::BodySupport(map, gf, trp.responder, band_lo, band_hi);
+            const cv::Mat pen = planning::EgressPenalty(m.clear_r, support, m.risk, ew);
+            const planning::EgressReplan r = egress.Replan(m.trav_r, pen, support, m.risk);
+            s_replan.Add(Ms(w0));
+            const double ts = double(t_ns - kfs.front().t_ns) * 1e-9;
+            if (r.found && first_valid_s < 0) first_valid_s = ts;
+            reroutes += !r.reroute.empty();
+            incremental_expanded += r.expanded;
+            ++replans;
+            std::string trig;
+            for (const auto& t : r.triggers) trig += (trig.empty() ? "\"" : ",\"") + t + "\"";
+            eg_log << "{\"t_s\":" << ts << ",\"final\":" << (final_replan ? "true" : "false") << ",\"found\":"
+                   << (r.found ? "true" : "false") << ",\"exit\":" << r.exit << ",\"length_m\":" << r.length_m
+                   << ",\"cost_cells\":" << (r.found ? r.cost_cells : -1) << ",\"confidence\":" << r.confidence
+                   << ",\"changed_cells\":" << r.changed_cells << ",\"expanded\":" << r.expanded << ",\"ms\":"
+                   << Ms(w0) << ",\"triggers\":[" << trig << "],\"reroute\":\"" << r.reroute << "\",\"cells\":[";
+            for (size_t i = 0; i < r.cells.size(); ++i) eg_log << (i ? "," : "") << "[" << r.cells[i].r << "," << r.cells[i].c << "]";
+            eg_log << "]}\n";
+            if (final_replan) {   // run-level check of the incremental search: a fresh D* Lite on the final grids
+                const planning::DStarLite fresh(m.trav_r, pen, target, exits);
+                fresh_cost = fresh.Cost(), fresh_expanded = fresh.Expanded();
+            }
+            last_route = r, last_support = support;
+        };
+        int64_t next_replan = kfs.front().t_ns + int64_t(cfg["replan_period_s"].as<double>() * 1e9);
         for (const auto& k : kfs) {
+            while (egress_on && k.t_ns >= next_replan) {
+                Replan(next_replan, false);
+                next_replan += int64_t(cfg["replan_period_s"].as<double>() * 1e9);
+            }
             if (k.agent == 1 && !merge_ok) continue;
             if (k.agent == 1 && k.t_ns < t_merge) {
                 held.push_back(k);
@@ -210,6 +281,7 @@ int main(int argc, char** argv) {
             }
             Integrate(k);
         }
+        if (egress_on) Replan(kfs.back().t_ns, true);
 
         // --- slab on the briefing grid (1.8's rule, same band) -------------------------------------------------------
         const int zv0 = int(std::floor(z_lo / tp.voxel)), zv1 = int(std::floor(z_hi / tp.voxel));
@@ -229,11 +301,6 @@ int main(int argc, char** argv) {
         fs::create_directories(out);
         cv::imwrite((fs::path(out) / "slab.png").string(), slab);
         // 4.2 (D111): the capsule traversability at both rho and the [PROXY] risk, on the same grid.
-        planning::GridFrame gf;
-        gf.ox = ox, gf.oy = oy, gf.cell = cell, gf.cols = cols, gf.rows = rows;
-        planning::TravParams trp;
-        trp.responder.rho = rho_r;
-        trp.agent.rho = cfg["clearance"]["rho_agent_m"].as<double>();
         auto t_trav = std::chrono::steady_clock::now();
         const planning::TraversabilityMaps tm = planning::ComputeTraversability(map, esdf, gf, trp);
         const double trav_ms = Ms(t_trav);
@@ -306,6 +373,29 @@ int main(int argc, char** argv) {
             << "traversability: {ms: " << trav_ms << ", responder_cells: " << cv::countNonZero(tm.trav_r)
             << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
             << "risk_terms: {" << risk_where << "}\n";
+        if (egress_on) {
+            // §7 range check (no GT): support along the final route. Flat (spread < 0.1) => the band fallback.
+            std::vector<float> sv;
+            for (const auto& q : last_route.cells) sv.push_back(last_support.at<float>(q.r, q.c));
+            std::sort(sv.begin(), sv.end());
+            auto Q = [&](double p) { return sv.empty() ? 0.0 : double(sv[size_t(std::floor(p * double(sv.size() - 1)))]); };
+            res << "egress:   # 4.5 (EGRESS_4.5, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = 0 (risk uncalibrated)\n"
+                << "  support_band_m: [" << band_lo << ", " << band_hi << "]\n"
+                << "  replans: " << replans << "\n  reroutes: " << reroutes << "\n  first_route_s: " << first_valid_s
+                << "\n  final: {found: " << (last_route.found ? "true" : "false") << ", exit: " << last_route.exit
+                << ", length_m: " << last_route.length_m << ", cells: " << last_route.cells.size()
+                << ", confidence_p5: " << last_route.confidence << "}\n"
+                << "  final_route_support: {min: " << Q(0) << ", p5: " << Q(0.05) << ", median: " << Q(0.5)
+                << ", max: " << Q(1) << ", spread: " << (Q(1) - Q(0)) << "}\n"
+                << "  final_vs_fresh: {incremental_cost_cells: " << (last_route.found ? last_route.cost_cells : -1)
+                << ", fresh_cost_cells: " << (std::isfinite(fresh_cost) ? fresh_cost : -1)
+                << ", equal: " << ((last_route.found ? last_route.cost_cells : -1) == (std::isfinite(fresh_cost) ? fresh_cost : -1) ? "true" : "false")
+                << ", expanded_incremental_all_replans: " << incremental_expanded << ", expanded_fresh_once: " << fresh_expanded << "}\n"
+                << "  ms_per_replan: {mean: " << s_replan.Mean() << ", p95: " << s_replan.Pct(0.95) << "}\n";
+            cv::Mat sup16;
+            last_support.convertTo(sup16, CV_16U, 65535.0);
+            cv::imwrite((fs::path(out) / "egress_support.png").string(), sup16);
+        }
         std::ofstream man(fs::path(out) / "manifest.yaml");
         std::string cmd;
         for (int i = 0; i < argc; ++i) cmd += (i ? " " : "") + std::string(argv[i]);

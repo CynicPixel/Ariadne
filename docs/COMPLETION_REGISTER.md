@@ -137,7 +137,7 @@ identical.
 | 4.2 traversability / risk at ρ_agent and ρ_responder | **partial (D111, A1):** egress = observed column ∧ 3D occupied capsule, agent = altitude-band capsule; evidence spool precision 1.000, recall 0.900, both starts reach the target (1.8: 1.000 / 0.898), strict 3D reported (0.354, target closed) (`evaluation/runs/traversability_4.2/`). **Open: risk proxy calibration against GT zones**: hazard geometry and GT zones done (D112, `ci_tiny_hazard` seeds 0–2); renders on AWS g4dn approved, not yet run; Voxblox half-voxel inflation (P2). |
 | 4.3 NBV (I8) | needs L1 for closed loop |
 | 4.4 allocation (CBBA + broker-greedy) | needs L1 |
-| 4.5 egress (D* Lite, 5th-percentile confidence) | |
+| 4.5 egress (D* Lite, 5th-percentile confidence) | **partial (D113, A1):** D* Lite on D111's ρ_responder lattice (many-exit backward search, 3×3 invalidation), equal to a fresh Dijkstra exactly on 180 random flip rounds (7.6× fewer expansions), with tests for the corner rule, invariant 4 and reroute (`tests/unit/test_egress.cpp`). Evidence spool: 12/12 routes GT-valid, final route GT-optimal (4.441 m), the same as 1.8 (first route 145 s, both); incremental = fresh at the final replan (`evaluation/runs/egress_4.5/`). Confidence calibration **degenerate** (all valid, 0.900–0.902). **Open:** exit-gate reroute (no run-level instance yet), risk-aware rows (wait for D112), hazard-seed rows (wait for AWS renders). |
 | 4.6 TARE / FAR scheduling | Domain 3 survey owed (D45) |
 | 5.1 dark worlds, lamp calibration | **carries 3.1's §31.5 sim row** (dark + co-moving lamp, CLAHE on/off, through `ariadne_place_eval --sim-d90` + `retrieval_rows_eval.py sim`) |
 | 5.2 falloff normalisation (Stage 3) | from 2.2 |

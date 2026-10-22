@@ -1,0 +1,12 @@
+# 4.5 egress replay (docs/design/EGRESS_4.5.md §7, D113). Dev host, one process each, sequential, 2026-10-23.
+# SPOOL = the Phase 1 exit-gate evidence spool build/a1/spool_ev/aadffb8df5790ca0-20261017T072237Z
+#         (git-ignored; content sha256 3bbd1fca7a129ad29908b118d6a536533fa2e6d2f4167c35a32ef5ea36bc35b6, as volumetric_4.1)
+# SCENE = evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+# BASELINE = evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z (1.8 A*, D45)
+# Order (pre-registered, §7): 1. the range check on the final route's support (results.yaml egress.final_route_support,
+# no GT) fired (spread 0.0999 < 0.1); 2. the band derived from geometry ([-0.31, 2.31] m, §7) was fixed and written into
+# the design; 3. both runs; 4. only then the GT scoring.
+ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT --egress 1 --support-band -0.31,2.31
+ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT_FULL --egress 1   # full_envelope/: secondary row; egress_support.png byte-identical
+python3 -I python/analysis/egress_eval.py --scene SCENE --run OUT --baseline BASELINE --out OUT
+# Binary: build at the working tree over e2e538d with the 4.5 sources uncommitted (manifest git_dirty: true).
