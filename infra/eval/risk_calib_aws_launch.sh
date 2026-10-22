@@ -12,7 +12,7 @@ AWS=infra/scripts/aws.sh
 ACCT=836505524290 REGION=eu-north-1
 REG=$ACCT.dkr.ecr.$REGION.amazonaws.com REPO_ECR=ariadne/ariadne-core
 BUCKET=s3://ariadne-$ACCT-eun1
-STAGE=$BUCKET/staging/risk_calib
+STAGE=$BUCKET/runs/risk_calib-staging   # under runs/: the instance role reads runs/* only (terraform compute module)
 W=build/risk_calib_aws
 SEEDS="${SEEDS:-0 1 2}"
 IMAGES=("ariadne/core-dev:dev ariadne/core-dev:dev" "ariadne/sim:dev ariadne/sim:dev")

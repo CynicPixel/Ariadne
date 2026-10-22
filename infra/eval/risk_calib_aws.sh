@@ -2,7 +2,7 @@
 # 4.2 risk-proxy calibration renders (design RISK_ZONES_4.2 §3, D112) on ONE fresh g4dn.xlarge. Runs as root ON THE
 # INSTANCE, from spinup.sh's copy of the launching working tree:
 #   infra/scripts/spinup.sh run --profile gpu --max-minutes 240 -- \
-#     'STAGE=s3://<bucket>/staging/<id> COMMIT=<sha> REG=<ecr registry> SEEDS="0 1 2" bash infra/eval/risk_calib_aws.sh'
+#     'STAGE=s3://<bucket>/runs/risk_calib-staging COMMIT=<sha> REG=<ecr registry> SEEDS="0 1 2" bash infra/eval/risk_calib_aws.sh'
 # Inputs staged under $STAGE by infra/eval/risk_calib_aws_launch.sh (nothing is built remotely):
 #   images.txt     "<ecr ref> <local name> <image id>": ariadne/sim:dev (render) and ariadne/core-dev:dev (estimator)
 #   inputs.tar     the generated scenes build/worldgen/scenes/ci_tiny_hazard_<seed> and the payload binaries
