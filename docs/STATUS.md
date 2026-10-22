@@ -4,6 +4,12 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — Phase 5 (DVE) opens on `feat/ph5-dve`: session A2 claims D130–D149
+
+- **Decision IDs D130–D149 are claimed by session A2** for Phase 5 (5.1–5.6 and the exit gate), the 3.1 sim dark
+  retrieval row and the TUM fr1 time-offset follow-up. D100–D109 stay A2's for 2.6/L2/3.3 (D100–D102 used).
+- Branch `feat/ph5-dve` from `main` (f8c7030). Design preflight first (literature, OpenCV-native check, review).
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.
