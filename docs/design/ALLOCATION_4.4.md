@@ -192,3 +192,31 @@ and the common scales: no new constant.
     undercount. That's why the test codec was never a claim.
   - If CBBA bytes ever feed a predicted-vs-measured claim, COLLAB_3.2 §7's rules apply: first transmission only,
     overhead as separate rows.
+
+## 12. Replay rows, as measured (2026-10-23; `evaluation/runs/allocation_4.4_replay/`)
+
+The real `Phase4Planner` on the evidence spool, 40 replans. Agent 1 is active only after the merge (12 linked
+replans).
+
+| | value |
+|---|---|
+| CBBA = SGA (L_t = 1) | **40 / 40** |
+| CBBA / optimum, linked replans | mean 0.994, worst 0.983 |
+| greedy joint pick / optimum, linked replans | mean 0.985, worst 0.900 |
+| CBBA rounds: single agent / linked | ≤ 2 (no messages) / 2–3 |
+| TASK_CONSENSUS per message, linked | 2.4 KB (≈ 160 tasks × 13 B + scales + framing) |
+| per linked event | 13.9 KB |
+| events triggered | 32 / 40 (31 by "tasks", 1 "first"); 8 reused the last assignment |
+| bytes, event-triggered vs every replan | 123.4 KB vs 166.3 KB (−26 %) |
+| Plan() per replan, both agents | p50 2.9 s, max 9.5 s (fine under lockstep) |
+
+**Reported as measured, not tuned:**
+- **Event triggering saves only 26 %.** 4.3's target set churns on nearly every replan, as the map grows, so "new
+  task" fires.
+- **A message carries every task (≈ 160).** At 2.4 KB that undercuts §21.7's byte rationale on this spool.
+- **The obvious remedies are design changes, not knobs:**
+  - announce only the tasks an agent can bid on (the top-K by its own c̄);
+  - send deltas against the last acknowledged state.
+  - Each would need its own review and a byte-table row; none is applied here.
+- **The first replay exposed a convergence bug,** fixed in `63fdbee`: single-agent events ran to the 1000-round cap
+  because "converged" required agreement across disconnected agents.

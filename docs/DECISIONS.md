@@ -3132,3 +3132,9 @@ Both are main's (3.2 / 3.5).
 - **D115 correction (2026-10-23):** "CBBA = SGA under DMG" is exact at **L_t = 1** (2000 / 2000) but not at L_t = 2
   (5 / 1000 diverge through a stale second-slot bid, each with an eq. 6 tail release; a hand-built instance pins
   it). **Default L_t = 1.** L_t = 2 is a reported row, and its round and 50 % bounds are empirical there.
+- **D115 measured (2026-10-23, replay; `evaluation/runs/allocation_4.4_replay/`):**
+  - CBBA = SGA on 40 / 40 replans. CBBA/optimum on linked replans: mean 0.994, worst 0.983 (greedy pick: 0.985 /
+    0.900).
+  - 2.4 KB per TASK_CONSENSUS message, 13.9 KB per linked event.
+  - Event triggering saves only 26 % of bytes, because 4.3's task set churns. That's reported, not tuned; top-K
+    announcement and deltas are listed as possible design changes.
