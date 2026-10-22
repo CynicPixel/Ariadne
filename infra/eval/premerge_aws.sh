@@ -47,7 +47,10 @@ aws s3 cp "$STAGE/inputs.tar" - | tar x -C "$REPO" || fail "inputs.tar"
 (cd "$REPO" && sha256sum -c --quiet inputs.SHA256SUMS) > "$R/inputs_check.txt" 2>&1 || fail "inputs sha256"
 rec=$(cat "$REPO/inputs.recording_path")
 mkdir -p "$REPO/$rec"
-aws s3 sync "$DATA/" "$REPO/$rec/" --only-show-errors || fail "recording sync"
+# File by file from the checksum list: GetObject only (the runner role has no ListBucket, so no `s3 sync`).
+(cd "$REPO/$rec" && sed -E 's/^[0-9a-f]{64}  \.\///' "$REPO/recording.SHA256SUMS" \
+  | xargs -P 4 -I{} sh -c 'mkdir -p "$(dirname "{}")" && aws s3 cp "'"$DATA"'/{}" "{}" --only-show-errors') \
+  || fail "recording fetch"
 (cd "$REPO/$rec" && sha256sum -c --quiet "$REPO/recording.SHA256SUMS") > "$R/recording_check.txt" 2>&1 \
   || fail "recording sha256"
 rm -f "$REPO/inputs.SHA256SUMS" "$REPO/recording.SHA256SUMS" "$REPO/inputs.recording_path"

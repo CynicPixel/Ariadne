@@ -13,8 +13,10 @@ AWS=infra/scripts/aws.sh
 ACCT=836505524290 REGION=eu-north-1
 REG=$ACCT.dkr.ecr.$REGION.amazonaws.com REPO_ECR=ariadne/ariadne-core
 BUCKET=s3://ariadne-$ACCT-eun1
-STAGE=$BUCKET/staging/premerge
-DATA=$BUCKET/datasets/phase1_sim_record/ci_tiny_0-20261001T133914Z/raw
+# Both under runs/: the runner role may read and write runs/* only and "cannot touch datasets/" (compute module,
+# least privilege; maintainer kept it, 2026-10-23). runs/ has no expiry (IA transition only), so the copy persists.
+STAGE=$BUCKET/runs/_staging/premerge
+DATA=$BUCKET/runs/_datasets/phase1_sim_record/ci_tiny_0-20261001T133914Z/raw
 REC=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
 W=build/premerge_aws
 IMAGES=("ariadne/core-dev:m-premerge ariadne/core-dev:dev" "ariadne-recon:1 ariadne-recon:1"
