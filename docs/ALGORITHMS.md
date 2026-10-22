@@ -3367,10 +3367,66 @@ the domain owed since the start (rate-limited twice) and since D45.
 
 | Method | Source | Content | Ariadne |
 |---|---|---|---|
-| **CBBA** (Choi, Brunet, How) | T-RO 25(4):912–926, 2009, DOI 10.1109/TRO.2009.2022423 (*abstract*; the T-RO PDF was not reachable: MIT DSpace serves HTML, CORE a Cloudflare challenge) | bundle construction by marginal score under diminishing marginal gain (DMG); consensus on winning bids, winners and timestamps; conflict-free convergence with a worst-case guarantee under DMG | §21.7: bundles of 1–2, event-triggered. **The receiver/sender action table (update / reset / leave) must be transcribed from the paper itself before 4.4 code**: owed, with a request to the maintainer for the PDF |
+| **CBBA** (Choi, Brunet, How) | T-RO 25(4):912–926, 2009, DOI 10.1109/TRO.2009.2022423. **Read in primary text** (2026-10-23): MIT Open Access copy, DSpace bitstream `9954d25d-991a-4c8d-be1d-3574ee986f43`; Table I transcribed from the rendered p. 917, since its text layer does not extract | bundle construction by marginal score under diminishing marginal gain (DMG); consensus on winning bids, winners and timestamps; conflict-free convergence with a worst-case guarantee under DMG. Algorithm 3, eqs. (3)–(6) and Table I are transcribed below (§22.3.1) | §21.7: bundles of 1–2, event-triggered. 4.4 implements §22.3.1 exactly |
 | **HRCA**, a CBBA variant | ACC 2011 ([PDF](https://skoge.folk.ntnu.no/prost/proceedings/acc11/data/papers/1172.pdf)) | read: CBBA's two phases, the DMG condition, a marginal score with insertion `⊕_n`, the `update / reset / leave` action names and a two-bidder rule table (its own, not CBBA's) | confirms the shape of the rules; not a substitute for Table I |
 | **GACA** (grouping auction-consensus) | [arXiv:2608.15884](https://arxiv.org/abs/2608.15884) | nearest-neighbour task grouping before allocation; group-level claim, acquire and contest actions; a per-agent conflict graph resolved by component; timestamps to compensate for communication discrepancies | §21.7's "experimental extension"; Ariadne's spatial clustering step plays the same role |
 | **Exact optimum** | `cv::solveLP` (OpenCV core, `optim.hpp`) | the assignment LP is integral (totally unimodular), so the simplex gives the optimal assignment | **4.4's oracle:** CBBA and broker-greedy are graded against the exact optimum on every logged round |
+
+#### 22.3.1 CBBA, transcribed (Choi, Brunet & How 2009, §IV, Algorithm 3, eqs. (3)–(6), Table I)
+
+**Per-agent state:**
+- winning bids y_i ∈ R₊^{N_t};
+- winners z_i ∈ I^{N_t};
+- bundle b_i and path p_i, each of length ≤ L_t;
+- timestamps s_i ∈ R^{N_u}.
+
+**Phase 1, BuildBundle (Algorithm 3).** While |b_i| < L_t:
+- c_ij = max_{n ≤ |p_i|} S_i^{p_i ⊕_n {j}} − S_i^{p_i} for every j ∉ b_i (eq. 3; c_ij = 0 if j ∈ b_i);
+- h_ij = 𝟙(c_ij > y_ij);
+- J_i = argmax_j c_ij · h_ij;
+- n_{i,J_i} = argmax_n S_i^{p_i ⊕_n {J_i}};
+- b_i = b_i ⊕_end {J_i}; p_i = p_i ⊕_{n_{i,J_i}} {J_i};
+- y_{i,J_i} = c_{i,J_i}; z_{i,J_i} = i.
+
+The recursion ends when |b_i| = L_t or h_i = 0. Ties are broken lexicographically by agent and task id (§III-B).
+
+**Timestamps (eq. 5):** on each message, s_ik = τ_r (the reception time) if g_ik = 1, else max_{m: g_im = 1} s_mk.
+
+**The three actions on task j:**
+- update: y_ij = y_kj, z_ij = z_kj;
+- reset: y_ij = 0, z_ij = ∅;
+- leave: no change.
+
+**Table I: receiver i's action on task j, from sender k's message** (default: leave). m, n are other agents.
+
+| k thinks z_kj | i thinks z_ij | receiver's action |
+|---|---|---|
+| k | i | if y_kj > y_ij → update |
+| k | k | update |
+| k | m ∉ {i,k} | if s_km > s_im or y_kj > y_ij → update |
+| k | none | update |
+| i | i | leave |
+| i | k | reset |
+| i | m ∉ {i,k} | if s_km > s_im → reset |
+| i | none | leave |
+| m ∉ {i,k} | i | if s_km > s_im and y_kj > y_ij → update |
+| m ∉ {i,k} | k | if s_km > s_im → update; else → reset |
+| m ∉ {i,k} | m | if s_km > s_im → update |
+| m ∉ {i,k} | n ∉ {i,k,m} | if s_km > s_im and s_kn > s_in → update; if s_km > s_im and y_kj > y_ij → update; if s_kn > s_in and s_im > s_km → reset |
+| m ∉ {i,k} | none | if s_km > s_im → update |
+| none | i | leave |
+| none | k | update |
+| none | m ∉ {i,k} | if s_km > s_im → update |
+| none | none | leave |
+
+**Bundle release (eq. 6):** if an update or reset touched a task in b_i, let n̄_i = min{n : z_{i,b_in} ≠ i}. Then:
+- y_{i,b_in} = 0 and z_{i,b_in} = ∅ for every n > n̄_i;
+- b_in = ∅ for every n ≥ n̄_i.
+
+The tasks added after the outbid one are released, because their marginal scores assumed it. With L_t = 1, CBBA reduces to CBAA.
+
+**Guarantee (§V–VI):** under DMG (eq. 7, c_ij[b_i] ≥ c_ij[b_i ⊕_end b]), conflict-free convergence within N_min·D
+iterations, where D is the network diameter, and 50 % of the optimum in the worst case.
 
 ### 22.4 Routing (4.5 egress, 4.6 exploration-time)
 
