@@ -1,4 +1,4 @@
-# L2 (D91): the sim IMU noise operator's config (core/inertial/imu_noise_operator.hpp), applied at consumption time
+# L2 (D101): the sim IMU noise operator's config (core/inertial/imu_noise_operator.hpp), applied at consumption time
 # to the rig's clean IMU stream like D to the pixels: ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml.
 # Values: the ADIS16448 as EuRoC models it (mav0/imu0/sensor.yaml, Kalibr densities) -- a real MAV-class MEMS IMU,
 # so sim and EuRoC share one noise regime. rate_hz must match the rig's imu.period_ns (5 ms).

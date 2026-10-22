@@ -7,7 +7,7 @@
 //   ariadne_sim_vo --rec RECDIR --scene SCENEDIR --perception-config YAML
 //                  --slam-config YAML --out DIR [--agent 0] [--frames N] [--seed S]
 //                  [--degradation YAML]   (2.2: apply D with this named config; default none)
-//                  [--imu-noise YAML]     (L2, D91: expose the IMU through this seeded noise operator; default no IMU)
+//                  [--imu-noise YAML]     (L2, D101: expose the IMU through this seeded noise operator; default no IMU)
 // ---------------------------------------------------------------------------
 #include "perception/degradation/degradation_config.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"

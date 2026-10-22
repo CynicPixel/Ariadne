@@ -91,7 +91,7 @@ public:
     /// Camera `cam`'s (0 left, 1 right) calibrated flat field for the radiometric stage; empty (K = 1) when the
     /// source has none -- EuRoC publishes none (2.2).
     virtual perception::radiometric::FlatField FlatFieldOf(int /*cam*/) const { return {}; }
-    /// The named IMU noise operator config applied to Imu() (L2, D91), "none" if none.
+    /// The named IMU noise operator config applied to Imu() (L2, D101), "none" if none.
     virtual std::string ImuNoiseConfig() const { return "none"; }
 };
 
@@ -264,13 +264,13 @@ public:
     uint32_t Agent() const override { return uint32_t(agent_); }
     std::string DegradationConfig() const override { return degradation_ ? degradation_name_ : "none"; }
     perception::radiometric::FlatField FlatFieldOf(int cam) const override { return flat_[cam == 0 ? 0 : 1]; }
-    /// The IMU only once SetImuNoise was called (L2, D91): without it the source exposes no IMU, so default sim
+    /// The IMU only once SetImuNoise was called (L2, D101): without it the source exposes no IMU, so default sim
     /// runs (imu_mode none, the Phase-1 gate) see exactly what they saw before.
     std::vector<core::ImuMeasurement> Imu() const override { return imu_; }
     core::ImuNoise ImuNoiseModel() const override { return imu_noise_ ? imu_noise_->noise : core::ImuNoise{}; }
     std::string ImuNoiseConfig() const override { return imu_noise_ ? imu_noise_->name : "none"; }
 
-    /// Read the canonical (clean) IMU stream and apply the seeded noise operator `p` (L2, D91;
+    /// Read the canonical (clean) IMU stream and apply the seeded noise operator `p` (L2, D101;
     /// core/inertial/imu_noise_operator.hpp). The seed derives from the run seed and the agent, as D's do. A config
     /// with all densities 0 exposes the clean stream. ImuNoiseModel() then reports exactly the injected model.
     void SetImuNoise(const core::ImuNoiseOperatorParams& p, uint64_t run_seed) {

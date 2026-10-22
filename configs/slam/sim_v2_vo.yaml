@@ -1,4 +1,4 @@
-# L2 (D91, 2026-10-22): sim_v2 as it was before it switched to imu.mode full -- the visual-only v2 path. D69 (2.2)
+# L2 (D101, 2026-10-22): sim_v2 as it was before it switched to imu.mode full -- the visual-only v2 path. D69 (2.2)
 # and the synthetic StereoVo tests ran this. Every value is the pre-switch sim_v2's.
 # 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder SLAM for the simulated rig: euroc.yaml with the depth floor of sim_v1.

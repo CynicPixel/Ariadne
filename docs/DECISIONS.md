@@ -2690,9 +2690,9 @@ metric as `INERTIAL_2.4.md` §4.9.
     alone.
   - **Maintainer's call** whether V1_03 alone justifies building it (register: 2.1 row).
 
-## 2026-10-22 — D91: L2 — the seeded sim IMU noise operator; sim_v2 runs the full inertial layer
+## 2026-10-22 — D101: L2 — the seeded sim IMU noise operator; sim_v2 runs the full inertial layer
 
-(Decision IDs D90–D99 are claimed by this session in STATUS on `feat/2.6-tum`.)
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.)
 
 - **Operator:** `core/inertial/imu_noise_operator.hpp`. It applies the Kalibr/EuRoC continuous model, discretised at
   the nominal rate, to the sim's clean canonical IMU stream at consumption time (D37), like D:

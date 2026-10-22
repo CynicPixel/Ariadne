@@ -1,4 +1,4 @@
-# L2 (D91, 2026-10-22): sim_v2 runs the full inertial layer (D59) on the sim IMU through the seeded noise operator
+# L2 (D101, 2026-10-22): sim_v2 runs the full inertial layer (D59) on the sim IMU through the seeded noise operator
 # (ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml; without it the runner refuses: no IMU). The imu section
 # is euroc_v2's with the noise inflation 1 (the injected model IS the estimator's model). The visual-only v2 path
 # is sim_v2_vo.

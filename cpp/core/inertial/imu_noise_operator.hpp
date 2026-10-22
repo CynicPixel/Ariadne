@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// L2 (D91): the seeded sim IMU noise operator -- D's counterpart for the IMU.
+// L2 (D101): the seeded sim IMU noise operator -- D's counterpart for the IMU.
 //
 // The sim records a CLEAN IMU stream (rig imu.period_ns; D37: noise is a
 // consumption-time operator). This applies the standard continuous-time model

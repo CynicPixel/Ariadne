@@ -46,7 +46,7 @@ identical.
 
 | area | state | evidence / missing |
 |---|---|---|
-| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. Sim IMU noise operator built (L2, D91). |
+| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. Sim IMU noise operator built (L2, D101). |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
 | Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, **draft**. ALIKED+LightGlue hard pairs: D63. **Sim-rig exports (1280×720 RGB) for EigenPlaces and ALIKED: not built (—).** |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73). **Certificate D74: not started (B).** |
@@ -61,7 +61,7 @@ identical.
 | id | item | state | owner |
 |---|---|---|---|
 | L1 | **Live closed-loop runtime:** `ros2/ariadne_{agent,bridge,operator,sim}` hold no source. Gazebo live → bridge → estimator → mission → mover commands. Needed by 4.3/4.4 (NBV acting), 7.1 (agentic actions), 8.1/8.5 (missions, demo). | **not started** | — (must be assigned; arch §5.4, §5.10, D38–D40 note "the bridge stays for live runs") |
-| L2 | Sim IMU noise operator (seeded, consumption-time, like D) | done | A2: D91. `--imu-noise`, prefix-replay bit-identical; sim_v2 imu full initialises (ATE 3.06 mm, 1000 frames). Not wired into `ariadne_sim_collab`. |
+| L2 | Sim IMU noise operator (seeded, consumption-time, like D) | done | A2: D101. `--imu-noise`, prefix-replay bit-identical; sim_v2 imu full initialises (ATE 3.06 mm, 1000 frames). Not wired into `ariadne_sim_collab`. |
 | L3 | Sim-rig retrieval / hard-pair exports (1280×720 RGB) for EigenPlaces and ALIKED+LightGlue | not started | — (D62/D63 are EuRoC-scoped; needed by the 3.4 plot, 3.5, sim missions) |
 | L4 | Reference-export regeneration as one command (`models.sh eigenplaces`, `aliked-lg`) | partial | A1 (commands documented in PERCEPTION_2.1 §13; the gate's cache copy is local only) |
 | L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | not started | A1 |
@@ -105,7 +105,7 @@ identical.
 | 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. **D62 draft** (exact-default deviation). Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4–L6. CLAHE retrieval split not run. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
-| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 built (D91). | M |
+| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 built (D101). | M |
 | 2.5 robust back end | **partial: D74 not started** | D70–D73 part 2c | B |
 | 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
 | Gate: FD Jacobian suite | done | | |

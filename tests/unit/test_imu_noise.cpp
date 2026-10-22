@@ -1,4 +1,4 @@
-// L2 (D91): the seeded sim IMU noise operator -- determinism and the discretised noise statistics.
+// L2 (D101): the seeded sim IMU noise operator -- determinism and the discretised noise statistics.
 #include "core/inertial/imu_noise_operator.hpp"
 
 #include <gtest/gtest.h>
