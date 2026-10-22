@@ -3109,3 +3109,25 @@ Maintainer-approved 2026-10-23.
     ci_tiny_0 recording is their "ambient normal" row.
 - **Upload:** each recording goes to `runs/ph5-dark/<commit>/` as soon as it finishes, because a spot reclaim skips
   spinup's end-of-run upload.
+
+## 2026-10-23 — D138: 5.5 confined worlds and the one-pass baseline sweep
+
+**Confined worlds.** `configs/worldgen/confined_v1.yaml`: maze_short's grammar squeezed.
+- Responder corridors at the grid minimum (0.90 m).
+- Three agent-only narrow passages at 0.45–0.60 m, inside the Z_min ≤ 0.3 m regime of §9.4.
+- 2.2–2.4 m ceilings and more braids.
+- Acceptance: 20/20 seeds (`worldgen accept`, seeds 0–19). Missions 237–340 s. Where narrow passages are used, agent
+  routes are shorter than responder routes.
+
+**Baseline sweep (§9.1, §31.8).**
+- Rig option `stereo.sweep_baselines_m`: extra right cameras `right_b04/08/12/20`, rendered in the SAME pass as the
+  main pair. Every baseline sees identical frames, poses and lighting, and the sweep costs one render, not four.
+- They are bridged and recorded through the mission's bridge YAML, and `sim_record` verifies each one's count, period
+  and pairing with the left camera.
+- `configs/sim/rig_stereo_sweep_v1.yaml` = v1 + the sweep.
+- Rigs without the key are unchanged: v1 worldgen output stays byte-identical to main (0 differing files).
+- Tests: worldgen 106/106, including sweep poses, topics, the manifest and distinct baselines.
+- **Consumer side, not built yet:** SimSource picks the right camera by name and takes the baseline from the manifest's
+  `t_B_camera_m`. That change is in `stereo_source.hpp`, so it lands after the 2.6/L2 merge.
+- §9.4's validator already exists (`perception_config.hpp`, `MinObservableRange`). The B = 20 cm row needs
+  `num_disparities` 512, or it must declare its blind zone.

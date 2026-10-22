@@ -1,0 +1,46 @@
+# Agent sensor rig (arch §5.3, design SIM_1.1-1.3 §5). sweep_v1 (5.5, D138) = v1 plus the §9.1 baseline-sweep
+# right cameras, rendered in the same pass. One source of truth for the
+# simulated rig; the mission manifest copies it, the estimator reads the same file.
+name: rig_stereo_sweep_v1
+camera:
+  width: 1280
+  height: 720
+  hfov_deg: 90.0            # fx = fy = (width/2) / tan(hfov/2) = 640 px
+  rate_hz: 20
+  near_m: 0.05
+  far_m: 60.0
+  # The RENDER is an exact pinhole: gz Harmonic's ogre2 ignores SDF lens distortion
+  # (SMOKE §4n), so the SDF carries none and camera_info is honest about it. In the
+  # pixel-centre convention the render's principal point is ((W-1)/2, (H-1)/2); gz's
+  # camera_info states (W/2, H/2) (its continuous convention, measured +0.5 px, §4n).
+# The camera the ESTIMATOR sees (D41): the Brown-Conrady lens applied at READ time by
+# perception/degradation/lens.hpp to the pinhole render (arch §5.3: the undistort path
+# is exercised, with exactly known coefficients). Pixel-centre convention, OpenCV
+# coefficient order. fx must exceed the render's for barrel distortion to stay inside
+# the render: the minimum for these coefficients is 674.05 px; 680 leaves >= 3 px.
+lens:
+  model: plumb_bob
+  fx: 680.0
+  fy: 680.0
+  cx: 639.5
+  cy: 359.5
+  k1: -0.05
+  k2: 0.01
+  p1: 0.0005
+  p2: -0.0002
+  k3: 0.0
+stereo:
+  baseline_m: 0.10
+  sweep_baselines_m: [0.04, 0.08, 0.12, 0.20]   # extra right cameras right_b04/b08/b12/b20 (§9.1, §31.8)
+# Body frame = IMU frame: x forward, y left, z up. The left camera's optical
+# centre sits forward and above the IMU so T_B_C is not an identity.
+left_camera_in_body_m: [0.03, 0.05, 0.02]
+depth:
+  enabled: 1                # GT only: co-located with the left camera, never shown to perception
+imu:
+  period_ns: 5000000        # 200 Hz, clean (noise is a consumption-time operator, D37)
+lamp:
+  intensity: 0.0            # inert until Phase 5
+  inner_deg: 25.0
+  outer_deg: 40.0
+  in_body_m: [0.05, 0.0, 0.04]

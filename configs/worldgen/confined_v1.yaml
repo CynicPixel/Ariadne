@@ -1,0 +1,14 @@
+# Phase 5 (5.5, D138): confined spaces. maze_short's grammar squeezed: responder corridors at their minimum width
+# (2 rho_responder + grid = 0.85 m, so 0.90 on the 5 cm grid), three agent-only narrow passages at 0.45-0.60 m (Z_min <= 0.3 m territory,
+# §9.4), low ceilings, more braids so routes actually use the narrow passages. Lit as ci_tiny (ambient + zone
+# lights): the baseline sweep isolates GEOMETRY; the dark variant is a lighting override, not a new layout.
+name: confined_v1
+lattice: {nx: 3, ny: 3, cell_m: 6.0}
+rooms: {count: [3, 4], size_m: [3.0, 4.0]}
+corridors: {width_m: [0.9, 1.0], narrow_count: 3, narrow_width_m: [0.45, 0.60]}
+topology: {cover_edges_max: 2, extra_edges: 2, dead_end_stubs: 1}
+entrances: {count: 2, vestibule_m: 2.5}
+target: {path_length_m: [10.0, 20.0]}
+clearance: {rho_agent_m: 0.20, rho_responder_m: 0.40}
+structure: {grid_m: 0.05, wall_height_m: [2.2, 2.4]}
+search: {max_attempts: 50}
