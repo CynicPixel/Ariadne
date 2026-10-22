@@ -1,0 +1,10 @@
+[22:36:40] 0. build + full ctest
+[22:41:06] 1. sim_collab clean + faults (parallel)
+[22:51:37] 2. recon prepare
+[22:52:33] 2. render REUSED from build/render_cache/f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a (pre-merge)
+[22:52:33] 2. recon score
+[22:52:37] 3. mission merged / agent 0 / agent 1
+[22:52:49] 4. report
+[22:52:54] 5. console check
+[22:52:54] 6. gate
+[22:52:55] PASS: build/premerge/aadffb8df5790ca0-20261022T223640Z

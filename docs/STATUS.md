@@ -1221,3 +1221,22 @@ restoration ablations easier than reality. Neither blocks Phase 0.
 
 Arch §3's tree names `docs/ARCHITECTURE.md`; the real file is
 `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md`. Source of truth not renamed.
+
+## 2026-10-23 — main integrated (2.1, 2.5, 2.6, L2, 3.3 + B's SE-Sync evidence); pre-merge PASS on AWS (M)
+
+- **Merges:** feat/2.1-perception, feat/2.5-robust-backend, feat/2.6-tum, feat/l2-sim-imu-noise, feat/3.3-comms, plus
+  B's SE-Sync large-graph evidence (cherry-picked: sphere/torus/cubicle/grid3D certified, rim not).
+- **Pre-merge (D49) on AWS:** `infra/eval/premerge_aws_launch.sh stage|run|teardown`, run `20261022T223316Z-cpux86-0fc2f6`, commit a26bb6b.
+  - **VERDICT PASS:** 54/54 gate checks, ctest 539/539; every determinism check matched, including Phase 1's
+    `bytes.json`.
+  - Evidence: `evaluation/runs/premerge_aws/20261022T223316Z-cpux86-0fc2f6/` (summaries; renders and raw traces not committed).
+- **Found by the AWS runs and fixed:**
+  - phase1.sh never passed the D90 sim-rig exports, so A1's L3 tests failed under `ARIADNE_REQUIRE_MODELS=1`
+    (a26bb6b);
+  - the runner role reads `runs/*` only, so staging and the persistent recording moved under `runs/` (maintainer
+    kept the role's datasets/ exclusion);
+  - git safe.directory (no HOME in user-data);
+  - the gate now runs as uid 1000.
+- **Cost of the five launches:** about $0.08, compute only.
+- **Persistent:** the Phase 1 recording at `runs/_datasets/phase1_sim_record/…` (12.6 GB). Uploaded once.
+- **Not done:** the Phase 2 full exit-gate run (fresh GPU render).
