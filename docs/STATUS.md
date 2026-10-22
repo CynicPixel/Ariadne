@@ -4,6 +4,22 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — Session B opens L1 (live closed-loop runtime), then 7.1–7.2; D150–D169 claimed
+
+- **Decision IDs D150–D169 are claimed by session B**, before any of them is written.
+- **Scope, in order:**
+  - the 2.5 tail: the large SE-Sync certificate graphs (D74, maintainer-approved);
+  - **L1**, on `feat/live-runtime`: live Gazebo → `ros_gz_bridge` → the replay estimator path; mission decisions → the
+    kinematic mover's goto / follow / hold; the console fed live. Acceptance: one live two-agent run that closes
+    the loop, and a recording of it whose replay reproduces the estimator outputs.
+  - **7.1–7.2**, on `feat/ph7-agentic`: the MCP tool surface, the Bedrock orchestrator (D84), and the classical
+    ablation as "skip the choose step".
+- **Not taken:** the gravity-prior plumbing into agent subgraphs and the `RobustJointSolve` call in `SolveMultiAgent`
+  (main session).
+- **Live runs use AWS GPU** (one g4dn.xlarge spot, the D84 quota). The host has no GPU.
+
+---
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.
