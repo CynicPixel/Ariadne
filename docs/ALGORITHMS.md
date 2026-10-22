@@ -3425,8 +3425,15 @@ The recursion ends when |b_i| = L_t or h_i = 0. Ties are broken lexicographicall
 
 The tasks added after the outbid one are released, because their marginal scores assumed it. With L_t = 1, CBBA reduces to CBAA.
 
-**Guarantee (§V–VI):** under DMG (eq. 7, c_ij[b_i] ≥ c_ij[b_i ⊕_end b]), conflict-free convergence within N_min·D
-iterations, where D is the network diameter, and 50 % of the optimum in the worst case.
+**Guarantees, as stated (checked against §V–VI, not from memory):**
+- **Theorem 1** (DMG, synchronized conflict resolution, static network of diameter D): CBBA produces the **same
+  solution as sequential greedy (SGA)** and converges to a conflict-free assignment within N_min·D iterations, with
+  N_min = min{N_t, N_u·L_t}.
+- **Dynamic network:** if every window of ρ consecutive graphs is jointly connected, the bound is ρ·N_min.
+- **Theorem 2** (DMG, accurate situational awareness): M_OPT ≤ 2·CBBA, i.e. 50 % optimality.
+- **Consequence for 4.4:** under DMG, CBBA and a broker's centralized sequential greedy give the **same
+  assignment**. Their difference is communication: bytes, rounds and robustness to a lost broker. It is not
+  solution quality, so §21.7's "both logged identically" can be checked as an exact equality.
 
 ### 22.4 Routing (4.5 egress, 4.6 exploration-time)
 
