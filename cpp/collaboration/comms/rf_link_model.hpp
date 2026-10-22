@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 3.3 (D92): the RFComms-derived LinkModel with wall attenuation (arch §5.7).
+// 3.3 (D102): the RFComms-derived LinkModel with wall attenuation (arch §5.7).
 //
 // PHYSICAL LAYER, transcribed from gz-sim8 src/systems/rf_comms/RFComms.cc
 // (read 2026-10-22), so the broker reproduces what the sim's RFComms plugin

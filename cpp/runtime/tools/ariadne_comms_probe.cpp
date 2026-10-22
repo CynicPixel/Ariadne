@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_comms_probe: the 3.3 comms node's link state along a sim mission's GT trajectories (D92).
+// ariadne_comms_probe: the 3.3 comms node's link state along a sim mission's GT trajectories (D102).
 //
 //   ariadne_comms_probe --rec DIR --scene DIR --comms YAML --out DIR [--rate-hz R]
 //

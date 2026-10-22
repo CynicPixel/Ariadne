@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 3.3 (D92): the comms broker node -- the accounting/policy layer of arch §5.7.
+// 3.3 (D102): the comms broker node -- the accounting/policy layer of arch §5.7.
 //
 // It OWNS, for one mission:
 //   - the link stack: a base LinkModel (ideal, or RFComms-derived with or without wall attenuation;

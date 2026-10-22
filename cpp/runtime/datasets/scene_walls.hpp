@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 3.3 (D92): the sim scene's GT wall faces and the agents' GT body tracks, for the comms node's link model
+// 3.3 (D102): the sim scene's GT wall faces and the agents' GT body tracks, for the comms node's link model
 // (collaboration/comms/rf_link_model.hpp). File I/O stays here, in runtime; the collaboration library gets plain
 // triangles and tracks.
 //

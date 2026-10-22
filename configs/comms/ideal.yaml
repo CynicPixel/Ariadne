@@ -1,4 +1,4 @@
-# 3.3 (D92) arch §5.7 mode "ideal": every link up, no loss, unlimited rate, 1 ms latency.
+# 3.3 (D102) arch §5.7 mode "ideal": every link up, no loss, unlimited rate, 1 ms latency.
 name: ideal
 mode: ideal
 rf: {latency_s: 0.001}

@@ -1,4 +1,4 @@
-# 3.3 Comms broker node — RFComms link model, wall attenuation, partitions (D92)
+# 3.3 Comms broker node — RFComms link model, wall attenuation, partitions (D102)
 
 Session A2, 2026-10-22, branch `feat/3.3-comms`. Arch §5.7; the seam is COLLAB_3.2 §2.
 

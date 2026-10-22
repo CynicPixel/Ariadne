@@ -2690,9 +2690,9 @@ metric as `INERTIAL_2.4.md` §4.9.
     alone.
   - **Maintainer's call** whether V1_03 alone justifies building it (register: 2.1 row).
 
-## 2026-10-22 — D92: 3.3 comms broker node — RFComms-derived link model with wall attenuation, scripted partitions, one ledger; L8 keeps the 1500 B MTU
+## 2026-10-22 — D102: 3.3 comms broker node — RFComms-derived link model with wall attenuation, scripted partitions, one ledger; L8 keeps the 1500 B MTU
 
-(Decision IDs D90–D99 are claimed by this session in STATUS on `feat/2.6-tum`.) Design and numbers:
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.) Design and numbers:
 `docs/design/COMMS_3.3.md`.
 
 - **`RfLinkModel` implements the COLLAB_3.2 §2 `LinkModel` seam.**

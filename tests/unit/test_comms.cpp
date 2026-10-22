@@ -1,4 +1,4 @@
-// 3.3 (D92): the RFComms-derived link model, the wall ray-cast, the scenario configs, and the comms node's
+// 3.3 (D102): the RFComms-derived link model, the wall ray-cast, the scenario configs, and the comms node's
 // ledger rule.
 #include "collaboration/comms/comms_node.hpp"
 #include "collaboration/protocol/transport.hpp"

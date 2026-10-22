@@ -1,4 +1,4 @@
-# 3.3 (D92) collapsed_v1 plus scripted faults (arch §5.7 "partitioned" / "intermittent"): agents 0 and 1 split for
+# 3.3 (D102) collapsed_v1 plus scripted faults (arch §5.7 "partitioned" / "intermittent"): agents 0 and 1 split for
 # 20 s, then agent 1 drops out for 5 s. Times are seconds from the mission's first sim-clock stamp.
 name: collapsed_partition_v1
 mode: attenuated

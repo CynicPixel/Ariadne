@@ -42,7 +42,7 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_sim_vo RUNTIME DESTINATION bin COMPONENT ariadne)
 
-  # 3.3 (D92): the comms node's link state along a sim mission's GT trajectories.
+  # 3.3 (D102): the comms node's link state along a sim mission's GT trajectories.
   add_executable(ariadne_comms_probe tools/ariadne_comms_probe.cpp)
   target_link_libraries(ariadne_comms_probe PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)

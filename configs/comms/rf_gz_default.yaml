@@ -1,4 +1,4 @@
-# 3.3 (D92) RFComms with gz-sim8's DEFAULT radio (RangeConfiguration / RadioConfiguration, read from RFComms.cc
+# 3.3 (D102) RFComms with gz-sim8's DEFAULT radio (RangeConfiguration / RadioConfiguration, read from RFComms.cc
 # 2026-10-22: max_range 50 m, n 2.5, l0 40 dB, sigma 10 dB, 54 Mb/s, tx 27 dBm, noise floor -90 dBm), plus the
 # per-wall term. At ci_tiny ranges this radio is ~50 dB above the BER knee: expected to be loss-free (a stated null).
 name: rf_gz_default

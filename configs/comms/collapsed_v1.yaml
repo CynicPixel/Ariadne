@@ -1,4 +1,4 @@
-# 3.3 (D92) a degraded radio in a collapsed structure: the RFComms model with low-power, obstructed parameters, so
+# 3.3 (D102) a degraded radio in a collapsed structure: the RFComms model with low-power, obstructed parameters, so
 # walls and range matter at ci_tiny's 5-15 m scale. Every departure from the gz default is a stated assumption.
 name: collapsed_v1
 mode: attenuated
