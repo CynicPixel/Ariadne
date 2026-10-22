@@ -19,8 +19,9 @@
 // SetDegradation with a named config), applied to the RGB frame after the lens
 // and before the gray conversion -- the order a real camera has (optics, then
 // the sensor). Each (agent, camera) gets its own D seed, so the two cameras do
-// not carry the same noise and PRNU fields. The dust stage needs GT depth for
-// both cameras and stays refused until Phase 5. Without SetDegradation the
+// not carry the same noise and PRNU fields. The dust stage gets GT depth for
+// both cameras (D142: the right one warped from the left depth camera, then
+// both through the lens like their images). Without SetDegradation the
 // manifest records degradation_config = "none" and every pixel is as before.
 // ---------------------------------------------------------------------------
 #include "core/random/seed.hpp"
@@ -28,6 +29,7 @@
 #include "perception/degradation/lens.hpp"
 #include "perception/radiometric/flat_field.hpp"
 #include "perception/stereo/camera_model.hpp"
+#include "runtime/datasets/sim_depth.hpp"
 #include "runtime/datasets/euroc.hpp"
 #include "runtime/manifest/run_manifest.hpp"
 #include "runtime/metrics/trajectory_io.hpp"
@@ -43,6 +45,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <set>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -168,6 +171,7 @@ public:
         frame_ = ag["frame_id"].as<std::string>();
         t_left_ = ag["topics"]["left_image"].as<std::string>();
         t_right_ = ag["topics"]["right_image"].as<std::string>();
+        if (m["rig"]["depth"]["enabled"].as<int>()) t_depth_ = ag["topics"]["depth_image"].as<std::string>();
         const std::string t_pose = ag["topics"]["gt_pose"].as<std::string>();
         if (!m["lens"]) throw std::runtime_error("sim: mission has no rig.lens (pre-D41 recording)");
 
@@ -264,9 +268,9 @@ public:
     /// the agent and the side. Also calibrates each camera's flat field from D frames of a flat target under
     /// the same sensor and seed (radiometric/flat_field.hpp), as a lab would before the mission.
     void SetDegradation(const perception::NamedDegradation& d, uint64_t run_seed, int threads) {
-        if (d.params.enable_dust) {
-            throw std::runtime_error("sim: degradation " + d.name + " enables dust, which needs GT depth for both "
-                                     "cameras (Phase 5); refused rather than run without it");
+        if (d.params.enable_dust && t_depth_.empty()) {
+            throw std::runtime_error("sim: degradation " + d.name + " enables dust, but the mission records no GT "
+                                     "depth (rig.depth.enabled 0); refused rather than run without it");
         }
         degradation_ = d.params;
         degradation_name_ = d.name;
@@ -283,48 +287,79 @@ public:
 
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         struct Stop {};
-        std::map<int64_t, StereoFrame> pending;   // stamps with only one side so far
+        // Stamps not yet complete: the clean images (and GT depth when D has dust, D142) wait here until every part
+        // of the pair has arrived; the pair is then processed in one go. D's frame id is the pair index, exactly as
+        // when each side was degraded on arrival (2.2), so dust-free runs are byte-identical to before.
+        struct Raw {
+            core::ImageU8 img[2];
+            core::ImageF32 depth;
+            bool have[3] = {false, false, false};
+        };
+        const bool dust = degradation_ && degradation_->enable_dust;
+        std::map<int64_t, Raw> pending;
         int64_t last_emitted = -1;
         size_t n = 0;
-        uint64_t arrived[2] = {0, 0};             // D's frame id: per-camera arrival index (= the pair index)
         RosbagReader bag;
         bag.Open(sensors_mcap_);
+        std::set<std::string> topics{t_left_, t_right_};
+        if (dust) topics.insert(t_depth_);
         try {
             bag.Replay([&](const RosMessage& msg) {
-                const bool left = msg.topic == t_left_;
                 const auto im = ros_cdr::DecodeImage(msg.data, msg.size);
                 ros_cdr::ValidateImage(im);
-                if (im.encoding != "rgb8") throw std::runtime_error("sim: expected rgb8, got " + im.encoding);
-                core::ImageU8 clean(int(im.width), int(im.height), 3);
-                for (uint32_t r = 0; r < im.height; ++r) {
-                    std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
-                }
-                core::ImageU8 seen = perception::ApplyLens(clean, map_);
-                if (degradation_) {
-                    const int c = left ? 0 : 1;
-                    seen = perception::DegradeParallel(seen, *degradation_, seed_[c], arrived[c]++, threads_);
-                }
-                cv::Mat gray;
-                cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), gray, cv::COLOR_RGB2GRAY);
                 const int64_t t = im.header.stamp.ns();
-                StereoFrame& f = pending[t];
-                f.t_ns = t;
-                (left ? f.left : f.right) = gray;
-                if (left) f.left_rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
-                if (f.left.empty() || f.right.empty()) return;
+                Raw& r = pending[t];
+                if (msg.topic == t_depth_) {
+                    if (im.encoding != "32FC1") throw std::runtime_error("sim: expected 32FC1 depth, got " + im.encoding);
+                    r.depth = core::ImageF32(int(im.width), int(im.height));
+                    for (uint32_t y = 0; y < im.height; ++y) {
+                        std::memcpy(&r.depth.data[size_t(y) * im.width], &im.data[size_t(y) * im.step], im.width * 4);
+                    }
+                    r.have[2] = true;
+                } else {
+                    if (im.encoding != "rgb8") throw std::runtime_error("sim: expected rgb8, got " + im.encoding);
+                    const int c = msg.topic == t_left_ ? 0 : 1;
+                    r.img[c] = core::ImageU8(int(im.width), int(im.height), 3);
+                    for (uint32_t y = 0; y < im.height; ++y) {
+                        std::memcpy(&r.img[c].data[size_t(y) * im.width * 3], &im.data[size_t(y) * im.step],
+                                    im.width * 3);
+                    }
+                    r.have[c] = true;
+                }
+                if (!r.have[0] || !r.have[1] || (dust && !r.have[2])) return;
                 // Complete pair: it must be the oldest pending stamp, or a frame went missing.
                 if (pending.begin()->first != t || t <= last_emitted) {
                     throw std::runtime_error("sim: stereo pair at " + std::to_string(t) +
                                              " completed before an older stamp: a frame is missing");
                 }
                 last_emitted = t;
-                StereoFrame done = std::move(f);
+                StereoFrame done;
+                done.t_ns = t;
+                core::ImageF32 depth_seen[2];
+                if (dust) {
+                    // Each camera's depth through the same lens as its image; the right camera's by warping the
+                    // left depth on the render grid first (runtime/datasets/sim_depth.hpp).
+                    const double baseline = (T_B_left_.t - T_B_right_.t).norm();
+                    depth_seen[0] = perception::ApplyLensDepth(r.depth, map_);
+                    depth_seen[1] = perception::ApplyLensDepth(WarpDepthToRight(r.depth, lens_.render_fx, baseline), map_);
+                }
+                for (int c = 0; c < 2; ++c) {
+                    core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
+                    if (degradation_) {
+                        seen = perception::DegradeParallel(seen, depth_seen[c], *degradation_, seed_[c], n, threads_);
+                    }
+                    const cv::Mat rgb(seen.height, seen.width, CV_8UC3, seen.data.data());
+                    cv::Mat gray;
+                    cv::cvtColor(rgb, gray, cv::COLOR_RGB2GRAY);
+                    (c == 0 ? done.left : done.right) = gray;
+                    if (c == 0) done.left_rgb = rgb.clone();
+                }
                 pending.erase(t);
                 done.agent = uint32_t(agent_);
                 done.id = n;
                 on_frame(done);
                 if (++n == max_frames) throw Stop{};
-            }, {t_left_, t_right_});
+            }, topics);
         } catch (const Stop&) {
         }
         if (max_frames == 0 && !pending.empty()) throw std::runtime_error("sim: unpaired frames at the end");
@@ -332,7 +367,7 @@ public:
     }
 
 private:
-    std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, sensors_mcap_, checksum_ = kUnknownField;
+    std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, sensors_mcap_, checksum_ = kUnknownField;
     int agent_ = 0;
     size_t frames_ = 0;
     int found_ = 0;

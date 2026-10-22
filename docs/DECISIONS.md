@@ -3278,7 +3278,15 @@ rows (ATE 3 mm clean) on the same ci_tiny seed-0 trajectories.
 `lampdark_sensor_v0`: the sRGB decode plus the 2.2 camera (shot + read noise, PRNU, vignette), radiance_scale 1. The
 darkness is the render's. It is not a frozen 5.4 level.
 
-**Dust rows deferred.** `SimSource` refuses dust: D needs GT depth for both cameras, and the recordings carry depth
-for the left one only. The fix is to warp left GT depth into the right camera (z-buffered, holes left without dust)
-before D. It touches `stereo_source.hpp`, so it lands after the 2.6/L2 merge or in an isolated helper. Then the
-D135/D139 rows run.
+**Dust rows: unblocked 2026-10-23.**
+- `runtime/datasets/sim_depth.hpp::WarpDepthToRight` gives the right camera's GT depth: a forward z-buffered splat on
+  the render grid (u − f·B/z, nearest surface wins, disocclusions unknown, so they get no dust). Test 1/1.
+- `SimSource` now buffers each stamp's left, right and (with dust) depth, then lens-maps each depth like its image
+  before D. D's frame id stays the pair index.
+- **Byte-identity checked:** a 40-frame `lampdark_sensor_v0` run before and after the change gives an identical
+  `estimate_body.tum` and `vo_trace.csv`.
+- A functional headlamp run works. At S = 0.3 on the dim 4 s probe recording (lamp intensity 2), VO is lost from
+  frame 1: the veil buries the scene, the §10.2 "glowing wall". Dust strengths are set against the intensity-6
+  recordings before the D135/D139 rows run.
+- `configs/degradation/lampdark_headlamp_v0.yaml` holds the rig v2 lamp geometry; D works on the lens image, so
+  focal 680.
