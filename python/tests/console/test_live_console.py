@@ -18,12 +18,15 @@ def _scene(d):
 
 
 def test_live_frames_follow_the_telemetry(tmp_path, monkeypatch):
-    run, scene = tmp_path / "run", tmp_path / "scene"
-    run.mkdir()
+    # live.sh passes the OUTER run directory; ariadne_live writes into a subdirectory of it (the first live run's
+    # console tailed the outer one and served 1012 empty frames).
+    outer, scene = tmp_path / "run", tmp_path / "scene"
+    run = outer / "aadffb8df5790ca0-live-20261023T000000Z"
+    run.mkdir(parents=True)
     _scene(scene)
     tel = run / "telemetry.jsonl"
     tel.write_text(json.dumps({"type": "pose", "t_s": 1.0, "agent": 0, "xy": [0.1, 0.2], "yaw": 0.0}) + "\n")
-    monkeypatch.setenv("ARIADNE_LIVE", f"{run}:{scene}")
+    monkeypatch.setenv("ARIADNE_LIVE", f"{outer}:{scene}")
     import importlib
     import operator_console.server as srv
     importlib.reload(srv)
@@ -46,5 +49,5 @@ def test_live_frames_follow_the_telemetry(tmp_path, monkeypatch):
         while not msgs[-1].get("end") and len(msgs) < 10:
             msgs.append(ws.receive_json())
         assert msgs[-1].get("end") is True
-    log = [json.loads(l) for l in (run / "console_frames.jsonl").read_text().splitlines()]
+    log = [json.loads(l) for l in (outer / "console_frames.jsonl").read_text().splitlines()]
     assert [r["seq"] for r in log][:2] == [0, 1] and log[1]["t_s"] == 5.2

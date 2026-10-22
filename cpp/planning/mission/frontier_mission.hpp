@@ -22,6 +22,8 @@
 #include "planning/volumetric/occupancy_grid.hpp"
 
 #include <opencv2/core.hpp>
+#include <opencv2/geometry/2d.hpp>   // cv::DIST_L2 (OpenCV 5 moved DistanceTypes here)
+#include <opencv2/imgproc.hpp>
 #include <yaml-cpp/yaml.h>
 
 #include <cmath>
@@ -124,6 +126,7 @@ inline Briefing LoadBriefing(const std::string& scene_dir, const MissionConfig& 
 /// One replan's maps and routes (everything the 1.8 tool writes or decides from).
 struct ReplanMaps {
     cv::Mat slab, support, trav_r, trav_a;
+    cv::Mat trav_safe;   // free AND clearance to anything NOT observed free >= rho_agent (live goals; L1 D153b)
     GridPath egress, agent_route;
     FrontierSet frontiers;
 };
@@ -135,6 +138,7 @@ struct Candidate {
     double path_cells = 0;      // grid path distance to `goal`
     double centroid_x = 0, centroid_y = 0;
     int cells = 0;
+    double standoff_m = 0;      // StandoffCandidates: distance from `goal` to the nearest cluster member
 };
 
 class FrontierMap {
@@ -174,6 +178,7 @@ public:
         const cv::Mat clr_agent = EdgeClearance(occ, gs.cell, cap);
         r.trav_r = Traversable(free, clr_egress, cfg_.rho_r);
         r.trav_a = Traversable(free, clr_agent, cfg_.rho_a);
+        r.trav_safe = Traversable(free, clr_egress, cfg_.rho_a);
         r.support = grid_.SlabSupport(z0_, z1_, r.slab);
         r.egress = AStar(r.trav_r, b_.target, b_.exits);
         r.agent_route = AStar(r.trav_a, b_.target, b_.exits);
@@ -196,6 +201,54 @@ public:
                 if (d < c.path_cells) c.path_cells = d, c.goal = m;
             }
             if (!std::isfinite(c.path_cells)) continue;
+            c.centroid_x = b_.gs.origin_x + (k.centroid_c + 0.5) * b_.gs.cell;
+            c.centroid_y = b_.gs.origin_y + (k.centroid_r + 0.5) * b_.gs.cell;
+            c.cells = k.cells;
+            out.push_back(c);
+        }
+        std::stable_sort(out.begin(), out.end(), [](const Candidate& a, const Candidate& b) { return a.path_cells < b.path_cells; });
+        return out;
+    }
+
+    /// The live planning space (L1 D153b): trav_safe, plus trav_a within `escape_m` of the agent (it may stand where
+    /// the unseen space behind it makes its own cell unsafe under the conservative rule).
+    cv::Mat PlanSpace(const ReplanMaps& r, const Cell& from, double escape_m) const {
+        cv::Mat near = cv::Mat::zeros(r.trav_a.size(), CV_8U);
+        cv::circle(near, cv::Point(from.c, from.r), int(std::ceil(escape_m / b_.gs.cell)), cv::Scalar(1), cv::FILLED);
+        cv::Mat plan;
+        cv::bitwise_or(r.trav_safe, r.trav_a & near, plan);
+        return plan;
+    }
+
+    /// Live candidates (L1 D153b): per frontier cluster, the STANDOFF goal = the cell of trav_safe reachable from `from`
+    /// over `plan` that is nearest (Euclidean) to the cluster, ties by path length; clusters with no such cell within
+    /// `max_standoff_m` are dropped. A frontier cell borders unknown space, which is often an unseen wall: driving
+    /// onto it (Candidates) was refused by the mover's envelope check in the first live runs; looking at it from
+    /// rho_agent of KNOWN free space is not. Nearest first by path, like Candidates.
+    std::vector<Candidate> StandoffCandidates(const ReplanMaps& r, const cv::Mat& plan, const Cell& from,
+                                              double max_standoff_m) const {
+        const cv::Mat D = GridDistances(plan, from);
+        std::vector<Candidate> out;
+        for (size_t i = 0; i < r.frontiers.clusters.size(); ++i) {
+            const auto& k = r.frontiers.clusters[i];
+            cv::Mat not_member(r.slab.size(), CV_8U, cv::Scalar(255));
+            for (const auto& m : k.members) not_member.at<uint8_t>(m.r, m.c) = 0;
+            cv::Mat dist;
+            cv::distanceTransform(not_member, dist, cv::DIST_L2, cv::DIST_MASK_PRECISE);   // cells to the cluster
+            Candidate c;
+            c.cluster = int(i);
+            double best = std::numeric_limits<double>::infinity();
+            for (int y = 0; y < dist.rows; ++y) {
+                for (int x = 0; x < dist.cols; ++x) {
+                    if (!r.trav_safe.at<uint8_t>(y, x)) continue;
+                    const double d = D.at<double>(y, x);
+                    if (!std::isfinite(d)) continue;
+                    const double f = dist.at<float>(y, x);
+                    if (f < best || (f == best && d < c.path_cells)) best = f, c.goal = Cell{y, x}, c.path_cells = d;
+                }
+            }
+            if (!std::isfinite(best) || best * b_.gs.cell > max_standoff_m) continue;
+            c.standoff_m = best * b_.gs.cell;
             c.centroid_x = b_.gs.origin_x + (k.centroid_c + 0.5) * b_.gs.cell;
             c.centroid_y = b_.gs.origin_y + (k.centroid_r + 0.5) * b_.gs.cell;
             c.cells = k.cells;

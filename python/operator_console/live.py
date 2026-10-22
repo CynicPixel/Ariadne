@@ -30,6 +30,16 @@ class LiveRun:
     events: list = field(default_factory=list)       # (t_s, kind, text)
     ended: bool = False
 
+    def src(self) -> Path | None:
+        """The directory ariadne_live writes: `run` itself, or its one subdirectory holding telemetry.jsonl (live.sh
+        passes the outer run directory; the runtime creates <scene>-live-<UTC>/ inside it). None until it exists."""
+        if (self.run / "telemetry.jsonl").exists():
+            return self.run
+        subs = sorted(d for d in self.run.glob("*/telemetry.jsonl"))
+        if len(subs) > 1:
+            raise RuntimeError(f"{self.run}: more than one ariadne_live run directory")
+        return subs[0].parent if subs else None
+
     def meta(self) -> dict:
         sc = json.loads((self.scene / "scene.json").read_text())
         e = sc["esdf"]
@@ -43,11 +53,12 @@ class LiveRun:
                 "snapshots": len(self.snapshots), "live": True}
 
     def poll(self) -> None:
-        # The end marker first: a finished run may append no telemetry after it, and the stream must still end.
-        self.ended = (self.run / "results.yaml").exists()
-        p = self.run / "telemetry.jsonl"
-        if not p.exists():
+        src = self.src()
+        if src is None:
             return
+        # The end marker first: a finished run may append no telemetry after it, and the stream must still end.
+        self.ended = (src / "results.yaml").exists()
+        p = src / "telemetry.jsonl"
         with open(p, "rb") as f:
             f.seek(self.offset)
             data = f.read()
@@ -62,7 +73,7 @@ class LiveRun:
                 self.poses[d["agent"]] = (d["t_s"], d["xy"][0], d["xy"][1], d["yaw"])
                 self.t_s = max(self.t_s, d["t_s"])
             elif kind == "snapshot":
-                self.snapshots.append((d["t_s"], self.run / d["png"]))
+                self.snapshots.append((d["t_s"], src / d["png"]))
                 self.egress = d.get("egress_xy")
             elif kind == "decision":
                 r = d["record"]

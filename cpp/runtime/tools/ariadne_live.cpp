@@ -53,7 +53,8 @@ namespace {
 
 struct LiveConfig {
     std::string name, chooser;
-    double end_s = 0, max_command_m = 0, eps_cells = 1, telemetry_hz = 5, min_goal_m = 0;
+    double end_s = 0, max_command_m = 0, eps_cells = 1, telemetry_hz = 5, min_goal_m = 0, escape_m = 0,
+           max_standoff_m = 0, refused_radius_m = 0;
     bool face_frontier = true;
     int hold_back_ms = 3000;
 };
@@ -68,6 +69,9 @@ LiveConfig LoadLive(const std::string& path) {
     c.eps_cells = n["command"]["simplify_eps_cells"].as<double>();
     c.face_frontier = n["command"]["face_frontier"].as<bool>();
     c.min_goal_m = n["command"]["min_goal_m"].as<double>();
+    c.escape_m = n["command"]["escape_m"].as<double>();
+    c.max_standoff_m = n["command"]["max_standoff_m"].as<double>();
+    c.refused_radius_m = n["command"]["refused_radius_m"].as<double>();
     c.hold_back_ms = n["reorder"]["hold_back_ms"].as<int>();
     c.telemetry_hz = n["telemetry_hz"].as<double>();
     if (c.chooser != "classical") throw std::invalid_argument("live config: chooser must be classical (7.1 adds more)");
@@ -229,6 +233,10 @@ int main(int argc, char** argv) {
         if (cmd_topic.size() != 2) throw std::runtime_error("live: expected 2 agents in mission_live.json");
 
         AgentLane lanes[2];
+        // The mover's answers (D153b): (agent, command stamp) -> accepted. Part of the recorded input, so the wait for
+        // them below is deterministic in replay.
+        std::map<std::pair<int, int64_t>, bool> answers;
+        bool input_done = false;
         std::mutex progress_mu;
         std::condition_variable progress_cv;
 
@@ -283,6 +291,15 @@ int main(int argc, char** argv) {
                 lanes[agent].gt.Add(tp);
             } else if (role == "mover_state") {
                 const std::string js = runtime::ros_cdr::DecodeString(m.data->data(), m.data->size());
+                const auto num = [&js](const std::string& key) -> long long {
+                    const auto p = js.find("\"" + key + "\":");
+                    return p == std::string::npos ? -1 : std::stoll(js.substr(p + key.size() + 3));
+                };
+                {
+                    std::lock_guard<std::mutex> lk(progress_mu);
+                    answers[{agent, int64_t(num("cmd_stamp_ns"))}] = js.find("\"accepted\":true") != std::string::npos;
+                }
+                progress_cv.notify_all();
                 mover_state.Put("{\"agent\":" + std::to_string(agent) + ",\"seq\":" + std::to_string(m.seq) +
                                 ",\"state\":" + js + "}");
                 telemetry.Put("{\"type\":\"mover_state\",\"agent\":" + std::to_string(agent) + ",\"state\":" + js + "}");
@@ -323,6 +340,11 @@ int main(int argc, char** argv) {
                 }
                 reorder_timeouts = ro.released_on_timeout();
                 for (auto& l : lanes) l.images.Close();
+                {
+                    std::lock_guard<std::mutex> lk(progress_mu);
+                    input_done = true;
+                }
+                progress_cv.notify_all();
             });
         } else {
             reader = std::thread([&] {
@@ -339,6 +361,11 @@ int main(int argc, char** argv) {
                     Dispatch(std::move(m));
                 });
                 for (auto& l : lanes) l.images.Close();
+                {
+                    std::lock_guard<std::mutex> lk(progress_mu);
+                    input_done = true;
+                }
+                progress_cv.notify_all();
             });
         }
 
@@ -408,8 +435,10 @@ int main(int argc, char** argv) {
         }
 
         // --- the mission: barrier -> integrate -> replan -> candidates -> choose -> command ----------------------
-        int replans = 0, commands_sent = 0;
+        int replans = 0, commands_sent = 0, answer_timeouts = 0;
         size_t integrated[2] = {0, 0}, rays = 0;
+        std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
+        std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
@@ -417,6 +446,22 @@ int main(int argc, char** argv) {
                     return (lanes[0].done || lanes[0].progress >= T) && (lanes[1].done || lanes[1].progress >= T);
                 });
                 if (lanes[0].done && lanes[1].done && lanes[0].progress < T && lanes[1].progress < T) break;
+                // The previous decision's outcome is an input to this one: wait for both answers to the commands sent
+                // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
+                if (T > replan_ns) {
+                    const auto have = [&] {
+                        return input_done || (answers.count({0, T - replan_ns}) && answers.count({1, T - replan_ns}));
+                    };
+                    if (is_live) {
+                        if (!progress_cv.wait_for(lk, std::chrono::seconds(30), have)) ++answer_timeouts;
+                    } else {
+                        progress_cv.wait(lk, have);
+                    }
+                    for (int k = 0; k < 2; ++k) {
+                        const auto a = answers.find({k, T - replan_ns});
+                        if (a != answers.end() && !a->second && last_goal.count(k)) refused_goals.push_back({k, last_goal[k]});
+                    }
+                }
             }
             // Keyframes stamped before T, merged across agents in (t, agent, id) order.
             std::vector<KfRec> batch;
@@ -487,14 +532,28 @@ int main(int argc, char** argv) {
                 const Cell ac = brief.ToCell(T_W_C.t.x(), T_W_C.t.y());
                 o << ",\"agent_xy_m\":" << Xy(T_W_C.t.x(), T_W_C.t.y()) << ",\"agent_cell\":[" << ac.r << "," << ac.c
                   << "]},";
-                const auto cands = map.Candidates(maps, ac);
+                // Standoff candidates over the conservative plan space (D153b), minus goals the mover refused before.
+                const cv::Mat plan = map.PlanSpace(maps, ac, lc.escape_m);
+                std::vector<mis::Candidate> cands;
+                int excluded_refused = 0;
+                for (const auto& c : map.StandoffCandidates(maps, plan, ac, lc.max_standoff_m)) {
+                    const auto [gx, gy] = brief.CellCentre(c.goal);
+                    bool refused = false;
+                    for (const auto& [ra, rg] : refused_goals) {
+                        refused = refused || (ra == k && std::hypot(rg.first - gx, rg.second - gy) < lc.refused_radius_m);
+                    }
+                    if (refused) ++excluded_refused;
+                    else cands.push_back(c);
+                }
                 o << "\"candidates\":[";
                 for (size_t i = 0; i < cands.size() && i < 5; ++i) {
                     const auto& c = cands[i];
+                    const auto [gx, gy] = brief.CellCentre(c.goal);
                     o << (i ? "," : "") << "{\"cluster\":" << c.cluster << ",\"path_m\":" << c.path_cells * brief.gs.cell
+                      << ",\"goal_xy_m\":" << Xy(gx, gy) << ",\"standoff_m\":" << c.standoff_m
                       << ",\"centroid_xy_m\":" << Xy(c.centroid_x, c.centroid_y) << ",\"cells\":" << c.cells << "}";
                 }
-                o << "],\"candidates_total\":" << cands.size() << ",";
+                o << "],\"candidates_total\":" << cands.size() << ",\"excluded_refused\":" << excluded_refused << ",";
                 // Chooser (classical): the nearest reachable cluster; none -> hold.
                 runtime::ros_cdr::PoseArray cmd;
                 cmd.header.stamp.sec = int32_t(T / 1000000000);
@@ -512,7 +571,8 @@ int main(int argc, char** argv) {
                 }
                 if (pick >= 0) {
                     const auto& c = cands[size_t(pick)];
-                    const auto path = CommandPath(brief, maps.trav_a, ac, c.goal, lc.eps_cells, lc.max_command_m);
+                    const auto path = CommandPath(brief, plan, ac, c.goal, lc.eps_cells, lc.max_command_m);
+                    if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {
                         runtime::ros_cdr::Pose p;
                         p.position = {x, y, brief.entry_z[size_t(k)]};
@@ -567,7 +627,8 @@ int main(int argc, char** argv) {
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
             << "\ncommands_decided: " << commands_sent << "\nreorder_released_on_timeout: " << reorder_timeouts
-            << "\nunrouted_messages: " << dropped_untyped << "\nagents:\n";
+            << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
+            << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";
         for (int k = 0; k < 2; ++k) {
             res << "  - {agent: " << k << ", frames: " << lanes[k].frames << ", keyframes: " << lanes[k].keyframes
                 << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k] << "}\n";
