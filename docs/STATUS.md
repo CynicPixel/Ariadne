@@ -48,6 +48,23 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-22 — A1 opens Phase 4 (mission intelligence) on `feat/ph4-mission`; D110–D129 claimed
+
+- **Decision IDs D110–D129 are claimed by A1** for Phase 4 (4.1–4.6 and its exit gate).
+- **Carry from 3.1 done: D90 settled at 640×360.** A sim retrieval evaluation with revisit GT from the recorded GT
+  poses (`ariadne_place_eval --rec/--scene/--agent --sim-d90`, `retrieval_rows_eval.py sim`; design and decision rule
+  fixed before the run in `docs/design/RETRIEVAL_SIM_D90.md`). Clean ci_tiny recording: 61 queries after motion
+  thinning, all agent 0's (33 intra-agent, 28 against agent 1's database). Pooled R@1 0.705 at both sizes
+  (McNemar p = 1.0); 1280×720 costs 4×. Evidence `evaluation/runs/retrieval_sim_d90/`.
+- **3.1's §31.5 dark row is carried to 5.1** (A2's dark worlds); the tooling for it is the same two commands.
+- **Phase 4 preflight findings that change the arch's numbers (each goes to a decision):**
+  - **HashTSDF:** `cv::Volume` has no voxel or weight read and no per-pixel weight (SMOKE §4u), so 4.1 builds §20.1's
+    from-scratch voxel-hash TSDF and keeps HashTSDF as the oracle.
+  - **Voxel 0.05 m, not 8–10 cm:** on both scenes' GT, D45's measured one-cell wall bleed closes agent 1's entrance at
+    ρ_responder for 8 and 10 cm voxels, not for 5 cm (`VOLUMETRIC_4.1.md` §1).
+  - **`scene_gt.npz` has no risk-zone labels** (both scenes), which 4.2's calibration needs; **maze_medium_0 has no
+    recording**, which the gate's second scene needs.
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.

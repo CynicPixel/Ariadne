@@ -12,7 +12,8 @@ Reference catalogue for reimplementation. Sourced from five parallel deep-resear
 | 2a | Classic 3DGS-SLAM systems | ✅ §2 |
 | 2b | Feed-forward pointmap SLAM & multi-agent 3DGS | ✅ §3 |
 | 2c | Partitioned / distributed 3DGS (merge mechanisms) | ✅ §4 |
-| 3 | Active perception, NBV, multi-robot task allocation | ❌ **Rate-limited twice — still owed** |
+| 3 | Active perception, NBV, multi-robot task allocation | ✅ §22 (2026-10-23; primary text except where marked) |
+| 3a | Volumetric mapping for planning (TSDF, ESDF, frontiers, traversability) | ✅ §21 (2026-10-23, Phase 4.1/4.2; primary text) |
 | 4 | Degraded visual environments + DARPA SubT | ✅ **§9–§20** — illumination §9 · dust/confined §10 · burst §11 · event+thermal §12 · enhancement §13 · HDR/noise §14 · modalities §15 · night data §16 · aliasing §17 · co-moving-light data §18 · ASTM protocol §19 · **DARPA SubT §20** |
 | 4b | **Datasets & benchmarks** | ✅ §6, §8 |
 | 5 | Distributed optimization, pose-graph consensus, robust estimation | ✅ §7 |
@@ -3309,3 +3310,161 @@ CERBERUS documented a failure mode that maps directly onto Ariadne's drone + gro
 | ⛔ | Reimplementing CompSLAM, Super Odometry, LAMP or Wildcat | >2 months each | **Read, don't build.** Take the wrapper (§12.4b), not the system |
 
 ⚠️ **Honesty ledger for §20:** fieldrobotics.net was inaccessible (403) so all quotes are from arXiv preprints with DOIs cross-verified via OpenAlex; the two **DARPA-side after-action papers were located but not read** (paywalled); **Team Coordinated Robotics** could not be found at all; and `arpg/marble` and `csiro-robotics/wildcat` are **not publicly available** despite being cited as such in the T-RO survey.
+
+---
+
+## 21. Volumetric mapping for planning — TSDF, ESDF, frontiers, traversability (Phase 4.1 / 4.2)
+
+Added 2026-10-23, from primary text: the papers were downloaded and read, sections cited (`docs/design/PHASE4_PREFLIGHT.md`). Consumed by D110 (4.1) and D111 (4.2).
+
+| Method | Venue | What Ariadne takes | What it does not |
+|---|---|---|---|
+| **Voxblox** (Oleynikova et al.) | IROS 2017, [arXiv:1611.03631](https://arxiv.org/abs/1611.03631) | 8³-voxel block hash; weighted TSDF fusion; merged raycasting (one update per voxel per scan); **eq. 5 weighting**: `1/z²` in front, a linear drop-off behind the surface to 0 at δ = 4v (after Bylow et al.); the projective-distance error `r_p = d sin θ − d` and the rule *"increase the safety distance by half of one voxel"* | its quasi-Euclidean ESDF wavefront |
+| **nvblox** (Millane et al.) | 2023, [arXiv:2311.00626](https://arxiv.org/abs/2311.00626) | sites = voxels within ε of the TSDF zero crossing; full Euclidean ESDF; an ESDF updated slower than the sensor rate is acceptable; no depth interpolation across foreground–background edges | projection-mapping integration (Voxblox: it aliases at large voxel/pixel ratios); its GPU parallel banding |
+| **FIESTA** (Han et al.) | IROS 2019, [arXiv:1903.02144](https://arxiv.org/abs/1903.02144) | separate insert and delete queues for an incremental ESDF (the design comparison) | occupancy-based, "near-optimal" distances |
+| **Felzenszwalb & Huttenlocher** | Theory of Computing 8:415–428, 2012 | Algorithm 1, the exact 1D lower envelope, for the **centre-to-centre** metric | not the cube-edge metric: Ariadne's clearance convention (centre to the nearest point of a blocked cube, the GT's) needs `(2|Δ|−1)²/4` per axis, an exact windowed min-convolution (D110 correction) |
+| **FUEL** (Zhou et al.) | RA-L 2021, [arXiv:2010.11561](https://arxiv.org/abs/2010.11561) | the frontier information structure is updated only where space was newly observed (D110's incremental frontiers) | its hierarchical planner (Domain 3) |
+| **OctoMap** (Hornung et al.) | Auton. Robots 2013 | the 1.8 placeholder's sensor model (D45), kept as the ablation baseline | — |
+| **STEP** (Fan et al.) | JPL / DARPA SubT, [arXiv:2303.01614](https://arxiv.org/abs/2303.01614) (abstract) | a risk map consumed as a planning cost, not a binary gate | its slope and step terms (flat floors here) |
+| **GBPlanner2** (Kulkarni et al.) | CERBERUS 2022 (secondary) | traversable ground beneath every edge: the 4.2 capsule's observed-column half | its sampling planner (Domain 3) |
+
+**OpenCV 5 adjacency** (checked in the installed headers, SMOKE §4u):
+- `cv::Volume` (TSDF / HashTSDF / ColorTSDF): integrate and raycast only, with no voxel or weight read. Used as the
+  4.1 test oracle.
+- `cv::distanceTransform`: 2D and centre-to-centre.
+- `cv::RgbdNormals` and `cv::findPlanes` (`ptcloud/depth.hpp`): the candidate plane-based overhang term for 4.2
+  (pending calibration).
+- `cv::triangleRasterizeDepth`: mesh → depth, for GT-geometry test depth.
+- `cv::Octree`: points, not occupancy.
+
+**Domain 3 (NBV, exploration, allocation, routing):** §22.
+
+---
+
+## 22. Domain 3 — active perception / NBV, exploration, multi-agent allocation, routing (Phase 4.3–4.6)
+
+Added 2026-10-23. Papers were downloaded and their method sections read, except where marked *secondary*. This closes
+the domain owed since the start (rate-limited twice) and since D45.
+
+### 22.1 Next-best-view and information gain (4.3)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **Isler et al.**, *An Information Gain Formulation for Active Volumetric 3D Reconstruction* | ICRA 2016 (*secondary*: via SEE's related work and abstracts; no open PDF found) | per-voxel IG from occupancy probability, visibility (rays stop at occupied) and distance; variants weight unobserved voxels and "rear side" voxels | §21.3's `Δcoverage` (unknown voxels hit by a 200–500-ray frustum bundle) and `Δentropy` (occupancy entropy along the same rays) are this family |
+| **Delmerico et al.**, *A Comparison of Volumetric Information Gain Metrics for Active 3D Object Reconstruction* | Auton. Robots 42(2), 2018, DOI 10.1007/s10514-017-9634-0 (*secondary*: abstract and summaries; no open PDF) | the first comparative study. Counting unobserved voxels, and weighting unobserved voxels near observed surfaces, did best | supports §21.3's choice of an unknown-count term over a pure-entropy term; Ariadne self-normalises per term (p90), so the terms are never compared in raw units |
+| **SEE** (Border & Gammell) | IJRR 2023, [arXiv:2207.13684](https://arxiv.org/abs/2207.13684) | measurement-direct NBV on a density representation; frontier points with shared visibility; also the field's own survey: raycast visibility evaluation is the cost bottleneck | the ray budget per candidate (200–500) is §21.3's answer to that cost |
+
+### 22.2 Exploration planning (4.3 candidates, 4.6 scheduling)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **TARE** (Cao, Zhu, Choset, Zhang) | RSS 2021, [PDF](https://frc.ri.cmu.edu/~zhangji/publications/RSS_2021.pdf) | Two levels. In a **local planning horizon**, sample a minimum viewpoint set covering the uncovered surfaces (`|p_s − p_v| ≤ D` plus an orientation bound) and solve a TSP through them. At the **global** level, sparse subspaces (cubes) marked exploring / explored / unexplored, with a TSP over them; the two paths join at the horizon boundary | 4.6: D110's 0.5 m coarse layer is the global subspace grid; the local layer is 4.3's candidates and a short TSP |
+| **FUEL** (Zhou et al.) | RA-L 2021, [arXiv:2010.11561](https://arxiv.org/abs/2010.11561) | A **frontier information structure** per cluster: cells, AABB, the mean, viewpoints sampled in cylindrical coordinates around the cluster, and connection costs to all other clusters. Large clusters split by PCA. Incremental update by AABB intersection. A global ATSP over clusters, then local viewpoint refinement, then a min-time trajectory | 4.1 already takes the incremental rule; 4.3's generator A takes the per-cluster viewpoint sampling and the PCA split |
+| **GBPlanner / GBPlanner2** (Dang et al. 2020; Kulkarni et al. 2022) | JFR / CERBERUS (*secondary*: the CERBERUS system papers) | a local RRG for gain, a global graph for relocation and return home; GBPlanner2 checks traversable ground under every edge | the return-home relocation mirrors §21.4's hard energy rule; ground under edges is D111's observed column |
+| **RACER** (Zhou, Xu, Shen) | T-RO 39(3), 2023, [arXiv:2209.08533](https://arxiv.org/abs/2209.08533) | multi-UAV: an **online hgrid decomposition** of unknown space; allocation by **pairwise interaction** over asynchronous, unreliable communication, with per-pair timestamps; coverage paths and workload balance as a **CVRP** | the comms-constrained comparator for 4.4: pairwise, asynchronous, timestamped. CBBA is the arch's choice (§21.7); RACER's pairwise hgrid is the documented alternative if CBBA's consensus traffic does not fit the byte budget |
+
+### 22.3 Multi-agent allocation (4.4)
+
+| Method | Source | Content | Ariadne |
+|---|---|---|---|
+| **CBBA** (Choi, Brunet, How) | T-RO 25(4):912–926, 2009, DOI 10.1109/TRO.2009.2022423. **Read in primary text** (2026-10-23): MIT Open Access copy, DSpace bitstream `9954d25d-991a-4c8d-be1d-3574ee986f43`; Table I transcribed from the rendered p. 917, since its text layer does not extract | bundle construction by marginal score under diminishing marginal gain (DMG); consensus on winning bids, winners and timestamps; conflict-free convergence with a worst-case guarantee under DMG. Algorithm 3, eqs. (3)–(6) and Table I are transcribed below (§22.3.1) | §21.7: bundles of 1–2, event-triggered. 4.4 implements §22.3.1 exactly |
+| **HRCA**, a CBBA variant | ACC 2011 ([PDF](https://skoge.folk.ntnu.no/prost/proceedings/acc11/data/papers/1172.pdf)) | read: CBBA's two phases, the DMG condition, a marginal score with insertion `⊕_n`, the `update / reset / leave` action names and a two-bidder rule table (its own, not CBBA's) | confirms the shape of the rules; not a substitute for Table I |
+| **GACA** (grouping auction-consensus) | [arXiv:2608.15884](https://arxiv.org/abs/2608.15884) | nearest-neighbour task grouping before allocation; group-level claim, acquire and contest actions; a per-agent conflict graph resolved by component; timestamps to compensate for communication discrepancies | §21.7's "experimental extension"; Ariadne's spatial clustering step plays the same role |
+| **Exact optimum** | `cv::solveLP` (OpenCV core, `optim.hpp`) | the assignment LP is integral (totally unimodular), so the simplex gives the optimal assignment | **4.4's oracle:** CBBA and broker-greedy are graded against the exact optimum on every logged round |
+
+#### 22.3.1 CBBA, transcribed (Choi, Brunet & How 2009, §IV, Algorithm 3, eqs. (3)–(6), Table I)
+
+**Per-agent state:**
+- winning bids y_i ∈ R₊^{N_t};
+- winners z_i ∈ I^{N_t};
+- bundle b_i and path p_i, each of length ≤ L_t;
+- timestamps s_i ∈ R^{N_u}.
+
+**Phase 1, BuildBundle (Algorithm 3).** While |b_i| < L_t:
+- c_ij = max_{n ≤ |p_i|} S_i^{p_i ⊕_n {j}} − S_i^{p_i} for every j ∉ b_i (eq. 3; c_ij = 0 if j ∈ b_i);
+- h_ij = 𝟙(c_ij > y_ij);
+- J_i = argmax_j c_ij · h_ij;
+- n_{i,J_i} = argmax_n S_i^{p_i ⊕_n {J_i}};
+- b_i = b_i ⊕_end {J_i}; p_i = p_i ⊕_{n_{i,J_i}} {J_i};
+- y_{i,J_i} = c_{i,J_i}; z_{i,J_i} = i.
+
+The recursion ends when |b_i| = L_t or h_i = 0. Ties are broken lexicographically by agent and task id (§III-B).
+
+**Timestamps (eq. 5):** on each message, s_ik = τ_r (the reception time) if g_ik = 1, else max_{m: g_im = 1} s_mk.
+
+**The three actions on task j:**
+- update: y_ij = y_kj, z_ij = z_kj;
+- reset: y_ij = 0, z_ij = ∅;
+- leave: no change.
+
+**Table I: receiver i's action on task j, from sender k's message** (default: leave). m, n are other agents.
+
+| k thinks z_kj | i thinks z_ij | receiver's action |
+|---|---|---|
+| k | i | if y_kj > y_ij → update |
+| k | k | update |
+| k | m ∉ {i,k} | if s_km > s_im or y_kj > y_ij → update |
+| k | none | update |
+| i | i | leave |
+| i | k | reset |
+| i | m ∉ {i,k} | if s_km > s_im → reset |
+| i | none | leave |
+| m ∉ {i,k} | i | if s_km > s_im and y_kj > y_ij → update |
+| m ∉ {i,k} | k | if s_km > s_im → update; else → reset |
+| m ∉ {i,k} | m | if s_km > s_im → update |
+| m ∉ {i,k} | n ∉ {i,k,m} | if s_km > s_im and s_kn > s_in → update; if s_km > s_im and y_kj > y_ij → update; if s_kn > s_in and s_im > s_km → reset |
+| m ∉ {i,k} | none | if s_km > s_im → update |
+| none | i | leave |
+| none | k | update |
+| none | m ∉ {i,k} | if s_km > s_im → update |
+| none | none | leave |
+
+**Bundle release (eq. 6):** if an update or reset touched a task in b_i, let n̄_i = min{n : z_{i,b_in} ≠ i}. Then:
+- y_{i,b_in} = 0 and z_{i,b_in} = ∅ for every n > n̄_i;
+- b_in = ∅ for every n ≥ n̄_i.
+
+The tasks added after the outbid one are released, because their marginal scores assumed it. With L_t = 1, CBBA reduces to CBAA.
+
+**Guarantees, as stated (checked against §V–VI, not from memory):**
+- **Theorem 1** (DMG, synchronized conflict resolution, static network of diameter D): CBBA produces the **same
+  solution as sequential greedy (SGA)** and converges to a conflict-free assignment within N_min·D iterations, with
+  N_min = min{N_t, N_u·L_t}.
+- **Dynamic network:** if every window of ρ consecutive graphs is jointly connected, the bound is ρ·N_min.
+- **Theorem 2** (DMG, accurate situational awareness): M_OPT ≤ 2·CBBA, i.e. 50 % optimality.
+- **Consequence for 4.4:** under DMG, CBBA and a broker's centralized sequential greedy give the **same
+  assignment**. Their difference is communication: bytes, rounds and robustness to a lost broker. It is not
+  solution quality, so §21.7's "both logged identically" can be checked as an exact equality.
+- **Correction (2026-10-23, measured; `tests/unit/test_allocation.cpp`): the equality holds exactly at L_t = 1, not
+  always at L_t = 2.**
+  - **The mechanism:** a second-slot bid placed on top of a first task the bidder later loses (eq. 6 then releases
+    it) can outbid a peer. The peer's bundle fills with a lower task, and Algorithm 3 never revisits it, since it
+    adds only while |b_i| < L_t.
+  - **Measured:** L_t = 1, 2000 / 2000 random instances equal SGA, with zero tail releases. L_t = 2, 5 / 1000
+    diverge, every one with an eq. 6 tail release; worst CBBA/optimum 0.618.
+  - A hand-built three-agent instance pins it.
+  - At L_t = 2, Theorem 1(2)'s round bound and Theorem 2's 50 % are therefore **empirical**: they held on every
+    instance, but are not guaranteed.
+
+### 22.4 Routing (4.5 egress, 4.6 exploration-time)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **D\* Lite** (Koenig & Likhachev) | AAAI 2002, Figure 3 transcribed from the rendered page | CalculateKey, UpdateVertex and ComputeShortestPath as transcribed in `EGRESS_4.5.md`; search from the goal; `k_m` for a moving start | 4.5: egress over D111's lattice; the start is fixed, so `k_m` = 0 |
+| **FAR Planner** (Yang, Cao, Zhu, Oh, Zhang) | IROS 2022, [arXiv:2110.09460](https://arxiv.org/abs/2110.09460) | polygons from edge points around obstacles; a **two-layer** dynamically updated global visibility graph; "attemptable" routing through unknown space with fast replanning; reported 12–47 % less travel time than A* / D* Lite baselines | 4.6, the exploration-time router and §31.6's comparator. OpenCV-native polygon extraction: `findContours` + `approxPolyDP` on the 2D slab, visibility by `LineIterator` |
+
+### 22.5 Traversal and risk (4.2)
+
+See §21: STEP (risk as a CVaR cost map), GBPlanner2 (ground beneath edges). No published TSDF-based structural
+collapse-risk proxy was found. D111's proxy is ours and is calibrated against D112's GT zones.
+
+### 22.6 OpenCV 5 adjacency for Phase 4 (installed headers, 2026-10-23)
+
+- `cv::solveLP`: the exact allocation oracle.
+- `cv::partition` (equivalence classes by predicate) and `cv::kmeans`: task clustering (§21.7).
+- `cv::findContours`, `cv::approxPolyDP`, `cv::pointPolygonTest`, `cv::convexHull`: FAR polygons.
+- `cv::LineIterator`: line of sight on the grid.
+- `cv::Subdiv2D`: Delaunay / Voronoi graphs (a candidate topology for the coarse layer).
+- `cv::connectedComponents`: 2D clusters.
+
+**No** OpenCV graph search, TSP or auction exists. Those are from scratch, with oracles.
+

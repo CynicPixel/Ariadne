@@ -2714,8 +2714,9 @@ notes above. The D62 entry itself is unchanged.
 
 ## 2026-10-22 — D90: sim-rig exports — EigenPlaces and ALIKED-n16 + LightGlue at 1280×720 RGB, with an RGB path
 
-**DRAFT pending the maintainer** on one point: EigenPlaces' sim default size. Everything else follows D62/D63 as
-approved.
+**Settled 2026-10-22** by the sim retrieval evaluation (`docs/design/RETRIEVAL_SIM_D90.md`, rule fixed before the
+run): EigenPlaces' sim default is **640×360**. Everything else follows D62/D63 as approved. The maintainer's
+approval of the size was replaced by that pre-registered rule, as the Phase 4 brief asked; it is re-openable.
 
 - **What:**
   - Sim-rig exports from the same pinned upstreams and weights as D62/D63, made by `models.sh eigenplaces-sim` /
@@ -2731,12 +2732,16 @@ approved.
   - Exact against upstream at the new size, which re-runs D63's 752×480-only validation of the export rewrites.
   - The regeneration is bit-exact.
   - A channel-swap guard shows an R/B swap changes the result instead of passing silently.
-- **Proposed (to approve):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
-  about a quarter of 1280×720. Retrieval quality on sim views is not measured yet; that belongs to 3.1 (sim
-  retrieval). ALIKED runs at the native 1280×720: hard pairs only, so cost matters less than localisation.
+- **Default (settled):** EigenPlaces' sim default is **640×360**, the analogue of D62's half-size 376×240. It costs
+  a quarter of 1280×720 (L5: 312 vs 1280 ms p50; here 331 vs 1297 ms on the dev host). ALIKED runs at the native
+  1280×720: hard pairs only, so cost matters less than localisation.
+- **Measured (clean ci_tiny recording, RETRIEVAL_SIM_D90 §5):** 61 revisit queries after motion thinning, all of them
+  agent 0's (33 intra-agent, 28 against agent 1's database). Pooled R@1 is **0.705 at both sizes** (McNemar p = 1.0),
+  R@5 0.885 vs 0.869. The rule kept 640×360 unless 1280×720 won with p < 0.05; it did not. With 61 queries from
+  one small scene, this is "no evidence that full resolution helps", not "they are equal".
 - **Limits:**
   - Four frames from one scene, with weak colour.
-  - The 640×360 vs 1280×720 recall question is open.
+  - The size question was settled on one clean scene only; the dark-scene row (§31.5) is carried to 5.1.
   - There is no runtime consumer yet (3.1/3.5).
 - **§49:**
 
@@ -3194,3 +3199,200 @@ Each decision below is summarised there with its reasons; the evidence is filled
 
 **Unchanged, checked.** `SimSource` after the frame-assembly extraction: `ariadne_sim_vo` on the d41 bag gives
 sha-identical `estimate_body.tum` for both agents, old binary vs new.
+
+
+## 2026-10-23 — D110: 4.1 volumetric stack — from-scratch voxel-hash TSDF at 5 cm (HashTSDF the oracle), incremental FH ESDF, 3D frontiers, coarse RLE layer
+
+- **What** (`docs/design/VOLUMETRIC_4.1.md`, `cpp/planning/volumetric/{tsdf_map,esdf,frontiers3d}`):
+  - 8³-voxel blocks in a hash; along-ray SDF, clamped to τ = 3 voxels; per-keyframe averaging, then one fusion per
+    voxel, with weights `(σ_ref/σ_Z)²`; a silhouette guard.
+  - Tri-state: unknown = weight 0; occupied = SDF < half a voxel.
+  - ESDF: distance to the nearest point of a blocked cube (the GT's and D45's convention), by three exact windowed
+    min-convolution passes, capped at ρ_responder + 2 voxels. Two fields: egress (unknown blocks) and agent.
+    Recomputed per dirty box (± reach), never globally.
+  - **Correction (2026-10-23):** as first committed (`f3eb6bb`), clearance was `edt·v − v/2` on an FH
+    (centre-to-centre) transform, mislabelled as the GT convention. It is optimistic on diagonals, gave 4 false
+    egress claims at GT clearance 0.395 m, and the brute-force test had copied it. The map metrics are unaffected
+    (they read the TSDF slab). The 5 cm decision was re-run with worldgen's `_edt_to` and survives. The preflight
+    was incomplete: `docs/design/PHASE4_PREFLIGHT.md`.
+  - Frontiers in the motion band, 26-connected, with centroid, normal and a 64-ray visible-unknown fan; updated
+    incrementally (FUEL's rule).
+  - Coarse layer: 0.5 m cells, RLE codec.
+- **Why from scratch:** SMOKE §4u. `cv::Volume` has no voxel or weight read and no per-pixel weight. It stays the
+  oracle (a test).
+- **Supersedes the arch's 8–10 cm voxel:** measured on both scenes' GT, a one-cell wall bleed closes agent 1's
+  entrance at ρ_responder for 8 and 10 cm, not for 5 cm.
+- **Evidence:** 8 tests (§7). On the evidence spool vs 1.8: coverage 0.942 / 0.933, free precision 0.979 / 0.961,
+  occupied precision 0.865 / 0.707; about 105 ms per keyframe on the dev host. Corrections made after measuring,
+  each reported: unknown = weight 0 (the first run used `w_min = 0.5`, coverage 0.861); the oracle tolerance is two
+  voxels (the oracle's own p95 error is 1.35 voxels).
+- **Not here:** the live keyframe path (L1's `frontier_mission.hpp` seam, once committed) and the wire field for the
+  coarse summary (3.2's).
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | Voxblox (block hash, weighting, projective error), nvblox, FIESTA, FH 2012, FUEL: `VOLUMETRIC_4.1.md` §1, `PHASE4_PREFLIGHT.md` §2; **`ALGORITHMS.md` entry owed** |
+  | arch decision | D110, plus the §20.1 blockquote |
+  | ablation matrix | 1.8 OctoMap placeholder (D45) vs D110, same spool and scorer |
+  | benchmark config | `configs/mission/mission_v1.yaml` (stride, gates, band); D110 defaults in `TsdfParams` |
+  | manifest schema | `ariadne_volumetric_eval` manifest (`layer: phase4_volumetric`), spool sha256 |
+
+
+## 2026-10-23 — D111: 4.2 traversability at ρ_agent / ρ_responder — egress = observed column ∧ 3D occupied capsule; structural risk [PROXY] built, uncalibrated
+
+**Partial: traversability is done in replay; the risk proxy is not calibrated.**
+
+- **What** (`docs/design/TRAVERSABILITY_4.2.md`, `cpp/planning/volumetric/traversability.{hpp,cpp}`):
+  - **Egress at ρ_responder** (the product, invariant 4) is the intersection of two tests:
+    - D45's observed-column rule on 4.1's TSDF slab, with 1.8's `EdgeClearance` ≥ ρ;
+    - a standing-body capsule (axis 0.45–1.40 m) on the occupied-only 3D field.
+  - **Agent at ρ_agent:** a capsule over the flying rig's 0.8–1.2 m altitude band on the agent field.
+  - **Risk `[PROXY]`:** saturating counts of down-facing undersides and of mass over open columns, in a 1 m disc,
+    in the 1.8–2.4 m band.
+  - Outputs on the briefing grid: traversability, per-column clearance, risk.
+- **Supersedes arch §22.1's 26-connected 3D lattice:** 2.5D, because a responder walks on a flat floor. The 3D test
+  survives as the capsule.
+- **Why not strict 3D:** the rig cannot observe a standing body's volume. On the evidence spool the strict rule has
+  recall 0.354 and closes the target. Reported, not the product.
+- **Evidence:** 5 tests, with independent brute force. On the evidence spool: precision 1.000, recall 0.900,
+  starts → target both, against 1.8's 1.000 / 0.898 / both (`evaluation/runs/traversability_4.2/`).
+- **Changed after measuring:**
+  - the strict → hybrid rule (advisor review);
+  - the clearance convention (D110's correction);
+  - the support test (before any calibration data existed).
+- **Open:**
+  - risk calibration against GT zones (worldgen hazards + renders; GPU spend to be asked);
+  - Voxblox's half-voxel inflation (P2), decided separately.
+- **§49:**
+
+  | step | status |
+  |---|---|
+  | catalogue | STEP (risk map as cost), GBPlanner2 (ground beneath edges): `TRAVERSABILITY_4.2.md` §1; **`ALGORITHMS.md` entry owed** |
+  | arch decision | D111, plus the §20.5 / §22.1 blockquotes |
+  | ablation matrix | strict 3D vs hybrid vs 1.8, same spool and scorer |
+  | benchmark config | `TravParams` defaults; ρ from `configs/mission/mission_v1.yaml` |
+  | manifest schema | `ariadne_volumetric_eval` results (`traversability`, `risk_terms`) |
+
+
+## 2026-10-23 — D112: worldgen structural hazards (cantilever slabs, hung masses) with GT risk zones, for calibrating D111's risk proxy
+
+- **What** (`docs/design/RISK_ZONES_4.2.md`, `python/dataset_tools/worldgen/hazards.py`):
+  - An opt-in preset section `hazards`. Its own Philox stream (`S_HAZARDS = 40`) places cantilever slabs (held by a
+    room wall) and hung masses, with undersides ≥ 1.95 m: above a standing responder, so they threaten a route
+    without blocking it.
+  - Six-face meshes, bottom included (`K_HAZARD`).
+  - `scene_gt.npz` gains `hazard_footprint` and `risk_zone` (footprint ⊕ 0.5 m, `[ASSUMPTION]` a debris-fall
+    margin); `scene.json` gains `hazards`.
+  - New preset `configs/worldgen/ci_tiny_hazard.yaml` (ci_tiny + 2–3 cantilevers + 1–2 hung masses).
+- **Why these two:** the US&R collapse patterns (secondary sources, §1 of the design). Cantilever collapse is "the
+  most dangerous type of collapse to operate in". Lean-to and V slabs reach the floor and would need a 3D GT
+  traversability: out of v1, stated.
+- **Existing scenes unchanged, proven:**
+  - at its default the section is left out of `Preset.to_canonical()`, so all four preset digests equal their
+    pre-D112 values (pinned in `test_hazards.py`);
+  - every golden scene-directory digest still matches (`test_golden.py`);
+  - a no-hazard scene's `scene_gt.npz` gains no layers.
+- **Tests:** 112/112 worldgen tests. The new ones:
+  - digests;
+  - a twin check: `ci_tiny_hazard` seed 0 has the same attempt, `free`, `esdf`, `trav_*`, starts, target and
+    scripts as `ci_tiny` seed 0, since the streams are keyed by (seed, attempt, site);
+  - placement constraints;
+  - outward faces, with the bottom normal at −z;
+  - the GT margin by hand.
+- **Scenes:** seeds 0 / 1 / 2 have 5 / 4 / 5 hazards (scene ids `f232a40b77b3538f`, `d0ab877b3a06fc04`,
+  `3406f0792c57a975`).
+- **Next:** render on AWS g4dn (maintainer, 2026-10-23), run the Phase 1 estimator chain to a spool, then the 4.1
+  map, then calibration by the protocol fixed in the design §3: the threshold on seed 0, the report on seeds 1–2,
+  and AUC ≥ 0.75 to enter planning.
+
+## 2026-10-23 — D113: 4.5 egress = D* Lite on D111's ρ_responder lattice, many-exit backward search, 5th-percentile body-support confidence
+
+- **What** (`docs/design/EGRESS_4.5.md`, `cpp/planning/route/`):
+  - **Search:** Koenig & Likhachev Fig. 3 (transcribed). The search runs from the exits, each seeded rhs = 0, to
+    the fixed target. k_m = 0, and h = octile(target, ·), which is consistent because every edge costs ≥ its length.
+  - **Lattice:** 1.8's, 8-connected with the corner rule. A non-traversable column has no edge (invariant 4 as a
+    constraint).
+  - **Edge cost:** |x−y|·(1 + mean endpoint penalty), with penalty = w_u(1 − support) + w_r·risk +
+    w_c·max(0, ρ_safe − clearance)/ρ_safe. The weights are 1 / 0 / 1, fixed a priori; w_r stays 0 until D112's
+    calibration passes.
+  - **Support** = the observed fraction of the ρ-capsule body envelope.
+  - **Replan:** every changed cell re-runs UpdateVertex on its 3×3 block.
+- **Why:**
+  - arch §22.1/§22.3 name D* Lite;
+  - the map changes under a fixed plan, and each replan touches only the vertices whose costs changed;
+  - the 1.8 A* stays as the ablation baseline (unchanged).
+- **Measured:**
+  - tests: D* Lite = fresh Dijkstra exactly on 180 random flip rounds (7.6× fewer expansions);
+  - evidence spool: 12/12 routes GT-valid and the final route GT-optimal, the same as 1.8 (both first route at 145 s);
+  - incremental = fresh at the final replan.
+- **Pre-registered range check fired** (support spread 0.0999 < 0.1). The geometric observable band
+  ([−0.31, 2.31] m, from altitude 0.8–1.2 m, half-FOV 28° and the 2.84 m depth gate) contains the whole envelope,
+  so the switch is a no-op (byte-identical support).
+- **Calibration:** degenerate (all valid, confidence 0.900–0.902), reported as degenerate.
+- **Exit-gate reroute:** open; no run-level instance yet.
+
+## 2026-10-23 — D114: 4.3 NBV design (generators A–E, a shared FUEL viewpoint sampler, 256-ray IG, p90 self-normalisation, one path cost, the energy-reserve rule); gate on lockstep L1
+
+- **What** (`docs/design/NBV_4.3.md`):
+  - **Generators A–E** feed one cylindrical viewpoint sampler (FUEL): radii 1.0 / 1.5 / 2.0 m, 16 azimuths,
+    z = 1.0 m; kept if in `trav_a` with line of sight; best 2 per target.
+  - **IG:** a 256-ray frustum bundle to 2.84 m.
+    - Δcoverage: unknown voxels;
+    - Δentropy: with p_occ = ½e^(−w) for free voxels and 1 − ½e^(−w) for occupied, the weight's unit being one
+      σ_ref observation;
+    - Δegress: unknown voxels in the route envelope;
+    - Δpose_connectivity: a planning-side `ConnectivityOracle`, the Δλ₂ of 3.4's selector through a runtime
+      adapter;
+    - Δloop_disambiguation: `AliasSource`.
+  - **Normalisation:** each term by its candidate-set p90, and G = the sum.
+  - **Costs:** the path-proportional costs (motion, time, energy) are counted once, as
+    λ_path(t) = (1 + λ_e(t) + λ_t(t))/3 ∈ [1, 5/3], with the arch's cubic schedules. Bandwidth and risk are
+    p90-normalised with λ = 1.
+  - **Hard rule:** if E_remaining < 1.3·E(return), only {return, hold}, as a supervisor event.
+- **Why:**
+  - arch §21.2–§21.4 as written, except cost normalisation, an extension flagged in the design: without it every
+    λ⁰ is unit-bearing;
+  - counting the costs once avoids the hidden 3× motion weight that per-term normalisation of ∝-path costs would
+    create.
+- **Measured before adoption:** Δentropy is not saturated on the evidence-spool map (known-voxel w p50 0.74–0.83;
+  mean H 0.61–0.66 bit; a third over 0.9 bit).
+- **Conflict surfaced:** two §21.3 producers are absent on this branch. 3.4's spectral gain is unmerged
+  (feat/3.4-spectral), and §17.3's alias flags don't exist anywhere. Those terms are 0, with the reason in the trace,
+  until they land. They're never a stand-in value.
+- **Gate:** the coverage-vs-budget ablation has pre-registered axes (§5). It runs on **lockstep L1** (maintainer):
+  B builds a gz pause at each barrier, so runs are reproducible per seed. The replay decision log tests the
+  machinery only.
+
+## 2026-10-23 — D115: 4.4 allocation = CBBA (L_t ≤ 2, event-triggered) and broker SGA on a time-discounted DMG score with common auction scales
+
+- **What** (`docs/design/ALLOCATION_4.4.md`; the paper transcribed in ALGORITHMS §22.3.1):
+  - **Algorithms:** CBBA (Algorithm 3, Table I, eq. 6 release), run only on a new task, a completed task, or a
+    topology change. Broker sequential greedy (SGA) on the same inputs. Both logged identically.
+  - **Score:** S_i(p) = Σ_j c̄_ij · exp(−λ_path · d_ij(p) / P_path).
+    - c̄_ij = the D114 value net of bandwidth and risk;
+    - d_ij(p) = the geodesic distance along the path;
+    - P = common scales: the max over agents of each term's p90, frozen per allocation event.
+- **Why:**
+  - **DMG holds** (paper eqs. 11–12, triangle inequality on geodesics). D114's linear U is not DMG for two-task
+    bundles, because an insertion shrinks a neighbour's detour.
+  - **Under DMG, Theorem 1 makes CBBA's assignment equal SGA's.** So the arch's "auction vs broker-greedy" row
+    measures communication (rounds, messages, bytes), not quality, and "logged identically" becomes an exact test.
+  - **Common scales make bids comparable across agents.** Per-agent p90s would not.
+- **Oracle:** exact every round. L_t = 1 by `cv::solveLP` (total unimodularity). L_t = 2 with N_u = 2 by a sorted
+  disjoint scan.
+- **Wire:** `TaskConsensus` (MessageClass TASK_CONSENSUS = 10 already exists) is to be added with the master
+  session, which holds open 3.4 edits to `wire.fbs`. Until then the bytes come from a test codec, labelled, and are
+  never claimed.
+- **Replay** exercises only the connected two-agent case. The disconnection and staleness regimes come from the
+  synthetic tests and live L1.
+
+- **D115 correction (2026-10-23):** "CBBA = SGA under DMG" is exact at **L_t = 1** (2000 / 2000) but not at L_t = 2
+  (5 / 1000 diverge through a stale second-slot bid, each with an eq. 6 tail release; a hand-built instance pins
+  it). **Default L_t = 1.** L_t = 2 is a reported row, and its round and 50 % bounds are empirical there.
+- **D115 measured (2026-10-23, replay; `evaluation/runs/allocation_4.4_replay/`):**
+  - CBBA = SGA on 40 / 40 replans. CBBA/optimum on linked replans: mean 0.994, worst 0.983 (greedy pick: 0.985 /
+    0.900).
+  - 2.4 KB per TASK_CONSENSUS message, 13.9 KB per linked event.
+  - Event triggering saves only 26 % of bytes, because 4.3's task set churns. That's reported, not tuned; top-K
+    announcement and deltas are listed as possible design changes.

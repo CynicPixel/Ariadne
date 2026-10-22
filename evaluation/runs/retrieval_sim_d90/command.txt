@@ -1,0 +1,7 @@
+# D90 sim retrieval evaluation (docs/design/RETRIEVAL_SIM_D90.md). Run 2026-10-22 on the dev host, one process at a time.
+# Binary built from f8c7030 plus this commit's ariadne_place_eval change (hence git_dirty: true in the manifests).
+# REC = evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw (git-ignored, 12 GB; bag sha256 in the manifests)
+ariadne_place_eval --rec REC/rec --scene REC/scene --agent 0 --sim-d90 --perception-config configs/perception/euroc.yaml --export .cache/models/eigenplaces_sim_ref --out OUT/agent0
+ariadne_place_eval --rec REC/rec --scene REC/scene --agent 1 --sim-d90 --perception-config configs/perception/euroc.yaml --export .cache/models/eigenplaces_sim_ref --out OUT/agent1
+python3 -I python/analysis/retrieval_rows_eval.py sim OUT --base ep640 --methods ep1280 --out OUT/rows
+# Descriptors (<method>.f32, 200 x 256 float32 per agent) are not committed; their sha256 are in descriptors.sha256.

@@ -22,6 +22,7 @@ from .raster import Grid
 
 # surface id = KIND << 24 | index  (texture Philox counter word; never renumber)
 K_WALL, K_FLOOR, K_CEIL, K_PROP, K_BOARD = 1, 2, 3, 4, 5
+K_HAZARD = 6   # D112: structural hazards (cantilever slabs, hung masses)
 
 
 @dataclass(frozen=True)
@@ -171,6 +172,30 @@ def prop_surfaces(props, g: float, px_per_m: int):
 
 
 BOARD_OFFSET_M = 0.002    # proud of the wall: no z-fighting with the wall quad behind it
+
+
+def hazard_surfaces(hazards, g: float, px_per_m: int):
+    """Six outward faces per hazard box, the BOTTOM included: the underside is what a rescuer must see and what the
+    risk proxy's overhang term looks for (design RISK_ZONES_4.2)."""
+    out = []
+    for hi, h in enumerate(hazards):
+        x0, y0, x1, y1 = h.rect.x0 * g, h.rect.y0 * g, h.rect.x1 * g, h.rect.y1 * g
+        z0, dz = h.z0, h.z1 - h.z0
+        lx, ly = x1 - x0, y1 - y0
+        faces = [
+            Quad((x0, y0, z0), (lx, 0.0, 0.0), (0.0, 0.0, dz)),     # south face, n = -y
+            Quad((x1, y1, z0), (-lx, 0.0, 0.0), (0.0, 0.0, dz)),    # north face, n = +y
+            Quad((x1, y0, z0), (0.0, ly, 0.0), (0.0, 0.0, dz)),     # east face,  n = +x
+            Quad((x0, y1, z0), (0.0, -ly, 0.0), (0.0, 0.0, dz)),    # west face,  n = -x
+            Quad((x0, y0, h.z1), (lx, 0.0, 0.0), (0.0, ly, 0.0)),   # top,        n = +z
+            Quad((x0, y0, z0), (0.0, ly, 0.0), (lx, 0.0, 0.0)),     # bottom,     n = -z
+        ]
+        cx, cy = (h.rect.x0 + h.rect.x1) / 2, (h.rect.y0 + h.rect.y1) / 2
+        for fi, q in enumerate(faces):
+            w_m, h_m = q.size()
+            size = (max(int(round(h_m * px_per_m)), 8), max(int(round(w_m * px_per_m)), 8))
+            out.append(Surface(K_HAZARD << 24 | (hi << 4 | fi), K_HAZARD, q, size, (cx, cy)))
+    return out
 
 
 def board_quad(bp, g: float, width_m: float) -> Quad:

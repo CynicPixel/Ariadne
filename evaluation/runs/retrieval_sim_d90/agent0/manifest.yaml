@@ -1,0 +1,19 @@
+# ariadne_place_eval (PERCEPTION_2.1 §11.5). Generated.
+tool: ariadne_place_eval
+command: "/work/build/docker/cpp/runtime/ariadne_place_eval --rec /simrec/ci_tiny_0-20261001T133914Z/raw/rec --scene /simrec/ci_tiny_0-20261001T133914Z/raw/scene --agent 0 --sim-d90 --perception-config /work/configs/perception/euroc.yaml --export /work/.cache/feat-2.1-perception/models_sim/eigenplaces_sim_ref --out /work/build/a1/simret/agent0"
+scene: sim/aadffb8df5790ca0/agent0
+bag_checksum: sha256:2139973242be9ed1713c40348f08a0dce0ff2827e6719b99e24ef6f40301ea61
+git_commit: f8c7030a253fa3ac4ee61793fd3f2341038914c8
+git_dirty: true
+image_digest: sha256:04d8a7c58de1f0bd9a8998da8cd0c4aaa45c38320b7606f4e1f8d305fe33b7e4
+agent: 0
+perception_config: euroc
+place_recognition: [eigenplaces_r50_256@640x360/cv_dnn_classic, eigenplaces_r50_256@1280x720/cv_dnn_classic (RGB path)]
+place_index: [exact (in place_recall_eval.py)]
+degradation: none
+degradation_seed: 20261022
+degradation_digest: none
+eigenplaces_commit: a2969f71d5ea31017443af490b15273ca4c50af1
+eigenplaces_weights_sha256: 2923c10295563ea15efa1571b499c67a7aab4d1ee6e19eba5e8b92756dc9d7e7
+every: 20
+exclude_s: 30

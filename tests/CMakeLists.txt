@@ -91,9 +91,16 @@ if(OpenCV_FOUND)
     unit/test_aliked_lightglue_reference.cpp
     unit/test_hard_pair.cpp
     unit/test_loop_verify_geometry.cpp
-    unit/test_dnn_contract.cpp)
+    unit/test_dnn_contract.cpp
+    unit/test_volumetric.cpp
+    unit/test_traversability.cpp
+    unit/test_egress.cpp
+    unit/test_nbv.cpp
+    unit/test_phase4_planner.cpp
+    unit/test_allocation.cpp
+    unit/test_visibility_graph.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
-    ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)
+    ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   gtest_discover_tests(test_opencv)
 endif()

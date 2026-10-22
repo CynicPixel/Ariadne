@@ -827,3 +827,34 @@ has not moved for 15 s of wall time.
 - Systems' `PreUpdate` while paused (the mover taking a command at paused time T): covered by
   `python/tests/sim/test_mover_live.py::test_command_taken_while_paused` (applied_ns = 0 in a world paused at 0).
 Re-run (~2 min): `infra/scripts/tests/lockstep_smoke/run.sh` (header has the docker command; probe.py beside it).
+
+## 4u. HashTSDF (`cv::Volume`) for the §20 volumetric stack: usable as the oracle, not as the planner's map `[SMOKE-TEST]` 2026-10-22
+
+§4b showed `cv::Volume(VolumeType::HashTSDF)` constructs. 4.1 (arch §20.1) needs more than that, so this checks what
+the planner would read from it. Reproduce with `infra/scripts/smoke_hashtsdf.cpp` (command in its header).
+
+**The public API** (`opencv2/ptcloud/volume.hpp`, `volume_settings.hpp`, `detail/`): `integrate(depth, pose)`
+(also with colour or an `OdometryFrame`), `raycast`, `fetchNormals`, `fetchPointsNormals[Colors]`, `getBoundingBox`,
+`getVisibleBlocks`, `getTotalVolumeUnits`, `reset`, `setEnableGrowth`. It does **not** have:
+
+- a read of a voxel's TSDF value or weight, or any iteration over blocks or voxels;
+- a per-pixel sample weight: every pixel integrates with weight 1, capped by `maxWeight`.
+
+§20.2's tri-state needs the per-voxel weight (unknown = weight 0). §20.3's ESDF and §20.4's frontiers need the
+voxels. §20.1's sample weights are `1/σ_Z²`. None of these is expressible through this API: this is §20.1's "API
+proves awkward" case. §4b's note "no from-scratch TSDF needed" is superseded.
+
+**Synthetic check** (known answer: a fronto-parallel wall at Z = 2 m, 640×360 pinhole, 5 identical integrations,
+truncation 4 voxels, raycast from the same pose):
+
+| voxel | raycast valid | raycast \|ΔZ\| median / max | `fetchPointsNormals` points, mean \|ΔZ\| |
+|---|---|---|---|
+| 0.05 m | 230317 / 230400 | 0.020 / 0.050 m | 21573, 0.087 m |
+| 0.08 m | 229694 / 230400 | 0.042 / 0.160 m | 8672, 0.141 m |
+
+The raycast surface sits about half a voxel off the true wall. The fetched points spread further, by 1.7 voxels on
+average. This is `[UNVERIFIED]` as to cause; one candidate is a voxel-corner vs voxel-centre convention.
+
+**So:** 4.1 builds the from-scratch voxel-hash TSDF of §20.1's fallback, and `cv::Volume` HashTSDF stays as its
+correctness oracle: same frames, same voxel size and truncation, unit weights, compared on the raycast surface at a
+tolerance of one voxel. The oracle's own half-voxel bias, measured here, is why the tolerance is not tighter.

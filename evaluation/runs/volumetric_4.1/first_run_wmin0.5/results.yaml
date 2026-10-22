@@ -1,0 +1,14 @@
+# ariadne_volumetric_eval (VOLUMETRIC_4.1 §6, D110). Generated; host timings are indicative.
+keyframes_integrated: {agent0: 320, agent1: 251}
+voxel_m: 0.05
+truncation_voxels: 3
+blocks: 3067
+map_bytes: 12562432
+esdf: {incremental: 565, rebuilds: 6, mean_voxels_recomputed: 498419, box: [382, 270, 94]}
+frontier_clusters_final: 12
+frontier_rejected_small: 142
+coarse: {cells: 4320, rle_bytes: 1047}
+ms_per_keyframe:
+  integrate: {mean: 19.5128, p95: 42.3426}
+  esdf_update: {mean: 56.5634, p95: 106.262}
+  frontier_update: {mean: 89.4071, p95: 150.906}

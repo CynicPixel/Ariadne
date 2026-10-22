@@ -1,0 +1,256 @@
+# 4.3 Next-best-view (I8): candidates A–E, raycast IG, self-normalisation, λ scheduling, the energy-reserve rule (A1)
+
+Status: **reviewed** (advisor 2026-10-23: points 1–6 addressed below; the gate regime decided by the maintainer: lockstep L1, §9), before any code. Decision: D114. Arch §21.1–§21.4; ALGORITHMS §22.1–§22.2.
+Consumes D110 (map, frontiers, coarse layer), D111 (trav_a, risk), D113 (the egress route and its support). Feeds
+4.4 allocation and B's `MissionPlanner::Plan` (through `TaskCandidate`, commit e2e538d). The 1.8 nearest-frontier
+policy stays as the ablation baseline.
+
+## 0. What the gate asks, and the regime it needs
+
+- **Plan 4.3 gate:** a planner ablation plot of reconstruction coverage vs mission budget, for random,
+  coverage-greedy, uncertainty-only and Ariadne, on ≥ 2 scenes × 3 seeds.
+- **Arch §5.9:** closed-loop active-perception experiments must run live, because the trajectory depends on the
+  estimate. They are reported over seeds with variance, and every figure declares its regime.
+- **So replay cannot produce the gate's plot.** A replay spool's trajectory is fixed, so a planner can only be
+  scored counterfactually there ("what it would have chosen").
+- **The planner is built behind the seam and run in two regimes:**
+  1. **replay decision log** (deterministic, now): every replan on the evidence spool logs the full candidate set,
+     with terms, costs and utility. This tests the machinery, not the policy's value;
+  2. **closed loop** (the gate): the choice of loop is the one open question (§9).
+
+## 1. Interface (planning-level; no runtime, ROS or AWS type)
+
+```text
+NbvInputs  { const TsdfMap&, const Esdf&, const FrontierSet3D&, const CoarseLayer&, const TraversabilityMaps&,
+             const EgressReplan* route, const cv::Mat* route_support,
+             per agent: pose (world), energy used, peers' keyframe positions;
+             mission clock t, budget T; ConnectivityOracle*; AliasSource* }
+NbvPlanner::Plan(inputs, agent) -> std::vector<TaskCandidate>   (sorted by utility, ties by task_id)
+```
+
+- `ConnectivityOracle` returns the §16.2 spectral gain Δλ₂ of the inter-agent edge that a view near a peer's
+  keyframe would enable. Its producer is 3.4's selector (D170), whose API was read from `feat/3.4-spectral`:
+  - `SelectionProblem` has `n` nodes, `fixed` `GraphEdge{a, b, kappa}`, `candidates` `CandidateEdge{id, a, b,
+    kappa}`, `node_bytes` and a budget;
+  - `SolveFiedler` / `SelectionReport.lambda2` give λ₂.
+- **The oracle is a planning-side interface over plain numbers:** `double Gain(int agent, int64_t peer_kf_id)`.
+  As built, the adapter maps (agent, keyframe) to the broker's graph nodes.
+  - It holds no collaboration type, so planning keeps its core-only dependency rule.
+  - A runtime adapter implements it as λ₂(G ∪ {e}) − λ₂(G) with 3.4's `SolveFiedler`, on the broker's pose graph
+    (`fixed`), with kappa the predicted retrieval similarity.
+- `AliasSource` returns §17.3's alias-flagged place pairs.
+- **Conflict, surfaced:** arch §21.3 says every term has a producer. On `feat/ph4-mission` (from main `f8c7030`):
+  - **3.4 is not merged:** it's on `feat/3.4-spectral`, the main session's;
+  - **§17.3 alias flags have no producer at all.**
+- Until each lands, its term is **0 with the reason in the trace**, never a stand-in value. Generators C and D still
+  produce candidates, so their geometry and costs are tested. Their gain is reported as missing.
+
+## 2. Candidate generators (§21.2)
+
+Every generator yields **targets** (a point plus a size). One shared **viewpoint sampler** turns a target into
+views. That is FUEL's per-cluster cylindrical sampling (ALGORITHMS §22.2):
+- **Sample grid:** radii {1.0, 1.5, 2.0} m (inside the 2.84 m depth gate), 16 azimuths, z = 1.0 m (the motion
+  altitude), yaw toward the target.
+- **A view is kept** if its cell is in `trav_a` and a voxel ray from the view to the target hits no occupied voxel
+  (line of sight).
+- **Per target:** the best `k = 2` views by Δcoverage (FUEL keeps the best per cluster; two leave a fallback).
+- No RNG: the grid is fixed, so plans are deterministic.
+
+The targets per generator:
+
+| Gen | Target | Source |
+|---|---|---|
+| A frontier | each kept `FrontierCluster3D`: its centroid, and its normal when defined. A cluster whose AABB extent is > 2 m is split along its first principal axis (FUEL's PCA split) | D110 |
+| B uncertainty | coarse 0.5 m cells holding surface (occupied > 0) whose mean weight is in the **bottom decile** of such cells (rank-based, so no weight threshold) | D110 coarse layer |
+| C connectivity | peers' keyframe positions within 4 m of this agent's map that this agent's keyframes have not come within 2 m of | spool / L1 poses |
+| D alias | each alias-flagged place pair: both places | `AliasSource` (none yet) |
+| E egress | connected runs of current-route cells with support < 1, centred on their lowest-support cell | D113 |
+
+`task_id` = a hash of (generator, the target's anchor voxel), stable across replans (`TaskCandidate`).
+
+## 3. Information gain (§21.3)
+
+- **One bundle per view:** 256 rays (inside the arch's 200–500), on a 16 × 16 grid over the rig's frustum. The
+  frustum is the spool's left intrinsics at 640 × 360. Rays run to 2.84 m and stop at the first occupied voxel.
+- **Voxel walk:** 1.8's Amanatides–Woo walk (`occupancy_grid.hpp`). Voxels are de-duplicated across the bundle.
+- **The five terms:**
+  - **Δcoverage** = unknown voxels reached.
+  - **Δentropy** = Σ H(p) over reached voxels, the expected entropy removed if the view resolves them.
+    - Unknown: p = 0.5 (1 bit).
+    - Free: p_occ = ½·e^(−w). Occupied: p_occ = 1 − ½·e^(−w).
+    - Here w is the TSDF weight, whose unit is one observation at σ_ref (D110). That unit is the only scale; there
+      is no fitted constant.
+  - **Δegress_confidence** = reached voxels that are unknown and inside the current route's body envelope (the
+    support definition of D113).
+  - **Δpose_connectivity** = ConnectivityOracle gain (C only; 0 otherwise).
+  - **Δloop_disambiguation** = AliasSource value (D only; 0 otherwise).
+- **Saturation check (advisor point 2; evidence-spool map, no GT; `ariadne_volumetric_eval` `known_weights`):**
+
+  | | known voxels | w p10 / p50 / p90 | mean H | H > 0.9 bit |
+  |---|---|---|---|---|
+  | free | 775,710 | 0.110 / 0.743 / 4.87 | 0.660 bit | 34.4 % |
+  | occupied | 196,132 | 0.112 / 0.832 / 9.78 | 0.611 bit | 33.4 % |
+
+  - H runs from about 1 bit (w ≈ 0.1) to about 0.04 bit (w ≈ 5). Two-thirds of known voxels are below 0.9 bit.
+  - So Δentropy separates re-observing weakly seen surfaces from re-observing well-seen ones. It is not
+    "reachable voxels".
+  - **The mapping is adopted.**
+- **Self-normalisation:** each term is divided by its 90th percentile over the current candidate set. If the p90 is
+  0 (≥ 90 % zeros), divide by the max; if that's 0 too, the term is 0.
+- **G = Σ normalised terms**, with α = β = γ = δ = 1 (the arch fixes no others; normalisation makes 1 the neutral
+  choice).
+
+## 4. Costs, λ scheduling and the hard rule (§21.4)
+
+- **C_motion** = path length at ρ_agent: `GridDistances` on `trav_a` from the agent's cell (1.8, exact geodesic).
+- **C_time** = path / v, with v = worldgen's motion speed.
+- **C_energy** = e_per_m · path.
+  - In the kinematic rig all three are ∝ path. After per-term p90 normalisation they become the **same number for
+    every candidate** (advisor, review point 1).
+  - Kept as three separate terms, with λ⁰ = 1 each, the path weight would be 3 at t = 0. That's against a G where
+    usually only 2–3 of the 5 terms are nonzero, so "λ⁰ = 1 is neutral" would be false.
+  - **Proposed:** count the proportional costs once:
+    `C_path = path/p90(path)`, `λ_path(t) = (λ_d⁰ + λ_e(t) + λ_t(t)) / 3`.
+    That's 1 at t = 0 and E_used = 0, and 5/3 when both the energy and the clock are exhausted. The cubic schedules
+    act as one multiplier, and the effective weight is stated in D114.
+  - Rigs where time or energy is not ∝ path (hover, comms waits) get the terms back, separately.
+- **C_bandwidth** = the §15.7 byte-table cost of the exchange a view triggers: generator C views only (a
+  keyframe-summary exchange); 0 otherwise.
+- **C_risk** = the candidate's risk, as `TaskCandidate`:
+  - max of the geometric bottleneck term and the structural [PROXY];
+  - the proxy enters only if D112's calibration passes.
+- **Cost normalisation: an extension, flagged.**
+  - The arch normalises the IG terms only, which leaves λ⁰ unit-bearing: metres vs bytes vs risk.
+  - Proposed: each cost is also divided by its candidate-set p90, so λ⁰ = 1 is unit-free. Without this, every λ⁰ is
+    an unfalsifiable tuning choice, which is exactly what §21.3 rejects for gains.
+- **Schedules, as the arch gives them:**
+  - λ_e(t) = λ_e⁰ (1 + (E_used/E_total)³), and λ_t the same against t/T;
+  - λ_d, λ_b, λ_r constant at 1.
+- **U(a) = G − λ_path(t)·C_path − λ_b·C_b/p90_b − λ_r·C_r/p90_r**, with λ_b = λ_r = 1.
+- **Hard rule, outside the utility:** if E_remaining < 1.3 · E(return path), the candidate set becomes
+  {return_to_safe_zone, hold}.
+  - The return path is the ρ_agent geodesic to the nearest briefed entrance.
+  - It's logged as a supervisor event (§24).
+  - It's tested as unreachable from the optimizer: no gain and no weight can re-admit a candidate.
+- **New `mission_v2` keys:** E_total, e_per_m, v (from worldgen motion), budget T. In the kinematic rig E is a
+  distance budget, stated as such.
+
+## 5. Baselines for the ablation (plan 4.3)
+
+**Gate axes, pre-registered (2026-10-23, before any closed-loop run):**
+- **Coverage (y):** 4.1's map metric, the fraction of GT-free cells observed free in the 1.8 slab over the
+  [0.15, 1.90] m band (`volumetric_eval.py` "coverage"; the same scorer as the D110 rows).
+  - Secondary: the fraction of GT structure cells adjacent to free space observed occupied (surface coverage).
+- **Budget (x):** metres flown, summed over agents, at 10 fixed fractions of the run's distance budget. In the
+  kinematic rig that's the energy budget E_total.
+- **Scenes:** `ci_tiny` and `maze_short` (existing presets), seeds 0, 1, 2. With hazards, `ci_tiny_hazard`
+  joins as a third if its spools exist.
+- **Report:** per policy and budget, the mean over the 3 seeds, with min and max (§5.9: over seeds with variance,
+  never a single run). Scalar: area under the coverage-budget curve. The regime is declared on the figure.
+- **The claim is "Ariadne ≥ every baseline at every budget fraction".** It's tested per scene. A loss is reported
+  as a loss.
+- **Added 2026-10-23 (EXPLORATION_4.6 review), before any run:** the §31.6 row **TARE-inspired** (D116). That makes
+  6 policies × 2 scenes × 3 seeds = 36 lockstep runs, ≈ 14 h on llvmpipe (≈ 22 min each).
+  - On ci_tiny (about one 6 m subspace) the TARE row is nearly local-only, so a null result there is not over-read.
+
+All four share the same generators, sampler and costs, so the comparison isolates the scoring:
+- **random:** a uniform choice among reachable candidates (seeded Philox stream);
+- **coverage-greedy:** G = Δcoverage only, cost-free; nearest wins ties;
+- **uncertainty-only:** G = Δentropy only;
+- **Ariadne:** the full U(a).
+
+1.8's nearest-frontier policy is a fifth row (the D45 baseline).
+
+## 6. Tests
+
+1. The IG raycast against a brute-force voxel count on a synthetic map: an unknown box behind a wall with a hole.
+   Exact counts.
+2. Self-normalisation is scale-invariant: multiplying a term by k leaves the normalised terms, G and the ranking
+   unchanged.
+3. The λ schedules at E_used = 0 / ½ / E_total, by hand.
+4. The hard rule:
+   - below the reserve, only {return, hold} are emitted, whatever the gains (a 10⁶ gain candidate is still dropped);
+   - above it, the normal set.
+5. The sampler: every emitted view is in `trav_a`, with line of sight to its target. Deterministic: two calls give
+   identical output.
+6. Generator E: a route with a low-support run yields a target at its minimum.
+
+## 7. Replay decision log (now)
+
+At every 5 s replan on the evidence spool, per agent: the full candidate set (generator, goal, terms raw and
+normalised, costs, U), the choice, and the timings. This is evidence that the machinery runs at replan rate. It is
+**not** the policy's value, and it is never plotted as coverage vs budget.
+
+## 8. Preflight record
+
+- **Literature:** ALGORITHMS §22.1–22.2:
+  - read in primary text: TARE, FUEL, SEE, RACER;
+  - secondary only: Isler and Delmerico. Delmerico's result (unobserved-voxel counting did best) backs Δcoverage
+    as a term separate from Δentropy.
+- **OpenCV-native:** none for raycast IG. `cv::Volume::raycast` renders depth only and has no voxel read (SMOKE
+  §4u). PCA uses `cv::PCA`. Line of sight uses the voxel walk.
+- **B's seam:** `TaskCandidate` → `TaskOption` (8ff170a), with risk and its reason per option.
+
+## 9. Open question for the maintainer: the closed loop for the gate
+
+**L1 facts (B, 2026-10-23):**
+- **Closed loop works today.** `ariadne_live` (feat/ph7-agentic) calls `MissionPlanner::Plan` at every
+  sim-time barrier T = k·5 s. The pick is validated, then `Route` → mover `PoseArray`; the mover checks against the
+  ESDF and holds if refused. gz renders whatever is executed. 4.3 plugs in by implementing `MissionPlanner`.
+- **Cost:** no GPU is needed. llvmpipe RTF is 0.13–0.15, about 22–25 min wall per 200 s mission, one run at a time
+  on the dev host (memory), so 24 runs ≈ 9–10 h. NVIDIA EGL on g4dn is unknown until SMOKE §4v (the D112 run).
+- **Not reproducible live:** gz keeps running while the planner thinks. Commands apply about 1.7 s of sim time
+  after their stamp, depending on wall latency, so runs N and N+1 differ. Replaying a recording is bit-exact
+  (D152a).
+- **Lockstep** (pause at each barrier via gz WorldControl, resume after the commands) is not built; about half a
+  day for B. It removes the latency confound and makes classical/NBV runs reproducible.
+
+**The options:**
+- **(a) L1 as is:** 24+ runs, ≈ 10 h on the dev host. Variance includes wall-latency noise, which differs by
+  policy (the costlier planners lag more), confounding the comparison.
+- **(b) L1 with lockstep (B, ½ day):** the same 24+ runs, reproducible per seed. The policies differ only in their
+  choices. On g4dn, if §4v passes, faster.
+- **(c) A GT-raycast kinematic loop now, as a development harness, then (a) or (b) for the gate figure:**
+  CPU-only, seconds per run, a different regime, labelled.
+
+**Decision (maintainer, 2026-10-23): (b), lockstep L1.** B is asked to schedule lockstep. The gate runs go through
+A1's `MissionPlanner` on `ariadne_live`, with the axes of §5. The library and the replay decision log (§7) are built
+meanwhile.
+
+## 10. Review (advisor, 2026-10-23)
+
+1. Path-proportional costs counted once (λ_path); the effective weight stated (§4).
+2. Δentropy saturation measured before adoption: not saturated (§3).
+3. Gate axes pre-registered (§5).
+4. ConnectivityOracle shaped to 3.4's real API, read-only from its branch (§1).
+5. L1's closed-loop facts got from B before asking the maintainer (§9).
+6. AWS provenance: the D112 payload binaries were built at `df38a12` (pinned by `inputs.SHA256SUMS`); run commit
+   `c8a3262`. Both go into the D112 run record.
+
+## 11. As built (2026-10-23)
+
+Code: `cpp/planning/mission/nbv.{hpp,cpp}` (D114). Tests: `tests/unit/test_nbv.cpp`, 6 tests, all pass with the 7
+egress tests:
+- the raycast on a wall: exactly 0 coverage behind a solid wall; the entropy identity with and without a hole;
+  egress counts only envelope voxels; clipping to bounds;
+- p90 scale invariance and its fallbacks;
+- λ_path by hand;
+- the reserve rule;
+- the sampler contract;
+- generator E's target at the route's lowest support.
+
+**Replay decision log on the evidence spool** (`evaluation/runs/nbv_4.3_replay/`, 52 decisions: agent 0 at all 40
+replans, agent 1 at the 12 after the merge):
+- **First run: 5.9 s per agent per plan (p95 8.0 s).** The cost was the sampler: every target's 48 sampled views
+  got the full 256-ray bundle.
+  - Fixed: views are ranked by coverage on a 64-ray bundle, and only the 2 kept views get the full 256-ray terms.
+    The voxel state now takes one hash lookup.
+  - IG is now also clipped to the briefing's extent (grid × [0, `z_max`]), so rays leaving the building are not gain.
+- **After the fix: mean 1.98 s, p95 3.1 s.**
+  - That's fine under lockstep L1 (the world is paused while planning).
+  - Unpaused, it would exceed the 5 s period's budget on the dev host. Not a target; stated.
+- **Generator mix by the end:** A 32–36 targets, B 109–118, C 20 (agent 0), E 2. D: 0 (no producer).
+- **The top choice:** A 27, B 24, C 1. None empty.
+- Both missing producers are named in every line's notes.
+- The early views' Δcoverage (≈ 15k voxels) is real: at t = 5 s the building's interior is unknown and inside the
+  extent.

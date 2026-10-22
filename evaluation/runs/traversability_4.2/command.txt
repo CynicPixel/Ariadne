@@ -1,0 +1,9 @@
+# 4.1 + 4.2 evaluation (VOLUMETRIC_4.1.md §7, TRAVERSABILITY_4.2.md §6; D110 corrected, D111). Dev host, one process, 2026-10-23.
+# SPOOL = the Phase 1 exit-gate evidence spool build/phase1_gate/aadffb8df5790ca0-20261017T072201Z/spool/aadffb8df5790ca0-20261017T072237Z
+#         (git-ignored, 213 MB; content sha256 over sorted files 3bbd1fca7a129ad29908b118d6a536533fa2e6d2f4167c35a32ef5ea36bc35b6)
+# SCENE = evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+# BASELINE = evaluation/runs/phase1/exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z/slab.png (1.8, D45)
+ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT
+python3 -I python/analysis/volumetric_eval.py --scene SCENE --slab OUT/slab.png --baseline BASELINE --out OUT
+# first_run_wmin0.5/: the same run with the first design's w_min = 0.5 (unknown below half a sigma_ref observation),
+# kept because it was measured before the definition was corrected to arch §20.2's "unknown = weight 0".

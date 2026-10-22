@@ -30,8 +30,8 @@ import numpy as np
 from . import GENERATOR_VERSION
 from .furnish import hash_key, lights, zone_styles
 from .assets import load_charuco
-from .geometry import K_BOARD, K_CEIL, K_FLOOR, K_PROP, K_WALL, board_surfaces, floor_ceiling_surfaces, \
-    prop_surfaces, wall_runs, wall_surfaces
+from .geometry import K_BOARD, K_CEIL, K_FLOOR, K_HAZARD, K_PROP, K_WALL, board_surfaces, floor_ceiling_surfaces, \
+    hazard_surfaces, prop_surfaces, wall_runs, wall_surfaces
 from .layout import _edge_key
 from .mesh import write_obj
 from .png import pixel_digest, write_png
@@ -39,7 +39,8 @@ from .preview import write_preview
 from .raster import extract_path, geodesic
 from .texture import Style, albedo
 
-KIND_NAMES = {K_WALL: "wall", K_FLOOR: "floor", K_CEIL: "ceiling", K_PROP: "prop", K_BOARD: "board"}
+KIND_NAMES = {K_WALL: "wall", K_FLOOR: "floor", K_CEIL: "ceiling", K_PROP: "prop", K_BOARD: "board",
+              K_HAZARD: "hazard"}
 
 
 def _f(x: float) -> str:
@@ -59,6 +60,8 @@ def _zone_of(scene, surface):
         return ("room", prop.room)
     if surface.kind == K_BOARD:
         return ("room", scene.boards[surface.sid & 0xFFFFFF].room)
+    if surface.kind == K_HAZARD:
+        return ("room", scene.hazards[(surface.sid & 0xFFFFFF) >> 4].room)
     x, y = surface.probe_xy_units
     ranked = sorted(L.free_rects(), key=lambda t: {"room": 0, "vestibule": 1, "passage": 2}[t[0]])
     for kind, owner, r in ranked:
@@ -75,6 +78,7 @@ def surfaces(scene):
     out += floor_ceiling_surfaces(scene.structure_free, scene.grid, scene.wall_height_m,
                                   P.appearance.floor_px_per_m)
     out += prop_surfaces(scene.props, g, P.appearance.wall_px_per_m)
+    out += hazard_surfaces(scene.hazards, g, P.appearance.wall_px_per_m)   # none unless the preset asks (D112)
     ch = load_charuco()
     out += board_surfaces(scene.boards, g, ch.size_m[0], ch.images[0].shape[:2])
     return out
@@ -204,6 +208,11 @@ def ground_truth(scene) -> dict:
             if np.isfinite(dist[scene.target_cell]):
                 out[f"route_{label}_start{k}"] = np.array(extract_path(parent, g.width, scene.target_cell),
                                                          np.int32)
+    if scene.hazards:   # D112: only scenes with hazards gain layers, so existing scene_gt.npz files are unchanged
+        from .hazards import risk_layers
+        foot, zone = risk_layers(scene.hazards, g, scene.preset.hazards.zone_margin_m)
+        out["hazard_footprint"] = foot
+        out["risk_zone"] = zone
     return out
 
 
@@ -270,6 +279,9 @@ def scene_manifest(scene, surf_rows, pls) -> dict:
                    "height_m": p.height_m} for p in scene.props],
         "lights": [{"name": pl.name, "xyz_m": [pl.x_m, pl.y_m, pl.z_m]} for pl in pls],
         "charuco_boards": board_manifest(scene),
+        **({"hazards": [{"kind": h.kind, "room": list(h.room), "side": h.side,
+                         "rect_m": [h.rect.x0 * g, h.rect.y0 * g, h.rect.x1 * g, h.rect.y1 * g],
+                         "z_m": [h.z0, h.z1]} for h in scene.hazards]} if scene.hazards else {}),
         "routes": {"template": P.routes.template,
                    "start_delays_s": list(scene.start_delays_s),
                    "min_agent_separation_m": (round(scene.min_separation_m, 4)
