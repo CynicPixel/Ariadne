@@ -67,7 +67,7 @@ identical.
 | L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | done on g4dn.xlarge (x86, 2C/4T); demo-machine and m8g numbers open | A1. `ariadne_dnn_timing`, `evaluation/runs/l5_timing/20261021T211117Z-gpu-e2b3e3/` (STATUS 2026-10-21 A1 table). The m8g/COOL timings stay with 7.3 |
 | L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
-| L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
+| L8 | MTU / IPv4 framing model revisited against the real link model | **revisited; recommendation open** | A2: D102 / COMMS_3.3 §4. Keep 1500 B under RFComms as modelled (≤3 % edge cost). Under bit-wise PER + slow fading, 1472 B loses 3–10× goodput at the edge (64–256 B wins): the 3.2 owner decides. Seam limit: `loss_p` for one size; heartbeats 1.3–2.3× over-lossy near the edge. |
 | L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
@@ -120,7 +120,7 @@ identical.
 |---|---|---|---|
 | 3.1 EigenPlaces retrieval + CLAHE split | partial | Core D62 (approved). CLAHE split built (D92, `enhance`, default none); EuRoC rows: no effect, darkened proxy turned out easier than clean (`evaluation/runs/retrieval_3.1/`). **Open: the §31.5 sim row (dark + co-moving light), needing a sim retrieval eval with revisit GT, which also settles D90's sim size.** L3 done (D90). | A1 |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
-| 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
+| 3.3 comms broker node (RFComms + attenuation + partitions) | **partial** | D102: `RfLinkModel` + wall ray-cast + `CommsNode` (one ledger, tested) + scenario configs + `ariadne_comms_probe` on ci_tiny. **Waits on** 3.2's sim integration (`protocol: v2`) to carry protocol traffic. | A2 |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
 | 3.6 descriptor compression rows | done for global descriptors (D93); XFeat local row = stated gap | `evaluation/runs/retrieval_3.6/20261021T212015Z`: fp16/int8 lossless on EuRoC, PCA not worth it; int8 258 B is the wire candidate, **needs a wire.fbs change → 3.2 (M)**. XFeat fp16/int8 row → the first XFeat-on-the-wire config (D60 ships ORB) | A1 |

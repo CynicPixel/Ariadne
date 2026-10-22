@@ -3202,3 +3202,36 @@ field except timings.
 - **Not built:** `ariadne_sim_collab --imu-noise` (multi-agent), and ground-truth inertial states for the sim (so
   `init_vs_gt` reports −1).
 
+## 2026-10-22 — D102: 3.3 comms broker node — RFComms-derived link model with wall attenuation, scripted partitions, one ledger; L8 keeps the 1500 B MTU
+
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.) Design and numbers:
+`docs/design/COMMS_3.3.md`.
+
+- **`RfLinkModel` implements the COLLAB_3.2 §2 `LinkModel` seam.**
+  - RFComms' equations are transcribed from gz-sim8, with its quirks reproduced and tagged.
+  - It adds a per-wall term: solid blocks crossed, from a ray-cast against the scene's GT wall faces, counting face
+    entries once per surface. Doorways are free.
+  - `loss_p` = E[PER] over the shadowing, integrated on a fine grid. It matches a Monte Carlo of RFComms'
+    per-packet procedure.
+- **`CommsNode`** owns the link stack (base + `FaultPlan`), the `Network` and the one `ByteLedger`. Only Endpoints
+  write the ledger; forwarding adds no rows (tested).
+- **Scenarios:** `configs/comms/` holds ideal, `rf_gz_default`, `collapsed_v1` and `collapsed_partition_v1`.
+  - Parameters that depart from gz defaults are tagged [ASSUMPTION].
+  - The COST-231 heavy wall, 6.9 dB, is [UNVERIFIED-primary].
+- **Measured on ci_tiny** (`ariadne_comms_probe`):
+  - The gz-default radio is loss-free at these ranges, the stated null.
+  - `collapsed_v1` loses 1.6 / 17 / 49 % of 1500-byte datagrams at 0 / 1 / 2 walls.
+  - The partition scenario is down for exactly the scripted 25 s.
+- **Seam limit, stated:** `Sample()` has no datagram size, so `loss_p` is for 1500 B. 40-byte heartbeats would see
+  1.3–2.3× less loss near the edge. A size on the seam is the 3.2 owner's call; nothing in
+  `collaboration/protocol/` was changed.
+- **L8, conditional: keep `kPathMtuBytes` = 1500 under RFComms as modelled.**
+  - At `collapsed_v1`'s median power, goodput rises with size: 0.61 at 64 B vs 0.80 at 1472 B.
+  - At the edge (the 2-wall mean, −81.7 dBm) the best size is 512 B, and 1472 B costs ≤ 3 %.
+  - Under the physical case instead (PER in bits, slow per-link fading), 1472 B gives 0.06 against 0.59 at 64 B: a
+    3–10× loss at the edge.
+  - Recommendation to the 3.2 owner (COMMS_3.3 §4): if the link model is made physical, cap or adapt edge-link
+    fragment size. The serializer is not changed here.
+- **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
+  exists.
+
