@@ -176,3 +176,19 @@ and the common scales: no new constant.
   - L_t = 1: exact equality and the N_min·D bound;
   - L_t = 2: converged, conflict-free, divergence only with tail releases, and ≥ 50 % of brute force, labelled
     empirical.
+
+## 11. Wire (2026-10-23, master session's option (b))
+
+- **Schema:** `TaskConsensus { tasks:[ulong]; y:[float]; z:[byte]; s:[long]; scales:[float] }` in `wire.fbs`,
+  appended last in `Envelope`.
+- **Encoding:** `WireCodec::EncodeTaskConsensus` goes through `FinishEnvelope`, so the `ByteLedger` counts class
+  TASK_CONSENSUS (10) like every class. It is **not compressed** (§15.7 compresses classes 4–5 only).
+- **Unequal per-task vectors decode as malformed.**
+- **Existing bytes unchanged, proven:** `Serialization.PreTaskConsensusBytesUnchanged` pins the size and FNV-1a of
+  a fixed heartbeat, loop edge, pose graph and ack, recorded with the pre-change tree (= main's). All 59 protocol
+  tests pass.
+- **CBBA counts real wire bytes:** `allocation_wire.hpp` measures each message as its envelope's `wire_bytes`.
+  - A 6-task, 2-agent message is 274 B on the wire, against 110 B from the test codec, which is a 2.5×
+    undercount. That's why the test codec was never a claim.
+  - If CBBA bytes ever feed a predicted-vs-measured claim, COLLAB_3.2 §7's rules apply: first transmission only,
+    overhead as separate rows.

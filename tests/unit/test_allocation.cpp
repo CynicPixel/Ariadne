@@ -5,6 +5,7 @@
 // brute force; the two-agent sorted scan equals brute force; eq. 7 holds for the time-discounted score and fails for
 // an additive one (the reason for D115's score).
 #include "planning/mission/allocation.hpp"
+#include "planning/mission/allocation_wire.hpp"
 
 #include <gtest/gtest.h>
 
@@ -255,4 +256,23 @@ TEST(Cbba, DiscountedScoreIsDmgAdditiveIsNot) {
     // 12 - 11 = 1; after task 10 is in the path its detour is 1, so it nets 12 - 1 = 11 > 1: eq. 7 fails.
     const double alone = 12 - 11, after = 12 - 1;
     EXPECT_GT(after, alone);
+}
+
+TEST(Cbba, WireBytesAtTheSerializer) {
+    // D115 / invariant 6: a CBBA message measured as the TASK_CONSENSUS envelope it is on the wire; the test codec
+    // (16 + 13 per task + 8 per agent) is a different number and never a claim.
+    std::mt19937 rng(3);
+    const AuctionInstance in = RandomInstance(rng, 2, 6, 1);
+    const ariadne::core::WireCodec codec(ariadne::core::Framing::kWholeMessage);
+    CbbaParams p;
+    p.bytes = WireBytes(codec, std::vector<float>(8, 1.0f));
+    const std::vector<std::vector<int>> G = {{0, 1}, {1, 0}};
+    const Allocation c = RunCbba(in, [&](int) { return G; }, p);
+    ASSERT_TRUE(c.converged);
+    EXPECT_GT(c.messages, 0u);
+    CbbaMessage m;
+    m.sender = 1, m.task_ids = in.task_ids, m.y.assign(6, 0.5), m.z.assign(6, 0), m.s = {1, 1};
+    const size_t one = WireBytes(codec, std::vector<float>(8, 1.0f))(m);
+    EXPECT_EQ(c.bytes, c.messages * one) << "every message has the same shape here";
+    std::printf("[cbba] TASK_CONSENSUS wire bytes for 6 tasks, 2 agents: %zu (test codec %zu)\n", one, TestCodecBytes(m));
 }

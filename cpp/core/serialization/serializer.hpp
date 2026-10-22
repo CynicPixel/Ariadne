@@ -316,6 +316,15 @@ struct FeatureResponseValue {
     std::vector<float> camera;        // fx fy cx cy baseline_m
 };
 
+/// D115: one CBBA consensus message (see wire.fbs TaskConsensus).
+struct TaskConsensusValue {
+    std::vector<uint64_t> tasks;
+    std::vector<float> y;
+    std::vector<int8_t> z;      // winner agent, -1 = none
+    std::vector<int64_t> s;     // per agent (eq. 5)
+    std::vector<float> scales;  // the auction's common scales
+};
+
 struct DecodedMessage {
     MessageClass cls = MessageClass::HEARTBEAT;
     AgentId sender = 0;
@@ -336,6 +345,8 @@ struct DecodedMessage {
     HeartbeatValue heartbeat;
     bool has_ack = false;   // a standalone ACK; a heartbeat's ack is in `heartbeat.ack`
     AckValue ack;
+    bool has_task_consensus = false;
+    TaskConsensusValue task_consensus;
 };
 
 namespace detail {
@@ -498,6 +509,19 @@ public:
                               [&](wire::EnvelopeBuilder& eb) { eb.add_heartbeat(off); });
     }
 
+    SerializedMessage EncodeTaskConsensus(const TaskConsensusValue& v, AgentId sender, AgentId receiver, Timestamp t,
+                                          uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256);
+        const auto tasks = fbb.CreateVector(v.tasks);
+        const auto y = fbb.CreateVector(v.y);
+        const auto z = fbb.CreateVector(v.z);
+        const auto s = fbb.CreateVector(v.s);
+        const auto scales = fbb.CreateVector(v.scales);
+        const auto off = wire::CreateTaskConsensus(fbb, tasks, y, z, s, scales);
+        return FinishEnvelope(fbb, MessageClass::TASK_CONSENSUS, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_consensus(off); });
+    }
+
     SerializedMessage EncodeAck(const AckValue& a, AgentId sender, AgentId receiver, Timestamp t,
                                 uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(128);
@@ -642,6 +666,19 @@ public:
         if (const auto* a = env->ack()) {
             out->has_ack = true;
             if (!ReadAck(a, &out->ack)) return Status::kMalformed;
+        }
+        out->has_task_consensus = false;
+        if (const auto* c = env->task_consensus()) {
+            const size_t n = c->tasks() ? c->tasks()->size() : 0;
+            if ((c->y() ? c->y()->size() : 0) != n || (c->z() ? c->z()->size() : 0) != n) return Status::kMalformed;
+            out->has_task_consensus = true;
+            auto& v = out->task_consensus;
+            v = {};
+            if (c->tasks()) v.tasks.assign(c->tasks()->begin(), c->tasks()->end());
+            if (c->y()) v.y.assign(c->y()->begin(), c->y()->end());
+            if (c->z()) v.z.assign(c->z()->begin(), c->z()->end());
+            if (c->s()) v.s.assign(c->s()->begin(), c->s()->end());
+            if (c->scales()) v.scales.assign(c->scales()->begin(), c->scales()->end());
         }
         return Status::kOk;
     }
