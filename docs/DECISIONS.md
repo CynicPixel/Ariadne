@@ -3156,3 +3156,49 @@ field except timings.
 - **EuRoC unchanged:** MH_01, 300 frames, `euroc_v2`. `estimate_body.tum` and `vo_trace.csv` are byte-identical
   between `main` (aa7dce2) and this change.
 - **Cost:** track ≈ 16–18 ms per frame, keyframe ≈ 24–30 ms (640×480).
+
+## 2026-10-22 — D101: L2 — the seeded sim IMU noise operator; sim_v2 runs the full inertial layer
+
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.)
+
+- **Operator:** `core/inertial/imu_noise_operator.hpp`. It applies the Kalibr/EuRoC continuous model, discretised at
+  the nominal rate, to the sim's clean canonical IMU stream at consumption time (D37), like D:
+  - white noise σ_nd/√Δt;
+  - a bias random walk, step σ_rw·√Δt, from the config's initial bias (zero).
+- **Determinism:** each sample's draws are Philox keyed by (seed, sample index): `PhiloxStream(seed, k, 0)`, with a
+  fixed draw order. The bias is the running sum of steps 0..k−1, so any replay prefix is bit-identical (tested).
+  - The seed is `DeriveSeed(DeriveSeed(run_seed, "imu_noise"), "agentK")`, the same plumbing as D's.
+- **Config:** `configs/sim/imu_noise_v1.yaml` is rig-scoped (`rig: rig_stereo_v1`). It holds the ADIS16448 densities
+  exactly as EuRoC's `imu0/sensor.yaml` gives them, so sim and EuRoC share one noise regime.
+  - It is a separate file, not keys in `rig_stereo_v1.yaml`, because worldgen snapshots the rig into
+    `mission_*.json`. New keys there would change future scene outputs for an operator that acts at consumption
+    time.
+- **Wiring:** `SimSource::SetImuNoise`, via `ariadne_sim_vo --imu-noise YAML`. The source exposes **no IMU unless
+  the operator is set**, so default sim runs, including the Phase-1 gate's `sim_v1`, see what they saw before.
+  - `ImuNoiseModel()` reports exactly the injected model.
+  - `results.yaml` records `imu_noise_config`.
+- **`sim_v2` → `imu.mode full`** (maintainer's instruction). It uses euroc_v2's imu section with noise inflation 1,
+  because the injected model is the estimator's model.
+  - The pre-switch `sim_v2` is kept verbatim as `sim_v2_vo`, as euroc_v2 → euroc_v2_attitude was. D69 and the
+    synthetic `StereoVo` tests now name it.
+  - `sim_v2` without `--imu-noise` is refused by the runner's existing "no IMU" check.
+- **Evidence:**
+  - Unit tests:
+    - prefix replay is bit-identical at n = 1/17/1000/3999 of 4000;
+    - zero densities return clean + b₀;
+    - white-noise σ matches within 2 % (60k samples × 3 axes);
+    - the bias-walk variance equals σ_rw²·T within 20 % (300 seeds × 3 axes, a ~4σ bound);
+    - the shipped config loads.
+  - The `StereoVo` lost-frame and inertial tests pass on `sim_v2_vo` (4/4).
+- **Sim run** (ci_tiny_0 agent 0, 1000 frames, seed 1, `sim_v2` + `imu_noise_v1`):
+  - initialised on the first attempt at 5.35 s, with unconstrained |g| 9.79 m/s² and χ²/dof 4.1;
+  - gravity error vs GT: median 0.13°, p90 1.3°;
+  - final gyro bias 1–4e-4 rad/s per axis. The injected walk's 1σ after 50 s is 1.4e-4;
+  - inertial χ²/dof 0.30;
+  - **ATE 3.06 mm** (keyframe-refined 2.79 mm) vs **2.76 mm** for the visual-only path on the same frames (D69's
+    clean row), 0 lost frames. The clean sim is easy, so this shows the layer works on the sim IMU; it does not
+    show a benefit.
+  - Keyframes cost ≈ 200 ms with the inertial solve (at ≤ 1 keyframe per second).
+- **Not built:** `ariadne_sim_collab --imu-noise` (multi-agent), and ground-truth inertial states for the sim (so
+  `init_vs_gt` reports −1).
+

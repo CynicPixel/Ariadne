@@ -836,6 +836,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     if (attitude) {
         const core::Vec3 b = attitude->Bias();
+        if (source.ImuNoiseConfig() != "none") res << "imu_noise_config: " << source.ImuNoiseConfig() << "\n";   // L2
         res << "imu: {mode: " << scfg.imu.mode << ", seed_lk: " << (scfg.imu.seed_lk ? "true" : "false")
             << ", stationary_start: " << (attitude->StationaryStart() ? "true" : "false") << ", gyro_bias_final: [" << b.x()
             << ", " << b.y() << ", " << b.z() << "], bias_samples: " << attitude->BiasSamples()

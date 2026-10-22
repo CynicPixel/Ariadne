@@ -78,6 +78,14 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with
   `ARIADNE_REQUIRE_MODELS=1`. No premerge was run: phase 1 runs ORB, and none of these wrappers is on its path.
 
+## 2026-10-22 — L2: seeded sim IMU noise operator; sim_v2 runs the full inertial layer (D101)
+
+- `ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml`: ADIS16448 densities, Philox keyed per (seed, sample),
+  bit-identical on prefix replay. Without the flag the sim exposes no IMU, so default runs and the gate are unchanged.
+- `sim_v2` is now `imu.mode full`; the old `sim_v2` is `sim_v2_vo`. ci_tiny agent 0, 1000 frames: initialised at
+  5.35 s; ATE 3.06 mm vs 2.76 mm visual-only; 0 lost.
+- Decision IDs D100–D109 are claimed by this session (the claim is on `feat/2.6-tum`).
+
 ## 2026-10-21 — Combined EuRoC run done (D85); completion register created
 
 - **2.4 full VIO + 2.1 re-association:** average 0.120 (0.121 for 2.4 alone), 9/11 in class. V1_03 and V2_02 are
