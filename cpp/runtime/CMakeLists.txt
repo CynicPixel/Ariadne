@@ -70,6 +70,16 @@ if(OpenCV_FOUND)
   install(TARGETS ariadne_report_check RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 1.8 placeholder mission layer over a 1.7 spool (design MISSION_1.8).
+  # L1 live closed-loop runtime (design LIVE_RUNTIME_L1): the sim_collab estimator path + the mission, over the
+  # ROS edge's Unix socket or a recording of a live run. ROS-free.
+  add_executable(ariadne_live tools/ariadne_live.cpp)
+  target_link_libraries(ariadne_live PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_imgproc
+    opencv_features)
+  find_package(Threads REQUIRED)
+  target_link_libraries(ariadne_live PRIVATE Threads::Threads)
+  install(TARGETS ariadne_live RUNTIME DESTINATION bin COMPONENT ariadne)
+
   add_executable(ariadne_mission tools/ariadne_mission.cpp)
   target_link_libraries(ariadne_mission PRIVATE ariadne::runtime_opencv opencv_imgcodecs opencv_imgproc)
   install(TARGETS ariadne_mission RUNTIME DESTINATION bin COMPONENT ariadne)

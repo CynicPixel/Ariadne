@@ -117,6 +117,27 @@ inline std::vector<uint8_t> EncodePoseStamped(const PoseStamped& m) {
     return w.bytes();
 }
 
+/// geometry_msgs/msg/PoseArray (the live command, design LIVE_RUNTIME_L1 D151)
+inline std::vector<uint8_t> EncodePoseArray(const PoseArray& m) {
+    detail::RequireLittleEndianHost();
+    CdrWriter w;
+    detail::WriteHeader(w, m.header);
+    w.Write<uint32_t>(uint32_t(m.poses.size()));
+    for (const auto& p : m.poses) {
+        detail::WriteVector3(w, p.position);
+        detail::WriteQuaternion(w, p.orientation);
+    }
+    return w.bytes();
+}
+
+/// std_msgs/msg/String
+inline std::vector<uint8_t> EncodeString(const std::string& s) {
+    detail::RequireLittleEndianHost();
+    CdrWriter w;
+    w.WriteString(s);
+    return w.bytes();
+}
+
 /// tf2_msgs/msg/TFMessage (a sequence of geometry_msgs/TransformStamped)
 inline std::vector<uint8_t> EncodeTfMessage(const std::vector<TransformStamped>& v) {
     detail::RequireLittleEndianHost();

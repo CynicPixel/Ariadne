@@ -1,0 +1,17 @@
+# The live closed-loop runtime (design LIVE_RUNTIME_L1 D152-D154). The mapping / frontier / routing values are
+# configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
+name: live_v1
+end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
+chooser: classical           # classical = the nearest reachable frontier at least min_goal_m away; 7.1 adds the orchestrator
+command:
+  max_length_m: 3.0          # a follow() is cut here: at <= 0.6 m/s that is ~5 s of motion, one replan period, so
+                             # the next decision always arrives before the agent runs out of path (receding horizon)
+  simplify_eps_cells: 1.0    # cv::approxPolyDP tolerance on the A* cell path; each chord re-checked on the grid
+  face_frontier: true        # the last pose turns to face the chosen cluster's centroid (observe what was approached)
+  min_goal_m: 1.0            # candidates nearer than this are not driven to. Measured 2026-10-23 (first live smoke):
+                             # the nearest cluster is ALWAYS the one under the agent (path 0 m: the unknown band behind
+                             # and beside a 90-degree forward rig), so 1.8's nearest rule, executed, never moves.
+                             # 1.0 m = 2.5 rho_responder: past the agent's own footprint band.
+reorder:
+  hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
+telemetry_hz: 5.0            # console pose rate, in sim time

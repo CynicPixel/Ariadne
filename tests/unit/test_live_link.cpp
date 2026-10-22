@@ -1,0 +1,192 @@
+// The live runtime's input side (design LIVE_RUNTIME_L1 D150-D152): runtime/live/{link_frame,live_source}.hpp.
+//   - link frames round-trip over a socketpair, control frames included; a bad magic throws;
+//   - PoseArray (the command) and String (mover state) CDR round-trip through the runtime's own codec;
+//   - PeekStamp reads the header stamp without a full decode;
+//   - Reorderer releases in (stamp, topic, arrival) order behind the watermark, and stops waiting for a silent topic
+//     after the hold-back time;
+//   - ConsumedRecorder: the MCAP replays in the CONSUMED order (log time = sequence) even where stamps tie, and the
+//     replay's digest equals the live one;
+//   - SimFrameAssembler lenient mode drops and counts an unpaired frame where strict mode throws.
+#include "runtime/live/link_frame.hpp"
+#include "runtime/live/live_source.hpp"
+#include "runtime/replay/ros_cdr_writer.hpp"
+
+#include <gtest/gtest.h>
+#include <sys/socket.h>
+
+#include <filesystem>
+#include <thread>
+
+using namespace ariadne::runtime;
+namespace live = ariadne::runtime::live;
+
+namespace {
+
+std::vector<uint8_t> EncodeRgbImage(int64_t t_ns, int w, int h, uint8_t fill) {
+    ros_cdr::CdrWriter c;
+    c.Write<int32_t>(int32_t(t_ns / 1000000000));
+    c.Write<uint32_t>(uint32_t(t_ns % 1000000000));
+    c.WriteString("agent_0/left_optical");
+    c.Write<uint32_t>(uint32_t(h));
+    c.Write<uint32_t>(uint32_t(w));
+    c.WriteString("rgb8");
+    c.Write<uint8_t>(0);
+    c.Write<uint32_t>(uint32_t(3 * w));
+    c.Write<uint32_t>(uint32_t(3 * w * h));
+    std::vector<uint8_t> b = c.bytes();
+    b.insert(b.end(), size_t(3 * w * h), fill);
+    return b;
+}
+
+live::StreamMessage Msg(const std::string& topic, int64_t t, uint8_t tag = 0) {
+    live::StreamMessage m;
+    m.topic = topic;
+    m.type = "sensor_msgs/msg/Imu";
+    m.stamp_ns = t;
+    m.data = std::make_shared<std::vector<uint8_t>>(std::vector<uint8_t>{0, 1, 0, 0, tag});
+    return m;
+}
+
+}  // namespace
+
+TEST(LiveLink, FramesRoundTripOverASocket) {
+    int sv[2];
+    ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
+    std::vector<uint8_t> big(3u << 20);
+    for (size_t i = 0; i < big.size(); ++i) big[i] = uint8_t(i * 7);
+    std::thread w([&] {
+        EXPECT_TRUE(live::WriteFrame(sv[0], "/ariadne/agent_0/left/image_raw", big.data(), big.size()));
+        const std::string js = "{\"forwarded\":[]}";
+        EXPECT_TRUE(live::WriteFrame(sv[0], "#ready", reinterpret_cast<const uint8_t*>(js.data()), js.size()));
+        EXPECT_TRUE(live::WriteFrame(sv[0], "/empty", nullptr, 0));
+        ::shutdown(sv[0], SHUT_WR);
+    });
+    live::LinkFrame f;
+    ASSERT_TRUE(live::ReadFrame(sv[1], f));
+    EXPECT_EQ(f.topic, "/ariadne/agent_0/left/image_raw");
+    EXPECT_EQ(f.payload, big);
+    ASSERT_TRUE(live::ReadFrame(sv[1], f));
+    EXPECT_EQ(f.topic, "#ready");
+    ASSERT_TRUE(live::ReadFrame(sv[1], f));
+    EXPECT_TRUE(f.payload.empty());
+    EXPECT_FALSE(live::ReadFrame(sv[1], f));   // clean EOF between frames
+    w.join();
+    ::close(sv[0]);
+    ::close(sv[1]);
+
+    ASSERT_EQ(::socketpair(AF_UNIX, SOCK_STREAM, 0, sv), 0);
+    const uint8_t junk[12] = {1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0};
+    ASSERT_EQ(::send(sv[0], junk, sizeof junk, 0), ssize_t(sizeof junk));
+    EXPECT_THROW(live::ReadFrame(sv[1], f), std::runtime_error);
+    ::close(sv[0]);
+    ::close(sv[1]);
+}
+
+TEST(LiveLink, CommandAndMoverStateCdrRoundTrip) {
+    ros_cdr::PoseArray m;
+    m.header.stamp = {12, 345000000};
+    m.header.frame_id = "world";
+    for (int i = 0; i < 3; ++i) {
+        ros_cdr::Pose p;
+        p.position = {1.0 + i, -2.5, 1.0};
+        p.orientation = {0, 0, i == 2 ? 0.7071067811865476 : 0.0, i == 2 ? 0.7071067811865476 : 0.0};
+        m.poses.push_back(p);
+    }
+    const auto b = ros_cdr::EncodePoseArray(m);
+    const auto d = ros_cdr::DecodePoseArray(b.data(), b.size());
+    EXPECT_EQ(d.header.stamp.ns(), 12345000000);
+    EXPECT_EQ(d.header.frame_id, "world");
+    ASSERT_EQ(d.poses.size(), 3u);
+    EXPECT_EQ(d.poses[1].position.x, 2.0);
+    EXPECT_EQ(d.poses[2].orientation.w, 0.7071067811865476);
+    EXPECT_EQ(d.poses[0].orientation.w, 0.0);   // the zero quaternion ("no final yaw") survives
+    const ros_cdr::PoseArray hold{m.header, {}};
+    const auto hb = ros_cdr::EncodePoseArray(hold);
+    EXPECT_TRUE(ros_cdr::DecodePoseArray(hb.data(), hb.size()).poses.empty());
+    const auto s = ros_cdr::EncodeString("{\"accepted\":true}");
+    EXPECT_EQ(ros_cdr::DecodeString(s.data(), s.size()), "{\"accepted\":true}");
+    EXPECT_EQ(live::PeekStamp("geometry_msgs/msg/PoseArray", b), 12345000000);
+    EXPECT_EQ(live::PeekStamp("std_msgs/msg/String", s), -1);
+}
+
+TEST(LiveLink, ReordererReleasesBehindTheWatermark) {
+    live::Reorderer ro({"/a", "/b"}, std::chrono::milliseconds(200));
+    std::vector<std::string> out;
+    auto rel = [&](live::StreamMessage m) { out.push_back(m.topic + "@" + std::to_string(m.stamp_ns)); };
+    ro.Push(Msg("/a", 10), rel);
+    ro.Push(Msg("/a", 20), rel);
+    EXPECT_TRUE(out.empty());                     // /b has not spoken: nothing is safe yet
+    ro.Push(Msg("/b", 15), rel);
+    EXPECT_EQ(out, (std::vector<std::string>{"/a@10", "/b@15"}));
+    ro.Push(Msg("/b", 20), rel);                  // tie at 20: topic order, then arrival
+    EXPECT_EQ(out.back(), "/b@20");
+    EXPECT_EQ(out[out.size() - 2], "/a@20");
+    // /a falls silent: after the hold-back /b's messages flow without it.
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    ro.Push(Msg("/b", 30), rel);
+    EXPECT_EQ(out.back(), "/b@30");
+    EXPECT_GE(ro.released_on_timeout(), 1);
+}
+
+TEST(LiveLink, RecordingReplaysInConsumedOrderWithTies) {
+    const std::string path = (std::filesystem::temp_directory_path() / "ariadne_live_rec_test.mcap").string();
+    const std::vector<std::pair<std::string, int64_t>> seq{{"/r", 50}, {"/l", 50}, {"/i", 45}, {"/l", 100}, {"/r", 100}};
+    uint64_t digest_live;
+    {
+        live::ConsumedRecorder rec;
+        rec.Open(path);
+        uint64_t n = 0;
+        for (const auto& [t, s] : seq) {
+            auto m = Msg(t, s, uint8_t(n));
+            m.seq = ++n;
+            rec.Write(m);
+        }
+        digest_live = rec.digest();
+        rec.Close();
+    }
+    RosbagReader bag;
+    bag.Open(path);
+    std::vector<std::string> got;
+    live::ConsumedRecorder replay;   // not opened: digest only
+    bag.Replay([&](const RosMessage& m) {
+        got.push_back(std::string(m.topic));
+        live::StreamMessage s;
+        s.topic = std::string(m.topic);
+        s.data = std::make_shared<std::vector<uint8_t>>(m.data, m.data + m.size);
+        s.stamp_ns = int64_t(m.publish_time_ns);
+        replay.Absorb(s);
+    });
+    EXPECT_EQ(got, (std::vector<std::string>{"/r", "/l", "/i", "/l", "/r"}));   // consumed order, not stamp order
+    EXPECT_EQ(replay.digest(), digest_live);
+    std::filesystem::remove(path);
+}
+
+TEST(LiveLink, AssemblerLenientDropsWhereStrictThrows) {
+    ariadne::perception::LensModel lens;
+    lens.width = 8;
+    lens.height = 6;
+    lens.fx = lens.fy = lens.render_fx = lens.render_fy = 10;
+    lens.cx = lens.render_cx = 3.5;
+    lens.cy = lens.render_cy = 2.5;
+    const auto map = ariadne::perception::BuildLensMap(lens);
+    const std::string L = "/l", R = "/r";
+    auto img = [](int64_t t) { return EncodeRgbImage(t, 8, 6, 100); };
+    for (const bool strict : {true, false}) {
+        SimFrameAssembler a(map, 0, L, R, strict);
+        std::vector<int64_t> emitted;
+        auto on = [&](const StereoFrame& f) { emitted.push_back(f.t_ns); };
+        const auto l1 = img(50), r2 = img(100), l2 = img(100);
+        a.Feed(L, l1.data(), l1.size(), on);   // its right never arrives
+        a.Feed(R, r2.data(), r2.size(), on);
+        if (strict) {
+            EXPECT_THROW(a.Feed(L, l2.data(), l2.size(), on), std::runtime_error);
+        } else {
+            a.Feed(L, l2.data(), l2.size(), on);
+            EXPECT_EQ(emitted, std::vector<int64_t>{100});
+            EXPECT_EQ(a.unpaired(), 1u);
+            const auto late = img(50);   // the missing right, too late: dropped and counted
+            a.Feed(R, late.data(), late.size(), on);
+            EXPECT_EQ(a.unpaired(), 2u);
+        }
+    }
+}

@@ -157,6 +157,15 @@ struct PoseStamped {                 // geometry_msgs/msg/PoseStamped
     Quaternion orientation;
 };
 
+struct Pose {                        // geometry_msgs/msg/Pose (Point has Vector3's layout)
+    Vector3 position;
+    Quaternion orientation;
+};
+struct PoseArray {                   // geometry_msgs/msg/PoseArray: the live command (design LIVE_RUNTIME_L1 D151)
+    Header header;
+    std::vector<Pose> poses;
+};
+
 struct TransformStamped {            // geometry_msgs/msg/TransformStamped
     Header header;
     std::string child_frame_id;
@@ -170,6 +179,8 @@ Imu DecodeImu(const uint8_t* data, size_t size);
 PoseStamped DecodePoseStamped(const uint8_t* data, size_t size);
 std::vector<TransformStamped> DecodeTfMessage(const uint8_t* data, size_t size);   // tf2_msgs/TFMessage
 Time DecodeClock(const uint8_t* data, size_t size);                                 // rosgraph_msgs/Clock
+PoseArray DecodePoseArray(const uint8_t* data, size_t size);                        // geometry_msgs/PoseArray
+std::string DecodeString(const uint8_t* data, size_t size);                         // std_msgs/String
 
 /// Checks an Image's internal consistency (step >= width*channels, data == step*height).
 void ValidateImage(const Image& img);
