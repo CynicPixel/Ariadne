@@ -3007,3 +3007,41 @@ falloff and active-exposure claims (5.2/5.3) rest on the sim (5.1 calibration) a
 - ablation matrix: the 5.6 row names the three flights;
 - benchmark config: A2's 5.6 config lists the flights;
 - manifest: unchanged, since the dataset is already recorded by name.
+
+## 2026-10-23 — D89: supersedes D88 — 5.6 runs on UMA-VI's illumination-change sequences (open, real stereo + IMU); EuRoC's dark flights stay as the full-GT companion
+
+**Maintainer, 2026-10-23:** "if there is a dataset available openly without chasing maintainers go for it, revert
+the decision". So D88's choice of EuRoC as the primary is reverted.
+
+**Checked 2026-10-23:**
+
+| dataset | access | rig match | verdict |
+|---|---|---|---|
+| OIVIO (ARPG) | page now has no download links at all | stereo + IMU + onboard lamp, the ideal | gone |
+| ViViD++ (KAIST) | request form (`forms.gle`), auto-reply mail | RGB/thermal/event/depth + IMU, not stereo RGB | out: a request, and the wrong rig |
+| SubT-MRS (CMU) | no download location confirmed | multi-camera + LiDAR + thermal | out: unconfirmed |
+| **UMA-VI** (Málaga, IJRR 2020, doi 10.1177/0278364920938439) | **Zenodo record 7809282, open**: API lists every file; a ranged GET returns 206 | **hardware-synced stereo (Bumblebee2 + a custom stereo rig) + IMU, handheld** | **chosen** |
+
+**Decision.**
+- **The 5.6 primary:** UMA-VI's five `IllChange` sequences, about 20.7 GB:
+  - third-floor-csc1 / csc2;
+  - conference-csc1 / csc2 / csc3.
+- **Metric:** the dataset's own protocol. Ground truth exists only at the start and end of each sequence, so the
+  number is the accumulated drift at the end (the authors' tools), not ATE. Report it that way.
+- **The full-GT companion:** EuRoC MH_04/MH_05/V1_03 stay as D88 set them, because they carry full-trajectory ATE.
+- **Claim scope, as in D88:** abrupt illumination changes and low light on real sensors. Not a co-mounted lamp in
+  total darkness; the lamp claims rest on the sim.
+
+**Open, for A2 to settle from the data before writing code:**
+- What `IllChange` actually shows (lights switched off and on is the expected content) [UNVERIFIED]: inspect
+  `sample.zip` first.
+- Image size and rate, the IMU model and rate, and the on-disk format: verify against the calibration files.
+- **The licence differs by source:** Zenodo's metadata says CC BY 4.0; the university repository (RIUMA) says
+  CC BY-NC-ND 4.0. Apply the stricter one. Evaluation use only, and no UMA-VI pixels in any submitted material
+  (as D35 for EuRoC).
+
+**§49:**
+- catalogue: an `ALGORITHMS.md` dataset entry;
+- ablation matrix: the 5.6 row names the 5 sequences and the 3 EuRoC flights;
+- benchmark config: a 5.6 config;
+- manifest: the dataset name plus the Zenodo file md5 (the record ships `checksum.md5`).

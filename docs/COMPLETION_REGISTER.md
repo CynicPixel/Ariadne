@@ -144,7 +144,7 @@ identical.
 | 5.3 active exposure + lamp co-control | **carries 2.2's Stage 4 exposure normalisation** |
 | 5.4 degradation configs frozen | carries L9 (I6 dust fidelity) |
 | 5.5 confined-space worlds, baseline sweep | D86: EuRoC V1_03 (fast motion, 92 lost frames, 0.329) is the dataset regression case; projection-guided re-association is the candidate fix. |
-| 5.6 real-data low-light validation | D88 (maintainer): EuRoC MH_04/MH_05/V1_03 replace OIVIO (unavailable, 404). Low-light on real sensors, not lamp-in-darkness; lamp claims rest on sim. Owner A2. |
+| 5.6 real-data low-light validation | D89 (supersedes D88): UMA-VI `IllChange` x5 (Zenodo 7809282, open; stereo + IMU; end-drift metric, start/end GT only) primary; EuRoC MH_04/MH_05/V1_03 full-GT companion. OIVIO gone, ViViD++ needs a request. Real low light and illumination changes, not lamp-in-darkness. Owner A2. |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |
