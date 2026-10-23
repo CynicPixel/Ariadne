@@ -144,6 +144,11 @@ unless the measured CPU budget fails.
    tests and protocol tests stay green.
 2. **Deferred features** in CollabNode, plus a protocol test (a request answered two ticks later). Protocol tests stay
    green.
+   - **Done (as built):** `NodeHooks::features` returns `std::optional`; nullopt keeps a peer's request
+     (`AnswerDeferred`, request-id order, dropped after `response_ttl_s`) or the broker's own keyframe
+     (`ResolveOwnFeatures`, dropped after `request_give_up_s`). Stats `answers_deferred` / `answers_given_up`.
+     protocol 72/72 (DeferredFeatures 3). Pass B on the D173 smoke (`spec_inject`, seed 1): ledger.csv, edges.csv,
+     outcome.yaml and ate_vs_bytes.csv byte-identical to 15426f8; results.yaml differs only in `ms_total` timings.
 3. **Worker side:** the frontend in the worker behind `collab: true` (default false, so the D168 digests are
    unchanged), plus the #ckf/#freq/#fresp codecs. Test: lazy == eager features.
 4. **Parent side:** the fleet in ariadne_live, the lockstep watermark, the T_W_O feedback (B), and telemetry.

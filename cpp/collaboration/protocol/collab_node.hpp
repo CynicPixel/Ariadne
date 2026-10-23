@@ -116,8 +116,10 @@ struct NodeHooks {
     std::function<std::vector<KeyframeRef>(const KeyframeRef& query,
                                            const std::map<KeyframeRef, core::GlobalDescriptorValue>& db)>
         retrieve;
-    /// Agent: local features of one of its keyframes, for a MATCH_RESPONSE.
-    std::function<core::FeatureResponseValue(uint64_t keyframe)> features;
+    /// Agent: local features of one of its keyframes, for a MATCH_RESPONSE. nullopt = not ready yet (D174: the live
+    /// worker extracts them lazily, on request); the node keeps the request and asks again on every Tick, answering
+    /// when the hook is ready, until response_ttl_s. Replay hooks are always ready, so their bytes are unchanged.
+    std::function<std::optional<core::FeatureResponseValue>(uint64_t keyframe)> features;
     /// Broker: geometric verification of a candidate pair, given both feature sets.
     std::function<std::optional<LoopEdgeValue>(const KeyframeRef& a, const core::FeatureResponseValue& fa,
                                                const KeyframeRef& b, const core::FeatureResponseValue& fb)>
@@ -176,6 +178,7 @@ struct NodeStats {
     uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
     uint64_t edges_injected = 0;            // §42 item 7 evaluation: false closures planted through InjectVerifiedEdge
+    uint64_t answers_deferred = 0, answers_given_up = 0;   // D174: features not ready when asked / never ready by the TTL
     uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
     uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
     uint64_t uncalibrated_class_prices = 0;   // edges / graph batches priced at ratio 1.0 (D171): likewise
@@ -270,10 +273,12 @@ public:
             SendHeartbeats(t, net);
             next_heartbeat_ = t + core::Duration::SecondsFromDouble(p_.membership.period_s);
         }
-        // 3. snapshot cadence to my broker
+        // 3. snapshot cadence to my broker; feature requests whose answer was not ready (D174)
         if (!mem_.IsBroker()) MaybeSnapshot(t);
+        AnswerDeferred(t);
         // 4. broker duties
         if (mem_.IsBroker()) {
+            ResolveOwnFeatures(t);
             MaybeSelect(t);
             RetryRequests(t);
             MaybeSolve(t);
@@ -508,15 +513,47 @@ private:
 
     void AnswerRequest(const core::DecodedMessage& m, core::Timestamp t) {
         if (!hooks_.features || !descriptors_.count(m.match_request.candidate_keyframe)) return;
-        core::FeatureResponseValue f = hooks_.features(m.match_request.candidate_keyframe);
-        f.request_id = m.match_request.request_id;
-        f.keyframe_id = m.match_request.candidate_keyframe;
+        const uint64_t id = m.match_request.request_id, kf = m.match_request.candidate_keyframe;
+        if (deferred_answers_.count(id)) return;   // a retry of a request still being prepared
+        auto f = hooks_.features(kf);
+        if (!f) {
+            deferred_answers_.emplace(id, DeferredAnswer{m.sender, kf, t});
+            ++stats_.answers_deferred;
+            return;
+        }
+        SendResponse(std::move(*f), id, kf, m.sender, t);
+    }
+
+    /// D174: answer the requests whose features have become ready, in request-id order (deterministic); drop those
+    /// still not ready after response_ttl_s (the broker gives up on its side after request_give_up_s).
+    void AnswerDeferred(core::Timestamp t) {
+        for (auto it = deferred_answers_.begin(); it != deferred_answers_.end();) {
+            const DeferredAnswer& d = it->second;
+            if ((t - d.since).toSeconds() >= p_.response_ttl_s) {
+                ++stats_.answers_given_up;
+                it = deferred_answers_.erase(it);
+                continue;
+            }
+            auto f = hooks_.features(d.keyframe);
+            if (!f) {
+                ++it;
+                continue;
+            }
+            SendResponse(std::move(*f), it->first, d.keyframe, d.to, t);
+            it = deferred_answers_.erase(it);
+        }
+    }
+
+    void SendResponse(core::FeatureResponseValue f, uint64_t request_id, uint64_t keyframe, AgentId to,
+                      core::Timestamp t) {
+        f.request_id = request_id;
+        f.keyframe_id = keyframe;
         OutMessage o;
         o.cls = core::MessageClass::MATCH_RESPONSE;
         o.key = f.request_id;
         o.created = t;
         o.ttl = core::Duration::SecondsFromDouble(p_.response_ttl_s);
-        const AgentId self = self_, to = m.sender;
+        const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         o.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeFeatureResponse(f, self, to, ts, seq); };
         ep_.Enqueue(to, std::move(o));
@@ -667,7 +704,12 @@ private:
     void RequestFeatures(const KeyframeRef& k, core::Timestamp t) {
         if (features_.count(k)) return;
         if (k.agent == self_) {
-            if (hooks_.features) features_[k] = hooks_.features(k.keyframe);
+            if (!hooks_.features) return;
+            if (auto f = hooks_.features(k.keyframe)) {
+                features_[k] = std::move(*f);
+            } else {
+                own_waiting_.emplace(k, t);   // D174: verified once ResolveOwnFeatures finds it ready
+            }
             return;
         }
         if (requests_.count(k)) return;
@@ -703,6 +745,27 @@ private:
             }
             if ((t - r.last).toSeconds() >= p_.request_retry_s) SendRequest(it->first, r, t);
             ++it;
+        }
+    }
+
+    /// D174: the broker's own keyframes whose features were not ready when a selected pair needed them.
+    void ResolveOwnFeatures(core::Timestamp t) {
+        for (auto it = own_waiting_.begin(); it != own_waiting_.end();) {
+            const KeyframeRef k = it->first;
+            if ((t - it->second).toSeconds() >= p_.request_give_up_s) {
+                ++stats_.requests_given_up;
+                it = own_waiting_.erase(it);
+                continue;
+            }
+            auto f = hooks_.features(k.keyframe);
+            if (!f) {
+                ++it;
+                continue;
+            }
+            features_[k] = std::move(*f);
+            it = own_waiting_.erase(it);
+            for (const auto& [a, b] : candidates_)
+                if (a == k || b == k) TryVerify(a, b, t);
         }
     }
 
@@ -927,6 +990,12 @@ private:
     std::set<std::pair<AgentId, uint32_t>> known_g_;
     uint64_t edge_msg_key_ = 0, graph_msg_key_ = 0;
     bool resyncing_ = false, resync_snapshot_ = false;
+    struct DeferredAnswer {   // D174: a MATCH_REQUEST whose features were not ready when it arrived
+        AgentId to = 0;
+        uint64_t keyframe = 0;
+        core::Timestamp since;
+    };
+    std::map<uint64_t, DeferredAnswer> deferred_answers_;   // by request id
     AgentId T_G_W_anchor_ = 0;   // D171: sends to a new broker are tagged resync
 
     // broker state (soft: rebuilt from agents after an election change)
@@ -934,6 +1003,7 @@ private:
     std::set<std::pair<KeyframeRef, KeyframeRef>> candidates_, verified_;
     std::map<KeyframeRef, core::FeatureResponseValue> features_;
     std::map<KeyframeRef, Request> requests_;
+    std::map<KeyframeRef, core::Timestamp> own_waiting_;   // D174: own keyframes whose features were not ready
     std::map<uint64_t, KeyframeRef> request_owner_;
     uint64_t request_counter_ = 0;
     std::map<EdgeKey, LoopEdgeValue> broker_edges_;
