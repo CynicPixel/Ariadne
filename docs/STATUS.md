@@ -18,6 +18,11 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
   `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
   budget defaults are labelled placeholders until D171's derived levels.
+- **3.2 sim integration MERGED** (3c5b8ae, fast-forward; D171): two-pass causal replay (`ariadne_collab_passa` per
+  agent, `ariadne_collab_sim` over CommsNode with comms scenarios, partitions and disconnects), ALIKED+LightGlue
+  verification, the D76 robust broker solve, int8 local descriptors, per-message byte predictions. AWS pre-merge
+  `20261023T114451Z-cpux86-bc1d75`: **54/54**, ctest 592/592 + protocol 19/19. The gate sweep (byte table, ATE vs
+  bytes, campaign) is still to run; the first attempt failed on a calibration bug, fixed (D171 note).
 - **Phase 5 round 2 (A2) MERGED** (eb976de, fast-forward: 5.2 features-on-proxy D146, 5.3 replay wiring D147). AWS
   pre-merge `20261023T085348Z-cpux86-3d2b9a`: **54/54**, ctest 587/587 + protocol 18/18, every determinism check
   byte-identical (defaults unchanged, as claimed). Evidence: `evaluation/runs/premerge_aws/20261023T085348Z-cpux86-3d2b9a/`,

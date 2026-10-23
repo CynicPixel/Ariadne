@@ -1,0 +1,1 @@
+3c5b8ae5228e559fe88c34e87d9fa20841309fda infra(3.2, D171): sweep fixes after the first AWS run - calibration globs directories only (the job .log files share the prefix and crashed it); any failure collects first; pass-A stores kept with the results and reusable via STORES_FROM (sha256-checked); trimmed to the gate's rows (budget levels 25/50, campaign one seed); D171 note
