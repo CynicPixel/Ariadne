@@ -1,0 +1,9 @@
+input digest ced7640a20cf76d6 truth digest 6c0bbdb4becd09b8 tilt0 3.7807683586294782
+perturb 1e-12 # 0 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 1 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 2 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 3 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 4 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 5 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 6 gerr 2.7104 tilt 3.1702 iters  10 found 1
+perturb 1e-12 # 7 gerr 2.7104 tilt 3.1702 iters  10 found 1
