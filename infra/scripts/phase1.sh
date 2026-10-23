@@ -115,9 +115,12 @@ $S/recon.sh prepare "$SPOOL" "$SCENE" "$C/recon_eval.yaml" "$BIG/recon" > "$BIG/
   || { tail -20 "$BIG/recon_prepare.log"; die "recon prepare failed"; }
 pkg="$(sha256sum "$BIG/recon/package/render_package.npz" | cut -d' ' -f1)"
 if [ "$mode" = full ]; then
+  # ARIADNE_RENDER_CMD takes kaggle.sh render's arguments (PKG_DIR OUT). The AWS gate sets it to
+  # infra/eval/render_relay.sh: the same fresh Kaggle render, run by the launching host, whose token stays there.
+  render="${ARIADNE_RENDER_CMD:-$S/kaggle.sh render}"
   log "2. Kaggle render (remote GPU)"
-  cmd "$S/kaggle.sh render $BIG/recon/package $BIG/render"
-  $S/kaggle.sh render "$BIG/recon/package" "$BIG/render" > "$BIG/kaggle.log" 2>&1 \
+  cmd "$render $BIG/recon/package $BIG/render"
+  $render "$BIG/recon/package" "$BIG/render" > "$BIG/kaggle.log" 2>&1 \
     || { tail -20 "$BIG/kaggle.log"; die "Kaggle render failed"; }
   mkdir -p "$CACHE/$pkg" && cp "$BIG/render/renders.npz" "$BIG/render/remote.json" "$CACHE/$pkg/"
 else
