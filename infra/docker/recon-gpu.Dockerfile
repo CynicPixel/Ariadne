@@ -23,6 +23,9 @@ RUN pip install --no-cache-dir torch==2.11.0 --index-url https://download.pytorc
 ENV TORCH_CUDA_ARCH_LIST="7.5;8.6;8.9" MAX_JOBS=16
 RUN pip install --no-cache-dir --no-build-isolation --no-binary gsplat gsplat==1.5.3 \
     && python -c "from gsplat import csrc; print('gsplat.csrc AOT:', csrc.__file__)"
+# Every package goes into the venv HERE: the runtime base has no CA bundle, so it never runs pip (first build,
+# run 20261023T191330Z-cpux86-763d65, failed exactly so).
+RUN pip install --no-cache-dir scipy==1.18.1 opencv-python-headless==5.0.0.93 pyyaml==6.0.3 pytest==9.1.1
 
 FROM ubuntu@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 # = ubuntu:24.04 (runtime: the venv's python3 is this image's /usr/bin/python3.12)
@@ -30,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 libgomp
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
-RUN pip install --no-cache-dir scipy==1.18.1 opencv-python-headless==5.0.0.93 pyyaml==6.0.3 pytest==9.1.1 \
-    && python -c "import torch, gsplat; from gsplat import csrc; print('torch', torch.__version__, 'gsplat', gsplat.__version__, 'csrc', csrc.__file__)"
+RUN python -c "import torch, gsplat, scipy, cv2, yaml; from gsplat import csrc; print('torch', torch.__version__, 'gsplat', gsplat.__version__, 'csrc', csrc.__file__, 'cv2', cv2.__version__)"
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/work/python/reconstruction
 WORKDIR /work

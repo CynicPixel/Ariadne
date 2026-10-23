@@ -36,7 +36,7 @@ id="$(docker image inspect ariadne/recon-gpu:build --format '{{.Id}}')"
 echo "$id" > "$R/image_id.txt"
 short="${id#sha256:}"; short="${short:0:12}"
 docker image inspect ariadne/recon-gpu:build --format '{{.Size}}' > "$R/image_bytes.txt"
-grep -E "gsplat.csrc AOT:|torch .* gsplat .* csrc" "$R/build.log" > "$R/csrc_proof.txt" || true
+grep -E "gsplat.csrc AOT:|^torch .* gsplat .* csrc" "$R/build.log" > "$R/csrc_proof.txt" || true
 docker run --rm --network none ariadne/recon-gpu:build python -c \
   "import torch, gsplat; from gsplat import csrc; print('run-time import, no GPU:', torch.__version__, gsplat.__version__, csrc.__file__, 'cuda available', torch.cuda.is_available())" \
   >> "$R/csrc_proof.txt" 2>&1
