@@ -18,6 +18,11 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
   `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
   budget defaults are labelled placeholders until D171's derived levels.
+- **Phase 5 (A2) MERGED** (64059fa via merge 2594ac6: 5.1-5.6 work, D130-D146). AWS pre-merge
+  `20261023T071522Z-cpux86-42ce81`: **54/54**, ctest 580/580 + protocol 18/18, render reused (A2's pipeline changes
+  keep the defaults; the render package sha256 matches). Evidence: `evaluation/runs/premerge_aws/20261023T071522Z-cpux86-42ce81/`,
+  about $0.04. An earlier attempt (`20261023T070241Z`) died with the workstation and its instance was terminated by
+  the host trap, without results.
 - **3.2 sim integration** (`feat/3.2-sim`, D171, design SIMCOLLAB_3.2): built, not yet run.
   - Two-pass causal replay over CommsNode.
   - Inter-agent exchange with ALIKED+LightGlue.
