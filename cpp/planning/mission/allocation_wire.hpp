@@ -17,8 +17,8 @@
 
 namespace ariadne::planning {
 
-inline core::TaskConsensusValue ToWire(const CbbaMessage& m, const std::vector<float>& scales) {
-    core::TaskConsensusValue v;
+inline core::CbbaConsensusValue ToWire(const CbbaMessage& m, const std::vector<float>& scales) {
+    core::CbbaConsensusValue v;
     for (size_t j = 0; j < m.task_ids.size(); ++j) {
         if (m.z[j] < 0) continue;   // sparse: (0, none) is implied for every task not listed
         v.tasks.push_back(uint64_t(m.task_ids[j]));
@@ -31,7 +31,7 @@ inline core::TaskConsensusValue ToWire(const CbbaMessage& m, const std::vector<f
 }
 
 /// The receiver's expansion of a decoded sparse message onto the event's task list (ids not listed: y 0, z none).
-inline CbbaMessage FromWire(const core::TaskConsensusValue& v, int sender, const std::vector<int64_t>& task_ids) {
+inline CbbaMessage FromWire(const core::CbbaConsensusValue& v, int sender, const std::vector<int64_t>& task_ids) {
     CbbaMessage m;
     m.sender = sender, m.task_ids = task_ids;
     m.y.assign(task_ids.size(), 0.0), m.z.assign(task_ids.size(), -1);
@@ -48,17 +48,17 @@ inline CbbaMessage FromWire(const core::TaskConsensusValue& v, int sender, const
 /// RunCbba's transport through the wire: encode (sparse), decode, expand. CBBA then runs on exactly what was sent.
 inline std::function<CbbaMessage(const CbbaMessage&)> WireTransport(const core::WireCodec& codec, std::vector<float> scales) {
     return [&codec, scales](const CbbaMessage& m) {
-        const auto enc = codec.EncodeTaskConsensus(ToWire(m, scales), core::AgentId(m.sender), 0, core::Timestamp{0}, 0);
+        const auto enc = codec.EncodeCbbaConsensus(ToWire(m, scales), core::AgentId(m.sender), 0, core::Timestamp{0}, 0);
         core::DecodedMessage d;
-        if (codec.Decode(enc.bytes, &d) != core::WireCodec::Status::kOk || !d.has_task_consensus) return CbbaMessage{};
-        return FromWire(d.task_consensus, m.sender, m.task_ids);
+        if (codec.Decode(enc.bytes, &d) != core::WireCodec::Status::kOk || !d.has_cbba_consensus) return CbbaMessage{};
+        return FromWire(d.cbba_consensus, m.sender, m.task_ids);
     };
 }
 
 /// The function object RunCbba takes: wire bytes (payload + framing) of the message, as the ledger would record.
 inline std::function<size_t(const CbbaMessage&)> WireBytes(const core::WireCodec& codec, std::vector<float> scales) {
     return [&codec, scales](const CbbaMessage& m) {
-        return size_t(codec.EncodeTaskConsensus(ToWire(m, scales), core::AgentId(m.sender), 0, core::Timestamp{0}, 0)
+        return size_t(codec.EncodeCbbaConsensus(ToWire(m, scales), core::AgentId(m.sender), 0, core::Timestamp{0}, 0)
                           .record.wire_bytes);
     };
 }

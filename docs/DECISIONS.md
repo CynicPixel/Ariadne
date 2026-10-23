@@ -4446,6 +4446,118 @@ Branch `feat/3.4-spectral`.
 | benchmark config | the budget sweep (`budget_bytes_per_s`) for the ATE-vs-bytes plot: with the 3.2 sim integration |
 | manifest | policy, `budget_bytes_per_s` / `budget_burst_bytes`, `selection_interval_s`, `refine_passes`, response ratio + calibration run; emitted by the runtime once wired |
 
+## 2026-10-23 — D171: 3.2 sim integration — the v2 protocol over CommsNode on sim recordings (design SIMCOLLAB_3.2)
+
+**Preflight:**
+- **Literature.** COSMO-Bench (arXiv 2508.16731) for the method: the front-end runs over recorded data, and a
+  distance-driven comms model fitted to real Wi-Fi gates the exchange. Swarm-SLAM for the front-end/back-end split
+  and the arm comparison. Tian et al. RSS 2018 for budgeted exchange and the greedy-coverage row. RFComms (D102) for
+  per-size PER.
+- **OpenCV-native check:** cv::dnn EigenPlaces; cv::ALIKED + cv::LightGlueMatcher; findEssentialMat; solvePnPRansac.
+- **Advisor:** review 1, folded into the design.
+
+**Decisions:**
+1. **Two passes.**
+   - Pass A: each agent's shipped front-end (the D69 configuration), cached per (scene, seed).
+   - Pass B: a discrete-event run on the recording clock, CollabNode × CommsNode.
+   - A keyframe is released whole at `t_final`, when it leaves the BA window, so nothing reaches pass B before the
+     agent would know it. A test checks there is no lookahead.
+   - Broker compute takes zero sim time [ASSUMPTION]; the measured time is reported.
+2. **The VO startup prefix (D87 carry) is never released.** 3.4's chain spans min..max ids seen, not 0..max.
+3. **Inter-agent features are ALIKED-n16 + LightGlue** (the hard-pair path, D63: AUC@10° 0.607 against ORB's 0.284).
+   - fp16 on the wire; int8 is a 3.6 row.
+   - The verify chain is COLLAB_3.2 §11.
+   - Thresholds are calibrated on the other scene.
+   - ORB/mean-bit becomes the `orb_meanbit` ablation. Intra-agent loops stay ORB (a registered carry).
+4. **Datagram size goes on the link seam.** Loss is evaluated per datagram at its size with RFComms `ExpectedPer`. The
+   MTU stays 1500 (D102 L8).
+5. **Arms** map to D170 and §31.1 (design §4). Budget levels are {10, 25, 50, 100} % of the similarity arm's
+   measured fetch rate on the calibration scene. D170's 20 kB/s and 200 kB defaults are unsourced placeholders until
+   that measurement replaces them.
+6. **The byte gate is completed:**
+   - per-message pairing of predictions with first transmissions;
+   - a predictor per class;
+   - retransmit, ack and resync (after an election) as overhead rows;
+   - predictions summed over every broker;
+   - cross-scene calibration.
+7. **"3 seeds"** = one seed driving both passes: IMU noise and VO RANSAC in pass A, link loss and verifier RANSAC in
+   pass B. D is `none`.
+8. **Scene 1's inter-agent opportunities are measured first.** If there are fewer than 10, a third scene (maze_short)
+   is rendered before the gate.
+
+**As built (same day, before any gate run):**
+- **Global descriptor on the wire: fp16**, arch §15.7's encoding.
+  - An appended `descriptor_f16` field in `GlobalDescriptor`. v1 bytes are unchanged; the golden test still pins
+    1142 B and FNV `0x653ebb54ae4fd40b`.
+  - The codec had shipped float32 only. D93's int8 stays a 3.6 row.
+- **Retrieval threshold: cosine 0.8.**
+  - Source: Swarm-SLAM's stereo `similarity_threshold`, from `cslam_experiments` `kitti_stereo.yaml`, used there on
+    CosPlace, EigenPlaces' predecessor from the same group.
+  - `top_k` 3 is [ASSUMPTION].
+  - `edges.csv` records every verify call with its ground-truth edge error, so the scene-1 check can revise both.
+- **Predictions per message.**
+  - Every descriptor, pose edge and graph batch is priced when planned: the codec's exact payload, times the class's
+    calibrated ratio for the compressed classes (4, 5, 6, D14), plus framing.
+  - The prediction reaches the ledger with the first transmission (`ByteRecord::predicted_wire_bytes`, ledger only).
+  - Requests and responses keep D170's selection-time prices.
+- **`resync`.** Sends to a new broker carry a ledger-only tag: descriptors not yet sent, every edge, and the forced
+  snapshot. They form an overhead row, outside the gate.
+- **Robust stage.** `RobustMultiAgentSolve` runs D76's `RobustJointSolve` through a new `MultiAgentInput::solver`
+  hook.
+  - An agent tied to the gauge only through rejected edges is reported **unplaced**, never placed on those edges.
+  - The plain-PGO `MultiAgentSolve` is the `robust: false` ablation row.
+- **Edge noise model:** the EuRoC fit (`euroc_v2_loops.yaml`), carried to the sim [ASSUMPTION]. A sim fit from
+  `edges.csv` follows the first sweep.
+- **Local descriptors: int8 with a per-keyframe scale.** This is arch §15.7's default (fp16 is its ablation), and it
+  corrects this entry's earlier fp16 choice.
+  - Measured (`LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs`, D90 sim pairs f200/f205 and
+    f700/f710): LightGlue's match set is **identical** to fp32's, precision 1 and recall 1, for both int8 and fp16.
+  - Caveat: these are near-temporal pairs. Inter-agent pairs are harder, and `edges.csv` keeps watching.
+  - The feature response carries `feature_bytes` and `header_bytes` (appended wire fields; v1 bytes unchanged).
+    The decoder had hard-coded ORB's 32 B per feature and rejected every other layout; the smoke found this, and
+    `Serialization.LargeFeatureResponseRoundTripsThroughFragmentation` now pins it.
+- **Token-bucket depth:** at least the largest single fetch (RFC 2697: CBS ≥ the largest packet). With a depth of one
+  period's level alone, a level below one fetch per period starved the arm instead of rationing it (smoke: 0 of 246
+  candidates ever selected).
+- **Verifier calibration, pre-registered (2026-10-23, before any scene-1 data).**
+  - **Label:** a candidate is *good* iff its pose error is at most 10°. That is D63's protocol for this matcher, the
+    LightGlue/SuperGlue relative-pose AUC@10°: the larger of the rotation error and the translation-direction
+    error, with rotation only when the true baseline is under 0.1 m.
+  - D73's 0.2 m / 2° rule is not used here. It would label a true 13 cm / 2.6° inter-agent edge (180 inliers) bad.
+  - **Data:** the similarity arm on the **ideal** link of the OTHER scene, all seeds. Verification is geometry; the
+    `collapsed_v1` runs deliver too few responses to calibrate on.
+  - **Candidates:** rows that reached PnP and that the D71 gate did not reject.
+  - **Floor:** the smallest PnP-inlier count ≥ 25 (the 1.6 verifier's) that accepts no bad candidate. Only this floor
+    is varied, and only upward: B1 records PnP counts only for candidates that passed the E gate.
+  - **Reported:** the recall of good candidates, and the margin between the worst bad and the weakest good.
+  - **Stop condition:** if either scene has fewer than 10 good candidates, the sweep stops before B2 (this entry's
+    precondition).
+- **Smoke finding (scene 0, 30 s, NOT gate data): perceptual aliasing reaches the merged map.**
+  - One query keyframe of agent 1 verified against five of agent 0's keyframes, each about 10 m / 80° off, with
+    25–27 PnP inliers. The true edges have 143–180.
+  - The five are mutually consistent, so PCM accepts them as a clique: D75's aliasing-group failure.
+  - On the `ideal` link the true edges also arrived, and the robust stage kept them: merged ATE 2.6 cm.
+  - On `collapsed_v1` only the false group arrived: merged ATE 3.55 m.
+  - No back-end setting can reject a self-consistent group with no competitor. The group-level defence (five edges
+    from one query are one piece of evidence) is 3.5's, with its own preflight (arch §17.3). The sweep reports the
+    accepted-false-edge rate and the map deformation per arm, and those runs stay in the plot.
+- **First AWS sweep (`20261023T073806Z-cpux86-7f912a`, 74 min, about $0.15): failed at calibration on a script bug.**
+  - Stage A (12 stores, 43 min) and B1 (12 runs, 25 min) completed. The calibration then globbed `cal_s<k>_seed*`,
+    which also matches the jobs' `.log` files, and crashed. Fixed: directories only.
+  - The script exited before collecting, so the instance took B1 and the stores with it. Fixed: any failure now
+    collects first, and the pass-A stores are kept under the run's results (`STORES_FROM` reuses them, checked
+    against `stores.SHA256SUMS`).
+  - **Trimmed to the gate's rows** (maintainer, 2026-10-23: no runs beyond what the gate needs). B2 runs two budget
+    levels (25 %, 50 %) instead of four, and C runs one seed per variant and scene. The plot still has three arms on
+    2 scenes × 3 seeds; the 10 % and 100 % levels are not run.
+
+**§49:**
+- catalogue: ALGORITHMS (COSMO-Bench, Tian et al.);
+- arch: §5.7/§15.6 as-built note at merge;
+- ablation matrix: §31.1 rows mapped;
+- benchmark config: `configs/benchmark/collab_3.x.yaml` with the sweep;
+- manifest: protocol, arm, budget level and its derivation run, comms scenario, seed, pass-A cache sha.
+
 ## 2026-10-23 — D172: Phase 2 full gate on AWS — 53/54; the 54th was the D55 reference's own dirty flag; `report.yaml` re-pinned
 
 **The run.** `phase1.sh` in full mode on clean commit b59a77d, on AWS (cpux86 spot, 32 min), with a fresh Kaggle
@@ -4488,3 +4600,41 @@ render.
 - the VO-side startup prefix (D87);
 - D91's pool rule goes to 7.3.
 
+
+## 2026-10-23 — D173: §42 item 7 false-closure injection in pass B; merge evidence; the N-agent mission spool (schema 3)
+
+**Context.** Phase 8's demo mission (B's D213) gets the collaboration items (§42 items 4–8, 13–14, 16) from one
+mission recording replayed through 3.2's pass A/B. Item 7 needs "at least one false closure generated
+intentionally", and A1's N-agent mission stage needs per-agent merges, which the 2-agent 1.7 spool cannot carry.
+
+**Decisions.**
+- **`CollabNode::InjectVerifiedEdge`** (evaluation only) plants an edge at the broker exactly as if its verify hook had
+  returned it. It travels and is solved like any verified edge, so only the robust stage (PCM → GNC, D76) can reject
+  it. It counts as `edges_injected`.
+- **Pass B `inject_false_edges:`** (default none, so outputs without it are unchanged): `{t_s, agent_a, kf_a, agent_b,
+  kf_b, offset_m, yaw_deg}`. Z = the true T_Ca_Cb · [R_z(yaw) | offset]. The information is copied from the last edge
+  verified on that agent pair, and planting waits until both keyframes are released and the pair has a verified edge.
+  Logged as reason `injected` in edges.csv. results.yaml reports, per injection: planted time, ground-truth error,
+  solves seen, solves that kept it, final weight, and rejected.
+- **What is and is not rejected (correcting M's earlier claim to B).** PCM accepts a lone candidate in a pair group as
+  "untested" (pcm.hpp), so a false closure with no competitor is kept. It is rejected once true loops for that pair
+  exist. Smoke (scene 0, ideal link, 30 s, `build/smoke/b_inject`, NOT gate data):
+  - The injection was planted at 25.0 s, 4 m / 45° off, when the pair's only other edges were the false aliasing group.
+  - It was **kept for 1 solve**, then rejected (final weight 0) after the true loops arrived at 27.8 s.
+  - Merged ATE was 2.6 cm, unchanged.
+  - The demo's injection must follow the pair's true loops, and its evidence must report `kept_solves`.
+- **Merge evidence** (`results.yaml`):
+  - `estimates`: per agent, the adopted frame anchor and T_G_W.
+  - `kept_inter_edges`: every inter-agent loop still kept by the last solve that contained it, with when it was first
+    kept. Injected loops are never evidence: the smoke's injection was the first loop ever kept.
+- **Mission spool schema 3** (agreed with A1 and A2): A2's schema-2 bundle fields, plus A1's `merges:` list in place
+  of the single `merge:` block. Composer: `python/analysis/compose_mission_spool.py`.
+  - Inputs: per-agent `ariadne_sim_vo --spool` runs and the pass-B run.
+  - For each agent k: T_O0_Ok = T_G_W0⁻¹ · T_G_Wk, only when agents 0 and k share an anchor.
+  - The edge is the earliest kept loop joining k to an agent already in agent 0's frame, with both keyframes spooled.
+  - Otherwise `ok: false`.
+  - Files are symlinked. [ASSUMPTION] pass A and sim_vo give identical keyframe ids on the same recording; the
+    composer checks that the edge keyframes exist, and the mission run checks that the ids match.
+
+**Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
+anchors never merge).

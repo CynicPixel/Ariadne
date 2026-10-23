@@ -19,9 +19,9 @@
 // draw itself in Network's keyed Philox stream. PER(P_rx) is nearly a step, so the expectation is integrated on a
 // fine fixed grid over +-8 sigma (not Gauss-Hermite), tabulated once against the mean received power.
 //
-// SEAM LIMIT (stated): LinkModel::Sample has no datagram size, so loss_p is computed for one size,
-// `datagram_bytes` (default: the serializer's path MTU, 1500). A 40-byte heartbeat sees a lower PER than a full
-// fragment near the edge; COMMS_3.3 §L8 quantifies it.
+// DATAGRAM SIZE (D171): Network asks SampleSized(.., wire_bytes), and loss_p is E[PER] at that size -- RFComms as
+// modelled (bytes exponent, per-packet sigma), the case under which COMMS_3.3 §L8 keeps the 1500 B MTU. Sample()
+// without a size keeps `datagram_bytes` (default 1500), for the probe and the D102 tables.
 //
 // Other deviations: RFComms enforces `capacity` by dropping over a 1 s window; here it is the link rate
 // (Network queues). RFComms has no latency; `latency_s` is ours. Positions are agent BODY positions (radio at the
@@ -156,6 +156,11 @@ public:
     }
 
     LinkState Sample(AgentId from, AgentId to, Timestamp t) const override { return Detail(from, to, t).state; }
+    LinkState SampleSized(AgentId from, AgentId to, Timestamp t, double wire_bytes) const override {
+        RfLinkDetail r = Detail(from, to, t);
+        if (r.state.up) r.state.loss_p = LossAt(r.rx_mean_dbm, wire_bytes);
+        return r.state;
+    }
 
     RfLinkDetail Detail(AgentId from, AgentId to, Timestamp t) const {
         RfLinkDetail r;
@@ -174,13 +179,22 @@ public:
         return r;
     }
 
-    double LossAt(double rx_mean_dbm) const {
+    double LossAt(double rx_mean_dbm) const { return Interp(table_, rx_mean_dbm); }
+    /// E[PER] at `bytes`, interpolated on the same 0.1 dB grid as the 1500 B table. Only the two grid cells a query
+    /// brackets are computed (then cached), so a new size costs two integrals, not a table.
+    double LossAt(double rx_mean_dbm, double bytes) const {
+        if (bytes == p_.datagram_bytes) return LossAt(rx_mean_dbm);
+        const auto cell = [&](int i) {
+            const auto [it, fresh] = sized_.try_emplace({bytes, i}, 0.0);
+            if (fresh) it->second = rf::ExpectedPer(TableDbm(i), p_.sigma_db, p_.noise_floor_dbm, bytes);
+            return it->second;
+        };
         const double x = (rx_mean_dbm - TableDbm(0)) / kStepDb;
-        if (x <= 0.0) return table_[0];
-        if (x >= kTable - 1) return table_[kTable - 1];
+        if (x <= 0.0) return cell(0);
+        if (x >= kTable - 1) return cell(kTable - 1);
         const int i = int(x);
         const double w = x - i;
-        return (1.0 - w) * table_[i] + w * table_[i + 1];
+        return (1.0 - w) * cell(i) + w * cell(i + 1);
     }
     const RfParams& params() const { return p_; }
 
@@ -192,7 +206,17 @@ private:
     RfParams p_;
     std::map<AgentId, AgentTrack> tracks_;
     std::vector<WallTriangle> walls_;
+    double Interp(const double* table, double rx_mean_dbm) const {
+        const double x = (rx_mean_dbm - TableDbm(0)) / kStepDb;
+        if (x <= 0.0) return table[0];
+        if (x >= kTable - 1) return table[kTable - 1];
+        const int i = int(x);
+        const double w = x - i;
+        return (1.0 - w) * table[i] + w * table[i + 1];
+    }
+
     double table_[kTable];
+    mutable std::map<std::pair<double, int>, double> sized_;   // (bytes, grid index) -> E[PER], filled on use
 };
 
 }  // namespace ariadne::collaboration

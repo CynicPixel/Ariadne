@@ -92,15 +92,26 @@ MultiAgentResult SolveMultiAgent(const MultiAgentInput& in) {
 
     // Nothing to optimise without an edge (e.g. a lone broker with one keyframe: zero free variables).
     out.initial_cost = out.final_cost = g.Cost();
+    std::set<uint32_t> kept;
+    for (const auto& [a, T] : T_G_W0) kept.insert(a);
     if (!g.edges().empty()) {
-        if (in.init != PgoInit::kCurrent) ApplyPoses(g, InitialPoses(g, anchor, in.init));
-        out.initial_cost = g.Cost();
-        out.report = SolvePoseGraph(g, anchor, in.settings);
+        if (in.solver) {
+            kept = in.solver(g, anchor);
+            kept.insert(in.gauge_agent);
+        } else {
+            if (in.init != PgoInit::kCurrent) ApplyPoses(g, InitialPoses(g, anchor, in.init));
+            out.initial_cost = g.Cost();
+            out.report = SolvePoseGraph(g, anchor, in.settings);
+        }
         out.final_cost = g.Cost();
     }
 
     // 4. Per-agent outputs.
     for (const auto& [a, T0] : T_G_W0) {
+        if (!kept.count(a)) {
+            out.unplaced.push_back(a);
+            continue;
+        }
         std::vector<SE3> in_w, in_g;
         auto& kfs = out.T_G_C[a];
         for (const auto& n : by_agent.at(a)->nodes) {

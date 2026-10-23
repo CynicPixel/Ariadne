@@ -80,6 +80,17 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_sim_collab RUNTIME DESTINATION bin COMPONENT ariadne)
 
+  # 3.2 sim integration (design SIMCOLLAB_3.2, D171): pass A writes each agent's keyframe store; pass B runs the v2
+  # protocol over the comms node from the stores.
+  add_executable(ariadne_collab_passa tools/ariadne_collab_passa.cpp)
+  target_link_libraries(ariadne_collab_passa PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_collab_passa RUNTIME DESTINATION bin COMPONENT ariadne)
+  add_executable(ariadne_collab_sim tools/ariadne_collab_sim.cpp)
+  target_link_libraries(ariadne_collab_sim PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
+  install(TARGETS ariadne_collab_sim RUNTIME DESTINATION bin COMPONENT ariadne)
+
   # 1.9 the §30.2 report gate (design HARNESS_1.9): registry dump + MissingMetrics/UnknownMetrics.
   add_executable(ariadne_report_check tools/ariadne_report_check.cpp)
   target_link_libraries(ariadne_report_check PRIVATE ariadne::runtime_opencv)

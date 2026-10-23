@@ -58,6 +58,11 @@ class LinkModel {
 public:
     virtual ~LinkModel() = default;
     virtual LinkState Sample(AgentId from, AgentId to, Timestamp t) const = 0;
+    /// The state one datagram of `wire_bytes` (payload + the 28 B UDP/IP header) sees. A physical model's loss
+    /// depends on the size (RFComms: PER over the datagram's bytes); the default ignores it (D171, SIMCOLLAB_3.2 §3).
+    virtual LinkState SampleSized(AgentId from, AgentId to, Timestamp t, double /*wire_bytes*/) const {
+        return Sample(from, to, t);
+    }
 };
 
 /// A default state for every pair, with per-directed-link overrides.
@@ -96,7 +101,14 @@ public:
     void ExtraLatency(Timestamp t0, Timestamp t1, double extra_s) { latency_.push_back({t0, t1, extra_s}); }
 
     LinkState Sample(AgentId from, AgentId to, Timestamp t) const override {
-        LinkState s = base_.Sample(from, to, t);
+        return Faulted(base_.Sample(from, to, t), from, to, t);
+    }
+    LinkState SampleSized(AgentId from, AgentId to, Timestamp t, double wire_bytes) const override {
+        return Faulted(base_.SampleSized(from, to, t, wire_bytes), from, to, t);
+    }
+
+private:
+    LinkState Faulted(LinkState s, AgentId from, AgentId to, Timestamp t) const {
         for (const auto& p : partitions_)
             if (In(t, p.t0, p.t1) && GroupOf(p.groups, from) != GroupOf(p.groups, to)) s.up = false;
         for (const auto& d : disconnects_)
@@ -106,7 +118,6 @@ public:
         return s;
     }
 
-private:
     struct PartitionWindow { Timestamp t0, t1; std::vector<std::vector<AgentId>> groups; };
     struct DisconnectWindow { AgentId agent; Timestamp t0, t1; };
     struct LatencyWindow { Timestamp t0, t1; double extra_s; };
@@ -157,15 +168,16 @@ public:
         if (payload.size() > core::kDatagramPayloadBytes)
             throw std::invalid_argument("Network::Send: payload exceeds one datagram; fragment it first");
         ++stats_.sent;
-        const LinkState s = links_.Sample(from, to, t);
+        // Bytes on the wire include the 28 B UDP/IP header; a size-aware model prices the loss at that size.
+        const double wire = double(payload.size() + core::kDatagramOverheadBytes);
+        const LinkState s = links_.SampleSized(from, to, t, wire);
         LinkTx& tx = tx_[{from, to}];
         const uint64_t index = tx.next_index++;
         if (!s.up) {
             ++stats_.lost_link_down;
             return;
         }
-        // Serialization delay on a busy directed link (bytes include the 28 B UDP/IP header).
-        const double wire = double(payload.size() + core::kDatagramOverheadBytes);
+        // Serialization delay on a busy directed link.
         const Timestamp start = std::max(t, tx.free_at);
         const Duration tx_time =
             s.bandwidth_Bps > 0.0 ? Duration::SecondsFromDouble(wire / s.bandwidth_Bps) : Duration{0};

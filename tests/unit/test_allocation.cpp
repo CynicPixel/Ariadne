@@ -305,11 +305,11 @@ TEST(Cbba, SparseWireRoundTripIsExact) {
     const ariadne::core::WireCodec codec(ariadne::core::Framing::kWholeMessage);
     CbbaMessage m;
     m.sender = 1, m.task_ids = {3, 8, 21, 40, 55}, m.y = {0, 0.75, 0, 1.5, 0}, m.z = {-1, 1, -1, 0, -1}, m.s = {4, 7};
-    const auto enc = codec.EncodeTaskConsensus(ToWire(m, {1.f, 2.f}), 1, 0, ariadne::core::Timestamp{0}, 0);
+    const auto enc = codec.EncodeCbbaConsensus(ToWire(m, {1.f, 2.f}), 1, 0, ariadne::core::Timestamp{0}, 0);
     ariadne::core::DecodedMessage d;
     ASSERT_EQ(codec.Decode(enc.bytes, &d), ariadne::core::WireCodec::Status::kOk);
-    EXPECT_EQ(d.task_consensus.tasks.size(), 2u) << "only the two tasks with a winner travel";
-    const CbbaMessage back = FromWire(d.task_consensus, 1, m.task_ids);
+    EXPECT_EQ(d.cbba_consensus.tasks.size(), 2u) << "only the two tasks with a winner travel";
+    const CbbaMessage back = FromWire(d.cbba_consensus, 1, m.task_ids);
     EXPECT_EQ(back.z, m.z);
     EXPECT_EQ(back.y, m.y);   // doubles on the wire: exact
     EXPECT_EQ(back.s, m.s);
@@ -317,7 +317,7 @@ TEST(Cbba, SparseWireRoundTripIsExact) {
     CbbaMessage big;
     big.sender = 0, big.s = {1, 1};
     for (int j = 0; j < 160; ++j) big.task_ids.push_back(1000 + j), big.y.push_back(j < 2 ? 0.5 : 0.0), big.z.push_back(j < 2 ? 0 : -1);
-    const size_t sparse = codec.EncodeTaskConsensus(ToWire(big, std::vector<float>(8, 1.f)), 0, 1, ariadne::core::Timestamp{0}, 0).record.wire_bytes;
+    const size_t sparse = codec.EncodeCbbaConsensus(ToWire(big, std::vector<float>(8, 1.f)), 0, 1, ariadne::core::Timestamp{0}, 0).record.wire_bytes;
     std::printf("[cbba] sparse TASK_CONSENSUS for 160 tasks, 2 with winners: %zu B\n", sparse);
     EXPECT_LT(sparse, 300u);
 }

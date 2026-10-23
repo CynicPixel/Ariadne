@@ -25,10 +25,13 @@ namespace ariadne::collaboration {
 /// prices at ratio 1.0 (an upper bound) and is labelled uncalibrated: it is excluded from the I6 gate.
 struct ResponseCostModel {
     std::map<uint16_t, double> response_ratio;   // feature_bytes -> transmitted / payload
+    std::map<int, double> class_ratio;           // POSE_EDGE / POSE_GRAPH (compressed classes, D14) -> ratio (D171)
     std::string calibration_run;                 // the disjoint run(s) the ratios came from (manifest)
     bool Calibrated(uint16_t feature_bytes) const {
         return !calibration_run.empty() && response_ratio.count(feature_bytes);
     }
+    bool ClassCalibrated(int cls) const { return !calibration_run.empty() && class_ratio.count(cls); }
+    double ClassRatio(int cls) const { return ClassCalibrated(cls) ? class_ratio.at(cls) : 1.0; }
     double Ratio(uint16_t feature_bytes) const {
         const auto it = response_ratio.find(feature_bytes);
         return Calibrated(feature_bytes) ? it->second : 1.0;
@@ -56,6 +59,8 @@ public:
         f.keyframe_id = ~0ull;
         f.keypoints.assign(size_t(n_features) * 2, 0.0f);
         f.descriptors.assign(size_t(n_features) * feature_bytes, 0);
+        if (feature_bytes != 32) f.feature_bytes = feature_bytes;   // D171: non-ORB layouts carry it (a per-response
+                                                                    // header, e.g. int8's 4 B scale, is not priced)
         f.points3d.assign(size_t(n_features) * 3, 0.0f);
         f.camera.assign(5, 0.0f);
         // Envelope fields as on a real message: FlatBuffers omits zero-valued fields, so a sample encoded with seq 0,
@@ -70,6 +75,15 @@ public:
         const double request = double(codec_.EncodeMatchRequest(r, a, a, ts, seq).record.wire_bytes);
         return cache_[key] = FetchCost{request, response};
     }
+
+    /// A planned message's first-transmission wire bytes (D171): its exact payload through the codec, the class's
+    /// calibrated ratio if the class is compressed (1.0 uncalibrated: an upper bound), and the codec's framing.
+    double PredictWire(const core::SerializedMessage& sample, core::MessageClass cls) const {
+        if (!core::IsCompressedClass(cls)) return double(sample.record.wire_bytes);
+        const double payload = double(sample.record.payload_bytes);
+        return Framed(std::min(payload, std::ceil(m_.ClassRatio(int(cls)) * payload)));
+    }
+    bool ClassCalibrated(core::MessageClass cls) const { return m_.ClassCalibrated(int(cls)); }
 
 private:
     double Framed(double transmitted) const {

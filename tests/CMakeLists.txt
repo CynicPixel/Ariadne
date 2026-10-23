@@ -34,7 +34,9 @@ add_executable(test_protocol
   protocol/test_transport.cpp
   protocol/test_membership.cpp
   protocol/test_collab_v2.cpp
-  protocol/test_collab_selection.cpp)
+  protocol/test_collab_selection.cpp
+  protocol/test_coordination_wire.cpp
+  protocol/test_coordination_node.cpp)
 target_link_libraries(test_protocol PRIVATE ariadne::core GTest::gtest_main)
 gtest_discover_tests(test_protocol)
 
@@ -92,6 +94,7 @@ if(OpenCV_FOUND)
     unit/test_aliasing_ramp.cpp
     unit/test_joint_robust.cpp
     unit/test_spectral_selector.cpp
+    unit/test_local_descriptor_codec.cpp
     unit/test_window_ba_levmarq.cpp
     unit/test_reassociation.cpp
     unit/test_xfeat_engine.cpp

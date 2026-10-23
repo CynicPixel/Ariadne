@@ -129,9 +129,15 @@ struct NodeHooks {
     /// candidate as it appears (the Phase-1 behaviour: the "similarity" baseline, and the default). SelectBySimilarity
     /// is the "greedy" baseline; SelectSpectral (spectral_selector.hpp, links OpenCV) is the policy.
     std::function<SelectionReport(const SelectionProblem&)> select;
+    /// D175: coordination messages (SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS) addressed to this agent, delivered as they
+    /// arrive (sim time), for the agent's planner mailbox. Unset = such messages are dropped.
+    std::function<void(const core::DecodedMessage&, core::Timestamp)> coordination;
 };
 
 struct NodeParams {
+    // D175 coordination TTLs: a patch is superseded by later ones (it carries everything since the acked version), a
+    // bid or a consensus older than one replan period is worthless.
+    double patch_ttl_s = 30.0, bid_ttl_s = 5.0, consensus_ttl_s = 5.0;
     MembershipParams membership;
     EndpointParams endpoint;
     double descriptor_ttl_s = 120.0;
@@ -169,8 +175,10 @@ struct NodeStats {
     // 3.4: selection rounds, candidates selected / dropped unselected, predicted first-transmission bytes per class
     uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
+    uint64_t edges_injected = 0;            // §42 item 7 evaluation: false closures planted through InjectVerifiedEdge
     uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
     uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
+    uint64_t uncalibrated_class_prices = 0;   // edges / graph batches priced at ratio 1.0 (D171): likewise
     uint64_t max_pending = 0;             // largest candidate pool handed to the policy
     double select_ms_total = 0, select_ms_max = 0;   // policy wall time per round (not used for decisions)
 };
@@ -287,6 +295,9 @@ public:
         return issued_;
     }
     std::optional<core::SE3> T_G_W() const { return T_G_W_; }
+    /// The anchor whose G the current T_G_W is expressed in (it can predate the latest adopted estimate, which may
+    /// list this agent as a member it did not place). For scoring (D171); never read by the protocol.
+    AgentId T_G_W_anchor() const { return T_G_W_anchor_; }
     AgentId anchor() const { return mem_.anchor(); }
     const std::map<EdgeKey, LoopEdgeValue>& edges() const { return edges_; }
     /// Edges the broker holds back because a snapshot does not yet cover an endpoint (§3.4).
@@ -316,6 +327,7 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeGlobalDescriptor(g, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
     }
 
@@ -327,6 +339,7 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeLoopEdge(e, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
     }
 
@@ -339,7 +352,18 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodePoseGraph(g, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
+    }
+
+    /// COLLAB_3.2 §7 / D171: price a planned message (a sample encode with a representative reliable sequence, as
+    /// FetchCostPredictor) and tag a resend to a new broker. Prediction and tag reach the ledger with the first
+    /// transmission; a message that expires unsent never does.
+    void Plan(OutMessage& m, core::Timestamp t) {
+        const uint64_t seq = (1ull << 40) | 1ull;
+        m.predicted_wire_bytes = cost_.PredictWire(m.encode(seq, t), m.cls);
+        m.resync = resyncing_;
+        if (core::IsCompressedClass(m.cls) && !cost_.ClassCalibrated(m.cls)) ++stats_.uncalibrated_class_prices;
     }
 
     PoseGraphValue Snapshot() const {
@@ -361,7 +385,9 @@ private:
         const bool stale = nodes_.size() > snapshot_nodes_ &&
                            (!last_snapshot_ || (t - *last_snapshot_).toSeconds() >= p_.snapshot_max_interval_s);
         if (!enough_kf && !stale) return;
+        resyncing_ = resync_snapshot_;
         SendGraph(mem_.broker(), Snapshot(), t, /*supersedes=*/true);
+        resyncing_ = resync_snapshot_ = false;
         snapshot_nodes_ = nodes_.size();
         last_snapshot_ = t;
     }
@@ -400,11 +426,14 @@ private:
             return;
         }
         const auto& sent = ep_.Sent(b, core::MessageClass::GLOBAL_DESCRIPTOR);
+        resyncing_ = true;
         for (const auto& [kf, g] : descriptors_)
             if (!sent.count(kf)) SendDescriptor(kf, t);
         for (const auto& [k, e] : edges_) SendEdge(b, e, t);
+        resyncing_ = false;
         snapshot_nodes_ = 0;   // force a fresh snapshot to the new broker
         last_snapshot_.reset();
+        resync_snapshot_ = true;
     }
 
     // --- receiving ---
@@ -413,6 +442,15 @@ private:
     bool KnownFrame(const FrameTag& f) const {
         if (f.epoch == 0) return std::find(fleet_.begin(), fleet_.end(), f.agent) != fleet_.end();
         return known_g_.count({f.agent, f.epoch}) > 0;
+    }
+
+    template <typename Fill>
+    void DeliverLocal(core::MessageClass cls, core::Timestamp t, Fill fill) {
+        if (!hooks_.coordination) return;
+        core::DecodedMessage d;
+        d.cls = cls, d.sender = self_, d.receiver = self_, d.stamp_ns = t.ns;
+        fill(d);
+        hooks_.coordination(d, t);
     }
 
     void Handle(core::DecodedMessage m, core::Timestamp t) {
@@ -458,6 +496,11 @@ private:
                     snapshots_[m.sender] = std::move(m.pose_graph);
                     dirty_ = true;
                 }
+                break;
+            case MC::SUBMAP_PATCH:
+            case MC::TASK_BID:
+            case MC::TASK_CONSENSUS:
+                if (hooks_.coordination) hooks_.coordination(m, t);
                 break;
             default: break;
         }
@@ -508,6 +551,7 @@ private:
             // Placed: adopt the anchor and my T_G_W (anchor propagation, §15.5).
             mem_.SetAnchor(g.anchor.agent);
             T_G_W_ = FromPoseValue(f.T_G_W);
+            T_G_W_anchor_ = g.anchor.agent;
             known_g_.insert({g.anchor.agent, g.anchor.epoch});
         }
     }
@@ -681,17 +725,99 @@ private:
         const auto e = hooks_.verify(a, fa->second, b, fb->second);
         if (!e) return;
         ++stats_.edges_verified;
-        broker_edges_.emplace(KeyOf(*e), *e);
+        AcceptEdge(*e, t);
+    }
+
+    void AcceptEdge(const LoopEdgeValue& e, core::Timestamp t) {
+        broker_edges_.emplace(KeyOf(e), e);
         // The endpoints keep the edge so any later broker can be re-sent it.
-        for (AgentId to : {e->agent_a, e->agent_b}) {
+        for (AgentId to : {e.agent_a, e.agent_b}) {
             if (to == self_) {
-                edges_.emplace(KeyOf(*e), *e);
+                edges_.emplace(KeyOf(e), e);
             } else {
-                SendEdge(to, *e, t);
+                SendEdge(to, e, t);
             }
         }
         dirty_ = true;
     }
+
+public:
+    // --- D175: coordination through the radio (MULTIAGENT_PIPELINE) ---------------------------------------------
+    struct ComponentView {
+        AgentId broker = 0;
+        std::vector<AgentId> members;
+        core::EpochValue epoch;
+    };
+    /// This agent's connected component as its membership sees it now (§15.4: lowest id brokers, epoch accepted).
+    ComponentView Component() const { return {mem_.broker(), mem_.ComponentMembers(), mem_.accepted()}; }
+    /// The highest SUBMAP_PATCH version `to` has acknowledged (0 = none): the next patch carries what changed since.
+    uint64_t AckedPatchVersion(AgentId to) {
+        const auto& d = ep_.Delivered(to, core::MessageClass::SUBMAP_PATCH);
+        return d.empty() ? 0 : *d.rbegin();
+    }
+    void SendPatch(AgentId to, const core::SubmapPatchValue& p, core::Timestamp t) {
+        if (to == self_) return;
+        OutMessage m;
+        m.cls = core::MessageClass::SUBMAP_PATCH;
+        m.key = p.version;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.patch_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeSubmapPatch(p, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// To this agent's component broker; the broker's own bid is delivered locally at once (no radio hop).
+    void SendBid(const core::TaskBidValue& b, core::Timestamp t) {
+        const AgentId to = mem_.broker();
+        if (to == self_) return DeliverLocal(core::MessageClass::TASK_BID, t, [&](core::DecodedMessage& d) {
+            d.has_task_bid = true, d.task_bid = b;
+        });
+        OutMessage m;
+        m.cls = core::MessageClass::TASK_BID;
+        m.key = b.seq;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.bid_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskBid(b, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// Broker: the assignment to every member of `c` (self locally).
+    void SendConsensus(const core::TaskConsensusValue& c, core::Timestamp t) {
+        for (AgentId to : c.members) {
+            if (to == self_) {
+                DeliverLocal(core::MessageClass::TASK_CONSENSUS, t, [&](core::DecodedMessage& d) {
+                    d.has_task_consensus = true, d.task_consensus = c;
+                });
+                continue;
+            }
+            OutMessage m;
+            m.cls = core::MessageClass::TASK_CONSENSUS;
+            m.key = c.seq;
+            m.created = t;
+            m.ttl = core::Duration::SecondsFromDouble(p_.consensus_ttl_s);
+            const AgentId self = self_;
+            const core::WireCodec* codec = &codec_;
+            m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskConsensus(c, self, to, ts, seq); };
+            Plan(m, t);
+            ep_.Enqueue(to, std::move(m));
+        }
+    }
+
+    /// EVALUATION ONLY (arch §42 item 7: "at least one false closure is generated intentionally"): plant `e` at the
+    /// broker exactly as if its verify hook had returned it, so it travels and is solved like any verified edge and
+    /// only the robust stage can reject it. Returns false (nothing planted) unless this node is the broker.
+    bool InjectVerifiedEdge(const LoopEdgeValue& e, core::Timestamp t) {
+        if (!mem_.IsBroker()) return false;
+        ++stats_.edges_injected;
+        AcceptEdge(e, t);
+        return true;
+    }
+
+private:
 
     void MaybeSolve(core::Timestamp t) {
         if (!hooks_.solve) return;
@@ -800,6 +926,8 @@ private:
     std::optional<EstimateRecord> adopted_;
     std::set<std::pair<AgentId, uint32_t>> known_g_;
     uint64_t edge_msg_key_ = 0, graph_msg_key_ = 0;
+    bool resyncing_ = false, resync_snapshot_ = false;
+    AgentId T_G_W_anchor_ = 0;   // D171: sends to a new broker are tagged resync
 
     // broker state (soft: rebuilt from agents after an election change)
     std::map<KeyframeRef, core::GlobalDescriptorValue> descriptor_db_;

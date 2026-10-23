@@ -33,10 +33,13 @@
 // ---------------------------------------------------------------------------
 #include "core/time/timestamp.hpp"
 
+#include <Eigen/Core>   // Eigen::half: the fp16 descriptor encoding (D171)
 #include <flatbuffers/flatbuffers.h>
 #include <zstd.h>
 #include <wire_generated.h>
 
+#include <array>
+#include <stdexcept>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -113,7 +116,8 @@ inline constexpr int kCompressionLevel = 3;
 inline bool IsCompressedClass(MessageClass cls) {
     return cls == MessageClass::MATCH_RESPONSE ||
            cls == MessageClass::POSE_EDGE ||
-           cls == MessageClass::POSE_GRAPH;
+           cls == MessageClass::POSE_GRAPH ||
+           cls == MessageClass::SUBMAP_PATCH;   // D175: mostly-uniform blocks compress well
 }
 
 /// §4.4. One row per message actually sent.
@@ -129,6 +133,10 @@ struct ByteRecord {
     uint64_t cumulative_bytes = 0;   // running total on this ledger
     bool compressed = false;
     bool retransmit = false;         // 3.2 ARQ: resent fragments; not "first transmission" (COLLAB_3.2 §7)
+    // Ledger-only (never on the wire; D171, COLLAB_3.2 §7): the sender's plan-time prediction of this message's first
+    // transmission (-1 = none), and whether it is a resend after an election (broker state is soft): an overhead row.
+    double predicted_wire_bytes = -1.0;
+    bool resync = false;
 
     /// Achieved compression ratio. 1.0 means compression did not help, which
     /// for high-entropy descriptors is the expected outcome and is reported.
@@ -303,6 +311,7 @@ struct GlobalDescriptorValue {
     float quality = 0.0f;
     uint32_t n_features = 0;     // 3.4: the feature response's size, advertised for pricing; 0 = not advertised
     uint16_t feature_bytes = 0;
+    bool fp16 = false;           // D171: encode `descriptor` as fp16 (arch §15.7); decoded values are the fp16 ones
 };
 
 struct MatchRequestValue {
@@ -313,13 +322,70 @@ struct MatchRequestValue {
 struct FeatureResponseValue {
     uint64_t request_id = 0, keyframe_id = 0;
     std::vector<float> keypoints;     // x0 y0 x1 y1 ...
-    std::vector<uint8_t> descriptors; // 32 bytes per keypoint
+    std::vector<uint8_t> descriptors; // header_bytes, then feature_bytes per keypoint (v1: 32, ORB, no header)
     std::vector<float> points3d;      // x y z per keypoint, NaN = no depth
     std::vector<float> camera;        // fx fy cx cy baseline_m
+    uint16_t feature_bytes = 0;       // D171: 0 = the v1 layout (32 B ORB)
+    uint16_t header_bytes = 0;        // D171: e.g. the int8 encoding's per-keyframe scale (4 B)
 };
 
-/// D115: one CBBA consensus message (see wire.fbs TaskConsensus).
+// --- D175: coordination through the radio (mirrors planning::multi, A1) ---------------------------------------
+inline constexpr int kSlabBlockSide = 32;   // cells per block side (0.05 m cells: 1.6 m)
+inline constexpr int kSlabBlockCells = kSlabBlockSide * kSlabBlockSide;
+
+struct SlabBlockValue {
+    int32_t bx = 0, by = 0;
+    std::vector<uint8_t> cells;   // kSlabBlockCells codes 0..3, unpacked (the codec packs 2 bits per cell)
+};
+struct SubmapPatchValue {
+    int32_t sender = 0;
+    uint32_t epoch = 0;
+    uint64_t version = 0;
+    int64_t t_ns = 0;
+    std::vector<SlabBlockValue> blocks;
+    FrameTag frame;               // W_sender
+};
+struct BlockGainValue {
+    int16_t bx = 0, by = 0;
+    uint8_t w = 0;   // the view's full-IG unknown voxels in this block not known to peers (cap 255; A1)
+};
+inline constexpr size_t kMaxFootprintBlocks = 32;
+struct BidOptionValue {
+    int64_t task_key = 0;
+    double goal_x = 0, goal_y = 0;
+    std::array<float, 5> ig_raw{};
+    float path_m = 0, cost_bandwidth = 0, cost_risk = 0, risk = 0;
+    uint8_t source = 0;
+    std::vector<BlockGainValue> footprint;   // D175 R1; empty = not sent (the plain / R2 rows)
+};
+struct TaskBidValue {
+    int32_t sender = 0;
+    uint32_t epoch = 0;
+    uint64_t seq = 0;
+    int64_t t_ns = 0;
+    float lambda_path = 0;
+    std::vector<BidOptionValue> options;
+    FrameTag frame;               // G
+};
+struct AssignmentValue {
+    int32_t agent = 0;
+    int64_t task_key = 0;
+    double goal_x = 0, goal_y = 0;
+};
 struct TaskConsensusValue {
+    int32_t broker = 0;
+    uint32_t epoch = 0;
+    uint64_t seq = 0;
+    int64_t t_ns = 0, bids_t_ns = 0;
+    std::vector<int32_t> members;
+    std::vector<AssignmentValue> assignments;
+    FrameTag frame;               // G
+};
+
+/// D115: one CBBA consensus message (see wire.fbs CbbaConsensus). Count-only in production (CBBA is the
+/// centralised oracle row; arch §21.7 sends broker SGA consensus = TaskConsensusValue above), kept for the
+/// D115a transport proof and the 4.4 ablation.
+struct CbbaConsensusValue {
     std::vector<uint64_t> tasks;
     std::vector<double> y;      // exact: Table I compares bids, so they travel unrounded
     std::vector<int8_t> z;      // winner agent, -1 = none
@@ -347,8 +413,14 @@ struct DecodedMessage {
     HeartbeatValue heartbeat;
     bool has_ack = false;   // a standalone ACK; a heartbeat's ack is in `heartbeat.ack`
     AckValue ack;
+    bool has_submap_patch = false;
+    SubmapPatchValue submap_patch;
+    bool has_task_bid = false;
+    TaskBidValue task_bid;
     bool has_task_consensus = false;
     TaskConsensusValue task_consensus;
+    bool has_cbba_consensus = false;
+    CbbaConsensusValue cbba_consensus;
 };
 
 namespace detail {
@@ -470,9 +542,17 @@ public:
     SerializedMessage EncodeGlobalDescriptor(const GlobalDescriptorValue& g, AgentId sender, AgentId receiver,
                                              Timestamp t, uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(1024 + 4 * g.descriptor.size());
-        const auto d = fbb.CreateVector(g.descriptor);
+        flatbuffers::Offset<flatbuffers::Vector<float>> d;
+        flatbuffers::Offset<flatbuffers::Vector<uint16_t>> h;
+        if (g.fp16) {
+            std::vector<uint16_t> bits(g.descriptor.size());
+            for (size_t i = 0; i < bits.size(); ++i) bits[i] = Eigen::numext::bit_cast<uint16_t>(Eigen::half(g.descriptor[i]));
+            h = fbb.CreateVector(bits);
+        } else {
+            d = fbb.CreateVector(g.descriptor);
+        }
         const auto off = wire::CreateGlobalDescriptor(fbb, g.keyframe_id, g.stamp_ns, d, g.quality, g.n_features,
-                                                        g.feature_bytes);
+                                                        g.feature_bytes, h);
         return FinishEnvelope(fbb, MessageClass::GLOBAL_DESCRIPTOR, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_global_descriptor(off); });
     }
@@ -493,7 +573,8 @@ public:
         const auto de = fbb.CreateVector(f.descriptors);
         const auto p3 = fbb.CreateVector(f.points3d);
         const auto ca = fbb.CreateVector(f.camera);
-        const auto off = wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca);
+        const auto off =
+            wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca, f.feature_bytes, f.header_bytes);
         return FinishEnvelope(fbb, MessageClass::MATCH_RESPONSE, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_feature_response(off); });
     }
@@ -512,7 +593,7 @@ public:
                               [&](wire::EnvelopeBuilder& eb) { eb.add_heartbeat(off); });
     }
 
-    SerializedMessage EncodeTaskConsensus(const TaskConsensusValue& v, AgentId sender, AgentId receiver, Timestamp t,
+    SerializedMessage EncodeCbbaConsensus(const CbbaConsensusValue& v, AgentId sender, AgentId receiver, Timestamp t,
                                           uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(256);
         const auto tasks = fbb.CreateVector(v.tasks);
@@ -520,9 +601,9 @@ public:
         const auto z = fbb.CreateVector(v.z);
         const auto s = fbb.CreateVector(v.s);
         const auto scales = fbb.CreateVector(v.scales);
-        const auto off = wire::CreateTaskConsensus(fbb, tasks, y, z, s, scales);
+        const auto off = wire::CreateCbbaConsensus(fbb, tasks, y, z, s, scales);
         return FinishEnvelope(fbb, MessageClass::TASK_CONSENSUS, sender, receiver, t, sequence,
-                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_consensus(off); });
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_cbba_consensus(off); });
     }
 
     SerializedMessage EncodeAck(const AckValue& a, AgentId sender, AgentId receiver, Timestamp t,
@@ -531,6 +612,64 @@ public:
         const auto off = BuildAck(fbb, a);
         return FinishEnvelope(fbb, MessageClass::ACK, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_ack(off); });
+    }
+
+    SerializedMessage EncodeSubmapPatch(const SubmapPatchValue& p, AgentId sender, AgentId receiver, Timestamp t,
+                                        uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(512 + 260 * p.blocks.size());
+        std::vector<flatbuffers::Offset<wire::SlabBlock>> blocks;
+        for (const auto& b : p.blocks) {
+            if (b.cells.size() != size_t(kSlabBlockCells)) throw std::invalid_argument("SubmapPatch: block size");
+            std::vector<uint8_t> packed(kSlabBlockCells / 4, 0);
+            for (int i = 0; i < kSlabBlockCells; ++i) {
+                if (b.cells[size_t(i)] > 3) throw std::invalid_argument("SubmapPatch: cell code > 3");
+                packed[size_t(i / 4)] |= uint8_t(b.cells[size_t(i)] << (2 * (i % 4)));
+            }
+            blocks.push_back(wire::CreateSlabBlock(fbb, b.bx, b.by, fbb.CreateVector(packed)));
+        }
+        const auto bv = fbb.CreateVector(blocks);
+        const auto frame = detail::ToWire(p.frame);
+        const auto off = wire::CreateSubmapPatch(fbb, p.sender, p.epoch, p.version, p.t_ns, bv, &frame);
+        return FinishEnvelope(fbb, MessageClass::SUBMAP_PATCH, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_submap_patch(off); });
+    }
+
+    SerializedMessage EncodeTaskBid(const TaskBidValue& b, AgentId sender, AgentId receiver, Timestamp t,
+                                    uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256 + 96 * b.options.size());
+        std::vector<flatbuffers::Offset<wire::BidOption>> opts;
+        for (const auto& o : b.options) {
+            if (o.footprint.size() > kMaxFootprintBlocks) throw std::invalid_argument("TaskBid: footprint > 32 blocks");
+            const auto ig = fbb.CreateVector(o.ig_raw.data(), o.ig_raw.size());
+            flatbuffers::Offset<flatbuffers::Vector<const wire::BlockGain*>> fp;
+            if (!o.footprint.empty()) {
+                std::vector<wire::BlockGain> v;
+                for (const auto& g : o.footprint) v.emplace_back(g.bx, g.by, g.w);
+                fp = fbb.CreateVectorOfStructs(v);
+            }
+            opts.push_back(wire::CreateBidOption(fbb, o.task_key, o.goal_x, o.goal_y, ig, o.path_m, o.cost_bandwidth,
+                                                 o.cost_risk, o.risk, o.source, fp));
+        }
+        const auto ov = fbb.CreateVector(opts);
+        const auto frame = detail::ToWire(b.frame);
+        const auto off = wire::CreateTaskBid(fbb, b.sender, b.epoch, b.seq, b.t_ns, b.lambda_path, ov, &frame);
+        return FinishEnvelope(fbb, MessageClass::TASK_BID, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_bid(off); });
+    }
+
+    SerializedMessage EncodeTaskConsensus(const TaskConsensusValue& c, AgentId sender, AgentId receiver, Timestamp t,
+                                          uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256 + 40 * c.assignments.size());
+        std::vector<flatbuffers::Offset<wire::Assignment>> as;
+        for (const auto& a : c.assignments)
+            as.push_back(wire::CreateAssignment(fbb, a.agent, a.task_key, a.goal_x, a.goal_y));
+        const auto mv = fbb.CreateVector(c.members);
+        const auto av = fbb.CreateVector(as);
+        const auto frame = detail::ToWire(c.frame);
+        const auto off =
+            wire::CreateTaskConsensus(fbb, c.broker, c.epoch, c.seq, c.t_ns, c.bids_t_ns, mv, av, &frame);
+        return FinishEnvelope(fbb, MessageClass::TASK_CONSENSUS, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_consensus(off); });
     }
 
     /// Decode. The message class comes from the frame header, so no
@@ -617,12 +756,19 @@ public:
         }
         out->has_global_descriptor = out->has_match_request = out->has_feature_response = false;
         if (const auto* g = env->global_descriptor()) {
-            if (!g->descriptor()) return Status::kMalformed;
+            if (!g->descriptor() && !g->descriptor_f16()) return Status::kMalformed;
             out->has_global_descriptor = true;
             auto& v = out->global_descriptor;
             v.keyframe_id = g->keyframe_id();
             v.stamp_ns = g->stamp_ns();
-            v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
+            if (g->descriptor()) {
+                v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
+            } else {
+                v.fp16 = true;
+                v.descriptor.clear();
+                for (uint16_t b : *g->descriptor_f16())
+                    v.descriptor.push_back(float(Eigen::numext::bit_cast<Eigen::half>(b)));
+            }
             v.quality = g->quality();
             v.n_features = g->n_features();
             v.feature_bytes = g->feature_bytes();
@@ -634,7 +780,9 @@ public:
         if (const auto* f = env->feature_response()) {
             if (!f->keypoints() || !f->descriptors() || !f->points3d() || !f->camera()) return Status::kMalformed;
             const size_t n = f->keypoints()->size() / 2;
-            if (f->keypoints()->size() % 2 || f->descriptors()->size() != 32 * n || f->points3d()->size() != 3 * n ||
+            const size_t per = f->feature_bytes() ? f->feature_bytes() : 32;
+            if (f->keypoints()->size() % 2 || f->descriptors()->size() != f->header_bytes() + per * n ||
+                f->points3d()->size() != 3 * n ||
                 f->camera()->size() != 5) {
                 return Status::kMalformed;
             }
@@ -646,6 +794,8 @@ public:
             v.descriptors.assign(f->descriptors()->begin(), f->descriptors()->end());
             v.points3d.assign(f->points3d()->begin(), f->points3d()->end());
             v.camera.assign(f->camera()->begin(), f->camera()->end());
+            v.feature_bytes = f->feature_bytes();
+            v.header_bytes = f->header_bytes();
         }
         out->has_heartbeat = out->has_ack = false;
         if (const auto* h = env->heartbeat()) {
@@ -672,12 +822,68 @@ public:
             out->has_ack = true;
             if (!ReadAck(a, &out->ack)) return Status::kMalformed;
         }
-        out->has_task_consensus = false;
+        out->has_submap_patch = out->has_task_bid = out->has_task_consensus = false;
+        if (const auto* p = env->submap_patch()) {
+            if (p->frame() == nullptr) return Status::kUntaggedPose;   // §15.5: the blocks are in W_sender
+            auto& v = out->submap_patch;
+            v = {};
+            v.sender = p->sender(), v.epoch = p->epoch(), v.version = p->version(), v.t_ns = p->t_ns();
+            v.frame = detail::FromWire(*p->frame());
+            if (const auto* bs = p->blocks()) {
+                for (const auto* b : *bs) {
+                    if (b->cells() == nullptr || b->cells()->size() != size_t(kSlabBlockCells / 4))
+                        return Status::kMalformed;
+                    SlabBlockValue bv;
+                    bv.bx = b->bx(), bv.by = b->by();
+                    bv.cells.resize(kSlabBlockCells);
+                    for (int i = 0; i < kSlabBlockCells; ++i)
+                        bv.cells[size_t(i)] = uint8_t((b->cells()->Get(uint32_t(i / 4)) >> (2 * (i % 4))) & 3u);
+                    v.blocks.push_back(std::move(bv));
+                }
+            }
+            out->has_submap_patch = true;
+        }
+        if (const auto* b = env->task_bid()) {
+            if (b->frame() == nullptr) return Status::kUntaggedPose;   // goals are in G
+            auto& v = out->task_bid;
+            v = {};
+            v.sender = b->sender(), v.epoch = b->epoch(), v.seq = b->seq(), v.t_ns = b->t_ns();
+            v.lambda_path = b->lambda_path();
+            v.frame = detail::FromWire(*b->frame());
+            if (const auto* os = b->options()) {
+                for (const auto* o : *os) {
+                    if (o->ig_raw() == nullptr || o->ig_raw()->size() != 5) return Status::kMalformed;
+                    BidOptionValue ov;
+                    ov.task_key = o->task_key(), ov.goal_x = o->goal_x(), ov.goal_y = o->goal_y();
+                    for (uint32_t i = 0; i < 5; ++i) ov.ig_raw[i] = o->ig_raw()->Get(i);
+                    ov.path_m = o->path_m(), ov.cost_bandwidth = o->cost_bandwidth(), ov.cost_risk = o->cost_risk();
+                    ov.risk = o->risk(), ov.source = o->source();
+                    if (const auto* fp = o->footprint()) {
+                        if (fp->size() > kMaxFootprintBlocks) return Status::kMalformed;
+                        for (const auto* g : *fp) ov.footprint.push_back({g->bx(), g->by(), g->w()});
+                    }
+                    v.options.push_back(ov);
+                }
+            }
+            out->has_task_bid = true;
+        }
         if (const auto* c = env->task_consensus()) {
+            if (c->frame() == nullptr) return Status::kUntaggedPose;
+            auto& v = out->task_consensus;
+            v = {};
+            v.broker = c->broker(), v.epoch = c->epoch(), v.seq = c->seq(), v.t_ns = c->t_ns();
+            v.bids_t_ns = c->bids_t_ns();
+            v.frame = detail::FromWire(*c->frame());
+            if (c->members()) v.members.assign(c->members()->begin(), c->members()->end());
+            if (const auto* as = c->assignments())
+                for (const auto* a : *as) v.assignments.push_back({a->agent(), a->task_key(), a->goal_x(), a->goal_y()});
+            out->has_task_consensus = true;
+        }
+        if (const auto* c = env->cbba_consensus()) {
             const size_t n = c->tasks() ? c->tasks()->size() : 0;
             if ((c->y() ? c->y()->size() : 0) != n || (c->z() ? c->z()->size() : 0) != n) return Status::kMalformed;
-            out->has_task_consensus = true;
-            auto& v = out->task_consensus;
+            out->has_cbba_consensus = true;
+            auto& v = out->cbba_consensus;
             v = {};
             if (c->tasks()) v.tasks.assign(c->tasks()->begin(), c->tasks()->end());
             if (c->y()) v.y.assign(c->y()->begin(), c->y()->end());

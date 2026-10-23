@@ -6,7 +6,9 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <iostream>
 
 namespace ac = ariadne::collaboration;
 namespace act = ariadne::collaboration::testing;
@@ -172,4 +174,49 @@ TEST(MultiAgent, ProtocolWithTheProductionSolveEndsConsistent) {
         EXPECT_LT((T->t - gt.t).norm(), 5e-3) << "agent " << a;
         EXPECT_LT(RotErr(T->R, gt.R), 5e-3) << "agent " << a;
     }
+}
+
+TEST(MultiAgent, RobustStageRejectsFalseInterAgentEdgesAndLeavesNoConsensusUnplaced) {
+    // D171: the broker's robust stage (D76 RobustJointSolve through MultiAgentInput::solver, as RobustMultiAgentSolve
+    // wires it). Agents 0-1 keep their true edges plus 4 false ones; agent 2's edges are ALL false and mutually
+    // inconsistent (PCM: no consensus). Expected: agent 1 placed at the truth, agent 2 unplaced; the plain PGO places
+    // agent 2 on the false edges.
+    act::Scenario sc;
+    std::map<uint32_t, std::vector<core::SE3>> gt_W;
+    slam::MultiAgentInput in = DriftingSwarm(sc, 0.0, 0.0, &gt_W);
+    std::vector<slam::InterAgentEdge> kept;
+    for (const auto& e : in.edges)
+        if (e.agent_b != 2 && e.agent_a != 2) kept.push_back(e);
+    const size_t n_true = kept.size();
+    ASSERT_GT(n_true, 5u);
+    for (int i = 0; i < 4; ++i)   // false 0-1 edges between far-apart keyframes
+        kept.push_back({0, uint64_t(5 + 7 * i), 1, uint64_t(40 - 3 * i), Exp(Noise(900 + i, 2.0), Noise(950 + i, 0.6)),
+                        act::Scenario::Information()});
+    for (int i = 0; i < 3; ++i)   // agent 2: only false edges, inconsistent with each other
+        kept.push_back({0, uint64_t(10 + 9 * i), 2, uint64_t(30 + 5 * i), Exp(Noise(700 + i, 3.0), Noise(750 + i, 0.8)),
+                        act::Scenario::Information()});
+    in.edges = kept;
+
+    slam::MultiAgentInput robust = in;
+    slam::JointRobustReport rep;
+    robust.solver = [&](slam::PoseGraph& g, uint64_t anchor) {
+        rep = slam::RobustJointSolve(g, anchor, {}, nullptr);
+        return ac::AgentsTiedToGauge(g, rep.gnc.inliers, 0);
+    };
+    const slam::MultiAgentResult r = slam::SolveMultiAgent(robust);
+    const slam::MultiAgentResult plain = slam::SolveMultiAgent(in);
+
+    const core::SE3 T_G_World = sc.T_World_W(0).inverse();
+    const core::SE3 truth1 = T_G_World * sc.T_World_W(1);
+    ASSERT_TRUE(r.T_G_W.count(1));
+    EXPECT_LT((r.T_G_W.at(1).t - truth1.t).norm(), 0.02);
+    EXPECT_LT(RotErr(r.T_G_W.at(1).R, truth1.R), 0.005);
+    EXPECT_FALSE(r.T_G_W.count(2)) << "agent 2 rides only on rejected edges: unplaced, never placed on them";
+    EXPECT_NE(std::find(r.unplaced.begin(), r.unplaced.end(), 2u), r.unplaced.end());
+    EXPECT_TRUE(plain.T_G_W.count(2)) << "the plain PGO places it (the ablation's failure mode)";
+    const double plain_err1 = (plain.T_G_W.at(1).t - truth1.t).norm();
+    std::cout << "[ MEASURED ] robust stage: inter-agent " << rep.inter_agent.size() << " (true " << n_true
+              << "), PCM accepted " << rep.inter_pcm_accepted << ", GNC inliers " << rep.inter_inliers
+              << "; agent 1 T_G_W error robust " << (r.T_G_W.at(1).t - truth1.t).norm() << " m, plain " << plain_err1
+              << " m\n";
 }

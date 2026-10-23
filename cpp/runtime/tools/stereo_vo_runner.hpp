@@ -106,6 +106,7 @@ struct KeyframeView {
     /// The tracker's left-pixel observations at this keyframe (StereoVo::KeyframeObservationsLeft): what the
     /// console's feature overlay shows - the landmarks the estimator USED, never a redetection.
     std::vector<cv::Point2f> track_px;
+    const slam::PoseGraph* graph = nullptr;   // the VO graph right after this keyframe (read-only; D171 pass A)
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -667,6 +668,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
+                    kv.graph = &vo.graph();
                     args.on_keyframe(kv);
                 }
                 if (loops) {

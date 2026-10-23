@@ -401,7 +401,7 @@ TEST(Serialization, PoseGraphsRemainHighlyCompressible) {
         << "pose-graph compressibility regressed; D14's byte budget assumes ~5x";
 }
 
-// --- Pre-D115 bytes are unchanged by the TaskConsensus append (master's rule 2) ---------------------------------
+// --- Pre-D115 bytes are unchanged by the CbbaConsensus append (master's rule 2) ---------------------------------
 // Size and FNV-1a of fixed messages, recorded with the PRE-change tree (feat/ph4-mission at 1ca0457, whose wire.fbs
 // and serializer.hpp equal main's), so appending TaskConsensus must leave every existing Envelope message
 // byte-identical.
@@ -439,32 +439,63 @@ TEST(Serialization, PreTaskConsensusBytesUnchanged) {
     EXPECT_EQ(Fnv(ak.bytes), 0x011ede3f1e7c8e79ull) << "ack bytes changed";
 }
 
-TEST(Serialization, TaskConsensusRoundTripsAndIsCounted) {   // D115: class TASK_CONSENSUS through FinishEnvelope
+TEST(Serialization, CbbaConsensusRoundTripsAndIsCounted) {   // D115: class TASK_CONSENSUS through FinishEnvelope
     const WireCodec codec(Framing::kWholeMessage);
-    TaskConsensusValue v;
+    CbbaConsensusValue v;
     v.tasks = {101, 202, 303};
     v.y = {0.5f, 0.0f, 1.25f};
     v.z = {1, -1, 0};
     v.s = {7, 9};
     v.scales = {1, 2, 3, 4, 5, 6, 7, 8};
-    const auto m = codec.EncodeTaskConsensus(v, 1, 0, Timestamp{5}, 3);
+    const auto m = codec.EncodeCbbaConsensus(v, 1, 0, Timestamp{5}, 3);
     EXPECT_EQ(m.record.type, MessageClass::TASK_CONSENSUS);
     EXPECT_FALSE(m.record.compressed) << "§15.7 compresses classes 4-5 only";
     DecodedMessage d;
     ASSERT_EQ(codec.Decode(m.bytes, &d), WireCodec::Status::kOk);
-    ASSERT_TRUE(d.has_task_consensus);
-    EXPECT_EQ(d.task_consensus.tasks, v.tasks);
-    EXPECT_EQ(d.task_consensus.y, v.y);
-    EXPECT_EQ(d.task_consensus.z, v.z);
-    EXPECT_EQ(d.task_consensus.s, v.s);
-    EXPECT_EQ(d.task_consensus.scales, v.scales);
+    ASSERT_TRUE(d.has_cbba_consensus);
+    EXPECT_EQ(d.cbba_consensus.tasks, v.tasks);
+    EXPECT_EQ(d.cbba_consensus.y, v.y);
+    EXPECT_EQ(d.cbba_consensus.z, v.z);
+    EXPECT_EQ(d.cbba_consensus.s, v.s);
+    EXPECT_EQ(d.cbba_consensus.scales, v.scales);
     ByteLedger ledger;
     auto rec = m.record;
     ledger.Record(rec);
     EXPECT_EQ(ledger.TotalForClass(MessageClass::TASK_CONSENSUS), m.record.wire_bytes);
     EXPECT_GE(m.record.wire_bytes, m.bytes.size()) << "framing is charged on top";
-    TaskConsensusValue bad = v;   // per-task vectors of unequal length are malformed, not silently truncated
+    CbbaConsensusValue bad = v;   // per-task vectors of unequal length are malformed, not silently truncated
     bad.y.pop_back();
-    const auto mb = codec.EncodeTaskConsensus(bad, 1, 0, Timestamp{5}, 4);
+    const auto mb = codec.EncodeCbbaConsensus(bad, 1, 0, Timestamp{5}, 4);
     EXPECT_EQ(codec.Decode(mb.bytes, &d), WireCodec::Status::kMalformed);
+TEST(Serialization, LargeFeatureResponseRoundTripsThroughFragmentation) {
+    // D171: an ALIKED-n16 response at its real size (1024 features, int8 128-D + scale, 3D points): ~93 fragments.
+    // The protocol tests' scenes use ~200 features; the sim integration first exercised this size.
+    using namespace ariadne::core;
+    for (auto framing : {Framing::kWholeMessage, Framing::kFragmented}) {
+        const WireCodec codec(framing);
+        FeatureResponseValue f;
+        f.request_id = 7;
+        f.keyframe_id = 99;
+        for (int i = 0; i < 1024; ++i) {
+            f.keypoints.push_back(float(i % 1280)), f.keypoints.push_back(float(i % 720));
+            for (int k = 0; k < 3; ++k) f.points3d.push_back(i % 5 == 0 ? NAN : 0.01f * float(i + k));
+        }
+        f.descriptors.resize(4 + 1024 * 128);
+        for (size_t i = 0; i < f.descriptors.size(); ++i) f.descriptors[i] = uint8_t((i * 2654435761u) >> 13);
+        f.camera = {672.f, 672.f, 640.f, 360.f, 0.1f};
+        f.feature_bytes = 128;
+        f.header_bytes = 4;
+        const auto m = codec.EncodeFeatureResponse(f, 1, 0, Timestamp{123456789}, (1ull << 40) | 5);
+        DecodedMessage d;
+        ASSERT_EQ(codec.Decode(m.bytes, &d), WireCodec::Status::kOk) << "framing " << int(framing) << ", "
+                                                                     << m.bytes.size() << " B";
+        ASSERT_TRUE(d.has_feature_response);
+        EXPECT_EQ(d.feature_response.descriptors, f.descriptors);
+        EXPECT_EQ(d.feature_response.keypoints.size(), f.keypoints.size());
+        EXPECT_EQ(d.feature_response.feature_bytes, 128u);
+        EXPECT_EQ(d.feature_response.header_bytes, 4u);
+        f.feature_bytes = 0;   // a v1 decoder's rule: 32 B per feature, so this layout is malformed without the fields
+        EXPECT_EQ(codec.Decode(codec.EncodeFeatureResponse(f, 1, 0, Timestamp{123456789}, 5).bytes, &d),
+                  WireCodec::Status::kMalformed);
+    }
 }
