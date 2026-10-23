@@ -144,6 +144,7 @@ if [ -z "${DEV_FAILED:-}" ]; then
   timed ctest_dev timeout "$(cap 40)" docker run --rm -v "$SRC":/work \
     -e ARIADNE_GIT_COMMIT="$COMMIT" -e ARIADNE_GIT_DIRTY="$DIRTY" "$DEV_IMG" bash -c "
     set -o pipefail
+    mkdir -p /work/build/arm64 /work/.cache   # the shipped tree has no build/ (run 63e43d failed here)
     cmake -S /work -B /work/build/arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DARIADNE_REQUIRE_OPENCV=ON \
       -DCMAKE_SKIP_RPATH=ON -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-arm64 > /work/build/configure.log 2>&1 \
       || { tail -50 /work/build/configure.log; exit 2; }
