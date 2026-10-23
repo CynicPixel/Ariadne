@@ -5142,3 +5142,71 @@ current place's seed), so a revisit always opened a new place id even when it re
 grouping in each agent's own frame (revisits merged), with one-to-one support per place pair (CLIPPER-style) and an
 ambiguity test (Olson 2009), is the literature's direction for the unknown-start case and belongs to 3.5. Surveys:
 scratchpad alias_survey.md / collab_fast_survey.md, summarized in the next decision.
+
+## 2026-10-24 — Preflight for the collaboration redesign (surveys + advisor)
+
+Two literature surveys from primary sources (scratchpad `alias_survey.md`, `collab_fast_survey.md`; summarized here),
+then advisor review. Findings that drive D178/D179:
+- **PCM states its own failure mode** (Mangelson et al., ICRA 2018, Assumption 2: the measurement system must not be
+  "biased toward selecting incorrect measurements over correct ones"); revisits + top-k retrieval are that bias. Its
+  successors (group-k consistency, Forsgren et al. IROS 2022 / IJRR 2024; CLIPPER, Lusk et al. ICRA 2021; ROBIN, Shi et
+  al. ICRA 2021) still pick the set with most support: none fixes "a large false group beats a small true group".
+- **Systems with a known common frame gate candidates by proximity before consistency:** LAMP (Ebadi et al. ICRA 2020:
+  fiducials at the entrance, search radius around the estimate) and LAMP 2.0 (Chang et al. RA-L 2022: d_max = α·n_curr
+  growing with traversal in the gate-calibrated frame, α = 0.2 m/node). Olson (RAS 2009) gives the principled form:
+  Mahalanobis gating with covariance projected along the odometry path ("Dijkstra projection", conservative).
+- **GNC needs an outlier-free initial guess** (Kimera-Multi, Tian et al. T-RO 2022: "In multi-robot PGO, there is no
+  longer an outlier-free initial guess (i.e., odometry), which is crucial for the strong performance of GNC"). Ours is
+  chordal over PCM's output, which seeded the false basin.
+- **Bytes:** one side's features travel to the other side, which verifies (vertex cover: Giamou et al. ICRA 2018; Tian
+  et al. IJRR 2021; DOOR-SLAM; Kimera-Multi) - our broker fetching both endpoints deviates from the locked
+  "vertex-cover sharing". Our 60-130 kB per fetched keyframe is 3-6x D2SLAM's 20.1 kB/keyframe. No survey found an
+  information-theoretic bound: we report measured bytes against the vertex-cover minimum, never "the limit".
+- **Async + reproducible:** asynchronous multi-robot back ends (ASAPP, D2SLAM/ARock) do not address replay
+  determinism; the workable form is asynchronous compute with commits logged on the sim clock (D179).
+
+## 2026-10-24 — D178: known-entry Mahalanobis gate on inter-agent loops + GNC initialised from the entry prior (pre-registered)
+
+**Basis:** LAMP / LAMP 2.0 (known entry frame, traversal-growing proximity gate), Olson 2009 (Mahalanobis gate, covariance
+projected along the odometry path), Kimera-Multi (GNC's initial guess). Known starts: maintainer 2026-10-23.
+**Prior.** T_World_Wk for each agent from the mission briefing's start poses (live: B's T_W_O[k]; pass B: the scene's
+agent spawn poses, NOT ground truth of a keyframe), labelled in manifests as a known-start prior.
+**Residual.** For an inter-agent edge (a, ka) -> (b, kb) with Z = T_Ca_Cb: implied T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1,
+prior P = T_World_Wa^-1 T_World_Wb, r = Log(P^-1 implied) in R^6 (the left-multiplicative convention).
+**Covariance.** Σ = Σ_a(ka) ⊕ Σ_b(kb) ⊕ Σ_Z ⊕ 2Σ_entry, each transported to the residual's frame by the SE(3) adjoint
+(first order). Σ_k(kf): the odometry edges' covariances (their information^-1, in the snapshot) composed along agent k's
+chain from its first keyframe (Olson's projection; the chain IS the minimum path without intra-agent loops). Σ_entry:
+operator placement, σ = 0.10 m and 2 deg per axis [ASSUMPTION, physical: a hand-placed drone at a window]. 
+**Calibration (pre-registered, scene 1 only - never gate data).** NEES of the chain-composed odometry pose against GT
+aligned at entry, over every released keyframe of scene 1's stores (3 seeds x 2 agents): κ = mean(NEES)/6; Σ_k ← κ Σ_k
+if κ > 1 (the odometry information is overconfident), unchanged otherwise. κ and the NEES histogram are recorded.
+**Gate.** Keep the edge iff r^T Σ^-1 r ≤ χ²_6(0.999) = 22.46. Rotation alone of the observed aliases (≈100 deg) gives
+(100/σ_r)^2 ≥ 400 for any σ_r ≤ 5 deg, above every χ² cutoff from 0.95 to 0.9999: the decision does not hinge on the
+threshold.
+**GNC initial guess.** With the gate on, the joint solve initialises every agent's T_G_W from the entry prior instead of
+chordal over PCM's accepted set.
+**Config.** `entry_gate: {enabled: false, chi2_conf: 0.999, entry_sigma_m: 0.10, entry_sigma_deg: 2.0, kappa: <from
+calibration>}`; default off; the 3.2 smoke byte-identical with it off.
+**Pass criteria (fixed now).** B2 + C rerun with the gate on: scene 0 budgeted rows merged ATE < 0.10 m in >= 5 of 6
+cells (arm x level, seed-mean); scene 1 not worse by > 10 % (or 2 mm); no run corrupt; true verified edges (pose error
+<= 10 deg) rejected by the gate <= 1 % on both scenes. Failing any is a reported negative result.
+**Scope.** Known starts only. [INFERENCE] decisive against pure one-period translation aliases only up to ~100 m of
+travel per agent at 1 % drift; the demo's paths are checked against that. Unknown-start aliasing stays 3.5 (spatial
+place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio ambiguity test, repetition worlds,
+§17.3 diagnostics).
+
+## 2026-10-24 — D179: asynchronous collaboration, committed on the sim clock (maintainer: no barrier syncs)
+
+**Requirement** (maintainer 2026-10-24): collaboration "blazingly fast", no barrier syncs, asynchronous. **Semantics:**
+- All collaboration compute is asynchronous and never waited on: DNN in the per-agent collab workers; retrieval,
+  verification and broker solves on the fleet's own thread.
+- The radio stays a single owner on SIM time (D175's coordination and its D218 replay proof depend on it). Every
+  asynchronous result (a #ckf record, a #fresp, a verification, a solve) is committed at the sim tick at which the fleet
+  thread observed it, and the (tick, event) pair is logged. Live never waits for a result; replay applies the logged
+  events at their logged ticks, so replays equal the live run they log (record/replay is the substrate, CLAUDE.md §1).
+- The runtime's `Step(t)` enqueues tick t and returns. With collab on, the fleet thread owns the radio nodes; D175 sends
+  are sim-timestamped entries in a queue into the fleet thread, and coordination deliveries come back through a queue
+  the runtime drains at its barrier step 2. **Invariant 1 (B):** the drain order is per tick, FIFO per sender, ticks in
+  order, and replay reproduces exactly that order from the log. **Invariant 2 (B):** the published snapshot {T_O0_O,
+  Linked, Telemetry} is swapped atomically as one value; the planner reads it lock-free.
+- Replaces D174's lockstep (watermark waits, feature replies at ask + feature_latency_s).
