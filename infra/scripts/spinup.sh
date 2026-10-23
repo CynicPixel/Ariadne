@@ -79,8 +79,14 @@ profile_defaults() {
 
 runner_outputs() {
   local json
-  json="$("$AWS" tf main output -json runner 2>/dev/null)" \
-    || die "cannot read Terraform outputs; is the main stack applied?"
+  # ARIADNE_RUNNER_JSON: the `tf main output -json runner` of the checkout that holds the Terraform state, saved to a
+  # file, for a git worktree that has none (the state is never copied).
+  if [ -n "${ARIADNE_RUNNER_JSON:-}" ]; then
+    json="$(cat "$ARIADNE_RUNNER_JSON")" || die "cannot read $ARIADNE_RUNNER_JSON"
+  else
+    json="$("$AWS" tf main output -json runner 2>/dev/null)" \
+      || die "cannot read Terraform outputs; is the main stack applied?"
+  fi
   eval "$(printf '%s' "$json" | python3 -c '
 import json, sys, shlex
 d = json.load(sys.stdin)
