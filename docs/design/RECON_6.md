@@ -1,7 +1,77 @@
 # Design — Phase 6: dense reconstruction to full spec, live-incremental (D190–D209)
 
-Status: **preflight** (2026-10-23). The design sections follow after the advisor review and the T4 microbenchmark;
-nothing is built from this file until M has the design summary.
+Status: **design proposal** (2026-10-23), after the preflight (arch §18–19, §29, D44, plan items 6.1–6.4 and the exit
+gate; ALGORITHMS §2–4; the survey in Appendix A; the OpenCV check in Appendix B; one advisor review). Nothing is built
+until M has the summary. Every constant below without a citation is [ASSUMPTION] until the T4 microbenchmark (§2)
+or a gate measurement replaces it.
+
+## 1. What runs where
+
+```text
+keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4)      ──► console (browser)
+ live: B's #kf       ingest → submap manager → seed → train active submap         Spark renders the splats
+       (D168 record)  → lifecycle → export chunk (rate-limited)                    (WebGL, client GPU);
+ replay: spool dir    PGO version → re-anchor = new 4×4 per submap                  per-submap transform
+ (same reader)                                                                       = re-anchoring
+```
+
+- **The GPU trains, the browser renders.** Every web splat renderer surveyed rasterises client-side (A.5), so the T4
+  does no display rendering. Two budgets, kept separate:
+  - **Train/update budget (T4):** ms per iteration at keyframe resolution × iterations per keyframe must fit the
+    keyframe interval (1–3 KF/s per agent, 2 agents). Unknown on a T4 — nobody publishes one (A.3/A.4) — so the
+    **first deliverable is a Kaggle T4 microbenchmark** (free): forward+backward ms/iter for N = 50k/100k/250k/500k
+    Gaussians at 320×180 and 640×360, packed vs unpacked, plus the append-Gaussians path. Iterations per keyframe
+    are then derived, not chosen.
+  - **Render budget (browser):** splat count (Spark's stated budget is 1–5 M on a computer, A.5), sort rate, and bytes
+    per update (32 B/Gaussian .splat; 16 B Spark packed). Closed submaps are sent once; only the active submap is
+    re-sent, at most every ~2 s [ASSUMPTION].
+- **Bounded work:** only the active submap trains (Gaussian-SLAM / GLC-SLAM pattern, A.2); closed submaps are frozen,
+  exported once, and never touched again except by their anchor transform.
+
+## 2. Mechanisms (each with its backing)
+
+| Piece | Choice | Backing |
+|---|---|---|
+| Submaps | anchored to their first keyframe; Gaussians stored in the anchor frame; close at 30 KF (arch 20–40) or on a loop closure that bends the trajectory | arch §18.6; LoopSplat/GLC-SLAM rigid submap update (A.2) |
+| Re-anchoring | a PGO update changes the anchor's T_W_anchor only; Gaussians unchanged; the console gets one 4×4 per submap (Spark per-object transform), no re-download, no retraining | arch §18.6; MAGS-SLAM μ′ = Rμ + t, Σ′ = RΣRᵀ (s = 1); exit-gate bullet 2 becomes a CPU unit test |
+| Seeding | back-project the keyframe's half-res Z where the current render's α < 0.5, only if no Gaussian lies within ρ; initial scale from the pixel footprint Z/f; colour from the training image | Gaussian-SLAM α-mask + radius check (A.2); RTG-SLAM opaque-disc init (A.2) |
+| Optimisation | per keyframe: ≥ 40 % of the iterations on the new keyframe, the rest over the active submap's keyframes; L1 + D-SSIM + σ-weighted depth L1 (§19.3's L_photo + L_depth) | Gaussian-SLAM ≥ 40 % rule (A.2); arch §19.3 |
+| Densify / prune | no clone/split live (seeding is the only growth); prune opacity < 0.005 | Gaussian-SLAM "no clone/prune" (A.2); gsplat DefaultStrategy prune threshold (A.4) |
+| Lifecycle | NEW → UNSTABLE → SUPPORTED → STABLE by a per-Gaussian count of keyframe updates in which it was visible and consistent; STABLE are frozen (gradients masked) | arch §18.4; RTG-SLAM Tables 13/15 (A.6 item 1). Its δη = 100 counts FRAMES at frame rate; ours counts keyframes, so the threshold is re-derived [ASSUMPTION], not copied |
+| Exposure | per-keyframe 3×4 affine, identity, enabled when the submap's own step counter passes 5000 | arch §18.7. Live, a 30-KF submap may never reach 5000 steps; the transform then stays off live, and the exposure-delay ablation runs on the batch path (exit gate) |
+| Merge | nearest-chunk overlap pruning between submaps/agents | arch §18.7 (Hierarchical 3DGS) — baseline; §18.5 fusion only if it beats it |
+| Training image | lamp-only scenes: the albedo proxy (§19.1, KeyframeFalloff); lit scenes: linear RGB (static radiance — §19.1's coherence problem does not arise). Labelled per run | arch §19.1; D146 (the proxy refuses non-lamp-only scenes) |
+
+## 3. Interfaces
+
+- **Live input:** B's D168 `#kf` record (id, t_ns, T_O_C, intrinsics, half-res Z/S fp16, full-res rgb), forwarded by
+  `ariadne_live` to a recon socket (a tee of the bytes B's worker already holds; LinkFrame length-prefixed typed
+  records; unix socket, TCP if the service is off-host), plus a pose-version record when PGO re-anchors. B confirmed
+  (2026-10-23) that today's live/demo worlds are LIT (ci_tiny_0, maze_short_6: per-room point lights, ambient 0.35,
+  rig lamps at intensity 0), so the live path trains on linear RGB and `#kf` is enough as-is. When B's 5.3 lamp sink
+  lands and a dark demo scene exists, `#kf` gains the half-res albedo + valid mask (an additive record change). The
+  live loop runs per-agent VO without global PGO today, so pose-version records will be rare until collaboration
+  lands live; the re-anchoring path is exercised by the replay gate. Console: B owns `operator_console`; the splat
+  panel is its own JS module and its own websocket path (`/splat`), no change to B's endpoints or telemetry sections.
+- **Replay input:** the RECON_1.7 spool (schema bumped for the albedo proxy and pose versions) — "replay from files
+  alone" stays true; the live socket and the spool feed one reader.
+- **Output:** per-submap splat chunks + a submap table (id, agent, anchor kf, T_W_anchor, pose version, count,
+  bytes); manifest records `splat_backend` (`gsplat_cuda@aws|kaggle`), gsplat/torch/CUDA versions, GPU name.
+
+## 4. Without a GPU
+
+The CPU path (RECON_1.7 fuse + init, D44) streams depth-seeded, **unoptimised** Gaussians to the same console panel,
+labelled "initialisation only, no GPU". Geometry still grows live; appearance is the seed colour. Batch renders and
+the exit-gate metrics go to Kaggle (D44). The live realtime demo still needs a GPU (maintainer, D44).
+
+## 5. Open decisions (not mine)
+
+- **Judging-week hosting.** G/VT on-demand quota is 0 (raise to 8 requested); g4dn spot in eu-north-1 was reclaimed
+  three times on 2026-10-23 in 1a, and 1b/1c had no g4dn capacity the same morning. g4dn.xlarge on-demand in
+  eu-north-1 is $0.558/h (AWS Pricing API, 2026-10-23) = $13.39/day; spot was $0.087–0.108/h the same day
+  (≈ $2.1–2.6/day) with reclaims. The user decides on-demand vs spot vs the no-GPU fallback for the judging window.
+- **Renderer.** Arch §29.3 names GaussianSplats3D as an example; its README now declares it unmaintained and points
+  to Spark (MIT, per-object transforms, incremental `SplatMesh`). Proposed D-entry: Spark.
 
 ## Appendix A — SOTA survey: real-time / incremental 3DGS mapping, gsplat, web renderers
 
