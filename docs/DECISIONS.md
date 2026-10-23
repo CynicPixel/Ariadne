@@ -4181,6 +4181,38 @@ validator").
 **Cost.** Render g4dn.xlarge spot $0.087/h, capped at 150 min. The replays are CPU, and their placement (local or
 c7i spot) is asked separately.
 
+## 2026-10-23 — D149: Phase 5 exit gate — NOT closed; each bullet against its evidence
+
+The format follows D172. Evidence is as of tip `93a21a9` (feat/ph5-dve). On 2026-10-23 the user ruled (via M) that
+dark, lamp-lit and dusty runs are STRETCH goals, taken up after the live demo runs in real time (D199). Bullets that
+need them are marked so: they are deferred by that ruling, not dropped.
+
+| Gate bullet | Status | Evidence |
+|---|---|---|
+| DVE ablation rows (§31.5): each radiometric stage's effect on repeatability, match precision, ATE, loop-closure precision; negatives kept | **partial** | ATE / keyframes / lost frames for the 10 §31.5 rows (D145–D147 Results, AWS `649f156`), with negatives kept (features-on-proxy +2.9 mm; lamp 15 % 1.32 m). D142's preliminary lighting rows. **Not measured:** repeatability, match precision and loop-closure precision per stage; the dust rows (5.4: stretch) |
+| Live-vs-replay exposure-control comparison (§5.6 approximation) | **blocked: stretch** | Replay side done: D147 contract, trace checks 171/171 and 168/168, Failure E recovered in 2.35 s. The live side needs B's 5.3 lamp sink, and D145 limits the comparison to the lamp path (sdformat14 has no exposure element). The lamp path is a dark-world item, so stretch under D199 |
+| OIVIO (→ Hilti 2023 site2_robot_3, D141): tracking survives lamp-lit sequences with reported ATE; failure segments documented | **measured, failing** | D144: all 3 rows score 0/100 (GCP rms 10–229 m; 14–22 % of frames lost). The failure segments are documented as failure case FC-5.6-1: losses while turning with a dark far field. The sim-tuned settings do not transfer. Kept as the negative result §34.2 asks for |
+| Corridor degeneracy detector fires on degenerate scenes and suppresses loop attempts (gate ordering) | **blocked: recording** | Pre-registered in D148 (criteria fixed before data). The sweep render failed twice over: the TF bug (fixed `82ffa00`) and the writer backlog (one-pass not recordable). The user chose a 2-camera confined_v1 render (approved; g4dn spot had no capacity in any eu-north-1 AZ at 14:47Z, retrying), then the approved CPU replay (`ph5_aws.sh ROWS=d148`) |
+
+**Plan items.**
+- 5.1: dark worlds, lamp, calibration. Done (D131, D133, D137).
+- 5.2: Stage 3 at keyframes. Done (D146; trajectory equality measured).
+- 5.3: replay co-control and the Failure E scenario. Done (D147 Results). The live `light_config` sink is B's.
+- 5.4: dust configs frozen. Open, stretch (D199).
+- 5.5: confined worlds done (D138). The baseline sweep is not recordable one-pass on g4dn (D138 correction), and its
+  re-design is open. The SimSource right-camera selection, the sweep configs and depth_eval are built and tested.
+- 5.6: measured, failing (D144).
+
+**Spend for Phase 5 on 2026-10-23.**
+- CPU $0.1156: four row launches, one of them successful.
+- GPU $0.0881: the failed sweep render.
+- S3: 15.8 GB of the failed render deleted on approval.
+- Earlier sessions: GPU $0.1241, CPU ~$0.07.
+
+**Closes when:** the corridor bullet is measured against D148, and the per-stage repeatability, match-precision and
+loop-closure rows are run (a CPU row set, still to be defined after preflight). The stretch bullets are re-opened by
+the user's call once the live demo runs in real time.
+
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
 Design: `docs/design/SPECTRAL_3.4.md`. Code:
