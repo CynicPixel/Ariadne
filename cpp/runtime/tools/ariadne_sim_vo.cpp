@@ -10,6 +10,7 @@
 //                  [--imu-noise YAML]     (L2, D101: expose the IMU through this seeded noise operator; default no IMU)
 //                  [--lamp-calib YAML]    (5.2, D146: the rig's lamp calibration, for a perception falloff: section)
 //                  [--radiance-event AT_S:STOPS]  (5.3, D147: Failure E -- the scene 2^STOPS brighter from AT_S on)
+//                  [--right-camera NAME]  (5.5, D138: a sweep rig's right_b04/b08/b12/b20; default the main "right")
 // ---------------------------------------------------------------------------
 #include "perception/degradation/degradation_config.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
@@ -21,7 +22,7 @@
 int main(int argc, char** argv) {
     ariadne::tools::StereoVoArgs a;
     a.tool = "ariadne_sim_vo";
-    std::string rec, scene, degradation, imu_noise, radiance_event;
+    std::string rec, scene, degradation, imu_noise, radiance_event, right_camera = "right";
     int agent = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string k = argv[i];
@@ -39,15 +40,16 @@ int main(int argc, char** argv) {
         else if (k == "--imu-noise") imu_noise = v;
         else if (k == "--lamp-calib") a.lamp_calib = v;
         else if (k == "--radiance-event") radiance_event = v;
+        else if (k == "--right-camera") right_camera = v;
         else { std::fprintf(stderr, "unknown argument %s\n", k.c_str()); return 2; }
     }
     if (rec.empty() || scene.empty() || a.perception_config.empty() || a.slam_config.empty() || a.out.empty()) {
         std::fprintf(stderr, "usage: %s --rec RECDIR --scene SCENEDIR --perception-config YAML --slam-config YAML "
-                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML] [--imu-noise YAML] [--lamp-calib YAML] [--radiance-event AT_S:STOPS]\n", argv[0]);
+                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML] [--imu-noise YAML] [--lamp-calib YAML] [--radiance-event AT_S:STOPS] [--right-camera NAME]\n", argv[0]);
         return 2;
     }
     try {
-        ariadne::runtime::SimSource source(rec, scene, agent);
+        ariadne::runtime::SimSource source(rec, scene, agent, "default", right_camera);
         if (!degradation.empty()) {
             source.SetDegradation(ariadne::perception::LoadDegradation(degradation), a.seed, cv::getNumThreads());
         }

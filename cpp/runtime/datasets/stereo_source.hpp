@@ -262,8 +262,12 @@ inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t
 
 class SimSource : public StereoSource {
 public:
-    SimSource(const std::string& rec, const std::string& scene, int agent, const std::string& mission = "default")
-        : rec_(rec), agent_(agent) {
+    /// `right_camera` picks the rig's right camera by name (5.5, D138): "right" (the main pair) or one of a sweep
+    /// rig's right_b04/b08/b12/b20. Its topic and its extrinsics come from the mission and /tf_static like the main
+    /// pair's (sim_record checked the TF against the manifest's t_B_camera_m exactly), so the baseline follows.
+    SimSource(const std::string& rec, const std::string& scene, int agent, const std::string& mission = "default",
+              const std::string& right_camera = "right")
+        : rec_(rec), agent_(agent), right_camera_(right_camera) {
         const YAML::Node sc = YAML::LoadFile(scene + "/scene.json");
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
@@ -285,7 +289,10 @@ public:
         if (!ag) throw std::runtime_error("sim: agent " + std::to_string(agent) + " not in the mission");
         frame_ = ag["frame_id"].as<std::string>();
         t_left_ = ag["topics"]["left_image"].as<std::string>();
-        t_right_ = ag["topics"]["right_image"].as<std::string>();
+        if (!ag["topics"][right_camera_ + "_image"]) {
+            throw std::runtime_error("sim: the mission has no right camera '" + right_camera_ + "' (rig " + rig_ + ")");
+        }
+        t_right_ = ag["topics"][right_camera_ + "_image"].as<std::string>();
         if (m["rig"]["depth"]["enabled"].as<int>()) t_depth_ = ag["topics"]["depth_image"].as<std::string>();
         const std::string t_pose = ag["topics"]["gt_pose"].as<std::string>();
         t_imu_ = ag["topics"]["imu"].as<std::string>();
@@ -334,7 +341,7 @@ public:
                     T.t = core::Vec3(t.translation.x, t.translation.y, t.translation.z);
                     const std::string base = frame_.substr(0, frame_.size() - 9);   // "agent_k/"
                     if (t.child_frame_id == base + "left_optical") T_B_left_ = T, ++found_;
-                    if (t.child_frame_id == base + "right_optical") T_B_right_ = T, ++found_;
+                    if (t.child_frame_id == base + right_camera_ + "_optical") T_B_right_ = T, ++found_;
                 }
             }
         }, {t_pose, "/tf_static"});
@@ -357,7 +364,9 @@ public:
 
     std::string RunName() const override { return scene_id_ + "-agent" + std::to_string(agent_); }
     std::string SceneName() const override { return "sim/" + scene_id_ + "/agent" + std::to_string(agent_); }
-    std::string CameraConfig() const override { return rig_ + "+lens(D41)"; }
+    std::string CameraConfig() const override {
+        return rig_ + "+lens(D41)" + (right_camera_ == "right" ? "" : "+" + right_camera_);
+    }
     std::string BagChecksum() const override { return checksum_; }
     perception::RawStereoCalibration Calibration() const override {
         perception::PinholeRadtan c;
@@ -551,6 +560,7 @@ private:
     std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, t_imu_, sensors_mcap_,
         checksum_ = kUnknownField;
     int agent_ = 0;
+    std::string right_camera_ = "right";               // 5.5 (D138): the right camera by name (sweep rigs)
     std::optional<LampRig> lamp_;
     FramePhoto photo_;                                 // D's state as applied to the latest frame (D147)
     std::optional<PhotometricCommand> pending_cmd_;    // applied to the next complete pair
