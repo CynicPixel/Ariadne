@@ -368,11 +368,37 @@ public:
     size_t FrameCount() const override { return 0; }                     // unknown ahead of time
     uint32_t Agent() const override { return uint32_t(agent_); }
 
+    /// D167 timers, per emitted frame: how long this lane sat idle (queue wait), waited for the other agent's
+    /// turn (the D152a lock), and tracked (Feed, the estimator inside). Sums since the previous emission, so a
+    /// frame's cost includes the handling of its own unpaired half.
+    std::function<void(int64_t t_ns, double wait_s, double lock_s, double track_s)> on_timing;
+
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         SimFrameAssembler assembler(map_, uint32_t(agent_), t_left_, t_right_, /*strict=*/false);
-        while (auto m = images_.Pop()) {
-            std::lock_guard<std::mutex> lk(turn_);
-            if (assembler.Feed(m->topic, m->data->data(), m->data->size(), on_frame) && assembler.emitted() == max_frames) break;
+        using clk = std::chrono::steady_clock;
+        auto sec = [](clk::time_point a, clk::time_point b) { return std::chrono::duration<double>(b - a).count(); };
+        double wait_s = 0, lock_s = 0, track_s = 0;
+        int64_t t_ns = -1;
+        const std::function<void(const StereoFrame&)> wrapped = [&](const StereoFrame& f) {
+            t_ns = f.t_ns;
+            on_frame(f);
+        };
+        for (;;) {
+            const auto t0 = clk::now();
+            auto m = images_.Pop();
+            if (!m) break;
+            const auto t1 = clk::now();
+            std::unique_lock<std::mutex> lk(turn_);
+            const auto t2 = clk::now();
+            const bool emitted = assembler.Feed(m->topic, m->data->data(), m->data->size(), wrapped);
+            const auto t3 = clk::now();
+            lk.unlock();
+            wait_s += sec(t0, t1), lock_s += sec(t1, t2), track_s += sec(t2, t3);
+            if (emitted) {
+                if (on_timing) on_timing(t_ns, wait_s, lock_s, track_s);
+                wait_s = lock_s = track_s = 0;
+                if (assembler.emitted() == max_frames) break;
+            }
         }
         unpaired_ = assembler.unpaired() + assembler.pending();
         return assembler.emitted();
