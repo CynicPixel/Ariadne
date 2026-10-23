@@ -4,6 +4,22 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-24 — Phase 5/6 round 3 (A2) + D173 injection MERGED; shared AWS slot queue
+
+- **MERGED to main** (f772dad, fast-forward of the combined pre-merge branch):
+  - A2's 6b05fa5: Phase 5/6 work, including the canonical tool fix 698eb6b and the RECON_6 pieces.
+  - feat/3.2-inject 15426f8 (D173): `CollabNode::InjectVerifiedEdge`, pass-B evidence (`estimates`,
+    `kept_inter_edges`, injected fate), and the schema-3 mission spool composer `compose_mission_spool.py`.
+- **AWS pre-merge** `20261023T160829Z-cpux86-512e55`: **54/54**, ctest 596/596, every determinism check
+  byte-identical. Evidence: `evaluation/runs/premerge_aws/20261023T160829Z-cpux86-512e55/`, $0.044.
+- **AWS slots are never left idle** (maintainer, 2026-10-23). One dispatcher, `infra/scripts/slotq.sh`, launches
+  queued jobs (`build/slotq/queue/NN-owner-name.job`) in name order as soon as the 32-vCPU CPU spot quota has room;
+  sessions run no retry loops of their own.
+- **Maintainer, 2026-10-24:** dark / lighting / dust / noise work is PAUSED in every session until the multi-agent
+  POC (D175 in the live loop) runs. Afterwards, the demo's world setup gets a toggle for it, off by default.
+
+---
+
 ## 2026-10-23 — Phase 2 CLOSED: full gate on AWS (D172); 3.x in flight
 
 - **The Phase 2 full gate:**
