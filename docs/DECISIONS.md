@@ -4745,3 +4745,10 @@ aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-size
   gate drops (must be 0 on both scenes, else a negative result).
 - **Scope, honestly:** this guards the known-starts deployment. It does not solve aliasing between agents whose starts
   are unknown, nor aliases smaller than the drift bound; those remain 3.5 (repetition worlds, §17.3 diagnostics).
+
+**D176/D177 status correction (2026-10-24).** Both were designed without the preflight the maintainer requires (SOTA
+literature pass + advisor before any design; no ad-hoc incremental fixes after a failed run). D177 is WITHDRAWN as a
+pre-registration: not built, not run. The D176 grouping code is parked uncommitted (git stash on feat/live-collab).
+The measurements above stand. The design restarts from a literature survey of perceptual aliasing in multi-robot loop
+closure (PCM's large-false-clique failure and its successors, systems in repetitive/subterranean environments, gating
+against known initial poses, ambiguity-aware back ends), then an advisor review, then a pre-registered decision.
