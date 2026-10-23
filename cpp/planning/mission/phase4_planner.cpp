@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -99,23 +100,26 @@ void ApplyDirectives(int agent, const std::vector<RegionDirective>& dirs,
         if (used[k]) ap->applied.push_back(dirs[k].id);
 }
 
-void JointPick(Phase4Plan* p) {
+void JointPick(Phase4Plan* p, const std::vector<int>& component) {
     const size_t n = p->agents.size();
     p->joint.assign(n, -1);
+    auto comp = [&](size_t a) { return component.empty() ? 0 : component.at(a); };
     auto best = [&](size_t a) { const auto& o = p->agents[a].nbv.options; return o.empty() ? -1e300 : o[0].utility; };
     std::vector<size_t> order(n);
     for (size_t a = 0; a < n; ++a) order[a] = a;
     std::stable_sort(order.begin(), order.end(), [&](size_t x, size_t y) { return best(x) > best(y); });
-    std::set<int64_t> taken;   // task ids are non-negative (TaskId), so none collides with "no task"
+    std::map<int, std::set<int64_t>> taken;   // per component; task ids are non-negative (TaskId): none is "no task"
+    std::set<int> started;                    // components whose first picker has picked
     for (size_t k = 0; k < n; ++k) {
         const auto& o = p->agents[order[k]].nbv.options;
+        const int c = comp(order[k]);
         int pick = -1;
-        if (k == 0) pick = o.empty() ? -1 : 0;   // the first picker takes its best option
+        if (started.insert(c).second) pick = o.empty() ? -1 : 0;   // a component's first picker takes its best option
         else
-            for (size_t i = 0; i < o.size() && pick < 0; ++i)   // OtherTask's rule, over every task already taken
-                if (!taken.count(o[i].task_id) && o[i].risk <= 1e300) pick = int(i);
+            for (size_t i = 0; i < o.size() && pick < 0; ++i)   // OtherTask's rule, over its component's taken tasks
+                if (!taken[c].count(o[i].task_id) && o[i].risk <= 1e300) pick = int(i);
         p->joint[order[k]] = pick;
-        if (pick >= 0) taken.insert(o[size_t(pick)].task_id);
+        if (pick >= 0) taken[c].insert(o[size_t(pick)].task_id);
     }
 }
 
@@ -144,6 +148,7 @@ Phase4Planner::Phase4Planner(const Phase4Briefing& b, const Phase4Params& p, int
     if (n_agents < 1) throw std::invalid_argument("Phase4Planner: n_agents must be >= 1");
     track_.resize(size_t(n_agents));
     last_pick_.assign(size_t(n_agents), -1);
+    shared_.assign(size_t(n_agents), std::vector<size_t>(size_t(n_agents), 0));
 }
 
 size_t Phase4Planner::Integrate(int agent, int64_t /*t_ns*/, const DepthFrame& f) {
@@ -188,40 +193,99 @@ Phase4Plan Phase4Planner::Plan(double t_s, const std::vector<Phase4AgentInput>& 
     out.t_s = t_s;
     out.agents.resize(size_t(n));
     out.joint.assign(size_t(n), -1);
-    out.maps = ComputeTraversability(map_, esdf_, b_.grid, p_.trav);
-    out.support = BodySupport(map_, b_.grid, p_.trav.responder, p_.support_band_lo, p_.support_band_hi);
-    EgressWeights w = p_.egress;
-    if (!p_.risk_calibrated) w.w_r = 0;   // invariant: the [PROXY] enters only after D112's bar
-    const cv::Mat pen = EgressPenalty(out.maps.clear_r, out.support, out.maps.risk, w);
-    out.egress = egress_.Replan(out.maps.trav_r, pen, out.support, out.maps.risk);
+    // The comms graph: an edge between two active, linked agents (N = 2: the one "both linked" edge); its connected
+    // components bound what can be coordinated (JointPick) and shared (peers) this replan.
+    std::vector<std::vector<int>> G(size_t(n), std::vector<int>(size_t(n), 0));
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            G[size_t(i)][size_t(j)] = i != j && agents[size_t(i)].active && agents[size_t(j)].active &&
+                                      agents[size_t(i)].linked && agents[size_t(j)].linked;
+    std::vector<int> component(size_t(n), -1);
+    int n_comp = 0;
+    for (int s = 0; s < n; ++s) {
+        if (component[size_t(s)] >= 0) continue;
+        std::vector<int> stack{s};
+        component[size_t(s)] = s;   // labelled by its lowest member
+        while (!stack.empty()) {
+            const int u = stack.back();
+            stack.pop_back();
+            for (int v = 0; v < n; ++v)
+                if (G[size_t(u)][size_t(v)] && component[size_t(v)] < 0) component[size_t(v)] = s, stack.push_back(v);
+        }
+        if (agents[size_t(s)].active) ++n_comp;   // counted over the active agents
+    }
+    // Peers are what an agent has RECEIVED: another agent's track up to the last replan they shared a component
+    // [PROXY]: synced at replans, the map itself stays one fused map (partition_note).
+    for (int a = 0; a < n; ++a)
+        for (int b = 0; b < n; ++b)
+            if (a != b && component[size_t(a)] == component[size_t(b)]) shared_[size_t(a)][size_t(b)] = track_[size_t(b)].size();
+    out.allocation.components = std::max(1, n_comp);
+    if (n_comp > 1)
+        out.allocation.partition_note = "allocation partition-aware; map and peers centralised [PROXY]";
+    PlanMaps(&out);
     const CoarseLayer coarse = BuildCoarse(map_);
     for (int a = 0; a < n; ++a) {
         if (!agents[size_t(a)].active) continue;
-        NbvInputs ni;
-        ni.map = &map_, ni.frontiers = &fr_, ni.coarse = &coarse, ni.trav = &out.maps, ni.grid = b_.grid;
-        ni.route = &out.egress, ni.route_support = &out.support, ni.responder = p_.trav.responder;
-        ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
-        for (int b = 0; b < n; ++b)   // every other agent's track, ascending agent index (N = 2: the other agent)
+        std::vector<PeerKeyframe> peers;
+        for (int b = 0; b < n; ++b)   // every other agent's received track, ascending index (N = 2, linked: the other's)
             if (b != a)
-                for (size_t i = 0; i < track_[size_t(b)].size(); ++i) ni.peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
-        ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
-        ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
-        // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
-        cv::Mat ones(out.maps.trav_a.size(), CV_8U, cv::Scalar(1));
-        MaskKeepOut(a, dirs, b_.grid, &ones);
-        out.agents[a].keep_out = ones == 0;
-        TraversabilityMaps masked = out.maps;
-        masked.trav_a = out.maps.trav_a.clone();
-        masked.trav_a.setTo(0, out.agents[a].keep_out);
-        ni.trav = &masked;
-        AgentState st;
-        st.position = agents[a].position, st.e_used_m = agents[a].flown_m, st.own_keyframes = track_[a];
-        out.agents[a].nbv = PlanNbv(ni, a, st, p_.nbv);
-        out.agents[a].plan = PlanSpace(out.maps, CellOf(agents[a].position));
-        out.agents[a].plan.setTo(0, out.agents[a].keep_out);   // the escape disc never re-opens a keep_out
-        ApplyDirectives(a, dirs, agents[a].refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &out.agents[a]);
+                for (size_t i = 0; i < shared_[size_t(a)][size_t(b)]; ++i) peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
+        out.agents[size_t(a)] = PlanAgent(t_s, a, agents[size_t(a)], std::move(peers), nullptr, dirs, out, coarse);
     }
-    Allocate(agents, &out);
+    Allocate(agents, G, component, &out);
+    return out;
+}
+
+void Phase4Planner::PlanMaps(Phase4Plan* out) {
+    out->maps = ComputeTraversability(map_, esdf_, b_.grid, p_.trav);
+    out->support = BodySupport(map_, b_.grid, p_.trav.responder, p_.support_band_lo, p_.support_band_hi);
+    EgressWeights w = p_.egress;
+    if (!p_.risk_calibrated) w.w_r = 0;   // invariant: the [PROXY] enters only after D112's bar
+    const cv::Mat pen = EgressPenalty(out->maps.clear_r, out->support, out->maps.risk, w);
+    out->egress = egress_.Replan(out->maps.trav_r, pen, out->support, out->maps.risk);
+}
+
+Phase4AgentPlan Phase4Planner::PlanAgent(double t_s, int a, const Phase4AgentInput& in, std::vector<PeerKeyframe> peers,
+                                         const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs,
+                                         const Phase4Plan& shared, const CoarseLayer& coarse) const {
+    Phase4AgentPlan ap;
+    NbvInputs ni;
+    ni.map = &map_, ni.frontiers = &fr_, ni.coarse = &coarse, ni.trav = &shared.maps, ni.grid = b_.grid;
+    ni.route = &shared.egress, ni.route_support = &shared.support, ni.responder = p_.trav.responder;
+    ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
+    ni.peers = std::move(peers);
+    ni.peer_known = peer_known;
+    ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
+    ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
+    // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
+    cv::Mat ones(shared.maps.trav_a.size(), CV_8U, cv::Scalar(1));
+    MaskKeepOut(a, dirs, b_.grid, &ones);
+    ap.keep_out = ones == 0;
+    TraversabilityMaps masked = shared.maps;
+    masked.trav_a = shared.maps.trav_a.clone();
+    masked.trav_a.setTo(0, ap.keep_out);
+    ni.trav = &masked;
+    AgentState st;
+    st.position = in.position, st.e_used_m = in.flown_m, st.own_keyframes = track_[size_t(a)];
+    ap.nbv = PlanNbv(ni, a, st, p_.nbv);
+    ap.plan = PlanSpace(shared.maps, CellOf(in.position));
+    ap.plan.setTo(0, ap.keep_out);   // the escape disc never re-opens a keep_out
+    ApplyDirectives(a, dirs, in.refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &ap);
+    return ap;
+}
+
+Phase4Plan Phase4Planner::PlanOwn(double t_s, int self, const Phase4AgentInput& in, const std::vector<PeerKeyframe>& peers,
+                                  const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs) {
+    if (self < 0 || self >= Agents()) throw std::out_of_range("Phase4Planner::PlanOwn: agent " + std::to_string(self));
+    Phase4Plan out;
+    out.t_s = t_s;
+    out.agents.resize(size_t(Agents()));
+    out.joint.assign(size_t(Agents()), -1);
+    out.allocation.method = "broker";   // allocated by the component's broker over TASK_BID (D175), not here
+    PlanMaps(&out);
+    if (!in.active) return out;
+    const CoarseLayer coarse = BuildCoarse(map_);
+    out.agents[size_t(self)] = PlanAgent(t_s, self, in, peers, peer_known, dirs, out, coarse);
     return out;
 }
 
@@ -286,7 +350,8 @@ AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bu
     return in;
 }
 
-void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, Phase4Plan* out) {
+void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, const std::vector<std::vector<int>>& G,
+                             const std::vector<int>& component, Phase4Plan* out) {
     const int n = Agents();
     AllocationRecord& rec = out->allocation;
     rec.method = p_.allocator == Phase4Params::Allocator::kCbba ? "cbba"
@@ -300,7 +365,7 @@ void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, Phase4
     const bool baseline = p_.nbv.policy != NbvPolicy::kAriadne;
     if (baseline) rec.method = "greedy";
     if (p_.allocator == Phase4Params::Allocator::kGreedy || baseline || hard) {
-        JointPick(out);
+        JointPick(out, component);
         for (int a = 0; a < n; ++a)
             if (out->agents[size_t(a)].nbv.reserve_rule) out->joint[size_t(a)] = out->agents[size_t(a)].nbv.options.empty() ? -1 : 0;
         rec.trigger = hard ? "reserve_rule" : "every_replan";
@@ -310,12 +375,6 @@ void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, Phase4
     const AuctionInstance in = BuildAuction(*out, b_.grid, p_.max_bundle, &rec.scales, &view);
     rec.tasks = in.Tasks();
     const std::set<int64_t> tasks(in.task_ids.begin(), in.task_ids.end());
-    // The comms graph: an edge between two active, linked agents (N = 2: the one "both linked" edge).
-    std::vector<std::vector<int>> G(size_t(n), std::vector<int>(size_t(n), 0));
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j)
-            G[size_t(i)][size_t(j)] = i != j && agents[size_t(i)].active && agents[size_t(j)].active &&
-                                      agents[size_t(i)].linked && agents[size_t(j)].linked;
     // Event triggers (§21.7): a new or completed task (the task set changed), or a topology change.
     rec.trigger = !allocated_ ? "first" : (tasks != last_tasks_ ? "tasks" : (G != last_graph_ ? "topology" : "none"));
     if (rec.trigger == "none") {   // reuse the last assignment: each agent keeps its task while it still has a view

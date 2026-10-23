@@ -173,8 +173,14 @@ double VoxelEntropy(const TsdfVoxel* v, double w_min) {
     return Hb(0.5 * std::exp(-double(v->w)));   // free 0.5 e^-w and occupied 1 - 0.5 e^-w have the same entropy
 }
 
+bool PeerKnown::Known(const core::Vec3& p) const {
+    if (!mask) return false;
+    const Cell c = CellOf(grid, p.x(), p.y());
+    return In(*mask, c) && mask->at<uint8_t>(c.r, c.c) != 0;
+}
+
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
-                   const std::unordered_set<int64_t>* route_env, const Box3& bounds, int grid) {
+                   const std::unordered_set<int64_t>* route_env, const Box3& bounds, int grid, const PeerKnown* peer) {
     IgCounts ig;
     const int G = grid > 0 ? grid : f.grid;
     const double w_min = map.Params().w_min, half = 0.5 * map.Voxel();
@@ -194,7 +200,7 @@ IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const 
                 const uint8_t st = !t || t->w <= w_min ? kUnknown : (t->sdf < half ? kOccupied : kFree);
                 const core::Vec3 c = map.Centre(q);
                 const bool inside = (c.array() >= bounds.lo.array()).all() && (c.array() <= bounds.hi.array()).all();
-                if (inside && seen.insert(Pack(q)).second) {
+                if (inside && seen.insert(Pack(q)).second && !(st == kUnknown && peer && peer->Known(c))) {
                     ++ig.voxels;
                     ig.entropy += VoxelEntropy(t, w_min);
                     if (st == kUnknown) {
@@ -210,7 +216,7 @@ IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const 
 
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
                               const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
-                              const Box3& bounds) {
+                              const Box3& bounds, const PeerKnown* peer) {
     std::vector<View> views;
     const double vox = map.Voxel();
     const Idx3 tv = map.ToVoxel(target);
@@ -229,12 +235,12 @@ std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::
             if (blocked) continue;
             View v;
             v.eye = eye, v.cell = c, v.yaw = std::atan2(target.y() - eye.y(), target.x() - eye.x());
-            v.ig = RaycastIg(map, eye, v.yaw, f, route_env, bounds, f.rank_grid);   // ranking bundle
+            v.ig = RaycastIg(map, eye, v.yaw, f, route_env, bounds, f.rank_grid, peer);   // ranking bundle
             views.push_back(v);
         }
     std::stable_sort(views.begin(), views.end(), [](const View& a, const View& b) { return a.ig.coverage > b.ig.coverage; });
     if (int(views.size()) > sp.keep) views.resize(size_t(sp.keep));
-    for (auto& v : views) v.ig = RaycastIg(map, v.eye, v.yaw, f, route_env, bounds);   // the full bundle for the terms
+    for (auto& v : views) v.ig = RaycastIg(map, v.eye, v.yaw, f, route_env, bounds, -1, peer);   // the full bundle for the terms
     return views;
 }
 
@@ -477,9 +483,14 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
 
     const cv::Mat known = KnownFreePlan(tm, p.rho_a);   // view goals only in known-free agent space (D153b)
     // --- views, raw terms, costs ---------------------------------------------------------------------------------
+    PeerKnown peer;
+    peer.mask = in.peer_known, peer.grid = g;
+    const PeerKnown* peerp = in.peer_known ? &peer : nullptr;
     for (const auto& t : targets) {
-        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds)) {
+        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds, peerp)) {
             if (!In(dist, v.cell) || !std::isfinite(dist.at<double>(v.cell.r, v.cell.c))) continue;
+            // D175: a frontier or uncertainty view that only sees what peers already reported is no task.
+            if (peerp && v.ig.coverage == 0 && (t.src == TaskSource::kFrontier || t.src == TaskSource::kUncertainty)) continue;
             TaskCandidate c;
             c.task_id = TaskId(t.src, t.anchor), c.source = t.src;
             c.goal_xy = {v.eye.x(), v.eye.y()}, c.goal_yaw = v.yaw, c.centroid_xy = {t.p.x(), t.p.y()}, c.cells = t.size;

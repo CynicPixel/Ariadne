@@ -277,3 +277,54 @@ TEST(Phase4Planner, ThreeAgentPlanAndTopology) {
     ag[2].linked = false;   // agent 2 loses its link: the graph changes, the task set does not
     EXPECT_EQ(P.Plan(15.0, ag, {}).allocation.trigger, "topology");
 }
+
+TEST(Phase4Planner, JointPickNeverCoordinatesAcrossAPartition) {
+    // Two components cannot deconflict (no link, no broker): each picks exactly-once within its own component only.
+    Phase4Plan p;
+    p.agents.resize(3);
+    p.agents[0].nbv.options = {Opt(7, 0, 0, 1, 0.9), Opt(8, 0, 0, 1, 0.1)};
+    p.agents[1].nbv.options = {Opt(7, 0, 0, 1, 0.8), Opt(9, 0, 0, 1, 0.2)};
+    p.agents[2].nbv.options = {Opt(7, 0, 0, 1, 0.7), Opt(10, 0, 0, 1, 0.3)};
+    JointPick(&p, {0, 0, 2});   // agents 0 and 1 linked; agent 2 alone
+    EXPECT_EQ(p.joint[0], 0) << "task 7";
+    EXPECT_EQ(p.joint[1], 1) << "task 9: 7 is taken in its component";
+    EXPECT_EQ(p.joint[2], 0) << "task 7 too: agent 2 cannot know agent 0 took it";
+    JointPick(&p);   // one component: exactly-once over the whole fleet
+    EXPECT_EQ(p.joint[2], 1);
+}
+
+TEST(Phase4Planner, PartitionFreezesPeersAndIsLabelled) {
+    // Peers are what an agent RECEIVED: while agent 2 is cut off, agents 0 and 1 keep its track as of the last shared
+    // replan (and it theirs); on reconnecting they catch up. The plan says what is and is not modelled.
+    Phase4Briefing b;
+    b.grid.ox = 0, b.grid.oy = 0, b.grid.cell = 0.05, b.grid.cols = 80, b.grid.rows = 80;
+    b.target = {40, 70};
+    b.entrances = {{40, 10}};
+    Phase4Params prm;
+    const int W = 160, H = 90;
+    std::vector<float> Z(size_t(W * H), 2.0f), S(size_t(W * H), 0.02f);
+    DepthFrame f;
+    f.T_W_C.R << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+    f.fx = 84, f.fy = 84, f.cx = 80, f.cy = 45, f.width = W, f.height = H, f.depth = Z.data(), f.sigma = S.data();
+    Phase4Planner P(b, prm, 3);
+    auto Kf = [&](int a, double y) { DepthFrame g = f; g.T_W_C.t = core::Vec3(0.5, y, 1.0); P.Integrate(a, 0, g); };
+    for (int a = 0; a < 3; ++a) Kf(a, 1.0 + 0.5 * a);
+    std::vector<Phase4AgentInput> ag(3);
+    for (int a = 0; a < 3; ++a) ag[size_t(a)].active = true, ag[size_t(a)].position = core::Vec3(0.5, 1.0 + 0.5 * a, 1.0);
+    const Phase4Plan p1 = P.Plan(5.0, ag, {});
+    EXPECT_EQ(p1.allocation.components, 1);
+    EXPECT_TRUE(p1.allocation.partition_note.empty());
+    EXPECT_EQ(P.SharedTrack(0, 2), 1u);
+    ag[2].linked = false;
+    Kf(2, 2.2), Kf(1, 1.6);   // new keyframes on both sides of the cut
+    const Phase4Plan p2 = P.Plan(10.0, ag, {});
+    EXPECT_EQ(p2.allocation.components, 2);
+    EXPECT_EQ(p2.allocation.partition_note, "allocation partition-aware; map and peers centralised [PROXY]");
+    EXPECT_EQ(P.SharedTrack(0, 2), 1u) << "agent 2's new keyframe never reached agent 0";
+    EXPECT_EQ(P.SharedTrack(2, 1), 1u) << "nor agent 1's reached agent 2";
+    EXPECT_EQ(P.SharedTrack(0, 1), 2u) << "agents 0 and 1 are still linked";
+    ag[2].linked = true;
+    P.Plan(15.0, ag, {});
+    EXPECT_EQ(P.SharedTrack(0, 2), 2u);
+    EXPECT_EQ(P.SharedTrack(2, 1), 2u);
+}

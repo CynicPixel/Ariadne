@@ -12,6 +12,7 @@ if(OpenCV_FOUND)
     route/visibility_graph.cpp
     mission/nbv.cpp
     mission/phase4_planner.cpp
+    mission/multiagent.cpp
     mission/allocation.cpp)
   target_include_directories(ariadne_planning PUBLIC ${CMAKE_SOURCE_DIR}/cpp)
   target_link_libraries(ariadne_planning PUBLIC ariadne::core opencv_core opencv_imgproc opencv_geometry)

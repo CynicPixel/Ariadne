@@ -2,7 +2,8 @@
 // ariadne_volumetric_eval: 4.1's evaluation on a 1.7 spool (design VOLUMETRIC_4.1 §6, D110). Replay only, no GT.
 //
 // The same keyframes, anchor and merge timing as the 1.8 tool's merged run (D45: agent 0's briefed entry pose
-// anchors W; agent 1 joins through the 1.6 loop at t_merge, sharing its history then). Each keyframe goes through
+// anchors W; agent 1 joins through the 1.6 loop at t_merge, sharing its history then; a schema-3 spool carries one
+// merge per non-anchor agent, Phase 8 §42, and each agent k joins at its own t_merge). Each keyframe goes through
 // the Phase 4 volumetric stack: TsdfMap::Integrate -> Esdf::Update (incremental) -> FrontierSet3D::Update; each
 // stage is timed. At the end the map is projected onto the briefing's 2D grid with 1.8's slab rule over the same z
 // band (occupied if any voxel in the band is, free if any is free and none occupied, else unknown), so
@@ -55,7 +56,9 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <regex>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -171,9 +174,8 @@ int main(int argc, char** argv) {
 
         // --- spool -----------------------------------------------------------------------------------------------
         const YAML::Node sp = YAML::LoadFile(spool_dir + "/spool.yaml");
-        if (sp["schema_version"].as<int>() != 1) throw std::runtime_error("spool: schema_version != 1");
-        const bool merge_ok = sp["merge"]["ok"].as<bool>();
-        const core::SE3 T_O0_O1 = RowMajorPose(sp["merge"]["T_O0_O1"]);
+        const int schema = sp["schema_version"].as<int>();
+        if (schema < 1 || schema > 3) throw std::runtime_error("spool: schema_version not 1, 2 or 3");
         std::vector<Kf> kfs;
         std::map<std::pair<int, uint64_t>, int64_t> t_of;
         for (const auto& b : sp["bundles"]) {
@@ -187,14 +189,39 @@ int main(int argc, char** argv) {
         std::sort(kfs.begin(), kfs.end(), [](const Kf& a, const Kf& b) {
             return std::tie(a.t_ns, a.agent, a.kf_id) < std::tie(b.t_ns, b.agent, b.kf_id);
         });
-        int64_t t_merge = std::numeric_limits<int64_t>::max();
-        if (merge_ok) {
+        // One merge per non-anchor agent: its T_O0_Ok and t_merge = the later keyframe of its merge edge
+        // ([ASSUMPTION]: found then). Schemas 1 and 2 (A2's D195 photometric fields; two agents) have one `merge` block,
+        // agent 1's; schema 3 (Phase 8 §42, N agents) = schema 2's fields + a `merges` list of {agent, ok, T_O0_O, edge}
+        // [DESIGN]. The photometric fields are not read here. Agent 0 anchors W (D45).
+        int n_agents = 2;
+        if (schema == 3)
+            for (const auto& k : kfs) n_agents = std::max(n_agents, k.agent + 1);
+        struct Merge {
+            bool ok = false;
+            core::SE3 T_O0_O;
+            int64_t t = std::numeric_limits<int64_t>::max();
+        };
+        std::vector<Merge> merges(static_cast<size_t>(n_agents));
+        merges[0].ok = true, merges[0].t = std::numeric_limits<int64_t>::min();
+        auto ReadMerge = [&](const YAML::Node& mg, int agent) {
+            Merge& M = merges.at(size_t(agent));
+            M.ok = mg["ok"].as<bool>();
+            M.T_O0_O = RowMajorPose(schema < 3 ? mg["T_O0_O1"] : mg["T_O0_O"]);
+            if (!M.ok) return;
             std::smatch m;
-            const std::string edge = sp["merge"]["edge"].as<std::string>();
-            if (!std::regex_search(edge, m, std::regex(R"(agent0 kf (\d+) <- agent1 kf (\d+))"))) {
-                throw std::runtime_error("spool: cannot parse merge edge '" + edge + "'");
+            const std::string edge = mg["edge"].as<std::string>();
+            if (!std::regex_search(edge, m, std::regex(R"(agent(\d+) kf (\d+) <- agent(\d+) kf (\d+))")) ||
+                std::stoi(m[3]) != agent) {
+                throw std::runtime_error("spool: cannot parse merge edge '" + edge + "' for agent " + std::to_string(agent));
             }
-            t_merge = std::max(t_of.at({0, std::stoull(m[1])}), t_of.at({1, std::stoull(m[2])}));
+            M.t = std::max(t_of.at({std::stoi(m[1]), std::stoull(m[2])}), t_of.at({agent, std::stoull(m[4])}));
+        };
+        if (schema < 3) {
+            ReadMerge(sp["merge"], 1);
+        } else {
+            if (!sp["merges"] || !sp["merges"].IsSequence()) throw std::runtime_error("spool: schema 3 needs a merges list");
+            if (sp["merge"]) throw std::runtime_error("spool: schema 3 carries merges, not a merge block");
+            for (const auto& mg : sp["merges"]) ReadMerge(mg, mg["agent"].as<int>());
         }
 
         // --- the volumetric stack, per keyframe ----------------------------------------------------------------------
@@ -204,14 +231,15 @@ int main(int argc, char** argv) {
         fp.z_lo = z_lo, fp.z_hi = z_hi;
         planning::FrontierSet3D fr(fp);
         Stats s_int, s_esdf, s_fr;
-        size_t integrated[2] = {0, 0}, incremental = 0, rebuilds = 0, esdf_voxels = 0;
-        std::vector<Kf> held;
-        std::vector<core::Vec3> track[2];
-        double flown[2] = {0, 0};
+        std::vector<size_t> integrated(size_t(n_agents), 0);
+        size_t incremental = 0, rebuilds = 0, esdf_voxels = 0;
+        std::vector<std::vector<Kf>> held(static_cast<size_t>(n_agents));   // per agent, before its merge
+        std::vector<std::vector<core::Vec3>> track(static_cast<size_t>(n_agents));
+        std::vector<double> flown(size_t(n_agents), 0.0);
         std::unique_ptr<planning::Phase4Planner> p4;
         std::ofstream p4_log;
         auto Integrate = [&](const Kf& k) {
-            const core::SE3 T_W_C = T_W_O0 * (k.agent == 0 ? k.T_O_C : T_O0_O1 * k.T_O_C);
+            const core::SE3 T_W_C = T_W_O0 * (k.agent == 0 ? k.T_O_C : merges[size_t(k.agent)].T_O0_O * k.T_O_C);
             if (!track[k.agent].empty()) flown[k.agent] += (T_W_C.t - track[k.agent].back()).norm();
             track[k.agent].push_back(T_W_C.t);
             const cv::Mat Z = ReadHalf(k.stem.string() + "_depth.png", k.w, k.h);
@@ -236,7 +264,7 @@ int main(int argc, char** argv) {
                     lo = {std::min(lo.x, b.x * 8), std::min(lo.y, b.y * 8), std::min(lo.z, b.z * 8)};
                     hi = {std::max(hi.x, b.x * 8 + 7), std::max(hi.y, b.y * 8 + 7), std::max(hi.z, b.z * 8 + 7)};
                 }
-                if (integrated[0] + integrated[1] == 0) fr.Detect(map);
+                if (std::accumulate(integrated.begin(), integrated.end(), size_t(0)) == 0) fr.Detect(map);
                 else fr.Update(map, lo, hi);
             }
             s_fr.Add(Ms(t0));
@@ -277,7 +305,7 @@ int main(int argc, char** argv) {
             }
             pp.nbv.frustum.max_range_m = tp.max_depth;
             pp.nbv.rho_r = rho_r, pp.nbv.rho_a = trp.agent.rho;
-            p4 = std::make_unique<planning::Phase4Planner>(pb, pp);
+            p4 = std::make_unique<planning::Phase4Planner>(pb, pp, n_agents);
             fs::create_directories(out);
             p4_log.open(fs::path(out) / "phase4_allocation.jsonl");
         }
@@ -360,12 +388,15 @@ int main(int argc, char** argv) {
             }
             last_route = r, last_support = support;
             if (p4) {
-                std::vector<planning::Phase4AgentInput> ag(2);
-                for (int a = 0; a < 2; ++a) {
-                    ag[a].active = !track[a].empty();
-                    if (ag[a].active) ag[a].position = track[a].back(), ag[a].flown_m = flown[a];
+                std::vector<planning::Phase4AgentInput> ag(static_cast<size_t>(n_agents));
+                int n_active = 0;
+                for (int a = 0; a < n_agents; ++a) {
+                    ag[size_t(a)].active = !track[size_t(a)].empty();
+                    if (ag[size_t(a)].active) ag[size_t(a)].position = track[size_t(a)].back(), ag[size_t(a)].flown_m = flown[size_t(a)], ++n_active;
                 }
-                ag[0].linked = ag[1].linked = ag[0].active && ag[1].active;   // agent 1 integrates only after the merge
+                // An agent integrates only after its merge, so every active agent shares the merged frame: all of them
+                // are linked once two are active (N = 2: linked = both active).
+                for (auto& x : ag) x.linked = x.active && n_active >= 2;
                 const auto t1 = std::chrono::steady_clock::now();
                 const planning::Phase4Plan P = p4->Plan(ts, ag, {});
                 const double ms = Ms(t1);
@@ -377,19 +408,21 @@ int main(int argc, char** argv) {
                 planning::CbbaParams cp;
                 cp.bytes = planning::WireBytes(p4_codec, sc);
                 cp.transport = planning::WireTransport(p4_codec, sc);
-                const bool linked = ag[0].linked;
-                const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
+                const bool linked = n_active >= 2;
+                std::vector<std::vector<int>> G(size_t(n_agents), std::vector<int>(size_t(n_agents), 0));
+                for (int i = 0; i < n_agents; ++i)
+                    for (int j = 0; j < n_agents; ++j) G[size_t(i)][size_t(j)] = i != j && ag[size_t(i)].linked && ag[size_t(j)].linked;
                 const planning::Allocation cb = planning::RunCbba(in, [&](int) { return G; }, cp);
                 const planning::Allocation sg = planning::SequentialGreedy(in);
                 planning::Phase4Plan Pg = P;
                 planning::JointPick(&Pg);
                 double greedy = 0;
-                for (int a = 0; a < 2; ++a) {
-                    if (Pg.joint[a] < 0) continue;
+                for (int a = 0; a < n_agents; ++a) {
+                    if (Pg.joint[size_t(a)] < 0) continue;
                     for (int j = 0; j < in.Tasks(); ++j)
-                        if (view[size_t(a)][size_t(j)] == Pg.joint[a]) greedy += planning::PathScore(in, a, {j});
+                        if (view[size_t(a)][size_t(j)] == Pg.joint[size_t(a)]) greedy += planning::PathScore(in, a, {j});
                 }
-                const double opt = in.Tasks() ? planning::TwoAgentOptimum(in) : 0.0;
+                const double opt = n_agents != 2 ? -1.0 : in.Tasks() ? planning::TwoAgentOptimum(in) : 0.0;   // 2-agent only
                 // The §31.7 L_t = 2 row on the same plan (D115 correction: CBBA may differ from SGA there).
                 std::vector<float> sc2;
                 std::vector<std::vector<int>> view2;
@@ -401,10 +434,12 @@ int main(int argc, char** argv) {
                 cp2.transport = planning::WireTransport(p4_codec, sc2);
                 const planning::Allocation cb2 = planning::RunCbba(in2, [&](int) { return G; }, cp2);
                 const planning::Allocation sg2 = planning::SequentialGreedy(in2);
-                const double opt2 = in2.Tasks() ? planning::TwoAgentOptimum(in2) : 0.0;
-                p4_log << "{\"t_s\":" << ts << ",\"plan_ms\":" << ms << ",\"active\":[" << ag[0].active << "," << ag[1].active
-                       << "],\"linked\":" << linked << ",\"options\":[" << P.agents[0].nbv.options.size() << ","
-                       << P.agents[1].nbv.options.size() << "],\"event\":{\"method\":\"" << P.allocation.method
+                const double opt2 = n_agents != 2 ? -1.0 : in2.Tasks() ? planning::TwoAgentOptimum(in2) : 0.0;
+                p4_log << "{\"t_s\":" << ts << ",\"plan_ms\":" << ms << ",\"active\":[";
+                for (int a = 0; a < n_agents; ++a) p4_log << (a ? "," : "") << ag[size_t(a)].active;
+                p4_log << "],\"linked\":" << linked << ",\"options\":[";
+                for (int a = 0; a < n_agents; ++a) p4_log << (a ? "," : "") << P.agents[size_t(a)].nbv.options.size();
+                p4_log << "],\"event\":{\"method\":\"" << P.allocation.method
                        << "\",\"trigger\":\"" << P.allocation.trigger << "\",\"rounds\":" << P.allocation.rounds
                        << ",\"messages\":" << P.allocation.messages << ",\"bytes\":" << P.allocation.bytes << "},\"tasks\":"
                        << in.Tasks() << ",\"cbba\":{\"total\":" << cb.total << ",\"rounds\":" << cb.rounds << ",\"messages\":"
@@ -414,8 +449,8 @@ int main(int argc, char** argv) {
                        << ",\"bytes\":" << cb2.bytes << ",\"tail_releases\":" << cb2.tail_releases << ",\"sga\":" << sg2.total
                        << ",\"optimum\":" << opt2 << ",\"cbba_eq_sga\":" << (cb2.winner == sg2.winner) << ",\"legs_ms\":" << ms_legs
                        << "},\"joint\":[";
-                for (int a = 0; a < 2; ++a) {
-                    const int i = P.joint[a];
+                for (int a = 0; a < n_agents; ++a) {
+                    const int i = P.joint[size_t(a)];
                     p4_log << (a ? "," : "");
                     if (i < 0) {
                         p4_log << "null";
@@ -429,17 +464,19 @@ int main(int argc, char** argv) {
             }
             if (nbv_on) {
                 const planning::CoarseLayer coarse_now = planning::BuildCoarse(map);
-                for (int a = 0; a < 2; ++a) {
-                    if (track[a].empty()) continue;
+                for (int a = 0; a < n_agents; ++a) {
+                    if (track[size_t(a)].empty()) continue;
                     planning::NbvInputs ni;
                     ni.map = &map, ni.frontiers = &fr, ni.coarse = &coarse_now, ni.trav = &m, ni.grid = gf;
                     ni.route = &r, ni.route_support = &support, ni.responder = trp.responder, ni.entrances = exits;
-                    for (size_t i = 0; i < track[1 - a].size(); ++i) ni.peers.push_back({1 - a, int64_t(i), track[1 - a][i]});
+                    for (int b = 0; b < n_agents; ++b)   // every other agent's keyframes, ascending (N = 2: the other one)
+                        if (b != a)
+                            for (size_t i = 0; i < track[size_t(b)].size(); ++i) ni.peers.push_back({b, int64_t(i), track[size_t(b)][i]});
                     ni.t_s = ts;
                     ni.bounds.lo = core::Vec3(ox, oy, 0.0);
                     ni.bounds.hi = core::Vec3(ox + cols * cell, oy + rows * cell, cfg["grid"]["z_max_m"].as<double>());
                     planning::AgentState as;
-                    as.position = track[a].back(), as.e_used_m = flown[a], as.own_keyframes = track[a];
+                    as.position = track[size_t(a)].back(), as.e_used_m = flown[size_t(a)], as.own_keyframes = track[size_t(a)];
                     const auto t1 = std::chrono::steady_clock::now();
                     const planning::NbvPlan pl = planning::PlanNbv(ni, a, as, nbp);
                     const double ms = Ms(t1);
@@ -468,15 +505,17 @@ int main(int argc, char** argv) {
                 Replan(next_replan, false);
                 next_replan += int64_t(cfg["replan_period_s"].as<double>() * 1e9);
             }
-            if (k.agent == 1 && !merge_ok) continue;
-            if (k.agent == 1 && k.t_ns < t_merge) {
-                held.push_back(k);
+            const Merge& M = merges.at(size_t(k.agent));
+            if (!M.ok) continue;
+            if (k.t_ns < M.t) {
+                held[size_t(k.agent)].push_back(k);
                 continue;
             }
-            if (!held.empty() && k.t_ns >= t_merge) {   // the merge: agent 1 shares its history
-                for (const auto& h : held) Integrate(h);
-                held.clear();
-            }
+            for (int j = 1; j < n_agents; ++j)   // a merge: that agent shares its history (ascending agent index)
+                if (!held[size_t(j)].empty() && k.t_ns >= merges[size_t(j)].t) {
+                    for (const auto& h : held[size_t(j)]) Integrate(h);
+                    held[size_t(j)].clear();
+                }
             Integrate(k);
         }
         if (egress_on || nbv_on || phase4_on) Replan(kfs.back().t_ns, true);
@@ -586,7 +625,11 @@ int main(int argc, char** argv) {
         std::ofstream res(fs::path(out) / "results.yaml");
         res.precision(6);
         res << "# ariadne_volumetric_eval (VOLUMETRIC_4.1 §6, D110). Generated; host timings are indicative.\n"
-            << "keyframes_integrated: {agent0: " << integrated[0] << ", agent1: " << integrated[1] << "}\n"
+            << "keyframes_integrated: {" << [&] {
+                   std::ostringstream o;
+                   for (int a = 0; a < n_agents; ++a) o << (a ? ", " : "") << "agent" << a << ": " << integrated[size_t(a)];
+                   return o.str();
+               }() << "}\n"
             << "voxel_m: " << tp.voxel << "\ntruncation_voxels: " << tp.truncation_voxels
             << "\nblocks: " << map.Blocks() << "\nmap_bytes: " << map.Blocks() * sizeof(planning::TsdfBlock)
             << "\nesdf: {incremental: " << incremental << ", rebuilds: " << rebuilds
@@ -636,8 +679,10 @@ int main(int argc, char** argv) {
             << "\nspool_sha256: " << Env("ARIADNE_SPOOL_SHA256") << "\nconfig: " << cfg["name"].as<std::string>()
             << "\nlayer: phase4_volumetric (TsdfMap D110)\ngit_commit: " << Env("ARIADNE_GIT_COMMIT")
             << "\ngit_dirty: " << Env("ARIADNE_GIT_DIRTY") << "\nimage_digest: " << Env("ARIADNE_IMAGE_DIGEST") << '\n';
-        std::printf("integrated %zu + %zu keyframes; %zu blocks; ESDF %zu incremental / %zu rebuilds; %zu frontier clusters\n",
-                    integrated[0], integrated[1], map.Blocks(), incremental, rebuilds, fr.Clusters().size());
+        std::string per_agent;
+        for (int a = 0; a < n_agents; ++a) per_agent += (a ? " + " : "") + std::to_string(integrated[size_t(a)]);
+        std::printf("integrated %s keyframes; %zu blocks; ESDF %zu incremental / %zu rebuilds; %zu frontier clusters\n",
+                    per_agent.c_str(), map.Blocks(), incremental, rebuilds, fr.Clusters().size());
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_volumetric_eval: %s\n", e.what());
