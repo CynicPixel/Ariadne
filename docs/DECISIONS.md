@@ -5237,3 +5237,25 @@ responses should be suppressed while the first response is still in flight is a 
 verification redesign (next bytes item), and is not settled here.
 **Pass/fail for the next byte-table run:** the existing I6 gate (each gated class ≤ 15 % error on first transmission),
 unchanged.
+
+## 2026-10-24 — D178 amendment: how "true edges rejected ≤ 1 %" is scored (fixed before any gated sweep result is read)
+
+The sweep staged at 4459d57 (`20261023T213707Z-cpux86-e31421`) logs only the gate's totals (tested, rejected), so the
+pre-registered true-edge criterion cannot be scored from it. **Fix:** `ariadne_collab_sim` now writes
+`entry_gate.csv`: one row per inter-agent edge the gate ever tested, with times tested and rejected, and the last
+squared Mahalanobis distance and decision. Logging only; the gate's inputs and outputs are unchanged.
+**Definitions:**
+- A true edge is one in `edges.csv` with `reason == verified` and `pose_err_deg ≤ 10` (D171 §5's label, same as the
+  precision row). Edges are matched as an unordered (agent, keyframe) pair.
+- "Rejected" means rejected at its LAST test (the latest solve that saw the edge, with the longest odometry chain).
+  "Ever rejected" is also reported but is not the criterion.
+- A true edge the gate never tested (ungated) does not count as rejected, and the ungated count is reported.
+- The criterion is pooled per scene over every gated run (arms × budget levels × seeds): rejected true edges / tested
+  true edges ≤ 1 %, on each scene.
+**Procedure:**
+- The ATE criteria are scored on the e31421 sweep as staged.
+- The true-edge criterion is scored on a logged rerun of the same gated cells (same stores, seeds and configs, with the
+  logging build).
+- Every rerun cell must reproduce e31421's merged ATE and first-transmission bytes exactly. Bytes are compared after
+  folding D180's `wire_resend` back in, since the rerun's build includes D180. If any cell differs, the rerun is not
+  the same experiment: the true-edge criterion is then reported UNSCORED, with the reason.

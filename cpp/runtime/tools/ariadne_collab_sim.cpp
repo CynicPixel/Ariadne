@@ -239,6 +239,14 @@ int main(int argc, char** argv) {
                   << r.payload_bytes << ',' << r.transmitted_bytes << ',' << r.wire_bytes << ',' << int(r.compressed)
                   << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << int(r.resend) << ',' << r.predicted_wire_bytes << '\n';
         }
+        if (cfg.entry_gate.enabled) {
+            // D178: each inter-agent edge the gate tested, over all solves; the criterion uses the last decision.
+            std::ofstream g(fs::path(out) / "entry_gate.csv");
+            g << "agent_a,kf_a,agent_b,kf_b,tested,rejected,last_d2,last_accepted\n";
+            for (const auto& [k, e] : fleet_.entry_gate_edges())
+                g << std::get<0>(k) << ',' << std::get<1>(k) << ',' << std::get<2>(k) << ',' << std::get<3>(k) << ','
+                  << e.tested << ',' << e.rejected << ',' << e.last_d2 << ',' << int(e.last_accepted) << '\n';
+        }
         std::vector<const ac::CollabNode*> cn;
         for (const auto& n : nodes) cn.push_back(n.get());
         const ac::OutcomeReport oc = ac::EvaluateOutcome(cn, now);
