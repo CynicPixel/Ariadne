@@ -3239,6 +3239,11 @@ confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
 - **Report:** names the substitute and the reason.
 - **Unchanged:** the honesty requirement. Report where sim-tuned settings transfer and where they do not.
 - **Still open:** the maintainer may email ARPG for OIVIO access. If it arrives, OIVIO runs as well.
+- **Supersedes D88/D89 (main, 2026-10-23).** D88 chose EuRoC's dark flights as the 5.6 primary; D89 then chose
+  UMA-VI's `IllChange` sequences (ambient switching, end-drift metric). This entry came after both, and the master
+  session confirmed on merge planning that it stands: Hilti `site2_robot_3` has the co-moving onboard light in a dark
+  room, which neither of those has (ALGORITHMS §8.1). EuRoC MH_04/MH_05/V1_03 remain the full-GT low-light companion,
+  cited from D87's full-system run (keyframe-refined ATE 0.046 / 0.044 / 0.288 m), not re-run here.
 
 **§49 ritual:**
 - catalogue: ALGORITHMS §8.1, already present;
