@@ -116,7 +116,7 @@ aws s3 cp $uri - | tar xz -C /tmp
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
 cp -a /tmp/p/. . && cp /tmp/p/SHA256SUMS \$R/
 mkdir -p build/live/runs
-ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} \
+ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} \
   infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
 run=\$(ls -d build/live/runs/live-* | tail -1)
 infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
