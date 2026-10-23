@@ -4674,3 +4674,30 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
 
 **Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
 anchors never merge).
+
+## 2026-10-24 — D230: splat placement — every agent trains in its own odometry frame; T_W_O per agent from the briefing or the merge
+
+**Context.** The multi-agent POC (item 10, M's order 2026-10-24) needs one splat view of all agents in the mission
+world W, side by side with the generated world's GT mesh, which lives in W. The replay used W = agent 0's odometry
+frame and baked agent 1's merge into the poses (`T_O0_C`), so the reconstruction and the GT viewport did not share a
+frame, a third agent was not handled, and a live T_W_O change would have meant re-ingesting.
+
+**Decision** (`python/reconstruction/ariadne_recon/live/placement.py`, `service.py`).
+- Keyframes enter in their own agent's odometry frame O_k. A submap is drawn at T_W_O[k] T_O_anchor (arch §18.6:
+  a frame change is one matrix per submap, no retraining). `Service.set_placement(k, T_W_O)` is the one entry point,
+  used by the replay now and by B's `t_w_o` tee record later (B, 2026-10-24: the tee is a strict superset of the
+  briefing constant).
+- **briefing** (default with `--scene`): T_W_Ok = T_W_Bk T_B_C for every agent: entrance k's pose (scene.json
+  `entrances[k]`, z from `routes/agent_k.json`) times the rig extrinsic (mission `R_B_optical_rows`,
+  `t_B_camera_m.left`). This is the live demo's known-starts rule (B, D216), transcribed from `ariadne_mission.cpp`'s
+  world anchor and generalised from agent 0 to agent k.
+- **merges**: agent 0 from the briefing, agent k as T_W_O0 T_O0_Ok from the spool (schema 3 `merges:`, D213; or
+  schema < 3's `merge:`). Agent k's own entrance is not used, as in `ariadne_mission.cpp`.
+- An agent with no placement is skipped and listed under `unplaced` in the manifest. It is never drawn in someone
+  else's frame (honesty rule: an unmerged map is not shown as merged).
+
+**Not decided here.** Cross-agent overlap pruning (6.3, double walls) is unchanged: each agent's submaps are separate.
+
+**Tests.** `tests/test_live.py` 11/11: the briefing transform on a yawed entrance, both modes on a 2-agent schema-3
+spool, an unmerged agent never drawn, and set_placement moving the table without new chunks. All reconstruction
+python tests 22/22 (ariadne-recon:1).

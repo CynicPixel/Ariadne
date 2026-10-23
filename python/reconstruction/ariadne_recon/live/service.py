@@ -14,8 +14,12 @@ Backends:
 Training image (D195, D199): `rgb` on lit worlds (the live demo's default, D199); `albedo_proxy` where the agents'
 lamp is the light (D195), and then a keyframe without the proxy is refused. Nothing falls back silently.
 
-Placement: T_W_O per agent comes with the live tee (B); for a spool replay it is the identity [replay has no
-briefing], so W = agent 0's odometry frame.
+Placement (placement.py, D230): every keyframe enters in its own agent's odometry frame O_k; the table places a
+submap at T_W_O[k] @ T_O_anchor. Live, T_W_O[k] comes from B's tee (the briefing constant until collab moves it,
+then a `t_w_o` record: set_placement, one matrix, no retraining). A replay takes it from the briefing (--scene,
+--placement briefing: every agent's own entrance, the demo's known-starts rule) or from the spool's merges
+(--placement merges: agent 0's entrance, agent k via T_O0_Ok). An agent without a placement is not drawn.
+Without --scene, W = agent 0's odometry frame.
 """
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ import numpy as np
 
 from ..spool import Spool, load
 from .export import SPLAT_BYTES, chunk_bytes
+from .placement import placements
 from .seeding import SeedParams, seed
 from .submaps import SubmapManager
 
@@ -81,7 +86,7 @@ class Service:
         self.out, self.backend, self.training_image, self.trainer = out, backend, training_image, trainer
         (out / "chunks").mkdir(parents=True, exist_ok=True)
         self.label = LABELS[(backend, training_image)]
-        self.T_W_O: dict[int, np.ndarray] = {}
+        self.T_W_O: dict[int, np.ndarray] = {}   # agent -> placement; set_placement() before its first keyframe
         self.chunk: dict[int, str] = {}
         self.counts: dict[int, int] = {}
         self.n_export: dict[int, int] = {}
@@ -90,9 +95,16 @@ class Service:
         self.period = export_period_s
         self.log = open(out / "service_log.jsonl", "w")
 
+    def set_placement(self, agent: int, T_W_O) -> None:
+        """Agent k's odometry frame in W (briefing, merge, or a live `t_w_o` update): every submap of the agent moves
+        with it in the next table; chunks are not re-exported."""
+        self.T_W_O[agent] = np.asarray(T_W_O, float).copy()
+        if self.chunk:
+            self._table()
+
     def ingest(self, agent: int, kf: int, T_O_C, pose_version: int, K, image, Z, sigma) -> dict:
         if agent not in self.T_W_O:
-            self.T_W_O[agent] = np.eye(4)
+            raise ValueError(f"agent {agent}: no placement (set_placement first; an unplaced agent is never drawn)")
         before = {s.sid for s in self.trainer.manager.submaps if not s.closed}
         rec = self.trainer.add_keyframe(agent, kf, T_O_C, pose_version, K, image, Z, sigma)
         now = time.monotonic()
@@ -137,8 +149,11 @@ class Service:
 
 
 def replay(sp: Spool, svc: Service, training_image: str, max_keyframes: int = 0) -> int:
+    """Every keyframe of a placed agent, in time order; agents without a placement are skipped."""
     n = 0
     for b in sorted(sp.keyframes(), key=lambda b: (b.t_ns, b.agent)):
+        if b.agent not in svc.T_W_O:
+            continue
         if training_image == "albedo_proxy":
             if b.rgb_kind != "albedo_proxy":
                 raise SystemExit(f"keyframe {b.kf_id}: no albedo proxy (rgb_kind {b.rgb_kind}); RGB training must be "
@@ -147,7 +162,7 @@ def replay(sp: Spool, svc: Service, training_image: str, max_keyframes: int = 0)
         else:
             image = b.rgb().astype(np.float32) / 255.0
         Z, S = b.depth()
-        svc.ingest(b.agent, b.kf_id, sp.T_O0_C(b) if b.agent else b.T_O_C, b.frame_id_of_pose, b.K, image, Z, S)
+        svc.ingest(b.agent, b.kf_id, b.T_O_C, b.frame_id_of_pose, b.K, image, Z, S)
         n += 1
         if max_keyframes and n >= max_keyframes:
             break
@@ -164,6 +179,9 @@ def main(argv=None) -> int:
     ap.add_argument("--budget-ms", type=float, default=0.0)
     ap.add_argument("--export-period-s", type=float, default=2.0)
     ap.add_argument("--max-keyframes", type=int, default=0)
+    ap.add_argument("--scene", default=None, help="worldgen scene dir: W = the mission world (the GT viewport's)")
+    ap.add_argument("--placement", choices=("briefing", "merges"), default=None,
+                    help="default: briefing with --scene, merges without")
     a = ap.parse_args(argv)
     sp = load(a.spool)
     channels = 1 if a.training_image == "albedo_proxy" else 3
@@ -174,6 +192,12 @@ def main(argv=None) -> int:
         trainer = _CpuInit(channels, 30, SeedParams(), 0)
     out = Path(a.out)
     svc = Service(out, a.backend, a.training_image, trainer, a.export_period_s)
+    mode = a.placement or ("briefing" if a.scene else "merges")
+    placed, unplaced = placements(sp, mode, a.scene)
+    for k, T in placed.items():
+        svc.set_placement(k, T)
+    for k, why in unplaced.items():
+        print(f"service: agent {k} not placed, not drawn: {why}")
     t0 = time.time()
     n = replay(sp, svc, a.training_image, a.max_keyframes)
     svc.finish()
@@ -181,7 +205,10 @@ def main(argv=None) -> int:
         "tool": "ariadne_recon.live.service", "spool": str(a.spool), "spool_run_id": sp.run_id,
         "spool_schema": sp.schema_version, "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
-        "iters": a.iters, "budget_ms": a.budget_ms, "keyframes": n, "wall_s": round(time.time() - t0, 2)}, indent=2))
+        "iters": a.iters, "budget_ms": a.budget_ms, "keyframes": n, "wall_s": round(time.time() - t0, 2),
+        "placement": {"mode": mode, "scene": a.scene, "world": "mission W" if a.scene else "agent 0 odometry frame",
+                      "T_W_O": {str(k): [float(x) for x in T.ravel()] for k, T in placed.items()},
+                      "unplaced": {str(k): why for k, why in unplaced.items()}}}, indent=2))
     print(f"service: {n} keyframes -> {out} ({len(svc.chunk)} submaps)")
     return 0
 
