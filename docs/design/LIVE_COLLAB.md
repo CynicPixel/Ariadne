@@ -142,6 +142,16 @@ unless the measured CPU budget fails.
 
 1. **Refactor** `CollabFrontend` and `CollabFleet`. Pass A/B stay byte-identical on the smoke inputs (§1). The 3.2
    tests and protocol tests stay green.
+   - **Done (as built):** `runtime/agent/collab_frontend.hpp` (`CollabFrontend`: eager for pass A, lazy with
+     `keep_s` for live; `Features(id)` computes on request) and `runtime/agent/collab_fleet.hpp` (`CollabFleet` +
+     `CollabConfig`/`LoadCollabConfig`, which now rejects duplicate keys). Pass B on the D173 smoke: ledger, edges,
+     outcome, ate_vs_bytes byte-identical, results.yaml identical but for `ms_total`. Pass A: store byte-identical to
+     the pre-refactor binary at the same OpenCV thread count; `--check-lazy 1`: lazy == eager, 38/38 keyframes bitwise.
+   - **Finding (determinism):** `cv::ALIKED` output depends on the OpenCV thread count (`OPENCV_FOR_THREADS_NUM`):
+     the same keypoint set (1023-1024 of 1024 shared), in a different order, with descriptors differing up to 0.53.
+     Run to run at a fixed thread count it is bitwise stable. So pass-A stores, and live features, are reproducible
+     only with the thread count pinned. Pass A's yaml now records `opencv_threads`; the sweep pins it per job
+     (nproc / P_A). Live lockstep (§3) must pin it per worker too.
 2. **Deferred features** in CollabNode, plus a protocol test (a request answered two ticks later). Protocol tests stay
    green.
    - **Done (as built):** `NodeHooks::features` returns `std::optional`; nullopt keeps a peer's request

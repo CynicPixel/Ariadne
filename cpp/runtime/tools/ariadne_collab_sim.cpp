@@ -34,6 +34,7 @@
 #include "collaboration/protocol/outcome.hpp"
 #include "collaboration/retrieval/local_descriptor_codec.hpp"
 #include "perception/association/hard_pair_matcher.hpp"
+#include "runtime/agent/collab_fleet.hpp"
 #include "runtime/agent/collab_store.hpp"
 #include "runtime/datasets/scene_walls.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
@@ -63,120 +64,6 @@ namespace fs = std::filesystem;
 
 namespace {
 
-struct Config {
-    std::string arm = "spectral";             // similarity | greedy | spectral
-    double budget_bytes_per_s = 0, budget_burst_bytes = 0;
-    std::string budget_source;                // how the level was derived (D171 §4): recorded, never defaulted
-    double response_ratio = 0;                // calibrated MATCH_RESPONSE compression ratio; <= 0 = uncalibrated
-    double edge_ratio = 0, graph_ratio = 0;   // POSE_EDGE / POSE_GRAPH ratios, same calibration run (D171)
-    std::string calibration_run;
-    std::string comms_scenario;
-    double duplicate_p = 0, reorder_p = 0, jitter_s = 0;
-    double dt_s = 0.02, drain_s = 30.0, ate_every_s = 1.0;
-    double min_score = 0.5;
-    int top_k = 3;
-    ac::VerifyParams verify;
-    slam::DegeneracyParams gate;
-    bool robust = true;
-    double selection_interval_s = 5.0, candidate_ttl_s = 120.0;
-    int refine_passes = 2;
-    std::string local_encoding = "int8";      // arch §15.7 default; fp16 = the ablation row (D171)
-    std::string verify_calibration;           // where verify_min_pnp_inliers came from (manifest)
-    // Arch §42 item 7 (EVALUATION ONLY; default none): false closures planted at the broker as if verified, so only
-    // the robust stage can reject them. Z = (the true T_Ca_Cb) * [R_z(yaw_deg) | offset_m]; the information is copied
-    // from the last edge verified on the same agent pair, and a planting waits until that pair HAS a verified edge
-    // (a lone closure on a pair is accepted by PCM as "untested", pcm.hpp: the demo claim needs a competitor).
-    struct Injection {
-        double t_s = 0;
-        ac::AgentId agent_a = 0, agent_b = 1;
-        uint64_t kf_a = 0, kf_b = 0;
-        core::Vec3 offset_m = core::Vec3::Zero();
-        double yaw_deg = 0;
-    };
-    std::vector<Injection> inject;
-};
-
-Config LoadConfig(const std::string& path) {
-    const YAML::Node n = YAML::LoadFile(path);
-    Config c;
-    const auto get = [&](const YAML::Node& m, const char* k, auto& v) {
-        if (m[k]) v = m[k].as<std::decay_t<decltype(v)>>();
-    };
-    get(n, "arm", c.arm);
-    if (c.arm != "similarity" && c.arm != "greedy" && c.arm != "spectral")
-        throw std::invalid_argument(path + ": arm: similarity | greedy | spectral");
-    get(n, "budget_bytes_per_s", c.budget_bytes_per_s);
-    get(n, "budget_burst_bytes", c.budget_burst_bytes);
-    get(n, "budget_source", c.budget_source);
-    if (c.arm != "similarity" && (c.budget_bytes_per_s <= 0 || c.budget_burst_bytes <= 0 || c.budget_source.empty()))
-        throw std::invalid_argument(path + ": a budgeted arm needs budget_bytes_per_s, budget_burst_bytes, budget_source");
-    get(n, "response_ratio", c.response_ratio);
-    get(n, "calibration_run", c.calibration_run);
-    get(n, "edge_ratio", c.edge_ratio);
-    get(n, "graph_ratio", c.graph_ratio);
-    get(n, "comms_scenario", c.comms_scenario);
-    if (c.comms_scenario.empty()) throw std::invalid_argument(path + ": comms_scenario is required");
-    if (const YAML::Node f = n["faults"]) get(f, "duplicate_p", c.duplicate_p), get(f, "reorder_p", c.reorder_p),
-                                          get(f, "jitter_s", c.jitter_s);
-    get(n, "dt_s", c.dt_s);
-    get(n, "drain_s", c.drain_s);
-    get(n, "ate_every_s", c.ate_every_s);
-    if (const YAML::Node r = n["retrieval"]) get(r, "min_score", c.min_score), get(r, "top_k", c.top_k);
-    if (const YAML::Node v = n["verify"]) {
-        get(v, "min_matches", c.verify.min_matches);
-        get(v, "essential_threshold_px", c.verify.essential_threshold_px);
-        get(v, "min_essential_inliers", c.verify.min_essential_inliers);
-        get(v, "min_essential_inlier_ratio", c.verify.min_essential_inlier_ratio);
-        get(v, "pnp_reprojection_px", c.verify.pnp_reprojection_px);
-        get(v, "min_pnp_inliers", c.verify.min_pnp_inliers);
-    }
-    // The calibrated PnP floor (D171 §5 procedure, from the OTHER scene); the sweep writes it as one top-level key.
-    if (n["verify_min_pnp_inliers"]) c.verify.min_pnp_inliers = n["verify_min_pnp_inliers"].as<int>();
-    get(n, "verify_calibration", c.verify_calibration);
-    if (const YAML::Node g = n["gate"]) {
-        get(g, "noise_model", c.gate.noise_model);
-        get(g, "noise_k_t", c.gate.noise_k_t);
-        get(g, "noise_floor_t_m", c.gate.noise_floor_t_m);
-        get(g, "noise_k_r", c.gate.noise_k_r);
-        get(g, "noise_floor_r_rad", c.gate.noise_floor_r_rad);
-        get(g, "sigma_px", c.gate.sigma_px);
-        get(g, "sigma_disparity_px", c.gate.sigma_disparity_px);
-    }
-    get(n, "robust", c.robust);
-    get(n, "selection_interval_s", c.selection_interval_s);
-    get(n, "candidate_ttl_s", c.candidate_ttl_s);
-    get(n, "refine_passes", c.refine_passes);
-    get(n, "local_encoding", c.local_encoding);
-    ac::ParseLocalEncoding(c.local_encoding);
-    for (const YAML::Node& j : n["inject_false_edges"]) {
-        Config::Injection q;
-        q.t_s = j["t_s"].as<double>();
-        q.agent_a = j["agent_a"].as<ac::AgentId>(), q.kf_a = j["kf_a"].as<uint64_t>();
-        q.agent_b = j["agent_b"].as<ac::AgentId>(), q.kf_b = j["kf_b"].as<uint64_t>();
-        if (q.agent_a == q.agent_b) throw std::invalid_argument(path + ": inject_false_edges must join two agents");
-        if (const YAML::Node o = j["offset_m"]) q.offset_m = core::Vec3(o[0].as<double>(), o[1].as<double>(), o[2].as<double>());
-        if (j["yaw_deg"]) q.yaw_deg = j["yaw_deg"].as<double>();
-        c.inject.push_back(q);
-    }
-    return c;
-}
-
-/// The response's descriptors as the broker decodes them (arch §15.7 encodings; D171: int8 + per-keyframe scale).
-perception::HardPairFeatures ToHardPair(const core::FeatureResponseValue& r, ac::LocalEncoding enc) {
-    perception::HardPairFeatures f;
-    f.size = cv::Size(1280, 720);
-    for (size_t i = 0; i + 1 < r.keypoints.size(); i += 2) f.keypoints.emplace_back(r.keypoints[i], r.keypoints[i + 1], 1.0f);
-    const std::vector<float> d = ac::DecodeLocal(r.descriptors, enc);
-    cv::Mat(int(d.size() / 128), 128, CV_32F, const_cast<float*>(d.data())).copyTo(f.descriptors);
-    return f;
-}
-
-double Cosine(const std::vector<float>& a, const std::vector<float>& b) {
-    double d = 0, na = 0, nb = 0;
-    for (size_t i = 0; i < a.size() && i < b.size(); ++i) d += double(a[i]) * b[i], na += double(a[i]) * a[i], nb += double(b[i]) * b[i];
-    return na > 0 && nb > 0 ? d / std::sqrt(na * nb) : 0.0;
-}
-
 core::Timestamp At(int64_t ns) { return core::Timestamp{ns}; }
 
 }  // namespace
@@ -204,7 +91,7 @@ int main(int argc, char** argv) {
         return 2;
     }
     try {
-        const Config cfg = LoadConfig(config_path);
+        const runtime::CollabConfig cfg = runtime::LoadCollabConfig(config_path);
         fs::create_directories(out);
 
         // --- the stores (pass A), one per agent -------------------------------------------------------------
@@ -242,209 +129,33 @@ int main(int argc, char** argv) {
         ac::CommsNode comms(*base, seed, At(origin), {cfg.duplicate_p, cfg.reorder_p, 0.05, cfg.jitter_s});
         comms.Apply(scenario);
 
-        // --- hooks ----------------------------------------------------------------------------------------------
-        static const core::WireCodec codec(core::Framing::kFragmented);
+        // --- the fleet (runtime/agent/collab_fleet.hpp: the same class the live parent runs, D174) --------------
         perception::HardPairParams hp;
         hp.aliked_onnx = aliked_onnx;
         hp.lightglue_onnx = lightglue_onnx;
         hp.width = 1280, hp.height = 720;
         const perception::HardPairMatcher lightglue(hp);
-        std::map<std::pair<ac::KeyframeRef, ac::KeyframeRef>, double> score_cache;
-        struct VerifyStats { uint64_t calls = 0, verified = 0, gated = 0; std::map<std::string, uint64_t> reasons;
-                             double ms = 0; } vs;
-        double solve_ms = 0;
         // Every verify call with its ground-truth edge error: EVALUATION ONLY (threshold calibration on the other
         // scene, accepted-edge precision). Written after the decision; nothing reads it back.
         std::ofstream ecsv(fs::path(out) / "edges.csv");
-        ecsv << "agent_a,kf_a,agent_b,kf_b,score,matches,essential_inliers,pnp_inliers,reason,gt_err_t_m,gt_err_r_deg,"
-                "gt_baseline_m,pose_err_deg\n";
-        const auto gt_rel = [&](const ac::KeyframeRef& a, const ac::KeyframeRef& b) -> std::optional<core::SE3> {
-            const auto* ra = rec_of.at(a.agent).at(a.keyframe);
-            const auto* rb = rec_of.at(b.agent).at(b.keyframe);
-            if (!ra->has_gt || !rb->has_gt) return std::nullopt;
-            return (ra->gt_T_W_B * ra->T_B_C).inverse() * (rb->gt_T_W_B * rb->T_B_C);   // T_Ca_Cb, common GT world
-        };
-        const auto log_edge = [&](const ac::KeyframeRef& a, const ac::KeyframeRef& b, const ac::VerifyResult* v,
-                                  const std::string& reason, const core::SE3* Z) {
-            // pose_err_deg: D63's protocol for this matcher (LightGlue/SuperGlue relative-pose AUC): the larger of the
-            // rotation error and the angle between the estimated and true translation directions; rotation only when
-            // the true baseline is under 0.1 m (the direction is undefined there, D63's tiny-baseline caveat).
-            double et = NAN, er = NAN, base = NAN, pe = NAN;
-            if (const auto g = gt_rel(a, b); g && Z) {
-                const core::SE3 d = g->inverse() * *Z;
-                et = d.t.norm();
-                er = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
-                base = g->t.norm();
-                pe = er;
-                if (base >= 0.1 && Z->t.norm() > 1e-9)
-                    pe = std::max(pe, std::acos(std::clamp(g->t.normalized().dot(Z->t.normalized()), -1.0, 1.0)) *
-                                          180.0 / M_PI);
-            }
-            const auto sc = score_cache.find({a, b});
-            ecsv << a.agent << ',' << a.keyframe << ',' << b.agent << ',' << b.keyframe << ','
-                 << (sc == score_cache.end() ? NAN : sc->second) << ',' << (v ? v->matches : 0) << ','
-                 << (v ? v->essential_inliers : 0) << ',' << (v ? v->pnp_inliers : 0) << ',' << reason << ',' << et << ','
-                 << er << ',' << base << ',' << pe << '\n';
-        };
-        uint64_t solve_calls = 0, robust_inter = 0, robust_inliers = 0;
-        // Injections (§42 item 7): the last verified edge's information per unordered agent pair, and each planted
-        // edge's fate in the robust stage (its GNC weight in the latest solve that contained it).
-        std::map<std::pair<ac::AgentId, ac::AgentId>, std::vector<float>> pair_info;
-        const auto pair_key = [](ac::AgentId x, ac::AgentId y) { return std::make_pair(std::min(x, y), std::max(x, y)); };
-        struct InjectionState { bool planted = false; double planted_t_s = NAN; uint64_t solves_seen = 0, kept_solves = 0;
-                                double weight = NAN; double gt_t = NAN, gt_r = NAN; };
-        std::vector<InjectionState> inj(cfg.inject.size());
-        // Merge evidence for the mission spool (A1's N-agent schema): every inter-agent loop the robust stage ever kept
-        // (weight >= 0.5), when it was first kept, and its weight in the LAST solve that contained it. Only loops still
-        // kept at the end, and never injected ones, are evidence (an injection can be kept until true loops compete).
-        double sim_t_s = 0;
-        struct KeptEdge { double first_t_s = 0, last_weight = 0; bool injected = false; };
-        std::map<std::tuple<ac::AgentId, uint64_t, ac::AgentId, uint64_t>, KeptEdge> kept_edges;
-
-        ac::NodeParams np;
-        np.selection_interval_s = cfg.selection_interval_s;
-        np.candidate_ttl_s = cfg.candidate_ttl_s;
-        if (cfg.arm != "similarity") np.budget_bytes_per_s = cfg.budget_bytes_per_s, np.budget_burst_bytes = cfg.budget_burst_bytes;
         const ac::LocalEncoding enc = ac::ParseLocalEncoding(cfg.local_encoding);
-        const uint16_t feature_bytes = uint16_t(128 * ac::BytesPerDim(enc));
-        if (cfg.response_ratio > 0) np.response_cost.response_ratio[feature_bytes] = cfg.response_ratio,
-                                    np.response_cost.calibration_run = cfg.calibration_run;
-        if (cfg.edge_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_EDGE)] = cfg.edge_ratio;
-        if (cfg.graph_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_GRAPH)] = cfg.graph_ratio;
-        np.default_feature_bytes = feature_bytes;
-
-        const slam::JointRobustParams robust_params{};
-        auto solve_robust = ac::RobustMultiAgentSolve(robust_params, [&](const slam::JointRobustReport& r) {
-            robust_inter += r.inter_agent.size();
-            robust_inliers += uint64_t(r.inter_inliers);
-        }, [&](const slam::PoseGraph& joint) {
-            for (const auto& e : joint.edges()) {
-                const auto ag = [](uint64_t id) { return ac::AgentId(id >> slam::kAgentIdShift); };
-                const auto kf = [](uint64_t id) { return id & ((1ull << slam::kAgentIdShift) - 1); };
-                if (ag(e.from) == ag(e.to)) continue;
-                const bool fwd = ag(e.from) < ag(e.to);
-                const auto key = fwd ? std::make_tuple(ag(e.from), kf(e.from), ag(e.to), kf(e.to))
-                                     : std::make_tuple(ag(e.to), kf(e.to), ag(e.from), kf(e.from));
-                const auto it = kept_edges.find(key);
-                if (it != kept_edges.end()) it->second.last_weight = e.gnc_weight;
-                else if (e.gnc_weight >= 0.5) kept_edges.emplace(key, KeptEdge{sim_t_s, e.gnc_weight, false});
-            }
-            for (size_t i = 0; i < cfg.inject.size(); ++i) {
-                if (!inj[i].planted) continue;
-                const auto& q = cfg.inject[i];
-                const uint64_t A = slam::JointId(q.agent_a, q.kf_a), B = slam::JointId(q.agent_b, q.kf_b);
-                for (const auto& e : joint.edges())
-                    if ((e.from == A && e.to == B) || (e.from == B && e.to == A)) {
-                        ++inj[i].solves_seen, inj[i].weight = e.gnc_weight;
-                        if (e.gnc_weight >= 0.5) ++inj[i].kept_solves;
-                        break;
-                    }
-            }
-        });
-
-        std::vector<std::unique_ptr<ac::CollabNode>> nodes;
-        for (ac::AgentId self : fleet) {
-            ac::NodeHooks h;
-            h.retrieve = [&, self](const ac::KeyframeRef& q, const std::map<ac::KeyframeRef, core::GlobalDescriptorValue>& db) {
-                std::vector<std::pair<double, ac::KeyframeRef>> scored;
-                const auto qi = db.find(q);
-                if (qi == db.end()) return std::vector<ac::KeyframeRef>{};
-                for (const auto& [k, d] : db) {
-                    if (k.agent == q.agent) continue;
-                    const double s = Cosine(qi->second.descriptor, d.descriptor);
-                    if (s >= cfg.min_score) scored.push_back({s, k});
-                }
-                std::stable_sort(scored.begin(), scored.end(), [](const auto& x, const auto& y) { return x.first > y.first; });
-                if (int(scored.size()) > cfg.top_k) scored.resize(size_t(cfg.top_k));
-                std::vector<ac::KeyframeRef> outk;
-                for (const auto& [s, k] : scored) {
-                    score_cache[{q, k}] = score_cache[{k, q}] = s;
-                    outk.push_back(k);
-                }
-                return outk;
-            };
-            h.similarity = [&](const ac::KeyframeRef& q, const ac::KeyframeRef& c) {
-                const auto it = score_cache.find({q, c});
-                return it == score_cache.end() ? 1.0 : std::clamp(it->second, 1e-6, 1.0);
-            };
-            h.features = [&, self](uint64_t kf) {
+        runtime::CollabFleet fleet_(
+            cfg, fleet, comms, lightglue, seed, t_first,
+            [&](ac::AgentId self, uint64_t kf) -> std::optional<core::FeatureResponseValue> {   // the store: always ready
                 const runtime::CollabStoreRecord& r = *rec_of.at(self).at(kf);
-                core::FeatureResponseValue v;
-                v.keyframe_id = kf;
-                v.keypoints = r.keypoints;
-                v.descriptors = ac::EncodeLocal(r.descriptors, enc);
-                v.feature_bytes = feature_bytes;
-                v.header_bytes = enc == ac::LocalEncoding::kInt8 ? 4 : 0;
-                v.points3d = r.points3d;
-                v.camera.assign(r.camera.begin(), r.camera.end());
-                return v;
-            };
-            h.verify = [&, self](const ac::KeyframeRef& a, const core::FeatureResponseValue& fa, const ac::KeyframeRef& b,
-                                 const core::FeatureResponseValue& fb) -> std::optional<core::LoopEdgeValue> {
-                const auto t0 = std::chrono::steady_clock::now();
-                ++vs.calls;
-                const auto done = [&](const std::string& why) {
-                    ++vs.reasons[why];
-                    vs.ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-                };
-                const perception::HardPairFeatures A = ToHardPair(fa, enc), B = ToHardPair(fb, enc);
-                if (A.keypoints.size() < 8 || B.keypoints.size() < 8)
-                    return log_edge(a, b, nullptr, "too_few_features", nullptr), done("too_few_features"), std::nullopt;
-                const std::vector<cv::DMatch> m = lightglue.Match(A, B);
-                std::vector<cv::Point2f> pa, pb;
-                std::vector<int> ib;
-                for (const auto& d : m) {
-                    pa.push_back(A.keypoints[size_t(d.queryIdx)].pt);
-                    pb.push_back(B.keypoints[size_t(d.trainIdx)].pt);
-                    ib.push_back(d.trainIdx);
-                }
-                const uint64_t vseed = seed * 1000003ull + a.agent * 104729ull + a.keyframe * 7919ull + b.agent * 31ull + b.keyframe;
-                const ac::VerifyResult v = ac::VerifyMatched(pa, pb, ib, fb, cfg.verify, vseed);
-                if (!v.ok) return log_edge(a, b, &v, v.reason, v.reason == "pnp_gate" ? &v.T_A_B : nullptr),
-                                  done(v.reason), std::nullopt;
-                ++vs.verified;
-                slam::LoopGeometry geo;
-                geo.rig.cam = {fb.camera[0], fb.camera[1], fb.camera[2], fb.camera[3]};
-                geo.rig.baseline = fb.camera[4];
-                for (const auto& q : v.inlier_points_B) geo.X_B.push_back(core::Vec3(q.x, q.y, q.z));
-                for (const auto& q : v.inlier_pixels_A) geo.uv_A.push_back(core::Vec2(q.x, q.y));
-                geo.T_A_B = v.T_A_B;
-                const auto edge = slam::GatedInterAgentEdge(0, 1, geo, cfg.gate);
-                if (!edge) return log_edge(a, b, &v, "degenerate", &v.T_A_B), done("degenerate"), std::nullopt;
-                log_edge(a, b, &v, "verified", &edge->Z);
-                ++vs.gated;
-                done("verified");
-                core::LoopEdgeValue e;
-                pair_info[pair_key(a.agent, b.agent)] = ac::PackInformation(edge->information);
-                e.agent_a = a.agent;
-                e.keyframe_a = a.keyframe;
-                e.agent_b = b.agent;
-                e.keyframe_b = b.keyframe;
-                e.measurement = ac::ToPoseValue(edge->Z);
-                e.information = ac::PackInformation(edge->information);
-                e.frame_a = {a.agent, 0};
-                e.frame_b = {b.agent, 0};
-                e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
-                e.inlier_count = uint32_t(v.pnp_inliers);
-                return e;
-            };
-            h.solve = [&](const ac::SolveInput& in) {
-                const auto t0 = std::chrono::steady_clock::now();
-                ac::SolveOutput o = cfg.robust ? solve_robust(in) : ac::MultiAgentSolve(in);
-                solve_ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-                ++solve_calls;
-                return o;
-            };
-            if (cfg.arm == "greedy") h.select = [](const ac::SelectionProblem& P) { return ac::SelectBySimilarity(P); };
-            if (cfg.arm == "spectral") {
-                ac::SelectorParams sp;
-                sp.refine_passes = cfg.refine_passes;
-                h.select = [sp](const ac::SelectionProblem& P) { return ac::SelectSpectral(P, sp); };
-            }
-            nodes.push_back(std::make_unique<ac::CollabNode>(self, fleet, codec, comms.ledger(), std::move(h), np));
-        }
+                return runtime::CollabFleet::Response(kf, r.keypoints, r.descriptors, r.points3d, r.camera, enc);
+            },
+            [&](const ac::KeyframeRef& k) -> std::optional<core::SE3> {   // EVALUATION ONLY
+                const auto* r = rec_of.at(k.agent).at(k.keyframe);
+                if (!r->has_gt) return std::nullopt;
+                return r->gt_T_W_B * r->T_B_C;
+            },
+            &ecsv);
+        const auto& nodes = fleet_.nodes();
         std::map<ac::AgentId, ac::CollabNode*> node_of;
-        for (auto& n : nodes) node_of[n->self()] = n.get();
+        for (const auto& n : nodes) node_of[n->self()] = n.get();
+        const uint16_t feature_bytes = fleet_.feature_bytes();
+        (void)feature_bytes;
 
         // --- scoring (evaluation only) -------------------------------------------------------------------------
         std::map<ac::AgentId, std::vector<const runtime::CollabStoreRecord*>> released;
@@ -495,61 +206,13 @@ int main(int argc, char** argv) {
         core::Timestamp now = At(t_first);
         for (int64_t t = t_first; t <= t_end; t += dt) {
             now = At(t);
-            sim_t_s = 1e-9 * double(t - t_first);
-            for (const auto& d : comms.network().DeliverUntil(now)) node_of.at(d.to)->OnDatagram(d, now);
+            fleet_.Deliver(now);
             for (; next_rel < releases.size() && releases[next_rel].t <= t; ++next_rel) {
                 const Release& rl = releases[next_rel];
-                const runtime::CollabStoreRecord& r = *rl.r;
-                std::optional<ac::OdometryEdge> odo;
-                if (r.odo_from) {
-                    core::Mat6 I;
-                    for (int q = 0; q < 36; ++q) I(q / 6, q % 6) = r.odo_information[size_t(q)];
-                    odo = ac::OdometryEdge{*r.odo_from, r.odo_Z, I};
-                }
-                core::GlobalDescriptorValue g;
-                g.keyframe_id = r.id;
-                g.stamp_ns = r.t_create_ns;
-                g.descriptor = r.global;
-                g.n_features = uint32_t(r.keypoints.size() / 2);
-                g.feature_bytes = feature_bytes;
-                g.fp16 = true;   // arch §15.7's encoding (D171)
-                node_of.at(rl.agent)->AddKeyframe(r.id, r.t_create_ns, r.T_W_C, odo, g, now);
-                released[rl.agent].push_back(&r);
+                fleet_.Release(rl.agent, *rl.r, now);
+                released[rl.agent].push_back(rl.r);
             }
-            for (auto& n : nodes) n->Tick(now, comms.network());
-            for (size_t i = 0; i < cfg.inject.size(); ++i) {
-                const auto& q = cfg.inject[i];
-                if (inj[i].planted || t < t_first + int64_t(std::llround(q.t_s * 1e9))) continue;
-                const auto info = pair_info.find(pair_key(q.agent_a, q.agent_b));
-                const auto has = [&](ac::AgentId ag, uint64_t kf) {
-                    const auto it = released.find(ag);
-                    return it != released.end() && std::any_of(it->second.begin(), it->second.end(),
-                                                               [&](const auto* r) { return r->id == kf; });
-                };
-                if (info == pair_info.end() || !has(q.agent_a, q.kf_a) || !has(q.agent_b, q.kf_b)) continue;
-                const ac::KeyframeRef a{q.agent_a, q.kf_a}, b{q.agent_b, q.kf_b};
-                const auto truth = gt_rel(a, b);
-                if (!truth) throw std::runtime_error("inject_false_edges: no ground truth for the planted pair");
-                core::SE3 D;
-                D.R = Eigen::AngleAxisd(q.yaw_deg * M_PI / 180.0, core::Vec3::UnitZ()).toRotationMatrix();
-                D.t = q.offset_m;
-                const core::SE3 Z = *truth * D;
-                core::LoopEdgeValue e;
-                e.agent_a = a.agent, e.keyframe_a = a.keyframe, e.agent_b = b.agent, e.keyframe_b = b.keyframe;
-                e.measurement = ac::ToPoseValue(Z);
-                e.information = info->second;
-                e.frame_a = {a.agent, 0}, e.frame_b = {b.agent, 0};
-                e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
-                for (auto& n : nodes)
-                    if (n->InjectVerifiedEdge(e, now)) {
-                        inj[i].planted = true, inj[i].planted_t_s = 1e-9 * double(t - t_first);
-                        log_edge(a, b, nullptr, "injected", &Z);
-                        const core::SE3 d = truth->inverse() * Z;
-                        inj[i].gt_t = d.t.norm();
-                        inj[i].gt_r = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
-                        break;
-                    }
-            }
+            fleet_.Tick(now);
             if (t >= next_ate) {
                 size_t ma = 0, km = 0, kt = 0;
                 const runtime::ErrorStats e = merged_ate(ma, km, kt);
@@ -626,12 +289,13 @@ int main(int argc, char** argv) {
           << ", unadvertised_prices: " << unadv << "}\n";
         y << "protocol: {candidates: " << cands << ", selected: " << selected << ", expired: " << expired
           << ", edges_verified: " << edges_verified << ", solves: " << solves << ", broker_changes: " << changes << "}\n";
+        const auto& vs = fleet_.verify_stats();
         y << "verify: {calls: " << vs.calls << ", geometric: " << vs.verified << ", gated: " << vs.gated
           << ", ms_total: " << vs.ms << ", reasons: {";
         bool first = true;
         for (const auto& [k, c] : vs.reasons) y << (first ? "" : ", ") << k << ": " << c, first = false;
-        y << "}}\nsolve: {calls: " << solve_calls << ", ms_total: " << solve_ms << ", robust_inter_agent: " << robust_inter
-          << ", robust_inliers: " << robust_inliers << "}\n";
+        y << "}}\nsolve: {calls: " << fleet_.solve_calls() << ", ms_total: " << fleet_.solve_ms()
+          << ", robust_inter_agent: " << fleet_.robust_inter() << ", robust_inliers: " << fleet_.robust_inliers() << "}\n";
         // Per agent: the frame it adopted (G = W of `anchor`) and T_G_W, row-major 3x4; null = never merged.
         y << "estimates:\n";
         for (const auto& n : nodes) {
@@ -651,14 +315,14 @@ int main(int argc, char** argv) {
             injected_keys.insert(q.agent_a < q.agent_b ? std::make_tuple(q.agent_a, q.kf_a, q.agent_b, q.kf_b)
                                                        : std::make_tuple(q.agent_b, q.kf_b, q.agent_a, q.kf_a));
         y << "kept_inter_edges:   # kept by the last solve that contained them; never injected (merge evidence)\n";
-        for (const auto& [k, v] : kept_edges)
+        for (const auto& [k, v] : fleet_.kept_edges())
             if (v.last_weight >= 0.5 && !injected_keys.count(k))
                 y << "  - {agent_a: " << std::get<0>(k) << ", kf_a: " << std::get<1>(k) << ", agent_b: " << std::get<2>(k)
                   << ", kf_b: " << std::get<3>(k) << ", t_s: " << v.first_t_s << ", weight: " << v.last_weight << "}\n";
         y << "injected:\n";
         for (size_t i = 0; i < cfg.inject.size(); ++i) {
             const auto& q = cfg.inject[i];
-            const auto& st = inj[i];
+            const auto& st = fleet_.injections()[i];
             // rejected: the robust stage gave it weight < 0.5 in the latest solve that contained it
             y << "  - {t_s: " << q.t_s << ", agent_a: " << q.agent_a << ", kf_a: " << q.kf_a << ", agent_b: " << q.agent_b
               << ", kf_b: " << q.kf_b << ", planted: " << (st.planted ? "true" : "false") << ", planted_t_s: "
