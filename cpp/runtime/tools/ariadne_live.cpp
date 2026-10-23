@@ -500,6 +500,7 @@ int main(int argc, char** argv) {
             std::vector<multi::Rigid2> T_G_W;                         // known entry poses: the 2D part of T_W_O[k]
             std::vector<uint64_t> kf_count, bid_seq, patch_seq, cons_seq;   // per agent counters
             std::vector<std::optional<std::pair<uint64_t, core::SE3>>> last_kf;  // for the odometry edge
+            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (A1 e82307f)
             multi::BrokerParams broker;
             bool discounted = false;                                  // broker_mode discount: R2 ApplyConsensus
             double tau_s = 10.0, timeout_s = 10.0;
@@ -537,6 +538,7 @@ int main(int argc, char** argv) {
                 ma->T_G_W.push_back({T.t.x(), T.t.y(), std::atan2(T.R(1, 0), T.R(0, 0))});
             }
             ma->layers.emplace_back(NA, NA + 1, p4brief.grid);   // the operator's received layers (self = NA)
+            ma->op_egress = std::make_unique<multi::OperatorEgress>(p4brief.grid, brief.target, brief.exits, mc.rho_r);
             static const core::WireCodec ma_codec(core::Framing::kFragmented);
             for (int k = 0; k <= NA; ++k) {
                 ac::NodeHooks h;
@@ -1170,9 +1172,25 @@ int main(int argc, char** argv) {
             std::vector<multi::Pick> ma_picks;
             if (ma) {
                 // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
-                // (1) The comms tick for T runs BEFORE the planners (D175 SS5), nodes in ascending id: the one
-                // seeded, single-threaded step. Deliveries land in the mailboxes via the coordination hook.
-                for (auto& nd : ma->nodes) nd->Tick(core::Timestamp{T}, ma->comms->network());
+                // (1) The comms ticks for (T_prev, T] run BEFORE the planners (D175 SS5), nodes in ascending id
+                // per rung: the one seeded, single-threaded step. The rung spacing is the heartbeat period
+                // (membership needs >= m_in of the last `window` periods mutually heard to form a component - one
+                // tick per barrier starves it; found on the first POC smoke: every agent stayed a component of 1),
+                // and the endpoint pumps what the previous barrier enqueued. Heartbeat poses are the last keyframe
+                // added by the barrier's integrate step, so a pose is at most one replan stale. Deliveries land in
+                // the mailboxes via the coordination hook.
+                {
+                    const int64_t tick_dt = 500000000;   // = MembershipParams.period_s
+                    for (int64_t tt = T - replan_ns + tick_dt; tt <= T; tt += tick_dt) {
+                        const core::Timestamp t_now{tt};
+                        // The network is a discrete-event queue: arrived datagrams must be ROUTED to their
+                        // destination node before the tick (pass B's loop does exactly this; without it nothing
+                        // is ever received - found on the second POC smoke: heartbeats sent, none heard).
+                        for (const auto& d : ma->comms->network().DeliverUntil(t_now))
+                            if (int(d.to) <= NA) ma->nodes[size_t(d.to)]->OnDatagram(d, t_now);
+                        for (auto& nd : ma->nodes) nd->Tick(t_now, ma->comms->network());
+                    }
+                }
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
                 // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
@@ -1280,9 +1298,10 @@ int main(int argc, char** argv) {
                    << ",\"consensus\":" << lg.TotalForClass(core::MessageClass::TASK_CONSENSUS)
                    << ",\"heartbeat\":" << lg.TotalForClass(core::MessageClass::HEARTBEAT) << "}}";
                 plan_out.trace_json = mt.str();
-                // The console map is what the OPERATOR received over the radio (D175: the honest behaviour), the
-                // slab convention of occupancy_grid.hpp. Egress stays agent 0's own-map route until the operator's
-                // D* Lite over the merged layer lands (Phase C of this item).
+                // The console map and the return route are what the OPERATOR received over the radio (D175 SS8.2,
+                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and A1's
+                // incremental D* Lite over it at rho_responder. Its confidence is NOT computed (support is not on
+                // the wire) - the console must not show one.
                 const cv::Mat merged = ma->layers[size_t(NA)].Merged();
                 cv::Mat slab(merged.size(), CV_8U, cv::Scalar(planning::kUnknown));
                 slab.setTo(planning::kOccupied, merged == multi::kCellOccupied);
@@ -1290,6 +1309,11 @@ int main(int argc, char** argv) {
                 slab.setTo(planning::kFree, merged == multi::kCellFreeResponder);
                 plan_out.maps = plans[0].maps;
                 plan_out.maps.slab = slab;
+                const planning::EgressReplan oe = ma->op_egress->Replan(merged);
+                plan_out.maps.egress.found = oe.found;
+                plan_out.maps.egress.cells = oe.cells;
+                plan_out.maps.egress.goal_index = oe.exit;
+                plan_out.maps.egress.length_cells = oe.length_m / brief.gs.cell;
             } else {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
                 plan_out = planner->Plan(ctx);
