@@ -1,16 +1,22 @@
 // D175 per-agent planning (planning/mission/multiagent.hpp): the exchanged cell code; the exporter sends only blocks
 // changed since the receiver's ack; received layers place patches at T_G_W(j), refuse an agent's own patch, and merge
-// conservatively; the broker equals the centralised SGA on the same instance under full delivery, is exactly-once by
-// r_same, and ignores bids from another epoch or a non-member; a member's pick follows the consensus it received, or
-// falls back "uncoordinated" for each stated reason; PlanOwn without received data equals Plan's own-agent output; a
-// peer-known column is no gain.
+// conservatively (the responder bit an AND); the operator's egress routes only over cells every observer certified and
+// clear of every reported wall; the broker equals the centralised SGA on the same instance under full delivery, is
+// exactly-once by r_same, and ignores bids from another epoch or a non-member; a member's pick follows the consensus it
+// received, or falls back "uncoordinated" for each stated reason; PlanOwn without received data equals Plan's own-agent
+// output; a peer-known column is no gain; N agents' barrier steps on N threads equal the serial run byte for byte.
 #include "planning/mission/multiagent.hpp"
 #include "planning/mission/phase4_planner.hpp"
 #include "planning/volumetric/occupancy_grid.hpp"
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <thread>
 #include <vector>
 
 using namespace ariadne;
@@ -104,6 +110,8 @@ TEST(MultiAgentPlanning, ReceivedLayersPlaceMergeAndRefuseOwn) {
     m1.slab.at<uint8_t>(3, 3) = kFree, m1.trav_r.at<uint8_t>(3, 3) = 1;
     m1.slab.at<uint8_t>(4, 4) = kFree;
     m2.slab.at<uint8_t>(4, 4) = kOccupied;   // the peers disagree: the merge is conservative
+    m1.slab.at<uint8_t>(6, 6) = kFree, m1.trav_r.at<uint8_t>(6, 6) = 1;
+    m2.slab.at<uint8_t>(6, 6) = kFree;       // free, but agent 2 did not certify it at rho_responder
     e1.Update(m1), e2.Update(m2);
     ReceivedLayers R(0, 3, g);
     R.Integrate(e1.Export(0, 0, 0));
@@ -114,6 +122,7 @@ TEST(MultiAgentPlanning, ReceivedLayersPlaceMergeAndRefuseOwn) {
     const cv::Mat M = R.Merged();
     EXPECT_EQ(M.at<uint8_t>(3, 3), kCellFreeResponder);
     EXPECT_EQ(M.at<uint8_t>(4, 4), kCellOccupied) << "occupied wins";
+    EXPECT_EQ(M.at<uint8_t>(6, 6), kCellFree) << "the responder bit is an AND over the cell's observers";
     EXPECT_THROW(R.Integrate(SlabExporter(0, g).Export(0, 0, 0)), std::invalid_argument);
     ReceivedLayers S(0, 3, g);   // T_G_W(1) = one block (1.6 m) along +x: the patch lands one block over
     S.Integrate(e1.Export(0, 0, 0), Rigid2{1.6, 0, 0});
@@ -331,4 +340,154 @@ TEST(MultiAgentPlanning, CutOffAgentDiscountsByRememberedClaims) {
     EXPECT_EQ(p.option, 0) << "a 400 s old claim has decayed";
     c.t_ns = 15000000000, c.assignments = {{1, 6, 8, 8}};   // a fresh consensus for agent 1 itself: coordinated as usual
     EXPECT_TRUE(ApplyConsensusDiscounted(&c, 1, 1, 20000000000, 12.0, o, 1.0, 4.0, 30.0).coordinated);
+}
+
+namespace {
+TraversabilityMaps Corridor(const GridFrame& g, int c0, int c1) {   // rows 16..47 free and certified by the sender
+    TraversabilityMaps m = Maps(g);
+    for (int r = 16; r < 48; ++r)
+        for (int c = c0; c < c1; ++c) m.slab.at<uint8_t>(r, c) = kFree, m.trav_r.at<uint8_t>(r, c) = 1;
+    return m;
+}
+}  // namespace
+
+TEST(MultiAgentPlanning, OperatorEgressRoutesOnlyOverWhatWasReceivedAndCertified) {
+    // A 1.6 m corridor, 4.8 m long: agent 1 mapped its west part, agent 2 its east part; neither alone joins target and
+    // exit. Agent 3 then reports a pillar inside the corridor: cells within rho_responder of it leave the lattice even
+    // though agents 1 and 2 had certified them, and the incremental replan reroutes around it.
+    const GridFrame g = Grid(64, 96);
+    SlabExporter e1(1, g), e2(2, g), e3(3, g);
+    e1.Update(Corridor(g, 0, 56)), e2.Update(Corridor(g, 40, 96));
+    TraversabilityMaps pillar = Maps(g);
+    pillar.slab.at<uint8_t>(26, 60) = kOccupied;
+    e3.Update(pillar);
+    ReceivedLayers R(0, 4, g);
+    OperatorEgress op(g, Cell{32, 4}, {Cell{32, 92}}, 0.40);
+    R.Integrate(e1.Export(0, 0, 0));
+    EXPECT_FALSE(op.Replan(R.Merged()).found) << "the east part was never received";
+    R.Integrate(e2.Export(0, 0, 0));
+    const EgressReplan a = op.Replan(R.Merged());
+    ASSERT_TRUE(a.found);
+    EXPECT_EQ(a.confidence, -1) << "no support on the wire: not computed";
+    EXPECT_NEAR(a.length_m, 88 * 0.05, 0.3);
+    for (const Cell& q : a.cells) {
+        EXPECT_TRUE(op.Lattice().at<uint8_t>(q.r, q.c));
+        EXPECT_GE(op.Clearance().at<float>(q.r, q.c), 0.40f - 1e-6f) << "rho_responder (invariant 4)";
+    }
+    EXPECT_EQ(op.Lattice().at<uint8_t>(18, 30), 0) << "certified by agent 1 but within rho of the corridor's edge";
+    R.Integrate(e3.Export(0, 0, 0));
+    const cv::Mat M = R.Merged();
+    EXPECT_EQ(M.at<uint8_t>(30, 60), kCellFreeResponder) << "both observers certified it";
+    const EgressReplan b = op.Replan(M);
+    ASSERT_TRUE(b.found);
+    EXPECT_EQ(op.Lattice().at<uint8_t>(30, 60), 0) << "within rho of agent 3's pillar";
+    EXPECT_NE(std::find(b.triggers.begin(), b.triggers.end(), "new_obstacle"), b.triggers.end());
+    for (const Cell& q : b.cells)
+        if (q.c == 60) EXPECT_GE(q.r, 35) << "around the pillar, >= rho from its edge";
+}
+
+namespace {
+// One fleet of N agents over K barriers, each agent with its OWN planner, exporter and received layers. Per barrier:
+// the broker (agent 0) assigns from the bids that arrived (the previous barrier's), inline; then every agent's step
+// (integrate its own frame and what it received, PlanOwn, export, bid, apply the consensus) runs serially or on one
+// thread per agent, each thread touching only its own agent; then sends go out serially in id order, full delivery.
+// Returns the decision log: every option's id, utility and goal (hex floats), patch, bid and pick, and the broker's
+// assignments.
+std::string RunFleet(bool threaded) {
+    constexpr int N = 3, K = 4;
+    const Phase4Briefing b = Brief();
+    const Phase4Params prm;
+    struct Agent {
+        Phase4Planner planner;
+        SlabExporter ex;
+        ReceivedLayers rx;
+        std::vector<float> Z, S;
+        std::vector<SubmapPatch> in_patches;
+        std::vector<PeerPose> in_poses;
+        uint64_t sent = 0;   // the version last sent: every receiver acks it under full delivery
+        SubmapPatch out_patch;
+        TaskBid out_bid;
+        PeerPose out_pose;
+        std::string log;
+        Agent(const Phase4Briefing& b, const Phase4Params& p, int i) : planner(b, p, N), ex(i, b.grid), rx(i, N, b.grid) {}
+    };
+    std::vector<std::unique_ptr<Agent>> A;
+    for (int i = 0; i < N; ++i) A.push_back(std::make_unique<Agent>(b, prm, i));
+    const ComponentInfo comp{0, {0, 1, 2}, 1};
+    BrokerParams bp;
+    bp.mode = BrokerMode::kOverlap, bp.r_same = 1.0, bp.range_m = 4.0;
+    std::vector<TaskBid> bids;
+    std::optional<TaskConsensus> cons;
+    std::ostringstream log;
+    log << std::hexfloat;
+    for (int k = 0; k < K; ++k) {
+        const int64_t t_ns = int64_t(5 + 5 * k) * 1000000000;
+        if (!bids.empty()) {
+            cons = BrokerAssign(bids, comp, bp, t_ns, uint64_t(k));
+            log << "k" << k << " broker";
+            for (const Assignment& x : cons->assignments) log << " " << x.agent << ":" << x.task_key << "@" << x.goal_x << "," << x.goal_y;
+            log << "\n";
+        }
+        auto Step = [&](int i) {
+            Agent& a = *A[size_t(i)];
+            DepthFrame f = WallFrame(&a.Z, &a.S, 0.8 + 1.2 * i);
+            std::fill(a.Z.begin(), a.Z.end(), float(2.0 - 0.3 * k));   // flying east; the wall stays at x = 2.5
+            f.T_W_C.t.x() = 0.5 + 0.3 * k;
+            a.planner.Integrate(i, t_ns, f);
+            for (const SubmapPatch& p : a.in_patches) a.rx.Integrate(p);
+            std::vector<PeerKeyframe> peers;
+            for (const PeerPose& q : a.in_poses) peers.push_back({q.agent, q.kf_id, core::Vec3(q.x, q.y, q.z)});
+            Phase4AgentInput in;
+            in.active = true, in.position = f.T_W_C.t;
+            const Phase4Plan p = a.planner.PlanOwn(double(t_ns) * 1e-9, i, in, peers, &a.rx.KnownMask(), {});
+            a.ex.Update(p.maps);
+            a.out_patch = a.ex.Export(a.sent, 1, t_ns);
+            a.sent = a.ex.Version();
+            const auto& opts = p.agents[size_t(i)].nbv.options;
+            a.out_bid = BuildBid(i, 1, uint64_t(k), t_ns, p.agents[size_t(i)].nbv, 8);
+            a.out_pose = PeerPose{i, k, f.T_W_C.t.x(), f.T_W_C.t.y(), f.T_W_C.t.z(), t_ns};
+            const Pick pick = ApplyConsensus(cons ? &*cons : nullptr, i, 1, t_ns, 12.0, opts, bp.r_same);
+            std::ostringstream s;
+            s << std::hexfloat << "k" << k << " a" << i << " blocks=" << a.out_patch.blocks.size() << " v=" << a.sent
+              << " bid=" << a.out_bid.options.size() << " pick=" << pick.option << " why=" << pick.why << " opts";
+            for (const TaskCandidate& o : opts)
+                s << " " << o.task_id << ":" << o.utility << "@" << o.goal_xy.first << "," << o.goal_xy.second << "/" << o.footprint.size();
+            a.log = s.str() + "\n";
+        };
+        if (threaded) {
+            std::vector<std::thread> T;
+            for (int i = 0; i < N; ++i) T.emplace_back(Step, i);
+            for (auto& t : T) t.join();
+        } else {
+            for (int i = 0; i < N; ++i) Step(i);
+        }
+        bids.clear();
+        for (auto& a : A) a->in_patches.clear(), a->in_poses.clear();
+        for (int i = 0; i < N; ++i) {
+            log << A[size_t(i)]->log;
+            bids.push_back(A[size_t(i)]->out_bid);
+            for (int j = 0; j < N; ++j)
+                if (j != i) A[size_t(j)]->in_patches.push_back(A[size_t(i)]->out_patch), A[size_t(j)]->in_poses.push_back(A[size_t(i)]->out_pose);
+        }
+    }
+    return log.str();
+}
+
+size_t Count(const std::string& s, const std::string& what) {
+    size_t n = 0;
+    for (size_t at = s.find(what); at != std::string::npos; at = s.find(what, at + 1)) ++n;
+    return n;
+}
+}  // namespace
+
+TEST(MultiAgentPlanning, NAgentStepsOnNThreadsEqualTheSerialRun) {
+    // The share-nothing claim at the library level: one thread per agent, no lock, and the decision log equals the
+    // serial run's byte for byte (twice, so a lucky interleaving does not pass alone).
+    const std::string serial = RunFleet(false);
+    EXPECT_EQ(RunFleet(true), serial);
+    EXPECT_EQ(RunFleet(true), serial);
+    EXPECT_EQ(Count(serial, "why=uncoordinated: no consensus received"), 3u) << "barrier 0 only";
+    EXPECT_GE(Count(serial, "why=coordinated"), 3u) << "the broker's assignments reach the members";
+    EXPECT_EQ(Count(serial, " broker"), 3u);
+    EXPECT_EQ(Count(serial, "blocks=0 "), 0u) << "every agent's map changed at every barrier";
 }

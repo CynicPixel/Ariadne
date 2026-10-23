@@ -1,0 +1,16 @@
+# 4.3 gate manifest (§28.2 fields that apply to the set; each run's own manifest is in its result tarball).
+gate: "4.3 NBV ablation, claim: Ariadne >= every baseline at every time fraction, per scene (NBV_4.3 §5)"
+git_commit: d59ee3d   # a1p feat/l1-a1planner; the instance manifests record git_commit "" (the shipped tree has no .git)
+git_dirty: true       # infra/scripts/live_aws.sh profile/market flags only; no runtime source
+image_digest: "sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a"
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+instance: c7i.4xlarge spot, eu-north-1, renderer llvmpipe (no GPU)
+real_time_factor: 0 (unpaced) + D168 estimator_processes   # the sim paces the lanes
+scenes: [ci_tiny, maze_short]
+seeds: [0, 1, 2]
+mission_s: 200
+policies: [ariadne, coverage_greedy, uncertainty_only, random]   # configs/mission/gate/mission_v2_<policy>.yaml
+runs: runs.txt
+scorer: python/analysis/gate_coverage.py
+not_in_this_set: [tare, "-" (1.8 nearest-frontier)]   # b09-b12, the 4.6 rows; separate record

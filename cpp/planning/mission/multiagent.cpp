@@ -1,5 +1,6 @@
 #include "planning/mission/multiagent.hpp"
 
+#include "planning/volumetric/clearance.hpp"
 #include "planning/volumetric/occupancy_grid.hpp"
 
 #include <algorithm>
@@ -93,18 +94,48 @@ void ReceivedLayers::Integrate(const SubmapPatch& p, const Rigid2& T) {
 
 cv::Mat ReceivedLayers::Merged(const cv::Mat* own) const {
     cv::Mat out(g_.rows, g_.cols, CV_8U, cv::Scalar(kCellUnknown));
-    // Precedence: occupied > free with the responder bit > free > unknown.
-    static constexpr uint8_t kRank[4] = {0, 3, 1, 2};   // indexed by CellCode
+    // Precedence: occupied > free without the responder bit > free with it > unknown (the bit is an AND).
+    static constexpr uint8_t kRank[4] = {0, 3, 2, 1};   // indexed by CellCode
     auto Fold = [&](const cv::Mat& L) {
-        for (int r = 0; r < g_.rows; ++r)
-            for (int c = 0; c < g_.cols; ++c) {
-                const uint8_t v = L.at<uint8_t>(r, c);
-                uint8_t& o = out.at<uint8_t>(r, c);
-                if (kRank[v & 3] > kRank[o & 3]) o = v;
-            }
+        for (int r = 0; r < g_.rows; ++r) {
+            const uint8_t* l = L.ptr<uint8_t>(r);
+            uint8_t* o = out.ptr<uint8_t>(r);
+            for (int c = 0; c < g_.cols; ++c)
+                if (kRank[l[c] & 3] > kRank[o[c] & 3]) o[c] = l[c];
+        }
     };
     if (own) Fold(*own);
     for (const auto& L : layer_) Fold(L);
+    return out;
+}
+
+OperatorEgress::OperatorEgress(const GridFrame& g, const Cell& target, std::vector<Cell> exits, double rho_responder,
+                               const EgressWeights& w)
+    : g_(g), rho_(rho_responder), w_(w), planner_(target, std::move(exits), g.cell),
+      ones_(g.rows, g.cols, CV_32F, cv::Scalar(1)) {
+    w_.w_u = 0, w_.w_r = 0;   // support and risk are not on the wire
+}
+
+EgressReplan OperatorEgress::Replan(const cv::Mat& merged) {
+    if (merged.type() != CV_8U || merged.rows != g_.rows || merged.cols != g_.cols)
+        throw std::invalid_argument("OperatorEgress: CellCodes on the briefing grid");
+    cv::Mat blocked(merged.size(), CV_8U);
+    for (int r = 0; r < merged.rows; ++r) {
+        const uint8_t* m = merged.ptr<uint8_t>(r);
+        uint8_t* b = blocked.ptr<uint8_t>(r);
+        for (int c = 0; c < merged.cols; ++c) b[c] = m[c] != kCellFree && m[c] != kCellFreeResponder;
+    }
+    const cv::Mat c64 = EdgeClearance(blocked, g_.cell, std::max(rho_, w_.rho_safe));
+    c64.convertTo(clear_, CV_32F);
+    trav_r_.create(merged.size(), CV_8U);
+    for (int r = 0; r < merged.rows; ++r) {
+        const uint8_t* m = merged.ptr<uint8_t>(r);
+        const double* d = c64.ptr<double>(r);
+        uint8_t* t = trav_r_.ptr<uint8_t>(r);
+        for (int c = 0; c < merged.cols; ++c) t[c] = m[c] == kCellFreeResponder && d[c] >= rho_ - kTravEpsM;
+    }
+    EgressReplan out = planner_.Replan(trav_r_, EgressPenalty(clear_, ones_, cv::Mat(), w_), ones_, cv::Mat());
+    out.confidence = -1;   // not computed: no support on the wire
     return out;
 }
 
