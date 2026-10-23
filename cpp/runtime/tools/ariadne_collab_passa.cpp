@@ -5,7 +5,7 @@
 //
 //   ariadne_collab_passa --rec RECDIR --scene SCENEDIR --perception-config YAML --slam-config YAML --out DIR
 //       --agent K --seed S --imu-noise YAML --place-onnx ONNX --place-size WxH --aliked-onnx ONNX
-//       --lightglue-onnx ONNX [--frames N]
+//       --lightglue-onnx ONNX [--frames N] [--check-lazy 1] [--check-live 1]
 //
 // Per keyframe, at its creation (t_create): ALIKED-n16 on the rectified RGB (the D90 1280x720 sim export, K = 1024),
 // its 3D points from the masked SGBM depth, and EigenPlaces R50-256 on the same RGB. Then the keyframe waits: a
@@ -13,20 +13,30 @@
 // takes it, i.e. its odometry edge became final (it left the BA window), at that frame's time (t_final). Keyframes
 // before the mirror's anchor never become final (the D87 startup prefix) and are counted, never released.
 //
+// The per-keyframe work is runtime/agent/collab_frontend.hpp (D174: the live estimator worker runs the same class).
+// --check-lazy 1 runs a lazy twin of it on the same keyframes and checks, per released keyframe, that its on-request
+// features are bitwise the eager ones (LIVE_COLLAB §2: lazy == eager); a mismatch exits 3. --check-live 1 runs the live
+// split in-process (the estimator worker's release tracker -> the collab worker's core, through the #ckin/#crel/#ckf/
+// #freq/#fresp encoders) and checks every #ckf record and #fresp reply bitwise against the store; a mismatch exits 3.
+//
 // Output: DIR/store_agent<K>.bin, DIR/passa_agent<K>.yaml (counts, timings, the model records), plus everything the VO run
 // writes (results.yaml, trajectories, manifest) in DIR/vo_agent<K>/.
 // ---------------------------------------------------------------------------
 #include "perception/association/hard_pair_matcher.hpp"
 #include "perception/place/place_recognizer.hpp"
+#include "runtime/agent/collab_frontend.hpp"
 #include "runtime/agent/collab_store.hpp"
+#include "runtime/live/collab_worker_core.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
 #include "slam/loop_closure/loop_backend.hpp"
 
+#include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -35,14 +45,6 @@
 using namespace ariadne;
 
 namespace {
-
-struct Pending {   // features computed at t_create, waiting for the keyframe's odometry to become final
-    int64_t t_create_ns = 0;
-    std::vector<float> global, keypoints, descriptors, points3d;
-    std::array<float, 5> camera{};
-    std::optional<core::SE3> gt_T_W_B;
-    core::SE3 T_B_C;
-};
 
 /// Ground truth T_W_B nearest to t within 10 ms (evo's association rule, as the VO scoring).
 std::optional<core::SE3> NearestGt(const std::vector<runtime::TimedPose>& gt, int64_t t) {
@@ -63,6 +65,7 @@ int main(int argc, char** argv) {
     a.tool = "ariadne_collab_passa";
     std::string rec, scene, imu_noise, place_onnx, place_size = "640x360", aliked_onnx, lightglue_onnx, out;
     int agent = 0;
+    bool check_lazy = false, check_live = false;
     for (int i = 1; i < argc; ++i) {
         const std::string k = argv[i];
         if (i + 1 >= argc) { std::fprintf(stderr, "missing value for %s\n", k.c_str()); return 2; }
@@ -80,6 +83,8 @@ int main(int argc, char** argv) {
         else if (k == "--place-size") place_size = v;
         else if (k == "--aliked-onnx") aliked_onnx = v;
         else if (k == "--lightglue-onnx") lightglue_onnx = v;
+        else if (k == "--check-lazy") check_lazy = v == "1";
+        else if (k == "--check-live") check_live = v == "1";
         else { std::fprintf(stderr, "unknown argument %s\n", k.c_str()); return 2; }
     }
     if (rec.empty() || scene.empty() || a.perception_config.empty() || a.slam_config.empty() || out.empty() ||
@@ -108,87 +113,92 @@ int main(int argc, char** argv) {
 
         runtime::CollabStore store;
         store.agent = uint32_t(agent);
-        std::map<uint64_t, Pending> pending;
-        slam::LoopBackend mirror;   // no candidates ever: it only says which odometry is final
-        std::optional<uint64_t> last_released;
-        double ms_aliked = 0, ms_place = 0;
-        uint64_t keyframes = 0;
+        runtime::CollabFrontend front(place, aliked);   // eager: the store carries the local features
+        runtime::CollabFrontend twin(place, aliked, {/*eager=*/false, /*keep_s=*/1e18});
+        // The live split, in-process: tracker (estimator worker) -> core (collab worker), messages encoded/decoded.
+        runtime::CollabFeatureExtractor live_x(place, aliked, 1e18);
+        runtime::CollabReleaseTracker live_tracker;
+        std::map<uint64_t, runtime::CollabStoreRecord> live_records;
+        std::map<uint64_t, runtime::live::CollabFeatureReply> live_replies;
+        runtime::live::CollabWorkerCore live_core(live_x, [&](const std::string& topic, const std::vector<uint8_t>& b) {
+            if (topic == "#ckf") {
+                runtime::CollabStoreRecord r = runtime::live::DecodeRecord(b, nullptr);
+                live_records[r.id] = std::move(r);
+            } else if (topic == "#fresp") {
+                auto f = runtime::live::DecodeFeatureReply(b);
+                live_replies[f.kf] = std::move(f);
+            }
+        }, 1024);
 
         a.on_keyframe = [&](const tools::KeyframeView& kv) {
-            ++keyframes;
             const auto& kf = kv.keyframe;
             if (kv.bundle.rgb.channels() != 3 || kv.bundle.rgb.cols != hp.width || kv.bundle.rgb.rows != hp.height)
                 throw std::runtime_error("passa: the keyframe RGB is not the 1280x720 colour image the export needs");
-            Pending p;
-            p.t_create_ns = kf.t_ns;
-            p.T_B_C = kv.T_B_C;
-            p.gt_T_W_B = NearestGt(gt, kf.t_ns);
-            const auto t0 = std::chrono::steady_clock::now();
-            const perception::HardPairFeatures f = aliked.ExtractRgb(kv.bundle.rgb);
-            const auto t1 = std::chrono::steady_clock::now();
-            p.global = place.DescribeRgb(kv.bundle.rgb);
-            const auto t2 = std::chrono::steady_clock::now();
-            ms_aliked += std::chrono::duration<double, std::milli>(t1 - t0).count();
-            ms_place += std::chrono::duration<double, std::milli>(t2 - t1).count();
+            runtime::CollabKeyframeInput in;
+            in.id = kf.id;
+            in.t_ns = kf.t_ns;
+            in.rgb = kv.bundle.rgb;
+            in.depth32 = runtime::MaskedDepth32(kv.bundle.depth, kv.bundle.mask);   // NaN where unusable
             const auto& cam = kv.bundle.K;   // the rectified pinhole
-            const cv::Mat depth = runtime::MaskedDepth32(kv.bundle.depth, kv.bundle.mask);   // NaN where unusable
-            p.camera = {float(cam.fx), float(cam.fy), float(cam.cx), float(cam.cy), float(kv.baseline_m)};
-            for (int i = 0; i < int(f.keypoints.size()); ++i) {
-                const cv::Point2f& q = f.keypoints[size_t(i)].pt;
-                p.keypoints.push_back(q.x);
-                p.keypoints.push_back(q.y);
-                const int u = int(std::lround(q.x)), v = int(std::lround(q.y));
-                float z = NAN;
-                if (u >= 0 && v >= 0 && u < depth.cols && v < depth.rows) z = depth.at<float>(v, u);
-                const bool ok = std::isfinite(z) && z > 0.0f;
-                p.points3d.push_back(ok ? float((q.x - cam.cx) / cam.fx * z) : NAN);
-                p.points3d.push_back(ok ? float((q.y - cam.cy) / cam.fy * z) : NAN);
-                p.points3d.push_back(ok ? z : NAN);
-                const float* d = f.descriptors.ptr<float>(i);
-                p.descriptors.insert(p.descriptors.end(), d, d + f.descriptors.cols);
-            }
-            pending[kf.id] = std::move(p);
-
-            // Release whatever the mirror now holds as final, in id order, at this frame's time.
-            mirror.Sync(*kv.graph);
-            const auto& nodes = mirror.graph().nodes();
-            for (auto it = last_released ? nodes.upper_bound(*last_released) : nodes.begin(); it != nodes.end(); ++it) {
-                const auto pit = pending.find(it->first);
-                if (pit == pending.end()) throw std::logic_error("passa: a final keyframe without its features");
-                runtime::CollabStoreRecord r;
-                r.id = it->first;
-                r.t_create_ns = pit->second.t_create_ns;
-                r.t_final_ns = kf.t_ns;
-                r.T_W_C = it->second.T_W_C;
-                if (last_released) {
-                    bool found = false;
-                    for (const auto& e : mirror.graph().edges())
-                        if (e.type == slam::EdgeType::kOdometry && e.from == *last_released && e.to == r.id) {
-                            r.odo_from = e.from;
-                            r.odo_Z = e.Z;
-                            for (int q = 0; q < 36; ++q) r.odo_information[size_t(q)] = e.information(q / 6, q % 6);
-                            found = true;
-                        }
-                    if (!found) throw std::logic_error("passa: no final odometry edge into a released keyframe");
-                }
-                r.global = std::move(pit->second.global);
-                r.keypoints = std::move(pit->second.keypoints);
-                r.descriptors = std::move(pit->second.descriptors);
-                r.points3d = std::move(pit->second.points3d);
-                r.camera = pit->second.camera;
-                r.has_gt = pit->second.gt_T_W_B.has_value();
-                if (r.has_gt) r.gt_T_W_B = *pit->second.gt_T_W_B;
-                r.T_B_C = pit->second.T_B_C;
-                store.records.push_back(std::move(r));
-                pending.erase(pit);
-                last_released = it->first;
+            in.fx = cam.fx, in.fy = cam.fy, in.cx = cam.cx, in.cy = cam.cy, in.baseline_m = kv.baseline_m;
+            in.T_B_C = kv.T_B_C;
+            in.gt_T_W_B = NearestGt(gt, kf.t_ns);
+            in.graph = kv.graph;
+            for (auto& r : front.OnKeyframe(in)) store.records.push_back(std::move(r));
+            if (check_lazy) twin.OnKeyframe(in);
+            if (check_live) {
+                runtime::live::CollabKeyframeIn k;
+                k.id = in.id, k.t_ns = in.t_ns, k.fx = in.fx, k.fy = in.fy, k.cx = in.cx, k.cy = in.cy;
+                k.baseline_m = in.baseline_m, k.T_B_C = in.T_B_C, k.gt_T_W_B = in.gt_T_W_B;
+                k.rgb = kv.bundle.rgb, k.depth16 = kv.bundle.depth, k.mask = kv.bundle.mask;
+                live_core.Dispatch("#ckin", runtime::live::EncodeKeyframeIn(k));
+                for (const auto& rel : live_tracker.OnKeyframe(k.id, k.t_ns, *kv.graph))
+                    live_core.Dispatch("#crel", runtime::live::EncodeRelease(rel));
             }
         };
         const int rc = tools::RunStereoVo(source, a, argc, argv);
         // Never final: the startup prefix (ids below the first released one) and the tail still in the window.
-        uint64_t prefix = 0, tail = 0;
-        for (const auto& [id, p] : pending) (store.records.empty() || id < store.records.front().id ? prefix : tail)++;
+        const auto [prefix, tail] = front.Unreleased();
         store.prefix_unreleased = prefix;
+        const uint64_t keyframes = front.stats().keyframes;
+        const double ms_aliked = front.stats().ms_aliked, ms_place = front.stats().ms_place;
+        uint64_t lazy_compared = 0, lazy_mismatch = 0;
+        uint64_t live_compared = 0, live_mismatch = 0;
+        if (check_live) {
+            auto same = [](const std::vector<float>& x, const std::vector<float>& y) {
+                return x.size() == y.size() && std::memcmp(x.data(), y.data(), x.size() * sizeof(float)) == 0;
+            };
+            auto se3 = [](const core::SE3& x, const core::SE3& y) { return x.R == y.R && x.t == y.t; };
+            for (const auto& r : store.records) {
+                ++live_compared;
+                const auto it = live_records.find(r.id);
+                live_core.Dispatch("#freq", runtime::live::EncodeFeatureRequest(r.id));
+                const auto rp = live_replies.find(r.id);
+                const bool ok = it != live_records.end() && rp != live_replies.end() && rp->second.features &&
+                    it->second.t_create_ns == r.t_create_ns && it->second.t_final_ns == r.t_final_ns &&
+                    se3(it->second.T_W_C, r.T_W_C) && it->second.odo_from == r.odo_from && se3(it->second.odo_Z, r.odo_Z) &&
+                    it->second.odo_information == r.odo_information && same(it->second.global, r.global) &&
+                    it->second.camera == r.camera && it->second.has_gt == r.has_gt &&
+                    (!r.has_gt || se3(it->second.gt_T_W_B, r.gt_T_W_B)) && se3(it->second.T_B_C, r.T_B_C) &&
+                    same(rp->second.features->keypoints, r.keypoints) &&
+                    same(rp->second.features->descriptors, r.descriptors) &&
+                    same(rp->second.features->points3d, r.points3d);
+                if (!ok) ++live_mismatch;
+            }
+            if (live_records.size() != store.records.size()) ++live_mismatch;
+        }
+        if (check_lazy) {
+            auto same = [](const std::vector<float>& x, const std::vector<float>& y) {
+                return x.size() == y.size() && std::memcmp(x.data(), y.data(), x.size() * sizeof(float)) == 0;
+            };
+            for (const auto& r : store.records) {
+                const auto f = twin.Features(r.id);
+                ++lazy_compared;
+                if (!f || !same(f->keypoints, r.keypoints) || !same(f->descriptors, r.descriptors) ||
+                    !same(f->points3d, r.points3d))
+                    ++lazy_mismatch;
+            }
+        }
         const std::string path = (std::filesystem::path(out) / ("store_agent" + std::to_string(agent) + ".bin")).string();
         runtime::WriteCollabStore(path, store);
         std::ofstream y(std::filesystem::path(out) / ("passa_agent" + std::to_string(agent) + ".yaml"));
@@ -197,11 +207,17 @@ int main(int argc, char** argv) {
           << "\ntail_unreleased: " << tail << "\nms_aliked_mean: " << (keyframes ? ms_aliked / keyframes : 0)
           << "\nms_place_mean: " << (keyframes ? ms_place / keyframes : 0) << "\nplace: {model: " << place.Name()
           << ", size: " << place_size << "}\naliked: {model: " << aliked.Name() << "}\nvo_exit: " << rc
-          << "\nstore: " << path << "\n";
+          << "\nstore: " << path << "\nopencv_threads: " << cv::getNumThreads() << "\n";   // ALIKED's output depends on it (D174)
+        if (check_live) y << "live_check: {compared: " << live_compared << ", mismatches: " << live_mismatch << "}\n";
+        if (check_lazy) y << "lazy_check: {compared: " << lazy_compared << ", mismatches: " << lazy_mismatch << "}\n";
         std::printf("passa agent %d: %llu keyframes, %zu released, prefix %llu, tail %llu -> %s\n", agent,
                     (unsigned long long)keyframes, store.records.size(), (unsigned long long)prefix,
                     (unsigned long long)tail, path.c_str());
-        return rc;
+        if (check_lazy) std::printf("lazy check: %llu compared, %llu mismatches\n", (unsigned long long)lazy_compared,
+                                    (unsigned long long)lazy_mismatch);
+        if (check_live) std::printf("live check: %llu compared, %llu mismatches\n", (unsigned long long)live_compared,
+                                    (unsigned long long)live_mismatch);
+        return lazy_mismatch || live_mismatch ? 3 : rc;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_collab_passa: %s\n", e.what());
         return 1;

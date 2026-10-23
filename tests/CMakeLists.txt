@@ -36,7 +36,8 @@ add_executable(test_protocol
   protocol/test_collab_v2.cpp
   protocol/test_collab_selection.cpp
   protocol/test_coordination_wire.cpp
-  protocol/test_coordination_node.cpp)
+  protocol/test_coordination_node.cpp
+  protocol/test_deferred_features.cpp)
 target_link_libraries(test_protocol PRIVATE ariadne::core GTest::gtest_main)
 gtest_discover_tests(test_protocol)
 
@@ -113,7 +114,8 @@ if(OpenCV_FOUND)
     unit/test_phase4_planner.cpp
     unit/test_multiagent.cpp
     unit/test_allocation.cpp
-    unit/test_visibility_graph.cpp)
+    unit/test_visibility_graph.cpp
+    unit/test_collab_link.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
