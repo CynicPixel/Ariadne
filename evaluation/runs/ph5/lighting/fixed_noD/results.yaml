@@ -1,0 +1,18 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: 4aea478fe8633dbb-agent0
+frames: 1000
+associated_poses: 1000  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 7.35476
+ate_se3: {rmse_m: 0.00249145, mean_m: 0.00194564, max_m: 0.00701713, rotation_rmse_rad: 0.00322756}
+ate_rmse_percent_of_path: 0.0338754
+sim3_scale: 0.999371  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00114654, rotation_rmse_rad: 0.000479393}
+vo: {lost_frames: 0, keyframes: 78, ba_runs: 77, ba_mean_cost_ratio: 0.896772, landmarks_alive_at_end: 674, graph_edges: 68, graph_version: 803}
+stereo_match_valid_fraction: 0.782442
+triangulation: {candidates: 9627, created: 5529, no_stereo: 4090, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 8, uncertain: 0}
+timing_ms: {track_mean: 19.5989, vo_track_mean: 5.40879, keyframe_mean: 150.223, opencv_threads: 4}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.0537659, b: 7.03539e-05, c: 4.7371e-05, matches: 106, mad_px: 0.0232357, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.0297614, b: -5.25289e-05, c: -1.17968e-05, max_abs_dy_px: 0.045905, matches: 190}}
+stereo_exposure_match: true
+keyframe_refined: {ate_rmse_m: 0.00193465, ate_rotation_rmse_rad: 0.00249379, rpe_1s_translation_rmse_m: 0.000781826}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 10, observations: 482971, invalid_at_entry: 0, chi2_failed: 910, chi2_failed_fraction: 0.00188417, keyframe_observations_rejected: 649, culled: 4853, exit_edges: 68, keyframes_held: 0, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 1913, landmarks_ill_conditioned_at_solution: 6, marginal_degenerate: 0, inlier_sigma_px: 0.373239}
+lost: {motion: bridge, reanchor: every_frame, segments: 0, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 0, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}

@@ -1,0 +1,58 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: site2_robot_3_asl-20261023T035433Z
+created_utc: "2026-10-23T03:54:33Z"
+git_commit: 1468344ccfdc708f991138ff989c4a68a708a238
+git_dirty: false
+image_digest: "sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: EuRoC/site2_robot_3_asl
+seed: 1
+agent_count: 1
+execution_mode: replay
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: euroc_cam0_cam1
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: UNRECORDED
+degradation_config: none
+perception_config: sim_v1
+slam_config: sim_v2
+
+# Backends
+feature_engine: orb
+place_recognition: UNRECORDED
+loop_backend: none
+reconstruction_backend: UNRECORDED
+imu_mode: none
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: a=-0.0195285 b=0.000941548 c=-0.00231234 matches=155 keyframe=0
+lost_handling: bridge/every_frame
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+command: /work/build/docker/cpp/runtime/ariadne_euroc_vo --sequence /work/build/hilti/seq/site2_robot_3_asl --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v2.yaml --seed 1 --out /work/build/hilti/runs/sim_tuned
+frames: 3592
+keypoint_grid: 12x7
+max_keypoints: 1500
+opencv_threads: 8
+replenish_cadence: every_frame
+target_tracks: 500
