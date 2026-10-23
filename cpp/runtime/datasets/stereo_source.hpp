@@ -49,6 +49,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <cmath>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -111,6 +112,9 @@ struct StereoFrame {
     /// empty. Empty for stereo sources.
     cv::Mat depth;
     std::optional<FramePhoto> photo;   // 5.2, D146: set only when the pixels are linear in radiance
+    /// EVALUATION ONLY (5.5, D148): the GT depth on the raw left grid (CV_32F metres), set only when the source was
+    /// asked for it (SimSource::SetGtDepth). Perception never reads it; the runner's depth_eval block does.
+    cv::Mat gt_depth;
 };
 
 class StereoSource {
@@ -241,12 +245,32 @@ inline void ApplyPhotometric(perception::DegradationParams& d, const Photometric
     photo.applied_ns = t_ns;
 }
 
+/// The scripted overexposure event of Failure E (5.3, D147): from `at_s` after the first frame on, the scene's
+/// radiance is 2^stops brighter (a light comes on, a reflective surface fills the view). It acts on the SCENE, before
+/// the sensor, and is NOT reported in FramePhoto: the system does not know the scene changed, so the controller has to
+/// see it in the pixels and respond. (A step on D's exposure would be the controller's own actuator, overwritten by its
+/// next command.)
+struct RadianceEvent {
+    double at_s = 0.0;
+    double stops = 0.0;
+};
+
+/// The radiance factor the event applies to a frame `t_rel_ns` after the first one (1 before it, or with no event).
+inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t t_rel_ns) {
+    if (!e || 1e-9 * double(t_rel_ns) < e->at_s) return 1.0;
+    return std::exp2(e->stops);
+}
+
 // --- Simulator recording ---------------------------------------------------------
 
 class SimSource : public StereoSource {
 public:
-    SimSource(const std::string& rec, const std::string& scene, int agent, const std::string& mission = "default")
-        : rec_(rec), agent_(agent) {
+    /// `right_camera` picks the rig's right camera by name (5.5, D138): "right" (the main pair) or one of a sweep
+    /// rig's right_b04/b08/b12/b20. Its topic and its extrinsics come from the mission and /tf_static like the main
+    /// pair's (sim_record checked the TF against the manifest's t_B_camera_m exactly), so the baseline follows.
+    SimSource(const std::string& rec, const std::string& scene, int agent, const std::string& mission = "default",
+              const std::string& right_camera = "right")
+        : rec_(rec), agent_(agent), right_camera_(right_camera) {
         const YAML::Node sc = YAML::LoadFile(scene + "/scene.json");
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
@@ -268,7 +292,10 @@ public:
         if (!ag) throw std::runtime_error("sim: agent " + std::to_string(agent) + " not in the mission");
         frame_ = ag["frame_id"].as<std::string>();
         t_left_ = ag["topics"]["left_image"].as<std::string>();
-        t_right_ = ag["topics"]["right_image"].as<std::string>();
+        if (!ag["topics"][right_camera_ + "_image"]) {
+            throw std::runtime_error("sim: the mission has no right camera '" + right_camera_ + "' (rig " + rig_ + ")");
+        }
+        t_right_ = ag["topics"][right_camera_ + "_image"].as<std::string>();
         if (m["rig"]["depth"]["enabled"].as<int>()) t_depth_ = ag["topics"]["depth_image"].as<std::string>();
         const std::string t_pose = ag["topics"]["gt_pose"].as<std::string>();
         t_imu_ = ag["topics"]["imu"].as<std::string>();
@@ -317,7 +344,7 @@ public:
                     T.t = core::Vec3(t.translation.x, t.translation.y, t.translation.z);
                     const std::string base = frame_.substr(0, frame_.size() - 9);   // "agent_k/"
                     if (t.child_frame_id == base + "left_optical") T_B_left_ = T, ++found_;
-                    if (t.child_frame_id == base + "right_optical") T_B_right_ = T, ++found_;
+                    if (t.child_frame_id == base + right_camera_ + "_optical") T_B_right_ = T, ++found_;
                 }
             }
         }, {t_pose, "/tf_static"});
@@ -340,7 +367,9 @@ public:
 
     std::string RunName() const override { return scene_id_ + "-agent" + std::to_string(agent_); }
     std::string SceneName() const override { return "sim/" + scene_id_ + "/agent" + std::to_string(agent_); }
-    std::string CameraConfig() const override { return rig_ + "+lens(D41)"; }
+    std::string CameraConfig() const override {
+        return rig_ + "+lens(D41)" + (right_camera_ == "right" ? "" : "+" + right_camera_);
+    }
     std::string BagChecksum() const override { return checksum_; }
     perception::RawStereoCalibration Calibration() const override {
         perception::PinholeRadtan c;
@@ -372,6 +401,18 @@ public:
     /// Replay actuator (D147): D's exposure, analog gain and lamp_power, only on linear frames (D's sRGB decode).
     bool CanActuatePhotometric() const override {
         return degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb;
+    }
+    /// Failure E's scripted event (D147); needs D (the event is a radiance scale applied before D's sensor).
+    /// 5.5 (D148): attach the recording's GT depth to every frame (StereoFrame::gt_depth, evaluation only).
+    void SetGtDepth(bool on) {
+        if (on && t_depth_.empty()) throw std::runtime_error("sim: the recording has no depth camera (rig.depth off)");
+        gt_depth_ = on;
+    }
+
+    void SetRadianceEvent(const RadianceEvent& e) {
+        if (!degradation_) throw std::logic_error("sim: a radiance event needs --degradation");
+        if (!(e.at_s >= 0.0) || !std::isfinite(e.stops)) throw std::invalid_argument("sim: radiance event at_s >= 0");
+        radiance_event_ = e;
     }
     void SetPhotometric(const PhotometricCommand& cmd) override {
         if (!CanActuatePhotometric()) throw std::logic_error("sim: photometric commands need D with input_transfer: srgb");
@@ -444,7 +485,7 @@ public:
         RosbagReader bag;
         bag.Open(sensors_mcap_);
         std::set<std::string> topics{t_left_, t_right_};
-        if (dust) topics.insert(t_depth_);
+        if (dust || gt_depth_) topics.insert(t_depth_);
         try {
             bag.Replay([&](const RosMessage& msg) {
                 const auto im = ros_cdr::DecodeImage(msg.data, msg.size);
@@ -468,7 +509,7 @@ public:
                     }
                     r.have[c] = true;
                 }
-                if (!r.have[0] || !r.have[1] || (dust && !r.have[2])) return;
+                if (!r.have[0] || !r.have[1] || ((dust || gt_depth_) && !r.have[2])) return;
                 // Complete pair: it must be the oldest pending stamp, or a frame went missing.
                 if (pending.begin()->first != t || t <= last_emitted) {
                     throw std::runtime_error("sim: stereo pair at " + std::to_string(t) +
@@ -485,15 +526,28 @@ public:
                     depth_seen[0] = perception::ApplyLensDepth(r.depth, map_);
                     depth_seen[1] = perception::ApplyLensDepth(WarpDepthToRight(r.depth, lens_.render_fx, baseline), map_);
                 }
+                if (gt_depth_) {   // evaluation only (D148): the left camera's GT depth on the raw (lens) grid
+                    const core::ImageF32 g = dust ? depth_seen[0] : perception::ApplyLensDepth(r.depth, map_);
+                    done.gt_depth = cv::Mat(g.height, g.width, CV_32F, const_cast<float*>(g.data.data())).clone();
+                }
                 // A pending command (5.3, D147) takes effect on this pair, before D runs on it.
                 if (pending_cmd_) {
                     ApplyPhotometric(*degradation_, *pending_cmd_, t, photo_);
                     pending_cmd_.reset();
                 }
+                if (first_t_ns_ < 0) first_t_ns_ = t;
+                // Failure E (D147): the scene, not the sensor, gets brighter; FramePhoto does not report it.
+                const double event = RadianceEventFactor(radiance_event_, t - first_t_ns_);
+                std::optional<perception::DegradationParams> scene_params;
+                if (degradation_ && event != 1.0) {
+                    scene_params = *degradation_;
+                    scene_params->radiance_scale *= event;
+                }
                 for (int c = 0; c < 2; ++c) {
                     core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
                     if (degradation_) {
-                        seen = perception::DegradeParallel(seen, depth_seen[c], *degradation_, seed_[c], n, threads_);
+                        seen = perception::DegradeParallel(seen, depth_seen[c], scene_params ? *scene_params : *degradation_,
+                                                           seed_[c], n, threads_);
                     }
                     const cv::Mat rgb(seen.height, seen.width, CV_8UC3, seen.data.data());
                     cv::Mat gray;
@@ -519,9 +573,13 @@ private:
     std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, t_imu_, sensors_mcap_,
         checksum_ = kUnknownField;
     int agent_ = 0;
+    std::string right_camera_ = "right";               // 5.5 (D138): the right camera by name (sweep rigs)
+    bool gt_depth_ = false;                            // 5.5 (D148): attach GT depth to frames (evaluation only)
     std::optional<LampRig> lamp_;
     FramePhoto photo_;                                 // D's state as applied to the latest frame (D147)
     std::optional<PhotometricCommand> pending_cmd_;    // applied to the next complete pair
+    std::optional<RadianceEvent> radiance_event_;      // Failure E's scripted event (D147)
+    int64_t first_t_ns_ = -1;
     size_t frames_ = 0;
     int found_ = 0;
     perception::LensModel lens_;

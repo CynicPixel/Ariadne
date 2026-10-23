@@ -15,13 +15,17 @@
 #    Each recording is uploaded to s3://$BUCKET/runs/ph5-dark/<COMMIT>/ as soon as it finishes: a spot reclaim kills
 #    the instance without running spinup's end-of-run upload, so incremental upload is what keeps finished work.
 #    The local copy is then dropped, so spinup's own upload does not send the same ~11 GB again.
+#    RENDERS="preset:rig:name ..." replaces that list and PREFIX the S3 prefix (default ph5-dark), e.g. 5.5's lit
+#    confined world with the baseline-sweep cameras (D138):
+#      RENDERS=confined_v1:configs/sim/rig_stereo_sweep_v1.yaml:confined_v1_0 PREFIX=ph5-confined
 # The shipped tree has no .git: the commit comes in as COMMIT and is written to provenance.txt (recording.json's
 # git fields will be empty on this host).
 # ---------------------------------------------------------------------------
 set -euo pipefail
 : "${BUCKET:?}" "${IMAGE_ID:?}" "${COMMIT:?}" "${ARIADNE_RESULTS:?}"
 R="$ARIADNE_RESULTS"
-DEST="s3://$BUCKET/runs/ph5-dark/$COMMIT"
+RENDERS="${RENDERS:-ci_tiny_dark:configs/sim/rig_stereo_v2.yaml:ci_tiny_dark_0 ci_tiny_dark_fixed:configs/sim/rig_stereo_v1.yaml:ci_tiny_dark_fixed_0}"
+DEST="s3://$BUCKET/runs/${PREFIX:-ph5-dark}/$COMMIT"
 log() { echo "[remote $(date -u +%T)] $*" | tee -a "$R/progress.log"; aws s3 cp "$R/progress.log" "$DEST/progress.log" --only-show-errors || true; }
 printf 'commit %s\nimage %s\n' "$COMMIT" "$IMAGE_ID" > "$R/provenance.txt"
 
@@ -76,6 +80,8 @@ record() {   # preset rig name
   aws s3 cp --recursive "build/out/$name" "$DEST/$name" --only-show-errors && rm -rf "build/out/$name"
   log "$name: uploaded"
 }
-record ci_tiny_dark configs/sim/rig_stereo_v2.yaml ci_tiny_dark_0
-record ci_tiny_dark_fixed configs/sim/rig_stereo_v1.yaml ci_tiny_dark_fixed_0
+for spec in $RENDERS; do
+  IFS=: read -r preset rig name <<< "$spec"
+  record "$preset" "$rig" "$name"
+done
 log "done"

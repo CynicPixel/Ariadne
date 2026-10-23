@@ -12,7 +12,11 @@
 #      Calibration files go to results. HILTI=extras|skip for reruns (below).
 #   3. build ariadne_sim_vo from the shipped tree in the image
 #   4. the dark recordings from S3 (keys in ph5_dark_manifest.txt) -> 4 replay rows (dark lamp / dark fixed x no D / sensor D), agent 0, 1000 frames,
-#      sim_v1 perception + sim_v2 slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0)
+#      sim_v1 perception + sim_v2_vo slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0).
+#      sim_v2_vo IS D142's "sim_v2" (L2/D101 renamed the visual-only v2 path, values unchanged, and made sim_v2 full
+#      VIO, which refuses to run without --imu-noise: run 20261023T105733Z-cpux86-dbfd05 failed all 10 rows on it)
+#      ROWS=d145 instead runs the §31.5 rows of D145-D147 (below): Stage 3 equality, features on the proxy, active
+#      exposure, Failure E, the lamp sweep and the brightness-matched fixed-light row. ROWS=lighting (default) = D142's.
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${IMAGE:?}" "${GIT_COMMIT:?}" "${BUCKET:?}" "${DARK_PREFIX:?}"
@@ -120,38 +124,101 @@ echo "build_seconds $(( $(date +%s) - t0 ))" >> "$R/steps.txt"
 
 step "4 recordings"
 # By key from the committed manifest: the instance role may GetObject but not ListBucket, so --recursive fails.
-grep -v '^#' "$SRC/infra/eval/ph5_dark_manifest.txt" | awk '{print $2}' \
+MANIFEST="$SRC/infra/eval/${MANIFEST:-ph5_dark_manifest.txt}"   # ROWS=d148: ph5_confined_manifest.txt
+grep -v '^#' "$MANIFEST" | awk '{print $2}' \
   | xargs -P 8 -I{} aws s3 cp "$DARK_PREFIX/{}" "$WORK/{}" --only-show-errors || { step "fetch recordings FAILED"; exit 1; }
-grep -v '^#' "$SRC/infra/eval/ph5_dark_manifest.txt" | while read -r bytes key; do
+grep -v '^#' "$MANIFEST" | while read -r bytes key; do
   [ "$(stat -c %s "$WORK/$key" 2>/dev/null)" = "$bytes" ] || echo "size mismatch $key"
 done > "$R/fetch_check.txt"
 [ -s "$R/fetch_check.txt" ] && { step "fetch recordings: size mismatch (fetch_check.txt)"; exit 1; }
 chown -R "$(docker run --rm "$IMAGE" id -u):$(docker run --rm "$IMAGE" id -g)" "$WORK"
 step "4b replays"
 N=$(nproc); PER=$(( N / 2 ))
-run() {   # name rec degradation cpus
-  local name=$1 rec=$2 deg=$3 cpus=$4 extra=() s0; s0=$(date +%s)
+run() {   # name rec degradation cpus [perception config] [extra tool args...]; env AGENT (0), FRAMES (1000), SLAM (sim_v2_vo)
+  local name=$1 rec=$2 deg=$3 cpus=$4 pcfg=${5:-sim_v1} extra=() s0; s0=$(date +%s)
+  shift 4; [ $# -gt 0 ] && shift
   [ "$deg" != none ] && extra=(--degradation "/work/configs/degradation/$deg.yaml")
+  extra+=("$@")
   if docker run --rm --network none --cpuset-cpus "$cpus" -v "$SRC":/work -v "$WORK":/rec:ro -v "$OUT":/out \
        -e ARIADNE_GIT_COMMIT="$GIT_COMMIT" -e ARIADNE_GIT_DIRTY=false -e ARIADNE_IMAGE_DIGEST="$(cat "$R/image_id.txt")" \
-       "$IMAGE" /work/build/aws/cpp/runtime/ariadne_sim_vo --rec "/rec/$rec/rec" --scene "/rec/$rec/scene" --agent 0 \
-       --frames 1000 --seed 1 --perception-config /work/configs/perception/sim_v1.yaml \
-       --slam-config /work/configs/slam/sim_v2.yaml "${extra[@]}" --out "/out/$name" > "$R/run_$name.log" 2>&1; then
+       "$IMAGE" /work/build/aws/cpp/runtime/ariadne_sim_vo --rec "/rec/$rec/rec" --scene "/rec/$rec/scene" \
+       --agent "${AGENT:-0}" --frames "${FRAMES:-1000}" --seed 1 --perception-config "/work/configs/perception/$pcfg.yaml" \
+       --slam-config "/work/configs/slam/${SLAM:-sim_v2_vo}.yaml" "${extra[@]}" --out "/out/$name" > "$R/run_$name.log" 2>&1; then
     echo "RUN_OK $name $(( $(date +%s) - s0 ))s"
   else
     echo "RUN_FAILED $name"
   fi
+  # Upload each row as it ends: a spot reclaim skips the end-of-run upload (run 20261023T110828Z-cpux86-a420ae lost
+  # 21 min of finished rows that way). The small outputs only, as step 5 collects them.
+  local r; r=$(ls -d "$OUT/$name"/*/ 2>/dev/null | tail -1)
+  if [ -n "$r" ]; then
+    for f in results.yaml manifest.yaml estimate_body.tum vo_trace.csv exposure_trace.csv loop_candidates.csv \
+             loop_trace.jsonl raw/groundtruth_body.tum; do
+      [ -f "$r$f" ] && aws s3 cp "$r$f" "$DEST/replays/$name/$f" --only-show-errors
+    done
+  fi
+  [ -d "$OUT/spool_$name" ] && aws s3 cp --recursive "$OUT/spool_$name" "$DEST/spools/$name" --only-show-errors
+  aws s3 cp "$R/run_$name.log" "$DEST/replays/$name/run.log" --only-show-errors || true
 }
+if [ "${ROWS:-lighting}" = d145 ]; then
+  # §31.5 rows (D145-D147), two lanes. L = the lamp-lit recording, sensor D with the sRGB decode (Stage 3 and the
+  # controller need linear frames). Row 2 must reproduce row 1's trajectory (D146); 3 vs 4 is the features row; 1 vs 5
+  # fixed vs active exposure; 6 vs 7 Failure E with and without the controller (scene +2 stops at 20 s).
+  L=ci_tiny_dark_0 F=ci_tiny_dark_fixed_0 S=lampdark_sensor_v0 CAL=(--lamp-calib /work/configs/sim/lamp_calib_v2.yaml)
+  A="0-$((PER-1))" B="$PER-$((N-1))"
+  { run r01_flat "$L" "$S" "$A" sim_v1_rad_flat
+    run r02_falloff "$L" "$S" "$A" sim_v1_ph5_falloff "${CAL[@]}"
+    run r03_kfcad "$L" "$S" "$A" sim_v1_ph5_kfcad
+    run r04_kfcad_proxy "$L" "$S" "$A" sim_v1_ph5_kfcad_proxy "${CAL[@]}"
+    run r05_expo "$L" "$S" "$A" sim_v1_ph5_expo; } | tee -a "$R/runs.txt" &
+  { run r06_failE_expo "$L" "$S" "$B" sim_v1_ph5_expo --radiance-event 20:2
+    run r07_failE_fixed "$L" "$S" "$B" sim_v1_rad_flat --radiance-event 20:2
+    run r08_lamp50 "$L" lampdark_lamp50_v0 "$B"
+    run r09_lamp15 "$L" lampdark_lamp15_v0 "$B"
+    run r10_fixed_matched "$F" lampdark_fixed_matched_v0 "$B"; } | tee -a "$R/runs.txt" &
+  wait
+elif [ "${ROWS:-lighting}" = d148 ]; then
+  # 5.5 (D148), fixed before the confined_v1 render was read. C = the lit confined_v1 seed 0 + rig_stereo_sweep_v1
+  # recording; full mission, sim_v2 (VIO) + imu_noise_v1, no D. A: corridor gate ordering (sim_v2_loops), both agents.
+  # B: the baseline sweep (right_b04/b08/b12/b20 + the main pair), both agents, with the depth_eval block.
+  C=confined_v1_0 IMU=(--imu-noise /work/configs/sim/imu_noise_v1.yaml) DE=(--depth-eval 1)
+  A="0-$((PER-1))" B="$PER-$((N-1))"
+  export FRAMES=0 SLAM=sim_v2
+  { SLAM=sim_v2_loops AGENT=0 run corr_a0 "$C" none "$A" sim_v1 "${IMU[@]}"
+    AGENT=0 run sw_b10_a0 "$C" none "$A" sim_v1 "${IMU[@]}" "${DE[@]}"
+    AGENT=0 run sw_b04_a0 "$C" none "$A" sim_v1_sweep_b04 "${IMU[@]}" "${DE[@]}" --right-camera right_b04
+    AGENT=0 run sw_b08_a0 "$C" none "$A" sim_v1_sweep_b08 "${IMU[@]}" "${DE[@]}" --right-camera right_b08
+    AGENT=0 run sw_b12_a0 "$C" none "$A" sim_v1_sweep_b12 "${IMU[@]}" "${DE[@]}" --right-camera right_b12
+    AGENT=0 run sw_b20_a0 "$C" none "$A" sim_v1_sweep_b20 "${IMU[@]}" "${DE[@]}" --right-camera right_b20
+  } | tee -a "$R/runs.txt" &
+  { SLAM=sim_v2_loops AGENT=1 run corr_a1 "$C" none "$B" sim_v1 "${IMU[@]}"
+    AGENT=1 run sw_b10_a1 "$C" none "$B" sim_v1 "${IMU[@]}" "${DE[@]}"
+    AGENT=1 run sw_b04_a1 "$C" none "$B" sim_v1_sweep_b04 "${IMU[@]}" "${DE[@]}" --right-camera right_b04
+    AGENT=1 run sw_b08_a1 "$C" none "$B" sim_v1_sweep_b08 "${IMU[@]}" "${DE[@]}" --right-camera right_b08
+    AGENT=1 run sw_b12_a1 "$C" none "$B" sim_v1_sweep_b12 "${IMU[@]}" "${DE[@]}" --right-camera right_b12
+    AGENT=1 run sw_b20_a1 "$C" none "$B" sim_v1_sweep_b20 "${IMU[@]}" "${DE[@]}" --right-camera right_b20
+  } | tee -a "$R/runs.txt" &
+  wait
+elif [ "${ROWS:-lighting}" = spool ]; then
+  # 6.1 (D195): the albedo-proxy spool of ci_tiny_dark_0 agent 0, full mission, r02's configuration (Stage 3 at
+  # keyframes, sensor D with the sRGB decode so frames carry FramePhoto) + --spool, schema 2. Uploaded to spools/.
+  L=ci_tiny_dark_0 S=lampdark_sensor_v0
+  FRAMES=0 run spool_dark_a0 "$L" "$S" "0-$((N-1))" sim_v1_ph5_falloff \
+    --lamp-calib /work/configs/sim/lamp_calib_v2.yaml --spool /out/spool_spool_dark_a0 \
+    --recon-config /work/configs/recon/recon_v1.yaml | tee -a "$R/runs.txt"
+else
 { run lamp_noD ci_tiny_dark_0 none "0-$((PER-1))"; run lamp_sensor ci_tiny_dark_0 lampdark_sensor_v0 "0-$((PER-1))"; } \
   | tee -a "$R/runs.txt" &
 { run fixed_noD ci_tiny_dark_fixed_0 none "$PER-$((N-1))"; run fixed_sensor ci_tiny_dark_fixed_0 lampdark_sensor_v0 "$PER-$((N-1))"; } \
   | tee -a "$R/runs.txt" &
 wait
+fi
 
 step "5 collect"
 for d in "$OUT"/*/; do
   name=$(basename "$d"); r=$(ls -d "$d"*/ 2>/dev/null | tail -1); [ -n "$r" ] || continue
   mkdir -p "$R/replays/$name"
-  cp "$r"results.yaml "$r"manifest.yaml "$r"estimate_body.tum "$r"vo_trace.csv "$R/replays/$name/" 2>/dev/null
+  cp "$r"results.yaml "$r"manifest.yaml "$r"estimate_body.tum "$r"vo_trace.csv "$r"exposure_trace.csv \
+    "$R/replays/$name/" 2>/dev/null
 done
 step "done"

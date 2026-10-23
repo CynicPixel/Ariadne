@@ -1,0 +1,3 @@
+image 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core@sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a
+git_commit 649f15617a8ae654b698230945b09ce233e46fa8
+hf_revision 8e2a7a2de63670730a322d74090c1a5ea4b641eb

@@ -1,0 +1,8 @@
+# 1.6 fault identity: aadffb8df5790ca0-20261023T115253Z vs aadffb8df5790ca0-faults-20261023T115253Z
+PASS candidates.csv byte-identical
+PASS negative_probe.csv byte-identical
+PASS results.yaml identical except inject_faults/protocol
+fault run protocol: {broker_duplicates: 54, broker_buffered: 7, agent1_duplicates: 7, agent1_buffered: 4, undelivered: 0}
+PASS agent0 estimate_body.tum 4bc5e4c16f2bcef9d636ed04e172431379e30a9dc162c6613e690074fd1e71c0
+PASS agent1 estimate_body.tum 42575a81c5aa60c670d27065c30e027dcf93c0c77659874373b25a049fb8d3b2
+VERDICT PASS

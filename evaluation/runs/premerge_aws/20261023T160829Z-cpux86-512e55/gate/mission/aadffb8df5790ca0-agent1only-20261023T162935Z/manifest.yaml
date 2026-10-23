@@ -1,0 +1,57 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: aadffb8df5790ca0-agent1only-20261023T162935Z
+created_utc: "2026-10-23T16:29:36Z"
+git_commit: f772dadbf383566b672fb715dd88b4a99aec37bd
+git_dirty: false
+image_digest: "sha256:600fb68ecb53cb649876c20d52bb5809997567e52ab68534e8aba8e6555e4975"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim/aadffb8df5790ca0
+seed: 0
+agent_count: 2
+execution_mode: replay
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: mission_v1
+degradation_config: UNRECORDED
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: UNRECORDED
+place_recognition: UNRECORDED
+loop_backend: UNRECORDED
+reconstruction_backend: UNRECORDED
+imu_mode: attitude_only
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: not_applicable
+lost_handling: not_applicable
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+agents: 1
+command: /work/build/docker/cpp/runtime/ariadne_mission --spool /work/build/phase1_gate/aadffb8df5790ca0-20261023T161155Z/spool/aadffb8df5790ca0-20261023T161708Z --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene --config /work/configs/mission/mission_v1.yaml --out /work/build/premerge/aadffb8df5790ca0-20261023T161155Z/mission --agents 1
+planner: nearest_frontier+astar_placeholder
+spool: /work/build/phase1_gate/aadffb8df5790ca0-20261023T161155Z/spool/aadffb8df5790ca0-20261023T161708Z
+spool_run_id: aadffb8df5790ca0-20261023T161708Z
+spool_sha256: 51cd9efaa553c025671e14db7c82b8f7ae938722d3ce836dcdecd8d3ab1798b3

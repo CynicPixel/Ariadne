@@ -19,6 +19,7 @@
 #include "perception/stereo/stereo_rectifier.hpp"
 #include "perception/tracking/klt_tracker.hpp"
 #include "runtime/agent/intra_loop_closure.hpp"
+#include "runtime/tools/depth_eval.hpp"
 #include "runtime/agent/keyframe_records.hpp"
 #include "runtime/datasets/radiometric_source.hpp"
 #include "runtime/datasets/stereo_source.hpp"
@@ -104,6 +105,7 @@ struct KeyframeView {
     core::SE3 T_B_C;         // body <- rectified left camera
     double baseline_m = 0;
     const slam::PoseGraph* graph = nullptr;   // the VO graph right after this keyframe (read-only; D171 pass A)
+    std::optional<runtime::FramePhoto> photo;   // the applied photometric state (D147); unset without D
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -114,11 +116,14 @@ struct FrameView {
     bool is_keyframe = false;
     core::SE3 T_O_C;
     std::function<cv::Mat()> left_rect_rgb;   // empty Mat if the source has no colour
+    std::optional<runtime::FramePhoto> photo; // the applied photometric state (D147); unset without D
 };
 
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
     std::string lamp_calib;   // 5.2 (D146): the rig's lamp calibration, for a perception config with a falloff: section
+    std::string scenario;     // 5.3 (D147): a scripted event the tool set on the source, for the manifest ("" = none)
+    bool depth_eval = false;  // 5.5 (D148): SGBM depth vs the frames' GT depth at keyframes (evaluation only)
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
@@ -204,6 +209,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     // 5.3 (D147): the exposure + lamp co-controller at keyframes, commanding the source; refuses a source that
     // cannot actuate. prev_photo / lk_rescales: known-gain LK (below), a no-op while the applied state is constant.
     KeyframeExposure exposure(pcfg.exposure_control, source.CanActuatePhotometric());
+    KeyframeDepthEval depth_eval;   // 5.5 (D148): used only with args.depth_eval
     std::optional<runtime::FramePhoto> prev_photo;
     long lk_rescales = 0;
     slam::VoTrackResult prev_tr;
@@ -481,6 +487,12 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 // the stage off); features: proxy uses it only for detection at Replenish below.
                 perception::radiometric::AlbedoProxy albedo;
                 if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
+                if (args.depth_eval) {   // 5.5 (D148), evaluation only: the GT never reaches tracking or the VO
+                    if (frame.gt_depth.empty()) throw std::runtime_error("depth_eval: the source attached no GT depth");
+                    cv::Mat g;
+                    rectifier.RectifyLeftNearest(frame.gt_depth, g);
+                    depth_eval.Add(g, depth.Z, depth.valid, K_rect, cv::Matx33d(rectifier.R1()));
+                }
                 // 5.3 (D147): one controller decision per keyframe, from the state this frame reports as applied.
                 if (exposure.enabled()) {
                     const int64_t interval = prev_frame_t_ns >= 0 ? frame.t_ns - prev_frame_t_ns : 0;
@@ -662,6 +674,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
                     kv.graph = &vo.graph();
+                    kv.photo = frame.photo;
                     args.on_keyframe(kv);
                 }
                 if (loops) {
@@ -702,6 +715,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             fv.t_ns = vf.t_ns;
             fv.is_keyframe = made_keyframe;
             fv.T_O_C = T_W_C;
+            fv.photo = frame.photo;
             fv.left_rect_rgb = [&]() {
                 cv::Mat o;
                 if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, o);
@@ -801,6 +815,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.radiometric = source.Summary();
     if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
     if (exposure.enabled()) m.extra["exposure_control"] = exposure.Summary();   // 5.3
+    if (!args.scenario.empty()) m.extra["scenario"] = args.scenario;            // 5.3: e.g. Failure E's radiance event
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -1027,6 +1042,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
     falloff.WriteResults(res);  // 5.2; nothing when Stage 3 is off
+    depth_eval.WriteResults(res);   // 5.5 (D148); nothing unless --depth-eval
     exposure.WriteResults(res); // 5.3; nothing when the controller is off
     if (lk_rescales > 0) res << "known_gain_lk_rescales: " << lk_rescales << "\n";   // 5.3: only when the state varied
     if (reassoc.enabled()) res << reassoc.ResultsLine();

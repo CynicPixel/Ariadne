@@ -3512,6 +3512,15 @@ because Zhang's value was not transcribed. A closed-loop test settles it without
 Tests: test_opencv ExposureControl/Falloff/DegradationSrgb 14/14, test_numerical Degradation 25/25, test_unit
 Config/Degrad 20/20.
 
+- **Correction (2026-10-23, D148 run).** "Recorded and verified" overstated what had been done: the sweep had never
+  been recorded end to end. The first full render (run 20261023T105356Z-gpu-155842, g4dn, ~$0.088) failed twice:
+  - `/tf_static`: the canonical tool listed {left, right} only. It is fixed now: every `camera` sensor on base_link,
+    left and right still required, 12 transforms on confined_v1_0 checked in the sim image. Stereo rigs keep their
+    order, so their canonical bags should be unchanged; to verify in the pre-merge determinism run.
+  - Writer backlog: 12 RGB 1280×720 streams plus depth at 20 Hz exceeded the recorder's 4 GiB cap at t ≈ 70 s, and
+    it aborted rather than drop messages (D40). The one-pass sweep is therefore not recordable on a g4dn as
+    designed. Splitting it (passes or agents) is a decision for the maintainer (D148/D149).
+
 ## 2026-10-23 — D139: the headlamp dust model in D (replaces D135's lamp airlight as the physics; ALGORITHMS §10.2)
 
 `dust_model: headlamp` (opt-in; it requires `dust_order: pre_sensor` explicitly, because it is light in the medium).
@@ -3987,7 +3996,11 @@ frame on).
 - `t_min` stays D132's 0.5 ms.
 
 **Overexposure event (Failure E), sensor side.**
-- **The scripted event:** a D exposure step, e.g. +2 stops at a set time, as a perception-config entry.
+- **The scripted event:** a SCENE radiance step before D's sensor, e.g. +2 stops at a set time:
+  `ariadne_sim_vo --radiance-event AT_S:STOPS`, recorded in the manifest as `scenario`. It is not reported in
+  `FramePhoto`: the system does not know the scene changed, so the controller has to see it in the pixels.
+  (Corrected while building it: this entry first said "a D exposure step", but exposure is the controller's own
+  actuator, and its next absolute command would overwrite the step.)
 - **What the response must show:** the controller pulls back at ≤ 0.5 stop per keyframe, and the trace shows it.
 - **Why not the lamp:** in replay `lamp_power` cannot recover pixels clipped before the render (up to 16 %, D145), so a
   lamp-side event would look like a controller failure. That needs live `light_config`.
@@ -4070,6 +4083,135 @@ service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam
 - **Checks for the first AWS run** (the SimSource pending → next-pair path is covered locally only through
   `ApplyPhotometric` and the wrapper): in `exposure_trace.csv`, every row's `applied_decision` equals the previous row's
   `decision`, and `applied_ns` is the stamp of the frame right after `decided_ns`.
+
+### D145–D147 Results (AWS, 2026-10-23, commit `649f156`, run 20261023T113916Z-cpux86-7b3f1b, ~$0.06)
+
+Evidence: `evaluation/runs/ph5/d145_rows_20261023T113916Z/`. Agent 0, 1000 frames, seed 1, `sim_v2_vo`, all 10 rows OK.
+
+| Row | What | ATE SE(3) | KF | lost |
+|---|---|---|---|---|
+| r01 | flat-field only (sim_v1_rad_flat), sensor D | 14.8 mm | 182 | 0 |
+| r02 | + Stage 3 at keyframes (D146) | 14.8 mm | 182 | 0 |
+| r03 | keyframe-cadence baseline | 14.6 mm | 179 | 0 |
+| r04 | + features on the proxy | 17.5 mm | 152 | 0 |
+| r05 | active exposure (replay controller) | 14.9 mm | 172 | 0 |
+| r06 | Failure E (+2 stops at 20 s), controller on | 16.1 mm | 169 | 0 |
+| r07 | Failure E, fixed exposure | 19.1 mm | 249 | 0 |
+| r08 | lamp at 50 % | 150.6 mm | 243 | 22 |
+| r09 | lamp at 15 % | 1317 mm | 749 | 223 |
+| r10 | fixed light, brightness-matched | 4.2 mm | 71 | 0 |
+
+- **D146 equality holds.** r02's `estimate_body.tum` is byte-identical to r01's (sha256 `4e4bf88c…`). The proxy runs at
+  every keyframe (182) and never touches tracking. Median proxy valid fraction 0.47; feature-mask fraction 0.22.
+- **Features on the proxy (r04 vs r03): negative.** ATE +2.9 mm and 27 fewer keyframes. Detecting on the
+  reflectance image does not help this sequence. Kept as a negative row; the default stays `features: raw`.
+- **Active exposure (r05 vs r01): neutral** without an event (14.9 vs 14.8 mm). 172 decisions: 148 metric, 24
+  overexposed, saturation ≤ 4.7 %, steps ≤ 0.5 stop. Known-gain LK rescaled the previous pyramid 69 times.
+- **D147's pre-stated trace checks pass exactly.** `applied_decision` equals the previous decision in 171/171 (r05)
+  and 168/168 (r06). `applied_ns` is the stamp of the frame after `decided_ns` in all of them. Latency is one frame
+  (50 ms at 20 Hz).
+- **Failure E (the overexposure failure-and-response scenario, plan 5.3).**
+  - With the controller, it reacts at the first keyframe after the event (t = 20.0 s, saturation 7.4 %) and steps
+    −0.5 stop per keyframe: exposure 1 → 0.71 → 0.5 → 0.35 → 0.25 → 0.18. Saturation is 0 by t = 22.35 s, and it
+    then backs off +0.375 stop.
+  - ATE 16.1 mm with the controller against 19.1 mm with fixed exposure, and 169 vs 249 keyframes (the fixed run
+    keyframes through the washed-out stretch).
+- **Lamp power (r08/r09): steep, and reported as a finding.** At 50 % the lamp costs 10× the ATE and 22 lost frames;
+  at 15 % tracking collapses (1.3 m, 223 lost, 749 keyframes). This is the OIVIO-style lamp sweep of D145.
+- **Fixed light, brightness-matched (r10): 4.2 mm, 71 KF.** That is 3.5× better than the carried lamp at matched
+  brightness, so a co-moving light costs accuracy on its own, independent of mean brightness. D145 asked exactly
+  this; the coverage difference (the fixed lights reach the far field) is the likely cause [UNVERIFIED: not
+  isolated].
+- **Not in these rows** (gate bullet 1 asks for them): repeatability, match precision and loop-closure precision per
+  radiometric stage, and the dust rows. They are recorded as open in D149.
+
+## 2026-10-23 — D148: 5.5 measurement plan, fixed before the confined_v1 render is read — corridor gate ordering and the baseline sweep
+
+Written while the render was still recording (run 20261023T105356Z-gpu-155842, commit `8af6c71`); nothing below has
+seen its pixels.
+
+**Recording.** `confined_v1` seed 0 + `rig_stereo_sweep_v1`, lit (ambient 0.35 + zone lights: the sweep isolates
+geometry, D138), both agents, one g4dn spot pass, uploaded to `runs/ph5-confined/<commit>/confined_v1_0`.
+
+**A. Corridor degeneracy gate ordering** (Phase 5 gate bullet 4; arch §14.4: degeneracy gate → PCM → GNC).
+- **Replay.** `ariadne_sim_vo`, agents 0 and 1, full mission, seed 1, `sim_v1` perception, `sim_v2_loops` slam
+  (sim_v2 + euroc_v2_loops' loop block verbatim; `sim_v2` itself has loop closure off, so it makes no attempts to
+  suppress), `--imu-noise imu_noise_v1`, main pair (B = 10 cm), no D. Gate thresholds as shipped (D71/D73) [ASSUMPTION
+  on the sim rig]; none is changed after looking.
+- **Labels, from GT only.** Clearance d = the scene ESDF (`esdf_f32.bin`, 5 cm cells, metres to the nearest
+  obstacle) at each keyframe's GT xy. Narrow: d ≤ 0.30 m (the 0.45–0.60 m passages). Corridor: 0.30 < d ≤ 0.50 m (the
+  0.90–0.95 m passages). Open: d > 0.50 m. A candidate is *confined* if its query or its match keyframe is narrow or
+  corridor.
+- **Hard criterion (ordering).** Every candidate with `degenerate = true` has `pcm = false` and `gnc_inlier = false`:
+  it never reaches PCM. 0 violations, counted over all candidates of both agents.
+- **Firing.** The gate fires on a candidate when `degenerate = true` for any reason code (`too_few_points`,
+  `conditioning_translation`, `conditioning_rotation`, `parallax`, `collinear`). Reported per label: candidates,
+  refusals, the reason histogram, the D71 `corridor` score (reported, not gated), and the GT label of refused and
+  accepted candidates (good/bad at 0.2 m / 2°, D73).
+- **The bullet is met** when the ordering holds, at least one confined candidate is refused, and no GT-bad confined
+  candidate ends as a GNC inlier. If GT-bad confined candidates pass the gate and PCM/GNC remove them, the report says
+  so: the later stages did that work, not the detector. If retrieval yields no confined candidate, the bullet is
+  recorded "not exercised". Neither thresholds nor the scene change after looking.
+
+**B. Baseline sweep** (5.5, §9.1 "evaluate 4/8/12/20 cm against range/depth error", §31.8 "subject to the §9.4
+validator").
+- **Rows.** B = 4, 8, 12, 20 cm (`--right-camera right_b04|b08|b12|b20`, 0bfc95b) and the main pair 10 cm. Agents 0
+  and 1, full mission, seed 1, `sim_v1` perception except `stereo.num_disparities`, `sim_v2` slam with
+  `imu_noise_v1`, no D. Same frames, poses and lighting in every row (one render).
+- **Disparity range per baseline.** The smallest multiple of 16 that passes the §9.4 validator at
+  `required_min_range_m` 0.30, with rectified f = 671.54 px. That gives B04 96 (Z_min 0.283 m), B08 192 (0.281 m),
+  B12 272 (0.297 m) and B20 464 (0.290 m). The main pair keeps its shipped 240 (0.281 m; the rule would give 224), so its
+  perception config equals every earlier sim row. Its slam config does not: the sweep runs `sim_v2` (full VIO), while
+  the D142/D145 rows run `sim_v2_vo` (visual-only). Columns without a full search range: 7.5 / 15 / 18.75 / 21 / 36 %. SGBM time scales
+  with the range and is reported from the frontend timings.
+- **Metrics.**
+  - ATE (SE(3) alignment), keyframes, lost frames, tracks.
+  - Depth: each keyframe's SGBM Z against the recording's GT depth camera (co-located with the left camera) in GT
+    range bins 0.3–1 / 1–2 / 2–4 / 4–8 m. Reported as the median and p90 |Z − Z_gt| / Z_gt over SGBM-valid pixels,
+    plus the valid fraction per bin, every 2nd pixel.
+  - **Amended 2026-10-23, before the render was read** (the render was still recording). The first wording was
+    point-to-GT-mesh distance of GT-pose-placed points. The per-pixel GT depth measures the same along-ray range error
+    exactly, needs no mesh sampling, and needs no multi-GB spool upload per row. GT depth goes on the raw grid
+    (ApplyLensDepth), is rectified nearest-neighbour, and Z_rect = Z_raw / (R1ᵀ K_rect⁻¹ [u v 1]ᵀ).z. Built as the
+    runner's evaluation-only `depth_eval` block (`ariadne_sim_vo --depth-eval 1`, `StereoFrame::gt_depth`, never
+    read by perception), with a unit test, before the sweep is read.
+- **Reported as measured.** One seed chooses no baseline. The lamp-asymmetry confound of D138 does not arise here: the
+  render is lit.
+
+**Cost.** Render g4dn.xlarge spot $0.087/h, capped at 150 min. The replays are CPU, and their placement (local or
+c7i spot) is asked separately.
+
+## 2026-10-23 — D149: Phase 5 exit gate — NOT closed; each bullet against its evidence
+
+The format follows D172. Evidence is as of tip `93a21a9` (feat/ph5-dve). On 2026-10-23 the user ruled (via M) that
+dark, lamp-lit and dusty runs are STRETCH goals, taken up after the live demo runs in real time (D199). Bullets that
+need them are marked so: they are deferred by that ruling, not dropped.
+
+| Gate bullet | Status | Evidence |
+|---|---|---|
+| DVE ablation rows (§31.5): each radiometric stage's effect on repeatability, match precision, ATE, loop-closure precision; negatives kept | **partial** | ATE / keyframes / lost frames for the 10 §31.5 rows (D145–D147 Results, AWS `649f156`), with negatives kept (features-on-proxy +2.9 mm; lamp 15 % 1.32 m). D142's preliminary lighting rows. **Not measured:** repeatability, match precision and loop-closure precision per stage; the dust rows (5.4: stretch) |
+| Live-vs-replay exposure-control comparison (§5.6 approximation) | **blocked: stretch** | Replay side done: D147 contract, trace checks 171/171 and 168/168, Failure E recovered in 2.35 s. The live side needs B's 5.3 lamp sink, and D145 limits the comparison to the lamp path (sdformat14 has no exposure element). The lamp path is a dark-world item, so stretch under D199 |
+| OIVIO (→ Hilti 2023 site2_robot_3, D141): tracking survives lamp-lit sequences with reported ATE; failure segments documented | **measured, failing** | D144: all 3 rows score 0/100 (GCP rms 10–229 m; 14–22 % of frames lost). The failure segments are documented as failure case FC-5.6-1: losses while turning with a dark far field. The sim-tuned settings do not transfer. Kept as the negative result §34.2 asks for |
+| Corridor degeneracy detector fires on degenerate scenes and suppresses loop attempts (gate ordering) | **blocked: recording** | Pre-registered in D148 (criteria fixed before data). The sweep render failed twice over: the TF bug (fixed `82ffa00`) and the writer backlog (one-pass not recordable). The user chose a 2-camera confined_v1 render (approved; g4dn spot had no capacity in any eu-north-1 AZ at 14:47Z, retrying), then the approved CPU replay (`ph5_aws.sh ROWS=d148`) |
+
+**Plan items.**
+- 5.1: dark worlds, lamp, calibration. Done (D131, D133, D137).
+- 5.2: Stage 3 at keyframes. Done (D146; trajectory equality measured).
+- 5.3: replay co-control and the Failure E scenario. Done (D147 Results). The live `light_config` sink is B's.
+- 5.4: dust configs frozen. Open, stretch (D199).
+- 5.5: confined worlds done (D138). The baseline sweep is not recordable one-pass on g4dn (D138 correction), and its
+  re-design is open. The SimSource right-camera selection, the sweep configs and depth_eval are built and tested.
+- 5.6: measured, failing (D144).
+
+**Spend for Phase 5 on 2026-10-23.**
+- CPU $0.1156: four row launches, one of them successful.
+- GPU $0.0881: the failed sweep render.
+- S3: 15.8 GB of the failed render deleted on approval.
+- Earlier sessions: GPU $0.1241, CPU ~$0.07.
+
+**Closes when:** the corridor bullet is measured against D148, and the per-stage repeatability, match-precision and
+loop-closure rows are run (a CPU row set, still to be defined after preflight). The stretch bullets are re-opened by
+the user's call once the live demo runs in real time.
 
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
@@ -4286,6 +4428,214 @@ render.
 - the VO-side startup prefix (D87);
 - D91's pool rule goes to 7.3.
 
+
+## 2026-10-23 — D190: Phase 6 architecture — the GPU trains, the browser renders; only the active submap trains; budgets derived from a T4 measurement
+
+Design `docs/design/RECON_6.md` (preflight: arch §18–19, §29, D44, plan 6.1–6.4 and the exit gate; ALGORITHMS §2–4;
+SOTA survey RECON_6 Appendix A; OpenCV-native check Appendix B; advisor review). M reviewed it on 2026-10-23: the
+design is sound. Benchmark approved; the rest is built once D191–D195 are written.
+- **Split.** The python service (PyTorch + gsplat v1.5.3 pinned, Apache-2.0) trains. A browser renderer draws
+  the splats on the client GPU (every web renderer surveyed rasterises client-side, A.5). Two budgets, kept apart:
+  - T4 ms per iteration × iterations per keyframe ≤ the keyframe interval;
+  - browser splat count, sort rate and bytes per update.
+- **Measured inputs.**
+  - Keyframe rate: dark + lamp 4.4 KF/s per agent, lit 1.6 (D142 rows). That gives ~110 ms of GPU per keyframe for
+    two agents in the dark demo.
+  - No published T4 number exists for any candidate or for gsplat (A.3/A.4), so the iteration count comes from
+    `kaggle.sh bench`: train and render ms/iter against N, resolution and packed, with and without D-SSIM, plus the
+    append path.
+  - The demo T4 is shared with gz EGL and B's estimators on one g4dn.xlarge (B, 2026-10-23). The idle number is an
+    upper bound; the budget is measured with gz rendering.
+- **Bounded work.** Only the active submap trains (Gaussian-SLAM / GLC-SLAM). Closed submaps are frozen and sent once.
+  Submaps are anchored to their first keyframe in the agent's odometry frame O and close at 30 KF (arch §18.6: 20–40).
+  A PGO or O→W change is one 4×4 per submap, applied as a per-object transform in the renderer: no retraining and no
+  re-download. Exit-gate bullet 2 becomes a CPU unit test of that algebra.
+- **Seeding and loss.**
+  - Seeding: half-res Z back-projected where the current render's α < 0.5, with a radius check (Gaussian-SLAM); the
+    initial scale is the pixel footprint Z/f.
+  - Iterations: at least 40 % on the new keyframe (Gaussian-SLAM).
+  - Loss: 0.8 L1 + 0.2 D-SSIM (Kerbl 2023) plus a σ-weighted depth L1 (§19.3 L_photo + L_depth). L_light and the
+    §19.4 specular weight belong to the batch path (6.3).
+- **Interfaces** (agreed with B): `ariadne_live` tees each D168 `#kf` record (LinkFrame framing) to a recon socket, and
+  sends T_W_O[k] once per agent. The replay spool (RECON_1.7, schema bumped) feeds the same reader. The splat panel is
+  its own JS module on its own `/splat` websocket inside B's console.
+- **Open, with the user (through M):** judging-week GPU hosting (one T4 shared with gz, or a second GPU; on-demand
+  $0.558/h, quota 0; spot reclaimed 3× on 2026-10-23), and Spark instead of GaussianSplats3D (arch §29.3's example
+  is unmaintained per its own README).
+
+## 2026-10-23 — D191: the RTG-SLAM stability threshold, converted to keyframes rather than copied — δη_KF = 15 [ASSUMPTION]
+
+RTG-SLAM (arXiv 2404.19706) freezes a Gaussian once its confidence count reaches δη. δη = 100 gives 35.43 dB at
+17.31 FPS against 33.63 dB at δη = 50 (Table 15). That count is per **frame**: Replica processes every frame at
+30 Hz, so δη = 100 is about 3.3 s of consistent observation. Ariadne counts **keyframe updates**. Converted at equal
+observation time with the measured dark keyframe rate: 3.3 s × 4.4 KF/s ≈ **15**.
+- [ASSUMPTION] Equal time stands in for equal evidence. Keyframes are more distinct views than consecutive frames, so
+  15 errs towards freezing late (more optimisation, never a premature freeze).
+- In the lit (ablation) rate of 1.6 KF/s the same rule gives ~5. The lifecycle reads the run's measured rate, not a
+  constant.
+- Reported from the first spool run: the stable fraction over time, and the PSNR of frozen against unfrozen
+  Gaussians. Changed only through a measured ablation, never by eye.
+
+## 2026-10-23 — D192: the per-keyframe 3×4 exposure transform likely never switches on live; the batch path carries the evidence
+
+Arch §18.7 enables the affine only after ~5000 optimisation steps (Hierarchical 3DGS; skipping the delay is the
+"geometry mush" failure). Live, ~110 ms of GPU per keyframe at the dark rate leaves on the order of 10 iterations per
+keyframe (to be derived from the D190 benchmark). A 30-KF submap then gets ~300 steps, far below 5000.
+- **Decision.** The rule is kept exactly: a per-submap step counter, transform identity until 5000. It will therefore
+  most likely stay off live, and the live trace says so (`exposure_affine: off (steps N < 5000)` per submap).
+- **Evidence path.** The exit-gate exposure-delay ablation (on-time vs early) runs on the batch path (Kaggle or g4dn
+  on a spool), where submaps reach 5000 steps. Live never claims the transform.
+- With §19.1's normalisation in place the transform's job is small (arch §18.7), so its absence live costs little.
+  That claim is [UNVERIFIED] until the batch ablation measures it.
+
+## 2026-10-23 — D193: no clone/split densification on the live path — depth seeding is the only growth
+
+On the live path, Gaussians are added only by depth seeding at keyframes (α < 0.5 plus a radius check, D190) and
+removed only by pruning opacity < 0.005 (gsplat DefaultStrategy's threshold). No gradient-driven clone or split.
+- **Backing.** Gaussian-SLAM runs without clone or prune (RECON_6 A.2). LoopSplat and GLC-SLAM inherit that, and
+  RTG-SLAM grows from depth-sampled pixels only. gsplat's DefaultStrategy refines from step 500 to 15,000 with an
+  opacity reset every 3000 steps. A live submap never reaches those schedules (D192's step count), so running it would
+  be untested behaviour.
+- **Growth bound.** The live Gaussian count follows the observed surface area, which is what keeps the browser budget
+  (D190) predictable.
+- **Batch path.** The batch trainer may run DefaultStrategy or MCMC as an ablation row with its own entry. The default
+  stays depth-seeded on both paths, so live and batch reconstructions are the same model.
+
+## 2026-10-23 — D194: without a GPU the console still grows a map, labelled "initialisation only, no GPU"
+
+With no CUDA device, the service runs the RECON_1.7 CPU path (fuse + init, D44) on each keyframe. It streams those
+depth-seeded, **unoptimised** Gaussians to the same `/splat` panel: geometry from stereo depth, colour from the
+training image, no photometric optimisation.
+- The panel and the manifest say `splat_backend: cpu_init` and "initialisation only, no GPU". No PSNR/SSIM/LPIPS is
+  computed or quoted on this path; Chamfer against the GT mesh may be.
+- The realtime demo still needs a GPU (maintainer, D44). This path exists so a reclaimed or missing GPU degrades the
+  demo instead of blanking the panel.
+
+## 2026-10-23 — D195: training images are the albedo proxy by default; linear RGB on lit worlds is an ablation row
+
+Locked (CLAUDE.md §1, arch §19.1): the training images are the falloff-normalised albedo proxy. M's review
+(2026-10-23) adds that the demo world is dark, lit by the agents' own lamps (arch §42–43).
+- **Default.** The trainer refuses a record without the proxy: a `#kf` or spool record tagged `training_image: none`.
+  That refusal applies unless the run is configured as the RGB ablation. There is no silent fallback.
+- **Ablation row** (`training_image: rgb`, lit worlds only). Linear RGB, where the radiance is static (fixed lights),
+  so §19.1's coherence problem does not arise. It is labelled in the manifest and on the panel, and compared with the
+  proxy only on its own scene.
+- **The live chain to the proxy** (stated so nobody expects it sooner):
+  1. B's 5.3 lamp sink, because `KeyframeFalloff::Normalize` needs the frame's applied photometric state and live has
+     no D;
+  2. a dark demo world (Phase 8, unowned; M is raising it with the user);
+  3. a lamp calibration for that world's rig.
+- **Until then.** B's `#kf` carries the fields, tagged `none`. The trainer is built and gated on replay spools of
+  `ci_tiny_dark_0` (lamp-only, calibrated, proxy in `KeyframeBundle`, D146). The spool writer emitting the proxy is
+  6.1's first item.
+- **Display.** The panel shows the albedo proxy directly and is labelled so. §19.1's relit view needs a custom
+  renderer shader and is out of scope.
+
+## 2026-10-23 — D196: T4 measured — gsplat 1.5.3 train/render cost; iterations per keyframe derived from it
+
+`infra/scripts/kaggle.sh bench` ran on a Kaggle Tesla T4 (idle) with torch 2.11.0+cu128 and gsplat 1.5.3. Evidence:
+`evaluation/runs/ph6/bench_t4_20261023T1113Z` (L1 + depth) and `bench_t4_dssim_*` (the RECON_6 §2 loss). Each point is
+the median of 40 timed iterations after 8 warm-up. Times are ms per iteration (forward + backward + Adam), unpacked:
+
+| N Gaussians | 320×180 full loss | 640×360 full loss | 640×360 without D-SSIM | render 640×360 |
+|---|---|---|---|---|
+| 50k | 5.9 | 9.0 | 3.8 | 1.4 |
+| 100k | 6.3 | 10.9 | 5.3 | 1.7 |
+| 250k | 9.1 | 15.3 | 10.2 | 3.0 |
+| 500k | 13.5 | 20.7 | 15.9 | 4.9 |
+
+- **Packed** is slower at every point here (by 10–25 %), as gsplat's docs predict for small scenes. The live path runs
+  unpacked.
+- **D-SSIM** costs ~5 ms per iteration at 640×360: a plain-torch 11×11 convolution SSIM. A fused SSIM kernel is the
+  obvious lever, measured before it is adopted.
+- **The append path works.** 100k + 10k Gaussians took 1.4–2.0 ms, the Adam moments of the old rows stayed bitwise
+  unchanged, and 10 steps after the append were finite. That is the mechanism the live seeding relies on (D193).
+- **SH degree 3** costs 15.3 ms at 250k / 640×360, against 10.2 ms at SH0 without D-SSIM. Live stays SH0, which is
+  what the .splat chunk carries anyway.
+- **Derived budget.**
+  - Dark demo: ~110 ms per keyframe for two agents (D190). At a 100k–250k active submap that allows **~7–10
+    iterations per keyframe at 640×360, or ~12–17 at 320×180**, on an idle T4.
+  - The trainer's `budget_ms` mode computes the count from its own measured median, never from this table. The table
+    is the planning number.
+  - Whether live trains at 320×180 is decided by the first spool run's held-out PSNR at each resolution, not here.
+- **Caveats.**
+  - [ASSUMPTION] The synthetic scene is representative: ~2 px footprints filling the view. Real submaps with larger
+    Gaussians touch more pixels each.
+  - The demo T4 also renders gz, so these are upper bounds until measured under gz load (B, D190).
+
+## 2026-10-23 — D197: the console splat renderer is Spark, not GaussianSplats3D (user-approved)
+
+Arch §29.3 names GaussianSplats3D "e.g." as the in-browser Gaussian renderer. Its README now says it is no longer
+actively developed and points to Spark (RECON_6 A.5). The user approved Spark on 2026-10-23, through M.
+- **Spark (sparkjs, MIT, v2.4.0 at 2026-10-20).** Many `SplatMesh` objects are sorted together, each with its own
+  transform, and they resize incrementally. That is exactly the shape D190 needs: one mesh per submap, re-anchoring
+  = a new transform, and the active submap replaced in place. Formats include .splat (32 B/Gaussian), .spz and .sog.
+- **The version is pinned exactly** in the page's import (an exact version at least two weeks old), never a floating
+  tag.
+- **§49 ritual.** The arch §29.3 sentence gets a dated update naming Spark and this entry. GaussianSplats3D stays
+  allowed as a fallback only if Spark fails a measured smoke.
+
+## 2026-10-23 — D198: the live trainer follows Gaussian-SLAM's own recipe; three T4 smokes, measured honestly
+
+The first trainer (D190–D193) mixed three systems: RTG's 5 % sample, a 1-px footprint scale, a σ-normalised depth
+term of my own and RTG's opaque discs. Two Kaggle T4 smokes on a synthetic corridor showed it. The corridor has exact
+ray-cast depth and an analytic albedo with std 0.226, so predicting the mean scores **12.9 dB**.
+- **Smoke 1** (`fbbe641`): held-out PSNR flat at ~17 dB. The 1-px scale at a 5 % sample left ~4.5 px holes.
+- **Smoke 2** (`da9d9d4`, kNN scale): 13–16 dB. It seeded nothing after the first keyframe, and the uncited
+  σ-normalised depth term dominated the loss (~5 per pixel against ~0.15 for the photometric term).
+
+**Decision.** Transcribe Gaussian-SLAM (arXiv 2312.10070; TUM-RGBD values, the real-sensor setting), the system D193
+already rests on, without mixing:
+- **Seeding.** A submap's first keyframe takes a uniform M_u plus colour-gradient M_c, as fractions of 307,200 pixels
+  (0.326 / 0.163). Later keyframes sample uniformly where α < 0.6. ρ = 0.01 m; scale = the nearest-neighbour
+  distance; opacity 0.5.
+- **Loss.** L = (0.8 L1 + 0.2 D-SSIM) + metric depth L1 + an isotropy term |s − mean(s)|, all weights 1. MonoGS's
+  code uses the same metric-L1 form: α·L1_rgb + (1−α)·L1_depth, with α = 0.9 on TUM.
+- **Pruning and iterations.** Prune opacity < 0.5 at the middle and the end of a keyframe's iterations. Batch path:
+  100 iterations for a submap's first keyframe and 100 for the rest.
+- **Unspecified in the main text:** M_k (the supplement's value; the uniform fraction is used), and what "high
+  colour gradient" means (above the median Sobel magnitude here). Both are tagged [UNVERIFIED] / [ASSUMPTION] in the
+  code.
+- **Freezing fix.** STABLE rows (D191) are restored after each Adam step and their moments zeroed. Zeroing the
+  gradient alone let `exp_avg` keep moving them.
+
+**Smoke 3** (`c09d202`, evidence `evaluation/runs/ph6/train_smoke_20261023T1340Z`, 320×180, 60 KF, 30-KF submaps):
+
+| Variant | Iterations/KF | ms/KF | Train-view PSNR, init → after (median) | Held-out PSNR | α coverage |
+|---|---|---|---|---|---|
+| Gaussian-SLAM batch | 100 | 715 | 22.2 → 25.1 (early KFs 19.5 → 26.7–29.6) | 17.8–20.1 | 0.93–0.96 |
+| live budget | 15 | 123 | 20.8 → 21.3 | 17.7–18.5 | 0.91–0.96 |
+| batch, no depth term (diagnostic) | 100 | 694 | 22.8 → 26.5 (early 32.3) | 18.6–19.8 | 0.94–0.97 |
+
+- **No pipeline bug.** The model fits the views it trains on, so the earlier 17 dB was the recipe. Freezing and
+  re-anchoring are bitwise exact on the GPU.
+- **The live budget barely moves the seeds.** At 15 iterations per keyframe the training view gains ~0.5 dB.
+  Pruning at the middle of so few iterations removes fresh seeds before they are optimised: the first keyframe goes
+  19.5 → 16 dB. Live quality is therefore essentially the seed quality. That is a measured property of the live path
+  at this budget, not a defect to tune away by eye.
+- **The held-out gap** (train 25–30 dB, held-out 18–20 dB) is a generalisation gap on a hard 6-rad/m checker with a
+  fine sinusoid, seen from a forward-walking camera.
+- **Both are open.** Real-scene quality is the next measurement: a lit sim spool (D199, the demo world) at the batch
+  and live budgets, with the PSNR, SSIM and LPIPS of the exit gate. Any change to the live recipe (iteration
+  placement, pruning at low iteration counts) goes through its own entry with backing.
+
+## 2026-10-23 — D199: the live demo trains on linear RGB on the lit procedural maze; the albedo proxy is the dark-world stretch (user directive)
+
+The user's directive, relayed by M on 2026-10-23: dark, lamp-lit and dusty runs are stretch goals, taken up only
+after the core demo runs in real time. The demo world is a lit, random, seeded procedural maze. This session's demo
+parts are the incrementally updating splat in the console and a 3D model of the maze shown next to it.
+- **Default for the live demo:** `training_image: rgb`. The service trains on the keyframe's linear RGB, labelled
+  "RGB (lit world)" on the panel and in the manifest. Under fixed lights the radiance is static, so §19.1's
+  coherence problem does not arise. B's `#kf` record carries the RGB as is.
+- **D195 is narrowed, not reversed.** The albedo proxy stays the locked training image when the light source is the
+  agents' own lamp: dark and lamp-lit worlds, the stretch. D195's refusal rule still applies there. A dark-world
+  record without the proxy is refused, never silently trained on RGB.
+- **The Oct 24 offline gsplat** runs over B's lit 3-agent mission, not maze_dark_0. The glue is unchanged: per-agent
+  spools plus pass B's T_G_W per agent.
+- **Priority:** real-time incremental splat updates first.
+- **Open for M:** what "a 3D model of the maze" means here. One reading is the generator's own scene mesh (ground
+  truth, labelled as such). The other is a reconstructed model (A1's TSDF/ESDF). They make different claims and
+  must not be confused on screen.
 
 ## 2026-10-23 — D173: §42 item 7 false-closure injection in pass B; merge evidence; the N-agent mission spool (schema 3)
 

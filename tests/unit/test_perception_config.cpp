@@ -109,3 +109,24 @@ TEST(PerceptionConfig, EveryShippedConfigLoads) {
     euroc.fx = euroc.fy = 436.244;
     EXPECT_NO_THROW(ValidateStereoAgainstRig(LoadPerception((root / "perception/euroc.yaml").string()).stereo, euroc));
 }
+
+// 5.5 (D148): each sweep config's disparity range is the SMALLEST multiple of 16 the §9.4 validator accepts at its own
+// baseline (rectified f 671.54 px, required_min_range_m 0.30), and the main pair's shipped 240 still passes at 10 cm.
+TEST(PerceptionConfig, SweepDisparityRangesAreTheValidatorMinimum) {
+    const std::string dir = std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/";
+    const std::pair<const char*, double> rows[] = {{"sim_v1_sweep_b04", 0.04}, {"sim_v1_sweep_b08", 0.08},
+                                                   {"sim_v1_sweep_b12", 0.12}, {"sim_v1_sweep_b20", 0.20}};
+    for (const auto& [name, b] : rows) {
+        auto c = ariadne::perception::LoadPerception(dir + name + ".yaml");
+        ariadne::perception::RectifiedStereoRig rig;
+        rig.width = 1280;
+        rig.height = 720;
+        rig.fx = rig.fy = 671.54;
+        rig.cx = 639.5;
+        rig.cy = 359.5;
+        rig.baseline_m = b;
+        EXPECT_NO_THROW(ariadne::perception::ValidateStereoAgainstRig(c.stereo, rig)) << name;
+        c.stereo.num_disparities -= 16;
+        EXPECT_THROW(ariadne::perception::ValidateStereoAgainstRig(c.stereo, rig), ariadne::core::ConfigError) << name;
+    }
+}

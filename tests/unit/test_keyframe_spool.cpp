@@ -73,3 +73,50 @@ TEST(KeyframeSpool, StrideIsPerAgentAndIndexHasEveryField) {
     }
     EXPECT_EQ(y["bundles"][4]["role"].as<std::string>(), "heldout");
 }
+
+// 6.1 (D195): schema 2 -- the albedo proxy (NaN where it is not defined), the applied photometric state per bundle,
+// and the lamp (calibration copied in, R_rect_raw). A spool without any of them stays schema 1 (test above).
+TEST(KeyframeSpool, Schema2CarriesTheAlbedoProxyPhotoAndLamp) {
+    const fs::path d = TempDir("v2");
+    reconstruction::KeyframeSpool sp(d, {1.0, 1, 10});
+    const cv::Mat z(4, 6, CV_32F, cv::Scalar(2.0f)), rgb(4, 6, CV_8UC3, cv::Scalar(1, 2, 3));
+    cv::Mat albedo(4, 6, CV_32F, cv::Scalar(0.25f)), valid(4, 6, CV_8U, cv::Scalar(255));
+    valid.at<uchar>(2, 3) = 0;
+    reconstruction::SpoolLamp lamp;
+    lamp.calib_source = std::string(ARIADNE_SOURCE_DIR) + "/configs/sim/lamp_calib_v2.yaml";
+    lamp.calib_name = "lamp_calib_v2";
+    lamp.rig = "rig_stereo_v2";
+    lamp.intensity = 3.0;
+    lamp.R_rect_raw = cv::Matx33d(0, -1, 0, 1, 0, 0, 0, 0, 1);
+    sp.SetLamp(lamp);
+    const auto cam = sp.Camera(10, 10, 2.5, 1.5, 6, 4);
+    sp.AddKeyframe(0, 4, 40, 1, core::SE3(), cam, 0.1, rgb, z, z, albedo, valid,
+                   reconstruction::SpoolPhoto{2.0, 0.5, 7});
+    sp.AddHeldout(0, 5, 50, core::SE3(), cam, rgb, reconstruction::SpoolPhoto{1.5, 0.5, 7});
+    sp.Finish("run", "scene", false, core::SE3(), "none");
+
+    const YAML::Node y = YAML::LoadFile((d / "spool.yaml").string());
+    EXPECT_EQ(y["schema_version"].as<int>(), 2);
+    EXPECT_EQ(y["lamp"]["calibration"].as<std::string>(), "lamp_calibration.yaml");
+    EXPECT_TRUE(fs::exists(d / "lamp_calibration.yaml"));
+    EXPECT_DOUBLE_EQ(y["lamp"]["intensity"].as<double>(), 3.0);
+    ASSERT_EQ(y["lamp"]["R_rect_raw"].size(), 9u);
+    EXPECT_DOUBLE_EQ(y["lamp"]["R_rect_raw"][1].as<double>(), -1.0);   // row-major
+    const YAML::Node kf = y["bundles"][0], ho = y["bundles"][1];
+    EXPECT_EQ(kf["rgb_kind"].as<std::string>(), "albedo_proxy");
+    EXPECT_DOUBLE_EQ(kf["exposure_state"]["exposure_gain"].as<double>(), 2.0);
+    EXPECT_EQ(kf["exposure_state"]["decision_id"].as<uint64_t>(), 7u);
+    EXPECT_DOUBLE_EQ(kf["lamp_state"]["lamp_rel"].as<double>(), 0.5);
+    EXPECT_EQ(ho["rgb_kind"].as<std::string>(), "raw_radiance");
+    EXPECT_DOUBLE_EQ(ho["exposure_state"]["exposure_gain"].as<double>(), 1.5);
+
+    const cv::Mat bits = cv::imread((d / "agent0/kf_4_albedo.png").string(), cv::IMREAD_UNCHANGED);
+    ASSERT_EQ(bits.type(), CV_16U);
+    cv::Mat back;
+    cv::Mat(bits.size(), CV_16F, bits.data, bits.step).convertTo(back, CV_32F);
+    EXPECT_FLOAT_EQ(back.at<float>(0, 0), 0.25f);
+    EXPECT_TRUE(std::isnan(back.at<float>(2, 3)));   // not defined there: NaN, never a guessed reflectance
+
+    EXPECT_THROW(sp.AddKeyframe(0, 6, 60, 1, core::SE3(), cam, 0.1, rgb, z, z, albedo, cv::Mat()),
+                 std::invalid_argument);   // an albedo without its valid mask
+}
