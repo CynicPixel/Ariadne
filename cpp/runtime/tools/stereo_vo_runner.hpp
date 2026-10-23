@@ -119,6 +119,7 @@ struct FrameView {
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
     std::string lamp_calib;   // 5.2 (D146): the rig's lamp calibration, for a perception config with a falloff: section
+    std::string scenario;     // 5.3 (D147): a scripted event the tool set on the source, for the manifest ("" = none)
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
@@ -801,6 +802,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.radiometric = source.Summary();
     if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
     if (exposure.enabled()) m.extra["exposure_control"] = exposure.Summary();   // 5.3
+    if (!args.scenario.empty()) m.extra["scenario"] = args.scenario;            // 5.3: e.g. Failure E's radiance event
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;

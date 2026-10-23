@@ -49,6 +49,7 @@
 #include <functional>
 #include <map>
 #include <set>
+#include <cmath>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -241,6 +242,22 @@ inline void ApplyPhotometric(perception::DegradationParams& d, const Photometric
     photo.applied_ns = t_ns;
 }
 
+/// The scripted overexposure event of Failure E (5.3, D147): from `at_s` after the first frame on, the scene's
+/// radiance is 2^stops brighter (a light comes on, a reflective surface fills the view). It acts on the SCENE, before
+/// the sensor, and is NOT reported in FramePhoto: the system does not know the scene changed, so the controller has to
+/// see it in the pixels and respond. (A step on D's exposure would be the controller's own actuator, overwritten by its
+/// next command.)
+struct RadianceEvent {
+    double at_s = 0.0;
+    double stops = 0.0;
+};
+
+/// The radiance factor the event applies to a frame `t_rel_ns` after the first one (1 before it, or with no event).
+inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t t_rel_ns) {
+    if (!e || 1e-9 * double(t_rel_ns) < e->at_s) return 1.0;
+    return std::exp2(e->stops);
+}
+
 // --- Simulator recording ---------------------------------------------------------
 
 class SimSource : public StereoSource {
@@ -373,6 +390,12 @@ public:
     bool CanActuatePhotometric() const override {
         return degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb;
     }
+    /// Failure E's scripted event (D147); needs D (the event is a radiance scale applied before D's sensor).
+    void SetRadianceEvent(const RadianceEvent& e) {
+        if (!degradation_) throw std::logic_error("sim: a radiance event needs --degradation");
+        if (!(e.at_s >= 0.0) || !std::isfinite(e.stops)) throw std::invalid_argument("sim: radiance event at_s >= 0");
+        radiance_event_ = e;
+    }
     void SetPhotometric(const PhotometricCommand& cmd) override {
         if (!CanActuatePhotometric()) throw std::logic_error("sim: photometric commands need D with input_transfer: srgb");
         if (cmd.decision_id <= photo_.decision_id || (pending_cmd_ && cmd.decision_id <= pending_cmd_->decision_id)) {
@@ -490,10 +513,19 @@ public:
                     ApplyPhotometric(*degradation_, *pending_cmd_, t, photo_);
                     pending_cmd_.reset();
                 }
+                if (first_t_ns_ < 0) first_t_ns_ = t;
+                // Failure E (D147): the scene, not the sensor, gets brighter; FramePhoto does not report it.
+                const double event = RadianceEventFactor(radiance_event_, t - first_t_ns_);
+                std::optional<perception::DegradationParams> scene_params;
+                if (degradation_ && event != 1.0) {
+                    scene_params = *degradation_;
+                    scene_params->radiance_scale *= event;
+                }
                 for (int c = 0; c < 2; ++c) {
                     core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
                     if (degradation_) {
-                        seen = perception::DegradeParallel(seen, depth_seen[c], *degradation_, seed_[c], n, threads_);
+                        seen = perception::DegradeParallel(seen, depth_seen[c], scene_params ? *scene_params : *degradation_,
+                                                           seed_[c], n, threads_);
                     }
                     const cv::Mat rgb(seen.height, seen.width, CV_8UC3, seen.data.data());
                     cv::Mat gray;
@@ -522,6 +554,8 @@ private:
     std::optional<LampRig> lamp_;
     FramePhoto photo_;                                 // D's state as applied to the latest frame (D147)
     std::optional<PhotometricCommand> pending_cmd_;    // applied to the next complete pair
+    std::optional<RadianceEvent> radiance_event_;      // Failure E's scripted event (D147)
+    int64_t first_t_ns_ = -1;
     size_t frames_ = 0;
     int found_ = 0;
     perception::LensModel lens_;

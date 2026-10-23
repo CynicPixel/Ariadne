@@ -118,3 +118,12 @@ TEST(ExposureGlue, DecidesFromTheAppliedStateAndStepsDownWhenOverexposed) {
     EXPECT_LT(c.exposure_rel, 1.0);
     EXPECT_DOUBLE_EQ(c.lamp_rel, 1.0);
 }
+
+TEST(ExposureGlue, RadianceEventStepsTheSceneNotTheSensor) {
+    // Failure E (D147): 2 stops brighter from 20 s on; nothing before it, nothing without an event.
+    const ariadne::runtime::RadianceEvent e{20.0, 2.0};
+    EXPECT_DOUBLE_EQ(ariadne::runtime::RadianceEventFactor(std::nullopt, 30'000'000'000), 1.0);
+    EXPECT_DOUBLE_EQ(ariadne::runtime::RadianceEventFactor(e, 19'999'999'999), 1.0);
+    EXPECT_DOUBLE_EQ(ariadne::runtime::RadianceEventFactor(e, 20'000'000'000), 4.0);
+    EXPECT_DOUBLE_EQ(ariadne::runtime::RadianceEventFactor(ariadne::runtime::RadianceEvent{0.0, -1.0}, 0), 0.5);
+}

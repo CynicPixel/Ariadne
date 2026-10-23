@@ -3987,7 +3987,11 @@ frame on).
 - `t_min` stays D132's 0.5 ms.
 
 **Overexposure event (Failure E), sensor side.**
-- **The scripted event:** a D exposure step, e.g. +2 stops at a set time, as a perception-config entry.
+- **The scripted event:** a SCENE radiance step before D's sensor, e.g. +2 stops at a set time:
+  `ariadne_sim_vo --radiance-event AT_S:STOPS`, recorded in the manifest as `scenario`. It is not reported in
+  `FramePhoto`: the system does not know the scene changed, so the controller has to see it in the pixels.
+  (Corrected while building it: this entry first said "a D exposure step", but exposure is the controller's own
+  actuator, and its next absolute command would overwrite the step.)
 - **What the response must show:** the controller pulls back at ≤ 0.5 stop per keyframe, and the trace shows it.
 - **Why not the lamp:** in replay `lamp_power` cannot recover pixels clipped before the render (up to 16 %, D145), so a
   lamp-side event would look like a controller failure. That needs live `light_config`.
