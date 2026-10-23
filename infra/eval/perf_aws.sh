@@ -19,6 +19,8 @@
 #     (= pass A's OPENCV_FOR_THREADS_NUM, so the keyframes and their ALIKED are pass A's), then ariadne_perf_bench
 #     knobs per scene (4 threads: fidelity vs the stores; every setting) and a store-only replay at 2 threads (= pass
 #     B's count: how exactly the replay reproduces the production verdicts)
+#   A adaptive (after knobs): upstream LightGlue (torch) all9 vs depth/width-adaptive on the same pairs' features, every
+#     match list through the D71 gate (scripts/lg_adaptive.py + ariadne_perf_bench gate): exit layer, pruning, flips
 # Results: $ARIADNE_RESULTS/{steps.txt,run_manifest.yaml,lscpu.txt,timing/,knobs/,ort/,mpstat/}
 # ---------------------------------------------------------------------------
 set -uo pipefail
@@ -153,7 +155,8 @@ if [[ " $STAGES " == *" knobs "* ]]; then
     dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
       --pairs "/work/$PI/pairs_s$sc.csv" --collab-config configs/collab/collab_v2.yaml --seed 1 $AL $LG \
       --settings 1280x720:1024,1280x720:512,1280x720:256,960x540:1024,960x540:512,640x360:1024,640x360:512 \
-      --stores "/work/$PI/stores/s$sc/seed1" --out "/w/knobs/s$sc" > "$W/knobs_s$sc.log" 2>&1 &
+      --stores "/work/$PI/stores/s$sc/seed1" --dump-features "/w/feat/s$sc" --out "/w/knobs/s$sc" \
+      > "$W/knobs_s$sc.log" 2>&1 &
   done; wait
   for sc in 0 1; do
     dev -e OPENCV_FOR_THREADS_NUM=2 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
@@ -167,6 +170,46 @@ if [[ " $STAGES " == *" knobs "* ]]; then
     cp "$W"/knobs/s$sc/*.csv "$R/knobs/s$sc/" 2>/dev/null; cp "$W"/knobs_t2/s$sc/*.csv "$R/knobs/t2_s$sc/" 2>/dev/null
   done
   cp "$W"/knobs*.log "$R/knobs/" 2>/dev/null
+fi
+if [[ " $STAGES " == *" adaptive "* ]]; then
+  # M (2026-10-24): size the LightGlue adaptive depth/width payoff before any design. Upstream LightGlue in torch (the
+  # exporter's pins and loader) on the knobs run's dumped features: all9 (= our export, the control) and upstream's
+  # defaults; then every match list through the fleet's VerifyMatched + D71 gate (bench gate).
+  [ -d "$W/feat/s0" ] || fail "adaptive needs the knobs stage's --dump-features"
+  step "A model-ref image + upstream LightGlue"
+  LG_COMMIT=eb42fee2d71449efb0aa5c10549752b5d75384d8 AL_COMMIT=683d7c65197395c0b3f01ebe76e1084a27e73a65
+  docker build -q -t ariadne-xfeat-ref:1 -f infra/docker/xfeat_ref.Dockerfile infra/docker > "$R/adaptive_image.log" 2>&1 \
+    || fail "xfeat-ref image"
+  docker build -q -t ariadne-model-ref:1 - >> "$R/adaptive_image.log" 2>&1 <<'DOCKERFILE' || fail "model-ref image"
+FROM ariadne-xfeat-ref:1
+RUN pip install --no-cache-dir --root-user-action=ignore --index-url https://download.pytorch.org/whl/cpu \
+      torchvision==0.20.1+cpu \
+ && pip install --no-cache-dir --root-user-action=ignore onnx==1.17.0 \
+ && python -c "import torch, torchvision; assert torch.__version__ == '2.5.1+cpu', torch.__version__"
+DOCKERFILE
+  kv model_ref_image_id "$(docker image inspect ariadne-model-ref:1 --format '{{.Id}}')"
+  UPL=/opt/ariadne/up; mkdir -p "$UPL/weights"
+  git clone -q https://github.com/cvg/LightGlue.git "$UPL/lg" && git -C "$UPL/lg" checkout -q "$LG_COMMIT" || fail "LightGlue clone"
+  curl -sfL -o "$UPL/weights/aliked_lightglue.pth" https://github.com/cvg/LightGlue/releases/download/v0.1_arxiv/aliked_lightglue.pth
+  echo "d975e965b105311a6143194852297dff4f02aea5cc2e10cecfed966ca0e22503  $UPL/weights/aliked_lightglue.pth" \
+    | sha256sum -c --quiet || fail "aliked_lightglue.pth sha256"
+  chmod -R a+rX "$UPL"
+  step "A upstream LightGlue all9 + adaptive (torch, 16 threads), then the D71 gate"
+  mpstat_on adaptive
+  for sc in 0 1; do
+    docker run --rm --network none -u 1000:1000 -v "$SRC:/work:ro" -v "$W:/w" -v "$UPL:/up:ro" ariadne-model-ref:1 \
+      python -I /work/evaluation/runs/perf/pipeline_profile_20261024/scripts/lg_adaptive.py --upstream /up/lg \
+      --weights /up/weights --exporter /work/python/model_tools --feat-dir "/w/feat/s$sc" \
+      --pairs "/work/$PI/pairs_s$sc.csv" --threads 16 --out "/w/adaptive_s$sc.csv" > "$W/adaptive_s$sc.log" 2>&1 \
+      || { cp "$W/adaptive_s$sc.log" "$R/knobs/"; fail "lg_adaptive scene $sc"; }
+    dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_bench gate --feat-dir "/w/feat/s$sc" \
+      --matches "/w/adaptive_s$sc.csv" --collab-config configs/collab/collab_v2.yaml --seed 1 \
+      --out "/w/gate/s$sc" > "$W/gate_s$sc.log" 2>&1 || fail "gate scene $sc"
+    mkdir -p "$R/knobs/adaptive_s$sc"
+    cp "$W/gate/s$sc/gate.csv" "$W/adaptive_s$sc.log" "$W/gate_s$sc.log" "$R/knobs/adaptive_s$sc/"
+    cut -d, -f1-10 "$W/adaptive_s$sc.csv" > "$R/knobs/adaptive_s$sc/adaptive_nomatches.csv"
+  done
+  mpstat_off
 fi
 kv total_seconds "$(( $(date +%s) - T0 ))"
 step "done"

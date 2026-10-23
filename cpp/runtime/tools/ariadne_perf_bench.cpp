@@ -13,7 +13,10 @@
 //   1280x720 features truncated to each K by ALIKED score), eigenplaces_describe (per image, every --place, both
 //   engines). DIR/engines.csv: every model under ENGINE_CLASSIC and ENGINE_NEW, load + one forward, ok or the error.
 //   DIR/profile.csv: per-operator-type time of one forward (DNN_PROFILE_SUMMARY, ENGINE_NEW; the classic engine for
-//   EigenPlaces too). DIR/build.txt: the CPU features line and the build information's ONNX Runtime lines.
+//   EigenPlaces too; LightGlue at K 1024 and 512 per op, DNN_PROFILE_DETAILED, so the per-layer cost can be summed from
+//   the node names). DIR/build.txt: the CPU features line and the build information's ONNX Runtime lines.
+//
+// GATE (ariadne_perf_bench gate ...): externally made matches (scripts/lg_adaptive.py) through the same verify path.
 //
 // KNOBS (the speed knobs' accuracy cost on real verified-or-rejected pairs; the fleet's verify path, verbatim):
 //   ariadne_perf_bench knobs --kf-dir DIR --pairs CSV --collab-config YAML --seed S --aliked WxH=ONNX [...]
@@ -24,6 +27,7 @@
 //   point from the depth at its rounded pixel (CollabFeatureExtractor::ExtractLocal's rule). Per pair and setting
 //   (size, K = the top-K by score): CollabFleet::Response (the configured local encoding) -> decode -> LightGlue ->
 //   VerifyMatched (the fleet's per-pair seed) -> the D71 gate (GatedInterAgentEdge) -> the reason, as the fleet logs it.
+//   --dump-features DIR: the 1280x720 K=1024 features of every keyframe as LightGlue sees them (DumpFeat), for GATE.
 //   --stores: also the setting "store" - the pass-A store's own features (the production inputs) through the same
 //   path, so knobs.csv shows how exactly this replay reproduces the production verdicts.
 //   DIR/knobs.csv: the pair, its production columns, setting, n_a, n_b, matches, essential_inliers, pnp_inliers,
@@ -275,9 +279,10 @@ int Timing(std::map<std::string, std::vector<std::string>>& a) {
         const Stats s = Time([&] { full->Match(A, B); }, warmup, reps);
         const std::vector<cv::DMatch> m2 = full->Match(A, B);
         row("lightglue_match", "K" + ks, "cv_dnn_new", s, m1.size(), Digest(m1), Digest(m2));
-        if (k == 1024) {
+        if (k == 1024 || k == 512) {   // per-op DETAILED: node names carry the layer (transformers.<i>), so a layer's
+                                        // share of the forward is summed from them (the adaptive-depth payoff, M)
             cv::dnn::Net net = cv::dnn::readNetFromONNX(lg, cv::dnn::ENGINE_NEW);
-            net.setProfilingMode(cv::dnn::DNN_PROFILE_SUMMARY);
+            net.setProfilingMode(cv::dnn::DNN_PROFILE_DETAILED);
             const cv::Mat ka = perception::HardPairMatcher::NormalizeUpstream(A.keypoints, A.size).reshape(1, std::vector<int>{1, k, 2});
             const cv::Mat kb = perception::HardPairMatcher::NormalizeUpstream(B.keypoints, B.size).reshape(1, std::vector<int>{1, k, 2});
             net.setInput(ka, "kpts0"), net.setInput(kb, "kpts1");
@@ -286,7 +291,7 @@ int Timing(std::map<std::string, std::vector<std::string>>& a) {
             std::vector<cv::Mat> outs;
             net.forward(outs, net.getUnconnectedOutLayersNames());
             net.forward(outs, net.getUnconnectedOutLayersNames());
-            profile("lightglue_K1024", "cv_dnn_new", net);
+            profile("lightglue_K" + ks, "cv_dnn_new", net);
         }
     }
     for (const auto& spec : a["--place"]) {
@@ -415,6 +420,89 @@ ac::VerifyResult Verify(const perception::HardPairMatcher& lg, const runtime::Co
     return v;
 }
 
+/// One keyframe's features as LightGlue sees them in the fleet (descriptors AFTER the wire encoding's round trip):
+/// int32 n, then float keypoints[2n] (1280x720 px), descriptors[128n], points3d[3n] (NaN = none), camera[5].
+void DumpFeat(const fs::path& dir, int agent, uint64_t kf, const core::FeatureResponseValue& r, ac::LocalEncoding enc) {
+    fs::create_directories(dir);
+    const fs::path p = dir / ("a" + std::to_string(agent) + "_kf" + std::to_string(kf) + ".feat");
+    if (fs::exists(p)) return;
+    const std::vector<float> d = ac::DecodeLocal(r.descriptors, enc);
+    const int32_t n = int32_t(r.keypoints.size() / 2);
+    std::ofstream f(p, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(&n), 4);
+    f.write(reinterpret_cast<const char*>(r.keypoints.data()), r.keypoints.size() * 4);
+    f.write(reinterpret_cast<const char*>(d.data()), d.size() * 4);
+    f.write(reinterpret_cast<const char*>(r.points3d.data()), r.points3d.size() * 4);
+    f.write(reinterpret_cast<const char*>(r.camera.data()), 5 * 4);
+}
+
+core::FeatureResponseValue ReadFeat(const fs::path& p) {
+    std::ifstream f(p, std::ios::binary);
+    int32_t n = 0;
+    f.read(reinterpret_cast<char*>(&n), 4);
+    core::FeatureResponseValue r;
+    std::vector<float> d(size_t(n) * 128);
+    r.keypoints.resize(size_t(n) * 2), r.points3d.resize(size_t(n) * 3), r.camera.resize(5);
+    f.read(reinterpret_cast<char*>(r.keypoints.data()), r.keypoints.size() * 4);
+    f.read(reinterpret_cast<char*>(d.data()), d.size() * 4);
+    f.read(reinterpret_cast<char*>(r.points3d.data()), r.points3d.size() * 4);
+    f.read(reinterpret_cast<char*>(r.camera.data()), 5 * 4);
+    if (!f) throw std::runtime_error("short feature file " + p.string());
+    return r;
+}
+
+// ---------------------------------------------------------------- gate
+
+/// GATE: matches made elsewhere (upstream LightGlue, adaptive or not: scripts/lg_adaptive.py) on the dumped features,
+/// through the fleet's VerifyMatched (per-pair seed) + the D71 gate. --matches CSV: agent_a,kf_a,agent_b,kf_b,mode,
+/// then any columns, the LAST one "i-j i-j ..." (A index - B index). DIR/gate.csv: the row without the match list,
+/// + n_matches_here, essential_here, pnp_here, reason_here.
+int Gate(std::map<std::string, std::vector<std::string>>& a) {
+    const fs::path dir = a["--feat-dir"].back(), out = a["--out"].back();
+    fs::create_directories(out);
+    const runtime::CollabConfig cfg = runtime::LoadCollabConfig(a["--collab-config"].back());
+    const uint64_t seed = std::stoull(a["--seed"].back());
+    std::ifstream f(a["--matches"].back());
+    std::ofstream g(out / "gate.csv");
+    std::string line;
+    std::getline(f, line);
+    g << line.substr(0, line.rfind(',')) << ",n_matches_here,essential_here,pnp_here,reason_here\n";
+    int rows = 0;
+    while (std::getline(f, line)) {
+        const auto c = Split(line, ',');
+        const int aa = std::stoi(c[0]), ab = std::stoi(c[2]);
+        const uint64_t ka = std::stoull(c[1]), kb = std::stoull(c[3]);
+        const auto fa = ReadFeat(dir / ("a" + std::to_string(aa) + "_kf" + std::to_string(ka) + ".feat"));
+        const auto fb = ReadFeat(dir / ("a" + std::to_string(ab) + "_kf" + std::to_string(kb) + ".feat"));
+        std::vector<cv::Point2f> pa, pb;
+        std::vector<int> ib;
+        const std::string ml = line.substr(line.rfind(',') + 1);
+        for (const auto& t : Split(ml, ' ')) {
+            const auto d = t.find('-');
+            const int i = std::stoi(t.substr(0, d)), j = std::stoi(t.substr(d + 1));
+            pa.emplace_back(fa.keypoints[2 * size_t(i)], fa.keypoints[2 * size_t(i) + 1]);
+            pb.emplace_back(fb.keypoints[2 * size_t(j)], fb.keypoints[2 * size_t(j) + 1]);
+            ib.push_back(j);
+        }
+        const uint64_t vseed = seed * 1000003ull + uint64_t(aa) * 104729ull + ka * 7919ull + uint64_t(ab) * 31ull + kb;
+        ac::VerifyResult v = ac::VerifyMatched(pa, pb, ib, fb, cfg.verify, vseed);
+        if (v.ok) {
+            slam::LoopGeometry geo;
+            geo.rig.cam = {fb.camera[0], fb.camera[1], fb.camera[2], fb.camera[3]};
+            geo.rig.baseline = fb.camera[4];
+            for (const auto& q : v.inlier_points_B) geo.X_B.push_back(core::Vec3(q.x, q.y, q.z));
+            for (const auto& q : v.inlier_pixels_A) geo.uv_A.push_back(core::Vec2(q.x, q.y));
+            geo.T_A_B = v.T_A_B;
+            if (!slam::GatedInterAgentEdge(0, 1, geo, cfg.gate)) v.ok = false, v.reason = "degenerate";
+        }
+        g << line.substr(0, line.rfind(',')) << ',' << v.matches << ',' << v.essential_inliers << ',' << v.pnp_inliers
+          << ',' << v.reason << '\n';
+        ++rows;
+    }
+    std::printf("gate: %d rows\n", rows);
+    return 0;
+}
+
 int Knobs(std::map<std::string, std::vector<std::string>>& a) {
     const fs::path kfdir = a["--kf-dir"].back(), out = a["--out"].back();
     fs::create_directories(out);
@@ -539,9 +627,13 @@ int Knobs(std::map<std::string, std::vector<std::string>>& a) {
             const Kf& kb = kfs[{p.ab, p.kb}];
             const auto la = Local(TopK(feats[{p.aa, p.ka, size}], kk), ka);
             const auto lb = Local(TopK(feats[{p.ab, p.kb, size}], kk), kb);
-            put(p, size + ":" + std::to_string(kk),
-                runtime::CollabFleet::Response(p.ka, la.keypoints, la.descriptors, la.points3d, ka.camera, enc),
-                runtime::CollabFleet::Response(p.kb, lb.keypoints, lb.descriptors, lb.points3d, kb.camera, enc));
+            const auto ra = runtime::CollabFleet::Response(p.ka, la.keypoints, la.descriptors, la.points3d, ka.camera, enc);
+            const auto rb = runtime::CollabFleet::Response(p.kb, lb.keypoints, lb.descriptors, lb.points3d, kb.camera, enc);
+            put(p, size + ":" + std::to_string(kk), ra, rb);
+            if (a.count("--dump-features") && size == "1280x720" && kk == 1024) {
+                DumpFeat(fs::path(a["--dump-features"].back()), p.aa, p.ka, ra, enc);
+                DumpFeat(fs::path(a["--dump-features"].back()), p.ab, p.kb, rb, enc);
+            }
         }
         k.flush();
     }
@@ -571,13 +663,18 @@ int main(int argc, char** argv) {
                 if (!a.count(k)) throw std::invalid_argument(std::string("timing needs ") + k);
             return Timing(a);
         }
+        if (mode == "gate") {
+            for (const char* k : {"--feat-dir", "--matches", "--collab-config", "--seed", "--out"})
+                if (!a.count(k)) throw std::invalid_argument(std::string("gate needs ") + k);
+            return Gate(a);
+        }
         if (mode == "knobs") {
             for (const char* k : {"--kf-dir", "--pairs", "--collab-config", "--seed", "--aliked", "--lightglue",
                                   "--settings", "--out"})
                 if (!a.count(k)) throw std::invalid_argument(std::string("knobs needs ") + k);
             return Knobs(a);
         }
-        throw std::invalid_argument("mode timing|knobs");
+        throw std::invalid_argument("mode timing|knobs|gate");
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_perf_bench: %s\n", e.what());
         return 1;

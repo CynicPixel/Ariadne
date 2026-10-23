@@ -37,7 +37,7 @@ stage() {
 run() {   # $1 = cpux86 | cpuarm, $2 = stages
   local commit; commit=$(cat "$W/commit")
   [ "$(git rev-parse HEAD)" = "$commit" ] || { log "HEAD moved since stage"; exit 1; }
-  local stages="${2:-timing knobs}"
+  local stages="${2:-timing knobs adaptive}"
   [ "$1" = cpuarm ] && stages="${2:-timing}"
   exec infra/scripts/spinup.sh run --profile "$1" --max-minutes 120 -- \
     "COMMIT=$commit STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 STORES_FROM=$STORES_FROM STAGES='$stages' bash infra/eval/perf_aws.sh"
