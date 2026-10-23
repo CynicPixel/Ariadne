@@ -2,7 +2,7 @@
 # Host side of the 3.2/3.4 gate sweep (infra/eval/collab_aws.sh; design SIMCOLLAB_3.2, D171): stage the inputs,
 # launch through spinup.sh, tear down what this run staged. Runs from the repo root on a clean HEAD.
 #   infra/eval/collab_aws_launch.sh stage      git bundle, inputs.tar, both recordings (persistent), image to ECR
-#   infra/eval/collab_aws_launch.sh run [STAGES]   spinup.sh (cpux86, 300 min cap) -> build/runs/<id>/
+#   infra/eval/collab_aws_launch.sh run [STAGES]   spinup.sh (cpux86, 240 min cap: spinup.sh's limit) -> build/runs/<id>/
 #   infra/eval/collab_aws_launch.sh teardown   delete this run's temp ECR tag and staged inputs; sweep strays
 # The recordings are PERSISTENT datasets under runs/_datasets/ (maintainer, 2026-10-23: re-uploading per run costs
 # too much time): `stage` syncs each once (s3 sync skips unchanged files); teardown never deletes them.
@@ -63,7 +63,7 @@ stage() {
 run() {
   local commit; commit=$(cat "$W/commit")
   local stages="${1:-A B1 B2 C}"
-  infra/scripts/spinup.sh run --profile cpux86 --max-minutes 300 -- \
+  infra/scripts/spinup.sh run --profile cpux86 --max-minutes 240 -- \
     "STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 COMMIT=$commit REG=$REG STAGES='$stages' bash infra/eval/collab_aws.sh"
 }
 
