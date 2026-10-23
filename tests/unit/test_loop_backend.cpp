@@ -170,8 +170,12 @@ TEST(LoopBackend, TwoLapsWithLateOdometryAndOneWrongLoop) {
     EXPECT_FALSE(be.graph().edges()[size_t(wrong_event_edge)].gnc_weight > 0.5) << "wrong loop accepted";
     int inliers = 0, true_loops = 0;
     for (const auto& r : recs)
-        for (const auto& c : r.candidates)
+        for (const auto& c : r.candidates) {
             if (c.edge != wrong_event_edge) ++true_loops;   // identify the wrong loop by its edge, not its keyframes
+            // the gate's corridor score reaches the record (D148): lambda_max / trace lies in [1/3, 1]
+            EXPECT_GE(c.corridor, 1.0 / 3.0 - 1e-9);
+            EXPECT_LE(c.corridor, 1.0 + 1e-9);
+        }
     for (size_t e = 0; e < be.graph().edges().size(); ++e)
         if (IsLoopType(be.graph().edges()[e].type) && int(e) != wrong_event_edge) inliers += be.graph().edges()[e].gnc_weight > 0.5;
     double ate_vo = 0, ate_m = 0;
