@@ -14,8 +14,10 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   - The 54th check is `report.yaml`'s `inputs_clean`: the D55 reference itself was dirty. Re-pinned; see D172.
 - **The six Phase 2 exit-gate bullets** are mapped to evidence in D172. One stated deviation: SE-Sync rim, "not
   certified, unknown not wrong" (D74).
-- **3.4** (`feat/3.4-spectral`): rebased onto main. The graph spans ids min..max, and the budget defaults are labelled
-  placeholders. Protocol 61/61. Its AWS pre-merge is next.
+- **3.4 MERGED** (c720e77, fast-forward). AWS pre-merge `20261023T062836Z-cpux86-b27c7c`: **54/54**, ctest 549/549 +
+  protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
+  `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
+  budget defaults are labelled placeholders until D171's derived levels.
 - **3.2 sim integration** (`feat/3.2-sim`, D171, design SIMCOLLAB_3.2): built, not yet run.
   - Two-pass causal replay over CommsNode.
   - Inter-agent exchange with ALIKED+LightGlue.
