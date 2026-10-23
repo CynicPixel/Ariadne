@@ -1,10 +1,11 @@
 """The reconstruction service loop (RECON_6 §1/§3; D190, D194, D195): keyframes in -> submap chunks + table out.
 
-  python -m ariadne_recon.live.service --spool DIR [DIR ...] --out SPLAT_DIR [--scene DIR] [--placement briefing|merges] [--backend gpu|cpu_init]
+  python -m ariadne_recon.live.service --spool DIR [DIR ...] --out SPLAT_DIR [--scene DIR] [--placement briefing|merges]
+  python -m ariadne_recon.live.service --listen SOCK --out SPLAT_DIR [--scene DIR]      # live: B's tee (link.py) [--backend gpu|cpu_init]
          [--training-image albedo_proxy|rgb] [--iters N | --budget-ms MS] [--export-period-s 2]
 
-Input: a spool (schema 2 for the albedo proxy; replay from files alone). The live `#kf` socket feeds the same
-`ingest()` (B's tee, RECON_6 §3). Output, in SPLAT_DIR (what operator_console.splat serves):
+Input: a spool (schema 2 for the albedo proxy; replay from files alone), or live: `--listen` takes B's `#kf` / `#t_w_o`
+tee (link.py, D231) into the same `ingest()` / `set_placement()`. Output, in SPLAT_DIR (what operator_console.splat serves):
   table.json, chunks/<sid>_<n>.splat, service_log.jsonl (one line per keyframe), manifest.json
 
 Backends:
@@ -33,7 +34,8 @@ import numpy as np
 
 from ..spool import Spool, load
 from .export import SPLAT_BYTES, chunk_bytes
-from .placement import placements
+from .link import LinkError, K3, decode_kf, decode_t_w_o, half_rgb, pose12, read_frame
+from .placement import briefing_T_W_O, placements
 from .seeding import SeedParams, seed
 from .submaps import SubmapManager
 
@@ -148,6 +150,13 @@ class Service:
         self.log.close()
 
 
+def _mission_agents(scene_dir) -> int:
+    from pathlib import Path as _P
+    live = _P(scene_dir) / "mission_live.json"
+    m = json.loads((live if live.is_file() else _P(scene_dir) / "mission_default.json").read_text())
+    return len(m["agents"])
+
+
 def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes: int = 0, pace: float = 0.0) -> int:
     """Every keyframe of a placed agent, all spools merged in time order; agents without a placement are skipped.
     pace > 0 plays the keyframes at their mission times (1 = mission speed): what the console sees during a live run,
@@ -180,9 +189,65 @@ def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes
     return n
 
 
+def serve(sock_path: str, svc: Service, training_image: str, stats: dict) -> int:
+    """Live: one runtime connection on a unix socket; returns the keyframes ingested when the runtime closes it.
+    A #kf of an agent without a placement, of the wrong training image, or malformed is dropped and counted, never
+    guessed: the runtime never waits on this service, so dropping is the only back-pressure there is."""
+    import socket
+    if training_image != "rgb":
+        raise SystemExit("live ingest trains on RGB only (D199): the albedo proxy needs B's lamp sink first (D195)")
+    if os.path.exists(sock_path):
+        os.unlink(sock_path)
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(sock_path)
+    srv.listen(1)
+    print(f"service: listening on {sock_path}", flush=True)
+    conn, _ = srv.accept()
+    n = 0
+    try:
+        while (f := read_frame(conn)) is not None:
+            topic, payload = f
+            stats["frames"][topic] = stats["frames"].get(topic, 0) + 1
+            if topic == "#t_w_o":
+                try:
+                    k, T = decode_t_w_o(payload)
+                except (LinkError, ValueError, KeyError, TypeError) as e:
+                    stats["dropped"]["malformed_t_w_o"] = stats["dropped"].get("malformed_t_w_o", 0) + 1
+                    print(f"service: #t_w_o {e}", flush=True)
+                    continue
+                svc.set_placement(k, T)
+            elif topic == "#kf":
+                try:
+                    r = decode_kf(payload)
+                except LinkError as e:
+                    stats["dropped"]["malformed"] = stats["dropped"].get("malformed", 0) + 1
+                    print(f"service: {e}", flush=True)
+                    continue
+                k = int(r["agent"])
+                why = ("unplaced" if k not in svc.T_W_O else
+                       "training_image" if r.get("training_image") != "rgb" else
+                       "shape" if (r["w"], r["h"]) != (2 * r["zw"], 2 * r["zh"]) else None)
+                if why:
+                    stats["dropped"][why] = stats["dropped"].get(why, 0) + 1
+                    continue
+                image = half_rgb(r["rgb"]).astype(np.float32) / 255.0    # the spool's INTER_AREA, bit-exact
+                svc.ingest(k, int(r["id"]), pose12(r["T_O_C"]), int(r["pose_version"]), K3(r["Kz"]), image,
+                           r["Z"], r["S"])
+                n += 1
+            else:
+                stats["dropped"]["unknown_topic"] = stats["dropped"].get("unknown_topic", 0) + 1
+    finally:
+        conn.close()
+        srv.close()
+        os.unlink(sock_path)
+    return n
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--spool", required=True, nargs="+", help="one composed spool, or one spool per agent")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--spool", nargs="+", help="one composed spool, or one spool per agent")
+    src.add_argument("--listen", help="live: unix socket path for B's tee (ARIADNE_RECON_SOCK)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--backend", choices=("gpu", "cpu_init"), default="gpu")
     ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="rgb")   # D199: lit demo
@@ -195,7 +260,7 @@ def main(argv=None) -> int:
     ap.add_argument("--placement", choices=("briefing", "merges"), default=None,
                     help="default: briefing with --scene, merges without")
     a = ap.parse_args(argv)
-    spools = [load(s) for s in a.spool]
+    spools = [load(s) for s in a.spool] if a.spool else []
     channels = 1 if a.training_image == "albedo_proxy" else 3
     if a.backend == "gpu":
         from .trainer import LiveTrainer, TrainParams
@@ -204,22 +269,29 @@ def main(argv=None) -> int:
         trainer = _CpuInit(channels, 30, SeedParams(), 0)
     out = Path(a.out)
     svc = Service(out, a.backend, a.training_image, trainer, a.export_period_s)
-    mode = a.placement or ("briefing" if a.scene else "merges")
-    placed, unplaced = placements(spools, mode, a.scene)
+    if a.listen:   # live: the briefing constant until the tee's #t_w_o arrives (and overrides it)
+        mode = "live: #t_w_o" + (" (briefing until then)" if a.scene else "")
+        placed, unplaced = ({k: briefing_T_W_O(a.scene, k) for k in range(_mission_agents(a.scene))}
+                            if a.scene else {}), {}
+    else:
+        mode = a.placement or ("briefing" if a.scene else "merges")
+        placed, unplaced = placements(spools, mode, a.scene)
     for k, T in placed.items():
         svc.set_placement(k, T)
     for k, why in unplaced.items():
         print(f"service: agent {k} not placed, not drawn: {why}")
     t0 = time.time()
-    n = replay(spools, svc, a.training_image, a.max_keyframes, a.pace)
+    stats = {"frames": {}, "dropped": {}}
+    n = (serve(a.listen, svc, a.training_image, stats) if a.listen
+         else replay(spools, svc, a.training_image, a.max_keyframes, a.pace))
     svc.finish()
     (out / "manifest.json").write_text(json.dumps({
-        "tool": "ariadne_recon.live.service", "spool": a.spool, "spool_run_id": [sp.run_id for sp in spools],
+        "tool": "ariadne_recon.live.service", "spool": a.spool, "listen": a.listen, "link": stats, "spool_run_id": [sp.run_id for sp in spools],
         "spool_schema": [sp.schema_version for sp in spools], "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
         "iters": a.iters, "budget_ms": a.budget_ms, "pace": a.pace, "keyframes": n, "wall_s": round(time.time() - t0, 2),
         "placement": {"mode": mode, "scene": a.scene, "world": "mission W" if a.scene else "agent 0 odometry frame",
-                      "T_W_O": {str(k): [float(x) for x in T.ravel()] for k, T in placed.items()},
+                      "T_W_O": {str(k): [float(x) for x in T.ravel()] for k, T in svc.T_W_O.items()},
                       "unplaced": {str(k): why for k, why in unplaced.items()}}}, indent=2))
     print(f"service: {n} keyframes -> {out} ({len(svc.chunk)} submaps)")
     return 0

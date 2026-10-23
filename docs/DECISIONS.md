@@ -4703,3 +4703,34 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
 **Tests.** `tests/test_live.py` 12/12: the briefing transform on a yawed entrance, the live.demo entrance choice, both modes on a 2-agent schema-3
 spool, an unmerged agent never drawn, and set_placement moving the table without new chunks. All reconstruction
 python tests 23/23 (ariadne-recon:1).
+
+## 2026-10-24 — D231: the live keyframe tee contract (B ↔ A2) and the service's `--listen` mode
+
+**Context.** The POC's last splat gap: the live runtime feeds the service directly, not through a spool. B owns the
+runtime side (`ariadne_live` `deliver_kf`) and `live.sh`; A2 owns the service. The format was proposed by A2 and
+confirmed with amendments by B (2026-10-24).
+
+**Contract** (`python/reconstruction/ariadne_recon/live/link.py`).
+- **Transport.** B's LinkFrame framing (D150: `"ARL1" | topic | payload`, little-endian) on a unix stream socket. The
+  service listens on `ARIADNE_RECON_SOCK`; `ariadne_live` connects. The runtime side keeps a bounded queue of 8 per
+  agent, drops the oldest, counts drops in its results, and is a silent no-op with no listener. The splat never
+  back-pressures VO or the mission (memory: pipeline share-nothing).
+- **`#kf`** = u32 json_len | JSON {agent, id, t_ns, pose_version (0 until PGO re-anchoring), T_O_C (12 row-major),
+  K (full res, the RGB's), Kz (spool scale, Z/S's), w, h, zw, zh, training_image} | Z | S (float16, zh×zw, **0 =
+  invalid**, B's HalfAsSpool(MaskedDepth32)) | RGB (rgb8, h×w×3, rectified left).
+- **`#t_w_o`** = JSON {agent, t_s, xyzquat [x, y, z, qx, qy, qz, qw], **qw last**}: once per agent at start (the
+  briefing constant), then on every change. `#pose_version` is the agreed upgrade path for re-anchoring.
+- **Live trains on the replay's pixels.** The spool stores RGB at scale 0.5 by INTER_AREA. `half_rgb()` is the
+  integer 2×2 area average (`(a + b + c + d + 2) >> 2`), tested bit-exact against `cv2.resize(INTER_AREA)`, and the
+  trainer gets Kz. Proved end to end: B's 3 bring-up spools through the mock tee and the socket give byte-identical
+  chunks to the replay (4 submaps; placements equal to 4e-16 after the quaternion round trip).
+- **Robustness.** A malformed `#kf` or `#t_w_o`, a keyframe of an agent with no placement, a non-RGB training image,
+  or an unknown topic is dropped and counted in the manifest's `link` block, never guessed and never fatal. With
+  `--scene`, every mission agent starts at the briefing constant (D230) until its `#t_w_o` arrives.
+- **Image.** `ariadne-recon:1` for `cpu_init`; the console image lacks scipy and cv2, which seeding and the spool
+  reader need. The GPU backend is the gsplat image (Kaggle kernel image today; a judge-box image is open).
+
+**Tests.** `tests/test_link.py` 13/13 (bit-exact half_rgb, #kf round trip and short payload, qw-last quaternion,
+Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
+counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
+bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
