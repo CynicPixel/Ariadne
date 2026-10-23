@@ -4752,3 +4752,10 @@ pre-registration: not built, not run. The D176 grouping code is parked uncommitt
 The measurements above stand. The design restarts from a literature survey of perceptual aliasing in multi-robot loop
 closure (PCM's large-false-clique failure and its successors, systems in repetitive/subterranean environments, gating
 against known initial poses, ambiguity-aware back ends), then an advisor review, then a pre-registered decision.
+
+**D176 record correction (2026-10-24).** The negative result covers the IMPLEMENTATION tested, not spatial place
+grouping in general: places were clustered sequentially in keyframe-id order (a new place whenever a keyframe left the
+current place's seed), so a revisit always opened a new place id even when it returned to the same spot. Spatial
+grouping in each agent's own frame (revisits merged), with one-to-one support per place pair (CLIPPER-style) and an
+ambiguity test (Olson 2009), is the literature's direction for the unknown-start case and belongs to 3.5. Surveys:
+scratchpad alias_survey.md / collab_fast_survey.md, summarized in the next decision.
