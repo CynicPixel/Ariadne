@@ -38,6 +38,8 @@
 #include <zstd.h>
 #include <wire_generated.h>
 
+#include <array>
+#include <stdexcept>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -114,7 +116,8 @@ inline constexpr int kCompressionLevel = 3;
 inline bool IsCompressedClass(MessageClass cls) {
     return cls == MessageClass::MATCH_RESPONSE ||
            cls == MessageClass::POSE_EDGE ||
-           cls == MessageClass::POSE_GRAPH;
+           cls == MessageClass::POSE_GRAPH ||
+           cls == MessageClass::SUBMAP_PATCH;   // D175: mostly-uniform blocks compress well
 }
 
 /// §4.4. One row per message actually sent.
@@ -326,6 +329,59 @@ struct FeatureResponseValue {
     uint16_t header_bytes = 0;        // D171: e.g. the int8 encoding's per-keyframe scale (4 B)
 };
 
+// --- D175: coordination through the radio (mirrors planning::multi, A1) ---------------------------------------
+inline constexpr int kSlabBlockSide = 32;   // cells per block side (0.05 m cells: 1.6 m)
+inline constexpr int kSlabBlockCells = kSlabBlockSide * kSlabBlockSide;
+
+struct SlabBlockValue {
+    int32_t bx = 0, by = 0;
+    std::vector<uint8_t> cells;   // kSlabBlockCells codes 0..3, unpacked (the codec packs 2 bits per cell)
+};
+struct SubmapPatchValue {
+    int32_t sender = 0;
+    uint32_t epoch = 0;
+    uint64_t version = 0;
+    int64_t t_ns = 0;
+    std::vector<SlabBlockValue> blocks;
+    FrameTag frame;               // W_sender
+};
+struct BlockGainValue {
+    int16_t bx = 0, by = 0;
+    uint8_t w = 0;   // the view's full-IG unknown voxels in this block not known to peers, in units of 16 voxels (kFootprintUnit, rounded up, cap 255; A1 20de9e8)
+};
+inline constexpr size_t kMaxFootprintBlocks = 32;
+struct BidOptionValue {
+    int64_t task_key = 0;
+    double goal_x = 0, goal_y = 0;
+    std::array<float, 5> ig_raw{};
+    float path_m = 0, cost_bandwidth = 0, cost_risk = 0, risk = 0;
+    uint8_t source = 0;
+    std::vector<BlockGainValue> footprint;   // D175 R1; empty = not sent (the plain / R2 rows)
+};
+struct TaskBidValue {
+    int32_t sender = 0;
+    uint32_t epoch = 0;
+    uint64_t seq = 0;
+    int64_t t_ns = 0;
+    float lambda_path = 0;
+    std::vector<BidOptionValue> options;
+    FrameTag frame;               // G
+};
+struct AssignmentValue {
+    int32_t agent = 0;
+    int64_t task_key = 0;
+    double goal_x = 0, goal_y = 0;
+};
+struct TaskConsensusValue {
+    int32_t broker = 0;
+    uint32_t epoch = 0;
+    uint64_t seq = 0;
+    int64_t t_ns = 0, bids_t_ns = 0;
+    std::vector<int32_t> members;
+    std::vector<AssignmentValue> assignments;
+    FrameTag frame;               // G
+};
+
 struct DecodedMessage {
     MessageClass cls = MessageClass::HEARTBEAT;
     AgentId sender = 0;
@@ -346,6 +402,12 @@ struct DecodedMessage {
     HeartbeatValue heartbeat;
     bool has_ack = false;   // a standalone ACK; a heartbeat's ack is in `heartbeat.ack`
     AckValue ack;
+    bool has_submap_patch = false;
+    SubmapPatchValue submap_patch;
+    bool has_task_bid = false;
+    TaskBidValue task_bid;
+    bool has_task_consensus = false;
+    TaskConsensusValue task_consensus;
 };
 
 namespace detail {
@@ -526,6 +588,64 @@ public:
                               [&](wire::EnvelopeBuilder& eb) { eb.add_ack(off); });
     }
 
+    SerializedMessage EncodeSubmapPatch(const SubmapPatchValue& p, AgentId sender, AgentId receiver, Timestamp t,
+                                        uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(512 + 260 * p.blocks.size());
+        std::vector<flatbuffers::Offset<wire::SlabBlock>> blocks;
+        for (const auto& b : p.blocks) {
+            if (b.cells.size() != size_t(kSlabBlockCells)) throw std::invalid_argument("SubmapPatch: block size");
+            std::vector<uint8_t> packed(kSlabBlockCells / 4, 0);
+            for (int i = 0; i < kSlabBlockCells; ++i) {
+                if (b.cells[size_t(i)] > 3) throw std::invalid_argument("SubmapPatch: cell code > 3");
+                packed[size_t(i / 4)] |= uint8_t(b.cells[size_t(i)] << (2 * (i % 4)));
+            }
+            blocks.push_back(wire::CreateSlabBlock(fbb, b.bx, b.by, fbb.CreateVector(packed)));
+        }
+        const auto bv = fbb.CreateVector(blocks);
+        const auto frame = detail::ToWire(p.frame);
+        const auto off = wire::CreateSubmapPatch(fbb, p.sender, p.epoch, p.version, p.t_ns, bv, &frame);
+        return FinishEnvelope(fbb, MessageClass::SUBMAP_PATCH, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_submap_patch(off); });
+    }
+
+    SerializedMessage EncodeTaskBid(const TaskBidValue& b, AgentId sender, AgentId receiver, Timestamp t,
+                                    uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256 + 96 * b.options.size());
+        std::vector<flatbuffers::Offset<wire::BidOption>> opts;
+        for (const auto& o : b.options) {
+            if (o.footprint.size() > kMaxFootprintBlocks) throw std::invalid_argument("TaskBid: footprint > 32 blocks");
+            const auto ig = fbb.CreateVector(o.ig_raw.data(), o.ig_raw.size());
+            flatbuffers::Offset<flatbuffers::Vector<const wire::BlockGain*>> fp;
+            if (!o.footprint.empty()) {
+                std::vector<wire::BlockGain> v;
+                for (const auto& g : o.footprint) v.emplace_back(g.bx, g.by, g.w);
+                fp = fbb.CreateVectorOfStructs(v);
+            }
+            opts.push_back(wire::CreateBidOption(fbb, o.task_key, o.goal_x, o.goal_y, ig, o.path_m, o.cost_bandwidth,
+                                                 o.cost_risk, o.risk, o.source, fp));
+        }
+        const auto ov = fbb.CreateVector(opts);
+        const auto frame = detail::ToWire(b.frame);
+        const auto off = wire::CreateTaskBid(fbb, b.sender, b.epoch, b.seq, b.t_ns, b.lambda_path, ov, &frame);
+        return FinishEnvelope(fbb, MessageClass::TASK_BID, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_bid(off); });
+    }
+
+    SerializedMessage EncodeTaskConsensus(const TaskConsensusValue& c, AgentId sender, AgentId receiver, Timestamp t,
+                                          uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256 + 40 * c.assignments.size());
+        std::vector<flatbuffers::Offset<wire::Assignment>> as;
+        for (const auto& a : c.assignments)
+            as.push_back(wire::CreateAssignment(fbb, a.agent, a.task_key, a.goal_x, a.goal_y));
+        const auto mv = fbb.CreateVector(c.members);
+        const auto av = fbb.CreateVector(as);
+        const auto frame = detail::ToWire(c.frame);
+        const auto off =
+            wire::CreateTaskConsensus(fbb, c.broker, c.epoch, c.seq, c.t_ns, c.bids_t_ns, mv, av, &frame);
+        return FinishEnvelope(fbb, MessageClass::TASK_CONSENSUS, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_task_consensus(off); });
+    }
+
     /// Decode. The message class comes from the frame header, so no
     /// out-of-band knowledge is required. Returns kOk only when the message is
     /// well formed AND every pose carries a frame tag (§15.5).
@@ -675,6 +795,63 @@ public:
         if (const auto* a = env->ack()) {
             out->has_ack = true;
             if (!ReadAck(a, &out->ack)) return Status::kMalformed;
+        }
+        out->has_submap_patch = out->has_task_bid = out->has_task_consensus = false;
+        if (const auto* p = env->submap_patch()) {
+            if (p->frame() == nullptr) return Status::kUntaggedPose;   // §15.5: the blocks are in W_sender
+            auto& v = out->submap_patch;
+            v = {};
+            v.sender = p->sender(), v.epoch = p->epoch(), v.version = p->version(), v.t_ns = p->t_ns();
+            v.frame = detail::FromWire(*p->frame());
+            if (const auto* bs = p->blocks()) {
+                for (const auto* b : *bs) {
+                    if (b->cells() == nullptr || b->cells()->size() != size_t(kSlabBlockCells / 4))
+                        return Status::kMalformed;
+                    SlabBlockValue bv;
+                    bv.bx = b->bx(), bv.by = b->by();
+                    bv.cells.resize(kSlabBlockCells);
+                    for (int i = 0; i < kSlabBlockCells; ++i)
+                        bv.cells[size_t(i)] = uint8_t((b->cells()->Get(uint32_t(i / 4)) >> (2 * (i % 4))) & 3u);
+                    v.blocks.push_back(std::move(bv));
+                }
+            }
+            out->has_submap_patch = true;
+        }
+        if (const auto* b = env->task_bid()) {
+            if (b->frame() == nullptr) return Status::kUntaggedPose;   // goals are in G
+            auto& v = out->task_bid;
+            v = {};
+            v.sender = b->sender(), v.epoch = b->epoch(), v.seq = b->seq(), v.t_ns = b->t_ns();
+            v.lambda_path = b->lambda_path();
+            v.frame = detail::FromWire(*b->frame());
+            if (const auto* os = b->options()) {
+                for (const auto* o : *os) {
+                    if (o->ig_raw() == nullptr || o->ig_raw()->size() != 5) return Status::kMalformed;
+                    BidOptionValue ov;
+                    ov.task_key = o->task_key(), ov.goal_x = o->goal_x(), ov.goal_y = o->goal_y();
+                    for (uint32_t i = 0; i < 5; ++i) ov.ig_raw[i] = o->ig_raw()->Get(i);
+                    ov.path_m = o->path_m(), ov.cost_bandwidth = o->cost_bandwidth(), ov.cost_risk = o->cost_risk();
+                    ov.risk = o->risk(), ov.source = o->source();
+                    if (const auto* fp = o->footprint()) {
+                        if (fp->size() > kMaxFootprintBlocks) return Status::kMalformed;
+                        for (const auto* g : *fp) ov.footprint.push_back({g->bx(), g->by(), g->w()});
+                    }
+                    v.options.push_back(ov);
+                }
+            }
+            out->has_task_bid = true;
+        }
+        if (const auto* c = env->task_consensus()) {
+            if (c->frame() == nullptr) return Status::kUntaggedPose;
+            auto& v = out->task_consensus;
+            v = {};
+            v.broker = c->broker(), v.epoch = c->epoch(), v.seq = c->seq(), v.t_ns = c->t_ns();
+            v.bids_t_ns = c->bids_t_ns();
+            v.frame = detail::FromWire(*c->frame());
+            if (c->members()) v.members.assign(c->members()->begin(), c->members()->end());
+            if (const auto* as = c->assignments())
+                for (const auto* a : *as) v.assignments.push_back({a->agent(), a->task_key(), a->goal_x(), a->goal_y()});
+            out->has_task_consensus = true;
         }
         return Status::kOk;
     }

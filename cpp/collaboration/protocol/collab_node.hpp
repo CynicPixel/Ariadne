@@ -116,8 +116,10 @@ struct NodeHooks {
     std::function<std::vector<KeyframeRef>(const KeyframeRef& query,
                                            const std::map<KeyframeRef, core::GlobalDescriptorValue>& db)>
         retrieve;
-    /// Agent: local features of one of its keyframes, for a MATCH_RESPONSE.
-    std::function<core::FeatureResponseValue(uint64_t keyframe)> features;
+    /// Agent: local features of one of its keyframes, for a MATCH_RESPONSE. nullopt = not ready yet (D174: the live
+    /// worker extracts them lazily, on request); the node keeps the request and asks again on every Tick, answering
+    /// when the hook is ready, until response_ttl_s. Replay hooks are always ready, so their bytes are unchanged.
+    std::function<std::optional<core::FeatureResponseValue>(uint64_t keyframe)> features;
     /// Broker: geometric verification of a candidate pair, given both feature sets.
     std::function<std::optional<LoopEdgeValue>(const KeyframeRef& a, const core::FeatureResponseValue& fa,
                                                const KeyframeRef& b, const core::FeatureResponseValue& fb)>
@@ -129,9 +131,15 @@ struct NodeHooks {
     /// candidate as it appears (the Phase-1 behaviour: the "similarity" baseline, and the default). SelectBySimilarity
     /// is the "greedy" baseline; SelectSpectral (spectral_selector.hpp, links OpenCV) is the policy.
     std::function<SelectionReport(const SelectionProblem&)> select;
+    /// D175: coordination messages (SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS) addressed to this agent, delivered as they
+    /// arrive (sim time), for the agent's planner mailbox. Unset = such messages are dropped.
+    std::function<void(const core::DecodedMessage&, core::Timestamp)> coordination;
 };
 
 struct NodeParams {
+    // D175 coordination TTLs: a patch is superseded by later ones (it carries everything since the acked version), a
+    // bid or a consensus older than one replan period is worthless.
+    double patch_ttl_s = 30.0, bid_ttl_s = 5.0, consensus_ttl_s = 5.0;
     MembershipParams membership;
     EndpointParams endpoint;
     double descriptor_ttl_s = 120.0;
@@ -170,6 +178,7 @@ struct NodeStats {
     uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
     uint64_t edges_injected = 0;            // §42 item 7 evaluation: false closures planted through InjectVerifiedEdge
+    uint64_t answers_deferred = 0, answers_given_up = 0;   // D174: features not ready when asked / never ready by the TTL
     uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
     uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
     uint64_t uncalibrated_class_prices = 0;   // edges / graph batches priced at ratio 1.0 (D171): likewise
@@ -264,10 +273,12 @@ public:
             SendHeartbeats(t, net);
             next_heartbeat_ = t + core::Duration::SecondsFromDouble(p_.membership.period_s);
         }
-        // 3. snapshot cadence to my broker
+        // 3. snapshot cadence to my broker; feature requests whose answer was not ready (D174)
         if (!mem_.IsBroker()) MaybeSnapshot(t);
+        AnswerDeferred(t);
         // 4. broker duties
         if (mem_.IsBroker()) {
+            ResolveOwnFeatures(t);
             MaybeSelect(t);
             RetryRequests(t);
             MaybeSolve(t);
@@ -438,6 +449,15 @@ private:
         return known_g_.count({f.agent, f.epoch}) > 0;
     }
 
+    template <typename Fill>
+    void DeliverLocal(core::MessageClass cls, core::Timestamp t, Fill fill) {
+        if (!hooks_.coordination) return;
+        core::DecodedMessage d;
+        d.cls = cls, d.sender = self_, d.receiver = self_, d.stamp_ns = t.ns;
+        fill(d);
+        hooks_.coordination(d, t);
+    }
+
     void Handle(core::DecodedMessage m, core::Timestamp t) {
         using MC = core::MessageClass;
         if (m.has_heartbeat) {
@@ -482,21 +502,58 @@ private:
                     dirty_ = true;
                 }
                 break;
+            case MC::SUBMAP_PATCH:
+            case MC::TASK_BID:
+            case MC::TASK_CONSENSUS:
+                if (hooks_.coordination) hooks_.coordination(m, t);
+                break;
             default: break;
         }
     }
 
     void AnswerRequest(const core::DecodedMessage& m, core::Timestamp t) {
         if (!hooks_.features || !descriptors_.count(m.match_request.candidate_keyframe)) return;
-        core::FeatureResponseValue f = hooks_.features(m.match_request.candidate_keyframe);
-        f.request_id = m.match_request.request_id;
-        f.keyframe_id = m.match_request.candidate_keyframe;
+        const uint64_t id = m.match_request.request_id, kf = m.match_request.candidate_keyframe;
+        if (deferred_answers_.count(id)) return;   // a retry of a request still being prepared
+        auto f = hooks_.features(kf);
+        if (!f) {
+            deferred_answers_.emplace(id, DeferredAnswer{m.sender, kf, t});
+            ++stats_.answers_deferred;
+            return;
+        }
+        SendResponse(std::move(*f), id, kf, m.sender, t);
+    }
+
+    /// D174: answer the requests whose features have become ready, in request-id order (deterministic); drop those
+    /// still not ready after response_ttl_s (the broker gives up on its side after request_give_up_s).
+    void AnswerDeferred(core::Timestamp t) {
+        for (auto it = deferred_answers_.begin(); it != deferred_answers_.end();) {
+            const DeferredAnswer& d = it->second;
+            if ((t - d.since).toSeconds() >= p_.response_ttl_s) {
+                ++stats_.answers_given_up;
+                it = deferred_answers_.erase(it);
+                continue;
+            }
+            auto f = hooks_.features(d.keyframe);
+            if (!f) {
+                ++it;
+                continue;
+            }
+            SendResponse(std::move(*f), it->first, d.keyframe, d.to, t);
+            it = deferred_answers_.erase(it);
+        }
+    }
+
+    void SendResponse(core::FeatureResponseValue f, uint64_t request_id, uint64_t keyframe, AgentId to,
+                      core::Timestamp t) {
+        f.request_id = request_id;
+        f.keyframe_id = keyframe;
         OutMessage o;
         o.cls = core::MessageClass::MATCH_RESPONSE;
         o.key = f.request_id;
         o.created = t;
         o.ttl = core::Duration::SecondsFromDouble(p_.response_ttl_s);
-        const AgentId self = self_, to = m.sender;
+        const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         o.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeFeatureResponse(f, self, to, ts, seq); };
         ep_.Enqueue(to, std::move(o));
@@ -647,7 +704,12 @@ private:
     void RequestFeatures(const KeyframeRef& k, core::Timestamp t) {
         if (features_.count(k)) return;
         if (k.agent == self_) {
-            if (hooks_.features) features_[k] = hooks_.features(k.keyframe);
+            if (!hooks_.features) return;
+            if (auto f = hooks_.features(k.keyframe)) {
+                features_[k] = std::move(*f);
+            } else {
+                own_waiting_.emplace(k, t);   // D174: verified once ResolveOwnFeatures finds it ready
+            }
             return;
         }
         if (requests_.count(k)) return;
@@ -683,6 +745,27 @@ private:
             }
             if ((t - r.last).toSeconds() >= p_.request_retry_s) SendRequest(it->first, r, t);
             ++it;
+        }
+    }
+
+    /// D174: the broker's own keyframes whose features were not ready when a selected pair needed them.
+    void ResolveOwnFeatures(core::Timestamp t) {
+        for (auto it = own_waiting_.begin(); it != own_waiting_.end();) {
+            const KeyframeRef k = it->first;
+            if ((t - it->second).toSeconds() >= p_.request_give_up_s) {
+                ++stats_.requests_given_up;
+                it = own_waiting_.erase(it);
+                continue;
+            }
+            auto f = hooks_.features(k.keyframe);
+            if (!f) {
+                ++it;
+                continue;
+            }
+            features_[k] = std::move(*f);
+            it = own_waiting_.erase(it);
+            for (const auto& [a, b] : candidates_)
+                if (a == k || b == k) TryVerify(a, b, t);
         }
     }
 
@@ -722,6 +805,71 @@ private:
     }
 
 public:
+    // --- D175: coordination through the radio (MULTIAGENT_PIPELINE) ---------------------------------------------
+    struct ComponentView {
+        AgentId broker = 0;
+        std::vector<AgentId> members;
+        core::EpochValue epoch;
+    };
+    /// This agent's connected component as its membership sees it now (§15.4: lowest id brokers, epoch accepted).
+    ComponentView Component() const { return {mem_.broker(), mem_.ComponentMembers(), mem_.accepted()}; }
+    /// The highest SUBMAP_PATCH version `to` has acknowledged (0 = none): the next patch carries what changed since.
+    uint64_t AckedPatchVersion(AgentId to) {
+        const auto& d = ep_.Delivered(to, core::MessageClass::SUBMAP_PATCH);
+        return d.empty() ? 0 : *d.rbegin();
+    }
+    void SendPatch(AgentId to, const core::SubmapPatchValue& p, core::Timestamp t) {
+        if (to == self_) return;
+        OutMessage m;
+        m.cls = core::MessageClass::SUBMAP_PATCH;
+        m.key = p.version;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.patch_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeSubmapPatch(p, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// To this agent's component broker; the broker's own bid is delivered locally at once (no radio hop).
+    void SendBid(const core::TaskBidValue& b, core::Timestamp t) {
+        const AgentId to = mem_.broker();
+        if (to == self_) return DeliverLocal(core::MessageClass::TASK_BID, t, [&](core::DecodedMessage& d) {
+            d.has_task_bid = true, d.task_bid = b;
+        });
+        OutMessage m;
+        m.cls = core::MessageClass::TASK_BID;
+        m.key = b.seq;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.bid_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskBid(b, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// Broker: the assignment to every member of `c` (self locally).
+    void SendConsensus(const core::TaskConsensusValue& c, core::Timestamp t) {
+        for (AgentId to : c.members) {
+            if (to == self_) {
+                DeliverLocal(core::MessageClass::TASK_CONSENSUS, t, [&](core::DecodedMessage& d) {
+                    d.has_task_consensus = true, d.task_consensus = c;
+                });
+                continue;
+            }
+            OutMessage m;
+            m.cls = core::MessageClass::TASK_CONSENSUS;
+            m.key = c.seq;
+            m.created = t;
+            m.ttl = core::Duration::SecondsFromDouble(p_.consensus_ttl_s);
+            const AgentId self = self_;
+            const core::WireCodec* codec = &codec_;
+            m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskConsensus(c, self, to, ts, seq); };
+            Plan(m, t);
+            ep_.Enqueue(to, std::move(m));
+        }
+    }
+
     /// EVALUATION ONLY (arch §42 item 7: "at least one false closure is generated intentionally"): plant `e` at the
     /// broker exactly as if its verify hook had returned it, so it travels and is solved like any verified edge and
     /// only the robust stage can reject it. Returns false (nothing planted) unless this node is the broker.
@@ -842,6 +990,12 @@ private:
     std::set<std::pair<AgentId, uint32_t>> known_g_;
     uint64_t edge_msg_key_ = 0, graph_msg_key_ = 0;
     bool resyncing_ = false, resync_snapshot_ = false;
+    struct DeferredAnswer {   // D174: a MATCH_REQUEST whose features were not ready when it arrived
+        AgentId to = 0;
+        uint64_t keyframe = 0;
+        core::Timestamp since;
+    };
+    std::map<uint64_t, DeferredAnswer> deferred_answers_;   // by request id
     AgentId T_G_W_anchor_ = 0;   // D171: sends to a new broker are tagged resync
 
     // broker state (soft: rebuilt from agents after an election change)
@@ -849,6 +1003,7 @@ private:
     std::set<std::pair<KeyframeRef, KeyframeRef>> candidates_, verified_;
     std::map<KeyframeRef, core::FeatureResponseValue> features_;
     std::map<KeyframeRef, Request> requests_;
+    std::map<KeyframeRef, core::Timestamp> own_waiting_;   // D174: own keyframes whose features were not ready
     std::map<uint64_t, KeyframeRef> request_owner_;
     uint64_t request_counter_ = 0;
     std::map<EdgeKey, LoopEdgeValue> broker_edges_;
