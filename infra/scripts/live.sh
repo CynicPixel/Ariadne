@@ -168,9 +168,9 @@ cmd_run() {
   # D167 timers: gz's achieved RTF straight from the world stats topic, and the GL renderer string (D155: on g4dn
   # this must name the NVIDIA device; llvmpipe here means the GPU was NOT used).
   # The tap writes a start marker first, so an exec that never ran is distinguishable from a silent gz topic.
-  docker exec -d "$sim" sh -c "echo \"tap started $(date -u +%H:%M:%S)\" > /work/$run/gz_stats.err; exec gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" \
+  docker exec -d "$sim" sh -c "echo \"tap started $(date -u +%H:%M:%S)\" > /work/$run/gz_stats.err; . /opt/ros/jazzy/setup.sh; exec gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" \
     || echo "docker exec for the stats tap failed" > "$REPO_ROOT/$run/gz_stats.err"
-  docker exec "$sim" sh -c "timeout 3 gz topic -l" > "$REPO_ROOT/$run/gz_topics.txt" 2>&1 || true
+  docker exec "$sim" sh -c ". /opt/ros/jazzy/setup.sh; timeout 3 gz topic -l" > "$REPO_ROOT/$run/gz_topics.txt" 2>&1 || true
   for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn (A1)
     if docker exec "$sim" sh -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
          > "$REPO_ROOT/$run/renderer.txt" 2>&1 && [ -s "$REPO_ROOT/$run/renderer.txt" ]; then break; fi
