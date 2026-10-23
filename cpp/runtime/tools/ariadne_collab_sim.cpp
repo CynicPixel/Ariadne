@@ -63,6 +63,7 @@ struct Config {
     double budget_bytes_per_s = 0, budget_burst_bytes = 0;
     std::string budget_source;                // how the level was derived (D171 §4): recorded, never defaulted
     double response_ratio = 0;                // calibrated MATCH_RESPONSE compression ratio; <= 0 = uncalibrated
+    double edge_ratio = 0, graph_ratio = 0;   // POSE_EDGE / POSE_GRAPH ratios, same calibration run (D171)
     std::string calibration_run;
     std::string comms_scenario;
     double duplicate_p = 0, reorder_p = 0, jitter_s = 0;
@@ -92,6 +93,8 @@ Config LoadConfig(const std::string& path) {
         throw std::invalid_argument(path + ": a budgeted arm needs budget_bytes_per_s, budget_burst_bytes, budget_source");
     get(n, "response_ratio", c.response_ratio);
     get(n, "calibration_run", c.calibration_run);
+    get(n, "edge_ratio", c.edge_ratio);
+    get(n, "graph_ratio", c.graph_ratio);
     get(n, "comms_scenario", c.comms_scenario);
     if (c.comms_scenario.empty()) throw std::invalid_argument(path + ": comms_scenario is required");
     if (const YAML::Node f = n["faults"]) get(f, "duplicate_p", c.duplicate_p), get(f, "reorder_p", c.reorder_p),
@@ -259,6 +262,8 @@ int main(int argc, char** argv) {
         if (cfg.arm != "similarity") np.budget_bytes_per_s = cfg.budget_bytes_per_s, np.budget_burst_bytes = cfg.budget_burst_bytes;
         if (cfg.response_ratio > 0) np.response_cost.response_ratio[256] = cfg.response_ratio,
                                     np.response_cost.calibration_run = cfg.calibration_run;
+        if (cfg.edge_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_EDGE)] = cfg.edge_ratio;
+        if (cfg.graph_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_GRAPH)] = cfg.graph_ratio;
         np.default_feature_bytes = 256;
 
         const slam::JointRobustParams robust_params{};
@@ -421,6 +426,7 @@ int main(int argc, char** argv) {
                 g.descriptor = r.global;
                 g.n_features = uint32_t(r.keypoints.size() / 2);
                 g.feature_bytes = 256;
+                g.fp16 = true;   // arch §15.7's encoding (D171)
                 node_of.at(rl.agent)->AddKeyframe(r.id, r.t_create_ns, r.T_W_C, odo, g, now);
                 released[rl.agent].push_back(&r);
             }
@@ -437,11 +443,12 @@ int main(int argc, char** argv) {
         // --- outputs -------------------------------------------------------------------------------------------
         {
             std::ofstream l(fs::path(out) / "ledger.csv");
-            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit\n";
+            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit,resync,"
+                 "predicted_wire_bytes\n";
             for (const auto& r : comms.ledger().Records())
                 l << 1e-9 * double(r.t.ns - t_first) << ',' << r.sender << ',' << r.receiver << ',' << int(r.type) << ','
                   << r.payload_bytes << ',' << r.transmitted_bytes << ',' << r.wire_bytes << ',' << int(r.compressed)
-                  << ',' << int(r.retransmit) << '\n';
+                  << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << r.predicted_wire_bytes << '\n';
         }
         std::vector<const ac::CollabNode*> cn;
         for (const auto& n : nodes) cn.push_back(n.get());
@@ -462,29 +469,39 @@ int main(int argc, char** argv) {
           << "\nresponse_ratio: {value: " << cfg.response_ratio << ", calibration_run: \"" << cfg.calibration_run << "\"}"
           << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";
-        // Per-class wire bytes: first transmission (the I6 measured side) and retransmissions (overhead row).
-        std::map<int, std::array<uint64_t, 4>> cls;   // msgs_first, wire_first, transmitted_first, wire_retx
+        // Per class (COLLAB_3.2 §7, D171): first transmission outside resync (the I6 measured side) with the senders'
+        // per-message predictions; overhead rows apart: retransmissions and resends to a new broker (resync).
+        struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, predicted_msgs = 0;
+                            double predicted = 0; };
+        std::map<int, ClassBytes> cls;
         for (const auto& r : comms.ledger().Records()) {
-            auto& c = cls[int(r.type)];
-            if (r.retransmit) c[3] += r.wire_bytes;
-            else ++c[0], c[1] += r.wire_bytes, c[2] += r.transmitted_bytes;
+            ClassBytes& c = cls[int(r.type)];
+            if (r.retransmit) c.retx += r.wire_bytes;
+            else if (r.resync) c.resync += r.wire_bytes;
+            else {
+                ++c.msgs, c.wire += r.wire_bytes, c.transmitted += r.transmitted_bytes;
+                if (r.predicted_wire_bytes >= 0) ++c.predicted_msgs, c.predicted += r.predicted_wire_bytes;
+            }
         }
         y << "bytes:\n";
         for (const auto& [k, c] : cls)
-            y << "  - {class: " << k << ", messages: " << c[0] << ", wire_first: " << c[1] << ", transmitted_first: " << c[2]
-              << ", wire_retransmit: " << c[3] << "}\n";
+            y << "  - {class: " << k << ", messages: " << c.msgs << ", wire_first: " << c.wire << ", transmitted_first: "
+              << c.transmitted << ", predicted_first: " << (c.predicted_msgs == c.msgs && c.msgs ? c.predicted : -1.0)
+              << ", wire_retransmit: " << c.retx << ", wire_resync: " << c.resync << "}\n";
         y << "total_wire_bytes: {first: " << cum(true) << ", all: " << cum(false) << "}\n";
         double pred_req = 0, pred_resp = 0;
-        uint64_t edges_verified = 0, solves = 0, cands = 0, selected = 0, expired = 0, uncal = 0, unadv = 0, changes = 0;
+        uint64_t edges_verified = 0, solves = 0, cands = 0, selected = 0, expired = 0, uncal = 0, unadv = 0, changes = 0,
+                 uncal_cls = 0;
         for (const auto& n : nodes) {   // summed over every broker the run had (D171 §5)
             const auto& s = n->stats();
             pred_req += s.predicted_request_bytes, pred_resp += s.predicted_response_bytes;
             edges_verified += s.edges_verified, solves += s.solves, cands += s.candidates;
             selected += s.candidates_selected, expired += s.candidates_expired, uncal += s.uncalibrated_prices;
-            unadv += s.unadvertised_prices, changes += s.broker_changes;
+            unadv += s.unadvertised_prices, changes += s.broker_changes, uncal_cls += s.uncalibrated_class_prices;
         }
         y << "predicted: {match_request: " << pred_req << ", match_response: " << pred_resp
-          << ", uncalibrated_prices: " << uncal << ", unadvertised_prices: " << unadv << "}\n";
+          << ", uncalibrated_prices: " << uncal << ", uncalibrated_class_prices: " << uncal_cls
+          << ", unadvertised_prices: " << unadv << "}\n";
         y << "protocol: {candidates: " << cands << ", selected: " << selected << ", expired: " << expired
           << ", edges_verified: " << edges_verified << ", solves: " << solves << ", broker_changes: " << changes << "}\n";
         y << "verify: {calls: " << vs.calls << ", geometric: " << vs.verified << ", gated: " << vs.gated

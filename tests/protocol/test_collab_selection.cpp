@@ -132,6 +132,16 @@ TEST(CollabSelection, V1DescriptorBytesUnchangedAndNewFieldsRoundTrip) {
     ASSERT_EQ(codec.Decode(v2.bytes, &d), WireCodec::Status::kOk);
     EXPECT_EQ(d.global_descriptor.n_features, 800u);
     EXPECT_EQ(d.global_descriptor.feature_bytes, 32u);
+
+    // D171: fp16 on the wire (arch §15.7): half the descriptor bytes, values = the fp16 rounding of the input.
+    g.fp16 = true;
+    const auto h = codec.EncodeGlobalDescriptor(g, 3, 0, Timestamp{987654321}, 77);
+    EXPECT_NEAR(double(v2.bytes.size()) - double(h.bytes.size()), 512.0, 16.0) << "256 x 2 B saved, give or take padding";
+    ASSERT_EQ(codec.Decode(h.bytes, &d), WireCodec::Status::kOk);
+    ASSERT_EQ(d.global_descriptor.descriptor.size(), 256u);
+    EXPECT_TRUE(d.global_descriptor.fp16);
+    for (int i = 0; i < 256; ++i)
+        EXPECT_EQ(d.global_descriptor.descriptor[size_t(i)], float(Eigen::half(g.descriptor[size_t(i)]))) << i;
 }
 
 TEST(CollabSelection, GraphStartsAtTheFirstReleasedKeyframe) {

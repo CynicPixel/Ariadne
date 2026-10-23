@@ -4171,6 +4171,30 @@ Branch `feat/3.4-spectral`.
 8. **Scene 1's inter-agent opportunities are measured first.** If there are fewer than 10, a third scene (maze_short)
    is rendered before the gate.
 
+**As built (same day, before any gate run):**
+- **Global descriptor on the wire: fp16**, arch §15.7's encoding.
+  - An appended `descriptor_f16` field in `GlobalDescriptor`. v1 bytes are unchanged; the golden test still pins
+    1142 B and FNV `0x653ebb54ae4fd40b`.
+  - The codec had shipped float32 only. D93's int8 stays a 3.6 row.
+- **Retrieval threshold: cosine 0.8.**
+  - Source: Swarm-SLAM's stereo `similarity_threshold`, from `cslam_experiments` `kitti_stereo.yaml`, used there on
+    CosPlace, EigenPlaces' predecessor from the same group.
+  - `top_k` 3 is [ASSUMPTION].
+  - `edges.csv` records every verify call with its ground-truth edge error, so the scene-1 check can revise both.
+- **Predictions per message.**
+  - Every descriptor, pose edge and graph batch is priced when planned: the codec's exact payload, times the class's
+    calibrated ratio for the compressed classes (4, 5, 6, D14), plus framing.
+  - The prediction reaches the ledger with the first transmission (`ByteRecord::predicted_wire_bytes`, ledger only).
+  - Requests and responses keep D170's selection-time prices.
+- **`resync`.** Sends to a new broker carry a ledger-only tag: descriptors not yet sent, every edge, and the forced
+  snapshot. They form an overhead row, outside the gate.
+- **Robust stage.** `RobustMultiAgentSolve` runs D76's `RobustJointSolve` through a new `MultiAgentInput::solver`
+  hook.
+  - An agent tied to the gauge only through rejected edges is reported **unplaced**, never placed on those edges.
+  - The plain-PGO `MultiAgentSolve` is the `robust: false` ablation row.
+- **Edge noise model:** the EuRoC fit (`euroc_v2_loops.yaml`), carried to the sim [ASSUMPTION]. A sim fit from
+  `edges.csv` follows the first sweep.
+
 **§49:**
 - catalogue: ALGORITHMS (COSMO-Bench, Tian et al.);
 - arch: §5.7/§15.6 as-built note at merge;

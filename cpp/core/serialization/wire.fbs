@@ -135,6 +135,9 @@ table GlobalDescriptor {
   // unchanged).
   n_features:uint;
   feature_bytes:ushort;   // descriptor bytes per feature (ORB 32)
+  // D171, appended: the descriptor as IEEE fp16 bits (arch §15.7's encoding); then `descriptor` is absent. v1 senders
+  // never set it, so their bytes are unchanged.
+  descriptor_f16:[ushort];
 }
 
 /// §15.2 candidate request: the broker asks for one keyframe's local features.

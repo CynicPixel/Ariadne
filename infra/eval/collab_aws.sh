@@ -127,12 +127,16 @@ for sc in (0, 1):
         if not first: continue
         t0 = min(float(r["t_s"]) for r in rows); t1 = max(float(r["t_s"]) for r in rows)
         fetch = sum(int(r["wire_bytes"]) for r in first if r["class"] in ("3", "4"))
-        resp = [r for r in first if r["class"] == "4"]
-        pay = sum(int(r["payload_bytes"]) for r in resp); tx = sum(int(r["transmitted_bytes"]) for r in resp)
         rates.append(fetch / max(t1 - t0, 1e-9)); runs.append(os.path.basename(d))
-        if pay: ratios.append(tx / pay)
+        ratio = []
+        for k in ("4", "5", "6"):   # match response, pose edge, pose graph: the compressed classes
+            rs = [r for r in first if r["class"] == k and r.get("resync", "0") == "0"]
+            pay = sum(int(r["payload_bytes"]) for r in rs); tx = sum(int(r["transmitted_bytes"]) for r in rs)
+            ratio.append(tx / pay if pay else 0.0)
+        ratios.append(ratio)
     if rates:
-        print(f"scene{sc} {statistics.mean(rates):.1f} {statistics.mean(ratios) if ratios else 0:.5f} {','.join(runs)}")
+        m = [statistics.mean(r[i] for r in ratios) for i in range(3)]
+        print(f"scene{sc} {statistics.mean(rates):.1f} {m[0]:.5f} {m[1]:.5f} {m[2]:.5f} {','.join(runs)}")
 PY
 }
 
@@ -143,14 +147,16 @@ if [[ " $STAGES " == *" B2 "* ]]; then
   : > "$W/b2.jobs"
   for sc in 0 1; do
     other=$(( 1 - sc ))
-    read -r _ rate ratio runs < <(grep "^scene$other " "$R/calibration.txt") || fail "no calibration for scene $other"
+    read -r _ rate ratio eratio gratio runs < <(grep "^scene$other " "$R/calibration.txt") \
+      || fail "no calibration for scene $other"
     for pct in 10 25 50 100; do
       lvl=$(python3 -c "print(round($rate * $pct / 100.0, 1))")
       burst=$(python3 -c "print(round($lvl * 5.0, 1))")
       for arm in greedy spectral; do
         cfg "${arm}_s${sc}_p$pct.yaml" "arm: $arm" "budget_bytes_per_s: $lvl" "budget_burst_bytes: $burst" \
           "budget_source: \"$pct % of the similarity arm's fetch rate $rate B/s on scene $other ($runs)\"" \
-          "response_ratio: $ratio" "calibration_run: \"scene $other similarity arm ($runs)\""
+          "response_ratio: $ratio" "edge_ratio: $eratio" "graph_ratio: $gratio" \
+          "calibration_run: \"scene $other similarity arm ($runs)\""
         for s in $SEEDS; do run_b "${arm}_s${sc}_p${pct}_seed$s" $sc $s "${arm}_s${sc}_p$pct.yaml" >> "$W/b2.jobs"; done
       done
     done

@@ -37,7 +37,8 @@ SURFACE, INK, MUTED, GRID = "#fcfcfb", "#1d1d1b", "#6b6a63", "#e4e3de"
 ARM = {"similarity": "#9a9990", "greedy": "#eb6834", "spectral": "#2a78d6"}
 CLASS = {0: "heartbeat", 1: "global_descriptor", 3: "match_request", 4: "match_response", 5: "pose_edge",
          6: "pose_graph", 12: "ack"}
-PREDICTED = {3: "match_request", 4: "match_response"}   # classes with a predictor wired (D170); the rest are listed
+POLICY = {3: "match_request", 4: "match_response"}   # priced by the selection policy (D170): aggregate per run
+GATED = (1, 3, 4, 5, 6)                              # COLLAB_3.2 §7 classes; heartbeats and acks are overhead rows
 GATE = 0.15
 
 
@@ -91,17 +92,22 @@ def main():
         meas = {int(b["class"]): b for b in r.get("bytes", [])}
         pred = r.get("predicted", {})
         for k, b in sorted(meas.items()):
-            p = pred.get(PREDICTED[k]) if k in PREDICTED else None
+            if k in POLICY:
+                p = pred.get(POLICY[k])
+            else:
+                p = b.get("predicted_first", -1)
+                p = None if p is None or p < 0 else p
             err = abs(b["wire_first"] - p) / b["wire_first"] if p is not None and b["wire_first"] else None
-            if p is None and k not in (0, 12):
+            if p is None and k in GATED:
                 missing_predictor.add(CLASS.get(k, str(k)))
-            if err is not None:
+            if err is not None and k in GATED:
                 worst = max(worst, err)
             rows.append({"run": name, "class": CLASS.get(k, str(k)), "measured_wire_first": b["wire_first"],
                          "predicted": "" if p is None else round(p), "error": "" if err is None else round(err, 4),
                          "verdict": "" if err is None else ("PASS" if err <= GATE else "FAIL"),
-                         "overhead_wire_retransmit": b["wire_retransmit"],
-                         "uncalibrated_prices": pred.get("uncalibrated_prices", "")})
+                         "overhead_wire_retransmit": b["wire_retransmit"], "overhead_wire_resync": b.get("wire_resync", 0),
+                         "uncalibrated_prices": pred.get("uncalibrated_prices", ""),
+                         "uncalibrated_class_prices": pred.get("uncalibrated_class_prices", "")})
     with open(a.out / "byte_table.csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else ["run"])
         w.writeheader()

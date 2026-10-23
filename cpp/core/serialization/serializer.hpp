@@ -33,6 +33,7 @@
 // ---------------------------------------------------------------------------
 #include "core/time/timestamp.hpp"
 
+#include <Eigen/Core>   // Eigen::half: the fp16 descriptor encoding (D171)
 #include <flatbuffers/flatbuffers.h>
 #include <zstd.h>
 #include <wire_generated.h>
@@ -129,6 +130,10 @@ struct ByteRecord {
     uint64_t cumulative_bytes = 0;   // running total on this ledger
     bool compressed = false;
     bool retransmit = false;         // 3.2 ARQ: resent fragments; not "first transmission" (COLLAB_3.2 §7)
+    // Ledger-only (never on the wire; D171, COLLAB_3.2 §7): the sender's plan-time prediction of this message's first
+    // transmission (-1 = none), and whether it is a resend after an election (broker state is soft): an overhead row.
+    double predicted_wire_bytes = -1.0;
+    bool resync = false;
 
     /// Achieved compression ratio. 1.0 means compression did not help, which
     /// for high-entropy descriptors is the expected outcome and is reported.
@@ -303,6 +308,7 @@ struct GlobalDescriptorValue {
     float quality = 0.0f;
     uint32_t n_features = 0;     // 3.4: the feature response's size, advertised for pricing; 0 = not advertised
     uint16_t feature_bytes = 0;
+    bool fp16 = false;           // D171: encode `descriptor` as fp16 (arch §15.7); decoded values are the fp16 ones
 };
 
 struct MatchRequestValue {
@@ -459,9 +465,17 @@ public:
     SerializedMessage EncodeGlobalDescriptor(const GlobalDescriptorValue& g, AgentId sender, AgentId receiver,
                                              Timestamp t, uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(1024 + 4 * g.descriptor.size());
-        const auto d = fbb.CreateVector(g.descriptor);
+        flatbuffers::Offset<flatbuffers::Vector<float>> d;
+        flatbuffers::Offset<flatbuffers::Vector<uint16_t>> h;
+        if (g.fp16) {
+            std::vector<uint16_t> bits(g.descriptor.size());
+            for (size_t i = 0; i < bits.size(); ++i) bits[i] = Eigen::numext::bit_cast<uint16_t>(Eigen::half(g.descriptor[i]));
+            h = fbb.CreateVector(bits);
+        } else {
+            d = fbb.CreateVector(g.descriptor);
+        }
         const auto off = wire::CreateGlobalDescriptor(fbb, g.keyframe_id, g.stamp_ns, d, g.quality, g.n_features,
-                                                        g.feature_bytes);
+                                                        g.feature_bytes, h);
         return FinishEnvelope(fbb, MessageClass::GLOBAL_DESCRIPTOR, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_global_descriptor(off); });
     }
@@ -593,12 +607,19 @@ public:
         }
         out->has_global_descriptor = out->has_match_request = out->has_feature_response = false;
         if (const auto* g = env->global_descriptor()) {
-            if (!g->descriptor()) return Status::kMalformed;
+            if (!g->descriptor() && !g->descriptor_f16()) return Status::kMalformed;
             out->has_global_descriptor = true;
             auto& v = out->global_descriptor;
             v.keyframe_id = g->keyframe_id();
             v.stamp_ns = g->stamp_ns();
-            v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
+            if (g->descriptor()) {
+                v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
+            } else {
+                v.fp16 = true;
+                v.descriptor.clear();
+                for (uint16_t b : *g->descriptor_f16())
+                    v.descriptor.push_back(float(Eigen::numext::bit_cast<Eigen::half>(b)));
+            }
             v.quality = g->quality();
             v.n_features = g->n_features();
             v.feature_bytes = g->feature_bytes();

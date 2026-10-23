@@ -135,6 +135,8 @@ struct OutMessage {
     std::optional<core::Duration> ttl;   // best-effort expiry (§3.3); none for edges/graphs
     uint64_t key = 0;                    // content id: keyframe / request / submap id; bookkeeping + cancel
     bool supersedes = false;             // a POSE_GRAPH snapshot: replaces a queued, unsent one
+    double predicted_wire_bytes = -1.0;  // the sender's prediction (COLLAB_3.2 §7, D171); ledger only
+    bool resync = false;                 // a resend to a new broker (overhead row, D171)
 };
 
 struct EndpointParams {
@@ -517,7 +519,9 @@ private:
         f.tracked = IsTracked(om.cls, f.fragments.size());
         f.rto_s = p_.rto_min_s;
         f.record = m.record;
-        ledger_.Record(m.record);
+        f.record.predicted_wire_bytes = om.predicted_wire_bytes;
+        f.record.resync = om.resync;
+        ledger_.Record(f.record);
         ++stats_.first_tx_messages;
         pr.sent[uint8_t(om.cls)].insert(om.key);
         pr.inflight.emplace(id, std::move(f));
@@ -539,6 +543,7 @@ private:
         core::ByteRecord row = m.record;
         row.t = t;
         row.retransmit = true;
+        row.predicted_wire_bytes = -1.0;
         row.payload_bytes = row.transmitted_bytes = row.wire_bytes = 0;
         row.compressed = m.record.compressed;
         bool budget_ok = true;

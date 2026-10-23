@@ -171,6 +171,7 @@ struct NodeStats {
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
     uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
     uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
+    uint64_t uncalibrated_class_prices = 0;   // edges / graph batches priced at ratio 1.0 (D171): likewise
     uint64_t max_pending = 0;             // largest candidate pool handed to the policy
     double select_ms_total = 0, select_ms_max = 0;   // policy wall time per round (not used for decisions)
 };
@@ -316,6 +317,7 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeGlobalDescriptor(g, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
     }
 
@@ -327,6 +329,7 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeLoopEdge(e, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
     }
 
@@ -339,7 +342,18 @@ private:
         const AgentId self = self_;
         const core::WireCodec* codec = &codec_;
         m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodePoseGraph(g, self, to, ts, seq); };
+        Plan(m, t);
         ep_.Enqueue(to, std::move(m));
+    }
+
+    /// COLLAB_3.2 §7 / D171: price a planned message (a sample encode with a representative reliable sequence, as
+    /// FetchCostPredictor) and tag a resend to a new broker. Prediction and tag reach the ledger with the first
+    /// transmission; a message that expires unsent never does.
+    void Plan(OutMessage& m, core::Timestamp t) {
+        const uint64_t seq = (1ull << 40) | 1ull;
+        m.predicted_wire_bytes = cost_.PredictWire(m.encode(seq, t), m.cls);
+        m.resync = resyncing_;
+        if (core::IsCompressedClass(m.cls) && !cost_.ClassCalibrated(m.cls)) ++stats_.uncalibrated_class_prices;
     }
 
     PoseGraphValue Snapshot() const {
@@ -361,7 +375,9 @@ private:
         const bool stale = nodes_.size() > snapshot_nodes_ &&
                            (!last_snapshot_ || (t - *last_snapshot_).toSeconds() >= p_.snapshot_max_interval_s);
         if (!enough_kf && !stale) return;
+        resyncing_ = resync_snapshot_;
         SendGraph(mem_.broker(), Snapshot(), t, /*supersedes=*/true);
+        resyncing_ = resync_snapshot_ = false;
         snapshot_nodes_ = nodes_.size();
         last_snapshot_ = t;
     }
@@ -400,11 +416,14 @@ private:
             return;
         }
         const auto& sent = ep_.Sent(b, core::MessageClass::GLOBAL_DESCRIPTOR);
+        resyncing_ = true;
         for (const auto& [kf, g] : descriptors_)
             if (!sent.count(kf)) SendDescriptor(kf, t);
         for (const auto& [k, e] : edges_) SendEdge(b, e, t);
+        resyncing_ = false;
         snapshot_nodes_ = 0;   // force a fresh snapshot to the new broker
         last_snapshot_.reset();
+        resync_snapshot_ = true;
     }
 
     // --- receiving ---
@@ -800,6 +819,7 @@ private:
     std::optional<EstimateRecord> adopted_;
     std::set<std::pair<AgentId, uint32_t>> known_g_;
     uint64_t edge_msg_key_ = 0, graph_msg_key_ = 0;
+    bool resyncing_ = false, resync_snapshot_ = false;   // D171: sends to a new broker are tagged resync
 
     // broker state (soft: rebuilt from agents after an election change)
     std::map<KeyframeRef, core::GlobalDescriptorValue> descriptor_db_;
