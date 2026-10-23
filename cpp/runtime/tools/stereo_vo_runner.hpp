@@ -103,6 +103,9 @@ struct KeyframeView {
     cv::Mat left_rect;       // 8-bit gray (the bundle carries the RGB)
     core::SE3 T_B_C;         // body <- rectified left camera
     double baseline_m = 0;
+    /// The tracker's left-pixel observations at this keyframe (StereoVo::KeyframeObservationsLeft): what the
+    /// console's feature overlay shows - the landmarks the estimator USED, never a redetection.
+    std::vector<cv::Point2f> track_px;
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -643,6 +646,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kf.pose_cov = node.covariance;
                     kf.depth = depth;
                     kf.landmark_ids = vo.KeyframeLandmarks(kr.keyframe_id);
+                    kv.track_px = vo.KeyframeObservationsLeft(kr.keyframe_id);
                 kf.pose_source = kr.source;
                 kf.segment = kr.segment;
                 if (attitude) {

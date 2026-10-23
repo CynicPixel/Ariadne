@@ -85,6 +85,18 @@ def cam_jpg(k: int) -> FileResponse:
     return FileResponse(f, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/cam/{k}.json")
+def cam_features(k: int) -> FileResponse:
+    """The tracked observations of that keyframe (pixel coords in cam_<k>.jpg): the feature overlay (item 6)."""
+    lv = live()
+    if not lv:
+        raise HTTPException(404, "live only")
+    f = lv.src() / "snapshots" / f"cam_{k}.json"
+    if not f.exists():
+        raise HTTPException(404, "no features yet")
+    return FileResponse(f, media_type="application/json", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/frame")
 def frame_at(t: float, speed: float = 10.0) -> JSONResponse:
     """One frame at mission time t (static view, screenshots): events from 0..t included."""

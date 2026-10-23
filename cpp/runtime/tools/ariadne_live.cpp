@@ -114,6 +114,7 @@ struct KfRec {
     core::SE3 T_O_C;
     cv::Mat Z, S;   // CV_32F, half resolution, fp16-rounded exactly as the spool stores them
     double fx = 0, fy = 0, cx = 0, cy = 0;
+    std::vector<cv::Point2f> track_px;   // the tracker's left-pixel observations (full-res; console overlay)
 };
 
 cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHalf, without the PNG round trip
@@ -269,6 +270,9 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         const std::string ti = "none";
         PutPod(o, uint32_t(ti.size()));
         o.insert(o.end(), ti.begin(), ti.end());
+        // Console overlay (P8): the tracked observations, one CV_32FC2 row. Appended last so older readers
+        // (there are none - worker and parent are the same binary) would simply stop before it.
+        PutMat(o, kv.track_px.empty() ? cv::Mat(0, 1, CV_32FC2) : cv::Mat(kv.track_px).reshape(2, 1));
         send("#kf", o);
     };
     a.on_frame = [&](const tools::FrameView& fv) {
@@ -723,6 +727,15 @@ int main(int argc, char** argv) {
                 else bgr = rgb;
                 cv::imwrite((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".jpg")).string(), bgr,
                             {cv::IMWRITE_JPEG_QUALITY, 80});
+                // The feature overlay: the observations the estimator recorded at this keyframe, as pixel
+                // coordinates in the image just written (full-res rectified left). The console draws them.
+                std::ostringstream j;
+                j << "{\"t_ns\":" << r.t_ns << ",\"w\":" << bgr.cols << ",\"h\":" << bgr.rows << ",\"pts\":[";
+                j.setf(std::ios::fixed), j.precision(1);
+                for (size_t i = 0; i < r.track_px.size(); ++i)
+                    j << (i ? "," : "") << '[' << r.track_px[i].x << ',' << r.track_px[i].y << ']';
+                j << "]}";
+                std::ofstream((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".json")).string()) << j.str();
             }
             AgentLane& L = lanes[k];
             std::lock_guard<std::mutex> lk(L.mu);
@@ -811,6 +824,9 @@ int main(int argc, char** argv) {
                             const std::string training(reinterpret_cast<const char*>(q), tn);   // "none" until ph5-dve
                             q += tn;
                             if (training != "none") { GetMat(q); GetMat(q); }   // albedo + valid: not consumed here yet
+                            const cv::Mat px = GetMat(q);   // 1xN CV_32FC2 tracked observations
+                            if (!px.empty())
+                                r.track_px.assign(px.ptr<cv::Point2f>(), px.ptr<cv::Point2f>() + px.total());
                             deliver_kf(k, std::move(r), rgb);
                         } else if (f.topic == "#timing") {
                             const int64_t t = GetPod<int64_t>(q);
@@ -845,6 +861,7 @@ int main(int argc, char** argv) {
                     r.fy = b.K.fy * 0.5;
                     r.cx = 0.5 * (b.K.cx + 0.5) - 0.5;
                     r.cy = 0.5 * (b.K.cy + 0.5) - 0.5;
+                    r.track_px = kv.track_px;
                     deliver_kf(k, std::move(r), b.rgb);
                 };
                 a.on_frame = [&, k](const tools::FrameView& fv) { deliver_frame(k, fv.t_ns, fv.T_O_C); };

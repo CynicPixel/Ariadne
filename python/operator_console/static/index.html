@@ -97,11 +97,18 @@
   <section class="panel" aria-label="Agent cameras">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
       <div><select id="camsel0" aria-label="left camera agent"></select>
-        <img id="cam0" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown)"></div>
+        <div style="position:relative">
+          <img id="cam0" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown); display:block">
+          <canvas id="camov0" style="position:absolute; inset:0; pointer-events:none"></canvas>
+        </div></div>
       <div><select id="camsel1" aria-label="right camera agent"></select>
-        <img id="cam1" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown)"></div>
+        <div style="position:relative">
+          <img id="cam1" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown); display:block">
+          <canvas id="camov1" style="position:absolute; inset:0; pointer-events:none"></canvas>
+        </div></div>
     </div>
-    <small>latest keyframe per agent (what the estimator keyframed, not a raw stream)</small>
+    <small>latest keyframe per agent (what the estimator keyframed, not a raw stream)
+      <label style="float:right"><input type="checkbox" id="featovl" checked> tracked features</label></small>
   </section>
   <div style="display:grid; gap:16px; align-content:start; min-width:0">
     <section id="operator" hidden aria-label="Operator">
@@ -513,12 +520,34 @@ if (at !== null) {
 const camSel = [document.getElementById("camsel0"), document.getElementById("camsel1")];
 const camImg = [document.getElementById("cam0"), document.getElementById("cam1")];
 function camAgents() { return lastFrame ? lastFrame.agents.map((a) => a.id) : [0, 1]; }
+// Item 6: the feature overlay - the observations the estimator recorded at that keyframe (sent by the
+// runtime next to the jpg), drawn as dots. Honest by construction: these are the tracked landmarks the
+// SLAM used, never a client-side redetection. A one-poll image/points mismatch is possible and harmless.
+const camOv = [document.getElementById("camov0"), document.getElementById("camov1")];
+const featOvl = document.getElementById("featovl");
+const camPts = [null, null];
+function drawFeatures(i) {
+  const img = camImg[i], cv = camOv[i], d = camPts[i];
+  cv.width = img.clientWidth; cv.height = img.clientHeight;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  if (!featOvl.checked || !d || !d.w || !img.clientWidth) return;
+  const sx = cv.width / d.w, sy = cv.height / d.h;
+  g.fillStyle = "rgba(80,255,120,0.9)";
+  for (const [x, y] of d.pts) { g.beginPath(); g.arc(x * sx, y * sy, 2, 0, 6.2832); g.fill(); }
+}
+featOvl.addEventListener("change", () => { drawFeatures(0); drawFeatures(1); });
+camImg.forEach((img, i) => img.addEventListener("load", () => drawFeatures(i)));
 setInterval(() => {
   const ids = camAgents();
-  camSel.forEach((sel, i) => {
+  camSel.forEach(async (sel, i) => {
     if (sel.options.length !== ids.length) {
       sel.innerHTML = ids.map((k) => `<option value="${k}">agent ${k} camera</option>`).join("");
       sel.value = ids[Math.min(i, ids.length - 1)];
+    }
+    if (featOvl.checked) {
+      try { camPts[i] = await (await fetch(`/api/cam/${sel.value}.json?t=${Date.now()}`)).json(); }
+      catch { camPts[i] = null; }
     }
     camImg[i].src = `/api/cam/${sel.value}.jpg?t=${Date.now()}`;
   });
