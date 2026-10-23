@@ -189,3 +189,13 @@ ones, and every route is valid (each segment re-checked by symmetric line of sig
   doesn't pay here. That is stated, not over-read.
 - The comparison only discriminates on larger or more cluttered scenes (maze_short, the hazard seeds), and on
   frequent local changes. Those rows come with their spools.
+
+## 10. Hazard seeds, and an open FAR defect (2026-10-23; `evaluation/runs/egress_4.5_hazard/s*_w0/route_compare.jsonl`)
+
+- **Seeds 1, 2:** FAR's length equals the string-pulled A\* on every routed replan (9 / 9, 11 / 11), all valid.
+- **Seed 0:** FAR is shorter on 11 of 13 replans, but **longer on the last two, 11.115 m vs 4.424 m**. FAR misses a
+  passage the lattice path uses, which violates §4's derived bound.
+  - Suspected (`[UNVERIFIED]`): a corner node at a narrow gap whose offset cell is blocked gets dropped, leaving no
+    visibility through the gap.
+  - **Open bug, to fix with a regression test made from this map** (the run's `trav_responder.png`).
+  - The gate rows are unaffected: `Route` uses A\* plus string-pulling, not FAR.
