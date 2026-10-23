@@ -4110,8 +4110,9 @@ validator").
   `imu_noise_v1`, no D. Same frames, poses and lighting in every row (one render).
 - **Disparity range per baseline.** The smallest multiple of 16 that passes the §9.4 validator at
   `required_min_range_m` 0.30, with rectified f = 671.54 px. That gives B04 96 (Z_min 0.283 m), B08 192 (0.281 m),
-  B12 272 (0.297 m) and B20 464 (0.290 m). The main pair keeps its shipped 240 (0.281 m; the rule would give 224), so it
-  equals every earlier sim row. Columns without a full search range: 7.5 / 15 / 18.75 / 21 / 36 %. SGBM time scales
+  B12 272 (0.297 m) and B20 464 (0.290 m). The main pair keeps its shipped 240 (0.281 m; the rule would give 224), so its
+  perception config equals every earlier sim row. Its slam config does not: the sweep runs `sim_v2` (full VIO), while
+  the D142/D145 rows run `sim_v2_vo` (visual-only). Columns without a full search range: 7.5 / 15 / 18.75 / 21 / 36 %. SGBM time scales
   with the range and is reported from the frontend timings.
 - **Metrics.**
   - ATE (SE(3) alignment), keyframes, lost frames, tracks.
