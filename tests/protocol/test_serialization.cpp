@@ -401,6 +401,74 @@ TEST(Serialization, PoseGraphsRemainHighlyCompressible) {
         << "pose-graph compressibility regressed; D14's byte budget assumes ~5x";
 }
 
+// --- Pre-D115 bytes are unchanged by the CbbaConsensus append (master's rule 2) ---------------------------------
+// Size and FNV-1a of fixed messages, recorded with the PRE-change tree (feat/ph4-mission at 1ca0457, whose wire.fbs
+// and serializer.hpp equal main's), so appending TaskConsensus must leave every existing Envelope message
+// byte-identical.
+namespace {
+uint64_t Fnv(const std::vector<uint8_t>& b) {
+    uint64_t h = 1469598103934665603ull;
+    for (uint8_t x : b) h ^= x, h *= 1099511628211ull;
+    return h;
+}
+HeartbeatValue FixedHeartbeat() {
+    HeartbeatValue h;
+    h.agent = 1, h.stamp_ns = 123456789, h.pose = MakePose(1, 2, 3), h.frame = FrameTag{1, 1};
+    h.battery = 0.8f, h.link_state = 0.5f, h.keyframe_watermark = 42, h.neighbors = {0, 2};
+    h.anchor = 0, h.broker = 0, h.epoch = {3, 0xABCDEFull, 0};
+    h.ack.done = {7, 8};
+    return h;
+}
+}  // namespace
+
+TEST(Serialization, PreTaskConsensusBytesUnchanged) {
+    const WireCodec codec(Framing::kWholeMessage);
+    const auto hb = codec.EncodeHeartbeat(FixedHeartbeat(), 1, 0, Timestamp{987654321}, 11);
+    const auto ed = codec.EncodeLoopEdge(MakeEdge(0, 1), 0, 1, Timestamp{987654321}, 12);
+    const auto pg = codec.EncodePoseGraph(MakeGraph(5, 3), 0, 1, Timestamp{987654321}, 13);
+    AckValue a;
+    a.done = {1, 2, 3};
+    const auto ak = codec.EncodeAck(a, 1, 0, Timestamp{987654321}, 14);
+    EXPECT_EQ(hb.bytes.size(), 238u);
+    EXPECT_EQ(Fnv(hb.bytes), 0x5d85433fd5441b89ull) << "heartbeat bytes changed";
+    EXPECT_EQ(ed.bytes.size(), 194u);
+    EXPECT_EQ(Fnv(ed.bytes), 0x49bb277520bc078bull) << "loop-edge bytes changed";
+    EXPECT_EQ(pg.bytes.size(), 417u);
+    EXPECT_EQ(Fnv(pg.bytes), 0xb6f2ab38c40f0161ull) << "pose-graph bytes changed";
+    EXPECT_EQ(ak.bytes.size(), 110u);
+    EXPECT_EQ(Fnv(ak.bytes), 0x011ede3f1e7c8e79ull) << "ack bytes changed";
+}
+
+TEST(Serialization, CbbaConsensusRoundTripsAndIsCounted) {   // D115: class TASK_CONSENSUS through FinishEnvelope
+    const WireCodec codec(Framing::kWholeMessage);
+    CbbaConsensusValue v;
+    v.tasks = {101, 202, 303};
+    v.y = {0.5f, 0.0f, 1.25f};
+    v.z = {1, -1, 0};
+    v.s = {7, 9};
+    v.scales = {1, 2, 3, 4, 5, 6, 7, 8};
+    const auto m = codec.EncodeCbbaConsensus(v, 1, 0, Timestamp{5}, 3);
+    EXPECT_EQ(m.record.type, MessageClass::TASK_CONSENSUS);
+    EXPECT_FALSE(m.record.compressed) << "§15.7 compresses classes 4-5 only";
+    DecodedMessage d;
+    ASSERT_EQ(codec.Decode(m.bytes, &d), WireCodec::Status::kOk);
+    ASSERT_TRUE(d.has_cbba_consensus);
+    EXPECT_EQ(d.cbba_consensus.tasks, v.tasks);
+    EXPECT_EQ(d.cbba_consensus.y, v.y);
+    EXPECT_EQ(d.cbba_consensus.z, v.z);
+    EXPECT_EQ(d.cbba_consensus.s, v.s);
+    EXPECT_EQ(d.cbba_consensus.scales, v.scales);
+    ByteLedger ledger;
+    auto rec = m.record;
+    ledger.Record(rec);
+    EXPECT_EQ(ledger.TotalForClass(MessageClass::TASK_CONSENSUS), m.record.wire_bytes);
+    EXPECT_GE(m.record.wire_bytes, m.bytes.size()) << "framing is charged on top";
+    CbbaConsensusValue bad = v;   // per-task vectors of unequal length are malformed, not silently truncated
+    bad.y.pop_back();
+    const auto mb = codec.EncodeCbbaConsensus(bad, 1, 0, Timestamp{5}, 4);
+    EXPECT_EQ(codec.Decode(mb.bytes, &d), WireCodec::Status::kMalformed);
+}
+
 TEST(Serialization, LargeFeatureResponseRoundTripsThroughFragmentation) {
     // D171: an ALIKED-n16 response at its real size (1024 features, int8 128-D + scale, 3D points): ~93 fragments.
     // The protocol tests' scenes use ~200 features; the sim integration first exercised this size.

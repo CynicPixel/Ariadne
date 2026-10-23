@@ -1,0 +1,5 @@
+# per-sample wall clock, ms (host shared: indicative only)
+samples: 200
+opencv_threads: 8
+ep640_ms_mean: 280.586
+ep1280_ms_mean: 1091.64

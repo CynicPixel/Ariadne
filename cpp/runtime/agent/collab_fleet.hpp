@@ -198,11 +198,12 @@ public:
 
     CollabFleet(const CollabConfig& cfg, const std::vector<ac::AgentId>& fleet, ac::CommsNode& comms,
                 const perception::HardPairMatcher& lightglue, uint64_t seed, int64_t t_first_ns, FeatureSource features,
-                GroundTruthCamera gt_camera, std::ostream* edges_csv)
+                GroundTruthCamera gt_camera, std::ostream* edges_csv,
+                std::function<void(ac::AgentId, ac::NodeHooks&)> customize = {})
         : cfg_(cfg), comms_(comms), lightglue_(lightglue), seed_(seed), t_first_ns_(t_first_ns),
           features_(std::move(features)), gt_camera_(std::move(gt_camera)), ecsv_(edges_csv),
           enc_(ac::ParseLocalEncoding(cfg.local_encoding)), feature_bytes_(uint16_t(128 * ac::BytesPerDim(enc_))),
-          inj_(cfg.inject.size()) {
+          inject_(cfg.inject), inj_(cfg.inject.size()) {
         if (ecsv_)
             *ecsv_ << "agent_a,kf_a,agent_b,kf_b,score,matches,essential_inliers,pnp_inliers,reason,gt_err_t_m,"
                       "gt_err_r_deg,gt_baseline_m,pose_err_deg\n";
@@ -227,18 +228,25 @@ public:
             [this](const slam::PoseGraph& joint) { ObserveSolve(joint); });
 
         for (ac::AgentId self : fleet) {
-            nodes_.push_back(std::make_unique<ac::CollabNode>(self, fleet, codec_, comms_.ledger(), Hooks(self), np));
+            ac::NodeHooks h = Hooks(self);
+            if (customize) customize(self, h);   // live: the D175 coordination mailbox (ariadne_live, B)
+            nodes_.push_back(std::make_unique<ac::CollabNode>(self, fleet, codec_, comms_.ledger(), std::move(h), np));
             node_of_[self] = nodes_.back().get();
         }
     }
     CollabFleet(const CollabFleet&) = delete;
     CollabFleet& operator=(const CollabFleet&) = delete;
 
-    /// The network up to `now`.
+    /// The network up to `now`. Datagrams to an id outside the fleet are dropped (counted).
     void Deliver(core::Timestamp now) {
         sim_t_s_ = 1e-9 * double(now.ns - t_first_ns_);
-        for (const auto& d : comms_.network().DeliverUntil(now)) node_of_.at(d.to)->OnDatagram(d, now);
+        for (const auto& d : comms_.network().DeliverUntil(now)) {
+            const auto it = node_of_.find(d.to);
+            if (it == node_of_.end()) ++undeliverable_;
+            else it->second->OnDatagram(d, now);
+        }
     }
+    uint64_t undeliverable() const { return undeliverable_; }
 
     /// One keyframe of `agent`, whole, at its t_final (its odometry became final). `n_features` advertises the
     /// local feature count when the record carries none (live, lazy); otherwise the record's own count.
@@ -265,37 +273,39 @@ public:
     void Tick(core::Timestamp now) {
         for (auto& n : nodes_) n->Tick(now, comms_.network());
         for (size_t i = 0; i < cfg_.inject.size(); ++i) {
-            const auto& q = cfg_.inject[i];
+            const auto& q = inject_[i];
             if (inj_[i].planted || now.ns < t_first_ns_ + int64_t(std::llround(q.t_s * 1e9))) continue;
-            const auto info = pair_info_.find(PairKey(q.agent_a, q.agent_b));
-            const auto has = [&](ac::AgentId ag, uint64_t kf) {
-                const auto it = released_.find(ag);
-                return it != released_.end() && it->second.count(kf);
-            };
-            if (info == pair_info_.end() || !has(q.agent_a, q.kf_a) || !has(q.agent_b, q.kf_b)) continue;
-            const ac::KeyframeRef a{q.agent_a, q.kf_a}, b{q.agent_b, q.kf_b};
-            const auto truth = GtRel(a, b);
-            if (!truth) throw std::runtime_error("inject_false_edges: no ground truth for the planted pair");
-            core::SE3 D;
-            D.R = Eigen::AngleAxisd(q.yaw_deg * M_PI / 180.0, core::Vec3::UnitZ()).toRotationMatrix();
-            D.t = q.offset_m;
-            const core::SE3 Z = *truth * D;
-            core::LoopEdgeValue e;
-            e.agent_a = a.agent, e.keyframe_a = a.keyframe, e.agent_b = b.agent, e.keyframe_b = b.keyframe;
-            e.measurement = ac::ToPoseValue(Z);
-            e.information = info->second;
-            e.frame_a = {a.agent, 0}, e.frame_b = {b.agent, 0};
-            e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
-            for (auto& n : nodes_)
-                if (n->InjectVerifiedEdge(e, now)) {
-                    inj_[i].planted = true, inj_[i].planted_t_s = 1e-9 * double(now.ns - t_first_ns_);
-                    LogEdge(a, b, nullptr, "injected", &Z);
-                    const core::SE3 d = truth->inverse() * Z;
-                    inj_[i].gt_t = d.t.norm();
-                    inj_[i].gt_r = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
-                    break;
-                }
+            Plant(i, now);
         }
+    }
+
+    /// D174 panel "inject false closure" (LIVE_COLLAB §5): plant one NOW on the agent pair with the most kept true
+    /// loops, between each agent's latest released keyframe, offset `offset_m` and `yaw_deg` (fixed by the caller:
+    /// every press is the same experiment). Armed only when that pair has a kept true loop and both keyframes have
+    /// ground truth. Returns the injection's index in injections(), or nullopt when not armed.
+    std::optional<size_t> InjectNow(core::Timestamp now, const core::Vec3& offset_m, double yaw_deg) {
+        std::map<std::pair<ac::AgentId, ac::AgentId>, size_t> kept;
+        for (const auto& [k, v] : kept_edges_)
+            if (v.last_weight >= 0.5 && !IsInjected(k)) ++kept[PairKey(std::get<0>(k), std::get<2>(k))];
+        if (kept.empty()) return std::nullopt;
+        auto best = kept.begin();
+        for (auto it = kept.begin(); it != kept.end(); ++it)
+            if (it->second > best->second) best = it;
+        const auto [a, b] = best->first;
+        const auto ra = released_.find(a), rb = released_.find(b);
+        if (ra == released_.end() || rb == released_.end() || ra->second.empty() || rb->second.empty()) return std::nullopt;
+        CollabConfig::Injection q;
+        q.t_s = 1e-9 * double(now.ns - t_first_ns_);
+        q.agent_a = a, q.kf_a = *ra->second.rbegin(), q.agent_b = b, q.kf_b = *rb->second.rbegin();
+        q.offset_m = offset_m, q.yaw_deg = yaw_deg;
+        if (!GtRel({a, q.kf_a}, {b, q.kf_b})) return std::nullopt;
+        inject_.push_back(q);
+        inj_.emplace_back();
+        if (!Plant(inject_.size() - 1, now)) {
+            inject_.pop_back(), inj_.pop_back();
+            return std::nullopt;
+        }
+        return inject_.size() - 1;
     }
 
     // --- state and evidence ---
@@ -307,12 +317,56 @@ public:
     uint64_t robust_inter() const { return robust_inter_; }
     uint64_t robust_inliers() const { return robust_inliers_; }
     const std::vector<InjectionState>& injections() const { return inj_; }
+    const std::vector<CollabConfig::Injection>& injection_specs() const { return inject_; }
     /// Every inter-agent loop the robust stage ever kept, when first kept, its weight in the LAST solve containing it.
     const std::map<EdgeKey, KeptEdge>& kept_edges() const { return kept_edges_; }
     ac::LocalEncoding encoding() const { return enc_; }
     uint16_t feature_bytes() const { return feature_bytes_; }
 
 private:
+    /// Plants injection i at `now` if its pair has a verified edge and both keyframes are released (else false).
+    bool Plant(size_t i, core::Timestamp now) {
+        const auto& q = inject_[i];
+        const auto info = pair_info_.find(PairKey(q.agent_a, q.agent_b));
+        const auto has = [&](ac::AgentId ag, uint64_t kf) {
+            const auto it = released_.find(ag);
+            return it != released_.end() && it->second.count(kf);
+        };
+        if (info == pair_info_.end() || !has(q.agent_a, q.kf_a) || !has(q.agent_b, q.kf_b)) return false;
+        const ac::KeyframeRef a{q.agent_a, q.kf_a}, b{q.agent_b, q.kf_b};
+        const auto truth = GtRel(a, b);
+        if (!truth) throw std::runtime_error("inject_false_edges: no ground truth for the planted pair");
+        core::SE3 D;
+        D.R = Eigen::AngleAxisd(q.yaw_deg * M_PI / 180.0, core::Vec3::UnitZ()).toRotationMatrix();
+        D.t = q.offset_m;
+        const core::SE3 Z = *truth * D;
+        core::LoopEdgeValue e;
+        e.agent_a = a.agent, e.keyframe_a = a.keyframe, e.agent_b = b.agent, e.keyframe_b = b.keyframe;
+        e.measurement = ac::ToPoseValue(Z);
+        e.information = info->second;
+        e.frame_a = {a.agent, 0}, e.frame_b = {b.agent, 0};
+        e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
+        for (auto& n : nodes_)
+            if (n->InjectVerifiedEdge(e, now)) {
+                inj_[i].planted = true, inj_[i].planted_t_s = 1e-9 * double(now.ns - t_first_ns_);
+                LogEdge(a, b, nullptr, "injected", &Z);
+                const core::SE3 d = truth->inverse() * Z;
+                inj_[i].gt_t = d.t.norm();
+                inj_[i].gt_r = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
+                return true;
+            }
+        return false;
+    }
+
+    bool IsInjected(const EdgeKey& k) const {
+        for (const auto& q : inject_) {
+            const EdgeKey e = q.agent_a < q.agent_b ? std::make_tuple(q.agent_a, q.kf_a, q.agent_b, q.kf_b)
+                                                    : std::make_tuple(q.agent_b, q.kf_b, q.agent_a, q.kf_a);
+            if (e == k) return true;
+        }
+        return false;
+    }
+
     static std::pair<ac::AgentId, ac::AgentId> PairKey(ac::AgentId x, ac::AgentId y) {
         return std::make_pair(std::min(x, y), std::max(x, y));
     }
@@ -376,9 +430,9 @@ private:
             if (it != kept_edges_.end()) it->second.last_weight = e.gnc_weight;
             else if (e.gnc_weight >= 0.5) kept_edges_.emplace(key, KeptEdge{sim_t_s_, e.gnc_weight, false});
         }
-        for (size_t i = 0; i < cfg_.inject.size(); ++i) {
+        for (size_t i = 0; i < inject_.size(); ++i) {
             if (!inj_[i].planted) continue;
-            const auto& q = cfg_.inject[i];
+            const auto& q = inject_[i];
             const uint64_t A = slam::JointId(q.agent_a, q.kf_a), B = slam::JointId(q.agent_b, q.kf_b);
             for (const auto& e : joint.edges())
                 if ((e.from == A && e.to == B) || (e.from == B && e.to == A)) {
@@ -496,10 +550,12 @@ private:
     uint64_t solve_calls_ = 0, robust_inter_ = 0, robust_inliers_ = 0;
     // The last verified edge's information per unordered agent pair (an injection copies it).
     std::map<std::pair<ac::AgentId, ac::AgentId>, std::vector<float>> pair_info_;
+    std::vector<CollabConfig::Injection> inject_;   // cfg.inject, then the panel's InjectNow presses
     std::vector<InjectionState> inj_;
     double sim_t_s_ = 0;
     std::map<EdgeKey, KeptEdge> kept_edges_;
     std::map<ac::AgentId, std::set<uint64_t>> released_;
+    uint64_t undeliverable_ = 0;
     std::function<ac::SolveOutput(const ac::SolveInput&)> solve_robust_;
     std::vector<std::unique_ptr<ac::CollabNode>> nodes_;
     std::map<ac::AgentId, ac::CollabNode*> node_of_;

@@ -1,0 +1,4 @@
+# 4.3 NBV replay decision log (docs/design/NBV_4.3.md §7, D114). Dev host, one process, 2026-10-23.
+# Machinery evidence only: the trajectory is the spool's, "executed": false. Never plotted as coverage vs budget.
+# SPOOL / SCENE as evaluation/runs/egress_4.5/command.txt.
+ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT --egress 1 --support-band -0.31,2.31 --nbv 1

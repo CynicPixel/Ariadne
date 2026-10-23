@@ -31,6 +31,7 @@ include(cmake/AriadneDependencies.cmake)
 add_subdirectory(cpp/core)
 add_subdirectory(cpp/perception)
 add_subdirectory(cpp/slam)
+add_subdirectory(cpp/planning)
 add_subdirectory(cpp/runtime)
 
 if(ARIADNE_BUILD_TESTS)

@@ -382,6 +382,17 @@ struct TaskConsensusValue {
     FrameTag frame;               // G
 };
 
+/// D115: one CBBA consensus message (see wire.fbs CbbaConsensus). Count-only in production (CBBA is the
+/// centralised oracle row; arch §21.7 sends broker SGA consensus = TaskConsensusValue above), kept for the
+/// D115a transport proof and the 4.4 ablation.
+struct CbbaConsensusValue {
+    std::vector<uint64_t> tasks;
+    std::vector<double> y;      // exact: Table I compares bids, so they travel unrounded
+    std::vector<int8_t> z;      // winner agent, -1 = none
+    std::vector<int64_t> s;     // per agent (eq. 5)
+    std::vector<float> scales;  // the auction's common scales
+};
+
 struct DecodedMessage {
     MessageClass cls = MessageClass::HEARTBEAT;
     AgentId sender = 0;
@@ -408,6 +419,8 @@ struct DecodedMessage {
     TaskBidValue task_bid;
     bool has_task_consensus = false;
     TaskConsensusValue task_consensus;
+    bool has_cbba_consensus = false;
+    CbbaConsensusValue cbba_consensus;
 };
 
 namespace detail {
@@ -578,6 +591,19 @@ public:
                                                h.keyframe_watermark, neighbors, h.anchor, h.broker, &epoch, ack);
         return FinishEnvelope(fbb, MessageClass::HEARTBEAT, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_heartbeat(off); });
+    }
+
+    SerializedMessage EncodeCbbaConsensus(const CbbaConsensusValue& v, AgentId sender, AgentId receiver, Timestamp t,
+                                          uint64_t sequence) const {
+        flatbuffers::FlatBufferBuilder fbb(256);
+        const auto tasks = fbb.CreateVector(v.tasks);
+        const auto y = fbb.CreateVector(v.y);
+        const auto z = fbb.CreateVector(v.z);
+        const auto s = fbb.CreateVector(v.s);
+        const auto scales = fbb.CreateVector(v.scales);
+        const auto off = wire::CreateCbbaConsensus(fbb, tasks, y, z, s, scales);
+        return FinishEnvelope(fbb, MessageClass::TASK_CONSENSUS, sender, receiver, t, sequence,
+                              [&](wire::EnvelopeBuilder& eb) { eb.add_cbba_consensus(off); });
     }
 
     SerializedMessage EncodeAck(const AckValue& a, AgentId sender, AgentId receiver, Timestamp t,
@@ -852,6 +878,18 @@ public:
             if (const auto* as = c->assignments())
                 for (const auto* a : *as) v.assignments.push_back({a->agent(), a->task_key(), a->goal_x(), a->goal_y()});
             out->has_task_consensus = true;
+        }
+        if (const auto* c = env->cbba_consensus()) {
+            const size_t n = c->tasks() ? c->tasks()->size() : 0;
+            if ((c->y() ? c->y()->size() : 0) != n || (c->z() ? c->z()->size() : 0) != n) return Status::kMalformed;
+            out->has_cbba_consensus = true;
+            auto& v = out->cbba_consensus;
+            v = {};
+            if (c->tasks()) v.tasks.assign(c->tasks()->begin(), c->tasks()->end());
+            if (c->y()) v.y.assign(c->y()->begin(), c->y()->end());
+            if (c->z()) v.z.assign(c->z()->begin(), c->z()->end());
+            if (c->s()) v.s.assign(c->s()->begin(), c->s()->end());
+            if (c->scales()) v.scales.assign(c->scales()->begin(), c->scales()->end());
         }
         return Status::kOk;
     }

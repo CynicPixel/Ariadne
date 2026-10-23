@@ -87,6 +87,22 @@ TEST(Network, PartitionCutsOnlyAcrossGroupsAndOnlyInWindow) {
     EXPECT_EQ(net.stats().lost_link_down, 1u);
 }
 
+// D174 panel "cut comms": an open-ended partition from the press, closed at the release; a second release is a no-op.
+TEST(Network, OpenPartitionLastsUntilEnded) {
+    ac::ScriptedLinkModel base({true, 0.01, 0.0, 0.0});
+    ac::FaultPlan plan(base);
+    plan.PartitionOpen(At(1.0), {{0}, {1, 2}});
+    EXPECT_TRUE(plan.Sample(0, 1, At(0.5)).up);
+    EXPECT_FALSE(plan.Sample(0, 1, At(1.0)).up);
+    EXPECT_FALSE(plan.Sample(0, 1, At(1e6)).up);   // until ended
+    EXPECT_TRUE(plan.Sample(1, 2, At(5.0)).up);
+    EXPECT_EQ(plan.EndOpenPartitions(At(7.0)), 1u);
+    EXPECT_FALSE(plan.Sample(0, 1, At(6.9)).up);
+    EXPECT_TRUE(plan.Sample(0, 1, At(7.0)).up);
+    EXPECT_EQ(plan.EndOpenPartitions(At(9.0)), 0u);
+    EXPECT_TRUE(plan.Sample(0, 1, At(8.0)).up);
+}
+
 TEST(Network, DisconnectAndExtraLatency) {
     ac::ScriptedLinkModel base({true, 0.01, 0.0, 0.0});
     ac::FaultPlan plan(base);

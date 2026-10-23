@@ -1,0 +1,377 @@
+{
+ "summary": {
+  "decisions": 12,
+  "go": 12,
+  "go_accepted": 2,
+  "go_refused": 8,
+  "go_unanswered": 2,
+  "accepted_and_estimate_moved_closer_within_5s": 2,
+  "console": {
+   "frames": 1012,
+   "nonzero_sim_time_frames": 0,
+   "wall_span_s": 204.1,
+   "max_sim_t_s": 0.0,
+   "clients": [
+    "127.0.0.1:52194"
+   ],
+   "note": "served to live.sh's probe WebSocket client, not a human"
+  },
+  "recording": {
+   "file": "live-20261022T194757Z-9299/aadffb8df5790ca0-live-20261022T194757Z/inputs.mcap (not committed)",
+   "bytes": 1955634678,
+   "sha256": "7d43d06395408c4cfce52077c11720be5208eb2d7faeef37318fb28b14068865"
+  }
+ },
+ "decisions": [
+  {
+   "t_s": 5,
+   "agent": 0,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     0.625,
+     3.075
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 17.880538285110877
+   },
+   "est_dist_to_goal_m": [
+    2.495,
+    0.849
+   ]
+  },
+  {
+   "t_s": 5,
+   "agent": 1,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     9.025,
+     5.375
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 18.004201155390625
+   },
+   "est_dist_to_goal_m": [
+    2.495,
+    0.879
+   ]
+  },
+  {
+   "t_s": 10,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     -0.475,
+     3.225
+    ],
+    [
+     -0.825,
+     3.225
+    ],
+    [
+     -1.125,
+     3.525
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (-1.12, 3.53): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 12.868059725106773
+   },
+   "est_dist_to_goal_m": [
+    0.997,
+    1.821
+   ]
+  },
+  {
+   "t_s": 10,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     9.225,
+     6.475
+    ],
+    [
+     9.225,
+     7.075
+    ],
+    [
+     9.425,
+     7.275
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (9.36, 7.21): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 12.990332237051012
+   },
+   "est_dist_to_goal_m": [
+    1.084,
+    1.959
+   ]
+  },
+  {
+   "t_s": 15,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.375,
+     3.125
+    ],
+    [
+     0.275,
+     3.225
+    ],
+    [
+     -0.825,
+     3.275
+    ],
+    [
+     -1.125,
+     3.525
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (-1.12, 3.53): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 15.201
+   },
+   "est_dist_to_goal_m": [
+    1.821,
+    1.821
+   ]
+  },
+  {
+   "t_s": 15,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     9.075,
+     6.875
+    ],
+    [
+     9.225,
+     7.125
+    ],
+    [
+     9.425,
+     7.275
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (9.39, 7.25): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 15.201
+   },
+   "est_dist_to_goal_m": [
+    1.959,
+    1.959
+   ]
+  },
+  {
+   "t_s": 20,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.375,
+     3.125
+    ],
+    [
+     0.275,
+     3.225
+    ],
+    [
+     -0.825,
+     3.275
+    ],
+    [
+     -1.125,
+     3.525
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (-1.12, 3.53): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 20.201
+   },
+   "est_dist_to_goal_m": [
+    1.821,
+    1.821
+   ]
+  },
+  {
+   "t_s": 20,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     9.075,
+     6.875
+    ],
+    [
+     9.225,
+     7.125
+    ],
+    [
+     9.425,
+     7.275
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (9.39, 7.25): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 20.201
+   },
+   "est_dist_to_goal_m": [
+    1.959,
+    1.959
+   ]
+  },
+  {
+   "t_s": 25,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.375,
+     3.125
+    ],
+    [
+     0.275,
+     3.225
+    ],
+    [
+     -0.825,
+     3.275
+    ],
+    [
+     -1.125,
+     3.525
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (-1.12, 3.53): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 25.216
+   },
+   "est_dist_to_goal_m": [
+    1.821,
+    1.821
+   ]
+  },
+  {
+   "t_s": 25,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     9.075,
+     6.875
+    ],
+    [
+     9.225,
+     7.125
+    ],
+    [
+     9.425,
+     7.275
+    ]
+   ],
+   "mover": {
+    "accepted": false,
+    "reason": "move leaves the collision envelope at (9.39, 7.25): ESDF 0.175 < 0.200",
+    "segments": 0,
+    "t_end_s": 25.216
+   },
+   "est_dist_to_goal_m": [
+    1.959,
+    1.959
+   ]
+  },
+  {
+   "t_s": 30,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.375,
+     3.125
+    ],
+    [
+     0.275,
+     3.225
+    ],
+    [
+     -0.825,
+     3.275
+    ],
+    [
+     -1.125,
+     3.525
+    ]
+   ],
+   "mover": null,
+   "est_dist_to_goal_m": [
+    1.821,
+    1.821
+   ]
+  },
+  {
+   "t_s": 30,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     9.075,
+     6.875
+    ],
+    [
+     9.225,
+     7.125
+    ],
+    [
+     9.425,
+     7.275
+    ]
+   ],
+   "mover": null,
+   "est_dist_to_goal_m": [
+    1.959,
+    1.959
+   ]
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+[INFO] [launch]: All log files can be found below /tmp/.ros/log/2026-10-22-19-47-58-688972-3d2b568c6b82-1
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [gz_sim-1]: process started with pid [47]
+[INFO] [component_container-2]: process started with pid [48]
+[component_container-2] [INFO] [1792698479.203132977] [ariadne_live_link]: Load Library: /opt/ros/jazzy/lib/libros_gz_bridge.so
+[component_container-2] [INFO] [1792698479.266621040] [ariadne_live_link]: Found class: rclcpp_components::NodeFactoryTemplate<ros_gz_bridge::RosGzBridge>
+[component_container-2] [INFO] [1792698479.266686499] [ariadne_live_link]: Instantiate class: rclcpp_components::NodeFactoryTemplate<ros_gz_bridge::RosGzBridge>
+[INFO] [launch_ros.actions.load_composable_nodes]: Loaded node '/ros_gz_bridge' in container '/ariadne_live_link'
+[component_container-2] [INFO] [1792698479.276487126] [ariadne_live_link]: Load Library: /work/build/ros2/install/ariadne_bridge/lib/libruntime_link.so
+[component_container-2] [INFO] [1792698479.383529059] [ariadne_live_link]: Found class: rclcpp_components::NodeFactoryTemplate<ariadne_bridge::RuntimeLink>
+[component_container-2] [INFO] [1792698479.383589605] [ariadne_live_link]: Instantiate class: rclcpp_components::NodeFactoryTemplate<ariadne_bridge::RuntimeLink>
+[component_container-2] [INFO] [1792698479.388226069] [ariadne_runtime_link]: connected to the runtime at /work/build/live/runs/live-20261022T194757Z-9299/link.sock
+[INFO] [launch_ros.actions.load_composable_nodes]: Loaded node '/ariadne_runtime_link' in container '/ariadne_live_link'
+[component_container-2] [INFO] [1792698480.277331071] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/clock (gz.msgs.Clock) -> /clock (rosgraph_msgs/msg/Clock)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.282322824] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/left/image_raw (gz.msgs.Image) -> /ariadne/agent_0/left/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.284030422] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/left/camera_info (gz.msgs.CameraInfo) -> /ariadne/agent_0/left/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.285021826] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/right/image_raw (gz.msgs.Image) -> /ariadne/agent_0/right/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.286012351] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/right/camera_info (gz.msgs.CameraInfo) -> /ariadne/agent_0/right/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.286969658] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/imu (gz.msgs.IMU) -> /ariadne/agent_0/imu (sensor_msgs/msg/Imu)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.288900410] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/gt/pose (gz.msgs.Pose) -> /ariadne/agent_0/gt/pose (geometry_msgs/msg/PoseStamped)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.290910801] [ros_gz_bridge]: Creating ROS->GZ Bridge: [/ariadne/agent_0/cmd (geometry_msgs/msg/PoseArray) -> /ariadne/agent_0/cmd (gz.msgs.Pose_V)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.292969494] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_0/mover_state (gz.msgs.StringMsg) -> /ariadne/agent_0/mover_state (std_msgs/msg/String)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.295015882] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/left/image_raw (gz.msgs.Image) -> /ariadne/agent_1/left/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.295967976] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/left/camera_info (gz.msgs.CameraInfo) -> /ariadne/agent_1/left/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.296863174] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/right/image_raw (gz.msgs.Image) -> /ariadne/agent_1/right/image_raw (sensor_msgs/msg/Image)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.297632691] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/right/camera_info (gz.msgs.CameraInfo) -> /ariadne/agent_1/right/camera_info (sensor_msgs/msg/CameraInfo)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.298429552] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/imu (gz.msgs.IMU) -> /ariadne/agent_1/imu (sensor_msgs/msg/Imu)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.299185975] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/gt/pose (gz.msgs.Pose) -> /ariadne/agent_1/gt/pose (geometry_msgs/msg/PoseStamped)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.299829641] [ros_gz_bridge]: Creating ROS->GZ Bridge: [/ariadne/agent_1/cmd (geometry_msgs/msg/PoseArray) -> /ariadne/agent_1/cmd (gz.msgs.Pose_V)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.300453875] [ros_gz_bridge]: Creating GZ->ROS Bridge: [/ariadne/agent_1/mover_state (gz.msgs.StringMsg) -> /ariadne/agent_1/mover_state (std_msgs/msg/String)] (Lazy 0)
+[component_container-2] [INFO] [1792698480.402113688] [ariadne_runtime_link]: ready: {"forwarded":["/ariadne/agent_0/left/image_raw","/ariadne/agent_0/left/camera_info","/ariadne/agent_0/right/image_raw","/ariadne/agent_0/right/camera_info","/ariadne/agent_0/imu","/ariadne/agent_0/gt/pose","/ariadne/agent_0/mover_state","/ariadne/agent_1/left/image_raw","/ariadne/agent_1/left/camera_info","/ariadne/agent_1/right/image_raw","/ariadne/agent_1/right/camera_info","/ariadne/agent_1/imu","/ariadne/agent_1/gt/pose","/ariadne/agent_1/mover_state"],"commands":["/ariadne/agent_0/cmd","/ariadne/agent_1/cmd"]}
+[component_container-2] [INFO] [1792698518.631237928] [ros_gz_bridge]: Passing message from ROS geometry_msgs/msg/PoseArray to Gazebo gz.msgs.Pose_V (showing msg only once per type)
+[component_container-2] [ERROR] [1792698676.490627194] [ariadne_runtime_link]: runtime link closed: messages are now dropped

@@ -1,0 +1,485 @@
+{
+ "summary": {
+  "decisions": 18,
+  "go": 16,
+  "go_accepted": 13,
+  "go_refused": 0,
+  "go_unanswered": 3,
+  "accepted_and_estimate_moved_closer_within_5s": 9,
+  "console": {
+   "frames": 1729,
+   "nonzero_sim_time_frames": 1728,
+   "wall_span_s": 349.9,
+   "max_sim_t_s": 45,
+   "clients": [
+    "127.0.0.1:37998"
+   ],
+   "note": "served to live.sh's probe WebSocket client, not a human"
+  },
+  "recording": {
+   "file": "live-20261022T200212Z-4158/aadffb8df5790ca0-live-20261022T200213Z/inputs.mcap (not committed)",
+   "bytes": 2361355253,
+   "sha256": "6bd62ab0624b50cd3b65583f9efcc5faf54e52190557180556d0b3e688fb5e73"
+  }
+ },
+ "decisions": [
+  {
+   "t_s": 5,
+   "agent": 0,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     0.425,
+     3.075
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 14.364073392895387
+   },
+   "est_dist_to_goal_m": [
+    2.295,
+    0.634
+   ]
+  },
+  {
+   "t_s": 5,
+   "agent": 1,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     9.025,
+     5.575
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 14.857680683792708
+   },
+   "est_dist_to_goal_m": [
+    2.295,
+    0.661
+   ]
+  },
+  {
+   "t_s": 10,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     -0.075,
+     3.125
+    ],
+    [
+     0.075,
+     2.975
+    ],
+    [
+     0.275,
+     2.975
+    ],
+    [
+     0.625,
+     2.625
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 9,
+    "t_end_s": 47.38712603590326
+   },
+   "est_dist_to_goal_m": [
+    0.961,
+    0.553
+   ]
+  },
+  {
+   "t_s": 10,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     8.925,
+     5.225
+    ],
+    [
+     8.325,
+     4.575
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 5,
+    "t_end_s": 29.274874597826432
+   },
+   "est_dist_to_goal_m": [
+    1.818,
+    1.196
+   ]
+  },
+  {
+   "t_s": 15,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.725,
+     3.425
+    ],
+    [
+     0.925,
+     3.425
+    ],
+    [
+     1.075,
+     3.575
+    ],
+    [
+     1.075,
+     3.875
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 9,
+    "t_end_s": 47.694626117830424
+   },
+   "est_dist_to_goal_m": [
+    0.998,
+    1.089
+   ]
+  },
+  {
+   "t_s": 15,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     8.275,
+     4.775
+    ],
+    [
+     8.175,
+     4.775
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 5,
+    "t_end_s": 31.298612631121962
+   },
+   "est_dist_to_goal_m": [
+    1.155,
+    0.852
+   ]
+  },
+  {
+   "t_s": 20,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.775,
+     3.425
+    ],
+    [
+     0.925,
+     3.425
+    ],
+    [
+     1.075,
+     3.575
+    ],
+    [
+     1.075,
+     3.875
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 9,
+    "t_end_s": 48.7532467673702
+   },
+   "est_dist_to_goal_m": [
+    1.089,
+    1.033
+   ]
+  },
+  {
+   "t_s": 20,
+   "agent": 1,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     10.075,
+     3.975
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 42.21884614670532
+   },
+   "est_dist_to_goal_m": [
+    1.656,
+    1.933
+   ]
+  },
+  {
+   "t_s": 25,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     0.675,
+     3.425
+    ],
+    [
+     0.925,
+     3.425
+    ],
+    [
+     1.075,
+     3.575
+    ],
+    [
+     1.075,
+     3.875
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 9,
+    "t_end_s": 62.69554064288913
+   },
+   "est_dist_to_goal_m": [
+    1.033,
+    0.642
+   ]
+  },
+  {
+   "t_s": 25,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     8.275,
+     3.175
+    ],
+    [
+     8.175,
+     2.825
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 5,
+    "t_end_s": 50.14745992888183
+   },
+   "est_dist_to_goal_m": [
+    1.901,
+    1.994
+   ]
+  },
+  {
+   "t_s": 30,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     2.225,
+     3.375
+    ],
+    [
+     2.375,
+     3.225
+    ],
+    [
+     3.225,
+     3.175
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 7,
+    "t_end_s": 69.04849841259545
+   },
+   "est_dist_to_goal_m": [
+    2.574,
+    2.525
+   ]
+  },
+  {
+   "t_s": 30,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     8.625,
+     4.825
+    ],
+    [
+     8.725,
+     4.725
+    ],
+    [
+     9.675,
+     4.675
+    ],
+    [
+     9.825,
+     4.525
+    ],
+    [
+     9.975,
+     4.525
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 11,
+    "t_end_s": 81.86031839679694
+   },
+   "est_dist_to_goal_m": [
+    1.677,
+    1.658
+   ]
+  },
+  {
+   "t_s": 35,
+   "agent": 0,
+   "result": "hold",
+   "kind": "hold",
+   "waypoints_xy_m": [],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 0,
+    "t_end_s": 46.3184436213206
+   }
+  },
+  {
+   "t_s": 35,
+   "agent": 1,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     9.825,
+     4.775
+    ]
+   ],
+   "mover": {
+    "accepted": true,
+    "reason": "",
+    "segments": 3,
+    "t_end_s": 58.865492146017615
+   },
+   "est_dist_to_goal_m": [
+    1.499,
+    2.211
+   ]
+  },
+  {
+   "t_s": 40,
+   "agent": 0,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     1.075,
+     3.575
+    ],
+    [
+     1.075,
+     3.975
+    ],
+    [
+     0.925,
+     4.125
+    ]
+   ],
+   "mover": null,
+   "est_dist_to_goal_m": [
+    0.767,
+    0.663
+   ]
+  },
+  {
+   "t_s": 40,
+   "agent": 1,
+   "result": "go",
+   "kind": "follow",
+   "waypoints_xy_m": [
+    [
+     8.625,
+     2.975
+    ],
+    [
+     8.825,
+     2.975
+    ],
+    [
+     9.675,
+     2.175
+    ]
+   ],
+   "mover": null,
+   "est_dist_to_goal_m": [
+    1.665,
+    1.757
+   ]
+  },
+  {
+   "t_s": 45,
+   "agent": 0,
+   "result": "hold",
+   "kind": "hold",
+   "waypoints_xy_m": [],
+   "mover": null
+  },
+  {
+   "t_s": 45,
+   "agent": 1,
+   "result": "go",
+   "kind": "goto",
+   "waypoints_xy_m": [
+    [
+     8.275,
+     5.075
+    ]
+   ],
+   "mover": null,
+   "est_dist_to_goal_m": [
+    1.839,
+    1.839
+   ]
+  }
+ ]
+}

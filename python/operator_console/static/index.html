@@ -9,13 +9,13 @@
   :root {
     --bg: #eef0ec; --panel: #fbfbf9; --ink: #1c1f1d; --muted: #66706a; --rule: #d9ddd6;
     --unknown: #3a3f3c; --free: #e9ece6; --occupied: #121413;
-    --agent0: #2a78d6; --agent1: #eb6834; --route: #c2410c; --route-agent: #0f766e; --exit: #2f855a; --target: #c53030;
+    --agent0: #2a78d6; --agent1: #eb6834; --agent2: #2f9e44; --route: #c2410c; --route-agent: #0f766e; --exit: #2f855a; --target: #c53030;
     --ok: #2f855a; --warn: #b7791f;
     --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #141716; --panel: #1c201e; --ink: #e7ebe8; --muted: #9aa49e; --rule: #2e3431;
-      --unknown: #262a28; --free: #c9cec8; --occupied: #050606; --agent0: #3987e5; --agent1: #d95926;
+      --unknown: #262a28; --free: #c9cec8; --occupied: #050606; --agent0: #3987e5; --agent1: #d95926; --agent2: #37b24d;
       --route: #f08a4b; --route-agent: #2dd4bf; color-scheme: dark; }
   }
   * { box-sizing: border-box; }
@@ -45,15 +45,31 @@
   ol.timeline li .t { font-family: var(--mono); color: var(--muted); }
   ol.timeline li.decision { color: var(--muted); }
   ol.timeline li.merge, ol.timeline li.route { font-weight: 600; }
+  ol.timeline li.alert { color: var(--warn); font-weight: 700; }
   .controls { display: flex; gap: 8px; align-items: center; }
   select, button { font: inherit; font-size: .8rem; color: var(--ink); background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 3px 8px; }
   button:focus-visible, select:focus-visible { outline: 2px solid var(--agent0); outline-offset: 2px; }
+  /* Operator panel (live runs only): approvals, LLM proposals, directives (arch §23, §29.3; AGENTIC_7 §0b). */
+  #operator[hidden] { display: none; }
+  .card { border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; margin: 0 0 8px; font-size: .8rem; }
+  .card.urgent { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+  .card .row { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .card .why { color: var(--muted); margin: 4px 0; overflow-wrap: anywhere; }
+  .card .act { display: flex; gap: 8px; margin-top: 6px; }
+  .empty { color: var(--muted); font-size: .8rem; margin: 0 0 8px; }
+  button.go { border-color: var(--ok); color: var(--ok); } button.no { border-color: var(--target); color: var(--target); }
+  form.dir { display: grid; grid-template-columns: 6.5rem 1fr; gap: 6px 8px; align-items: center; font-size: .8rem; }
+  form.dir input, form.dir select { font: inherit; font-size: .8rem; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--rule); border-radius: 4px; padding: 3px 6px; min-width: 0; }
+  form.dir .full { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  h3 { font-size: .75rem; margin: 12px 0 6px; color: var(--muted); font-weight: 600; }
+  canvas.pick { cursor: crosshair; }
   @media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
 </style>
 </head>
 <body>
 <div class="strip" role="status">
-  <h1>Ariadne console · stub</h1>
+  <h1>Ariadne console · stub <a href="/splat" style="font-size:0.55em; font-weight:normal; margin-left:12px">splat view →</a></h1>
   <span>mission time <span class="v" id="t">0.0</span> s</span>
   <span id="merged" class="pill wait">agent 1 not merged</span>
   <span id="route" class="pill wait">no valid egress route</span>
@@ -72,11 +88,78 @@
       <span><span class="sw" style="background:var(--unknown); outline:1px solid var(--rule)"></span>unknown</span>
       <span><span class="sw" style="background:var(--agent0)"></span>agent 0</span>
       <span><span class="sw" style="background:var(--agent1)"></span>agent 1</span>
+      <span><span class="sw" style="background:var(--agent2)"></span>agent 2</span>
+      <span><span class="sw" style="opacity:.35; background:var(--agent0)"></span>ground-truth ghost</span>
       <span><span class="sw" style="background:var(--route)"></span>egress route (0.40 m)</span>
       <span><span class="sw" style="background:var(--route-agent)"></span>agent route (0.20 m)</span>
     </div>
   </section>
+  <section class="panel" aria-label="Comms">
+    <h2 style="margin:0 0 6px; font-size:0.95em">comms <small id="commsmode" style="font-weight:normal"></small></h2>
+    <div id="commsbytes" style="font-variant-numeric:tabular-nums"></div>
+    <div id="commsagents" style="margin-top:4px"></div>
+    <div id="collabline" style="margin-top:4px"></div>
+    <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">
+      <select id="cutsel" aria-label="cut grouping"></select>
+      <button id="btncut">cut comms</button>
+      <button id="btnrestore">restore</button>
+      <button id="btninject">inject false closure</button>
+    </div>
+    <small>bytes are counted at the serializer, per class; picks come from the component broker's consensus
+      (uncoordinated = the agent's own best, logged)</small>
+  </section>
+  <section class="panel" aria-label="Agent cameras">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+      <div><select id="camsel0" aria-label="left camera agent"></select>
+        <div style="position:relative">
+          <img id="cam0" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown); display:block">
+          <canvas id="camov0" style="position:absolute; inset:0; pointer-events:none"></canvas>
+        </div></div>
+      <div><select id="camsel1" aria-label="right camera agent"></select>
+        <div style="position:relative">
+          <img id="cam1" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown); display:block">
+          <canvas id="camov1" style="position:absolute; inset:0; pointer-events:none"></canvas>
+        </div></div>
+    </div>
+    <small>latest keyframe per agent (what the estimator keyframed, not a raw stream)
+      <label style="float:right"><input type="checkbox" id="featovl" checked> tracked features</label></small>
+  </section>
   <div style="display:grid; gap:16px; align-content:start; min-width:0">
+    <section id="operator" hidden aria-label="Operator">
+      <h2>Operator</h2>
+      <div class="note" style="margin:-4px 0 10px">Everything here is a recorded input: the runtime takes it at its next replan and a replay re-applies it.
+        Operator <input id="who" size="10" value="operator" aria-label="operator name" style="font:inherit;font-size:.75rem"></div>
+      <h3>Approvals waiting (risk above the autonomous threshold)</h3>
+      <div id="approvals"><p class="empty">none</p></div>
+      <h3>LLM proposals (take effect only if you confirm)</h3>
+      <div id="proposals"><p class="empty">none</p></div>
+      <h3>New directive</h3>
+      <form class="dir" id="dirform" autocomplete="off" novalidate>
+        <label for="d-kind">kind</label>
+        <select id="d-kind">
+          <option value="priority_region">priority_region: favour a region</option>
+          <option value="keep_out">keep_out: never send agents there</option>
+          <option value="explore">explore: agent explores a region</option>
+          <option value="assign">assign: agent works a region</option>
+          <option value="goto">goto: agent drives to a point</option>
+          <option value="hold">hold: agent stops</option>
+          <option value="release">release: agent back to autonomy</option>
+        </select>
+        <label for="d-agent">agent</label>
+        <select id="d-agent"><option value="-1">all</option><option value="0">0</option><option value="1">1</option></select>
+        <label for="d-weight" data-for="priority_region">weight</label>
+        <input id="d-weight" data-for="priority_region" type="number" step="0.5" min="0.5" value="3">
+        <label for="d-budget" data-for="explore">time budget s</label>
+        <input id="d-budget" data-for="explore" type="number" step="5" min="0" value="0">
+        <label for="d-text">note</label>
+        <input id="d-text" placeholder="your words (recorded)">
+        <div class="full"><span class="note" id="d-shape">click the map to draw a polygon</span>
+          <button type="button" id="d-clear">Clear shape</button></div>
+        <div class="full"><button type="submit" class="go" id="d-send">Send directive</button><span class="note" id="d-msg"></span></div>
+      </form>
+      <h3>Recorded directives</h3>
+      <ol class="timeline" id="directives" style="max-height:22vh"></ol>
+    </section>
     <section>
       <h2>Bytes on the wire</h2>
       <div id="gauges"></div>
@@ -91,7 +174,58 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let meta, ws, slab = null, frameCache = null, trails = {0: [], 1: []}, maxBytes = {};
+let lastFrame = null, meta, ws, slab = null, frameCache = null, maxBytes = {};
+// Smooth motion (entity interpolation): every pose sample is kept with its sim time; the page draws at a render clock
+// that runs at the measured sim speed a little behind the newest sample, interpolating between the two samples around
+// it. Nothing is extrapolated: the drawn pose is always between two poses the runtime reported.
+let samples = {};   // agent id -> pose samples (P8: N agents)
+const clk = {t: null, rate: 0, newest: null, seenWall: null, seenT: null, lastAnim: null};
+const LAG_WALL_S = 0.6;   // how far (in wall seconds of sim progress) the render clock trails the newest sample
+
+function poseAt(id, t) {
+  const S = samples[id];
+  if (!S.length || t === null) return null;
+  if (t <= S[0][0]) return {x: S[0][1], y: S[0][2], yaw: S[0][3]};
+  const L = S[S.length - 1];
+  if (t >= L[0]) return {x: L[1], y: L[2], yaw: L[3]};
+  let lo = 0, hi = S.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m][0] <= t) lo = m; else hi = m; }
+  const a = S[lo], b = S[hi], u = (t - a[0]) / Math.max(1e-9, b[0] - a[0]);
+  let dy = b[3] - a[3];
+  dy = Math.atan2(Math.sin(dy), Math.cos(dy));   // the short way round
+  return {x: a[1] + u * (b[1] - a[1]), y: a[2] + u * (b[2] - a[2]), yaw: a[3] + u * dy};
+}
+
+function addSamples(f) {
+  for (const a of f.agents) {
+    const add = a.samples ?? (a.x === null ? [] : [[f.t_s, a.x, a.y, a.yaw]]);   // replay frames: one pose per frame
+    const S = samples[a.id] ??= [];
+    for (const s of add) if (!S.length || s[0] > S[S.length - 1][0]) S.push(s);
+  }
+  const ids = Object.keys(samples);
+  const newest = Math.max(...(ids.length ? ids : ["0"]).map((k) => samples[k].length ? samples[k][samples[k].length - 1][0] : -Infinity));
+  if (!isFinite(newest)) return;
+  const now = performance.now() / 1000;
+  if (clk.seenT !== null && newest > clk.seenT) {   // sim speed = sim progress per wall second, smoothed
+    const r = (newest - clk.seenT) / Math.max(1e-3, now - clk.seenWall);
+    clk.rate = clk.rate ? 0.8 * clk.rate + 0.2 * r : r;
+  }
+  if (clk.seenT === null || newest > clk.seenT) { clk.seenT = newest; clk.seenWall = now; }
+  clk.newest = newest;
+}
+
+function animate(nowMs) {
+  const now = nowMs / 1000, dt = clk.lastAnim === null ? 0 : Math.min(0.25, now - clk.lastAnim);
+  clk.lastAnim = now;
+  if (clk.newest !== null) {
+    const target = clk.newest - LAG_WALL_S * clk.rate;
+    if (clk.t === null) clk.t = target;
+    clk.t += dt * clk.rate + (target - clk.t) * Math.min(1, dt);   // advance at sim speed, drift back toward the lag
+    clk.t = Math.min(clk.t, clk.newest);
+    if (lastFrame) { try { draw(lastFrame); } catch (e) { $("source").textContent = `draw error: ${e.message}`; } }
+  }
+  requestAnimationFrame(animate);
+}
 const canvas = $("map"), ctx = canvas.getContext("2d");
 
 function w2c(x, y) {   // world metres -> canvas pixels (north up)
@@ -117,6 +251,7 @@ async function loadSlab(i) {
 }
 
 function draw(f) {
+  if (typeof renderComms === "function") renderComms(f);   // D218/D221 panel (defined later in this script)
   ctx.fillStyle = css("--unknown");
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (slab) {   // row 0 = south: flip vertically
@@ -134,16 +269,28 @@ function draw(f) {
   const dot = (x, y, r, color) => { const [u, v] = w2c(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.fill(); };
   meta.exits_xy.forEach(([x, y]) => dot(x, y, 7, css("--exit")));
   dot(meta.target_xy[0], meta.target_xy[1], 7, css("--target"));
-  for (const a of f.agents) {
-    if (a.x === null) continue;
-    const tr = trails[a.id];
-    if (!tr.length || Math.hypot(tr[tr.length - 1][0] - a.x, tr[tr.length - 1][1] - a.y) > 0.05) tr.push([a.x, a.y]);
-    const color = css(a.id ? "--agent1" : "--agent0");
+  const AGENT_VARS = ["--agent0", "--agent1", "--agent2"];
+  if (lastFrame) for (const ag of lastFrame.agents) {   // the faint ground-truth ghosts (P8: estimation made visible)
+    if (!ag.gt) continue;
+    const [u, v] = w2c(ag.gt[0], ag.gt[1]);
+    ctx.save(); ctx.globalAlpha = 0.3; ctx.translate(u, v); ctx.rotate(-ag.gt[2]);
+    ctx.fillStyle = css(AGENT_VARS[ag.id % 3]);
+    ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  for (const id of Object.keys(samples).map(Number)) {
+    const a = poseAt(id, clk.t);   // interpolated between the two samples around the render time
+    if (!a) continue;
+    const color = css(AGENT_VARS[id % 3]);
+    const S = samples[id], tr = [];
+    for (const s of S) { if (s[0] > clk.t) break; tr.push([s[1], s[2]]); }
+    tr.push([a.x, a.y]);
     line(tr, color, 1.5);
     const [u, v] = w2c(a.x, a.y);
     ctx.save(); ctx.translate(u, v); ctx.rotate(-a.yaw); ctx.fillStyle = color;
     ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill(); ctx.restore();
   }
+  lastFrame = f;
+  if (op.live) overlay(f.t_s);
 }
 
 function gauges(f) {
@@ -171,29 +318,199 @@ function timeline(f) {
 async function onFrame(f) {
   if (f.end) { $("source").textContent = "replay finished"; return; }
   $("t").textContent = f.t_s.toFixed(1);
-  const merged = f.agents.find((a) => a.id === 1).merged;
+  const merged = f.agents.find((a) => a.id === 1)?.merged ?? true;
   $("merged").textContent = merged ? "agent 1 merged" : "agent 1 not merged"; $("merged").className = `pill ${merged ? "ok" : "wait"}`;
   $("route").textContent = f.route.egress ? "valid egress route" : "no valid egress route"; $("route").className = `pill ${f.route.egress ? "ok" : "wait"}`;
   if (f.map_version !== null && f.map_version !== frameCache) {
     frameCache = f.map_version;
     try { await loadSlab(f.map_version); } catch (e) { $("source").textContent = `map error: ${e.message}`; }
   }
-  for (const step of [draw, gauges, timeline]) {
+  addSamples(f);
+  lastFrame = f;
+  for (const step of [gauges, timeline]) {
     try { step(f); } catch (e) { $("source").textContent = `${step.name} error: ${e.message}`; }
   }
 }
 
 async function start() {
   if (ws) ws.close();
-  trails = {0: [], 1: []}; frameCache = null; slab = null; $("timeline").innerHTML = "";
+  samples = {}; Object.assign(clk, {t: null, rate: 0, newest: null, seenWall: null, seenT: null});
+  frameCache = null; slab = null; $("timeline").innerHTML = "";
   meta = meta || await (await fetch("/api/meta")).json();
   canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
-  $("source").textContent = `replay · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+  op.live = meta.chain.collab_run === "live";
+  $("source").textContent = `${op.live ? "live" : "replay"} · ${meta.chain.scene} · ${meta.chain.mission_run}`;
+  if (op.live) operatorStart();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/telemetry?speed=${$("speed").value}`);
   const queue = [];
   let busy = false;
   ws.onmessage = async (m) => { queue.push(JSON.parse(m.data)); if (busy) return; busy = true; while (queue.length) await onFrame(queue.shift()); busy = false; };
 }
+
+// --- Operator panel (live runs only). The runtime is the authority: these calls only drop files it reads at its next
+// replan (directives) or verifies itself (approvals); nothing here changes what the planner computes.
+const op = {live: false, shape: [], recorded: [], proposals: [], approvals: [], timer: null};
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const REGION = new Set(["priority_region", "keep_out", "assign", "explore"]);
+const AGENT_LEVEL = new Set(["hold", "goto", "assign", "explore", "release"]);
+const who = () => encodeURIComponent($("who").value.trim() || "operator");
+try { const w = localStorage.getItem("ariadne.operator"); if (w) $("who").value = w; } catch (e) {}
+$("who").addEventListener("change", () => { try { localStorage.setItem("ariadne.operator", $("who").value); } catch (e) {} });
+
+function c2w(ev) {   // a click on the canvas -> world metres (inverse of w2c)
+  const r = canvas.getBoundingClientRect(), g = meta.grid, s = canvas.width / g.cols;
+  const u = (ev.clientX - r.left) * canvas.width / r.width, v = (ev.clientY - r.top) * canvas.height / r.height;
+  return [+(u / s * g.cell_m + g.origin_m[0]).toFixed(2), +((canvas.height - v) / s * g.cell_m + g.origin_m[1]).toFixed(2)];
+}
+
+// The directives in force at t (mirrors planning/mission/directives.hpp ActiveDirectives; display only).
+function inForce(all, t) {
+  const T = t * 1e9, out = [];
+  for (const d of all) {
+    if (d.effective_ns < 0 || d.effective_ns > T) continue;
+    if (d.kind === "cancel") { const i = out.findIndex((x) => x.id === d.target); if (i >= 0) out.splice(i, 1); continue; }
+    if (AGENT_LEVEL.has(d.kind)) {
+      for (let i = out.length - 1; i >= 0; --i) if (out[i].agent === d.agent && AGENT_LEVEL.has(out[i].kind)) out.splice(i, 1);
+      if (d.kind === "release") continue;
+    }
+    if (d.kind === "explore" && d.time_budget_s > 0 && T >= d.effective_ns + d.time_budget_s * 1e9) continue;
+    out.push(d);
+  }
+  return out;
+}
+
+function overlay(t) {
+  const poly = (pts, color, dash, fill) => {
+    if (!pts || pts.length < 2) return;
+    ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.beginPath();
+    pts.forEach(([x, y], i) => { const [u, v] = w2c(x, y); i ? ctx.lineTo(u, v) : ctx.moveTo(u, v); });
+    if (pts.length > 2) ctx.closePath();
+    if (fill) { ctx.globalAlpha = 0.18; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.stroke(); ctx.restore();
+  };
+  const mark = (x, y, color, r) => { const [u, v] = w2c(x, y); ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.stroke(); ctx.restore(); };
+  const colour = {keep_out: css("--target"), priority_region: css("--ok"), explore: css("--agent0"), assign: css("--agent0")};
+  for (const d of inForce(op.recorded, t)) {
+    if (REGION.has(d.kind)) poly(d.polygon, d.agent === 1 && d.kind !== "keep_out" ? css("--agent1") : colour[d.kind], [], true);
+    if (d.kind === "goto") mark(d.x, d.y, css(d.agent ? "--agent1" : "--agent0"), 6);
+  }
+  for (const pr of op.proposals) poly(pr.polygon, css("--warn"), [6, 4], false);
+  for (const a of op.approvals) { const g = a.intended_action.goal_xy_m; if (g) mark(g[0], g[1], css("--warn"), 10); }
+  if (op.shape.length) {
+    poly(op.shape, css("--ink"), [], false);
+    for (const [x, y] of op.shape) { const [u, v] = w2c(x, y); ctx.fillStyle = css("--ink"); ctx.fillRect(u - 3, v - 3, 6, 6); }
+  }
+}
+const redraw = () => { if (lastFrame) draw(lastFrame); };
+
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: body ? JSON.stringify(body) : null});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+function renderApprovals() {
+  const box = $("approvals"), now = Date.now() / 1000;
+  if (!op.approvals.length) { box.innerHTML = '<p class="empty">none</p>'; return; }
+  box.innerHTML = op.approvals.map((a) => {
+    const ia = a.intended_action, left = Math.max(0, Math.round(a.requested_unix_s + 60 - now));
+    const alt = a.alternative_action.hold ? "hold" : `candidate ${a.alternative_action.candidate}`;
+    return `<div class="card urgent"><div class="row"><b>agent ${esc(a.agent)}</b><span>candidate ${esc(ia.candidate)} · ${esc(ia.path_m?.toFixed?.(1))} m</span>
+      <span>risk <b>${esc(a.risk_score?.toFixed?.(2))}</b></span><span class="note">${left} s left</span></div>
+      <div class="why">risk: ${esc(a.risk_reason)}</div><div class="why">orchestrator: ${esc(a.orchestrator_reason)}</div>
+      <div class="why">if rejected: ${esc(alt)} · goal ringed on the map</div>
+      <div class="act"><button class="go" data-aid="${esc(a.approval_id)}" data-v="approved">Approve</button>
+      <button class="no" data-aid="${esc(a.approval_id)}" data-v="rejected">Reject</button></div></div>`;
+  }).join("");
+}
+
+function renderProposals() {
+  const box = $("proposals");
+  if (!op.proposals.length) { box.innerHTML = '<p class="empty">none</p>'; return; }
+  box.innerHTML = op.proposals.map((d) => `<div class="card"><div class="row"><b>${esc(d.kind)}</b>
+      <span>agent ${d.agent < 0 ? "all" : esc(d.agent)}</span>${d.kind === "priority_region" ? `<span>weight ${esc(d.weight)}</span>` : ""}
+      ${d.time_budget_s ? `<span>${esc(d.time_budget_s)} s</span>` : ""}<span class="note">dashed on the map</span></div>
+      <div class="why">${esc(d.text)}</div>
+      <div class="act"><button class="go" data-pid="${esc(d.id)}" data-v="confirm">Confirm</button>
+      <button class="no" data-pid="${esc(d.id)}" data-v="reject">Reject</button></div></div>`).join("");
+}
+
+function renderRecorded(rec, rejected) {
+  const t = lastFrame ? lastFrame.t_s : Infinity, live = new Set(inForce(rec, t).map((d) => d.id));
+  $("directives").innerHTML = rec.map((d) => {
+    const undo = !live.has(d.id) ? "" : AGENT_LEVEL.has(d.kind)
+      ? `<button data-undo="release" data-agent="${esc(d.agent)}">Release</button>`
+      : `<button data-undo="cancel" data-target="${esc(d.id)}">Cancel</button>`;
+    return `<li><span class="t">${(d.effective_ns / 1e9).toFixed(1)} s</span><span>${esc(d.kind)}${d.agent >= 0 ? ` · agent ${esc(d.agent)}` : ""}
+      · <span class="note">${esc(d.author)}</span>${live.has(d.id) ? "" : ' <span class="note">(ended)</span>'} ${undo}
+      ${d.text ? `<div class="why">${esc(d.text)}</div>` : ""}</span></li>`;
+  }).join("") + rejected.map((r) => `<li><span class="t">refused</span><span class="note">${esc(r.file)}: ${esc(r.error ?? JSON.stringify(r))}</span></li>`).join("");
+}
+
+async function operatorPoll() {
+  try {
+    const [ap, pr, dr] = await Promise.all(["/api/approvals", "/api/directives/proposed", "/api/directives"].map((u) => fetch(u).then((r) => r.ok ? r.json() : null)));
+    if (ap) { op.approvals = ap; renderApprovals(); }
+    if (pr) { op.proposals = pr; renderProposals(); }
+    if (dr) { op.recorded = dr.recorded; renderRecorded(dr.recorded, dr.rejected); }
+    redraw();
+  } catch (e) { $("d-msg").textContent = `poll: ${e.message}`; }
+}
+
+function formShape() {   // show only the fields the chosen kind uses; say what a map click does
+  const k = $("d-kind").value;
+  document.querySelectorAll("#dirform [data-for]").forEach((el) => { el.hidden = el.dataset.for !== k; });
+  $("d-shape").textContent = REGION.has(k) ? `polygon: ${op.shape.length} point(s) — click the map to add` :
+    k === "goto" ? (op.shape.length ? `goal (${op.shape[op.shape.length - 1].join(", ")}) — click to move` : "click the map to set the goal") : "no shape needed";
+  canvas.classList.toggle("pick", REGION.has(k) || k === "goto");
+}
+
+function operatorStart() {
+  $("operator").hidden = false;
+  formShape();
+  if (!op.timer) op.timer = setInterval(operatorPoll, 1000);
+  operatorPoll();
+}
+
+canvas.addEventListener("click", (ev) => {
+  if (!op.live) return;
+  const k = $("d-kind").value;
+  if (REGION.has(k)) op.shape.push(c2w(ev)); else if (k === "goto") op.shape = [c2w(ev)]; else return;
+  formShape(); redraw();
+});
+$("d-clear").addEventListener("click", () => { op.shape = []; formShape(); redraw(); });
+$("d-kind").addEventListener("change", () => { if (!REGION.has($("d-kind").value)) op.shape = op.shape.slice(-1); formShape(); redraw(); });
+
+$("dirform").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const k = $("d-kind").value, agent = +$("d-agent").value, d = {kind: k, agent, text: $("d-text").value.trim()};
+  // the same rules ParseDirective enforces, said before sending rather than as a refusal later
+  if (REGION.has(k)) { if (op.shape.length < 3) return void ($("d-msg").textContent = "draw a polygon of 3 or more points"); d.polygon = op.shape; }
+  if (k === "goto") { if (!op.shape.length) return void ($("d-msg").textContent = "click the map to set the goal"); [d.x, d.y] = op.shape[op.shape.length - 1]; }
+  if (["assign", "explore", "goto", "hold", "release"].includes(k) && agent < 0) return void ($("d-msg").textContent = `${k} needs one agent`);
+  if (k === "priority_region") { d.weight = +$("d-weight").value; if (!(d.weight > 0)) return void ($("d-msg").textContent = "weight must be > 0"); }
+  if (k === "explore") { d.time_budget_s = +$("d-budget").value; if (!(d.time_budget_s >= 0)) return void ($("d-msg").textContent = "time budget must be >= 0"); }
+  try {
+    const r = await post("/api/directive", d);
+    $("d-msg").textContent = `sent ${r.id}; takes effect at the next replan`;
+    op.shape = []; $("d-text").value = ""; formShape(); operatorPoll();
+  } catch (e) { $("d-msg").textContent = `refused: ${e.message}`; }
+});
+
+$("operator").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("button");
+  if (!b || b.id === "d-send" || b.id === "d-clear") return;
+  b.disabled = true;
+  try {
+    if (b.dataset.aid) await post(`/api/approval/${encodeURIComponent(b.dataset.aid)}/${b.dataset.v}?operator=${who()}`);
+    else if (b.dataset.pid) await post(`/api/directives/proposed/${encodeURIComponent(b.dataset.pid)}/${b.dataset.v}?operator=${who()}`);
+    else if (b.dataset.undo === "cancel") await post("/api/directive", {kind: "cancel", target: b.dataset.target});
+    else if (b.dataset.undo === "release") await post("/api/directive", {kind: "release", agent: +b.dataset.agent});
+    operatorPoll();
+  } catch (e) { $("d-msg").textContent = `refused: ${e.message}`; b.disabled = false; }
+});
 $("restart").addEventListener("click", start);
 $("speed").addEventListener("change", start);
 const at = new URLSearchParams(location.search).get("at");   // static view of one mission time (no WebSocket)
@@ -203,15 +520,90 @@ if (at !== null) {
     canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
     $("source").textContent = `static view · ${meta.chain.scene} · ${meta.chain.mission_run}`;
     for (let t = 0; t <= Number(at); t += 2) {   // build the trails as the live view would
-      const f = await (await fetch(`/api/frame?t=${t}`)).json();
-      for (const a of f.agents) if (a.x !== null) trails[a.id].push([a.x, a.y]);
+      addSamples(await (await fetch(`/api/frame?t=${t}`)).json());
     }
     const f = await (await fetch(`/api/frame?t=${at}`)).json();
     await onFrame(f);
+    clk.t = Number(at);
+    draw(f);
   })();
 } else {
   start();
+  requestAnimationFrame(animate);
 }
+// D218/D221: the comms panel - bytes by class, per-agent pick/why, the collab line, and the operator buttons
+const commsEls = {
+  mode: document.getElementById("commsmode"), bytes: document.getElementById("commsbytes"),
+  agents: document.getElementById("commsagents"), collab: document.getElementById("collabline"),
+  cutsel: document.getElementById("cutsel"),
+};
+function renderComms(f) {
+  const c = f.comms;
+  if (c) {
+    commsEls.mode.textContent = `${c.broker_mode} broker · ${c.scenario}`;
+    const b = c.bytes || {};
+    commsEls.bytes.textContent = `patch ${b.patch ?? 0} B · bid ${b.bid ?? 0} B · consensus ${b.consensus ?? 0} B · heartbeat ${b.heartbeat ?? 0} B`;
+    commsEls.agents.innerHTML = (c.agents || []).map((a, i) =>
+      `<div>agent ${i}: ${a.why.startsWith("coordinated") ? "coordinated" : a.why} · broker ${a.broker} · component of ${a.members}</div>`
+    ).join("");
+  }
+  const l = f.collab;
+  if (l) {
+    const merged = (l.agents || []).filter((a) => a.merged).length;
+    const inj = (l.injections || []).filter((i) => i.planted).length;
+    commsEls.collab.textContent = `SLAM collab: ${l.kept_inter_edges} kept inter-agent edges · ${merged} merged frames · ` +
+      `verify ${l.verify ? l.verify.calls : 0}${l.cut_active ? " · COMMS CUT" : ""}${inj ? ` · ${inj} injected` : ""}`;
+  }
+  if (!commsEls.cutsel.options.length && lastFrame) {
+    const ids = lastFrame.agents.map((a) => a.id);
+    const opts = ids.map((k) => `<option value="${ids.filter((j) => j !== k).join(",")}|${k}">isolate agent ${k}</option>`);
+    opts.push(`<option value="${ids.map((k) => `${k}`).join("|")}">every agent alone</option>`);
+    commsEls.cutsel.innerHTML = opts.join("");
+  }
+}
+async function collabAction(action, groups) {
+  try { await fetch(`/api/collab/${action}?groups=${encodeURIComponent(groups || "")}`, { method: "POST" }); }
+  catch (e) { /* queued-at-barrier semantics: the event log shows the application */ }
+}
+document.getElementById("btncut").addEventListener("click", () => collabAction("cut_comms", commsEls.cutsel.value));
+document.getElementById("btnrestore").addEventListener("click", () => collabAction("restore_comms"));
+document.getElementById("btninject").addEventListener("click", () => collabAction("inject_false"));
+// P8: camera windows - two panes, each selecting any agent (item 7), latest keyframe jpg per agent
+const camSel = [document.getElementById("camsel0"), document.getElementById("camsel1")];
+const camImg = [document.getElementById("cam0"), document.getElementById("cam1")];
+function camAgents() { return lastFrame ? lastFrame.agents.map((a) => a.id) : [0, 1]; }
+// Item 6: the feature overlay - the observations the estimator recorded at that keyframe (sent by the
+// runtime next to the jpg), drawn as dots. Honest by construction: these are the tracked landmarks the
+// SLAM used, never a client-side redetection. A one-poll image/points mismatch is possible and harmless.
+const camOv = [document.getElementById("camov0"), document.getElementById("camov1")];
+const featOvl = document.getElementById("featovl");
+const camPts = [null, null];
+function drawFeatures(i) {
+  const img = camImg[i], cv = camOv[i], d = camPts[i];
+  cv.width = img.clientWidth; cv.height = img.clientHeight;
+  const g = cv.getContext("2d");
+  g.clearRect(0, 0, cv.width, cv.height);
+  if (!featOvl.checked || !d || !d.w || !img.clientWidth) return;
+  const sx = cv.width / d.w, sy = cv.height / d.h;
+  g.fillStyle = "rgba(80,255,120,0.9)";
+  for (const [x, y] of d.pts) { g.beginPath(); g.arc(x * sx, y * sy, 2, 0, 6.2832); g.fill(); }
+}
+featOvl.addEventListener("change", () => { drawFeatures(0); drawFeatures(1); });
+camImg.forEach((img, i) => img.addEventListener("load", () => drawFeatures(i)));
+setInterval(() => {
+  const ids = camAgents();
+  camSel.forEach(async (sel, i) => {
+    if (sel.options.length !== ids.length) {
+      sel.innerHTML = ids.map((k) => `<option value="${k}">agent ${k} camera</option>`).join("");
+      sel.value = ids[Math.min(i, ids.length - 1)];
+    }
+    if (featOvl.checked) {
+      try { camPts[i] = await (await fetch(`/api/cam/${sel.value}.json?t=${Date.now()}`)).json(); }
+      catch { camPts[i] = null; }
+    }
+    camImg[i].src = `/api/cam/${sel.value}.jpg?t=${Date.now()}`;
+  });
+}, 1000);
 </script>
 </body>
 </html>

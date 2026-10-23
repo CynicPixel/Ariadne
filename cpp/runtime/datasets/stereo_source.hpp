@@ -53,6 +53,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -262,6 +263,92 @@ inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t
 }
 
 // --- Simulator recording ---------------------------------------------------------
+
+/// Raw stereo frame assembly from the sim's CDR images, shared by the bag replay (SimSource) and the live runtime
+/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41) -> D (2.2, when set) -> gray, then pair
+/// left/right by header stamp. Feed() one image message at a time, in delivery order.
+///   strict (bags): a pair completing before an older pending stamp means a frame is missing -> throws.
+///   lenient (live): the older, unpaired frames are dropped and counted (unpaired()); the run goes on.
+/// The sensor-stage D of SimFrameAssembler (2.2, D66): params null = no D.
+struct SimDegrade {
+    const perception::DegradationParams* params = nullptr;
+    uint64_t seed[2] = {0, 0};
+    int threads = 1;
+};
+
+class SimFrameAssembler {
+public:
+    using Degrade = SimDegrade;
+
+    SimFrameAssembler(const perception::LensMap& map, uint32_t agent, std::string t_left, std::string t_right,
+                      bool strict, Degrade d = {})
+        : map_(map), agent_(agent), t_left_(std::move(t_left)), t_right_(std::move(t_right)), strict_(strict), d_(d) {}
+
+    /// Returns true if a frame was emitted through on_frame.
+    bool Feed(std::string_view topic, const uint8_t* data, size_t size,
+              const std::function<void(const StereoFrame&)>& on_frame) {
+        const bool left = topic == t_left_;
+        if (!left && topic != t_right_) throw std::logic_error("sim: assembler fed a foreign topic");
+        const auto im = ros_cdr::DecodeImage(data, size);
+        ros_cdr::ValidateImage(im);
+        if (im.encoding != "rgb8") throw std::runtime_error("sim: expected rgb8, got " + im.encoding);
+        core::ImageU8 clean(int(im.width), int(im.height), 3);
+        for (uint32_t r = 0; r < im.height; ++r) {
+            std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
+        }
+        core::ImageU8 seen = perception::ApplyLens(clean, map_);
+        if (d_.params) {
+            const int c = left ? 0 : 1;
+            seen = perception::DegradeParallel(seen, *d_.params, d_.seed[c], arrived_[c]++, d_.threads);
+        }
+        cv::Mat gray;
+        cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), gray, cv::COLOR_RGB2GRAY);
+        const int64_t t = im.header.stamp.ns();
+        if (t <= last_emitted_) {   // a side arriving after its stamp was emitted or dropped
+            if (strict_) throw std::runtime_error("sim: image at " + std::to_string(t) + " after its stamp was emitted");
+            ++unpaired_;
+            return false;
+        }
+        StereoFrame& f = pending_[t];
+        f.t_ns = t;
+        (left ? f.left : f.right) = gray;
+        if (left) f.left_rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
+        if (f.left.empty() || f.right.empty()) return false;
+        // Complete pair: it must be the oldest pending stamp, or a frame went missing.
+        if (pending_.begin()->first != t) {
+            if (strict_) {
+                throw std::runtime_error("sim: stereo pair at " + std::to_string(t) +
+                                         " completed before an older stamp: a frame is missing");
+            }
+            while (pending_.begin()->first != t) {
+                pending_.erase(pending_.begin());
+                ++unpaired_;
+            }
+        }
+        last_emitted_ = t;
+        StereoFrame done = std::move(f);
+        pending_.erase(t);
+        done.agent = agent_;
+        done.id = n_++;
+        on_frame(done);
+        return true;
+    }
+
+    size_t emitted() const { return n_; }
+    size_t pending() const { return pending_.size(); }
+    size_t unpaired() const { return unpaired_; }
+
+private:
+    const perception::LensMap& map_;
+    uint32_t agent_;
+    std::string t_left_, t_right_;
+    bool strict_;
+    Degrade d_;
+    std::map<int64_t, StereoFrame> pending_;   // stamps with only one side so far
+    int64_t last_emitted_ = -1;
+    size_t n_ = 0, unpaired_ = 0;
+    uint64_t arrived_[2] = {0, 0};             // D's frame id: per-camera arrival index (= the pair index)
+};
 
 class SimSource : public StereoSource {
 public:

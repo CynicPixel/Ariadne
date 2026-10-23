@@ -122,6 +122,18 @@ table Heartbeat {
   ack:Ack;
 }
 
+/// §21.7 / D115: one CBBA consensus message (Choi, Brunet & How 2009, Table I inputs): per task the sender's winning
+/// bid y and winner z (-1 = none), its timestamps s per agent (eq. 5), and the auction's common scales (frozen per
+/// allocation event). Class TASK_CONSENSUS; never compressed (§15.7 compresses classes 4-5 only). Count-only in
+/// production (the oracle row); the broker SGA consensus on the wire is TaskConsensus below (D175).
+table CbbaConsensus {
+  tasks:[ulong];
+  y:[double];   // double: CBBA compares bids exactly (Table I), so the wire must not round them (D115a)
+  z:[byte];
+  s:[long];
+  scales:[float];
+}
+
 /// Every message on the wire is an Envelope. One root type means one
 /// serialization boundary, which is what makes byte accounting honest.
 /// §15.2 global descriptor (1.6 placeholder: mean-pooled ORB bits, 256 floats).
@@ -209,6 +221,9 @@ table Envelope {
   submap_patch:SubmapPatch;
   task_bid:TaskBid;
   task_consensus:TaskConsensus;
+  // Appended (4.4, D115, renamed at the D175 merge): CBBA consensus, count-only. Field ids are positional, so it
+  // sits AFTER the D175 fields the protocol tests pin.
+  cbba_consensus:CbbaConsensus;
 }
 
 root_type Envelope;

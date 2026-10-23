@@ -223,6 +223,16 @@ public:
         for (const auto& [id, obs] : keyframes_[kf].obs) ids.push_back(id);
         return ids;
     }
+    /// The left-image pixel observations recorded at keyframe `kf`, ascending landmark id (same order as
+    /// KeyframeLandmarks). Read-only view for consumers that show what the tracker used (the console overlay);
+    /// changes nothing.
+    std::vector<cv::Point2f> KeyframeObservationsLeft(uint64_t kf) const {
+        if (kf >= keyframes_.size()) throw std::out_of_range("StereoVo::KeyframeObservationsLeft: unknown keyframe");
+        std::vector<cv::Point2f> px;
+        px.reserve(keyframes_[kf].obs.size());
+        for (const auto& [id, o] : keyframes_[kf].obs) px.push_back(o.left);
+        return px;
+    }
     /// 2.1 re-association (PERCEPTION_2.1.md §4.3): every live landmark with the provenance of the keyframe that
     /// created it, so a caller can restrict itself to landmarks mapped from MEASURED poses (AUDIT_2.3 §4: a landmark
     /// triangulated at a predicted pose locks that pose's error in). Ascending id. Changes nothing.

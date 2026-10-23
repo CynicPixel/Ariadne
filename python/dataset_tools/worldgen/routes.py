@@ -255,16 +255,16 @@ def _clearance_along(scene, p, q, z) -> float:
 
 
 def separation(scripts, dt: float = 0.05) -> float:
-    """Minimum 3D distance between two agents over the mission (sampled every dt; an
+    """Minimum 3D distance between any two agents over the mission (sampled every dt; an
     agent stays at its final pose after its script ends)."""
-    a, b = scripts
-    T = max(a.duration, b.duration)
+    T = max(s.duration for s in scripts)
     best = math.inf
     t = 0.0
     while t <= T + 1e-9:
-        pa, _, _ = a.pose(t)
-        pb, _, _ = b.pose(t)
-        best = min(best, math.dist(pa[:3], pb[:3]))
+        ps = [s.pose(t)[0][:3] for s in scripts]
+        for i in range(len(ps)):
+            for j in range(i + 1, len(ps)):
+                best = min(best, math.dist(ps[i], ps[j]))
         t += dt
     return best
 
@@ -287,12 +287,27 @@ def schedule(scene) -> tuple[list, list, float]:
             cache[(k, d)] = build_script(scene, k, start_delay_s=d)
         return cache[(k, d)]
 
-    for d0, d1 in delays:
-        pair = [script(0, d0), script(1, d1)]
-        sep = separation(pair)
-        if sep >= R.min_agent_separation_m:
-            return pair, [d0, d1], sep
-    raise ValueError("agents come closer than min_agent_separation_m at every start delay")
+    if len(scene.layout.entrances) == 2:   # the original pair search, byte-identical scenes for every old preset
+        for d0, d1 in delays:
+            pair = [script(0, d0), script(1, d1)]
+            sep = separation(pair)
+            if sep >= R.min_agent_separation_m:
+                return pair, [d0, d1], sep
+        raise ValueError("agents come closer than min_agent_separation_m at every start delay")
+    # N >= 3 (P8 D212): greedy - agent 0 starts at 0; each later agent takes the smallest delay that keeps the
+    # whole fleet min_agent_separation_m apart from the scripts already fixed.
+    out = [script(0, 0.0)]
+    chosen = [0.0]
+    for k in range(1, len(scene.layout.entrances)):
+        for i in range(0, steps + 1):
+            d = i * R.start_delay_step_s
+            cand = out + [script(k, d)]
+            if separation(cand) >= R.min_agent_separation_m:
+                out, chosen = cand, chosen + [d]
+                break
+        else:
+            raise ValueError(f"agent {k}: closer than min_agent_separation_m at every start delay")
+    return out, chosen, separation(out)
 
 
 def build_script(scene, k: int, start_delay_s: float = 0.0) -> AgentScript:

@@ -1,0 +1,106 @@
+{
+ "a": {
+  "link_received": {
+   "/ariadne/agent_0/gt/pose": 3937,
+   "/ariadne/agent_0/imu": 3937,
+   "/ariadne/agent_0/left/camera_info": 394,
+   "/ariadne/agent_0/left/image_raw": 394,
+   "/ariadne/agent_0/mover_state": 3,
+   "/ariadne/agent_0/right/camera_info": 394,
+   "/ariadne/agent_0/right/image_raw": 394,
+   "/ariadne/agent_1/gt/pose": 3937,
+   "/ariadne/agent_1/imu": 3937,
+   "/ariadne/agent_1/left/camera_info": 394,
+   "/ariadne/agent_1/left/image_raw": 393,
+   "/ariadne/agent_1/mover_state": 3,
+   "/ariadne/agent_1/right/camera_info": 393,
+   "/ariadne/agent_1/right/image_raw": 393
+  },
+  "lockstep": {
+   "acks_not_accepted": 0,
+   "barriers": 4,
+   "commands_not_applied_at_T": 0,
+   "lockstep": true,
+   "pause_offset_ns": {
+    "max": 0,
+    "min": 0
+   },
+   "wall_paused_s_max": 0.098437
+  },
+  "run": "build/live/runs_lockstep3/live-20261022T230555Z-19aa/aadffb8df5790ca0-live-20261022T230555Z",
+  "summary": {
+   "agent0": {
+    "estimate_body_sha256": "ecf723b49a5049b82c427839b2e8d97849652c0c6ce89115616363203a385078",
+    "frames": 401,
+    "keyframes": 25
+   },
+   "agent1": {
+    "estimate_body_sha256": "4d3bf25cbe223ed12435980f459251465735bba65b672ebb96f6d74b257442de",
+    "frames": 401,
+    "keyframes": 35
+   },
+   "consumed": "{messages: 19257, digest_fnv1a64: 'f693e2b2edf95b00'}",
+   "directives_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "mover_state_sha256": "56c483ef2e78a7d8fa153fd76b07667fd9c5bed61daa06be6b4b56a5da5ff406",
+   "trace_records": 8,
+   "trace_sha256": "65e1902ca1da45de76007e5627e61b9a03bc3ba32c3bfb3e3e3ad238d729395c"
+  }
+ },
+ "b": {
+  "link_received": {
+   "/ariadne/agent_0/gt/pose": 3968,
+   "/ariadne/agent_0/imu": 3968,
+   "/ariadne/agent_0/left/camera_info": 397,
+   "/ariadne/agent_0/left/image_raw": 397,
+   "/ariadne/agent_0/mover_state": 3,
+   "/ariadne/agent_0/right/camera_info": 397,
+   "/ariadne/agent_0/right/image_raw": 397,
+   "/ariadne/agent_1/gt/pose": 3968,
+   "/ariadne/agent_1/imu": 3968,
+   "/ariadne/agent_1/left/camera_info": 397,
+   "/ariadne/agent_1/left/image_raw": 397,
+   "/ariadne/agent_1/mover_state": 3,
+   "/ariadne/agent_1/right/camera_info": 397,
+   "/ariadne/agent_1/right/image_raw": 396
+  },
+  "lockstep": {
+   "acks_not_accepted": 0,
+   "barriers": 4,
+   "commands_not_applied_at_T": 0,
+   "lockstep": true,
+   "pause_offset_ns": {
+    "max": 0,
+    "min": 0
+   },
+   "wall_paused_s_max": 0.05689
+  },
+  "run": "build/live/runs_lockstep3/live-20261022T230838Z-a524/aadffb8df5790ca0-live-20261022T230839Z",
+  "summary": {
+   "agent0": {
+    "estimate_body_sha256": "ecf723b49a5049b82c427839b2e8d97849652c0c6ce89115616363203a385078",
+    "frames": 401,
+    "keyframes": 25
+   },
+   "agent1": {
+    "estimate_body_sha256": "4d3bf25cbe223ed12435980f459251465735bba65b672ebb96f6d74b257442de",
+    "frames": 401,
+    "keyframes": 35
+   },
+   "consumed": "{messages: 19257, digest_fnv1a64: 'f693e2b2edf95b00'}",
+   "directives_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "mover_state_sha256": "56c483ef2e78a7d8fa153fd76b07667fd9c5bed61daa06be6b4b56a5da5ff406",
+   "trace_records": 8,
+   "trace_sha256": "65e1902ca1da45de76007e5627e61b9a03bc3ba32c3bfb3e3e3ad238d729395c"
+  }
+ },
+ "checks": {
+  "agent0": true,
+  "agent1": true,
+  "consumed": true,
+  "lockstep.applied_at_T": true,
+  "lockstep.both": true,
+  "mover_state_sha256": true,
+  "trace_sha256": true
+ },
+ "verdict": "PASS"
+}

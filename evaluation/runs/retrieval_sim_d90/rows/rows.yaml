@@ -1,0 +1,14 @@
+# retrieval_rows_eval: sim (RETRIEVAL_SIM_D90.md, D90), base ep640; thinning 0.25 m / 15.0 deg kept agent0 127, agent1 44. Generated.
+root: build/a1/simret
+protocol: {dist_m: 1.0, angle_deg: 30.0, exclude_s: 30.0}
+rows:
+  - {method: ep640, row: intra_agent0, bytes: 1024, extra: False, queries: 33, r1: 0.6667, r5: 0.8182, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep640, row: intra_agent1, bytes: 1024, extra: False, queries: 0, r1: nan, r5: nan, d_r1: nan, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep640, row: cross_agent0_vs_agent1, bytes: 1024, extra: False, queries: 28, r1: 0.7500, r5: 0.9643, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep640, row: cross_agent1_vs_agent0, bytes: 1024, extra: False, queries: 0, r1: nan, r5: nan, d_r1: nan, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep640, row: pooled, bytes: 1024, extra: False, queries: 61, r1: 0.7049, r5: 0.8852, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep1280, row: intra_agent0, bytes: 1024, extra: False, queries: 33, r1: 0.6061, r5: 0.8182, d_r1: -0.0606, mcnemar_p_r1: 0.6250, admissible: None}
+  - {method: ep1280, row: intra_agent1, bytes: 1024, extra: False, queries: 0, r1: nan, r5: nan, d_r1: nan, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep1280, row: cross_agent0_vs_agent1, bytes: 1024, extra: False, queries: 28, r1: 0.8214, r5: 0.9286, d_r1: 0.0714, mcnemar_p_r1: 0.6250, admissible: None}
+  - {method: ep1280, row: cross_agent1_vs_agent0, bytes: 1024, extra: False, queries: 0, r1: nan, r5: nan, d_r1: nan, mcnemar_p_r1: 1.0000, admissible: None}
+  - {method: ep1280, row: pooled, bytes: 1024, extra: False, queries: 61, r1: 0.7049, r5: 0.8689, d_r1: 0.0000, mcnemar_p_r1: 1.0000, admissible: None}

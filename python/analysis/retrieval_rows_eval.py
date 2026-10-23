@@ -2,12 +2,18 @@
 
   python3 -I retrieval_rows_eval.py compression ROOT --out DIR     # §17.2 rows on the D62 dumps (ep376, ep752)
   python3 -I retrieval_rows_eval.py methods ROOT --base ep376 --methods ep376_clahe --out DIR   # 3.1 rows
+  python3 -I retrieval_rows_eval.py sim ROOT --base ep640 --methods ep1280 --out DIR   # D90 (RETRIEVAL_SIM_D90.md)
 
 ROOT holds one directory per flight from ariadne_place_eval (samples.csv, <method>.f32). The protocol is
 place_recall_eval.py's (PERCEPTION_2.1 §11.5): a positive is within --dist m and --angle deg, the database is the
 samples older than --exclude-s, exact cosine top-k, ties broken by index. Each row is scored on the SAME queries as
 its baseline; McNemar is the exact two-sided binomial test on the discordant R@1 queries. Writes DIR/rows.csv and
 DIR/rows.yaml.
+
+`sim`: ROOT holds agent0/ and agent1/ of one sim recording. Samples are first thinned from GT (kept when the camera
+moved >= --thin-m or turned >= --thin-deg since the agent's last kept sample), then two query sets are pooled:
+intra-agent (database = own samples older than --exclude-s) and cross-agent (database = the other agent's samples
+older than the query).
 """
 from __future__ import annotations
 
@@ -42,6 +48,33 @@ def hits(t, c, ax, desc, dist, angle, excl_s):
             continue
         posset = set(admit[pos].tolist())
         sims = desc[admit] @ desc[q]
+        order = admit[np.lexsort((admit, -sims))]
+        out.append(tuple(bool(posset & set(order[:k].tolist())) for k in KS))
+    return np.array(out, dtype=bool).reshape(-1, len(KS))
+
+
+def thin(t, c, ax, m, deg):
+    """Indices kept by motion thinning (GT only): moved >= m or turned >= deg since the last kept sample."""
+    keep = [0]
+    for i in range(1, len(t)):
+        j = keep[-1]
+        if np.linalg.norm(c[i] - c[j]) >= m or ax[i] @ ax[j] < math.cos(math.radians(deg)):
+            keep.append(i)
+    return np.array(keep)
+
+
+def hits_cross(q, db, dist, angle):
+    """Per query of agent q with a positive in agent db's samples older than it: (hit@1, hit@5)."""
+    (tq, cq, aq, dq), (td, cd, ad, dd) = q, db
+    cos_thr = math.cos(math.radians(angle))
+    out = []
+    for i in range(len(tq)):
+        admit = np.where(td < tq[i])[0]
+        pos = (np.linalg.norm(cd[admit] - cq[i], axis=1) < dist) & (ad[admit] @ aq[i] > cos_thr)
+        if not pos.any():
+            continue
+        posset = set(admit[pos].tolist())
+        sims = dd[admit] @ dq[i]
         order = admit[np.lexsort((admit, -sims))]
         out.append(tuple(bool(posset & set(order[:k].tolist())) for k in KS))
     return np.array(out, dtype=bool).reshape(-1, len(KS))
@@ -133,6 +166,42 @@ def methods(a) -> int:
     return write(a, table, f"methods (RETRIEVAL_3.1_3.6 §3, D92), base {a.base}")
 
 
+def sim(a) -> int:
+    ms = [a.base] + a.methods.split(",")
+    agents = {}
+    for d in sorted(p for p in a.root.iterdir() if (p / "samples.csv").exists()):
+        t, c, ax, desc = load(d, ms)
+        k = thin(t, c, ax, a.thin_m, a.thin_deg)
+        agents[d.name] = (t[k], c[k], ax[k], {m: desc[m][k] for m in ms})
+    if len(agents) != 2:
+        raise SystemExit(f"sim: expected two agent directories under {a.root}, found {sorted(agents)}")
+    names = sorted(agents)
+    table = []
+    for m in ms:
+        sets = {}
+        for n in names:
+            t, c, ax, desc = agents[n]
+            sets[f"intra_{n}"] = hits(t, c, ax, desc[m], a.dist, a.angle, a.exclude_s)
+        for qn, dn in ((names[0], names[1]), (names[1], names[0])):
+            q, d = agents[qn], agents[dn]
+            sets[f"cross_{qn}_vs_{dn}"] = hits_cross(q[:3] + (q[3][m],), d[:3] + (d[3][m],), a.dist, a.angle)
+        sets["pooled"] = np.concatenate([v for v in sets.values()])
+        for sn, h in sets.items():
+            table.append({"method": m, "row": sn, "h": h})
+    base = {r["row"]: r["h"] for r in table if r["method"] == a.base}
+    out = []
+    for r in table:
+        h, b = r["h"], base[r["row"]]
+        out.append({"method": r["method"], "row": r["row"], "bytes": 1024, "extra": False, "queries": len(h),
+                    "r1": float(h[:, 0].mean()) if len(h) else float("nan"),
+                    "r5": float(h[:, 1].mean()) if len(h) else float("nan"),
+                    "d_r1": float(h[:, 0].mean() - b[:, 0].mean()) if len(h) else float("nan"),
+                    "mcnemar_p_r1": mcnemar_p(b[:, 0], h[:, 0]), "admissible": None})
+    kept = ", ".join(f"{n} {len(agents[n][0])}" for n in names)
+    return write(a, out, f"sim (RETRIEVAL_SIM_D90.md, D90), base {a.base}; thinning {a.thin_m} m / {a.thin_deg} deg "
+                         f"kept {kept}")
+
+
 def write(a, table, what) -> int:
     a.out.mkdir(parents=True, exist_ok=True)
     keys = ["method", "row", "bytes", "extra", "queries", "r1", "r5", "d_r1", "mcnemar_p_r1", "admissible"]
@@ -153,7 +222,7 @@ def write(a, table, what) -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["compression", "methods"])
+    ap.add_argument("mode", choices=["compression", "methods", "sim"])
     ap.add_argument("root", type=Path)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--base", default="ep376")
@@ -162,8 +231,10 @@ def main() -> int:
     ap.add_argument("--angle", type=float, default=30.0)
     ap.add_argument("--exclude-s", type=float, default=30.0)
     ap.add_argument("--bar", type=float, default=0.01, help="admissible if R@1 >= fp32 R@1 - bar (fixed before the run)")
+    ap.add_argument("--thin-m", type=float, default=0.25, help="sim: motion thinning, metres")
+    ap.add_argument("--thin-deg", type=float, default=15.0, help="sim: motion thinning, degrees")
     a = ap.parse_args()
-    return compression(a) if a.mode == "compression" else methods(a)
+    return {"compression": compression, "methods": methods, "sim": sim}[a.mode](a)
 
 
 if __name__ == "__main__":

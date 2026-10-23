@@ -20,7 +20,8 @@ add_executable(test_numerical
   numerical/test_window_ba_inertial.cpp
   numerical/test_inertial_init.cpp
   numerical/test_gravity_prior.cpp
-  numerical/test_scripted.cpp)
+  numerical/test_scripted.cpp
+  numerical/test_command_planner.cpp)
 target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception ariadne::slam
   yaml-cpp::yaml-cpp GTest::gtest_main)
 target_compile_definitions(test_numerical PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -78,6 +79,8 @@ if(OpenCV_FOUND)
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
+    unit/test_live_link.cpp
+    unit/test_live_planner.cpp
     unit/test_depth_eval.cpp
     unit/test_planning.cpp
     unit/test_xfeat_reference.cpp
@@ -103,9 +106,18 @@ if(OpenCV_FOUND)
     unit/test_aliked_lightglue_reference.cpp
     unit/test_hard_pair.cpp
     unit/test_loop_verify_geometry.cpp
-    unit/test_dnn_contract.cpp)
+    unit/test_dnn_contract.cpp
+    unit/test_volumetric.cpp
+    unit/test_traversability.cpp
+    unit/test_egress.cpp
+    unit/test_nbv.cpp
+    unit/test_phase4_planner.cpp
+    unit/test_multiagent.cpp
+    unit/test_allocation.cpp
+    unit/test_visibility_graph.cpp
+    unit/test_collab_link.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
-    ariadne::slam_opencv opencv_features opencv_imgcodecs GTest::gtest_main)
+    ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   gtest_discover_tests(test_opencv)
 endif()

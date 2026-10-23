@@ -1,0 +1,2 @@
+ariadne/core-dev:dev 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:rc-ariadne-core-dev-91643838031ab6cbda6a sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a
+ariadne/sim:dev 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:rc-ariadne-sim-8b780f52cb9a1d48c142e176e sha256:8b780f52cb9a1d48c142e176e1690dc5373f238feb606bb6e869aba933df33d9

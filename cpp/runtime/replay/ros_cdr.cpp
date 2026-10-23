@@ -197,4 +197,24 @@ Time DecodeClock(const uint8_t* data, size_t size) {
     return t;
 }
 
+PoseArray DecodePoseArray(const uint8_t* data, size_t size) {
+    CdrReader r(data, size);
+    PoseArray m;
+    m.header = ReadHeader(r);
+    m.poses.resize(r.ReadSequenceLength(56));   // 7 doubles per Pose
+    for (auto& p : m.poses) {
+        p.position = ReadVector3(r);
+        p.orientation = ReadQuaternion(r);
+    }
+    r.ExpectEnd();
+    return m;
+}
+
+std::string DecodeString(const uint8_t* data, size_t size) {
+    CdrReader r(data, size);
+    std::string s = r.ReadString();
+    r.ExpectEnd();
+    return s;
+}
+
 }  // namespace ariadne::runtime::ros_cdr

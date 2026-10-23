@@ -813,6 +813,9 @@ public:
     };
     /// This agent's connected component as its membership sees it now (§15.4: lowest id brokers, epoch accepted).
     ComponentView Component() const { return {mem_.broker(), mem_.ComponentMembers(), mem_.accepted()}; }
+    /// The newest heartbeat received from `a` (D175 item 4: peer poses reach the planner only through what was
+    /// heard on the radio), or nothing if none arrived. Read-only.
+    std::optional<core::HeartbeatValue> LastHeartbeat(AgentId a) const { return mem_.LastHeartbeat(a); }
     /// The highest SUBMAP_PATCH version `to` has acknowledged (0 = none): the next patch carries what changed since.
     uint64_t AckedPatchVersion(AgentId to) {
         const auto& d = ep_.Delivered(to, core::MessageClass::SUBMAP_PATCH);

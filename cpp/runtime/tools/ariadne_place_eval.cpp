@@ -17,6 +17,11 @@
 // --retrieval-3.1 (RETRIEVAL_3.1_3.6.md §3, D92): the CLAHE ablation instead. Methods ep376 and ep376_clahe only
 // (no ep752, meanbit or annoy), optionally on frames darkened by the seeded operator D (--degradation YAML, --seed;
 // applied to the left frame at consumption time, frame id = the stream index; a darkened-EuRoC [PROXY]).
+//
+// --rec DIR --scene DIR --agent N (instead of --sequence): one agent of a clean sim recording. With --sim-d90
+// (RETRIEVAL_SIM_D90.md, D90) the methods are ep640 and ep1280: EigenPlaces at 640x360 and 1280x720 through the RGB
+// path (DescribeRgb on StereoFrame::left_rgb, the sim export of models.sh eigenplaces-sim), exact only.
+// --samples-only writes samples.csv and the manifest without running any network (revisit counting).
 // ---------------------------------------------------------------------------
 #include "collaboration/retrieval/mean_bit_descriptor.hpp"
 #include "perception/degradation/degradation.hpp"
@@ -38,6 +43,7 @@
 #include <fstream>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -48,7 +54,9 @@ namespace fs = std::filesystem;
 namespace {
 
 struct Args {
-    std::string sequence, perception_config, export_dir, out;
+    std::string sequence, rec, scene, perception_config, export_dir, out;
+    int agent = 0;
+    bool sim_d90 = false, samples_only = false;
     int every = 20;
     double exclude_s = 30.0;
     int annoy_trees = 10;
@@ -66,6 +74,11 @@ Args Parse(int argc, char** argv) {
             return argv[++i];
         };
         if (k == "--sequence") a.sequence = next();
+        else if (k == "--rec") a.rec = next();
+        else if (k == "--scene") a.scene = next();
+        else if (k == "--agent") a.agent = std::stoi(next());
+        else if (k == "--sim-d90") a.sim_d90 = true;
+        else if (k == "--samples-only") a.samples_only = true;
         else if (k == "--perception-config") a.perception_config = next();
         else if (k == "--export") a.export_dir = next();
         else if (k == "--out") a.out = next();
@@ -77,12 +90,16 @@ Args Parse(int argc, char** argv) {
         else if (k == "--seed") a.seed = std::stoull(next());
         else throw std::runtime_error("unknown argument " + k);
     }
-    if (a.sequence.empty() || a.perception_config.empty() || a.export_dir.empty() || a.out.empty()) {
-        throw std::runtime_error("usage: ariadne_place_eval --sequence DIR --perception-config YAML --export DIR "
-                                 "--out DIR [--every 20] [--exclude-s 30] [--annoy-trees 10] "
-                                 "[--retrieval-3.1 [--degradation YAML] [--seed N]]");
+    if ((a.sequence.empty() == (a.rec.empty() || a.scene.empty())) || a.perception_config.empty() ||
+        a.export_dir.empty() || a.out.empty()) {
+        throw std::runtime_error("usage: ariadne_place_eval (--sequence DIR | --rec DIR --scene DIR [--agent N]) "
+                                 "--perception-config YAML --export DIR --out DIR [--every 20] [--exclude-s 30] "
+                                 "[--annoy-trees 10] [--retrieval-3.1 [--degradation YAML] [--seed N]] [--sim-d90] "
+                                 "[--samples-only]");
     }
     if (!a.degradation.empty() && !a.retrieval31) throw std::runtime_error("--degradation needs --retrieval-3.1");
+    if (a.sim_d90 != !a.rec.empty()) throw std::runtime_error("--sim-d90 is the (only) method set of a sim recording");
+    if (a.sim_d90 && a.retrieval31) throw std::runtime_error("--sim-d90 and --retrieval-3.1 are exclusive");
     return a;
 }
 
@@ -95,15 +112,25 @@ double Ms(std::chrono::steady_clock::time_point t0) {
 int main(int argc, char** argv) {
     try {
         const Args a = Parse(argc, argv);
-        runtime::EurocSource source(a.sequence);
+        std::unique_ptr<runtime::StereoSource> src;
+        if (a.sim_d90) src = std::make_unique<runtime::SimSource>(a.rec, a.scene, a.agent);
+        else src = std::make_unique<runtime::EurocSource>(a.sequence);
+        runtime::StereoSource& source = *src;
         const perception::PerceptionConfig pc = perception::LoadPerception(a.perception_config);
         const perception::OrbEngine orb(pc.features);
-        perception::PlaceRecognizer ep376({(fs::path(a.export_dir) / "eigenplaces_r50_256_376x240.onnx").string(),
-                                           376, 240, "classic"});
-        perception::PlaceRecognizer ep752({(fs::path(a.export_dir) / "eigenplaces_r50_256_752x480.onnx").string(),
-                                           752, 480, "classic"});
-        const perception::PlaceRecognizer ep376c({(fs::path(a.export_dir) / "eigenplaces_r50_256_376x240.onnx").string(),
-                                                  376, 240, "classic", "clahe"});
+        // Networks are built lazily: --samples-only builds none, and each mode builds only its own.
+        const auto ep = [&](int w, int h, const char* enhance = "none") {
+            return std::make_unique<perception::PlaceRecognizer>(perception::PlaceRecognizerParams{
+                (fs::path(a.export_dir) / ("eigenplaces_r50_256_" + std::to_string(w) + "x" + std::to_string(h) +
+                                           ".onnx")).string(), w, h, "classic", enhance});
+        };
+        std::unique_ptr<perception::PlaceRecognizer> ep376, ep752, ep376c, ep640, ep1280;
+        if (!a.samples_only && a.sim_d90) ep640 = ep(640, 360), ep1280 = ep(1280, 720);
+        else if (!a.samples_only) {
+            ep376 = ep(376, 240);
+            if (a.retrieval31) ep376c = ep(376, 240, "clahe");
+            else ep752 = ep(752, 480);
+        }
         std::optional<perception::NamedDegradation> deg;
         if (!a.degradation.empty()) deg = perception::LoadDegradation(a.degradation);
         const std::vector<runtime::TimedPose> gt = source.GroundTruth();
@@ -114,8 +141,11 @@ int main(int argc, char** argv) {
             core::Vec3 c, axis;
         };
         std::vector<Sample> samples;
-        const std::vector<std::string> methods = a.retrieval31 ? std::vector<std::string>{"ep376", "ep376_clahe"}
-                                                               : std::vector<std::string>{"ep376", "ep752", "meanbit"};
+        const std::vector<std::string> methods =
+            a.samples_only ? std::vector<std::string>{}
+            : a.sim_d90    ? std::vector<std::string>{"ep640", "ep1280"}
+            : a.retrieval31 ? std::vector<std::string>{"ep376", "ep376_clahe"}
+                            : std::vector<std::string>{"ep376", "ep752", "meanbit"};
         std::map<std::string, std::vector<std::vector<float>>> desc;
         std::map<std::string, double> ms_sum;
         source.ForEachFrame(0, [&](const runtime::StereoFrame& f) {
@@ -129,6 +159,17 @@ int main(int argc, char** argv) {
             if (!best || std::llabs(best->t_ns - f.t_ns) > 10000000LL) return;   // 10 ms
             const core::SE3 T_W_C = best->T * T_B_C;
             samples.push_back({f.t_ns, T_W_C.t, T_W_C.R * core::Vec3(0, 0, 1)});
+            if (a.samples_only) return;
+            if (a.sim_d90) {
+                if (f.left_rgb.empty()) throw std::runtime_error("sim frame has no left_rgb");
+                auto t0 = std::chrono::steady_clock::now();
+                desc["ep640"].push_back(ep640->DescribeRgb(f.left_rgb));
+                ms_sum["ep640"] += Ms(t0);
+                t0 = std::chrono::steady_clock::now();
+                desc["ep1280"].push_back(ep1280->DescribeRgb(f.left_rgb));
+                ms_sum["ep1280"] += Ms(t0);
+                return;
+            }
             if (a.retrieval31) {
                 cv::Mat left = f.left;
                 if (deg) {
@@ -138,18 +179,18 @@ int main(int argc, char** argv) {
                     left = cv::Mat(left.rows, left.cols, CV_8UC1, const_cast<uint8_t*>(out.data.data())).clone();
                 }
                 auto t0 = std::chrono::steady_clock::now();
-                desc["ep376"].push_back(ep376.Describe(left));
+                desc["ep376"].push_back(ep376->Describe(left));
                 ms_sum["ep376"] += Ms(t0);
                 t0 = std::chrono::steady_clock::now();
-                desc["ep376_clahe"].push_back(ep376c.Describe(left));
+                desc["ep376_clahe"].push_back(ep376c->Describe(left));
                 ms_sum["ep376_clahe"] += Ms(t0);
                 return;
             }
             auto t0 = std::chrono::steady_clock::now();
-            desc["ep376"].push_back(ep376.Describe(f.left));
+            desc["ep376"].push_back(ep376->Describe(f.left));
             ms_sum["ep376"] += Ms(t0);
             t0 = std::chrono::steady_clock::now();
-            desc["ep752"].push_back(ep752.Describe(f.left));
+            desc["ep752"].push_back(ep752->Describe(f.left));
             ms_sum["ep752"] += Ms(t0);
             t0 = std::chrono::steady_clock::now();
             const perception::FeatureSet fs_orb = orb.DetectAndCompute(f.left, cv::Mat());
@@ -173,7 +214,7 @@ int main(int argc, char** argv) {
         for (const auto& m : methods) {
             std::ofstream f(fs::path(a.out) / (m + ".f32"), std::ios::binary);
             for (const auto& d : desc[m]) f.write(reinterpret_cast<const char*>(d.data()), std::streamsize(d.size() * 4));
-            if (a.retrieval31) continue;   // exact only
+            if (a.retrieval31 || a.sim_d90) continue;   // exact only
             // annoy top-5 under the time filter, one row per query: index, then up to 5 sample indices.
             perception::PlaceIndex ann(256, perception::PlaceIndex::Backend::kAnnoy, a.annoy_trees, 1);
             for (size_t i = 0; i < desc[m].size(); ++i) ann.Add(i, desc[m][i]);
@@ -208,10 +249,14 @@ int main(int argc, char** argv) {
                << "\ngit_dirty: " << (std::getenv("ARIADNE_GIT_DIRTY") ? std::getenv("ARIADNE_GIT_DIRTY") : "UNRECORDED")
                << "\nimage_digest: "
                << (std::getenv("ARIADNE_IMAGE_DIGEST") ? std::getenv("ARIADNE_IMAGE_DIGEST") : "UNRECORDED")
-               << "\nperception_config: " << pc.name << "\nplace_recognition: [" << ep376.Name() << ", "
-               << (a.retrieval31 ? ep376c.Name() : ep752.Name() + ", meanbit_orb_placeholder")
+               << "\nagent: " << source.Agent() << "\nperception_config: " << pc.name << "\nplace_recognition: ["
+               << (a.samples_only ? std::string("none (samples only)")
+                   : a.sim_d90    ? ep640->Name() + ", " + ep1280->Name() + " (RGB path)"
+                   : a.retrieval31 ? ep376->Name() + ", " + ep376c->Name()
+                                   : ep376->Name() + ", " + ep752->Name() + ", meanbit_orb_placeholder")
                << "]\nplace_index: [exact (in place_recall_eval.py)"
-               << (a.retrieval31 ? std::string("") : ", annoy/trees" + std::to_string(a.annoy_trees) + "/seed1") << "]\n"
+               << (a.retrieval31 || a.sim_d90 || a.samples_only
+                       ? std::string("") : ", annoy/trees" + std::to_string(a.annoy_trees) + "/seed1") << "]\n"
                << "degradation: " << (deg ? deg->name : std::string("none")) << "\ndegradation_seed: " << a.seed << '\n'
                << "degradation_digest: " << (deg ? std::to_string(perception::DegradeDigest()) : std::string("none")) << '\n'
                << "eigenplaces_commit: " << em["commit"].as<std::string>()

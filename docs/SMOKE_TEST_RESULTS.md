@@ -811,6 +811,85 @@ bit-exact: 11/11 and 12/12 files. `lightglue_aliked.onnx` is byte-identical to t
 1 thread, 0.76 s and 0.17–0.23 s on 8. ALIKED at 1280×720 is 1.6–2.4 s per frame and LightGlue about 0.95 s per pair,
 both at the default pool. Quiet-host numbers are L5.
 
+## 4w. Lockstep through `ros_gz_bridge`: `run_to_sim_time` stops gz exactly at T, with the frame at T `[SMOKE-TEST]` 2026-10-23
+
+Gates D165 (LIVE_RUNTIME_L1). Sim image `ariadne/sim:dev` (ROS 2 Jazzy, `ros_gz_bridge` 1.0.24, gz-sim8, gz-msgs10),
+Mesa llvmpipe, scene `ci_tiny_0` (`mission_live.sdf`), world started paused (`gz sim -s --headless-rendering`).
+Bridge YAML: `/clock` and `/ariadne/agent_0/left/image_raw` gz→ROS, plus one service entry
+`{service_name: /world/<w>/control, ros_type_name: ros_gz_interfaces/srv/ControlWorld, gz_req_type_name:
+gz.msgs.WorldControl, gz_rep_type_name: gz.msgs.Boolean}`; the bridge logs "Creating ROS->GZ service bridge".
+A probe node (rclpy) calls the service with only `world_control.run_to_sim_time` set, then watches `/clock` until it
+has not moved for 15 s of wall time.
+
+| request | service result | `/clock` stopped at | frames received | frame stamped AT T | frames after T |
+|---|---|---|---|---|---|
+| run_to 2 s | true | 2 000 000 000 ns | 40 | yes | 0 |
+| run_to 4 s | true | 4 000 000 000 ns | 80 | yes | 0 |
+
+- The bridge copies `run_to_sim_time` (a plain `pause: false` would have run free): gz pauses itself at T exactly.
+- The 20 Hz camera's frame at T is published before the pause, so a barrier at T has its frame.
+- A world that STARTS paused publishes no frame at t = 0 (first frame 0.05 s): lockstep runs have one frame fewer per
+  agent than unpaused ones (1800 vs 1801 over 90 s).
+- Systems' `PreUpdate` while paused (the mover taking a command at paused time T): covered by
+  `python/tests/sim/test_mover_live.py::test_command_taken_while_paused` (applied_ns = 0 in a world paused at 0).
+Re-run (~2 min): `infra/scripts/tests/lockstep_smoke/run.sh` (header has the docker command; probe.py beside it).
+
+## 4u. HashTSDF (`cv::Volume`) for the §20 volumetric stack: usable as the oracle, not as the planner's map `[SMOKE-TEST]` 2026-10-22
+
+§4b showed `cv::Volume(VolumeType::HashTSDF)` constructs. 4.1 (arch §20.1) needs more than that, so this checks what
+the planner would read from it. Reproduce with `infra/scripts/smoke_hashtsdf.cpp` (command in its header).
+
+**The public API** (`opencv2/ptcloud/volume.hpp`, `volume_settings.hpp`, `detail/`): `integrate(depth, pose)`
+(also with colour or an `OdometryFrame`), `raycast`, `fetchNormals`, `fetchPointsNormals[Colors]`, `getBoundingBox`,
+`getVisibleBlocks`, `getTotalVolumeUnits`, `reset`, `setEnableGrowth`. It does **not** have:
+
+- a read of a voxel's TSDF value or weight, or any iteration over blocks or voxels;
+- a per-pixel sample weight: every pixel integrates with weight 1, capped by `maxWeight`.
+
+§20.2's tri-state needs the per-voxel weight (unknown = weight 0). §20.3's ESDF and §20.4's frontiers need the
+voxels. §20.1's sample weights are `1/σ_Z²`. None of these is expressible through this API: this is §20.1's "API
+proves awkward" case. §4b's note "no from-scratch TSDF needed" is superseded.
+
+**Synthetic check** (known answer: a fronto-parallel wall at Z = 2 m, 640×360 pinhole, 5 identical integrations,
+truncation 4 voxels, raycast from the same pose):
+
+| voxel | raycast valid | raycast \|ΔZ\| median / max | `fetchPointsNormals` points, mean \|ΔZ\| |
+|---|---|---|---|
+| 0.05 m | 230317 / 230400 | 0.020 / 0.050 m | 21573, 0.087 m |
+| 0.08 m | 229694 / 230400 | 0.042 / 0.160 m | 8672, 0.141 m |
+
+The raycast surface sits about half a voxel off the true wall. The fetched points spread further, by 1.7 voxels on
+average. This is `[UNVERIFIED]` as to cause; one candidate is a voxel-corner vs voxel-centre convention.
+
+**So:** 4.1 builds the from-scratch voxel-hash TSDF of §20.1's fallback, and `cv::Volume` HashTSDF stays as its
+correctness oracle: same frames, same voxel size and truncation, unit weights, compared on the raycast surface at a
+tolerance of one voxel. The oracle's own half-voxel bias, measured here, is why the tolerance is not tighter.
+
+## 4v. NVIDIA EGL headless render path on AWS g4dn.xlarge `[SMOKE-TEST]` 2026-10-23
+
+**Gate:** does Gazebo Harmonic render camera frames headless through the NVIDIA EGL path (not a silent llvmpipe
+fallback) on the GPU instance class the arch names for rendering (§5.10)?
+
+**Run:**
+- infra/scripts/sim.sh acceptance (`sim_smoke.py`), as step 3 of the D112 render job, on one g4dn.xlarge spot
+  instance in eu-north-1a;
+- driver 595.91.07, CUDA 13.2; the ariadne/sim:dev image by id `sha256:8b780f52…`;
+- evidence in `evaluation/runs/risk_calibration_4.2/aws_run/egl_smoke/`.
+
+**Result: PASS.**
+- `[sim_smoke] render mode: nvidia-egl`, then `SIM_SMOKE=PASS (3 good frames, render mode nvidia-egl)`.
+- Frames are 320×240 rgb8, luma std 73.9, with the scene's colour structure (red 0.318, blue 0.195).
+- The job then rendered three full ci_tiny_hazard missions on the same path: wall 2188 / 1323 / 469 s for seeds
+  0 / 1 / 2, about 200 s of sim each.
+  - The spread is not explained here; seed 0 also paid the first-render shader warm-up. `[UNVERIFIED]`
+
+**Notes:**
+- The `wall=` field in sim_smoke's timing lines is `time.monotonic()`, the host's monotonic clock, not time since
+  start: 192.9 s on frame 1 is uptime, not a slow frame.
+- Two failed launches before this one were both the job script's: an S3 prefix outside the instance role's
+  `runs/*`, then output dirs owned by root while the containers run as uid 1000. Neither was the render path.
+- **Unblocks:** B's live runs on g4dn (L1 `live_aws.sh`). The 4.3 / 4.6 lockstep gate on g4dn needs B's EGL
+  lockstep check first: lockstep is verified on llvmpipe only.
 ## 4u. Lamp photometry of the gz-sim8 / ogre2 camera (Phase 5 preflight) `[SMOKE-TEST]` 2026-10-22
 
 `simulator/smoke/lamp_probe/run_lamp_probe.py` (ariadne/sim:dev, llvmpipe; 17 launches plus a 2-launch rerun, every

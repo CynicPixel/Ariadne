@@ -1,0 +1,5 @@
+[sim_smoke] timing frame 2: stamp=0.200s wall=209.580s
+[sim_smoke] frame 2: 320x240 rgb8 luma_std=73.9 red=0.318 blue=0.195 OK
+[sim_smoke] timing frame 3: stamp=0.400s wall=209.778s
+[sim_smoke] frame 3: 320x240 rgb8 luma_std=73.9 red=0.318 blue=0.195 OK
+[sim_smoke] SIM_SMOKE=PASS (3 good frames, render mode nvidia-egl)

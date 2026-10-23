@@ -1,0 +1,6 @@
+# 4.5 hazard-seed egress rows + 4.6 §31.6 comparator (EGRESS_4.5 §7, EXPLORATION_4.6 §3; D113, D116). Dev host,
+# sequential, 2026-10-23. Spools: the three ci_tiny_hazard seeds rendered + estimated on AWS g4dn (D112 run,
+# build/runs/20261022T215952Z-gpu-277b5e, git-ignored). w_r = 0 vs 1 (D112 passed: the calibrated [PROXY]).
+ariadne_volumetric_eval --spool SPOOL_s --scene build/worldgen/scenes/ci_tiny_hazard_s --config configs/mission/mission_v1.yaml \
+  --out OUT --egress 1 --support-band -0.31,2.31 --risk-weight W --route-compare 1
+python3 -I python/analysis/egress_eval.py --scene build/worldgen/scenes/ci_tiny_hazard_s --run OUT --out OUT

@@ -1,0 +1,8 @@
+f8bc452c400448e0eeda4c9bf735d9b72f0eb66a460a6c10b152e1f57edd70c3  ./canonical/canonical_0.mcap
+374ee9f087bb7e9e2c23024e3093b83e4a318fcc89db100c297d9c809a1f44fc  ./canonical/metadata.yaml
+720b419e0131d64c32113c7e12d6768a85853b5cd20e140a0a5acc0b82379bab  ./logs/gz.log
+1ada703e86b16d806d0c82b1ae72ffc130aaa63bbbbb39c37b3d8e6deda36a3f  ./logs/gz_recorder.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./logs/gz_recorder.log
+7770b53da5825ccb2e78e9d2937eba13e72f7bc75e787d8e989c775fcb4fb346  ./recording.json
+4c44b339d8bd786db05581a65464abc515df904dad7de860340d4d498f886865  ./sensors/metadata.yaml
+c54894b22cce999e25097752c5fd46a2248d0caaee0f9c9c0fcfd3abc077bbcb  ./sensors/sensors_0.mcap

@@ -1,0 +1,40 @@
+# python/analysis/egress_eval.py (EGRESS_4.5 §5, D113). Generated.
+phase4_dstar:
+  replans: 41
+  routes_found: 9
+  routes_valid: 9
+  time_to_first_route_s: 165.0
+  time_to_first_gt_valid_route_s: 165.0
+  final:
+    t_s: 204.95
+    found: true
+    risk_zone_fraction: 0.34
+    exit: 1
+    length_m: 4.99142
+    gt_geodesic_m: 4.9414215087890625
+    length_ratio: 1.0101182404945637
+    valid_fraction: 1.0
+    valid: true
+    confidence: 0.889003
+    invalid_cells: 0
+    reroute: ''
+    triggers:
+    - new_obstacle
+    expanded: 0
+    changed_cells: 1047
+    ms: 668.489
+  all_found_routes_valid: true
+  calibration:
+    samples: 9
+    degenerate: true
+    confidence_min: 0.889003
+    confidence_max: 0.889003
+  support_band_m:
+  - -0.31
+  - 2.31
+  final_route_support:
+    min: 0.887293
+    p5: 0.889003
+    median: 0.942877
+    max: 1
+    spread: 0.112707

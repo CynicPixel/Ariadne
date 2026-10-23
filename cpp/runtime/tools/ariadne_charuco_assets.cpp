@@ -34,7 +34,7 @@ constexpr float kSquareM = 0.08f;          // 8 cm squares
 constexpr float kMarkerM = 0.06f;          // 6 cm markers
 constexpr int kPxPerSquare = 80;           // 1000 px/m: sharp edges at 0.5-3 m
 constexpr int kMarginSquares = 1;          // white quiet zone, one square wide
-constexpr int kBoards = 2;                 // one per entrance
+constexpr int kBoards = 3;                 // one per entrance (P8 D212: 3 agents; ids stay disjoint per board)
 
 }  // namespace
 

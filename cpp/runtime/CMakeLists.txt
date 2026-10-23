@@ -55,6 +55,10 @@ if(OpenCV_FOUND)
   install(TARGETS ariadne_comms_probe RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 2.1 retrieval evaluation dump (design PERCEPTION_2.1 §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
+  # 4.1 volumetric evaluation on a 1.7 spool (VOLUMETRIC_4.1 §6, D110).
+  add_executable(ariadne_volumetric_eval tools/ariadne_volumetric_eval.cpp)
+  target_link_libraries(ariadne_volumetric_eval PRIVATE ariadne::planning opencv_imgcodecs)
+
   add_executable(ariadne_place_eval tools/ariadne_place_eval.cpp)
   target_link_libraries(ariadne_place_eval PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
 
@@ -86,6 +90,11 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_collab_sim PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_collab_sim RUNTIME DESTINATION bin COMPONENT ariadne)
+  # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (LIVE_COLLAB §1).
+  add_executable(ariadne_collab_worker tools/ariadne_collab_worker.cpp)
+  target_link_libraries(ariadne_collab_worker PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_collab_worker RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 1.9 the §30.2 report gate (design HARNESS_1.9): registry dump + MissingMetrics/UnknownMetrics.
   add_executable(ariadne_report_check tools/ariadne_report_check.cpp)
@@ -93,6 +102,23 @@ if(OpenCV_FOUND)
   install(TARGETS ariadne_report_check RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 1.8 placeholder mission layer over a 1.7 spool (design MISSION_1.8).
+  # L1 live closed-loop runtime (design LIVE_RUNTIME_L1): the sim_collab estimator path + the mission, over the
+  # ROS edge's Unix socket or a recording of a live run. ROS-free.
+  add_executable(ariadne_live tools/ariadne_live.cpp)
+  target_link_libraries(ariadne_live PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv ariadne::planning opencv_imgcodecs opencv_imgproc
+    opencv_features)
+  find_package(Threads REQUIRED)
+  target_link_libraries(ariadne_live PRIVATE Threads::Threads)
+
+  add_executable(ariadne_live_canonical tools/ariadne_live_canonical.cpp)
+  target_link_libraries(ariadne_live_canonical PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv ariadne::planning opencv_imgcodecs opencv_imgproc
+    opencv_features)
+  find_package(Threads REQUIRED)
+  target_link_libraries(ariadne_live_canonical PRIVATE Threads::Threads)
+  install(TARGETS ariadne_live RUNTIME DESTINATION bin COMPONENT ariadne)
+
   add_executable(ariadne_mission tools/ariadne_mission.cpp)
   target_link_libraries(ariadne_mission PRIVATE ariadne::runtime_opencv opencv_imgcodecs opencv_imgproc)
   install(TARGETS ariadne_mission RUNTIME DESTINATION bin COMPONENT ariadne)

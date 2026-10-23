@@ -1,0 +1,8 @@
+# 4.3 gate (NBV_4.3 §5 as amended, §14 result). 24 lockstep live runs on AWS c7i.4xlarge spot, llvmpipe, RTF 0 + D168,
+# a1p feat/l1-a1planner d59ee3d (working tree: live_aws.sh --profile/--market only). Batches b01-b08 of
+# configs/mission/gate/aws_r0_bNN.jobs (scene seed T_s planner_config); b03 job 3 re-ran inside b07.
+LIVE_AWS_PROFILE=cpux86 infra/scripts/live_aws.sh batch configs/mission/gate/aws_r0_bNN.jobs 150
+# score (run in this repo, feat/ph4-nagent; RUNS = each run's trace.jsonl directory):
+python3 -I python/analysis/gate_coverage.py --runs RUNS --scenes /data/code/Ariadne-a1p/build/live/scenes --out OUT
+python3 -I evaluation/runs/nbv_4.3_gate/coverage_per_metre.py OUT/gate_rows.jsonl > coverage_per_metre.txt
+for T in 60 160; do echo "T=$T"; python3 -I evaluation/runs/nbv_4.3_gate/early_paths.py EXTRACT_DIR $T; done > early_paths.txt

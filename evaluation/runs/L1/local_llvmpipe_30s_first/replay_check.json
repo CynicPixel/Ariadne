@@ -1,0 +1,66 @@
+{
+ "checks": {
+  "replay1.agent0": true,
+  "replay1.agent1": true,
+  "replay1.consumed": true,
+  "replay1.mover_state_sha256": true,
+  "replay1.trace_records": true,
+  "replay1.trace_sha256": true,
+  "replay1==replay2": true,
+  "replay2.agent0": true,
+  "replay2.agent1": true,
+  "replay2.consumed": true,
+  "replay2.mover_state_sha256": true,
+  "replay2.trace_records": true,
+  "replay2.trace_sha256": true
+ },
+ "live": {
+  "agent0": {
+   "estimate_body_sha256": "ead0d1409d7ed9291d6a335b68229bdb25b9c4731fe9fd78b31e3b4141fb7de4",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "agent1": {
+   "estimate_body_sha256": "fa2231748edc7a01c28dd988e160c3dae99fb71a2ded8b29726bd6cdc051ef89",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "consumed": "{messages: 28857, digest_fnv1a64: 'bf919a7c52ebb3f5'}",
+  "mover_state_sha256": "e7eb4ba93757aa870ad0d0a156d3d525b187c9427dcaebcd878519b0dce9319d",
+  "trace_records": 12,
+  "trace_sha256": "1331bbc6a0d377c62f9e1e39fc94bef77fbf7c90d0832ffad54e2fa4c22f553e"
+ },
+ "replay1": {
+  "agent0": {
+   "estimate_body_sha256": "ead0d1409d7ed9291d6a335b68229bdb25b9c4731fe9fd78b31e3b4141fb7de4",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "agent1": {
+   "estimate_body_sha256": "fa2231748edc7a01c28dd988e160c3dae99fb71a2ded8b29726bd6cdc051ef89",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "consumed": "{messages: 28857, digest_fnv1a64: 'bf919a7c52ebb3f5'}",
+  "mover_state_sha256": "e7eb4ba93757aa870ad0d0a156d3d525b187c9427dcaebcd878519b0dce9319d",
+  "trace_records": 12,
+  "trace_sha256": "1331bbc6a0d377c62f9e1e39fc94bef77fbf7c90d0832ffad54e2fa4c22f553e"
+ },
+ "replay2": {
+  "agent0": {
+   "estimate_body_sha256": "ead0d1409d7ed9291d6a335b68229bdb25b9c4731fe9fd78b31e3b4141fb7de4",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "agent1": {
+   "estimate_body_sha256": "fa2231748edc7a01c28dd988e160c3dae99fb71a2ded8b29726bd6cdc051ef89",
+   "frames": 601,
+   "keyframes": 34
+  },
+  "consumed": "{messages: 28857, digest_fnv1a64: 'bf919a7c52ebb3f5'}",
+  "mover_state_sha256": "e7eb4ba93757aa870ad0d0a156d3d525b187c9427dcaebcd878519b0dce9319d",
+  "trace_records": 12,
+  "trace_sha256": "1331bbc6a0d377c62f9e1e39fc94bef77fbf7c90d0832ffad54e2fa4c22f553e"
+ },
+ "verdict": "PASS"
+}

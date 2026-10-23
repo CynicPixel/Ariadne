@@ -4,6 +4,79 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-24 (03:30 IST) — B's live multi-agent POC MERGED to main (`584415e`, fast-forward)
+
+- **What landed (session B, `feat/l1-a1p-llm`):** the D175 multi-agent coordination POC (deterministic replay,
+  oracle A/B digest), D218–D222 (splat tee D220, comms panel D222), and the D174 lockstep collab wiring.
+- **AWS pre-merge** `20261023T212435Z-cpux86-083c02` (c7i.4xlarge spot, 1591 s, ~$0.055): **54/54**, ctest
+  **695/695**, VERDICT PASS (render reused, working tree; not exit-gate evidence). Evidence:
+  `evaluation/runs/premerge_aws/20261023T212435Z-cpux86-083c02/`.
+- **Not yet on main:** D178 (entry gate), D179 (async CollabLive) + snapshot extension, D180 (re-send accounting),
+  all on `feat/live-collab-live`. The D178 sweep is running on AWS; B's D179 acceptance run (live 60 s + 3 replays)
+  `5x-B-collab60b` started 03:27 IST.
+
+---
+
+## 2026-10-23 — 7.1–7.2 redirected to option B (maintainer): seams around Phase 4; proposal to A1
+
+- **Maintainer, 2026-10-23: "go with B".** A1 keeps 4.3–4.6 (NBV, CBBA consensus, route graph). Session B builds the
+  seams: a planner interface in the live runtime, operator directives, and the LLM at task level
+  (`docs/design/AGENTIC_7.md` §0b).
+- **Proposal to A1 (object before either side builds on it):** the live runtime feeds the 4.1 `MissionInput`
+  contract through an adapter (`live::KeyframeInput`); planners implement `Integrate(keyframe)` +
+  `Plan(context) -> PlanOutput` (per-agent task + route or hold or **continue**, ranked joint alternatives,
+  escalations); directives (`priority_region`, `keep_out`, `assign`, `explore`, `goto`, `hold`/`release`) are
+  recorded inputs applied at replan ticks. The current 1.8 + standoff logic becomes `PlaceholderPlanner` (ablation).
+
+---
+
+## 2026-10-23 — L1 live closed-loop runtime: done on the local host (session B, `feat/live-runtime`)
+
+- **2.5 tail (D74):** the large SE-Sync graphs ran: sphere, torus, cubicle, grid3D certified (f = Table 1); **rim not
+  certified** (reported, not re-tuned). `evaluation/runs/2.5/certificate_sesync/`.
+- **L1 acceptance** (`evaluation/runs/L1/local_llvmpipe_45s`, `1bb27f9`): two agents live, decide → move → observe
+  (13 commands accepted, 0 refused, GT motion 2.82 / 5.08 m under command), the recording replayed twice = live,
+  console fed live. Local Mesa llvmpipe, RTF ≈ 0.14. D150–D155, D152a, D153b.
+- **Found by the runs:** two estimators on one OpenCV pool broke replay determinism in 1 pose of 501 (D152a: turns);
+  goals ON frontier cells were refused 10/10 by the mover's GT envelope (D153b: standoff goals); the console tailed
+  the wrong directory (D154 fix). Each is in the decision log with its measurement.
+- **Not done:** the AWS GPU live run (`live_aws.sh` built, images in ECR; the spend needs the maintainer's go-ahead,
+  and NVIDIA EGL in the sim image is an open SMOKE). Next: 7.1–7.2 (`docs/design/AGENTIC_7.md`, D156–D162).
+
+---
+
+## 2026-10-22 — Session B opens L1 (live closed-loop runtime), then 7.1–7.2; D150–D169 claimed
+
+- **Decision IDs D150–D169 are claimed by session B**, before any of them is written.
+- **Scope, in order:**
+  - the 2.5 tail: the large SE-Sync certificate graphs (D74, maintainer-approved);
+  - **L1**, on `feat/live-runtime`: live Gazebo → `ros_gz_bridge` → the replay estimator path; mission decisions → the
+    kinematic mover's goto / follow / hold; the console fed live. Acceptance: one live two-agent run that closes
+    the loop, and a recording of it whose replay reproduces the estimator outputs.
+  - **7.1–7.2**, on `feat/ph7-agentic`: the MCP tool surface, the Bedrock orchestrator (D84), and the classical
+    ablation as "skip the choose step".
+- **Not taken:** the gravity-prior plumbing into agent subgraphs and the `RobustJointSolve` call in `SolveMultiAgent`
+  (main session).
+- **Live runs use AWS GPU** (one g4dn.xlarge spot, the D84 quota). The host has no GPU.
+
+---
+
+## 2026-10-22 — A1 opens Phase 4 (mission intelligence) on `feat/ph4-mission`; D110–D129 claimed
+
+- **Decision IDs D110–D129 are claimed by A1** for Phase 4 (4.1–4.6 and its exit gate).
+- **Carry from 3.1 done: D90 settled at 640×360.** A sim retrieval evaluation with revisit GT from the recorded GT
+  poses (`ariadne_place_eval --rec/--scene/--agent --sim-d90`, `retrieval_rows_eval.py sim`; design and decision rule
+  fixed before the run in `docs/design/RETRIEVAL_SIM_D90.md`). Clean ci_tiny recording: 61 queries after motion
+  thinning, all agent 0's (33 intra-agent, 28 against agent 1's database). Pooled R@1 0.705 at both sizes
+  (McNemar p = 1.0); 1280×720 costs 4×. Evidence `evaluation/runs/retrieval_sim_d90/`.
+- **3.1's §31.5 dark row is carried to 5.1** (A2's dark worlds); the tooling for it is the same two commands.
+- **Phase 4 preflight findings that change the arch's numbers (each goes to a decision):**
+  - **HashTSDF:** `cv::Volume` has no voxel or weight read and no per-pixel weight (SMOKE §4u), so 4.1 builds §20.1's
+    from-scratch voxel-hash TSDF and keeps HashTSDF as the oracle.
+  - **Voxel 0.05 m, not 8–10 cm:** on both scenes' GT, D45's measured one-cell wall bleed closes agent 1's entrance at
+    ρ_responder for 8 and 10 cm voxels, not for 5 cm (`VOLUMETRIC_4.1.md` §1).
+  - **`scene_gt.npz` has no risk-zone labels** (both scenes), which 4.2's calibration needs; **maze_medium_0 has no
+    recording**, which the gate's second scene needs.
 ## 2026-10-24 (02:20 IST) — A2 splat service (D230/D231) + D174 steps 1-2 MERGED
 
 - **MERGED to main** (2cb160f, fast-forward of the combined pre-merge branch):
