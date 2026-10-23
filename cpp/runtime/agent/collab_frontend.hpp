@@ -27,6 +27,7 @@
 #include <cmath>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
