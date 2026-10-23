@@ -1,0 +1,28 @@
+run_kind: arm64_opencv_core_build
+created_utc: 2026-10-23T19:37:05Z
+git_commit: b5b9ee4a3f953a28242c2101ed49112b8d81cd62
+git_dirty: false
+source_snapshot_sha256: 6c86d98bfd47bb59118d8d64a62b0c6901ce2ce83150d4225b0eab5e2708ea87
+opencv_tag: 5.0.0
+instance_type: c8g.4xlarge
+ami_id: ami-0335270b14f48b820
+availability_zone: eu-north-1b
+kernel: 7.0.0-1014-aws
+nproc: 16
+build_jobs: 16
+cpu_model: Neoverse-V2
+docker_version: 29.1.3
+buildx_version: "github.com/docker/buildx 0.30.1 0.30.1-0ubuntu1~24.04.1"
+base_image_id: sha256:8632179c349c1cb740f5830ffc62c45a91dcefcc844e689fa071aef11761ad80
+base_image_arch: linux/arm64
+base_image_bytes: 521684337
+ubuntu_base_repo_digest: 
+opencv_core_commit: 40738fb16ceddb5fb3fea747585f7ce6abb0605b
+opencv_contrib_commit: 755e50675d97db9b7d449d8bd6b09888646f6c6e
+opencv_commits_match_dockerfile: true
+dev_image_id: sha256:1d39168cbec65873906d56365a89f5eb122a4f989398e6c121e022e0ff4ec66e
+gcc_version: "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+ctest_result: "99% tests passed, 1 tests failed out of 596"
+images_tarball: images-arm64.tar.zst (520391012 bytes: ariadne/opencv-base:5.0.0-arm64 ariadne/core-dev:arm64)
+total_seconds: 510
+exit_code: 1

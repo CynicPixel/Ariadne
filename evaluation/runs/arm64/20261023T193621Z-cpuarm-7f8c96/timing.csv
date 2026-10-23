@@ -1,0 +1,6 @@
+step,seconds,exit_code
+opencv_base,239,0
+smoke_test,2,0
+core_dev,8,0
+ctest_dev,222,8
+save,6,0
