@@ -52,6 +52,7 @@ struct BidOption {
     float cost_bandwidth = 0, cost_risk = 0;   // D114 cost[1], cost[4]
     float risk = 0;
     uint8_t source = 0;            // TaskSource char
+    std::vector<BlockGain> footprint;   // D175 R1: <= 32 blocks of the option's coverage voxels, by w
 };
 
 struct TaskBid {
@@ -144,12 +145,48 @@ private:
 TaskBid BuildBid(int sender, uint32_t epoch, uint64_t seq, int64_t t_ns, const NbvPlan& nbv, int max_options,
                  const Rigid2& T_G_W = {});
 
-/// The component broker's sequential greedy (arch §21.7's sanctioned shortcut) over the bids that ARRIVED from its
-/// members: common scales = max over bidders of each raw term's p90 (BuildAuction's rule over the received options),
-/// tasks = options within r_same of one another (greedy, in bid order), value = D114 G on the common scales net of
-/// bandwidth and risk, L_t = 1. Bids from non-members or a different epoch are ignored; one bid per member (the newest).
-TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo& comp, double r_same, int64_t t_ns,
-                           uint64_t seq);
+/// The broker's objective (D175 §3 rows): plain = SGA on D114 values; discount (R2) = after each assignment the other
+/// options' value x (1 - P(d)), P linear from 1 at the goal to 0 at range_m (Burgard et al. 2005); overlap (R1) = the
+/// coverage term replaced by its marginal over block footprints, f(S) = sum_b max_{o in S} w_ob (Lauri et al. 2020's
+/// max rule on blocks; monotone submodular), cost subtracted as in D114's utility.
+enum class BrokerMode { kPlain, kDiscount, kOverlap };
+
+struct BrokerParams {
+    BrokerMode mode = BrokerMode::kPlain;
+    double r_same = 1.0;     // exactly-once task identity (live_v1 min_goal_m)
+    double range_m = 4.0;    // R2's P(d) range: the depth gate / frustum max_range_m
+};
+
+struct BrokerRound {         // one greedy pick (discount / overlap)
+    int32_t agent = 0;
+    int64_t task_key = -1;
+    double delta_f = 0;      // the pick's marginal of f (footprint voxels)
+    double score = 0;        // what it won on
+    double f = 0;            // f(S) after the pick
+};
+
+struct BrokerLog {
+    std::vector<BrokerRound> rounds;
+    double f = 0;            // f(S_final) on the gain proxy (footprint voxels)
+    double upper_bound = 0;  // f(S) + sum over members of the best marginal given S (partition matroid, data-dependent);
+                             // f / upper_bound is the a-posteriori ratio, on the gain proxy only (never exploration time)
+};
+
+/// The component broker (arch §21.7's sanctioned shortcut) over the bids that ARRIVED from its members: common scales =
+/// max over bidders of each raw term's p90 (BuildAuction's rule over the received options); value = D114 G on the
+/// common scales net of bandwidth and risk; score = value x exp(-rate x path) (the auction's L_t = 1 PathScore).
+/// plain: tasks = options within r_same of one another (greedy, in bid order), SequentialGreedy. discount / overlap:
+/// rounds of the best (member, option) under the mode's value, skipping options within r_same of an assigned goal,
+/// until every member that has a feasible option is assigned. Bids from non-members or another epoch are ignored; one
+/// bid per member (the newest).
+TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo& comp, const BrokerParams& prm,
+                           int64_t t_ns, uint64_t seq, BrokerLog* log = nullptr);
+inline TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo& comp, double r_same,
+                                  int64_t t_ns, uint64_t seq) {
+    BrokerParams p;
+    p.r_same = r_same;
+    return BrokerAssign(bids, comp, p, t_ns, seq);
+}
 
 struct Pick {
     int option = -1;               // index into the agent's options, -1 none
@@ -162,5 +199,11 @@ struct Pick {
 /// its own best option, logged "uncoordinated".
 Pick ApplyConsensus(const TaskConsensus* c, int self, uint32_t epoch, int64_t now_ns, double timeout_s,
                     const std::vector<TaskCandidate>& options, double r_same);
+
+/// R2's cut-off rule on top of ApplyConsensus: when the pick is "uncoordinated", the agent ranks its own options by
+/// utility x prod over the peers' goals in the newest consensus it holds (any age or epoch) of
+/// (1 - P(d) e^(-age / tau_s)) [ASSUMPTION tau_s, logged in why]; positive utilities only are discounted.
+Pick ApplyConsensusDiscounted(const TaskConsensus* c, int self, uint32_t epoch, int64_t now_ns, double timeout_s,
+                              const std::vector<TaskCandidate>& options, double r_same, double range_m, double tau_s);
 
 }  // namespace ariadne::planning::multi

@@ -48,6 +48,7 @@ struct IgCounts {
     double entropy = 0;      // bits over the reached voxels
     int egress = 0;          // unknown voxels reached inside the route's body envelope
     int voxels = 0;          // distinct voxels reached
+    std::vector<BlockGain> footprint;   // only when asked (RaycastIg's footprint grid): the coverage voxels per block
 };
 
 /// What this agent's peers already know, as RECEIVED (D175): a 2D mask on the briefing grid, nonzero = some peer's
@@ -63,7 +64,7 @@ struct PeerKnown {
 /// own-unknown voxel in a peer-known column is no gain (no coverage, entropy or egress credit): the team has it.
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
                    const std::unordered_set<int64_t>* route_env, const Box3& bounds = Box3{}, int grid = -1,
-                   const PeerKnown* peer = nullptr);
+                   const PeerKnown* peer = nullptr, const GridFrame* footprint = nullptr);
 
 /// Binary entropy (bits) of a known voxel of weight w under D114's mapping; 1 for unknown.
 double VoxelEntropy(const TsdfVoxel* v, double w_min);
@@ -86,7 +87,8 @@ struct View {
 /// target's), the best `keep` by coverage (ties by sampling order).
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
                               const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
-                              const Box3& bounds = Box3{}, const PeerKnown* peer = nullptr);
+                              const Box3& bounds = Box3{}, const PeerKnown* peer = nullptr,
+                              const GridFrame* footprint = nullptr);   // footprints from the full bundle only
 
 struct PeerKeyframe {
     int agent = 0;
@@ -156,6 +158,7 @@ struct NbvInputs {
     double t_s = 0;
     Box3 bounds;                               // the briefing's extent (rays leaving the building are not gain)
     const cv::Mat* peer_known = nullptr;       // D175 per-agent planning: the received layer's known mask (grid), or null
+    bool footprints = false;                   // D175 R1: each option's block footprint (per-agent planning only)
 };
 
 struct NbvPlan {

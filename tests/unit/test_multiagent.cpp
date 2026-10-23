@@ -248,3 +248,87 @@ TEST(MultiAgentPlanning, PeerKnownColumnsAreNoGain) {
     EXPECT_GT(RaycastIg(P.Map(), eye, M_PI, fr, nullptr, box).coverage, 0);
     EXPECT_EQ(RaycastIg(P.Map(), eye, M_PI, fr, nullptr, box, -1, &pk).coverage, 0);
 }
+
+namespace {
+TaskCandidate FpOpt(int64_t id, double x, double y, double cov, std::vector<BlockGain> fp) {
+    TaskCandidate c = Opt(id, x, y, cov, 1.0, cov / 100);
+    c.footprint = std::move(fp);
+    return c;
+}
+}  // namespace
+
+TEST(MultiAgentPlanning, FootprintsSumToCoverageAndOnlyPerAgent) {
+    std::vector<float> Z, S;
+    const DepthFrame f = WallFrame(&Z, &S, 2.0);
+    Phase4Params prm;
+    Phase4Planner P(Brief(), prm, 2);
+    P.Integrate(0, 0, f);
+    Box3 box;
+    box.lo = core::Vec3(0, 0, 0), box.hi = core::Vec3(4, 4, 3);
+    const RigFrustum fr;
+    const GridFrame g = Brief().grid;
+    const IgCounts ig = RaycastIg(P.Map(), core::Vec3(1.0, 2.0, 1.0), M_PI, fr, nullptr, box, -1, nullptr, &g);
+    int sum = 0;
+    for (const auto& b : ig.footprint) sum += b.w;
+    ASSERT_GT(ig.coverage, 0);
+    EXPECT_LE(ig.footprint.size(), 32u);
+    for (size_t i = 1; i < ig.footprint.size(); ++i) EXPECT_GE(ig.footprint[i - 1].w, ig.footprint[i].w) << "by w";
+    // Every coverage voxel lies inside this 4 m grid: the units (rounded up per block) cover the count exactly.
+    EXPECT_GE(sum * kFootprintUnit, ig.coverage);
+    EXPECT_LT(sum * kFootprintUnit, ig.coverage + int(ig.footprint.size()) * kFootprintUnit);
+    EXPECT_TRUE(RaycastIg(P.Map(), core::Vec3(1.0, 2.0, 1.0), M_PI, fr, nullptr, box).footprint.empty());
+    std::vector<Phase4AgentInput> ag(2);
+    ag[0].active = true, ag[0].position = f.T_W_C.t;
+    const Phase4Plan pc = P.Plan(5.0, ag, {});
+    for (const auto& o : pc.agents[0].nbv.options) EXPECT_TRUE(o.footprint.empty()) << "the oracle row pays nothing";
+    const Phase4Plan po = P.PlanOwn(5.0, 0, ag[0], {}, nullptr, {});
+    size_t with = 0;
+    for (const auto& o : po.agents[0].nbv.options) with += !o.footprint.empty();
+    EXPECT_GT(with, 0u);
+}
+
+TEST(MultiAgentPlanning, OverlapBrokerAvoidsTheSharedBlockDiscountAvoidsTheNearGoal) {
+    // Agent 1's best view (B) sees the same block as agent 0's (A); its second (C) sees a fresh one. Goals are farther
+    // apart than r_same, so the plain broker assigns A and B (the overlap); R1 assigns A and C; f counts each block once.
+    NbvPlan n0, n1;
+    n0.options = {FpOpt(1, 1.0, 1.0, 100, {{0, 0, 100}})};
+    n1.options = {FpOpt(2, 2.5, 1.0, 100, {{0, 0, 100}}), FpOpt(3, 8.0, 8.0, 60, {{3, 3, 60}})};
+    n0.lambda_path = n1.lambda_path = 0.0;
+    const std::vector<TaskBid> bids = {BuildBid(0, 1, 1, 0, n0, 8), BuildBid(1, 1, 1, 0, n1, 8)};
+    const ComponentInfo comp{0, {0, 1}, 1};
+    auto KeyOf = [](const TaskConsensus& c, int agent) {
+        for (const auto& a : c.assignments) if (a.agent == agent) return a.task_key;
+        return int64_t(-1);
+    };
+    BrokerParams prm;
+    prm.r_same = 1.0, prm.range_m = 4.0;
+    EXPECT_EQ(KeyOf(BrokerAssign(bids, comp, prm, 0, 1), 1), 2) << "plain: B, the shared block";
+    prm.mode = BrokerMode::kOverlap;
+    BrokerLog log;
+    const TaskConsensus r1 = BrokerAssign(bids, comp, prm, 0, 1, &log);
+    EXPECT_EQ(KeyOf(r1, 0), 1);
+    EXPECT_EQ(KeyOf(r1, 1), 3) << "R1: C, the fresh block";
+    ASSERT_EQ(log.rounds.size(), 2u);
+    EXPECT_DOUBLE_EQ(log.f, 160.0 * kFootprintUnit);
+    EXPECT_GE(log.upper_bound, log.f);
+    prm.mode = BrokerMode::kDiscount;   // B is 1.5 m from A: x 1.5/4; C is far: x 1
+    EXPECT_EQ(KeyOf(BrokerAssign(bids, comp, prm, 0, 1), 1), 3) << "R2: the near goal is discounted";
+    prm.range_m = 1.2;                  // with a short range B is not discounted at all
+    EXPECT_EQ(KeyOf(BrokerAssign(bids, comp, prm, 0, 1), 1), 2);
+}
+
+TEST(MultiAgentPlanning, CutOffAgentDiscountsByRememberedClaims) {
+    // Agent 1 is cut off (the consensus it holds is older than the timeout). Its best option is next to agent 0's last
+    // assigned goal: discounted, it takes the far one; once the claim is old (age >> tau), the near one again.
+    const std::vector<TaskCandidate> o = {Opt(5, 1.2, 1.0, 9, 1, 0.9), Opt(6, 8, 8, 5, 1, 0.5)};
+    TaskConsensus c;
+    c.epoch = 1, c.t_ns = 0, c.assignments = {{0, 99, 1.0, 1.0}};
+    Pick p = ApplyConsensusDiscounted(&c, 1, 1, 20000000000, 12.0, o, 1.0, 4.0, 30.0);
+    EXPECT_FALSE(p.coordinated);
+    EXPECT_EQ(p.option, 1);
+    EXPECT_NE(p.why.find("tau 30 s"), std::string::npos);
+    p = ApplyConsensusDiscounted(&c, 1, 1, 400000000000, 12.0, o, 1.0, 4.0, 30.0);
+    EXPECT_EQ(p.option, 0) << "a 400 s old claim has decayed";
+    c.t_ns = 15000000000, c.assignments = {{1, 6, 8, 8}};   // a fresh consensus for agent 1 itself: coordinated as usual
+    EXPECT_TRUE(ApplyConsensusDiscounted(&c, 1, 1, 20000000000, 12.0, o, 1.0, 4.0, 30.0).coordinated);
+}

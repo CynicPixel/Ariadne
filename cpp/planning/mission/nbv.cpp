@@ -8,7 +8,10 @@
 #include <opencv2/geometry/2d.hpp>   // OpenCV 5: DistanceTypes (DIST_L2) live in the geometry module
 #include <opencv2/imgproc.hpp>
 
+#include <opencv2/core/utility.hpp>
+
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -180,8 +183,13 @@ bool PeerKnown::Known(const core::Vec3& p) const {
 }
 
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
-                   const std::unordered_set<int64_t>* route_env, const Box3& bounds, int grid, const PeerKnown* peer) {
+                   const std::unordered_set<int64_t>* route_env, const Box3& bounds, int grid, const PeerKnown* peer,
+                   const GridFrame* footprint) {
     IgCounts ig;
+    // Footprint: a flat per-block counter (no map, no hashing) and the blocks touched, for D175 R1.
+    const int fbw = footprint ? (footprint->cols + 31) / 32 : 0, fbh = footprint ? (footprint->rows + 31) / 32 : 0;
+    std::vector<int> per_block(size_t(fbw * fbh), 0);
+    std::vector<int> touched;
     const int G = grid > 0 ? grid : f.grid;
     const double w_min = map.Params().w_min, half = 0.5 * map.Voxel();
     const double vox = map.Voxel();
@@ -205,18 +213,34 @@ IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const 
                     ig.entropy += VoxelEntropy(t, w_min);
                     if (st == kUnknown) {
                         ++ig.coverage;
+                        if (footprint) {
+                            const Cell bc = CellOf(*footprint, c.x(), c.y());
+                            if (bc.r >= 0 && bc.c >= 0 && bc.r < footprint->rows && bc.c < footprint->cols) {
+                                const int k = (bc.r / 32) * fbw + bc.c / 32;   // 32 = multi::kBlock
+                                if (per_block[size_t(k)]++ == 0) touched.push_back(k);
+                            }
+                        }
                         if (route_env && route_env->count(Pack(q))) ++ig.egress;
                     }
                 }
                 if (st == kOccupied) stop = true;
             });
         }
+    if (footprint) {   // the 32 heaviest blocks, ties by block index (deterministic)
+        std::sort(touched.begin(), touched.end(), [&](int a, int b) {
+            return per_block[size_t(a)] != per_block[size_t(b)] ? per_block[size_t(a)] > per_block[size_t(b)] : a < b;
+        });
+        for (size_t i = 0; i < touched.size() && i < 32; ++i) {
+            const int k = touched[i], n = per_block[size_t(k)];
+            ig.footprint.push_back({int16_t(k % fbw), int16_t(k / fbw), uint8_t(std::min(255, (n + kFootprintUnit - 1) / kFootprintUnit))});
+        }
+    }
     return ig;
 }
 
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
                               const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
-                              const Box3& bounds, const PeerKnown* peer) {
+                              const Box3& bounds, const PeerKnown* peer, const GridFrame* footprint) {
     std::vector<View> views;
     const double vox = map.Voxel();
     const Idx3 tv = map.ToVoxel(target);
@@ -240,7 +264,7 @@ std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::
         }
     std::stable_sort(views.begin(), views.end(), [](const View& a, const View& b) { return a.ig.coverage > b.ig.coverage; });
     if (int(views.size()) > sp.keep) views.resize(size_t(sp.keep));
-    for (auto& v : views) v.ig = RaycastIg(map, v.eye, v.yaw, f, route_env, bounds, -1, peer);   // the full bundle for the terms
+    for (auto& v : views) v.ig = RaycastIg(map, v.eye, v.yaw, f, route_env, bounds, -1, peer, footprint);   // the full bundle
     return views;
 }
 
@@ -486,8 +510,15 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     PeerKnown peer;
     peer.mask = in.peer_known, peer.grid = g;
     const PeerKnown* peerp = in.peer_known ? &peer : nullptr;
-    for (const auto& t : targets) {
-        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds, peerp)) {
+    // Targets are independent (read-only map, per-target output slot): evaluated in parallel, gathered in target order,
+    // so the options are exactly the serial loop's. No locks, no shared writes.
+    std::vector<std::vector<TaskCandidate>> per_target(targets.size());
+    cv::parallel_for_(cv::Range(0, int(targets.size())), [&](const cv::Range& range) {
+      for (int ti = range.start; ti < range.end; ++ti) {
+        const Target& t = targets[size_t(ti)];
+        std::vector<TaskCandidate>& slot = per_target[size_t(ti)];
+        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds, peerp,
+                                         in.footprints ? &g : nullptr)) {
             if (!In(dist, v.cell) || !std::isfinite(dist.at<double>(v.cell.r, v.cell.c))) continue;
             // D175: a frontier or uncertainty view that only sees what peers already reported is no task.
             if (peerp && v.ig.coverage == 0 && (t.src == TaskSource::kFrontier || t.src == TaskSource::kUncertainty)) continue;
@@ -498,13 +529,20 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
             c.standoff_m = (v.eye - t.p).head<2>().norm();
             c.ig_raw[kCoverage] = v.ig.coverage, c.ig_raw[kEntropy] = v.ig.entropy, c.ig_raw[kEgressConfidence] = v.ig.egress;
             c.ig_raw[kPoseConnectivity] = t.gain_conn, c.ig_raw[kLoopDisambiguation] = t.gain_alias;
+            c.footprint = v.ig.footprint;
             c.cost = {c.path_m, t.src == TaskSource::kConnectivity ? p.exchange_bytes : 0.0, p.e_per_m * c.path_m,
                       c.path_m / p.speed_mps, 0.0};
             Risk(v.cell, &c, bott);
             c.cost[4] = c.risk;
-            out.options.push_back(c);
+            slot.push_back(std::move(c));
         }
-    }
+      }
+    });
+    size_t n_opt = 0;
+    for (const auto& s : per_target) n_opt += s.size();
+    out.options.reserve(out.options.size() + n_opt);
+    for (auto& s : per_target)
+        for (auto& c : s) out.options.push_back(std::move(c));
 
     // --- self-normalisation and utility (§21.3/§21.4, D114) ------------------------------------------------------
     std::array<double, 5> scale{};
