@@ -106,7 +106,33 @@ TEST(LiveLink, CommandAndMoverStateCdrRoundTrip) {
     const auto s = ros_cdr::EncodeString("{\"accepted\":true}");
     EXPECT_EQ(ros_cdr::DecodeString(s.data(), s.size()), "{\"accepted\":true}");
     EXPECT_EQ(live::PeekStamp("geometry_msgs/msg/PoseArray", b), 12345000000);
-    EXPECT_EQ(live::PeekStamp("std_msgs/msg/String", s), -1);
+    EXPECT_EQ(live::PeekStamp("std_msgs/msg/String", s), -1);   // no applied_ns: untimed
+    const auto ans = ros_cdr::EncodeString("{\"cmd_stamp_ns\":5000000000,\"applied_ns\":5000000000,\"accepted\":true}");
+    EXPECT_EQ(live::PeekStamp("std_msgs/msg/String", ans), 5000000001);
+}
+
+// D165: both agents' answers to one barrier, in EITHER arrival order, are released in the same (stamp, topic) order
+// once the watermark passes them (two EGL lockstep runs had recorded them swapped).
+TEST(LiveLink, AnswersReleasedInCanonicalOrder) {
+    auto run = [](bool agent1_first) {
+        live::Reorderer ro({"/a0/imu", "/a1/imu"}, std::chrono::hours(1));
+        std::vector<std::string> out;
+        auto rel = [&](live::StreamMessage m) { out.push_back(m.topic + "@" + std::to_string(m.stamp_ns)); };
+        auto msg = [](const std::string& t, int64_t s) { live::StreamMessage m; m.topic = t; m.stamp_ns = s; return m; };
+        ro.Push(msg("/a0/imu", 5000000000), rel);
+        ro.Push(msg("/a1/imu", 5000000000), rel);   // watermark = 5 s: the world paused at the barrier
+        if (agent1_first) ro.Push(msg("/a1/mover_state", 5000000001), rel), ro.Push(msg("/a0/mover_state", 5000000001), rel);
+        else ro.Push(msg("/a0/mover_state", 5000000001), rel), ro.Push(msg("/a1/mover_state", 5000000001), rel);
+        EXPECT_EQ(out.size(), 2u);                    // the answers are HELD while paused
+        ro.Push(msg("/a0/imu", 5005000000), rel);
+        ro.Push(msg("/a1/imu", 5005000000), rel);   // resumed: the watermark passes them
+        return out;
+    };
+    const auto a = run(false), b = run(true);
+    EXPECT_EQ(a, b);
+    ASSERT_GE(a.size(), 4u);
+    EXPECT_EQ(a[2], "/a0/mover_state@5000000001");
+    EXPECT_EQ(a[3], "/a1/mover_state@5000000001");
 }
 
 TEST(LiveLink, ReordererReleasesBehindTheWatermark) {
