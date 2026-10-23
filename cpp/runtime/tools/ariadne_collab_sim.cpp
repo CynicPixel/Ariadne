@@ -39,6 +39,7 @@
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "slam/robust/joint_robust.hpp"
 
+#include <Eigen/Geometry>
 #include <opencv2/core.hpp>
 #include <yaml-cpp/yaml.h>
 
@@ -49,7 +50,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -79,6 +82,18 @@ struct Config {
     int refine_passes = 2;
     std::string local_encoding = "int8";      // arch §15.7 default; fp16 = the ablation row (D171)
     std::string verify_calibration;           // where verify_min_pnp_inliers came from (manifest)
+    // Arch §42 item 7 (EVALUATION ONLY; default none): false closures planted at the broker as if verified, so only
+    // the robust stage can reject them. Z = (the true T_Ca_Cb) * [R_z(yaw_deg) | offset_m]; the information is copied
+    // from the last edge verified on the same agent pair, and a planting waits until that pair HAS a verified edge
+    // (a lone closure on a pair is accepted by PCM as "untested", pcm.hpp: the demo claim needs a competitor).
+    struct Injection {
+        double t_s = 0;
+        ac::AgentId agent_a = 0, agent_b = 1;
+        uint64_t kf_a = 0, kf_b = 0;
+        core::Vec3 offset_m = core::Vec3::Zero();
+        double yaw_deg = 0;
+    };
+    std::vector<Injection> inject;
 };
 
 Config LoadConfig(const std::string& path) {
@@ -133,6 +148,16 @@ Config LoadConfig(const std::string& path) {
     get(n, "refine_passes", c.refine_passes);
     get(n, "local_encoding", c.local_encoding);
     ac::ParseLocalEncoding(c.local_encoding);
+    for (const YAML::Node& j : n["inject_false_edges"]) {
+        Config::Injection q;
+        q.t_s = j["t_s"].as<double>();
+        q.agent_a = j["agent_a"].as<ac::AgentId>(), q.kf_a = j["kf_a"].as<uint64_t>();
+        q.agent_b = j["agent_b"].as<ac::AgentId>(), q.kf_b = j["kf_b"].as<uint64_t>();
+        if (q.agent_a == q.agent_b) throw std::invalid_argument(path + ": inject_false_edges must join two agents");
+        if (const YAML::Node o = j["offset_m"]) q.offset_m = core::Vec3(o[0].as<double>(), o[1].as<double>(), o[2].as<double>());
+        if (j["yaw_deg"]) q.yaw_deg = j["yaw_deg"].as<double>();
+        c.inject.push_back(q);
+    }
     return c;
 }
 
@@ -262,6 +287,19 @@ int main(int argc, char** argv) {
                  << er << ',' << base << ',' << pe << '\n';
         };
         uint64_t solve_calls = 0, robust_inter = 0, robust_inliers = 0;
+        // Injections (§42 item 7): the last verified edge's information per unordered agent pair, and each planted
+        // edge's fate in the robust stage (its GNC weight in the latest solve that contained it).
+        std::map<std::pair<ac::AgentId, ac::AgentId>, std::vector<float>> pair_info;
+        const auto pair_key = [](ac::AgentId x, ac::AgentId y) { return std::make_pair(std::min(x, y), std::max(x, y)); };
+        struct InjectionState { bool planted = false; double planted_t_s = NAN; uint64_t solves_seen = 0, kept_solves = 0;
+                                double weight = NAN; double gt_t = NAN, gt_r = NAN; };
+        std::vector<InjectionState> inj(cfg.inject.size());
+        // Merge evidence for the mission spool (A1's N-agent schema): every inter-agent loop the robust stage ever kept
+        // (weight >= 0.5), when it was first kept, and its weight in the LAST solve that contained it. Only loops still
+        // kept at the end, and never injected ones, are evidence (an injection can be kept until true loops compete).
+        double sim_t_s = 0;
+        struct KeptEdge { double first_t_s = 0, last_weight = 0; bool injected = false; };
+        std::map<std::tuple<ac::AgentId, uint64_t, ac::AgentId, uint64_t>, KeptEdge> kept_edges;
 
         ac::NodeParams np;
         np.selection_interval_s = cfg.selection_interval_s;
@@ -279,6 +317,29 @@ int main(int argc, char** argv) {
         auto solve_robust = ac::RobustMultiAgentSolve(robust_params, [&](const slam::JointRobustReport& r) {
             robust_inter += r.inter_agent.size();
             robust_inliers += uint64_t(r.inter_inliers);
+        }, [&](const slam::PoseGraph& joint) {
+            for (const auto& e : joint.edges()) {
+                const auto ag = [](uint64_t id) { return ac::AgentId(id >> slam::kAgentIdShift); };
+                const auto kf = [](uint64_t id) { return id & ((1ull << slam::kAgentIdShift) - 1); };
+                if (ag(e.from) == ag(e.to)) continue;
+                const bool fwd = ag(e.from) < ag(e.to);
+                const auto key = fwd ? std::make_tuple(ag(e.from), kf(e.from), ag(e.to), kf(e.to))
+                                     : std::make_tuple(ag(e.to), kf(e.to), ag(e.from), kf(e.from));
+                const auto it = kept_edges.find(key);
+                if (it != kept_edges.end()) it->second.last_weight = e.gnc_weight;
+                else if (e.gnc_weight >= 0.5) kept_edges.emplace(key, KeptEdge{sim_t_s, e.gnc_weight, false});
+            }
+            for (size_t i = 0; i < cfg.inject.size(); ++i) {
+                if (!inj[i].planted) continue;
+                const auto& q = cfg.inject[i];
+                const uint64_t A = slam::JointId(q.agent_a, q.kf_a), B = slam::JointId(q.agent_b, q.kf_b);
+                for (const auto& e : joint.edges())
+                    if ((e.from == A && e.to == B) || (e.from == B && e.to == A)) {
+                        ++inj[i].solves_seen, inj[i].weight = e.gnc_weight;
+                        if (e.gnc_weight >= 0.5) ++inj[i].kept_solves;
+                        break;
+                    }
+            }
         });
 
         std::vector<std::unique_ptr<ac::CollabNode>> nodes;
@@ -354,6 +415,7 @@ int main(int argc, char** argv) {
                 ++vs.gated;
                 done("verified");
                 core::LoopEdgeValue e;
+                pair_info[pair_key(a.agent, b.agent)] = ac::PackInformation(edge->information);
                 e.agent_a = a.agent;
                 e.keyframe_a = a.keyframe;
                 e.agent_b = b.agent;
@@ -433,6 +495,7 @@ int main(int argc, char** argv) {
         core::Timestamp now = At(t_first);
         for (int64_t t = t_first; t <= t_end; t += dt) {
             now = At(t);
+            sim_t_s = 1e-9 * double(t - t_first);
             for (const auto& d : comms.network().DeliverUntil(now)) node_of.at(d.to)->OnDatagram(d, now);
             for (; next_rel < releases.size() && releases[next_rel].t <= t; ++next_rel) {
                 const Release& rl = releases[next_rel];
@@ -454,6 +517,39 @@ int main(int argc, char** argv) {
                 released[rl.agent].push_back(&r);
             }
             for (auto& n : nodes) n->Tick(now, comms.network());
+            for (size_t i = 0; i < cfg.inject.size(); ++i) {
+                const auto& q = cfg.inject[i];
+                if (inj[i].planted || t < t_first + int64_t(std::llround(q.t_s * 1e9))) continue;
+                const auto info = pair_info.find(pair_key(q.agent_a, q.agent_b));
+                const auto has = [&](ac::AgentId ag, uint64_t kf) {
+                    const auto it = released.find(ag);
+                    return it != released.end() && std::any_of(it->second.begin(), it->second.end(),
+                                                               [&](const auto* r) { return r->id == kf; });
+                };
+                if (info == pair_info.end() || !has(q.agent_a, q.kf_a) || !has(q.agent_b, q.kf_b)) continue;
+                const ac::KeyframeRef a{q.agent_a, q.kf_a}, b{q.agent_b, q.kf_b};
+                const auto truth = gt_rel(a, b);
+                if (!truth) throw std::runtime_error("inject_false_edges: no ground truth for the planted pair");
+                core::SE3 D;
+                D.R = Eigen::AngleAxisd(q.yaw_deg * M_PI / 180.0, core::Vec3::UnitZ()).toRotationMatrix();
+                D.t = q.offset_m;
+                const core::SE3 Z = *truth * D;
+                core::LoopEdgeValue e;
+                e.agent_a = a.agent, e.keyframe_a = a.keyframe, e.agent_b = b.agent, e.keyframe_b = b.keyframe;
+                e.measurement = ac::ToPoseValue(Z);
+                e.information = info->second;
+                e.frame_a = {a.agent, 0}, e.frame_b = {b.agent, 0};
+                e.status = wire::EdgeStatus::GEOMETRY_VERIFIED;
+                for (auto& n : nodes)
+                    if (n->InjectVerifiedEdge(e, now)) {
+                        inj[i].planted = true, inj[i].planted_t_s = 1e-9 * double(t - t_first);
+                        log_edge(a, b, nullptr, "injected", &Z);
+                        const core::SE3 d = truth->inverse() * Z;
+                        inj[i].gt_t = d.t.norm();
+                        inj[i].gt_r = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
+                        break;
+                    }
+            }
             if (t >= next_ate) {
                 size_t ma = 0, km = 0, kt = 0;
                 const runtime::ErrorStats e = merged_ate(ma, km, kt);
@@ -536,6 +632,40 @@ int main(int argc, char** argv) {
         for (const auto& [k, c] : vs.reasons) y << (first ? "" : ", ") << k << ": " << c, first = false;
         y << "}}\nsolve: {calls: " << solve_calls << ", ms_total: " << solve_ms << ", robust_inter_agent: " << robust_inter
           << ", robust_inliers: " << robust_inliers << "}\n";
+        // Per agent: the frame it adopted (G = W of `anchor`) and T_G_W, row-major 3x4; null = never merged.
+        y << "estimates:\n";
+        for (const auto& n : nodes) {
+            y << "  - {agent: " << n->self();
+            if (const auto T = n->T_G_W()) {
+                y << ", anchor: " << n->T_G_W_anchor() << ", T_G_W: [";
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 4; ++c)
+                        y << (r || c ? ", " : "") << std::setprecision(17) << (c < 3 ? T->R(r, c) : T->t(r));
+                y << "]}\n" << std::setprecision(6);
+            } else {
+                y << ", anchor: null, T_G_W: null}\n";
+            }
+        }
+        std::set<std::tuple<ac::AgentId, uint64_t, ac::AgentId, uint64_t>> injected_keys;
+        for (const auto& q : cfg.inject)
+            injected_keys.insert(q.agent_a < q.agent_b ? std::make_tuple(q.agent_a, q.kf_a, q.agent_b, q.kf_b)
+                                                       : std::make_tuple(q.agent_b, q.kf_b, q.agent_a, q.kf_a));
+        y << "kept_inter_edges:   # kept by the last solve that contained them; never injected (merge evidence)\n";
+        for (const auto& [k, v] : kept_edges)
+            if (v.last_weight >= 0.5 && !injected_keys.count(k))
+                y << "  - {agent_a: " << std::get<0>(k) << ", kf_a: " << std::get<1>(k) << ", agent_b: " << std::get<2>(k)
+                  << ", kf_b: " << std::get<3>(k) << ", t_s: " << v.first_t_s << ", weight: " << v.last_weight << "}\n";
+        y << "injected:\n";
+        for (size_t i = 0; i < cfg.inject.size(); ++i) {
+            const auto& q = cfg.inject[i];
+            const auto& st = inj[i];
+            // rejected: the robust stage gave it weight < 0.5 in the latest solve that contained it
+            y << "  - {t_s: " << q.t_s << ", agent_a: " << q.agent_a << ", kf_a: " << q.kf_a << ", agent_b: " << q.agent_b
+              << ", kf_b: " << q.kf_b << ", planted: " << (st.planted ? "true" : "false") << ", planted_t_s: "
+              << st.planted_t_s << ", gt_err_t_m: " << st.gt_t << ", gt_err_r_deg: " << st.gt_r << ", solves_seen: "
+              << st.solves_seen << ", kept_solves: " << st.kept_solves << ", final_weight: " << st.weight << ", rejected: "
+              << (st.solves_seen ? (st.weight < 0.5 ? "true" : "false") : "unsolved") << "}\n";
+        }
         y << "ate_merged: {rmse_m: " << (merged.count ? merged.rmse : NAN) << ", frame_anchor: " << frame << ", merged_agents: " << ma
           << ", kf_merged: " << km << ", kf_released: " << kt << "}\n";
         y << "ate_solo:\n";

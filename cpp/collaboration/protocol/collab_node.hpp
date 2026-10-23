@@ -169,6 +169,7 @@ struct NodeStats {
     // 3.4: selection rounds, candidates selected / dropped unselected, predicted first-transmission bytes per class
     uint64_t selection_rounds = 0, candidates_selected = 0, candidates_expired = 0;
     double predicted_request_bytes = 0, predicted_response_bytes = 0;
+    uint64_t edges_injected = 0;            // §42 item 7 evaluation: false closures planted through InjectVerifiedEdge
     uint64_t unadvertised_prices = 0;     // keyframes priced at the default size (expected 0 on v2 runs)
     uint64_t uncalibrated_prices = 0;     // fetches priced without a calibrated ratio: such a run is not I6 evidence
     uint64_t uncalibrated_class_prices = 0;   // edges / graph batches priced at ratio 1.0 (D171): likewise
@@ -704,17 +705,34 @@ private:
         const auto e = hooks_.verify(a, fa->second, b, fb->second);
         if (!e) return;
         ++stats_.edges_verified;
-        broker_edges_.emplace(KeyOf(*e), *e);
+        AcceptEdge(*e, t);
+    }
+
+    void AcceptEdge(const LoopEdgeValue& e, core::Timestamp t) {
+        broker_edges_.emplace(KeyOf(e), e);
         // The endpoints keep the edge so any later broker can be re-sent it.
-        for (AgentId to : {e->agent_a, e->agent_b}) {
+        for (AgentId to : {e.agent_a, e.agent_b}) {
             if (to == self_) {
-                edges_.emplace(KeyOf(*e), *e);
+                edges_.emplace(KeyOf(e), e);
             } else {
-                SendEdge(to, *e, t);
+                SendEdge(to, e, t);
             }
         }
         dirty_ = true;
     }
+
+public:
+    /// EVALUATION ONLY (arch §42 item 7: "at least one false closure is generated intentionally"): plant `e` at the
+    /// broker exactly as if its verify hook had returned it, so it travels and is solved like any verified edge and
+    /// only the robust stage can reject it. Returns false (nothing planted) unless this node is the broker.
+    bool InjectVerifiedEdge(const LoopEdgeValue& e, core::Timestamp t) {
+        if (!mem_.IsBroker()) return false;
+        ++stats_.edges_injected;
+        AcceptEdge(e, t);
+        return true;
+    }
+
+private:
 
     void MaybeSolve(core::Timestamp t) {
         if (!hooks_.solve) return;

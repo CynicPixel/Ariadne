@@ -4286,3 +4286,41 @@ render.
 - the VO-side startup prefix (D87);
 - D91's pool rule goes to 7.3.
 
+
+## 2026-10-23 — D173: §42 item 7 false-closure injection in pass B; merge evidence; the N-agent mission spool (schema 3)
+
+**Context.** Phase 8's demo mission (B's D213) gets the collaboration items (§42 items 4–8, 13–14, 16) from one
+mission recording replayed through 3.2's pass A/B. Item 7 needs "at least one false closure generated
+intentionally", and A1's N-agent mission stage needs per-agent merges, which the 2-agent 1.7 spool cannot carry.
+
+**Decisions.**
+- **`CollabNode::InjectVerifiedEdge`** (evaluation only) plants an edge at the broker exactly as if its verify hook had
+  returned it. It travels and is solved like any verified edge, so only the robust stage (PCM → GNC, D76) can reject
+  it. It counts as `edges_injected`.
+- **Pass B `inject_false_edges:`** (default none, so outputs without it are unchanged): `{t_s, agent_a, kf_a, agent_b,
+  kf_b, offset_m, yaw_deg}`. Z = the true T_Ca_Cb · [R_z(yaw) | offset]. The information is copied from the last edge
+  verified on that agent pair, and planting waits until both keyframes are released and the pair has a verified edge.
+  Logged as reason `injected` in edges.csv. results.yaml reports, per injection: planted time, ground-truth error,
+  solves seen, solves that kept it, final weight, and rejected.
+- **What is and is not rejected (correcting M's earlier claim to B).** PCM accepts a lone candidate in a pair group as
+  "untested" (pcm.hpp), so a false closure with no competitor is kept. It is rejected once true loops for that pair
+  exist. Smoke (scene 0, ideal link, 30 s, `build/smoke/b_inject`, NOT gate data):
+  - The injection was planted at 25.0 s, 4 m / 45° off, when the pair's only other edges were the false aliasing group.
+  - It was **kept for 1 solve**, then rejected (final weight 0) after the true loops arrived at 27.8 s.
+  - Merged ATE was 2.6 cm, unchanged.
+  - The demo's injection must follow the pair's true loops, and its evidence must report `kept_solves`.
+- **Merge evidence** (`results.yaml`):
+  - `estimates`: per agent, the adopted frame anchor and T_G_W.
+  - `kept_inter_edges`: every inter-agent loop still kept by the last solve that contained it, with when it was first
+    kept. Injected loops are never evidence: the smoke's injection was the first loop ever kept.
+- **Mission spool schema 3** (agreed with A1 and A2): A2's schema-2 bundle fields, plus A1's `merges:` list in place
+  of the single `merge:` block. Composer: `python/analysis/compose_mission_spool.py`.
+  - Inputs: per-agent `ariadne_sim_vo --spool` runs and the pass-B run.
+  - For each agent k: T_O0_Ok = T_G_W0⁻¹ · T_G_Wk, only when agents 0 and k share an anchor.
+  - The edge is the earliest kept loop joining k to an agent already in agent 0's frame, with both keyframes spooled.
+  - Otherwise `ok: false`.
+  - Files are symlinked. [ASSUMPTION] pass A and sim_vo give identical keyframe ids on the same recording; the
+    composer checks that the edge keyframes exist, and the mission run checks that the ids match.
+
+**Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
+anchors never merge).

@@ -104,10 +104,12 @@ inline std::set<uint32_t> AgentsTiedToGauge(const slam::PoseGraph& g, const std:
     return seen;
 }
 
-/// NodeHooks::solve with the robust stage (D171). `last` (optional) receives the robust report of each call.
+/// NodeHooks::solve with the robust stage (D171). `last` (optional) receives the robust report of each call;
+/// `observe` (optional, evaluation) the solved joint graph with its loop weights (nodes are JointId(agent, keyframe)).
 inline std::function<SolveOutput(const SolveInput&)> RobustMultiAgentSolve(
-    slam::JointRobustParams params, std::function<void(const slam::JointRobustReport&)> last = {}) {
-    return [params, last](const SolveInput& in) -> SolveOutput {
+    slam::JointRobustParams params, std::function<void(const slam::JointRobustReport&)> last = {},
+    std::function<void(const slam::PoseGraph&)> observe = {}) {
+    return [params, last, observe](const SolveInput& in) -> SolveOutput {
         const auto g = in.graphs.find(in.gauge_agent);
         if (g == in.graphs.end() || g->second.nodes.empty()) return {};
         slam::MultiAgentInput mi = ToMultiAgentInput(in);
@@ -115,6 +117,7 @@ inline std::function<SolveOutput(const SolveInput&)> RobustMultiAgentSolve(
             // A cold GncState: the broker rebuilds the joint graph per solve, so edge indices are not stable.
             const slam::JointRobustReport r = slam::RobustJointSolve(joint, anchor, params, nullptr);
             if (last) last(r);
+            if (observe) observe(joint);
             return AgentsTiedToGauge(joint, r.gnc.inliers, in.gauge_agent);
         };
         const slam::MultiAgentResult r = slam::SolveMultiAgent(mi);
