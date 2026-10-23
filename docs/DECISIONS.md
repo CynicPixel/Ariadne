@@ -3290,3 +3290,77 @@ darkness is the render's. It is not a frozen 5.4 level.
   recordings before the D135/D139 rows run.
 - `configs/degradation/lampdark_headlamp_v0.yaml` holds the rig v2 lamp geometry; D works on the lens image, so
   focal 680.
+
+**Sessions and cost** (spinup ledger, compute only; EBS/IPv4 add cents):
+
+| session | outcome | cost |
+|---|---|---|
+| 1 (`d86-coredev` tag) | image tag exists only locally: pull failed after 70 s | $0.0013 |
+| 2 (1b) | spot reclaim during the Hilti fetch | ~$0.007 |
+| 3 (`e3bc7f6`) | Hilti export done (3.58 GB tar, sha256 `78d2c3bf…`); build failed: the worktree's `.cache` symlink ships dangling, so FetchContent could not write | $0.0198 |
+| 4 (`d6da28b`) | build passed (121 s); recordings fetch failed: the instance role has GetObject, not ListBucket, so `--recursive` cannot list | $0.0068 |
+| 5 (`380c900`) | Hilti side files (exposure + control points) + build + 4 replays, all OK | $0.0352 |
+
+Fixes: FetchContent cache under `build/`; `HILTI=full|extras|skip`; recordings fetched by key from the committed
+`infra/eval/ph5_dark_manifest.txt` (213 keys, sizes checked). CPU total ≈ $0.07.
+
+**Results: the no-dust lighting rows** (session 5; manifests `git_commit 380c900`, `git_dirty false`, image
+`sha256:91643838…`). `ariadne_sim_vo`, agent 0, 1000 frames, seed 1, `sim_v1` + `sim_v2`, 0 lost frames in every
+row. All four dark rows share one trajectory (GT path 7.355 m). D69's lit row is `ci_tiny_0` with the same seed and
+agent; that its trajectory is identical (only lighting differs between the presets) is [ASSUMPTION], not re-checked.
+
+| row | ATE rmse | keyframes | landmarks alive | stereo valid |
+|---|---|---|---|---|
+| lit (D69 reference) | 3 mm | 80 | 770 | 0.776 |
+| dark + fixed light, no D | 2.5 mm | 78 | 674 | 0.782 |
+| dark + fixed light, `lampdark_sensor_v0` | 5.2 mm | 72 | 237 | 0.784 |
+| dark + co-moving lamp, no D | **15.2 mm** | **219** | 471 | 0.782 |
+| dark + co-moving lamp, `lampdark_sensor_v0` | **17.0 mm** | **186** | 364 | 0.777 |
+
+- **The co-moving lamp, not the darkness, costs accuracy:** ×6 ATE against the fixed light on the same path and
+  ×2.8 keyframes. Its illumination is locked to the camera, so a surface's brightness changes as the range to it
+  changes, and tracks are renewed far more often. This is the case Stage 3 (falloff normalisation, D134/D140) exists
+  for; its row is the next measurement once it is wired into the runner.
+- **Sensor noise is the second-order term:** +2.7 mm fixed, +1.8 mm lamp, and roughly ⅓–½ of the landmarks lost,
+  as in D69.
+- One seed on one 50 s segment. Differences of ~1 mm are not claimed; the ×6 is.
+
+## 2026-10-23 — D143: equidistant (Kannala–Brandt) cameras through `cv::fisheye`; sequences without dense GT
+
+**Why.** Hilti 2023's robot OAK-D Pro W (5.6, D141) is calibrated by Kalibr as `pinhole` + `equidistant`, fx 567
+at 1280 px: about 127° horizontal field of view. Read as radial-tangential, its coefficients are silently wrong (the
+negative control in the test below fails by far more than the tolerance). Re-rectifying offline in the converter
+was the alternative. It was not taken, so that the real raw images go through the pipeline's own rectifier.
+
+**OpenCV-native check** (in the image, `/opt/opencv5`): `cv::fisheye::stereoRectify` (stereo.hpp),
+`cv::fisheye::initUndistortRectifyMap` (imgproc.hpp), `cv::fisheye::undistortPoints` / `projectPoints`
+(geometry/3d.hpp). ALGORITHMS §camera models: KB4 = `cv::fisheye`. Its fisheye warning ("rectifying to a plane
+wastes the FOV") applies, and is accepted for dense stereo.
+
+**What changed.**
+- `PinholeRadtan` gains `model` (radtan | equidistant). It is the last field, so positional init still means radtan.
+  `dist` holds k1..k4 for equidistant (cv::fisheye's D order, the same as Kalibr's).
+- `StereoRectifier`: fisheye path through the three functions above. `alpha` is passed as fisheye `balance`: the
+  endpoints share intent, the interior does not. The flag is `STEREO_ZERO_DISPARITY` (OpenCV 5's name for
+  the `CALIB_ZERO_DISPARITY` the fisheye doc still mentions). `RefineRightRows` rebuilds with the same model.
+- `loop_verify_geometry`: `fisheye::undistortPoints` for equidistant cameras. The sim source states radtan.
+- EuRoC loader: accepts Kalibr `equidistant`; any other name still throws.
+- EuRoC-layout sequences may omit `state_groundtruth_estimate0`. The runner then writes `dense_gt: false` and
+  `null` for every ATE/RPE field: the zero-default metric structs must not read as a 0 m error.
+
+**Tests.** Hilti-shaped rig (published coefficients, B 7.5 cm, points out to 55° off-axis): rows 1e-3 px, depth
+1e-4 relative. The same lens read as radtan fails. Rectified fx 468.7 px, 107.6° HFOV, 99.9 % lens-fed pixels at
+balance 0. That is the crop, measured. EuRoC 12/12 (incl. accept/refuse); rectification + loop-verify 6/6.
+
+**Hilti data preparation** (`dataset_tools.hilti`, tests 6 + 2 + 5 scorer):
+- `sensor_yaml`: T_BS = T_cam_imu⁻¹. The stereo chain matches Kalibr's T_cn_cnm1 to 2e-15, B 0.07514 m, and the
+  T_BS translation equals Hilti's own `T_imu0_cam0`.
+- **Stereo pairing by trigger.** 13 of 3592 pairs carry centre-of-exposure stamps 9.984 µs apart: same
+  `start_of_frame`, exposure 29988 vs 30008 µs. They are re-stamped to the left stamp only under those two
+  conditions; anything else is refused. Exact pairing would have dropped them (200 ms holes).
+- **Control points** are LiDAR measurements (`frame_id rslidar`, ~0.83 m from the sensor), stamped exactly at the GT
+  rows. The GT file holds the surveyed marker positions. So the scorer places each GCP as T_W_I(t)·T_I_L·p_L
+  (RA-L 2024 §V-B, Kalibr T_lidar_imu), not at the IMU.
+- **Real auto-exposure** (`exposure_info`): exposure sits at its ~30 ms cap for the whole sequence; only ISO moves
+  (930–1549). On 253 frames the right camera's ISO lags the left by one step. That is real-data evidence for 5.3's
+  actuator order (exposure to its ceiling, then gain) and for the stereo exposure match.

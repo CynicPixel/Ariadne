@@ -4,6 +4,18 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — Phase 5 (A2): lighting rows measured; Hilti 5.6 extracted, loader + scorer built, rows running
+
+- **Lighting rows (D142, AWS session 5, `380c900`):** the co-moving lamp costs ×6 ATE against a fixed light on the
+  same path (15.2 vs 2.5 mm; lit 3 mm) and ×2.8 keyframes. Sensor noise adds 2–3 mm. Dust rows and the Stage 3 row
+  are next.
+- **AWS:** five CPU sessions, ≈ $0.07 total (two failed launches, then dangling `.cache` symlink, then missing
+  ListBucket -- each fixed in `ph5_aws.sh`). GPU renders $0.1241.
+- **Hilti 5.6 (D141/D143):** export + side files (exposure, LiDAR-measured GCPs). Equidistant cameras through
+  `cv::fisheye`, trigger pairing, a scorer that places each GCP through T_W_I T_I_L p_L, and a runner path without
+  dense GT. Matrix fixed before measurement (`configs/benchmark/hilti_5.6.yaml`); the 3 rows are running locally.
+- **Real auto-exposure:** OAK-D exposure pinned at 30 ms, gain alone tracks the dark: 5.3's actuator order.
+
 ## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
 
 - **GPU session (D137), maintainer-approved:** g4dn.xlarge spot at $0.0858/h, instance `i-09d36054dbc53dab8`, cap
