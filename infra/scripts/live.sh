@@ -138,7 +138,7 @@ cmd_run() {
   fi
 
   # 1. The runtime listens first.
-  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work \
     -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
     -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
@@ -167,9 +167,16 @@ cmd_run() {
   log "link ready: $(cat "$REPO_ROOT/$run/link.ready")"
   # D167 timers: gz's achieved RTF straight from the world stats topic, and the GL renderer string (D155: on g4dn
   # this must name the NVIDIA device; llvmpipe here means the GPU was NOT used).
-  docker exec -d "$sim" bash -c "gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" || true
-  { docker exec "$sim" bash -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
-      || echo "renderer: ogre2.log not found at probe time"; } > "$REPO_ROOT/$run/renderer.txt" 2>&1 || true
+  # The tap writes a start marker first, so an exec that never ran is distinguishable from a silent gz topic.
+  docker exec -d "$sim" sh -c "echo \"tap started $(date -u +%H:%M:%S)\" > /work/$run/gz_stats.err; exec gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" \
+    || echo "docker exec for the stats tap failed" > "$REPO_ROOT/$run/gz_stats.err"
+  docker exec "$sim" sh -c "timeout 3 gz topic -l" > "$REPO_ROOT/$run/gz_topics.txt" 2>&1 || true
+  for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn (A1)
+    if docker exec "$sim" sh -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
+         > "$REPO_ROOT/$run/renderer.txt" 2>&1 && [ -s "$REPO_ROOT/$run/renderer.txt" ]; then break; fi
+    echo "renderer: ogre2.log not found at probe time" > "$REPO_ROOT/$run/renderer.txt"
+    sleep 5
+  done
   log "renderer: $(head -1 "$REPO_ROOT/$run/renderer.txt" 2>/dev/null)"
   if grep -q '^lockstep: *true' "$REPO_ROOT/$live_cfg"; then
     log "lockstep (D165): the runtime runs the world barrier to barrier"
