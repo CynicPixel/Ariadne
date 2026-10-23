@@ -4,6 +4,29 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-23 — Phase 2 CLOSED: full gate on AWS (D172); 3.x in flight
+
+- **The Phase 2 full gate:**
+  - `phase1.sh` in full mode, clean commit b59a77d, AWS cpux86 spot, 32 min, about $0.07.
+  - Fresh Kaggle render, relayed through S3 so the token stays on the workstation (`infra/eval/render_relay.sh`).
+  - **53/54.** ctest 539/539; fault identity, `bytes.json`, fused cloud, render package and the `renders.npz` sha256
+    all match the reference.
+  - The 54th check is `report.yaml`'s `inputs_clean`: the D55 reference itself was dirty. Re-pinned; see D172.
+- **The six Phase 2 exit-gate bullets** are mapped to evidence in D172. One stated deviation: SE-Sync rim, "not
+  certified, unknown not wrong" (D74).
+- **3.4** (`feat/3.4-spectral`): rebased onto main. The graph spans ids min..max, and the budget defaults are labelled
+  placeholders. Protocol 61/61. Its AWS pre-merge is next.
+- **3.2 sim integration** (`feat/3.2-sim`, D171, design SIMCOLLAB_3.2): built, not yet run.
+  - Two-pass causal replay over CommsNode.
+  - Inter-agent exchange with ALIKED+LightGlue.
+  - The robust broker solve (D76), wired at last.
+  - Datagram size on the link seam.
+  - fp16 global descriptors.
+  - Per-message byte predictions plus a resync overhead row.
+  - The AWS sweep and `collab_gate.py`.
+- **A2:** 5.6 on Hilti (D141, which replaces M's D89) is measured and **negative**, 0/100 (D144, FC-5.6-1).
+  `feat/ph5-dve` 3da96eb has main merged in and is queued for an AWS pre-merge.
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.

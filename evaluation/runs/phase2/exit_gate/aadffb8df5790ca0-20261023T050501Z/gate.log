@@ -1,0 +1,9 @@
+[05:05:01] 0. build + full ctest
+[05:09:16] 1. sim_collab clean + faults (parallel)
+[05:19:34] 2. recon prepare
+[05:20:29] 2. Kaggle render (remote GPU)
+[05:36:45] 2. recon score
+[05:36:50] 3. mission merged / agent 0 / agent 1
+[05:37:02] 4. report
+[05:37:07] 5. console check
+[05:37:07] 6. gate

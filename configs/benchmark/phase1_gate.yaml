@@ -19,7 +19,10 @@ reference:   # D55
   mission: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-20261017T080432Z
   mission_agent0: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent0only-20261017T080436Z
   mission_agent1: exit_gate/aadffb8df5790ca0-20261017T072201Z/mission/aadffb8df5790ca0-agent1only-20261017T080439Z
-  report: exit_gate/aadffb8df5790ca0-20261017T072201Z/report/aadffb8df5790ca0-20261017T072237Z
+  # D172: report.yaml only, re-pinned to the Phase 2 full gate (clean commit b59a77d, fresh Kaggle render). The D55
+  # reference carried inputs_clean: false (its recon manifest_score.yaml recorded git_dirty 'true'), so a clean run
+  # could never match and a dirty one would have; every other line of the two reports is identical.
+  report: ../phase2/exit_gate/aadffb8df5790ca0-20261023T050501Z/report/aadffb8df5790ca0-20261023T050917Z
 
 # Line exclusions are per file below: {re: Python regex matched at the line start, why: one of these reasons}.
 reasons:

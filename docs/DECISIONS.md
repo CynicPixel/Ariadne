@@ -3257,3 +3257,45 @@ field except timings.
 - **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
   exists.
 
+## 2026-10-23 — D172: Phase 2 full gate on AWS — 53/54; the 54th was the D55 reference's own dirty flag; `report.yaml` re-pinned
+
+**The run.** `phase1.sh` in full mode on clean commit b59a77d, on AWS (cpux86 spot, 32 min), with a fresh Kaggle
+render.
+- The render is relayed: the instance hands the package to S3, and the workstation renders it with its own token.
+  The Kaggle token never leaves the workstation; staging it to S3 was refused by the auto-mode classifier.
+- Evidence: `evaluation/runs/phase2/exit_gate/aadffb8df5790ca0-20261023T050501Z/`.
+
+**Result: 53/54.**
+- ctest 539/539, protocol 18/18, every I1 condition and every §4 contract.
+- Fault identity matches the committed reference, and so does `bytes.json`.
+- The fused cloud, render package and `renders.npz` sha256 all match. The fresh Kaggle render is byte-identical
+  again, D48 reproduced on a third render session.
+
+**The FAIL.** `report/report.yaml` differs from the D55 reference on one line: `inputs_clean: true` here against
+`false` there.
+- The D55 run, despite its clean commit, recorded `git_dirty: 'true'` in `recon/.../manifest_score.yaml`.
+- The comparator compares `inputs_clean` deliberately (D48: "so a dirty run cannot pass"). Against that reference
+  it did the opposite: a clean run failed, and a dirty run would have passed.
+
+**Decision.**
+- Re-pin only `reference.report` to this run. Every other reference stays D55's, and all of them matched.
+- The comparison rule itself is unchanged.
+- The next AWS pre-merge (3.4's) confirms 54/54 against the new reference.
+
+**Phase 2 exit gate, item by item (plan "Phase 2 testing / exit gate"):**
+
+| bullet | evidence | state |
+|---|---|---|
+| Jacobian finite-difference suite incl. near-zero depth and wide-FOV rays | `tests/numerical/test_pinhole.cpp` and the analytic-Jacobian tests, in ctest 539/539 | green |
+| Oracle agreement on 100 random synthetic graphs | `PgoOracle.AgreesWithGtsamOnEveryCase` over `.cache/oracle/pgo` (100 graphs), in ctest | green |
+| Certificate certifies known-optimal graphs, not planted-outlier ones | `Certificate.*` (D74); SE-Sync large graphs (c2648e6): sphere/torus/cubicle/grid3D certified | green, **one stated deviation:** rim "not certified, unknown not wrong" (D74; no re-tuning) |
+| Outlier ramp 10→90 %, breakpoint | `evaluation/runs/2.5/outlier_ramp/` (D75): PCM → GNC breakpoint at 90 % (groups of 10), 70 % (two growing groups) | done |
+| EuRoC stereo-VIO in the reference error class | D85 / D86 (9/11 accepted), D87 full system with loops (10/11 in class, ≥ ORB-SLAM3 on 7/11) | accepted |
+| TUM regression pinned | D100 / D86 (fr1 accepted as pinned) | done |
+| The full run at the phase gate (CLAUDE.md §4) | this run | 53/54, the 54th resolved above |
+
+**Phase 2 is closed.** Carries:
+- V1_03 is the 5.5 regression case;
+- the VO-side startup prefix (D87);
+- D91's pool rule goes to 7.3.
+
