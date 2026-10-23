@@ -94,6 +94,13 @@ if(OpenCV_FOUND)
     opencv_features)
   find_package(Threads REQUIRED)
   target_link_libraries(ariadne_live PRIVATE Threads::Threads)
+
+  add_executable(ariadne_live_canonical tools/ariadne_live_canonical.cpp)
+  target_link_libraries(ariadne_live_canonical PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv ariadne::planning opencv_imgcodecs opencv_imgproc
+    opencv_features)
+  find_package(Threads REQUIRED)
+  target_link_libraries(ariadne_live_canonical PRIVATE Threads::Threads)
   install(TARGETS ariadne_live RUNTIME DESTINATION bin COMPONENT ariadne)
 
   add_executable(ariadne_mission tools/ariadne_mission.cpp)
