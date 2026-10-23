@@ -157,7 +157,10 @@ calibrate() {
 import csv, sys, glob, os, statistics
 root = sys.argv[1]
 for sc in (0, 1):
-    rates, ratios, runs, bigs = [], [], [], []
+    rates, runs, bigs = [], [], []
+    # Compression ratio per class POOLED over the runs (sum transmitted / sum payload). Sweep 0345a5 averaged per-run
+    # ratios, and a run with no message of a class counted as ratio 0: scene 1's pose_edge (0, 0.645, 0.63) -> 0.425.
+    pay = {"4": 0, "5": 0, "6": 0}; tx = {"4": 0, "5": 0, "6": 0}
     for d in sorted(glob.glob(f"{root}/sim_s{sc}_seed*")):
         if not os.path.isdir(d): continue   # sim_s<k>_seed<s>.log is the job's log, not a run
         rows = list(csv.DictReader(open(f"{d}/ledger.csv")))
@@ -167,12 +170,9 @@ for sc in (0, 1):
         fetch = sum(int(r["wire_bytes"]) for r in first if r["class"] in ("3", "4"))
         big = max([int(r["wire_bytes"]) for r in first if r["class"] == "4"] or [0])
         rates.append(fetch / max(t1 - t0, 1e-9)); runs.append(os.path.basename(d)); bigs.append(big)
-        ratio = []
         for k in ("4", "5", "6"):   # match response, pose edge, pose graph: the compressed classes
             rs = [r for r in first if r["class"] == k and r.get("resync", "0") == "0"]
-            pay = sum(int(r["payload_bytes"]) for r in rs); tx = sum(int(r["transmitted_bytes"]) for r in rs)
-            ratio.append(tx / pay if pay else 0.0)
-        ratios.append(ratio)
+            pay[k] += sum(int(r["payload_bytes"]) for r in rs); tx[k] += sum(int(r["transmitted_bytes"]) for r in rs)
     # The verifier floor (D171 §5, pre-registered): over the ideal-link similarity runs of this scene, the candidates
     # that reached PnP and were not rejected by the D71 gate; bad = pose error > 10 deg (D63's protocol); the floor is
     # the smallest PnP-inlier count >= 25 (the 1.6 verifier's) that accepts no bad candidate.
@@ -187,7 +187,8 @@ for sc in (0, 1):
     kept = [n for n in good if n >= floor]
     print(f"verify{sc} {floor} {len(good)} {len(kept)} {len(bad)} {max(bad) if bad else 0} {min(good) if good else 0}")
     if rates:
-        m = [statistics.mean(r[i] for r in ratios) for i in range(3)]
+        if not all(pay.values()): raise SystemExit(f"scene{sc}: a compressed class never sent in the similarity runs")
+        m = [tx[k] / pay[k] for k in ("4", "5", "6")]
         # max_fetch: the largest single feature response seen (+ a request's ~140 B): the bucket depth floor.
         print(f"scene{sc} {statistics.mean(rates):.1f} {m[0]:.5f} {m[1]:.5f} {m[2]:.5f} {max(bigs) + 140} {','.join(runs)}")
 PY
