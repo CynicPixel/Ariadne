@@ -11,8 +11,8 @@ Backends:
   gpu       LiveTrainer (gsplat on CUDA)
   cpu_init  no GPU (D194): the same submaps and depth seeding, no optimisation; labelled "initialisation only, no GPU"
 
-Training image (D195): the albedo proxy by default; a keyframe without one is refused unless --training-image rgb
-(the lit-world ablation) is given. Nothing falls back silently.
+Training image (D195, D199): `rgb` on lit worlds (the live demo's default, D199); `albedo_proxy` where the agents'
+lamp is the light (D195), and then a keyframe without the proxy is refused. Nothing falls back silently.
 
 Placement: T_W_O per agent comes with the live tee (B); for a spool replay it is the identity [replay has no
 briefing], so W = agent 0's odometry frame.
@@ -33,9 +33,9 @@ from .seeding import SeedParams, seed
 from .submaps import SubmapManager
 
 LABELS = {("gpu", "albedo_proxy"): "albedo proxy (gsplat, live)",
-          ("gpu", "rgb"): "RGB ablation (lit world; not the albedo default)",
+          ("gpu", "rgb"): "RGB, lit world (gsplat, live)",
           ("cpu_init", "albedo_proxy"): "albedo proxy — initialisation only, no GPU",
-          ("cpu_init", "rgb"): "RGB ablation — initialisation only, no GPU"}
+          ("cpu_init", "rgb"): "RGB, lit world — initialisation only, no GPU"}
 
 
 def _atomic(path: Path, data: bytes) -> None:
@@ -141,8 +141,8 @@ def replay(sp: Spool, svc: Service, training_image: str, max_keyframes: int = 0)
     for b in sorted(sp.keyframes(), key=lambda b: (b.t_ns, b.agent)):
         if training_image == "albedo_proxy":
             if b.rgb_kind != "albedo_proxy":
-                raise SystemExit(f"keyframe {b.kf_id}: no albedo proxy (rgb_kind {b.rgb_kind}); the RGB ablation "
-                                 "must be asked for (--training-image rgb), never a fallback (D195)")
+                raise SystemExit(f"keyframe {b.kf_id}: no albedo proxy (rgb_kind {b.rgb_kind}); RGB training must be "
+                                 "asked for (--training-image rgb, lit worlds), never a fallback (D195)")
             image = b.albedo()
         else:
             image = b.rgb().astype(np.float32) / 255.0
@@ -159,7 +159,7 @@ def main(argv=None) -> int:
     ap.add_argument("--spool", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--backend", choices=("gpu", "cpu_init"), default="gpu")
-    ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="albedo_proxy")
+    ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="rgb")   # D199: lit demo
     ap.add_argument("--iters", type=int, default=0)
     ap.add_argument("--budget-ms", type=float, default=0.0)
     ap.add_argument("--export-period-s", type=float, default=2.0)

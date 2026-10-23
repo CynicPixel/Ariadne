@@ -152,7 +152,8 @@ def test_service_cpu_init_writes_table_and_chunks_labelled(tmp_path):
     from ariadne_recon.live import service
     spool = _spool_v2_one_agent(tmp_path / "spool")
     out = tmp_path / "splat"
-    assert service.main(["--spool", str(spool), "--out", str(out), "--backend", "cpu_init"]) == 0
+    assert service.main(["--spool", str(spool), "--out", str(out), "--backend", "cpu_init",
+                         "--training-image", "albedo_proxy"]) == 0
     t = json.loads((out / "table.json").read_text())
     assert t["label"] == "albedo proxy — initialisation only, no GPU" and t["backend"] == "cpu_init"
     (row,) = t["submaps"]
@@ -172,4 +173,5 @@ def test_service_refuses_a_keyframe_without_the_proxy(tmp_path):
     y["bundles"][1]["rgb_kind"] = "raw_radiance"
     (spool / "spool.yaml").write_text(yaml.safe_dump(y))
     with pytest.raises(SystemExit, match="never a fallback"):
-        service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init"])
+        service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init",
+                      "--training-image", "albedo_proxy"])
