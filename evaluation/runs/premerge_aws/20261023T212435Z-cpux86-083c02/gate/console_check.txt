@@ -1,0 +1,4 @@
+ledger: 310 messages, 1272765 B over 4 classes
+events: 35; merge 140.0 s; first route 145 s
+frames at 10x: 101 (106719 B of JSON)
+VERDICT PASS

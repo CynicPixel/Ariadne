@@ -1,0 +1,80 @@
+{"t_s":5,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,46],"frontier_clusters":2,"rejected_small":10,"result":"go","frontier_xy_m":[-1.42095,3.09797],"frontier_cells":37,"path_m":0.403553}
+{"t_s":5,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":10,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[71,101],"frontier_clusters":3,"rejected_small":18,"result":"go","frontier_xy_m":[3.39116,2.87348],"frontier_cells":198,"path_m":0.986396}
+{"t_s":10,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":15,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,130],"frontier_clusters":6,"rejected_small":18,"result":"go","frontier_xy_m":[3.21272,4.32939],"frontier_cells":114,"path_m":1.32426}
+{"t_s":15,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":20,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[55,153],"frontier_clusters":5,"rejected_small":22,"result":"go","frontier_xy_m":[3.39079,0.788158],"frontier_cells":19,"path_m":1.62279}
+{"t_s":20,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":25,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[54,154],"frontier_clusters":5,"rejected_small":23,"result":"go","frontier_xy_m":[3.39079,0.788158],"frontier_cells":19,"path_m":1.5935}
+{"t_s":25,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":30,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[54,154],"frontier_clusters":5,"rejected_small":23,"result":"go","frontier_xy_m":[3.39079,0.788158],"frontier_cells":19,"path_m":1.5935}
+{"t_s":30,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":35,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[52,154],"frontier_clusters":5,"rejected_small":24,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.74706}
+{"t_s":35,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":40,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[32,154],"frontier_clusters":5,"rejected_small":24,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.30355}
+{"t_s":40,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":45,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,154],"frontier_clusters":8,"rejected_small":25,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.34497}
+{"t_s":45,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":50,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,154],"frontier_clusters":7,"rejected_small":27,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.34497}
+{"t_s":50,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":55,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[34,153],"frontier_clusters":7,"rejected_small":30,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.29497}
+{"t_s":55,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":60,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[33,152],"frontier_clusters":8,"rejected_small":30,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.22426}
+{"t_s":60,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":65,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[43,140],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":0.969239}
+{"t_s":65,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":70,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,142],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.06066}
+{"t_s":70,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":75,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,142],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.06066}
+{"t_s":75,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":80,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[44,141],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.03995}
+{"t_s":80,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":85,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[55,144],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.56421}
+{"t_s":85,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":90,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[63,148],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":2.04706}
+{"t_s":90,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":95,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[49,148],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.4435}
+{"t_s":95,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":100,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[29,148],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":0.941421}
+{"t_s":100,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":105,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[47,148],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.3435}
+{"t_s":105,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":110,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[63,148],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":2.04706}
+{"t_s":110,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":115,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[62,146],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":1.95563}
+{"t_s":115,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":120,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[68,130],"frontier_clusters":8,"rejected_small":30,"result":"go","frontier_xy_m":[2,1.24531],"frontier_cells":32,"path_m":1.88848}
+{"t_s":120,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":125,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,129],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2,1.24531],"frontier_cells":32,"path_m":1.96777}
+{"t_s":125,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":130,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,138],"frontier_clusters":8,"rejected_small":29,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":2.18995}
+{"t_s":130,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":135,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,194],"frontier_clusters":10,"rejected_small":33,"result":"go","frontier_xy_m":[8.38137,3.54314],"frontier_cells":102,"path_m":1.45711}
+{"t_s":135,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: not merged"}
+{"t_s":140,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,245],"frontier_clusters":10,"rejected_small":34,"result":"go","frontier_xy_m":[9.13545,4.30773],"frontier_cells":110,"path_m":1.2}
+{"t_s":140,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","result":"no decision: no keyframe yet"}
+{"t_s":145,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[78,259],"frontier_clusters":10,"rejected_small":62,"result":"go","frontier_xy_m":[11.18,5.005],"frontier_cells":30,"path_m":2.10919}
+{"t_s":145,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":10,"rejected_small":62,"result":"go","frontier_xy_m":[11.18,5.005],"frontier_cells":30,"path_m":4.50711}
+{"t_s":150,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[77,257],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":7.38553}
+{"t_s":150,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":155,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[76,259],"frontier_clusters":9,"rejected_small":61,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":7.46482}
+{"t_s":155,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":61,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":160,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[78,259],"frontier_clusters":9,"rejected_small":61,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":7.50624}
+{"t_s":160,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":61,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":165,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[70,250],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":6.89056}
+{"t_s":165,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":170,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[68,249],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":6.79914}
+{"t_s":170,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":175,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[68,230],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":5.84914}
+{"t_s":175,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":62,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":180,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,171],"frontier_clusters":9,"rejected_small":64,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":2.94914}
+{"t_s":180,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":64,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":185,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,129],"frontier_clusters":8,"rejected_small":65,"result":"go","frontier_xy_m":[2.025,1.20726],"frontier_cells":31,"path_m":1.91777}
+{"t_s":185,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":8,"rejected_small":65,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":190,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,87],"frontier_clusters":9,"rejected_small":60,"result":"go","frontier_xy_m":[2.025,1.20726],"frontier_cells":31,"path_m":1.66924}
+{"t_s":190,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":60,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":195,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,34],"frontier_clusters":9,"rejected_small":71,"result":"go","frontier_xy_m":[2.025,1.20726],"frontier_cells":31,"path_m":4.11421}
+{"t_s":195,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":71,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}
+{"t_s":198.6,"agent":0,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[69,31],"frontier_clusters":9,"rejected_small":71,"result":"go","frontier_xy_m":[2.025,1.20726],"frontier_cells":31,"path_m":4.26421}
+{"t_s":198.6,"agent":1,"mode":"replay","executed":false,"decision":"nearest_frontier","agent_cell":[168,249],"frontier_clusters":9,"rejected_small":71,"result":"go","frontier_xy_m":[2.80395,0.901316],"frontier_cells":19,"path_m":10.3054}

@@ -4,6 +4,19 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-24 (03:30 IST) — B's live multi-agent POC MERGED to main (`584415e`, fast-forward)
+
+- **What landed (session B, `feat/l1-a1p-llm`):** the D175 multi-agent coordination POC (deterministic replay,
+  oracle A/B digest), D218–D222 (splat tee D220, comms panel D222), and the D174 lockstep collab wiring.
+- **AWS pre-merge** `20261023T212435Z-cpux86-083c02` (c7i.4xlarge spot, 1591 s, ~$0.055): **54/54**, ctest
+  **695/695**, VERDICT PASS (render reused, working tree; not exit-gate evidence). Evidence:
+  `evaluation/runs/premerge_aws/20261023T212435Z-cpux86-083c02/`.
+- **Not yet on main:** D178 (entry gate), D179 (async CollabLive) + snapshot extension, D180 (re-send accounting),
+  all on `feat/live-collab-live`. The D178 sweep is running on AWS; B's D179 acceptance run (live 60 s + 3 replays)
+  `5x-B-collab60b` started 03:27 IST.
+
+---
+
 ## 2026-10-23 — 7.1–7.2 redirected to option B (maintainer): seams around Phase 4; proposal to A1
 
 - **Maintainer, 2026-10-23: "go with B".** A1 keeps 4.3–4.6 (NBV, CBBA consensus, route graph). Session B builds the
