@@ -94,6 +94,20 @@
       <span><span class="sw" style="background:var(--route-agent)"></span>agent route (0.20 m)</span>
     </div>
   </section>
+  <section class="panel" aria-label="Comms">
+    <h2 style="margin:0 0 6px; font-size:0.95em">comms <small id="commsmode" style="font-weight:normal"></small></h2>
+    <div id="commsbytes" style="font-variant-numeric:tabular-nums"></div>
+    <div id="commsagents" style="margin-top:4px"></div>
+    <div id="collabline" style="margin-top:4px"></div>
+    <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap">
+      <select id="cutsel" aria-label="cut grouping"></select>
+      <button id="btncut">cut comms</button>
+      <button id="btnrestore">restore</button>
+      <button id="btninject">inject false closure</button>
+    </div>
+    <small>bytes are counted at the serializer, per class; picks come from the component broker's consensus
+      (uncoordinated = the agent's own best, logged)</small>
+  </section>
   <section class="panel" aria-label="Agent cameras">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
       <div><select id="camsel0" aria-label="left camera agent"></select>
@@ -237,6 +251,7 @@ async function loadSlab(i) {
 }
 
 function draw(f) {
+  if (typeof renderComms === "function") renderComms(f);   // D218/D221 panel (defined later in this script)
   ctx.fillStyle = css("--unknown");
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (slab) {   // row 0 = south: flip vertically
@@ -516,6 +531,43 @@ if (at !== null) {
   start();
   requestAnimationFrame(animate);
 }
+// D218/D221: the comms panel - bytes by class, per-agent pick/why, the collab line, and the operator buttons
+const commsEls = {
+  mode: document.getElementById("commsmode"), bytes: document.getElementById("commsbytes"),
+  agents: document.getElementById("commsagents"), collab: document.getElementById("collabline"),
+  cutsel: document.getElementById("cutsel"),
+};
+function renderComms(f) {
+  const c = f.comms;
+  if (c) {
+    commsEls.mode.textContent = `${c.broker_mode} broker · ${c.scenario}`;
+    const b = c.bytes || {};
+    commsEls.bytes.textContent = `patch ${b.patch ?? 0} B · bid ${b.bid ?? 0} B · consensus ${b.consensus ?? 0} B · heartbeat ${b.heartbeat ?? 0} B`;
+    commsEls.agents.innerHTML = (c.agents || []).map((a, i) =>
+      `<div>agent ${i}: ${a.why.startsWith("coordinated") ? "coordinated" : a.why} · broker ${a.broker} · component of ${a.members}</div>`
+    ).join("");
+  }
+  const l = f.collab;
+  if (l) {
+    const merged = (l.agents || []).filter((a) => a.merged).length;
+    const inj = (l.injections || []).filter((i) => i.planted).length;
+    commsEls.collab.textContent = `SLAM collab: ${l.kept_inter_edges} kept inter-agent edges · ${merged} merged frames · ` +
+      `verify ${l.verify ? l.verify.calls : 0}${l.cut_active ? " · COMMS CUT" : ""}${inj ? ` · ${inj} injected` : ""}`;
+  }
+  if (!commsEls.cutsel.options.length && lastFrame) {
+    const ids = lastFrame.agents.map((a) => a.id);
+    const opts = ids.map((k) => `<option value="${ids.filter((j) => j !== k).join(",")}|${k}">isolate agent ${k}</option>`);
+    opts.push(`<option value="${ids.map((k) => `${k}`).join("|")}">every agent alone</option>`);
+    commsEls.cutsel.innerHTML = opts.join("");
+  }
+}
+async function collabAction(action, groups) {
+  try { await fetch(`/api/collab/${action}?groups=${encodeURIComponent(groups || "")}`, { method: "POST" }); }
+  catch (e) { /* queued-at-barrier semantics: the event log shows the application */ }
+}
+document.getElementById("btncut").addEventListener("click", () => collabAction("cut_comms", commsEls.cutsel.value));
+document.getElementById("btnrestore").addEventListener("click", () => collabAction("restore_comms"));
+document.getElementById("btninject").addEventListener("click", () => collabAction("inject_false"));
 // P8: camera windows - two panes, each selecting any agent (item 7), latest keyframe jpg per agent
 const camSel = [document.getElementById("camsel0"), document.getElementById("camsel1")];
 const camImg = [document.getElementById("cam0"), document.getElementById("cam1")];

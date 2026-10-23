@@ -31,6 +31,8 @@ class LiveRun:
     snapshots: list = field(default_factory=list)    # (t_s, path)
     egress: list | None = None
     events: list = field(default_factory=list)       # (t_s, kind, text)
+    comms: dict | None = None    # D218: newest multiagent barrier (bytes by class, picks, components)
+    collab: dict | None = None   # D174: newest CollabLive telemetry line (merged, kept edges, cut, injections)
     ended: bool = False
     # poll() is called from the event loop (websockets) AND from FastAPI's thread pool: one reader at a time, or two
     # threads advance `offset` past each other and a half line reaches json.loads (it killed every stream on 2026-10-23)
@@ -102,6 +104,11 @@ class LiveRun:
                 self.egress = new_egress
             elif kind == "decision":
                 r = d["record"]
+                pl = r.get("planner")
+                if isinstance(pl, dict) and pl.get("name") == "a1_phase4_multiagent":   # D218: the comms panel's rows
+                    self.comms = {"t_s": r["t_s"], "broker_mode": pl.get("broker_mode"),
+                                  "scenario": pl.get("scenario"), "bytes": pl.get("bytes", {}),
+                                  "agents": pl.get("agents", [])}
                 c = r.get("command", {})
                 wp = c.get("waypoints_xy_m") or []
                 to = f" to ({wp[-1][0]:.1f}, {wp[-1][1]:.1f})" if wp else ""
@@ -113,6 +120,10 @@ class LiveRun:
                                     f"{'executed' if r['executed'] else 'not executed'}"))
             elif kind == "alert":
                 self.events.append((d["t_s"], "alert", d["text"]))
+            elif kind == "collab_action":   # D221: a panel action applied at the barrier
+                self.events.append((d["t_s"], "action", f"operator: {d['action']} applied"))
+            elif kind is None and "kept_inter_edges" in d:   # D174 CollabLive.Telemetry (one line per barrier)
+                self.collab = d
             elif kind == "mover_state":
                 s = d["state"]
                 verdict = "accepted" if s["accepted"] else f"REFUSED ({s['reason']})"
@@ -140,8 +151,11 @@ class LiveRun:
                 agents.append({"id": k, "merged": True, "x": None, "y": None, "yaw": None})
         mv = len(self.snapshots) - 1 if self.snapshots else None
         events = [{"t_s": t, "kind": k, "text": x} for t, k, x in self.events if t > since]
-        return {"t_s": round(self.t_s, 3), "seq": seq, "agents": agents, "bytes": {"total": 0}, "rate_Bps": 0,
+        by = dict(self.comms["bytes"]) if self.comms else {}
+        by["total"] = sum(v for v in by.values())
+        return {"t_s": round(self.t_s, 3), "seq": seq, "agents": agents, "bytes": by, "rate_Bps": 0,
                 "map_version": mv, "route": {"egress": self.egress, "agent": None}, "events": events,
+                "comms": self.comms, "collab": self.collab,
                 "live": True, "ended": self.ended}
 
 

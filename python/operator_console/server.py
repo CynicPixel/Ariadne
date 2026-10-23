@@ -9,6 +9,7 @@ for metadata and map snapshots. Two sources, one frame schema:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
 
@@ -101,6 +102,31 @@ def cam_features(k: int) -> FileResponse:
     if not f.exists():
         raise HTTPException(404, "no features yet")
     return FileResponse(f, media_type="application/json", headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/collab/{action}")
+def collab_action(action: str, groups: str = "") -> JSONResponse:
+    """D221 panel buttons: cut_comms (groups like "0|1,2,3"), restore_comms, inject_false. The file lands in the
+    run's collab_inbox and the runtime applies it at the next barrier (a recorded input, like directives)."""
+    lv = live()
+    if not lv:
+        raise HTTPException(404, "live only")
+    if action not in ("cut_comms", "restore_comms", "inject_false"):
+        raise HTTPException(400, "action: cut_comms|restore_comms|inject_false")
+    doc: dict = {"action": action}
+    if action == "cut_comms":
+        try:
+            doc["groups"] = [[int(a) for a in g.split(",")] for g in groups.split("|") if g]
+        except ValueError:
+            raise HTTPException(400, "groups: like 0|1,2,3")
+        if not doc["groups"]:
+            raise HTTPException(400, "cut_comms needs groups")
+    inbox = lv.src() / "collab_inbox"
+    inbox.mkdir(exist_ok=True)
+    import time as _t
+    f = inbox / f"{int(_t.time() * 1000)}_{action}.json"
+    f.write_text(json.dumps(doc) + "\n")
+    return JSONResponse({"queued": f.name})
 
 
 @app.get("/api/frame")
