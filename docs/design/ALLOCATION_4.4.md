@@ -162,7 +162,7 @@ and the common scales: no new constant.
 
 ## 10. Correction (2026-10-23, measured before any commit of code)
 
-- **§1's "CBBA = SGA" holds exactly at L_t = 1 only.** At L_t = 2 a stale second-slot bid can make them differ
+- **[SUPERSEDED by §15: the cause is a non-DMG score, not L_t]** **§1's "CBBA = SGA" holds exactly at L_t = 1 only.** At L_t = 2 a stale second-slot bid can make them differ
   (ALGORITHMS §22.3.1, correction). The first test sweep found it on 1 of 60 instances. The advisor's three
   separating checks then confirmed the mechanism:
   - L_t = 1: 2000 / 2000 equal, no tail release;
@@ -253,3 +253,60 @@ replans).
   as dense (proved by the wire-transport test, and CBBA = SGA here too).
 - **L_t = 2 buys nothing measurable on this spool:** the same optimum ratio. It costs 1.4 s of leg Dijkstras per
   replan, and it carries the stale-bid divergence risk (§10). L_t = 1 stays the default.
+
+## 15. Literature review: §10's reason was wrong; bid warping (2026-10-23)
+
+This is the primary-text review the maintainer asked for (`docs/design/lit/phase4_fixes_route_cbba.md`).
+
+**§10 said "CBBA = SGA holds exactly at L_t = 1 only". That is wrong as a statement about the paper.**
+- Theorem 1 (Choi et al., T-RO 2009, §V-B, p. 919) holds for any L_t, through N_min = min{N_t, N_u·L_t}. Its
+  precondition is a DMG score.
+- **Our score is not DMG.** Eqs. 11–12 argue that the time-discounted path score is DMG: each task arrives later on a
+  longer path. Eq. 7, though, constrains the insertion marginal, and that can rise. A task inserted next to a later
+  one shortens the detour another task needs. Sources of the measurement:
+  - a Python port of `PathScore`/`Marginal` on Euclidean legs: eq. 7 fails on 37 277 of ~480 000 (j, k, b) triples
+    (7.8 %), with |b| = 1, 4 tasks and random positions;
+  - the §10 hand-built instance itself, which is not DMG for agent A: c_Y[{W}] = 0.275 < c_Y[{X, W}] = 1.686;
+  - the C++ pin, `Cbba.DiscountedInsertionMarginalIsNotDmg`.
+  - `DiscountedScoreIsDmgAdditiveIsNot` checks only b = {} against {k}, where eq. 7 does hold.
+- So the L_t = 2 divergence is a Theorem 1 precondition failure. The "stale second-slot bid" was the symptom. The same
+  group's later paper names the issue: Johnson, Choi, Ponda & How, CDC 2012, eq. 3 and Example 2. Insertion scores
+  are non-submodular, which "can easily lead to cycling".
+
+**The fix, from the paper: bid warping (Johnson et al. 2012, §III-B, eq. 6, Algorithm 2).**
+- The true marginal c ranks the tasks. The warped bid c̄ = min(c, every bid already in the bundle) is used in the
+  outbid test and shared as y.
+- Bids then never increase along a bundle, which is Choi's eq. 9. To the fleet the bids look like they come from a DMG
+  score (Johnson Theorems 2–3), so conflict-free convergence within N_min·D follows.
+- Choi's own Lemma 4 (eq. 34, a clamp over iterations) is the alternative. We use Johnson's, since it targets exactly
+  insertion scores.
+- **Deviation `[DESIGN]`:** Johnson's Algorithm 2 rebuilds the bundle from scratch each phase; we keep Choi's
+  incremental Algorithm 3.
+- **At L_t = 1 the warp is the identity** (empty bundle), so the default, the gate, and §14's L_t = 1 column are
+  unchanged.
+
+**Tests (all pass):**
+- `BundleTwoWithBidWarping` asserts, over 1000 random instances:
+  - eq. 9 on every bundle;
+  - conflict-free;
+  - rounds ≤ N_min·D + 1.
+- Result: 5 / 1000 still differ from raw-score SGA, worst CBBA/optimum 0.618; the ≥ 50 % bound is labelled empirical.
+  Raw-score SGA is not the reference here: Johnson's equivalence is to the warped DMG surrogate, not to SGA on the
+  true score.
+- `StaleSecondSlotBidRegression` is unchanged; its bids are already monotone.
+
+**L_t = 1 stays the default, for the corrected reason:**
+- at L_t = 1 every bid is c_ij[∅], DMG holds trivially, and Theorem 1 applies. That is the 40 / 40;
+- the planner executes only `path.front()` per replan (receding horizon), so a second slot is never flown before the
+  next auction;
+- L_t = 2 bought nothing on the spool and cost 1.4 s of legs per replan (§14).
+- L_t = 1 is CBAA (Choi p. 916). With N_t > N_u it leaves tasks unassigned per auction, which costs nothing here
+  because each agent flies one task per replan.
+- The L_t = 2 replay row (§14) was measured before warping. Re-measuring it is an evaluation run and waits for the
+  maintainer.
+
+**Convergence (§`63fdbee`): supported, one correction.**
+- Theorem 1's bound is N_min·D; the "2 N_t D" written earlier is not in the paper.
+- ACBBA (2011) also calls the network converged once it "goes quiet".
+- Our quiet-round test compares (y, z, b) and excludes s, which is correct: eq. 5 advances s every message.
+- At L_t = 2 the N_min·D bound is now asserted.

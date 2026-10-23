@@ -5,7 +5,8 @@
 // comparator), over one abstract instance, with exact optima for grading.
 //
 //   score     S_i(p) = sum_{j in p} cbar_ij exp(-rate_i d_ij(p)), d_ij(p) the distance along p (agent -> p_0 -> ...).
-//             DMG by the paper's eqs. 11-12 when the legs satisfy the triangle inequality (geodesics do).
+//             NOT DMG in general: eqs. 11-12 cover the path score, not its insertion marginal (counterexample pinned
+//             in test_allocation). BuildBundle warps bids (Johnson et al. CDC 2012, eq. 6); identity at L_t = 1.
 //   compare   one comparator everywhere: bid, then the lower agent id (§III-B's lexicographic tie-break); BuildBundle's
 //             argmax over tasks breaks ties by the lower task index.
 //   rounds    synchronous: every agent builds its bundle, then every agent receives its neighbours' snapshots

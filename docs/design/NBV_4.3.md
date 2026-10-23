@@ -274,3 +274,98 @@ replans, agent 1 at the 12 after the merge):
 - Both missing producers are named in every line's notes.
 - The early views' Δcoverage (≈ 15k voxels) is real: at t = 5 s the building's interior is unknown and inside the
   extent.
+
+## 12. Amendment: plan space and the risk rule (2026-10-23, before any gate run)
+
+**Found by B on a replay of the A1Planner pilot:** risk 1.0 on 27/28 → 162/172 options. Two causes, fixed in order:
+1. **The arrival rule** (`30ac351`). I read D158's bottleneck at the goal cell alone. B's D158 takes the max over
+   the goal's escape_m disc, the widest way to arrive near the goal. That's now `ArrivalBottleneck`.
+   - It barely helped: 154/172 were still at 1.0.
+2. **The plan space.**
+   - D111's `trav_a` (the agent capsule on the occupied-only field) counts unknown space as passable. So views and
+     paths ran through unobserved columns, where the egress clearance `clear_r` is 0, and every maximin was 0.
+   - **Now:** the plan space and every view goal are restricted to `trav_a ∧ clear_r ≥ ρ_agent`: known-free
+     columns with ρ_agent clearance to anything not observed free (`KnownFreePlan`).
+     - That is B's D153b standoff rule, adopted live after the mover refused 10/10 goals next to unseen walls.
+
+**Literature check** (asked by the maintainer, done before this was committed):
+- **TARE** (Cao et al., RSS 2021), read in primary text:
+  - §III defines a viewpoint position p_v ∈ Q_trav, the traversable subspace;
+  - the local horizon's candidates come from H_trav, "the traversable subspace identified by considering collision
+    and connectivity";
+  - the surfaces to cover are the boundary between free and non-free space, the latter "includes both occupied and
+    unknown spaces".
+  - So TARE also keeps viewpoints in traversable, connected space and treats unknown as non-free. The amendment
+    follows it.
+- **FUEL** (Zhou et al., RA-L 2021): `[UNVERIFIED]` for this point. arXiv served an HTML page instead of the PDF on
+  two attempts, so its viewpoint constraint is not cited from memory.
+- **FAR** (Yang et al., IROS 2022): routes "attemptably" through unknown space, but for goal-directed navigation,
+  not exploration viewpoints. It stays a §31.6 comparator; `Route` doesn't use it.
+
+**Effect:** to be measured on B's replay of the same recording after the rebuild (risk histogram per replan), before
+the gate starts. The gate waits on it (YIELD set by A1).
+
+## 13. Literature review of every post-design fix, and the return space (2026-10-23, before any gate run)
+
+The maintainer asked for a primary-text review of every fix made after a measurement. The full reports, with quotes,
+pages and the URLs read, are in `docs/design/lit/phase4_fixes_nbv.md` and `phase4_fixes_route_cbba.md`. The
+findings that change this item:
+
+**Known-free plan space (§12): supported.**
+- **FUEL:** the paper (§IV-C) says only that viewpoints lie "within the free space". The released code (@662dd23c7b52)
+  is explicit:
+  - viewpoints with an unknown voxel within 0.21 m are rejected;
+  - A\* rejects unknown cells;
+  - the exploration config disables optimistic mode, so the ESDF treats unknown as an obstacle. That is our `clear_r`.
+  - This replaces §12's `[UNVERIFIED]`.
+- **NBVP** (Auton. Robots 2018, §3): "Paths are only planned through known free volume V_free".
+- **GBPlanner2** (§IV-A): "samples vertices in the known free space".
+- **Optimistic planning through unknown space** exists only for navigation to a given goal with constant replanning:
+  D\* Lite's free-space assumption, FAR's attemptable mode, Nav2's defaults, FUEL's point-goal launch files.
+
+**The goal's risk: D158's max over the escape disc is dropped; the score is taken at the commanded cell.**
+- Maximin clearance along a route is an established route-quality measure: Voronoi maximum-clearance paths (Geraerts &
+  Overmars, IJRR 2007, §1.2), and the maximum spanning tree of Agarwal, Fox & Salzman (arXiv 1706.02939).
+- No paper read scores a goal by the best cell of a neighbourhood. The practice (FUEL, the NBVP frontier baseline,
+  GBPlanner2) is to set the goal back from the frontier and require the body clear at the pose actually commanded.
+- The disc compensated for goals in unknown space. Since §12, every commanded goal is known-free with ρ_agent clearance,
+  so the risk is read at that cell (`arrive = 0`). It can no longer score a goal by a cell the agent is never sent to.
+  - `ArrivalBottleneck` stays (rad 0).
+  - The effect on the risk spread is measured on B's replay before the gate.
+
+**The return distance for §21.4's hard rule: the swept body along the flown track (`FlownReturnSpace`).**
+- **Finding (B, a1p replay of ci_tiny_0, 2026-10-23):** after §12, from t = 10 s every replan has
+  `E_remaining 118.83 < 1.30 × E(return) inf`.
+  - The forward rig never observes the way in, so the entrance is not known-free.
+  - The rule fired on every replan, and the unreachable return left only {hold}.
+- **Literature:**
+  - GBPlanner builds its homing graph "alongside the actual robot odometry" (FSR 2019, §5.2); GBPlanner2's code adds
+    each executed path.
+  - PLGRIM keeps breadcrumb nodes from the pose graph.
+  - CERBERUS's Recovery Homing backtracks the traversed path (§3.3.3).
+  - The closest precedent for a never-seen start: GBPlanner2 marks the robot's own box free for its first 5 triggers.
+  - Nav2's `footprint_clearing_enabled` clears only the current footprint.
+- **Now:** the return space is the known-free plan, plus every cell within ρ_agent of the polyline from the nearest
+  briefing entrance through the agent's track, minus every column the slab now marks occupied.
+  - The track is the integrated frame positions. Entrances are the scene's `start_xy_m`, the deployment points.
+  - The swept band comes from an exact L2 distance transform of the 1-px centre line, so it never claims a column the
+    body did not cover.
+  - It feeds only d_ret and the return option's risk. That risk is computed on the same space, with clearance
+    max(clear_r, ρ_agent) on swept columns, because the body passed there.
+  - Views, the exploration plan and every egress claim stay as before. The swept band is certified at agent width
+    only, so it never enters a ρ_responder claim (invariant 4).
+- **A lost route is its own event.** If no entrance is reachable even over the track (a collapse across it), the planner
+  emits the supervisor event "return route lost" and does not restrict the options.
+  - Holding forever does not prevent stranding; the agent is already cut off from the known way back.
+  - No source read has a deliberate policy here. GBPlanner2 logs a warning on a `@TODO` path and keeps exploring.
+    This choice is `[DESIGN]`.
+- **The ×1.3 factor is the architecture's (§21.4), `[DESIGN]`.** GBPlanner2 uses an additive margin (time home >
+  min(budget, battery) − 20 s); CERBERUS looks one exploration step ahead.
+- **Test:** `Nbv.ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved`, with the way in unobserved:
+  - no track gives "return route lost", no restriction and more than one option;
+  - the track gives no rule and normal options;
+  - low energy gives {return, hold}, with the return 0.70 m long and its risk below 1;
+  - a slab wall across the track gives "return route lost";
+  - the band is pinned at 4 cells.
+
+**64-ray view ranking and the gate's time axis:** being checked (`lit_gate_ig.md`); result below when it lands.

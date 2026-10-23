@@ -238,3 +238,50 @@ TEST(Nbv, ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc) {
     cv::Mat none(5, 5, CV_64F, cv::Scalar(-1.0));
     EXPECT_DOUBLE_EQ(ArrivalBottleneck(none, {2, 2}, 2), -1.0);
 }
+
+TEST(Nbv, ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved) {
+    // B's live finding (2026-10-23): the forward rig never observes the space behind it, so the way back to the entrance
+    // is not known-free; E(return) = inf fired the hard rule on every replan and left only {hold}. The return space adds
+    // the swept body of the flown track (GBPlanner's homing over the robot's own path; NBV_4.3 §13).
+    Scene sc(WallMap(true));
+    sc.tm.trav_a(cv::Rect(2, 2, 11, 56)).setTo(0);   // x 0.10..0.65 m (the way in, entrance cell (30, 3)): unobserved
+    NbvInputs in = sc.Inputs();
+    AgentState st;
+    st.position = core::Vec3(0.85, 1.5, 1.0);   // the escape disc (0.5 m) reaches x 0.35 m: not the entrance
+    NbvParams p;
+    p.e_total_m = 100;
+
+    const NbvPlan lost = PlanNbv(in, 0, st, p);   // no track: no route home at all
+    EXPECT_FALSE(lost.reserve_rule);
+    EXPECT_NE(lost.supervisor_event.find("return route lost"), std::string::npos);
+    EXPECT_GT(lost.options.size(), 1u);   // a lost route does not freeze the agent on {hold}
+
+    st.own_keyframes = {core::Vec3(0.20, 1.5, 1.0), core::Vec3(0.50, 1.5, 1.0), core::Vec3(0.85, 1.5, 1.0)};
+    const NbvPlan ok = PlanNbv(in, 0, st, p);
+    EXPECT_FALSE(ok.reserve_rule);
+    EXPECT_TRUE(ok.supervisor_event.empty());
+    EXPECT_GT(ok.options.size(), 1u);
+
+    st.e_used_m = 100 - 0.5;   // 0.5 m left < 1.3 x ~0.7 m of track
+    const NbvPlan low = PlanNbv(in, 0, st, p);
+    ASSERT_TRUE(low.reserve_rule);
+    ASSERT_EQ(low.options.size(), 2u);
+    EXPECT_EQ(low.options[0].source, TaskSource::kReturn);
+    EXPECT_NEAR(low.options[0].path_m, 0.70, 0.08);   // entrance centre (0.175, 1.525) to (0.85, 1.5), on the lattice
+    EXPECT_LT(low.options[0].risk_geometric, 1.0);    // scored on the return space, not the known-free plan (b < 0)
+
+    // A collapse across the track (the slab now marks it occupied): the swept columns no longer count.
+    sc.tm.slab(cv::Rect(8, 0, 1, 60)).setTo(kOccupied);
+    const NbvPlan cut = PlanNbv(in, 0, st, p);
+    EXPECT_FALSE(cut.reserve_rule);
+    EXPECT_NE(cut.supervisor_event.find("return route lost"), std::string::npos);
+
+    // FlownReturnSpace itself: the swept band is the body disc rounded down (0.20 m -> 4 cells each side).
+    cv::Mat swept;
+    const cv::Mat ret = FlownReturnSpace(cv::Mat::zeros(60, 60, CV_8U), cv::Mat(60, 60, CV_8U, cv::Scalar(kFree)), sc.g,
+                                         {core::Vec3(0.20, 1.5, 1.0), core::Vec3(0.85, 1.5, 1.0)}, {{30, 3}}, 0.20, &swept);
+    EXPECT_EQ(ret.at<uint8_t>(30, 3), 1);
+    EXPECT_EQ(ret.at<uint8_t>(34, 10), 1);
+    EXPECT_EQ(ret.at<uint8_t>(35, 10), 0);
+    EXPECT_EQ(cv::countNonZero(swept), cv::countNonZero(ret));
+}

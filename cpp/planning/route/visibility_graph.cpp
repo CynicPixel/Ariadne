@@ -158,7 +158,31 @@ VisRoute VisibilityGraph::Query(const Cell& start, const std::vector<Cell>& goal
     }
     for (int v = 0; v < V; ++v)
         if (LineOfSight(free_, start, nodes_[size_t(v)])) extra[size_t(S)].push_back(v);
+    // Endpoints that see no node (nor each other) join through the LATTICE [DESIGN] (EXPLORATION_4.6 §10: hazard seed
+    // 0's exit sat where no node was in sight; the graph routed to the far exit, 11.1 m vs 4.4 m). Not FAR's: FAR joins
+    // start / goal by visibility edges only, then attempts the goal through unknown space or reports failure (§11).
+    // Edge cost = the octile lattice distance (>= the executed string-pulled length); the segment is
+    // spliced in as the string-pulled A* path at reconstruction, so every executed segment stays line-of-sight valid.
     const double inf = std::numeric_limits<double>::infinity();
+    std::map<std::pair<int, int>, double> lattice;   // (endpoint, node) -> octile cells
+    auto Isolated = [&](int u) {
+        if (!extra[size_t(u)].empty()) return false;
+        for (int x = 0; x < N; ++x)
+            for (int y : extra[size_t(x)])
+                if (y == u) return false;
+        return true;
+    };
+    for (int u = S; u < N; ++u) {
+        if (!Free(free_, At(u).r, At(u).c) || !Isolated(u)) continue;
+        const cv::Mat d = GridDistances(free_, At(u));
+        for (int v = 0; v < V; ++v) {
+            const double dv = d.at<double>(nodes_[size_t(v)].r, nodes_[size_t(v)].c);
+            if (!std::isfinite(dv)) continue;
+            lattice[{u, v}] = dv;
+            if (u == S) extra[size_t(S)].push_back(v);
+            else extra[size_t(v)].push_back(u);
+        }
+    }
     std::vector<double> d(size_t(N), inf);
     std::vector<int> par(size_t(N), -1);
     using Q = std::pair<double, int>;
@@ -169,13 +193,40 @@ VisRoute VisibilityGraph::Query(const Cell& start, const std::vector<Cell>& goal
         pq.pop();
         if (du > d[size_t(u)]) continue;
         if (u >= G0) {   // the nearest goal by path length
-            out.found = true, out.goal_index = u - G0, out.length_cells = du;
-            for (int x = u; x >= 0; x = par[size_t(x)]) out.cells.push_back(At(x));
-            std::reverse(out.cells.begin(), out.cells.end());
+            out.found = true, out.goal_index = u - G0;
+            std::vector<int> chain;
+            for (int x = u; x >= 0; x = par[size_t(x)]) chain.push_back(x);
+            std::reverse(chain.begin(), chain.end());
+            out.cells.push_back(At(chain[0]));
+            for (size_t i = 1; i < chain.size(); ++i) {
+                const int a = chain[i - 1], b = chain[i];
+                const bool lat = lattice.count({a, b}) || lattice.count({b, a});
+                if (!lat) {
+                    out.cells.push_back(At(b));
+                    continue;
+                }
+                const GridPath gp = AStar(free_, At(a), {At(b)});   // the lattice approach, string-pulled
+                std::vector<Cell> pulled;
+                if (gp.found) {
+                    pulled.push_back(gp.cells[0]);
+                    size_t k = 0;
+                    while (k + 1 < gp.cells.size()) {
+                        size_t j = k + 1;
+                        for (size_t q = gp.cells.size() - 1; q > k + 1; --q)
+                            if (LineOfSight(free_, gp.cells[k], gp.cells[q])) { j = q; break; }
+                        pulled.push_back(gp.cells[j]);
+                        k = j;
+                    }
+                }
+                for (size_t q = 1; q < pulled.size(); ++q) out.cells.push_back(pulled[q]);
+            }
+            for (size_t i = 1; i < out.cells.size(); ++i) out.length_cells += Dist(out.cells[i - 1], out.cells[i]);
             return out;
         }
         auto Relax = [&](int v) {
-            const double nd = du + Dist(At(u), At(v));
+            const auto it = lattice.find({u, v}), it2 = lattice.find({v, u});
+            const double w = it != lattice.end() ? it->second : (it2 != lattice.end() ? it2->second : Dist(At(u), At(v)));
+            const double nd = du + w;
             if (nd < d[size_t(v)]) d[size_t(v)] = nd, par[size_t(v)] = u, pq.emplace(nd, v);
         };
         if (u < V)

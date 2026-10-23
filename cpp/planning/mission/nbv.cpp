@@ -1,9 +1,12 @@
 #include "planning/mission/nbv.hpp"
 
 #include "core/random/philox.hpp"
+#include "planning/volumetric/clearance.hpp"
 #include "planning/volumetric/occupancy_grid.hpp"
 
 #include <opencv2/core.hpp>
+#include <opencv2/geometry/2d.hpp>   // OpenCV 5: DistanceTypes (DIST_L2) live in the geometry module
+#include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -243,6 +246,45 @@ double P90Scale(std::vector<double> v) {
     return v.back() > 0 ? v.back() : 0.0;
 }
 
+cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a) {
+    cv::Mat ok = tm.clear_r >= float(rho_a - kTravEpsM);   // 255 where the egress clearance allows the agent
+    cv::Mat plan = tm.trav_a.clone();
+    plan.setTo(0, ok == 0);
+    return plan;
+}
+
+cv::Mat FlownReturnSpace(const cv::Mat& plan, const cv::Mat& slab, const GridFrame& g, const std::vector<core::Vec3>& track,
+                         const std::vector<Cell>& entrances, double body_m, cv::Mat* swept) {
+    cv::Mat sw = cv::Mat::zeros(plan.size(), CV_8U);
+    if (!track.empty()) {
+        std::vector<cv::Point> pts;   // (x = col, y = row)
+        auto ColRow = [&](const core::Vec3& p) {
+            return cv::Point(int(std::floor((p.x() - g.ox) / g.cell)), int(std::floor((p.y() - g.oy) / g.cell)));
+        };
+        const cv::Point first = ColRow(track.front());
+        double best = kInf;
+        for (const Cell& e : entrances) {
+            const double d = std::hypot(e.c - first.x, e.r - first.y);
+            if (d < best) best = d, pts.assign(1, cv::Point(e.c, e.r));
+        }
+        for (const auto& p : track) pts.push_back(ColRow(p));
+        // The centre line (1 px), then every cell centre within the body radius of it (exact L2 distance transform):
+        // never claims a column the body did not cover (a thick cv::line rounds its half-width up).
+        cv::Mat off(plan.size(), CV_8U, cv::Scalar(255));
+        if (pts.size() == 1) off.at<uint8_t>(pts[0]) = 0;
+        for (size_t i = 1; i < pts.size(); ++i) cv::line(off, pts[i - 1], pts[i], 0, 1, cv::LINE_8);
+        cv::Mat d;
+        cv::distanceTransform(off, d, cv::DIST_L2, cv::DIST_MASK_PRECISE);
+        sw = d <= float(body_m / g.cell);
+        sw.setTo(1, sw);
+        sw.setTo(0, slab == kOccupied);
+    }
+    cv::Mat ret = plan.clone();
+    ret.setTo(1, sw);
+    if (swept) *swept = sw;
+    return ret;
+}
+
 double ArrivalBottleneck(const cv::Mat& B, const Cell& goal, int rad) {
     double best = -1;
     for (int dy = -rad; dy <= rad; ++dy)
@@ -293,7 +335,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
 
     // Plan space (D158): trav_a, plus the agent's own escape disc where the slab is not occupied.
     const Cell me = CellOf(g, st.position.x(), st.position.y());
-    cv::Mat plan = tm.trav_a.clone();
+    cv::Mat plan = KnownFreePlan(tm, p.rho_a);
     const double esc = p.escape_m / g.cell;
     for (int r = std::max(0, me.r - int(esc) - 1); r <= std::min(plan.rows - 1, me.r + int(esc) + 1); ++r)
         for (int c = std::max(0, me.c - int(esc) - 1); c <= std::min(plan.cols - 1, me.c + int(esc) + 1); ++c)
@@ -305,9 +347,13 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     const double fe = std::min(1.0, st.e_used_m / p.e_total_m), ft = std::min(1.0, in.t_s / p.mission_T_s);
     out.lambda_path = (1.0 + (1.0 + fe * fe * fe) + (1.0 + ft * ft * ft)) / 3.0;
 
-    const int arrive = int(std::ceil(p.escape_m / g.cell));
-    auto Risk = [&](const Cell& c, TaskCandidate* t) {
-        const double b = ArrivalBottleneck(bott, c, arrive);   // D158 as B built it (risk was ~1.0 on 95 % of views)
+    // Scored at the commanded cell itself (rad 0): with the known-free plan space every commanded goal has the agent's
+    // body clear, the practice of FUEL / NBVP / GBPlanner2, and the score belongs to the pose the agent is sent to.
+    // D158's max over the goal's escape disc compensated for goals in unknown space (unknown-as-passable trav_a); it
+    // could score a goal by a cell the agent is never sent to, with no precedent in the literature read (NBV_4.3 §13).
+    const int arrive = 0;
+    auto Risk = [&](const Cell& c, TaskCandidate* t, const cv::Mat& B) {
+        const double b = ArrivalBottleneck(B, c, arrive);
         t->risk_geometric = std::isinf(b) ? 0.0 : (b < 0 ? 1.0 : std::clamp((p.rho_r - b) / (p.rho_r - p.rho_a), 0.0, 1.0));
         t->risk_structural = in.risk_calibrated ? double(tm.risk.at<float>(c.r, c.c)) : 0.0;
         t->risk = std::max(t->risk_geometric, t->risk_structural);
@@ -318,26 +364,39 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     };
 
     // --- the hard rule, outside the utility (§21.4) ----------------------------------------------------------------
+    // E(return) over the return space: known-free plus the swept body of the flown track (the way in, never observed
+    // by the forward rig). On the swept columns the body itself passed, so their clearance is at least rho_agent.
+    cv::Mat swept;
+    const cv::Mat ret_space = FlownReturnSpace(plan, tm.slab, g, st.own_keyframes, in.entrances, p.rho_a, &swept);
+    const cv::Mat dist_ret = GridDistances(ret_space, me);
     int best_e = -1;
     double d_ret = kInf;
     for (size_t i = 0; i < in.entrances.size(); ++i) {
         const Cell& e = in.entrances[i];
-        if (In(dist, e) && dist.at<double>(e.r, e.c) < d_ret) d_ret = dist.at<double>(e.r, e.c), best_e = int(i);
+        if (In(dist_ret, e) && dist_ret.at<double>(e.r, e.c) < d_ret) d_ret = dist_ret.at<double>(e.r, e.c), best_e = int(i);
     }
     const double e_return = p.e_per_m * d_ret * g.cell;
-    if (p.e_total_m - st.e_used_m < p.reserve * e_return) {
+    if (best_e < 0) {
+        // No entrance over the return space: the flown track itself is now blocked. That is a lost route, not an
+        // energy comparison (E_remaining < 1.3 x inf would hold the agent for the rest of the mission): reported as
+        // its own supervisor event, the options are not restricted.
+        out.supervisor_event = "return route lost: no entrance over known-free space or the flown track";
+    } else if (p.e_total_m - st.e_used_m < p.reserve * e_return) {
         out.reserve_rule = true;
         char buf[200];
         std::snprintf(buf, sizeof buf, "energy reserve: E_remaining %.2f < %.2f x E(return) %.2f -> {return, hold}",
                       p.e_total_m - st.e_used_m, p.reserve, e_return);
         out.supervisor_event = buf;
-        if (best_e >= 0) {
+        {
             TaskCandidate t;
             const Cell& e = in.entrances[size_t(best_e)];
             t.source = TaskSource::kReturn, t.task_id = TaskId(TaskSource::kReturn, best_e);
             t.goal_xy = {g.ox + (e.c + 0.5) * g.cell, g.oy + (e.r + 0.5) * g.cell}, t.centroid_xy = t.goal_xy;
             t.path_m = d_ret * g.cell;
-            Risk(e, &t);
+            cv::Mat clr_ret = tm.clear_r.clone();
+            cv::Mat floor_a = cv::max(clr_ret, float(p.rho_a));
+            floor_a.copyTo(clr_ret, swept);
+            Risk(e, &t, Bottleneck(ret_space, clr_ret, me, esc));   // on the space the return actually uses
             t.utility = 1;   // the supervisor's order, not a score: return before hold
             out.options.push_back(t);
         }
@@ -416,9 +475,10 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     }
     const std::unordered_set<int64_t>* envp = env.empty() ? nullptr : &env;
 
+    const cv::Mat known = KnownFreePlan(tm, p.rho_a);   // view goals only in known-free agent space (D153b)
     // --- views, raw terms, costs ---------------------------------------------------------------------------------
     for (const auto& t : targets) {
-        for (const View& v : SampleViews(map, g, tm.trav_a, t.p, p.sampler, p.frustum, envp, in.bounds)) {
+        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds)) {
             if (!In(dist, v.cell) || !std::isfinite(dist.at<double>(v.cell.r, v.cell.c))) continue;
             TaskCandidate c;
             c.task_id = TaskId(t.src, t.anchor), c.source = t.src;
@@ -429,7 +489,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
             c.ig_raw[kPoseConnectivity] = t.gain_conn, c.ig_raw[kLoopDisambiguation] = t.gain_alias;
             c.cost = {c.path_m, t.src == TaskSource::kConnectivity ? p.exchange_bytes : 0.0, p.e_per_m * c.path_m,
                       c.path_m / p.speed_mps, 0.0};
-            Risk(v.cell, &c);
+            Risk(v.cell, &c, bott);
             c.cost[4] = c.risk;
             out.options.push_back(c);
         }

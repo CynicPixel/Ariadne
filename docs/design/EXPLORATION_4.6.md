@@ -199,3 +199,39 @@ ones, and every route is valid (each segment re-checked by symmetric line of sig
     visibility through the gap.
   - **Open bug, to fix with a regression test made from this map** (the run's `trav_responder.png`).
   - The gate rows are unaffected: `Route` uses A\* plus string-pulling, not FAR.
+
+## 11. Literature review of the post-design fixes (2026-10-23; `docs/design/lit/phase4_fixes_route_cbba.md`)
+
+**The lattice join (`749187f`): our claim about FAR was wrong; the join is `[DESIGN]`.**
+- 749187f said the join works "as FAR joins start/goal through its local planner". FAR §III-C (p. 3) says
+  otherwise: "The planner first add p_robot and p_goal as two vertices … and connect them to the vertices … with
+  non-blocking visibility edges. Then, a breath-first search is run". The "local planner [34]" is the waypoint
+  follower that runs after FAR.
+- FAR's code (`graph_planner.cpp` @2799b69) handles the hard cases differently:
+  - goal edges are checked only against observed obstacles, so unknown space is passable ("attemptable");
+  - a goal inside an obstacle is moved to the nearest free cell by grid BFS (`ReEvaluateGoalPosition`);
+  - with no path, it replays the last path, sends the raw goal in attemptable mode, or reports failure.
+- Our comparator runs on the known ρ_responder lattice and cannot attempt through unknown space, so the lattice join
+  is our own substitute. It keeps the comparator's routes valid on the known map.
+- §9–10's comparator numbers stand: they measured our graph, labelled FAR-style.
+- **Two further deviations, recorded:**
+  - FAR prunes long edges that point into polygons (Fig. 3); ours does not;
+  - FAR inflates obstacles by the vehicle size; we offset nodes 1 cell instead.
+- **The gate is unaffected:** `Route` and every NBV row use A\* plus string-pulling, not this graph.
+
+**Line of sight checked in both directions (`cdbc6b1`): conservative and safe, `[DESIGN]`.**
+- Amanatides & Woo (1987) visit exactly the cells a ray crosses. Theta\* (JAIR 2010, App. A) defines line of sight
+  geometrically, which makes it symmetric. Neither is what `cv::LineIterator` 4-connected does.
+- Port of OpenCV 5 `LineIterator` (`[ASSUMPTION]`: it matches the pinned tag), over 624 centre-to-centre segments:
+  - the two directions differ on 392 segments;
+  - one direction alone misses a crossed cell on 272 segments, so it is unsafe;
+  - the union of both directions misses none, but over-blocks (includes untouched cells) on 272.
+- Kept for now: it is safe, and it affects `StringPull` identically in every gate row.
+- An exact order-free traversal with Theta\*'s corner rule would remove the over-blocking. That is a post-gate change.
+
+**D\* Lite's change trigger (4.5): supported.**
+- D\* Lite assumes nothing about whether costs "go up or down" (AAAI 2002, p. 4).
+- Its main loop is "for all directed edges (u, v) with changed edge costs … UpdateVertex(u)", and detecting the
+  change is left to the caller.
+- `DStarLite::Update` applies every changed cell on every replan. `new_obstacle` and the other triggers are trace
+  labels only.

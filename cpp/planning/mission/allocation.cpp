@@ -115,22 +115,31 @@ struct AgentState {
     std::vector<int> b, p;
 };
 
-void BuildBundle(const AuctionInstance& in, int i, AgentState* st) {   // Algorithm 3
+// Algorithm 3 with Johnson et al.'s bid warping (CDC 2012, eq. 6): the insertion marginal of a time-discounted path
+// score is NOT DMG (a task inserted next to a later one can raise another's marginal; pinned in test_allocation), so
+// Theorem 1's precondition fails at L_t >= 2. The true marginal c ranks the tasks; the warped bid
+// c_bar = min(c, every bid already in the bundle) is the outbid test and the shared y, so bids never increase along a
+// bundle (eq. 9) and the fleet sees a DMG score (Johnson Theorems 2-3). Johnson's Algorithm 2 rebuilds the bundle from
+// scratch each phase; this keeps Algorithm 3's incremental build [DESIGN]. At L_t = 1 the warp is the identity.
+void BuildBundle(const AuctionInstance& in, int i, AgentState* st) {
     const int N = in.Tasks();
     while (int(st->b.size()) < in.max_bundle) {
-        double best = 0;
+        double cap = std::numeric_limits<double>::infinity();
+        for (int k : st->b) cap = std::min(cap, st->y[size_t(k)]);
+        double best = 0, best_bid = 0;
         int J = -1, pos = 0;
         for (int j = 0; j < N; ++j) {
             if (std::find(st->b.begin(), st->b.end(), j) != st->b.end() || in.value[size_t(i)][size_t(j)] <= 0) continue;
             int n;
             const double c = Marginal(in, i, st->p, j, &n);
-            if (c <= 0 || !Outbids(c, i, st->y[size_t(j)], st->z[size_t(j)])) continue;   // h_ij
-            if (J < 0 || c > best) best = c, J = j, pos = n;                                // ties: lower task index
+            const double cw = std::min(c, cap);
+            if (cw <= 0 || !Outbids(cw, i, st->y[size_t(j)], st->z[size_t(j)])) continue;   // h_ij on the warped bid
+            if (J < 0 || c > best) best = c, best_bid = cw, J = j, pos = n;                  // ties: lower task index
         }
         if (J < 0) break;
         st->b.push_back(J);
         st->p.insert(st->p.begin() + pos, J);
-        st->y[size_t(J)] = best, st->z[size_t(J)] = i;
+        st->y[size_t(J)] = best_bid, st->z[size_t(J)] = i;
     }
 }
 
