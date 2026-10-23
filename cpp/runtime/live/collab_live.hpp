@@ -5,7 +5,8 @@
 //
 //   Attach(k, fd)   a connection to agent k's collab worker; a reader thread files its #ckf records, #fresp replies
 //                   and #cwm watermarks.
-//   Step(now)       at the barrier: (lockstep) wait until every attached worker's watermark is >= now; deliver the
+//   Step(now)       at every radio tick (the runtime's 0.5 s ladder inside each barrier, D218: one tick per 5 s
+//                   barrier starves membership): (lockstep) wait until every attached worker's watermark is >= now; deliver the
 //                   network up to now; release every record with t_final <= now (sim time, never arrival time);
 //                   tick the fleet. Features answer through CollabNode's deferred path: the first ask sends #freq and
 //                   returns "not ready"; the reply is handed over at the first tick >= ask + feature_latency_s, and in
@@ -14,6 +15,10 @@
 //   T_O0_O()        per agent k merged with agent 0 (the same adopted frame): T_G_W(0)^-1 T_G_W(k), the runtime's
 //                   T_W_O feedback (§4; B's mutex-guarded T_W_O[k]). Linked(): the comms state for A1's linked[k].
 //   Telemetry(now)  one JSON line for the console's comms panel (§5).
+// The fleet's nodes ARE the runtime's radio nodes with collab: true (one node per participant, the operator
+// included: it has no keyframes but relays and may be elected broker); `customize` adds the D175 coordination
+// mailbox to each. The runtime sends patches/bids/consensus through fleet().node(k) and never AddKeyframe()s itself:
+// keyframes enter only through Release (final odometry, #ckf), so SLAM and coordination share one radio and ledger.
 // GROUND TRUTH IS EVALUATION ONLY: the records' gt feeds edges.csv and injections, never a hook's decision.
 // ---------------------------------------------------------------------------
 #include "runtime/agent/collab_fleet.hpp"
@@ -44,11 +49,11 @@ class CollabLive {
 public:
     CollabLive(const CollabConfig& cfg, const std::vector<ac::AgentId>& fleet, ac::CommsNode& comms,
                const perception::HardPairMatcher& lightglue, uint64_t seed, int64_t t_first_ns, CollabLiveParams p,
-               std::ostream* edges_csv)
-        : p_(p), fleet_ids_(fleet), enc_(ac::ParseLocalEncoding(cfg.local_encoding)),
+               std::ostream* edges_csv, std::function<void(ac::AgentId, ac::NodeHooks&)> customize = {})
+        : p_(p), fleet_ids_(fleet), enc_(ac::ParseLocalEncoding(cfg.local_encoding)), comms_(comms),
           fleet_(cfg, fleet, comms, lightglue, seed, t_first_ns,
                  [this](ac::AgentId k, uint64_t kf) { return Features(k, kf); },
-                 [this](const ac::KeyframeRef& r) { return GtCamera(r); }, edges_csv) {}
+                 [this](const ac::KeyframeRef& r) { return GtCamera(r); }, edges_csv, std::move(customize)) {}
 
     ~CollabLive() { Shutdown(); }
     CollabLive(const CollabLive&) = delete;
@@ -129,8 +134,24 @@ public:
         }
         const auto& vs = fleet_.verify_stats();
         o << "],\"verify\":{\"calls\":" << vs.calls << ",\"gated\":" << vs.gated << "},\"kept_inter_edges\":"
-          << KeptCount() << "}";
+          << KeptCount() << ",\"cut_active\":" << (comms_.cut_active() ? "true" : "false") << ",\"injections\":[";
+        for (size_t i = 0; i < fleet_.injections().size(); ++i) {
+            const auto& st = fleet_.injections()[i];
+            o << (i ? "," : "") << "{\"planted\":" << (st.planted ? "true" : "false") << ",\"kept_solves\":"
+              << st.kept_solves << ",\"solves_seen\":" << st.solves_seen << ",\"weight\":"
+              << (std::isfinite(st.weight) ? st.weight : -1.0) << "}";
+        }
+        o << "]}";
         return o.str();
+    }
+
+    // --- panel controls (LIVE_COLLAB §5) ---
+    /// "Cut comms": the groups as a scripted partition from `now` until RestoreComms (logged in comms.cuts()).
+    void CutComms(core::Timestamp now, std::vector<std::vector<ac::AgentId>> groups) { comms_.Cut(now, std::move(groups)); }
+    void RestoreComms(core::Timestamp now) { comms_.Restore(now); }
+    /// "Inject false closure": the fixed experiment, 4 m and 45 deg, on the pair with the most kept true loops.
+    std::optional<size_t> InjectFalse(core::Timestamp now) {
+        return fleet_.InjectNow(now, core::Vec3(4.0, 0.0, 0.0), 45.0);
     }
 
     CollabFleet& fleet() { return fleet_; }
@@ -273,6 +294,7 @@ private:
     CollabLiveParams p_;
     std::vector<ac::AgentId> fleet_ids_;
     ac::LocalEncoding enc_;
+    ac::CommsNode& comms_;
     mutable std::mutex mu_;
     std::condition_variable cv_;
     bool stopping_ = false;

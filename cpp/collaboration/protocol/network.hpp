@@ -95,6 +95,17 @@ public:
     void Partition(Timestamp t0, Timestamp t1, std::vector<std::vector<AgentId>> groups) {
         partitions_.push_back({t0, t1, std::move(groups)});
     }
+    /// An open-ended partition from t0 (D174 "cut comms" button), closed at t1 by EndOpenPartitions(t1).
+    void PartitionOpen(Timestamp t0, std::vector<std::vector<AgentId>> groups) {
+        partitions_.push_back({t0, Timestamp{INT64_MAX}, std::move(groups)});
+    }
+    /// Closes every still-open partition at t1; returns how many it closed.
+    size_t EndOpenPartitions(Timestamp t1) {
+        size_t n = 0;
+        for (auto& p : partitions_)
+            if (p.t1.ns == INT64_MAX) p.t1 = std::max(t1, p.t0), ++n;
+        return n;
+    }
     /// During [t0, t1) `agent` can neither send nor receive.
     void Disconnect(AgentId agent, Timestamp t0, Timestamp t1) { disconnects_.push_back({agent, t0, t1}); }
     /// During [t0, t1) every link gains `extra_s` of latency.

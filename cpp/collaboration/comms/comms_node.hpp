@@ -116,6 +116,20 @@ public:
     }
 
     core::ByteLedger& ledger() { return ledger_; }   // hand this to every Endpoint; nothing else writes it
+    /// D174 panel: "cut comms" from t0 until Restore(t1) - groups as a scripted partition ({all apart} or {one apart});
+    /// every cut is kept for the run's record (scripted faults, like the scenario's).
+    void Cut(Timestamp t0, std::vector<std::vector<AgentId>> groups) {
+        cuts_.push_back({t0, Timestamp{INT64_MAX}, groups});
+        faults_.PartitionOpen(t0, std::move(groups));
+    }
+    void Restore(Timestamp t1) {
+        faults_.EndOpenPartitions(t1);
+        for (auto& c : cuts_)
+            if (c.t1.ns == INT64_MAX) c.t1 = std::max(t1, c.t0);
+    }
+    struct CutRecord { Timestamp t0, t1; std::vector<std::vector<AgentId>> groups; };
+    const std::vector<CutRecord>& cuts() const { return cuts_; }
+    bool cut_active() const { return !cuts_.empty() && cuts_.back().t1.ns == INT64_MAX; }
     const core::ByteLedger& ledger() const { return ledger_; }
     Network& network() { return net_; }
     const LinkModel& links() const { return faults_; }   // the effective link state (base + faults)
@@ -125,6 +139,7 @@ private:
 
     Timestamp origin_;
     FaultPlan faults_;
+    std::vector<CutRecord> cuts_;
     Network net_;
     core::ByteLedger ledger_;
 };
