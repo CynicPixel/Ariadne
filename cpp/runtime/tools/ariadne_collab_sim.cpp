@@ -203,7 +203,7 @@ int main(int argc, char** argv) {
         const auto cum = [&](bool first_only) {
             uint64_t s = 0;
             for (const auto& r : comms.ledger().Records())
-                if (!first_only || !r.retransmit) s += r.wire_bytes;
+                if (!first_only || !(r.retransmit || r.resend)) s += r.wire_bytes;
             return s;
         };
         const int64_t dt = int64_t(std::llround(cfg.dt_s * 1e9));
@@ -232,12 +232,12 @@ int main(int argc, char** argv) {
         // --- outputs -------------------------------------------------------------------------------------------
         {
             std::ofstream l(fs::path(out) / "ledger.csv");
-            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit,resync,"
+            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit,resync,resend,"
                  "predicted_wire_bytes\n";
             for (const auto& r : comms.ledger().Records())
                 l << 1e-9 * double(r.t.ns - t_first) << ',' << r.sender << ',' << r.receiver << ',' << int(r.type) << ','
                   << r.payload_bytes << ',' << r.transmitted_bytes << ',' << r.wire_bytes << ',' << int(r.compressed)
-                  << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << r.predicted_wire_bytes << '\n';
+                  << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << int(r.resend) << ',' << r.predicted_wire_bytes << '\n';
         }
         std::vector<const ac::CollabNode*> cn;
         for (const auto& n : nodes) cn.push_back(n.get());
@@ -266,14 +266,16 @@ int main(int argc, char** argv) {
           << "\"}" << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";
         // Per class (COLLAB_3.2 §7, D171): first transmission outside resync (the I6 measured side) with the senders'
-        // per-message predictions; overhead rows apart: retransmissions and resends to a new broker (resync).
-        struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, predicted_msgs = 0;
+        // per-message predictions; overhead rows apart: retransmissions, resends to a new broker (resync) and protocol
+        // re-sends of a request id (D180).
+        struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, resend = 0, predicted_msgs = 0;
                             double predicted = 0; };
         std::map<int, ClassBytes> cls;
         for (const auto& r : comms.ledger().Records()) {
             ClassBytes& c = cls[int(r.type)];
             if (r.retransmit) c.retx += r.wire_bytes;
             else if (r.resync) c.resync += r.wire_bytes;
+            else if (r.resend) c.resend += r.wire_bytes;
             else {
                 ++c.msgs, c.wire += r.wire_bytes, c.transmitted += r.transmitted_bytes;
                 if (r.predicted_wire_bytes >= 0) ++c.predicted_msgs, c.predicted += r.predicted_wire_bytes;
@@ -283,7 +285,7 @@ int main(int argc, char** argv) {
         for (const auto& [k, c] : cls)
             y << "  - {class: " << k << ", messages: " << c.msgs << ", wire_first: " << c.wire << ", transmitted_first: "
               << c.transmitted << ", predicted_first: " << (c.predicted_msgs == c.msgs && c.msgs ? c.predicted : -1.0)
-              << ", wire_retransmit: " << c.retx << ", wire_resync: " << c.resync << "}\n";
+              << ", wire_retransmit: " << c.retx << ", wire_resync: " << c.resync << ", wire_resend: " << c.resend << "}\n";
         y << "total_wire_bytes: {first: " << cum(true) << ", all: " << cum(false) << "}\n";
         double pred_req = 0, pred_resp = 0;
         uint64_t edges_verified = 0, solves = 0, cands = 0, selected = 0, expired = 0, uncal = 0, unadv = 0, changes = 0,
