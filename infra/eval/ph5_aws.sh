@@ -147,6 +147,15 @@ run() {   # name rec degradation cpus [perception config] [extra tool args...]
   else
     echo "RUN_FAILED $name"
   fi
+  # Upload each row as it ends: a spot reclaim skips the end-of-run upload (run 20261023T110828Z-cpux86-a420ae lost
+  # 21 min of finished rows that way). The small outputs only, as step 5 collects them.
+  local r; r=$(ls -d "$OUT/$name"/*/ 2>/dev/null | tail -1)
+  if [ -n "$r" ]; then
+    for f in results.yaml manifest.yaml estimate_body.tum vo_trace.csv exposure_trace.csv; do
+      [ -f "$r$f" ] && aws s3 cp "$r$f" "$DEST/replays/$name/$f" --only-show-errors
+    done
+  fi
+  aws s3 cp "$R/run_$name.log" "$DEST/replays/$name/run.log" --only-show-errors || true
 }
 if [ "${ROWS:-lighting}" = d145 ]; then
   # §31.5 rows (D145-D147), two lanes. L = the lamp-lit recording, sensor D with the sRGB decode (Stage 3 and the
