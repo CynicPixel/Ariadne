@@ -467,6 +467,8 @@ TEST(Serialization, CbbaConsensusRoundTripsAndIsCounted) {   // D115: class TASK
     bad.y.pop_back();
     const auto mb = codec.EncodeCbbaConsensus(bad, 1, 0, Timestamp{5}, 4);
     EXPECT_EQ(codec.Decode(mb.bytes, &d), WireCodec::Status::kMalformed);
+}
+
 TEST(Serialization, LargeFeatureResponseRoundTripsThroughFragmentation) {
     // D171: an ALIKED-n16 response at its real size (1024 features, int8 128-D + scale, 3D points): ~93 fragments.
     // The protocol tests' scenes use ~200 features; the sim integration first exercised this size.
