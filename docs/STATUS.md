@@ -16,9 +16,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   dense GT. Matrix fixed before measurement (`configs/benchmark/hilti_5.6.yaml`); the 3 rows ran locally (D144).
 - **Real auto-exposure:** OAK-D exposure pinned at 30 ms, gain alone tracks the dark: 5.3's actuator order.
 - **5.6 result (D144): 0/100 on all three rows** (sim-tuned, EuRoC-tuned, EuRoC + radiometric). The estimate is
-  wrong (rigid-invariant GCP distances checked), not the scoring. Tracking holds for ~60 s, then 14–22 % of frames are
-  lost. Leading suspect: the lamp's ring pattern on the floor is camera-locked (it survives a 200-frame mean);
-  causation not isolated. No re-tuning after the failure; fix candidates go through preflight first.
+  wrong (rigid-invariant GCP distances checked), not the scoring. Keyframes 200–300 per 300 frames whenever the
+  robot moves; 14–22 % lost, all in windows where it rotates with a dark far field. The lamp's ring pattern on the
+  floor is camera-locked (it survives a 200-frame mean) and fits as the mechanism; causation not isolated. No re-tuning after the failure; fix candidates go through preflight first.
 
 ## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
 

@@ -3365,7 +3365,7 @@ balance 0. That is the crop, measured. EuRoC 12/12 (incl. accept/refuse); rectif
   (930–1549). On 253 frames the right camera's ISO lags the left by one step. That is real-data evidence for 5.3's
   actuator order (exposure to its ceiling, then gain) and for the stereo exposure match.
 
-## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); a camera-locked lamp pattern is the leading suspect
+## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot moves
 
 **Runs** (`configs/benchmark/hilti_5.6.yaml`, fixed before measuring; commit `1468344`, clean; all 3592 frames;
 evidence `evaluation/runs/ph5/hilti_5.6/`). Hilti score, 5 GCPs, SE(3) fit / leave-one-out:
@@ -3380,28 +3380,52 @@ evidence `evaluation/runs/ph5/hilti_5.6/`). Hilti score, 5 GCPs, SE(3) fit / lea
   or extrinsic error in the chain would leave them intact. They match the survey early (ratio 0.88–0.95 between the
   first two GCPs, 15.5 m apart) and then fall apart: 0.27 for the sim-tuned row; 0.5–50 for the EuRoC rows. The
   estimated height spans 14 m (sim-tuned), 32 m and 527 m on one floor.
-- **Where it fails.** Tracking holds for the first ~600 frames (60 s) in every row. The losses cluster in frames
-  900–1200 and 1500–2100 (up to 207 of 300 frames lost), where mean PnP correspondences drop to 40–55. The last
-  ~900 frames track again.
+- **No phase tracks well.** Status stays "tracking" through the first 600 frames, but the sim-tuned row makes 190
+  and then 300 keyframes per 300 frames; the lit sim made ~80 in 1000. Landmarks do not survive from frame to frame,
+  so the map is rebuilt almost continuously from frame 0. The first GCP pair (frames ~196 → ~688) is already 5–12 %
+  short.
 - **The 2.2 radiometric gate** refuses on real data: the noise fit gives a < 0 on both cameras, so the VST stays off.
   The row differs from EuRoC-tuned only through that path, and its spread (17 vs 229 m) is one seed and is not
   claimed.
 
-**Diagnosis (leading suspect, not isolated).** A 200-frame mean over the whole sequence keeps, sharp, the lamp's
-concentric ring pattern on the floor, its bright lobe, and a dark smudge (likely lens dirt). For a ground robot the
-floor stays fixed relative to the camera, so the lamp pattern on it is camera-locked. Those strong edges do not move
-with the world: every track on them votes for zero motion. This is ALGORITHMS §17.4's lamp-anchored-edge hazard,
-and the sim lighting rows (D142) measured the co-moving lamp as the dominant cost there too. That the ring tracks
-cause the losses is [UNVERIFIED]: the share of tracks on the pattern has not been measured. Also present, also not
-isolated: 10 Hz (EuRoC 20 Hz) with 30 ms exposure on a moving robot, a rectified field of view of 107.6° from
-~127° (D143), and ISO up to 1549.
+**Diagnosis (measured correlation; mechanism not isolated).** Per 300-frame window, IMU gyro rate (`imu0`, z up),
+the mean brightness of the far field (the darkest 30 % of a 200-frame mean image, where the lamp never reaches),
+and the two rows' lost frames / keyframes:
+
+| frames | yaw p90 °/s | far-field mean | lost sim / rad | keyframes sim / rad |
+|---|---|---|---|---|
+| 0–299 | 1.5 | 85 | 0 / 0 | 190 / 173 |
+| 300–599 | 3.2 | 80 | 0 / 0 | 300 / 290 |
+| 600–899 | 2.8 | 94 | 39 / 38 | 212 / 192 |
+| 900–1199 | 3.1 | **44** | **174 / 182** | 243 / 256 |
+| 1200–1499 | **0.2** | 52 | 5 / 2 | 104 / 72 |
+| 1500–1799 | 3.1 | **50** | **203 / 207** | 241 / 235 |
+| 1800–2099 | 3.5 | 71 | 97 / 37 | 299 / 298 |
+| 2100–2399 | 3.0 | 81 | 76 / 19 | 208 / 198 |
+| 2400–2699 | 2.2 | 57 | 8 / 0 | 220 / 206 |
+| 2700–3591 | **0.1–0.2** | 52–54 | 0 / 0 | 34–60 per 300 |
+
+- **The quiet windows are the robot barely rotating** (0.2 °/s), not the tracker recovering. Translation in them is
+  not measured (`/track_odometry` was not exported). The first ends at frame 1499, just before the third GCP (~1508), and
+  the last contains the fifth (~3002): consistent with the robot stopping at its markers [ASSUMPTION].
+- **While it moves (2–7 °/s), losses are heavy only where the far field is dark** (44–50: 174–207 of 300 lost) and
+  light where it is lit (70–94: 0–97). Keyframes run at 200–300 per 300 whenever it moves, dark or lit.
+- **The camera-locked lamp pattern.** The 200-frame mean keeps the lamp's concentric ring pattern on the floor sharp,
+  with its lobe and a dark smudge (likely lens dirt). For a ground robot the floor is fixed relative to the camera,
+  so the pattern is camera-locked and its edges carry no motion. Being present in every frame, it cannot explain the
+  time pattern alone. It fits as the mechanism once the far field is dark: the lit floor is then all the texture
+  there is, and it is camera-locked [UNVERIFIED: the share of tracks on the pattern is not measured]. This is
+  ALGORITHMS §17.4's lamp-anchored-edge hazard, and D142 measured the co-moving lamp as the dominant cost in sim too.
+- **Smaller, not isolated:** rotation blur ≤ 7 °/s × 30 ms ≈ 1.6 px; 10 Hz (EuRoC 20 Hz); rectified FOV 107.6° of
+  ~127° (D143); ISO up to 1549.
 
 **Not done, deliberately.** No parameter was changed after the failed run (design-preflight rule). Candidate
 fixes, each to go through preflight (literature, OpenCV-native check, advisor) before any code:
 - a camera-fixed-structure mask from the running mean image's edges (the static-mask practice for self-occlusion);
+- measure first: the share of tracks and PnP inliers on the camera-locked pattern per window;
 - Stage 3 falloff normalisation with its `feature_mask` (D134/D140): needs depth, i.e. SGBM on this rig;
 - a motion-consistency check that drops tracks with zero image motion while the gyro reports rotation.
 
 **What transfers, stated:** extraction, calibration, fisheye rectification (row residual 0.42 px after refinement),
-stereo pairing, the Hilti scorer and the ~60 s of initial tracking. **What does not:** pose accuracy on a real dark
+stereo pairing and the Hilti scorer. **What does not:** pose accuracy on a real dark
 sequence with a co-moving lamp. The honest 5.6 line is 0/100 until a preflighted fix moves it.
