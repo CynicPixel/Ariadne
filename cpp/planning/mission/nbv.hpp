@@ -173,4 +173,9 @@ double P90Scale(std::vector<double> v);
 /// corner rule); cells within escape_cells of `from` count as unbounded. CV_64F, -1 unreachable.
 cv::Mat Bottleneck(const cv::Mat& plan, const cv::Mat& clr, const Cell& from, double escape_cells);
 
+/// D158's arrival rule (B, planner.hpp): the widest way to ARRIVE within `rad` cells of the goal = the max of the
+/// bottleneck map over that disc (a view goal sits at the edge of unknown space by design, so its own cell's clearance
+/// is not what a responder must pass). -1 if nothing in the disc is reachable.
+double ArrivalBottleneck(const cv::Mat& B, const Cell& goal, int rad);
+
 }  // namespace ariadne::planning

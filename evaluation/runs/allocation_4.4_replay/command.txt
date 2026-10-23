@@ -1,5 +1,6 @@
 # 4.4 allocation replay rows (docs/design/ALLOCATION_4.4.md §8, D115). Dev host, one process, 2026-10-23.
 # The real planning::Phase4Planner fed the evidence spool's keyframes; per replan, on the SAME auction instance:
 # CBBA (L_t = 1; TASK_CONSENSUS wire bytes at the serializer), broker SGA, the greedy joint pick, the exact optimum.
-# SPOOL / SCENE as evaluation/runs/egress_4.5/command.txt. Binary: working tree over 63fdbee (CBBA convergence fix).
+# SPOOL / SCENE as evaluation/runs/egress_4.5/command.txt. Binary: 146e769 (clean): sparse TASK_CONSENSUS through the
+# wire transport (D115a) and the L_t = 2 row ("lt2") on the same plan. The first replay (63fdbee, dense) is superseded.
 ariadne_volumetric_eval --spool SPOOL --scene SCENE --config configs/mission/mission_v1.yaml --out OUT --egress 1 --support-band -0.31,2.31 --phase4 1

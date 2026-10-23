@@ -225,3 +225,16 @@ TEST(Nbv, TareSchedulesLocalThenGlobal) {
     ASSERT_EQ(again.options.size(), global.options.size());
     if (!again.options.empty()) EXPECT_EQ(again.options.front().task_id, global.options.front().task_id);
 }
+
+TEST(Nbv, ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc) {
+    // D158 as B built it: a goal cell with clearance 0 (at the edge of unknown space) whose 0.5 m disc holds a cell
+    // reachable through 0.45 m must read 0.45 m, not 0.
+    cv::Mat B(20, 20, CV_64F, cv::Scalar(0.0));
+    B.at<double>(10, 13) = 0.45;   // 3 cells (0.15 m) from the goal
+    B.at<double>(10, 19) = 0.9;    // 9 cells away: inside a 10-cell disc, outside a 5-cell one
+    EXPECT_DOUBLE_EQ(ArrivalBottleneck(B, {10, 10}, 5), 0.45);
+    EXPECT_DOUBLE_EQ(ArrivalBottleneck(B, {10, 10}, 10), 0.9);
+    EXPECT_DOUBLE_EQ(ArrivalBottleneck(B, {10, 10}, 0), 0.0);
+    cv::Mat none(5, 5, CV_64F, cv::Scalar(-1.0));
+    EXPECT_DOUBLE_EQ(ArrivalBottleneck(none, {2, 2}, 2), -1.0);
+}

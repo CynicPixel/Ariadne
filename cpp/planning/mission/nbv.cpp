@@ -243,6 +243,17 @@ double P90Scale(std::vector<double> v) {
     return v.back() > 0 ? v.back() : 0.0;
 }
 
+double ArrivalBottleneck(const cv::Mat& B, const Cell& goal, int rad) {
+    double best = -1;
+    for (int dy = -rad; dy <= rad; ++dy)
+        for (int dx = -rad; dx <= rad; ++dx) {
+            const int y = goal.r + dy, x = goal.c + dx;
+            if (dx * dx + dy * dy > rad * rad || y < 0 || x < 0 || y >= B.rows || x >= B.cols) continue;
+            best = std::max(best, B.at<double>(y, x));
+        }
+    return best;
+}
+
 cv::Mat Bottleneck(const cv::Mat& plan, const cv::Mat& clr, const Cell& from, double escape_cells) {
     const int H = plan.rows, W = plan.cols;
     cv::Mat B(H, W, CV_64F, cv::Scalar(-1.0));
@@ -294,9 +305,10 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     const double fe = std::min(1.0, st.e_used_m / p.e_total_m), ft = std::min(1.0, in.t_s / p.mission_T_s);
     out.lambda_path = (1.0 + (1.0 + fe * fe * fe) + (1.0 + ft * ft * ft)) / 3.0;
 
+    const int arrive = int(std::ceil(p.escape_m / g.cell));
     auto Risk = [&](const Cell& c, TaskCandidate* t) {
-        const double b = bott.at<double>(c.r, c.c);
-        t->risk_geometric = std::isinf(b) ? 0.0 : std::clamp((p.rho_r - b) / (p.rho_r - p.rho_a), 0.0, 1.0);
+        const double b = ArrivalBottleneck(bott, c, arrive);   // D158 as B built it (risk was ~1.0 on 95 % of views)
+        t->risk_geometric = std::isinf(b) ? 0.0 : (b < 0 ? 1.0 : std::clamp((p.rho_r - b) / (p.rho_r - p.rho_a), 0.0, 1.0));
         t->risk_structural = in.risk_calibrated ? double(tm.risk.at<float>(c.r, c.c)) : 0.0;
         t->risk = std::max(t->risk_geometric, t->risk_structural);
         char buf[200];

@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     try {
         std::string spool_dir, scene_dir, config_path, out;
         bool egress_on = false, nbv_on = false, phase4_on = false, compare_on = false;
-        double band_lo = -1e9, band_hi = 1e9;
+        double band_lo = -1e9, band_hi = 1e9, risk_weight = 0;
         for (int i = 1; i + 1 < argc; i += 2) {
             const std::string k = argv[i], v = argv[i + 1];
             if (k == "--spool") spool_dir = v;
@@ -127,6 +127,7 @@ int main(int argc, char** argv) {
             else if (k == "--nbv") nbv_on = v == "1";
             else if (k == "--phase4") phase4_on = v == "1";
             else if (k == "--route-compare") compare_on = v == "1";
+            else if (k == "--risk-weight") risk_weight = std::stod(v);   // D112 passed: the risk-aware egress rows
             else if (k == "--support-band") {
                 if (std::sscanf(v.c_str(), "%lf,%lf", &band_lo, &band_hi) != 2 || !(band_hi > band_lo)) {
                     throw std::invalid_argument("--support-band LO,HI");
@@ -253,7 +254,8 @@ int main(int argc, char** argv) {
         const planning::Cell target = ToCell(scene["target_xy_m"][0].as<double>(), scene["target_xy_m"][1].as<double>());
         std::vector<planning::Cell> exits;
         for (const auto& e : scene["entrances"]) exits.push_back(ToCell(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>()));
-        const planning::EgressWeights ew;   // w_u = w_c = 1, w_r = 0: the risk proxy is uncalibrated (D112 pending)
+        planning::EgressWeights ew;   // w_u = w_c = 1; w_r from --risk-weight (0 default; 1 = the D112-calibrated rows)
+        ew.w_r = risk_weight;
         planning::EgressPlanner egress(target, exits, cell);
         planning::EgressPlanner egress_short(target, exits, cell);   // §3 comparator: all weights 0 (length only)
         planning::VisibilityGraph far_graph;
@@ -374,6 +376,7 @@ int main(int argc, char** argv) {
                 const planning::AuctionInstance in = planning::BuildAuction(P, gf, 1, &sc, &view);
                 planning::CbbaParams cp;
                 cp.bytes = planning::WireBytes(p4_codec, sc);
+                cp.transport = planning::WireTransport(p4_codec, sc);
                 const bool linked = ag[0].linked;
                 const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
                 const planning::Allocation cb = planning::RunCbba(in, [&](int) { return G; }, cp);
@@ -387,6 +390,18 @@ int main(int argc, char** argv) {
                         if (view[size_t(a)][size_t(j)] == Pg.joint[a]) greedy += planning::PathScore(in, a, {j});
                 }
                 const double opt = in.Tasks() ? planning::TwoAgentOptimum(in) : 0.0;
+                // The §31.7 L_t = 2 row on the same plan (D115 correction: CBBA may differ from SGA there).
+                std::vector<float> sc2;
+                std::vector<std::vector<int>> view2;
+                const auto t2 = std::chrono::steady_clock::now();
+                const planning::AuctionInstance in2 = planning::BuildAuction(P, gf, 2, &sc2, &view2);
+                const double ms_legs = Ms(t2);
+                planning::CbbaParams cp2;
+                cp2.bytes = planning::WireBytes(p4_codec, sc2);
+                cp2.transport = planning::WireTransport(p4_codec, sc2);
+                const planning::Allocation cb2 = planning::RunCbba(in2, [&](int) { return G; }, cp2);
+                const planning::Allocation sg2 = planning::SequentialGreedy(in2);
+                const double opt2 = in2.Tasks() ? planning::TwoAgentOptimum(in2) : 0.0;
                 p4_log << "{\"t_s\":" << ts << ",\"plan_ms\":" << ms << ",\"active\":[" << ag[0].active << "," << ag[1].active
                        << "],\"linked\":" << linked << ",\"options\":[" << P.agents[0].nbv.options.size() << ","
                        << P.agents[1].nbv.options.size() << "],\"event\":{\"method\":\"" << P.allocation.method
@@ -394,7 +409,11 @@ int main(int argc, char** argv) {
                        << ",\"messages\":" << P.allocation.messages << ",\"bytes\":" << P.allocation.bytes << "},\"tasks\":"
                        << in.Tasks() << ",\"cbba\":{\"total\":" << cb.total << ",\"rounds\":" << cb.rounds << ",\"messages\":"
                        << cb.messages << ",\"bytes\":" << cb.bytes << "},\"sga\":" << sg.total << ",\"greedy\":" << greedy
-                       << ",\"optimum\":" << opt << ",\"cbba_eq_sga\":" << (cb.winner == sg.winner) << ",\"joint\":[";
+                       << ",\"optimum\":" << opt << ",\"cbba_eq_sga\":" << (cb.winner == sg.winner)
+                       << ",\"lt2\":{\"cbba\":" << cb2.total << ",\"rounds\":" << cb2.rounds << ",\"messages\":" << cb2.messages
+                       << ",\"bytes\":" << cb2.bytes << ",\"tail_releases\":" << cb2.tail_releases << ",\"sga\":" << sg2.total
+                       << ",\"optimum\":" << opt2 << ",\"cbba_eq_sga\":" << (cb2.winner == sg2.winner) << ",\"legs_ms\":" << ms_legs
+                       << "},\"joint\":[";
                 for (int a = 0; a < 2; ++a) {
                     const int i = P.joint[a];
                     p4_log << (a ? "," : "");
@@ -591,7 +610,7 @@ int main(int argc, char** argv) {
             for (const auto& q : last_route.cells) sv.push_back(last_support.at<float>(q.r, q.c));
             std::sort(sv.begin(), sv.end());
             auto Q = [&](double p) { return sv.empty() ? 0.0 : double(sv[size_t(std::floor(p * double(sv.size() - 1)))]); };
-            res << "egress:   # 4.5 (EGRESS_4.5, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = 0 (risk uncalibrated)\n"
+            res << "egress:   # 4.5 (EGRESS_4.5, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = " << ew.w_r << "\n"
                 << "  support_band_m: [" << band_lo << ", " << band_hi << "]\n"
                 << "  replans: " << replans << "\n  reroutes: " << reroutes << "\n  first_route_s: " << first_valid_s
                 << "\n  final: {found: " << (last_route.found ? "true" : "false") << ", exit: " << last_route.exit

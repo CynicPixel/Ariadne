@@ -88,3 +88,29 @@ against our labels.
 - 3 renders at about 14 min of llvmpipe wall time each locally. On a T4 with EGL this is unmeasured: SMOKE first.
 - Then 3 estimator runs. Everything runs on one spot g4dn.xlarge through `spinup.sh --profile gpu`, under its three
   brakes.
+
+## Result (2026-10-23; `evaluation/runs/risk_calibration_4.2/`, protocol §3 as fixed before the data)
+
+- **Data:** three ci_tiny_hazard seeds, rendered, run through the estimator chain and mapped on AWS g4dn (one
+  spot run, ~$0.21 compute). The control is the evidence spool's hazard-free map.
+- **Population per seed:** 11–12k cells (GT trav_responder ∩ map-observed free), 37–43 % of them in GT risk zones.
+
+| score | seed 0 AUC | threshold (recall ≥ 0.9 on seed 0) | seeds 1–2 pooled: AUC / recall / FPR | control FPR |
+|---|---|---|---|---|
+| **proxy** (noisy-OR) | 0.841 | 1.0 (saturated) | **0.831** / 1.00 / 0.338 | 0.000 |
+| overhang alone | 0.921 | 1.0 | 0.922 / 0.999 / 0.156 | 0.000 |
+| unsupported alone | 0.841 | 1.0 | 0.831 / 1.00 / 0.338 | 0.000 |
+
+- **Bar passed:** evaluation AUC 0.831 ≥ 0.75. No term is dropped (both seed-0 AUCs > 0.6). **The proxy enters
+  planning** (w_r = 1 in the egress cost; `risk_calibrated: true`), as pre-registered.
+- **Reported with it, not hidden:**
+  - **The proxy saturates.** The recall-0.9 threshold lands on the clamp value 1.0, so its operating point is
+    effectively binary. At it, 34 % of in-population cells outside the risk zones also read 1.0 (FPR). The
+    N_ref = 100 saturation is reached too easily.
+  - **The overhang term alone is clearly better:** AUC 0.92, FPR 0.16.
+    - Switching to it now would be a choice made from this data.
+    - It's recorded as the next pre-registered candidate: overhang-only, threshold fixed on seed 0, its own fresh
+      seeds. It is not applied here.
+  - **The unsupported term carries the proxy's ranking:** proxy and unsupported AUCs are equal to 3 decimals.
+- **What it means for routing:** with w_r = 1, about a third of the non-hazard cells a route may use get the
+  maximal risk penalty. The hazard-seed egress rows (4.5) measure what that does to route length and validity.

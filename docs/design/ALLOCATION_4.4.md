@@ -220,3 +220,36 @@ replans).
   - Each would need its own review and a byte-table row; none is applied here.
 - **The first replay exposed a convergence bug,** fixed in `63fdbee`: single-agent events ran to the 1000-round cap
   because "converged" required agreement across disconnected agents.
+
+## 13. Sparse TASK_CONSENSUS (D115a, 2026-10-23)
+
+- **The cause:** §12 measured 2.4 KB per message, because every task (≈ 160) travelled with its (y, z), almost all
+  of them (0, none). Every CBBA event starts from y = 0, z = none, and with L_t = 1 only a handful of tasks ever
+  have a winner.
+- **The change: only tasks with a winner are sent.** The receiver expands every missing task to (0, none), which is
+  literally the sender's state, so Table I gets identical inputs. Bids travel as **doubles** (`y:[double]`), so the
+  wire never rounds a comparison.
+- **Proven end to end, not argued:**
+  - `CbbaParams.transport` delivers each message through encode → decode → expand;
+  - on 300 random instances (N_u 2–6, N_t 3–14, L_t 1–2) the assignment, the bids and the round count are
+    identical with and without the wire (`Cbba.WireTransportLeavesTheAssignmentUnchanged`).
+  - `Phase4Planner` and the replay evaluator now run CBBA through the wire transport.
+- **Size:** a 160-task event with 2 winners is 234 B on the wire. The run-level row is in §14.
+- **Not done, because it would change the algorithm, not the encoding:** announcing only top-K tasks, or deltas
+  against an acknowledged state. Neither is needed at this size.
+
+## 14. Replay rows with sparse messages and the L_t = 2 row (2026-10-23; `evaluation/runs/allocation_4.4_replay/`, binary 146e769)
+
+| | L_t = 1 (default) | L_t = 2 (§31.7 reported row) |
+|---|---|---|
+| CBBA = SGA | 40 / 40 | 40 / 40 (20 eq. 6 tail releases, none diverged here) |
+| CBBA / optimum, linked replans | mean 0.994, worst 0.983 | mean 0.994, worst 0.984 |
+| TASK_CONSENSUS wire bytes per message | **226 B** (dense: 2.4 KB) | 250 B |
+| rounds, linked | 2–3 | 2–4 |
+| bytes over the spool, event-triggered | **11.8 KB** (dense: 123.4 KB, 10.5× more) | — |
+| extra planner time | — | goal → goal legs: mean 1.4 s, max 4.4 s per replan |
+
+- **The byte rationale of §21.7 now holds on this spool:** about 1.3 KB per linked event, with the same assignments
+  as dense (proved by the wire-transport test, and CBBA = SGA here too).
+- **L_t = 2 buys nothing measurable on this spool:** the same optimum ratio. It costs 1.4 s of leg Dijkstras per
+  replan, and it carries the stale-bid divergence risk (§10). L_t = 1 stays the default.
