@@ -416,7 +416,8 @@ interpolated between barrier points, only within the metres that run reached; th
 | ci_tiny ariadne / best baseline | 0.440 / 0.417 | 0.837 / 0.797 | 0.938 / 0.898 | 0.960 / 0.913 | 0.963 / 0.923 | 0.962 / 0.936 |
 | maze_short ariadne / best baseline | 0.187 / 0.167 | 0.349 / 0.288 | 0.422 / 0.392 | 0.485 / 0.455 | 0.556 / 0.531 | 0.641 / 0.591 |
 
-- Per metre, Ariadne is best at every point from 5 to 30 m on both scenes, all 3 seeds in every mean.
+- Per metre, Ariadne is best of these four policies at every point from 5 to 30 m on both scenes, all 3 seeds in
+  every mean. With the two 4.6 rows it is not best everywhere (§14.1).
 - At 40 m only one Ariadne seed got that far, so the 40 m point is not compared.
 - This view does not rescue the claim. The claim is on the time axis, by the §5 amendment, made before any run.
 
@@ -434,3 +435,29 @@ interpolated between barrier points, only within the metres that run reached; th
   rule this is a design change made through §49, not a knob tuned after the failed run. It is open, after the D175 POC.
 
 **Not in this set:** the TARE row and the 1.8 nearest-frontier row ("-"). They are batches b09–b12, the 4.6 record.
+
+### 14.1 With the 4.6 rows: all 36 runs (2026-10-24)
+
+The TARE row and the 1.8 nearest-frontier row ("-") ran in batches b09–b12: same rig, same commit, every job exit 0.
+The four rows above are unchanged, since each run is scored on its own. The claim stays false on both scenes.
+
+| scene | ariadne | coverage_greedy | uncertainty_only | random | tare | nearest_frontier_1.8 |
+|---|---|---|---|---|---|---|
+| ci_tiny AUC | 0.884 | 0.892 | 0.883 | 0.876 | **0.895** | 0.789 |
+| maze_short AUC | 0.440 | **0.495** | 0.399 | 0.374 | 0.443 | 0.237 |
+
+**New losses on the time axis.**
+- ci_tiny: Ariadne is below TARE at T = 20–60 s (TARE 0.901 at 60 s vs 0.846), and below the 1.8 row at T = 20 and
+  40 s (0.522 vs 0.387 at 20 s).
+- maze_short: Ariadne is below TARE at T = 20 s and T = 80–160 s, and below the 1.8 row at T = 20 s (0.087 vs 0.082).
+- Ariadne is above TARE at T ≥ 80 s on ci_tiny and at 180–200 s on maze_short (0.757 vs 0.681 at 200 s).
+
+**Correction to the secondary view.** Ariadne is not best per metre at every point:
+- TARE is above it at 10 m on ci_tiny (0.849 vs 0.837) and at 15 m on maze_short (0.428 vs 0.422).
+- The 1.8 row is above it at 5 m on ci_tiny (0.482 vs 0.440).
+- At every other point from 5 to 30 m Ariadne is best (`coverage_per_metre.txt`).
+
+**The diagnostic reading is weaker than stated in §14.** TARE also chooses near goals: the median chosen path over
+the first 60 s on ci_tiny is 1.01–1.46 m. By T = 60 s it has flown about as far as Ariadne (10.4–11.5 m, against
+8.7–12.0 m), yet its coverage at 60 s is 0.901 against 0.846. So "near goals, fewer metres per second" does not
+explain the whole early gap on ci_tiny. The cause stays [UNVERIFIED]; the time-axis fix waits until after the D175 POC.

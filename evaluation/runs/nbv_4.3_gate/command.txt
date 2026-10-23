@@ -1,5 +1,5 @@
-# 4.3 gate (NBV_4.3 §5 as amended, §14 result). 24 lockstep live runs on AWS c7i.4xlarge spot, llvmpipe, RTF 0 + D168,
-# a1p feat/l1-a1planner d59ee3d (working tree: live_aws.sh --profile/--market only). Batches b01-b08 of
+# 4.3 + 4.6 gate (NBV_4.3 §5 as amended, §14 result; EXPLORATION_4.6 §12). 36 lockstep live runs on AWS c7i.4xlarge spot, llvmpipe, RTF 0 + D168,
+# a1p feat/l1-a1planner d59ee3d (working tree: live_aws.sh --profile/--market only). Batches b01-b12 of
 # configs/mission/gate/aws_r0_bNN.jobs (scene seed T_s planner_config); b03 job 3 re-ran inside b07.
 LIVE_AWS_PROFILE=cpux86 infra/scripts/live_aws.sh batch configs/mission/gate/aws_r0_bNN.jobs 150
 # score (run in this repo, feat/ph4-nagent; RUNS = each run's trace.jsonl directory):
