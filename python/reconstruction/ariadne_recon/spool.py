@@ -7,6 +7,11 @@ default. Poses are rectified-left cameras in each agent's odometry frame O_k.
 Schema 2 (6.1, D195) adds the §19.1 albedo proxy per keyframe (`rgb_kind: albedo_proxy`, `_albedo.png`), the APPLIED
 photometric state per bundle (exposure x gain, lamp power, controller decision), and the run's lamp (its calibration
 copied into the spool, the render intensity, R_rect_raw). Schema 1 spools load unchanged.
+
+Schema 3 (agreed with A1 and M, 2026-10-23) = schema 2's fields plus a `merges:` list REPLACING the single `merge:`
+block, for N agents: {agent: k, ok, T_O0_O: 12 row-major floats (agent k's odometry frame in agent 0's), edge}, one
+entry per non-anchor agent; agent 0 anchors. Schema < 3 reads `merge:` (agent 1 into agent 0); schema 3 requires
+`merges:` and refuses a `merge:` block. N = 1 + the largest bundle agent id.
 """
 from __future__ import annotations
 
@@ -17,7 +22,7 @@ import cv2
 import numpy as np
 import yaml
 
-SCHEMA_VERSIONS = (1, 2)
+SCHEMA_VERSIONS = (1, 2, 3)
 BUNDLE_FIELDS = ("role", "agent", "kf_id", "t_ns", "frame_id_of_pose", "T_WiC", "K", "width", "height",
                  "baseline_m", "files", "rgb_kind", "exposure_state", "lamp_state", "mask")
 
@@ -98,6 +103,7 @@ class Spool:
     T_O0_O1: np.ndarray
     merge_edge: str
     bundles: tuple[Bundle, ...]
+    merges: dict | None = None      # schema 3: agent k -> (ok, T_O0_Ok 4x4, edge)
 
     def keyframes(self) -> list[Bundle]:
         return [b for b in self.bundles if b.role == "keyframe"]
@@ -106,9 +112,13 @@ class Spool:
         return [b for b in self.bundles if b.role == "heldout"]
 
     def T_O0_C(self, b: Bundle) -> np.ndarray:
-        """A bundle's camera in agent 0's odometry frame (the 1.6 merge applied to agent 1)."""
+        """A bundle's camera in agent 0's odometry frame (the 1.6 merge applied to agent 1; schema 3: agent k's)."""
         if b.agent == 0:
             return b.T_O_C
+        if self.merges is not None:
+            if b.agent not in self.merges or not self.merges[b.agent][0]:
+                raise SpoolError(f"agent {b.agent} bundle but the spool has no ok merge for it")
+            return self.merges[b.agent][1] @ b.T_O_C
         if b.agent == 1:
             if not self.merge_ok:
                 raise SpoolError("agent 1 bundle but the spool has no merge")
@@ -130,6 +140,12 @@ def _half_png(path: Path, h: int, w: int) -> np.ndarray:
     return np.ascontiguousarray(bits).view(np.float16).astype(np.float32)
 
 
+def e_row(merges: dict, k: int) -> list:
+    """Agent k's merge as the 12 row-major numbers of schema < 3 (identity when absent)."""
+    T = merges[k][1] if k in merges else np.eye(4)
+    return [float(x) for x in T[:3, :].ravel()]
+
+
 def load(root: str | Path) -> Spool:
     root = Path(root)
     y = yaml.safe_load((root / "spool.yaml").read_text())
@@ -138,10 +154,22 @@ def load(root: str | Path) -> Spool:
     version = y.get("schema_version")
     if version not in SCHEMA_VERSIONS:
         raise SpoolError(f"schema_version {version!r} not in {SCHEMA_VERSIONS}")
-    for k in ("run_id", "scene_id", "merge", "bundles"):
+    for k in ("run_id", "scene_id", "merges" if version == 3 else "merge", "bundles"):
         if k not in y:
             raise SpoolError(f"spool.yaml: missing {k}")
-    m = y["merge"]
+    merges = None
+    if version == 3:
+        if "merge" in y:
+            raise SpoolError("schema 3 carries merges:, not merge:")
+        merges = {}
+        for e in y["merges"]:
+            for k in ("agent", "ok", "T_O0_O", "edge"):
+                if k not in e:
+                    raise SpoolError(f"merges entry: missing {k}")
+            merges[int(e["agent"])] = (bool(e["ok"]), pose_from_row_major(e["T_O0_O"]), str(e["edge"]))
+        m = {"ok": bool(merges.get(1, (False,))[0]), "T_O0_O1": e_row(merges, 1), "edge": merges.get(1, (0, 0, "none"))[2]}
+    else:
+        m = y["merge"]
     lamp = None
     if "lamp" in y:
         if version < 2:
@@ -185,4 +213,5 @@ def load(root: str | Path) -> Spool:
     if not bundles:
         raise SpoolError("spool has no bundles")
     return Spool(root=root, schema_version=int(version), lamp=lamp, run_id=str(y["run_id"]), scene_id=str(y["scene_id"]), merge_ok=bool(m["ok"]),
-                 T_O0_O1=pose_from_row_major(m["T_O0_O1"]), merge_edge=str(m["edge"]), bundles=tuple(bundles))
+                 T_O0_O1=pose_from_row_major(m["T_O0_O1"]), merge_edge=str(m["edge"]), bundles=tuple(bundles),
+                 merges=merges)

@@ -173,3 +173,22 @@ def test_schema2_albedo_needs_the_lamp(tmp_path):
 def test_schema1_still_loads_without_photo(tmp_path):
     sp = load(make_spool(tmp_path))
     assert sp.schema_version == 1 and sp.lamp is None and sp.keyframes()[0].lamp_rel is None
+
+
+def test_schema3_merges_list_places_every_agent(tmp_path):
+    """Schema 3 (A1/M/A2, 2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
+    make_spool(tmp_path)
+    y = yaml.safe_load((tmp_path / "spool.yaml").read_text())
+    y["schema_version"] = 3
+    y.pop("merge")
+    T = np.eye(4)
+    T[:3, 3] = [1.0, 2.0, 0.0]
+    y["merges"] = [{"agent": 1, "ok": True, "T_O0_O": row_major(T), "edge": "agent0 kf 3 <- agent1 kf 5"}]
+    (tmp_path / "spool.yaml").write_text(yaml.safe_dump(y))
+    sp = load(tmp_path)
+    b1 = [b for b in sp.keyframes() if b.agent == 1][0]
+    np.testing.assert_allclose(sp.T_O0_C(b1), T @ b1.T_O_C)
+    y["merge"] = {"ok": True, "T_O0_O1": row_major(T), "edge": "e"}
+    (tmp_path / "spool.yaml").write_text(yaml.safe_dump(y))
+    with pytest.raises(SpoolError, match="not merge"):
+        load(tmp_path)
