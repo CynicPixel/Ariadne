@@ -5210,3 +5210,30 @@ place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio
   order, and replay reproduces exactly that order from the log. **Invariant 2 (B):** the published snapshot {T_O0_O,
   Linked, Telemetry} is swapped atomically as one value; the planner reads it lock-free.
 - Replaces D174's lockstep (watermark waits, feature replies at ask + feature_latency_s).
+- **Amendment (2026-10-24, B's request):** the snapshot also carries, per fleet member k, what k's radio node knew at
+  that tick: `Component()` (broker, members, accepted epoch), `LastHeartbeat(j)` for every peer heard, and
+  `AckedPatchVersion(j)` for every other member (`CollabSnapshot::agent[k]`). The D175 fork-join reads these from its
+  one per-barrier snapshot instead of from nodes the fleet thread owns (a data race under D179). The values are frozen
+  at publish, and the published version is logged, so replay serves the same values. Reads within a barrier all see
+  one tick's state. A read never reflects the runtime's own same-barrier enqueues, which apply on the fleet thread
+  after it.
+
+## 2026-10-24 — D180: protocol re-sends are overhead in the byte table (pre-registered before the next byte run)
+
+**Finding** (3.2 rerun `20261023T191248Z-cpux86-eee456`): match_request was measured about 6× above prediction.
+`RetryRequests` re-sends an unanswered request every `request_retry_s` (10 s) under the same request id, and the
+transport logged each re-send as a new first transmission. The owner answers each retry that is not still deferred,
+so a duplicate MATCH_RESPONSE (about 136 KB) is also logged as first transmission; this is the likely cause of
+match_response running about 15 % over. The predictor prices one exchange per request, which is what the spectral
+policy's `gain/predicted_cost` needs.
+**Rule:** a MATCH_REQUEST or MATCH_RESPONSE whose (receiver, class, request id) the sender has already first-transmitted
+is a protocol re-send. Its ledger row is flagged `resend`. It is counted in its own overhead column
+(`wire_resend`), next to the ARQ retransmit and resync columns, and it is excluded from first-transmission bytes and
+from the ≤ 15 % prediction-error gate (I6). It stays in the "all bytes" totals and the hollow points of
+ate_vs_bytes, and the table reports it per class, so the cost is never hidden. Only these two classes are covered:
+their key is a unique request id, and a repeat is the same content by construction.
+**Not changed by this rule:** the predictor, the retry and give-up timers, and how the owner answers. Whether duplicate
+responses should be suppressed while the first response is still in flight is a protocol question for the one-way
+verification redesign (next bytes item), and is not settled here.
+**Pass/fail for the next byte-table run:** the existing I6 gate (each gated class ≤ 15 % error on first transmission),
+unchanged.
