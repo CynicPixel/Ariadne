@@ -722,6 +722,7 @@ int main(int argc, char** argv) {
                 cv::Mat plan;
                 std::vector<mis::Candidate> cands;   // ELIGIBLE only (path >= min_goal_m), nearest first
                 std::vector<double> risk;
+                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
             } P[2];
@@ -806,6 +807,7 @@ int main(int argc, char** argv) {
                     const double r = t.risk;
                     pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
+                    pd.exempt.push_back(t.supervisor_return);
                     // Operator intent at this goal (§0b): the region directives for this agent covering it, the product
                     // of their priority weights, the distance to the nearest one (0 inside; null if none is active).
                     std::string covering;
@@ -824,7 +826,8 @@ int main(int argc, char** argv) {
                        << t.path_m << ",\"goal_xy_m\":" << Xy(t.goal_xy.first, t.goal_xy.second) << ",\"standoff_m\":"
                        << t.standoff_m << ",\"centroid_xy_m\":" << Xy(t.centroid_xy.first, t.centroid_xy.second)
                        << ",\"cells\":" << t.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << t.risk_reason
-                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false")
+                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold && !t.supervisor_return ? "true" : "false")
+                       << (t.supervisor_return ? ",\"supervisor_return\":true" : "")
                        << ",\"directives\":[" << covering << "],\"priority_weight\":" << weight << ",\"to_directive_m\":";
                     if (std::isfinite(to_dir)) cj << to_dir; else cj << "null";
                     cj << "}";
@@ -964,7 +967,8 @@ int main(int argc, char** argv) {
                     }
                     if (want[k] < -1 || want[k] >= int(P[k].cands.size())) {
                         source[k] = "fallback", validation[k] = "missing or out of the candidate set";
-                    } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold) {
+                    } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold &&
+                               !P[k].exempt[size_t(want[k])]) {
                         const std::string expect = did + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
                         std::ifstream f(run_dir / "approvals" / (expect + ".json"));
                         approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
@@ -1030,7 +1034,16 @@ int main(int argc, char** argv) {
                     last_goal[k] = {direct[k]->x, direct[k]->y};
                     current[k] = {true, direct[k]->x, direct[k]->y, T, "operator goto " + direct[k]->id};
                 } else if (pick >= 0) {
-                    const auto g = plan_out.agents[k].options[size_t(pick)].goal_xy;
+                    const auto& po = plan_out.agents[k].options[size_t(pick)];
+                    if (po.supervisor_return && po.risk > lc.autonomous_threshold) {   // taken ungated: say so loudly
+                        std::ostringstream al;
+                        al.precision(3);
+                        al << "{\"type\":\"alert\",\"t_s\":" << ts << ",\"agent\":" << k << ",\"text\":\"agent " << k
+                           << ": energy-reserve RETURN taken without approval (risk " << po.risk << " > " << lc.autonomous_threshold
+                           << "; reserve returns are exempt)\"}";
+                        telemetry.Put(al.str());
+                    }
+                    const auto g = po.goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
                     const auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);

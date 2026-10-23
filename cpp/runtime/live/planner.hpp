@@ -59,6 +59,10 @@ struct TaskOption {
     int cells = 0;                        // information proxy
     double risk = 0;                      // §23, in [0, 1]
     std::string risk_reason;
+    // §21.4 energy-reserve return ordered by the planner's supervisor: never blocked by the §23 gate (it is taken,
+    // logged and alerted). Maintainer, 2026-10-23: holding at the reserve strands the agent, and the return's risk is
+    // 1.0 whenever the way in was flown but not observed (A1, NBV_4.3 §13).
+    bool supervisor_return = false;
     mis::Candidate c;                     // PlaceholderPlanner's own (grid cell goal for Route); not read by the runtime
 };
 

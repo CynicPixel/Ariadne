@@ -144,6 +144,7 @@ public:
                 o.task_id = t.task_id, o.goal_xy = t.goal_xy, o.goal_yaw = t.goal_yaw, o.path_m = t.path_m;
                 o.standoff_m = t.standoff_m, o.centroid_xy = t.centroid_xy, o.cells = t.cells;
                 o.risk = t.risk, o.risk_reason = t.risk_reason;
+                o.supervisor_return = ap.nbv.reserve_rule && t.source == planning::TaskSource::kReturn;
                 o.c.cluster = int(t.task_id & 0x7fffffff);   // only for the runtime's map rendering
                 o.c.goal = b_.ToCell(t.goal_xy.first, t.goal_xy.second);
                 o.c.cells = t.cells;
@@ -155,7 +156,8 @@ public:
             // The planner's own pick is its "classical" choice (the ablation's no-chooser row) when within the gate;
             // otherwise the best option within it.
             const int j = plan_.joint[a];
-            ao.classical = (j >= 0 && ao.options[size_t(j)].risk <= threshold_) ? j : OtherTask(out, a, -1, threshold_);
+            const bool takeable = j >= 0 && (ao.options[size_t(j)].risk <= threshold_ || ao.options[size_t(j)].supervisor_return);
+            ao.classical = takeable ? j : OtherTask(out, a, -1, threshold_);
             out.joint[a] = j;
             tj << (a ? "," : "") << "{\"reserve_rule\":" << (ap.nbv.reserve_rule ? "true" : "false")
                << ",\"supervisor_event\":\"" << ap.nbv.supervisor_event << "\",\"tare\":\"" << ap.nbv.tare << "\"}";
