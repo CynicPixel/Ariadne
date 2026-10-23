@@ -5,12 +5,19 @@
 // (slam/pose_graph/multi_agent.hpp) and back. Plugged into NodeHooks::solve by
 // the runtime; links slam_opencv. The protocol tests use an oracle instead.
 //
-// The robust stage (degeneracy gate -> PCM -> GNC-TLS, 2.5) is not here yet:
-// inter-agent edges enter the solve as verified. It slots in between the edge
-// list and SolveMultiAgent once 2.5 merges (COLLAB_3.2 §5).
+// The robust stage (D171, COLLAB_3.2 §5): RobustMultiAgentSolve runs 2.5's
+// joint-graph entry (slam/robust/joint_robust.hpp, D76: PCM -> chordal re-init
+// -> GNC-TLS) in place of the plain PGO. The D71 degeneracy gate runs earlier,
+// in the verifier that holds the geometry (COLLAB_3.2 §11). An agent whose
+// inter-agent edges were all rejected is reported unplaced, never placed on
+// them. MultiAgentSolve (no robust stage) stays as the ablation row.
 // ---------------------------------------------------------------------------
 #include "collaboration/protocol/collab_node.hpp"
 #include "slam/pose_graph/multi_agent.hpp"
+#include "slam/robust/joint_robust.hpp"
+
+#include <functional>
+#include <set>
 
 namespace ariadne::collaboration {
 
@@ -74,6 +81,45 @@ inline SolveOutput MultiAgentSolve(const SolveInput& in) {
     if (g == in.graphs.end() || g->second.nodes.empty()) return {};
     const slam::MultiAgentResult r = slam::SolveMultiAgent(ToMultiAgentInput(in));
     return SolveOutput(r.T_G_W.begin(), r.T_G_W.end());
+}
+
+/// The agents tied to `gauge` through inter-agent edges the robust stage kept (GNC inliers among the PCM-accepted).
+inline std::set<uint32_t> AgentsTiedToGauge(const slam::PoseGraph& g, const std::vector<size_t>& inliers,
+                                            uint32_t gauge) {
+    std::map<uint32_t, std::set<uint32_t>> adj;
+    for (size_t k : inliers)
+        if (const auto& e = g.edges()[k]; e.type == slam::EdgeType::kInterAgentLoop) {
+            const uint32_t a = uint32_t(e.from >> slam::kAgentIdShift), b = uint32_t(e.to >> slam::kAgentIdShift);
+            adj[a].insert(b);
+            adj[b].insert(a);
+        }
+    std::set<uint32_t> seen{gauge};
+    std::vector<uint32_t> st{gauge};
+    while (!st.empty()) {
+        const uint32_t a = st.back();
+        st.pop_back();
+        for (uint32_t b : adj[a])
+            if (seen.insert(b).second) st.push_back(b);
+    }
+    return seen;
+}
+
+/// NodeHooks::solve with the robust stage (D171). `last` (optional) receives the robust report of each call.
+inline std::function<SolveOutput(const SolveInput&)> RobustMultiAgentSolve(
+    slam::JointRobustParams params, std::function<void(const slam::JointRobustReport&)> last = {}) {
+    return [params, last](const SolveInput& in) -> SolveOutput {
+        const auto g = in.graphs.find(in.gauge_agent);
+        if (g == in.graphs.end() || g->second.nodes.empty()) return {};
+        slam::MultiAgentInput mi = ToMultiAgentInput(in);
+        mi.solver = [&](slam::PoseGraph& joint, uint64_t anchor) {
+            // A cold GncState: the broker rebuilds the joint graph per solve, so edge indices are not stable.
+            const slam::JointRobustReport r = slam::RobustJointSolve(joint, anchor, params, nullptr);
+            if (last) last(r);
+            return AgentsTiedToGauge(joint, r.gnc.inliers, in.gauge_agent);
+        };
+        const slam::MultiAgentResult r = slam::SolveMultiAgent(mi);
+        return SolveOutput(r.T_G_W.begin(), r.T_G_W.end());
+    };
 }
 
 }  // namespace ariadne::collaboration

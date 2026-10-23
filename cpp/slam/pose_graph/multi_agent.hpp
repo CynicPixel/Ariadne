@@ -34,7 +34,9 @@
 #include "slam/pose_graph/pose_graph.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <set>
 #include <vector>
 
 namespace ariadne::slam {
@@ -64,6 +66,11 @@ struct MultiAgentInput {
     SE3 gauge_T_G_W;                        // identity when the gauge agent is the anchor
     PgoInit init = PgoInit::kChordal;
     PgoSettings settings = PgoV2();
+    /// Optional replacement for init + SolvePoseGraph on the joint graph: the broker's robust stage
+    /// (slam/robust/joint_robust.hpp, D76; wired by collaboration/broker/broker_solve.hpp, D171). It solves `g` in
+    /// place with `anchor` fixed and returns the agents still tied to the gauge after it decided the inter-agent
+    /// edges; the others are reported unplaced (their first placement rode on edges it rejected).
+    std::function<std::set<uint32_t>(PoseGraph& g, uint64_t anchor)> solver;
 };
 
 struct MultiAgentResult {

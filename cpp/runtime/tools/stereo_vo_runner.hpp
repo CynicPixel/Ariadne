@@ -103,6 +103,7 @@ struct KeyframeView {
     cv::Mat left_rect;       // 8-bit gray (the bundle carries the RGB)
     core::SE3 T_B_C;         // body <- rectified left camera
     double baseline_m = 0;
+    const slam::PoseGraph* graph = nullptr;   // the VO graph right after this keyframe (read-only; D171 pass A)
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -660,6 +661,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
+                    kv.graph = &vo.graph();
                     args.on_keyframe(kv);
                 }
                 if (loops) {
