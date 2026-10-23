@@ -33,6 +33,7 @@ namespace ariadne::perception {
 struct StereoMatches {
     std::vector<cv::Point2f> right;
     std::vector<uchar> valid;
+    std::vector<uchar> reason;   // per point: 0 valid, 1 LK lost, 2 forward-backward, 3 off the row, 4 disparity <= 0
     int lk_lost = 0, fb_rejected = 0, row_rejected = 0, nonpositive = 0;
 };
 

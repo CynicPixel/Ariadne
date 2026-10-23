@@ -252,6 +252,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
          win_unobservable_after = 0, win_dof = 0, win_degenerate = 0;
     double win_sq = 0.0;
     long stereo_valid = 0, stereo_total = 0;
+    // Keyframe stereo outcomes by reason x image third (top/middle/bottom), and the valid matches' disparity sums:
+    // diagnostic output only (D144: where and why stereo fails on a real rig).
+    long stereo_reason[3][5] = {};
+    double stereo_disp_sum[3] = {}, stereo_disp_max[3] = {};
     long usac_retries = 0, usac_skipped = 0;
     // Online row refinement (D54): estimated at keyframes until it succeeds, then frozen and disclosed.
     perception::RowCorrection row_fix, row_check;   // row_check: re-estimated AFTER the refinement (acceptance: ~0)
@@ -415,6 +419,15 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             if (made_keyframe) {
                 stereo_valid += trace_valid;
                 stereo_total += static_cast<long>(sm.valid.size());
+                for (size_t q = 0; q < sm.reason.size(); ++q) {
+                    const int band = std::clamp(static_cast<int>(3.0f * tfv.points[q].y / rr.height), 0, 2);
+                    ++stereo_reason[band][sm.reason[q]];
+                    if (sm.reason[q] == 0) {
+                        const double d = tfv.points[q].x - sm.right[q].x;
+                        stereo_disp_sum[band] += d;
+                        stereo_disp_max[band] = std::max(stereo_disp_max[band], d);
+                    }
+                }
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -758,6 +771,15 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         << ", landmarks_alive_at_end: " << vo.landmark_count()
         << ", graph_edges: " << vo.graph().edges().size() << ", graph_version: " << vo.graph().version() << "}\n"
         << "stereo_match_valid_fraction: " << (stereo_total ? double(stereo_valid) / stereo_total : -1.0) << "\n"
+        << "stereo_match_by_third: {";
+    for (int b = 0; b < 3; ++b) {
+        const long* r = stereo_reason[b];
+        res << (b ? ", " : "") << (b == 0 ? "top" : b == 1 ? "middle" : "bottom") << ": {valid: " << r[0]
+            << ", lk_lost: " << r[1] << ", fb: " << r[2] << ", off_row: " << r[3] << ", nonpositive: " << r[4]
+            << ", disparity_mean_px: " << (r[0] ? stereo_disp_sum[b] / r[0] : -1.0)
+            << ", disparity_max_px: " << stereo_disp_max[b] << "}";
+    }
+    res << "}  # keyframe left->right LK outcomes per image third (diagnostic)\n"
         << "triangulation: {candidates: " << tri.candidates << ", created: " << tri.created
         << ", no_stereo: " << tri.no_stereo << ", nonpositive_disparity: " << tri.nonpositive_disparity
         << ", depth_range: " << tri.depth_range << ", reprojection: " << tri.reprojection
