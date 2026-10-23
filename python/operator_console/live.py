@@ -51,9 +51,17 @@ class LiveRun:
         e = sc["esdf"]
         ox, oy, g = e["origin_m"][0], e["origin_m"][1], e["cell_m"]
         cell = lambda x, y: [round(x, 3), round(y, 3)]
+        # P8 demo knobs (D216): a demo-mission recompose records the user's entrances/target in
+        # mission_live.json; what the operator sees must be what the mission runs, not the census default.
+        demo = {}
+        ml = self.scene / "mission_live.json"
+        if ml.exists():
+            demo = json.loads(ml.read_text()).get("live", {}).get("demo", {})
+        target = demo.get("target_xy_m", sc["target_xy_m"])
+        entrances = [sc["entrances"][i] for i in demo["entrances"]] if "entrances" in demo else sc["entrances"]
         return {"grid": {"origin_m": [ox, oy], "cell_m": g, "rows": e["rows"], "cols": e["cols"]},
-                "target_xy": cell(*sc["target_xy_m"]),
-                "exits_xy": [cell(*en["start_xy_m"]) for en in sc["entrances"]],
+                "target_xy": cell(*target),
+                "exits_xy": [cell(*en["start_xy_m"]) for en in entrances],
                 "classes": [], "end_s": None, "tick_hz": TICK_HZ,
                 "chain": {"collab_run": "live", "mission_run": self.run.name, "scene": sc["scene_id"]},
                 "snapshots": len(self.snapshots), "live": True}

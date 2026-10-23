@@ -68,6 +68,14 @@ cmd_compose() {
            --seed $seed --out ../$out --rig ../${ARIADNE_COMPOSE_RIG:-configs/sim/rig_stereo_v1.yaml} --live-rtf $rtf"
 }
 
+cmd_demo_mission() {   # P8 D216: recompose mission_live.* only, for the user's chosen entrances and target
+  local preset="$1" seed="$2" agents="${3:-}" target="${4:-}" rtf="${5:-1}" out="build/live/scenes/${1}_${2}"
+  log "demo mission $preset seed $seed agents ${agents:-all} target ${target:-generated} -> $out"
+  sim_run "cd python && python3 -m dataset_tools.worldgen demo-mission --preset ../configs/worldgen/$preset.yaml \
+           --seed $seed --out ../$out --rig ../${ARIADNE_COMPOSE_RIG:-configs/sim/rig_stereo_v1.yaml} --live-rtf $rtf \
+           ${agents:+--agents $agents} ${target:+--target-xy $target}"
+}
+
 CONTAINERS=()
 stop_mine() {
   local c
@@ -238,6 +246,7 @@ cmd_replay() {
 case "${1:-}" in
   build) shift; cmd_build "$@" ;;
   compose) shift; cmd_compose "$@" ;;
+  demo-mission) shift; cmd_demo_mission "$@" ;;
   run) shift; cmd_run "$@" ;;
   replay) shift; cmd_replay "$@" ;;
   *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
