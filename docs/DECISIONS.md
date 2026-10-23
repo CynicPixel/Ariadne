@@ -3781,3 +3781,70 @@ fixes, each to go through preflight (literature, OpenCV-native check, advisor) b
 **What transfers, stated:** extraction, calibration, fisheye rectification (row residual 0.42 px after refinement),
 stereo pairing and the Hilti scorer. **What does not:** pose accuracy on a real dark
 sequence with a co-moving lamp. The honest 5.6 line is 0/100 until a preflighted fix moves it.
+
+## 2026-10-23 — D145: §31.5 illumination rows defined (preflight: arch, SOTA pass, OpenCV check, advisor)
+
+**Preflight.**
+- **Arch read:** §5.3 (lamp), §5.6 (D: "scene radiance scale (darkness level)", replay exposure acts on sensing only),
+  §6.2–6.5, §19.2, §31.5, and the plan's Phase 5 gate. That gate requires each radiometric stage's effect on
+  repeatability, match precision, ATE and loop-closure precision, with negatives kept.
+- **SOTA pass:** primary sources opened, list below.
+- **OpenCV-native:** not applicable to scene lighting (the renderer's job, §5.6). The radiometric stages were checked
+  in D134/D140.
+- **Advisor:** reviewed twice.
+
+**Literature facts that shape the rows.**
+- **No benchmark compares world-fixed lights with a co-moving lamp in the same dark scene.**
+  - OIVIO varies only the onboard lamp's flux: ~100 / 50 / 15 % of 9000 lm on repeated trajectories (project page;
+    paper body not opened).
+  - Hilti 2023 and M2DGR describe their darkness qualitatively, with no lux values.
+  - Crocetti et al. ICRA'25 (arXiv 2502.13708) compares a steered robot lamp against a fixed-aim robot lamp, both
+    co-moving. Their "up to 75 %" ATE gain comes with their own caveat that the fixed-light ATEs are from partial
+    trajectories.
+  - The fixed-light row is therefore **[DESIGN]**.
+- **No community lux standard for "dark" exists.** OSHA 29 CFR 1926.56 gives working-light minima (tunnels and
+  underground ≈ 54 lx, headings ≈ 108 lx). That is real-world context only: Gazebo intensity is not calibrated to lux,
+  so no row is set from it.
+- **Photometric hazard.** NFL-BA (NeurIPS'25, arXiv 2412.13176) is the evidence that dynamic near-field lighting
+  degrades SLAM, but it is a neural photometric-BA method, not sparse VIO. DSO's (arXiv 1607.02565) affine brightness
+  term is global per frame and cannot absorb per-pixel 1/r²·cos falloff, so radiometric correction and falloff
+  normalisation stay separate rows.
+- **Exposure evaluation.** Tomasi et al. RA-L'21 (arXiv 2102.04341): a controller "cannot be evaluated with
+  previously-captured data". Published fixes use parallel cameras (Zhang ICRA'17; Shim TCSVT'18, arXiv 1708.07338),
+  repeated traversals, or synthetic re-exposure.
+  - Verified in our sim image: the sdformat14 camera spec has no exposure and no blur element, and gz-sensors /
+    gz-rendering headers have no motion blur.
+  - So in sim, exposure acts only through D, live or replay alike. Live vs replay differs only in the lamp path: a true
+    re-render (`light_config`) against D's linear `lamp_power` rescale, which is exact at ambient 0 below clipping
+    (D132).
+  - The comparison measures that difference, not exposure-dependent blur, which neither mode has.
+  - No published joint controller for lamp power and exposure was found, so D132's co-controller stays **[DESIGN]**,
+    and its §49 deviation already covers the fixed cost order.
+
+**Rows** (VO/SLAM rows for the Phase 5 gate; the two reconstruction rows are plan 6.1, defined here, run in Phase 6):
+
+| §31.5 row | definition | held fixed vs the lamp row |
+|---|---|---|
+| ambient normal | lit render (`ci_tiny`, D69), no D | geometry, trajectory, seed |
+| dark | lit render × D darkness level, `input_transfer: srgb` (§5.6); levels = 5.4's frozen dark0..3 | the same |
+| dark + fixed light **[DESIGN]** | `ci_tiny_dark_fixed`: ambient 0, the world's zone lights, no lamp. **Brightness-matched** to the lamp row through D's `radiance_scale`: trajectory-median linear brightness equal, exact only if neither render clips | geometry, trajectory, seed, median brightness |
+| dark + co-moving light | `ci_tiny_dark` (rig v2 lamp, D131/D133); lamp sweep 100 / 50 / 15 % through replay `lamp_power` (OIVIO's protocol), valid where the render does not clip | — |
+| + radiometric correction | 2.2 stages 1–2 (+ Stage 4 when exposure varies) | pixels |
+| + falloff normalisation | Stage 3 albedo proxy + `feature_mask` (D134/D140) | pixels |
+| + retrieval-path enhancement only | §6.3 split: enhancement on the retrieval path, not geometry | pixels |
+| fixed vs active exposure | D exposure fixed vs D132 controller; live-vs-replay quantifies the lamp path only (above) | trajectory |
+| NFL-aware / albedo-proxy reconstruction | plan 6.1 | — |
+
+**Residual confounds, stated, not removed:**
+- **Coverage.** Zone lights fill the rooms and the lamp lights a cone. Reported as the fraction of pixels above the
+  noise floor in each row.
+- **Clipping.** A hotspot clipped in the render cannot be rescaled. Reported per row as the clipped fraction.
+
+**Consequence.** D142's rows stay preliminary. The matched-brightness `radiance_scale` comes from a measurement of
+both recordings: sRGB-decoded median brightness, clipped fraction and above-noise fraction, over ~20 chunks of each
+`sensors_0.mcap`, read by ranged GET. That needs one approved S3 read of a few hundred MB.
+
+**Citations:** OIVIO project page (arpg.colorado.edu/oivio); Nair et al. RA-L 2024 (arXiv 2404.09765); Yin et al.
+M2DGR (arXiv 2112.13659); Ebadi et al. (arXiv 2208.01787); Crocetti et al. ICRA 2025 (arXiv 2502.13708); Dunn Beltran
+et al. NFL-BA NeurIPS 2025 (arXiv 2412.13176); Engel et al. DSO (arXiv 1607.02565); Zhang, Forster, Scaramuzza ICRA
+2017; Shim et al. TCSVT 2018 (arXiv 1708.07338); Tomasi et al. RA-L 2021 (arXiv 2102.04341); 29 CFR 1926.56 (eCFR).
