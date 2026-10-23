@@ -31,4 +31,4 @@ lockstep: false              # D165: true = gz paused at every barrier until the
                              # in live.sh sets it in the run's recorded config); false = the world runs free
 reorder:
   hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
-telemetry_hz: 5.0            # console pose rate, in sim time
+telemetry_hz: 20.0           # console pose rate, in sim time: every camera frame (the page interpolates between them)

@@ -26,6 +26,7 @@ class LiveRun:
     offset: int = 0
     t_s: float = 0.0
     poses: dict = field(default_factory=dict)        # agent -> (t_s, x, y, yaw)
+    history: dict = field(default_factory=dict)      # agent -> [(t_s, x, y, yaw)], every pose: the page interpolates
     snapshots: list = field(default_factory=list)    # (t_s, path)
     egress: list | None = None
     events: list = field(default_factory=list)       # (t_s, kind, text)
@@ -79,6 +80,7 @@ class LiveRun:
             kind = d.get("type")
             if kind == "pose":
                 self.poses[d["agent"]] = (d["t_s"], d["xy"][0], d["xy"][1], d["yaw"])
+                self.history.setdefault(d["agent"], []).append(self.poses[d["agent"]])
                 self.t_s = max(self.t_s, d["t_s"])
             elif kind == "snapshot":
                 self.snapshots.append((d["t_s"], src / d["png"]))
@@ -99,12 +101,20 @@ class LiveRun:
                                     f"agent {d['agent']} mover: {s['kind']} {verdict}, "
                                     f"{s['segments']} segments until t={s['t_end_s']:.1f} s"))
 
-    def frame(self, seq: int, since: float) -> dict:
+    def frame(self, seq: int, since: float, since_pose: float = -1.0) -> dict:
+        """`samples`: every pose of the agent stamped after `since_pose` (sim time), [t_s, x, y, yaw] each, so the page
+        can interpolate between them instead of jumping to the newest one."""
         agents = []
         for k in (0, 1):
             if k in self.poses:
                 t, x, y, yaw = self.poses[k]
-                agents.append({"id": k, "merged": True, "x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4)})
+                h = self.history.get(k, [])
+                i = len(h)
+                while i > 0 and h[i - 1][0] > since_pose:   # the new tail only (history is in stamp order)
+                    i -= 1
+                samples = [[round(a, 3), round(b, 3), round(c, 3), round(e, 4)] for a, b, c, e in h[i:]]
+                agents.append({"id": k, "merged": True, "x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4),
+                               "t": round(t, 3), "samples": samples})
             else:
                 agents.append({"id": k, "merged": True, "x": None, "y": None, "yaw": None})
         mv = len(self.snapshots) - 1 if self.snapshots else None

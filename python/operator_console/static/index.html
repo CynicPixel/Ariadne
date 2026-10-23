@@ -141,7 +141,57 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let lastFrame = null, meta, ws, slab = null, frameCache = null, trails = {0: [], 1: []}, maxBytes = {};
+let lastFrame = null, meta, ws, slab = null, frameCache = null, maxBytes = {};
+// Smooth motion (entity interpolation): every pose sample is kept with its sim time; the page draws at a render clock
+// that runs at the measured sim speed a little behind the newest sample, interpolating between the two samples around
+// it. Nothing is extrapolated: the drawn pose is always between two poses the runtime reported.
+let samples = {0: [], 1: []};
+const clk = {t: null, rate: 0, newest: null, seenWall: null, seenT: null, lastAnim: null};
+const LAG_WALL_S = 0.6;   // how far (in wall seconds of sim progress) the render clock trails the newest sample
+
+function poseAt(id, t) {
+  const S = samples[id];
+  if (!S.length || t === null) return null;
+  if (t <= S[0][0]) return {x: S[0][1], y: S[0][2], yaw: S[0][3]};
+  const L = S[S.length - 1];
+  if (t >= L[0]) return {x: L[1], y: L[2], yaw: L[3]};
+  let lo = 0, hi = S.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (S[m][0] <= t) lo = m; else hi = m; }
+  const a = S[lo], b = S[hi], u = (t - a[0]) / Math.max(1e-9, b[0] - a[0]);
+  let dy = b[3] - a[3];
+  dy = Math.atan2(Math.sin(dy), Math.cos(dy));   // the short way round
+  return {x: a[1] + u * (b[1] - a[1]), y: a[2] + u * (b[2] - a[2]), yaw: a[3] + u * dy};
+}
+
+function addSamples(f) {
+  for (const a of f.agents) {
+    const add = a.samples ?? (a.x === null ? [] : [[f.t_s, a.x, a.y, a.yaw]]);   // replay frames: one pose per frame
+    const S = samples[a.id];
+    for (const s of add) if (!S.length || s[0] > S[S.length - 1][0]) S.push(s);
+  }
+  const newest = Math.max(...[0, 1].map((k) => samples[k].length ? samples[k][samples[k].length - 1][0] : -Infinity));
+  if (!isFinite(newest)) return;
+  const now = performance.now() / 1000;
+  if (clk.seenT !== null && newest > clk.seenT) {   // sim speed = sim progress per wall second, smoothed
+    const r = (newest - clk.seenT) / Math.max(1e-3, now - clk.seenWall);
+    clk.rate = clk.rate ? 0.8 * clk.rate + 0.2 * r : r;
+  }
+  if (clk.seenT === null || newest > clk.seenT) { clk.seenT = newest; clk.seenWall = now; }
+  clk.newest = newest;
+}
+
+function animate(nowMs) {
+  const now = nowMs / 1000, dt = clk.lastAnim === null ? 0 : Math.min(0.25, now - clk.lastAnim);
+  clk.lastAnim = now;
+  if (clk.newest !== null) {
+    const target = clk.newest - LAG_WALL_S * clk.rate;
+    if (clk.t === null) clk.t = target;
+    clk.t += dt * clk.rate + (target - clk.t) * Math.min(1, dt);   // advance at sim speed, drift back toward the lag
+    clk.t = Math.min(clk.t, clk.newest);
+    if (lastFrame) { try { draw(lastFrame); } catch (e) { $("source").textContent = `draw error: ${e.message}`; } }
+  }
+  requestAnimationFrame(animate);
+}
 const canvas = $("map"), ctx = canvas.getContext("2d");
 
 function w2c(x, y) {   // world metres -> canvas pixels (north up)
@@ -184,11 +234,13 @@ function draw(f) {
   const dot = (x, y, r, color) => { const [u, v] = w2c(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.fill(); };
   meta.exits_xy.forEach(([x, y]) => dot(x, y, 7, css("--exit")));
   dot(meta.target_xy[0], meta.target_xy[1], 7, css("--target"));
-  for (const a of f.agents) {
-    if (a.x === null) continue;
-    const tr = trails[a.id];
-    if (!tr.length || Math.hypot(tr[tr.length - 1][0] - a.x, tr[tr.length - 1][1] - a.y) > 0.05) tr.push([a.x, a.y]);
-    const color = css(a.id ? "--agent1" : "--agent0");
+  for (const id of [0, 1]) {
+    const a = poseAt(id, clk.t);   // interpolated between the two samples around the render time
+    if (!a) continue;
+    const color = css(id ? "--agent1" : "--agent0");
+    const S = samples[id], tr = [];
+    for (const s of S) { if (s[0] > clk.t) break; tr.push([s[1], s[2]]); }
+    tr.push([a.x, a.y]);
     line(tr, color, 1.5);
     const [u, v] = w2c(a.x, a.y);
     ctx.save(); ctx.translate(u, v); ctx.rotate(-a.yaw); ctx.fillStyle = color;
@@ -230,14 +282,17 @@ async function onFrame(f) {
     frameCache = f.map_version;
     try { await loadSlab(f.map_version); } catch (e) { $("source").textContent = `map error: ${e.message}`; }
   }
-  for (const step of [draw, gauges, timeline]) {
+  addSamples(f);
+  lastFrame = f;
+  for (const step of [gauges, timeline]) {
     try { step(f); } catch (e) { $("source").textContent = `${step.name} error: ${e.message}`; }
   }
 }
 
 async function start() {
   if (ws) ws.close();
-  trails = {0: [], 1: []}; frameCache = null; slab = null; $("timeline").innerHTML = "";
+  samples = {0: [], 1: []}; Object.assign(clk, {t: null, rate: 0, newest: null, seenWall: null, seenT: null});
+  frameCache = null; slab = null; $("timeline").innerHTML = "";
   meta = meta || await (await fetch("/api/meta")).json();
   canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
   op.live = meta.chain.collab_run === "live";
@@ -422,14 +477,16 @@ if (at !== null) {
     canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
     $("source").textContent = `static view · ${meta.chain.scene} · ${meta.chain.mission_run}`;
     for (let t = 0; t <= Number(at); t += 2) {   // build the trails as the live view would
-      const f = await (await fetch(`/api/frame?t=${t}`)).json();
-      for (const a of f.agents) if (a.x !== null) trails[a.id].push([a.x, a.y]);
+      addSamples(await (await fetch(`/api/frame?t=${t}`)).json());
     }
     const f = await (await fetch(`/api/frame?t=${at}`)).json();
     await onFrame(f);
+    clk.t = Number(at);
+    draw(f);
   })();
 } else {
   start();
+  requestAnimationFrame(animate);
 }
 </script>
 </body>
