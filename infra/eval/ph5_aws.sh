@@ -13,6 +13,8 @@
 #   3. build ariadne_sim_vo from the shipped tree in the image
 #   4. the dark recordings from S3 (keys in ph5_dark_manifest.txt) -> 4 replay rows (dark lamp / dark fixed x no D / sensor D), agent 0, 1000 frames,
 #      sim_v1 perception + sim_v2 slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0)
+#      ROWS=d145 instead runs the §31.5 rows of D145-D147 (below): Stage 3 equality, features on the proxy, active
+#      exposure, Failure E, the lamp sweep and the brightness-matched fixed-light row. ROWS=lighting (default) = D142's.
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${IMAGE:?}" "${GIT_COMMIT:?}" "${BUCKET:?}" "${DARK_PREFIX:?}"
@@ -129,29 +131,51 @@ done > "$R/fetch_check.txt"
 chown -R "$(docker run --rm "$IMAGE" id -u):$(docker run --rm "$IMAGE" id -g)" "$WORK"
 step "4b replays"
 N=$(nproc); PER=$(( N / 2 ))
-run() {   # name rec degradation cpus
-  local name=$1 rec=$2 deg=$3 cpus=$4 extra=() s0; s0=$(date +%s)
+run() {   # name rec degradation cpus [perception config] [extra tool args...]
+  local name=$1 rec=$2 deg=$3 cpus=$4 pcfg=${5:-sim_v1} extra=() s0; s0=$(date +%s)
+  shift 4; [ $# -gt 0 ] && shift
   [ "$deg" != none ] && extra=(--degradation "/work/configs/degradation/$deg.yaml")
+  extra+=("$@")
   if docker run --rm --network none --cpuset-cpus "$cpus" -v "$SRC":/work -v "$WORK":/rec:ro -v "$OUT":/out \
        -e ARIADNE_GIT_COMMIT="$GIT_COMMIT" -e ARIADNE_GIT_DIRTY=false -e ARIADNE_IMAGE_DIGEST="$(cat "$R/image_id.txt")" \
        "$IMAGE" /work/build/aws/cpp/runtime/ariadne_sim_vo --rec "/rec/$rec/rec" --scene "/rec/$rec/scene" --agent 0 \
-       --frames 1000 --seed 1 --perception-config /work/configs/perception/sim_v1.yaml \
+       --frames 1000 --seed 1 --perception-config "/work/configs/perception/$pcfg.yaml" \
        --slam-config /work/configs/slam/sim_v2.yaml "${extra[@]}" --out "/out/$name" > "$R/run_$name.log" 2>&1; then
     echo "RUN_OK $name $(( $(date +%s) - s0 ))s"
   else
     echo "RUN_FAILED $name"
   fi
 }
+if [ "${ROWS:-lighting}" = d145 ]; then
+  # §31.5 rows (D145-D147), two lanes. L = the lamp-lit recording, sensor D with the sRGB decode (Stage 3 and the
+  # controller need linear frames). Row 2 must reproduce row 1's trajectory (D146); 3 vs 4 is the features row; 1 vs 5
+  # fixed vs active exposure; 6 vs 7 Failure E with and without the controller (scene +2 stops at 20 s).
+  L=ci_tiny_dark_0 F=ci_tiny_dark_fixed_0 S=lampdark_sensor_v0 CAL=(--lamp-calib /work/configs/sim/lamp_calib_v2.yaml)
+  A="0-$((PER-1))" B="$PER-$((N-1))"
+  { run r01_flat "$L" "$S" "$A" sim_v1_rad_flat
+    run r02_falloff "$L" "$S" "$A" sim_v1_ph5_falloff "${CAL[@]}"
+    run r03_kfcad "$L" "$S" "$A" sim_v1_ph5_kfcad
+    run r04_kfcad_proxy "$L" "$S" "$A" sim_v1_ph5_kfcad_proxy "${CAL[@]}"
+    run r05_expo "$L" "$S" "$A" sim_v1_ph5_expo; } | tee -a "$R/runs.txt" &
+  { run r06_failE_expo "$L" "$S" "$B" sim_v1_ph5_expo --radiance-event 20:2
+    run r07_failE_fixed "$L" "$S" "$B" sim_v1_rad_flat --radiance-event 20:2
+    run r08_lamp50 "$L" lampdark_lamp50_v0 "$B"
+    run r09_lamp15 "$L" lampdark_lamp15_v0 "$B"
+    run r10_fixed_matched "$F" lampdark_fixed_matched_v0 "$B"; } | tee -a "$R/runs.txt" &
+  wait
+else
 { run lamp_noD ci_tiny_dark_0 none "0-$((PER-1))"; run lamp_sensor ci_tiny_dark_0 lampdark_sensor_v0 "0-$((PER-1))"; } \
   | tee -a "$R/runs.txt" &
 { run fixed_noD ci_tiny_dark_fixed_0 none "$PER-$((N-1))"; run fixed_sensor ci_tiny_dark_fixed_0 lampdark_sensor_v0 "$PER-$((N-1))"; } \
   | tee -a "$R/runs.txt" &
 wait
+fi
 
 step "5 collect"
 for d in "$OUT"/*/; do
   name=$(basename "$d"); r=$(ls -d "$d"*/ 2>/dev/null | tail -1); [ -n "$r" ] || continue
   mkdir -p "$R/replays/$name"
-  cp "$r"results.yaml "$r"manifest.yaml "$r"estimate_body.tum "$r"vo_trace.csv "$R/replays/$name/" 2>/dev/null
+  cp "$r"results.yaml "$r"manifest.yaml "$r"estimate_body.tum "$r"vo_trace.csv "$r"exposure_trace.csv \
+    "$R/replays/$name/" 2>/dev/null
 done
 step "done"
