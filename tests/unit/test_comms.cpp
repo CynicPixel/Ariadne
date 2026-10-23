@@ -63,6 +63,40 @@ TEST(Comms, LossMatchesRfCommsPerPacketMonteCarlo) {
     }
 }
 
+TEST(Comms, LossIsPricedAtTheDatagramsOwnSize) {
+    // D171: Network asks SampleSized(.., wire_bytes); RFComms as modelled prices PER over the datagram's bytes, so a
+    // heartbeat near the edge drops less often than a full fragment. The unsized Sample keeps the 1500 B table.
+    ac::RfParams p;
+    p.sigma_db = 10.0;
+    p.tx_power_dbm = 0.0;
+    p.fading_exponent = 3.0;   // ~16 m: in the transition band
+    const ac::RfLinkModel m(p, {{0, Still({0, 0, 1})}, {1, Still({16, 0, 1})}}, {});
+    const auto full = m.Sample(0, 1, At(1)), at1500 = m.SampleSized(0, 1, At(1), 1500.0),
+               small = m.SampleSized(0, 1, At(1), 68.0);
+    const double rx = m.Detail(0, 1, At(1)).rx_mean_dbm;
+    ASSERT_TRUE(full.up);
+    EXPECT_EQ(at1500.loss_p, full.loss_p) << "the MTU size reads the existing table";
+    EXPECT_GT(full.loss_p, 0.05);
+    EXPECT_LT(small.loss_p, full.loss_p);
+    EXPECT_NEAR(small.loss_p, ac::rf::ExpectedPer(rx, p.sigma_db, p.noise_floor_dbm, 68.0), 2e-3)
+        << "grid interpolation at a new size";
+    EXPECT_EQ(m.SampleSized(0, 1, At(1), 68.0).loss_p, small.loss_p) << "cached cells are deterministic";
+
+    // The fault plan forwards the size, and the network uses it: 68 B datagrams are lost less than 1472 B ones.
+    ac::FaultPlan plan(m);
+    EXPECT_EQ(plan.SampleSized(0, 1, At(1), 68.0).loss_p, small.loss_p);
+    ac::Network small_net(plan, 9), big_net(plan, 9);
+    const int n = 4000;
+    for (int i = 0; i < n; ++i) {
+        small_net.Send(0, 1, std::vector<uint8_t>(40, 1), At(1));
+        big_net.Send(0, 1, std::vector<uint8_t>(core::kDatagramPayloadBytes, 1), At(1));
+    }
+    const double ls = double(small_net.stats().lost_random) / n, lb = double(big_net.stats().lost_random) / n;
+    EXPECT_NEAR(ls, small.loss_p, 4.0 * std::sqrt(small.loss_p * (1 - small.loss_p) / n) + 1e-3);
+    EXPECT_NEAR(lb, full.loss_p, 4.0 * std::sqrt(full.loss_p * (1 - full.loss_p) / n) + 1e-3);
+    EXPECT_LT(ls, lb);
+}
+
 TEST(Comms, PathLossRangeCutAndRate) {
     ac::RfParams p;   // gz-sim8 defaults
     p.sigma_db = 0.0;
