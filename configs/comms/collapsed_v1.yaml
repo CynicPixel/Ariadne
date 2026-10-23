@@ -1,0 +1,15 @@
+# 3.3 (D102) a degraded radio in a collapsed structure: the RFComms model with low-power, obstructed parameters, so
+# walls and range matter at ci_tiny's 5-15 m scale. Every departure from the gz default is a stated assumption.
+name: collapsed_v1
+mode: attenuated
+rf:
+  max_range_m: 50.0
+  fading_exponent: 3.0       # [ASSUMPTION] obstructed indoor (free space 2; gz default 2.5)
+  l0_db: 40.0                # free-space loss at 1 m, 2.4 GHz (20 log10(4 pi / lambda) = 40.0 dB)
+  sigma_db: 10.0             # gz default shadowing
+  capacity_bps: 250.0e3      # [ASSUMPTION] low-power mesh radio class (IEEE 802.15.4 PHY rate at 2.4 GHz)
+  tx_power_dbm: 0.0          # [ASSUMPTION] 1 mW, low-power mesh radio class
+  noise_floor_dbm: -90.0     # gz default
+  wall_loss_db: 6.9          # COST-231 multi-wall "heavy wall" as commonly cited [UNVERIFIED-primary]
+  latency_s: 0.005           # [ASSUMPTION]
+  datagram_bytes: 1500       # = core::kPathMtuBytes (L8)

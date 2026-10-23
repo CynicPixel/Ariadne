@@ -2877,7 +2877,29 @@ a non-certified planted-outlier graph a full shift would pass at 0.61× the redu
   | tinyGrid3D | — | — | certified |
   | smallGrid3D | — | — | certified |
 
-  Sphere, torus, grid3D, cubicle and rim are pending (the user is asked first: heavy).
+- **The large SE-Sync graphs (2026-10-22, maintainer-approved; `evaluation/runs/2.5/certificate_sesync/`).** One
+  container each, in order, hard memory cap, cgroup `memory.peak`. grid3D ran only after the projection rule written
+  into the manifest beforehand (≈ 12 kB per edge on the first four, ×10 for 3D-lattice fill → < 6 GB) passed.
+
+  | graph | nodes / edges | f | Table 1 | verdict | f − f* ≤ | LM its, max\|grad_R\| | peak | wall |
+  |---|---|---|---|---|---|---|---|---|
+  | sphere2500 | 2500 / 4949 | 1687.01 | 1.687e3 | **certified** | 1.1e-3 | 72, 7.4e-5 | 79 MB | 20 s |
+  | torus3D | 5000 / 9048 | 24227 | 2.423e4 | **certified** | 3.6e-3 | 200 (cap), 2.9e-2 | 152 MB | 180 s |
+  | cubicle | 5750 / 16869 | 717.126 | 7.171e2 | **certified** | 2.9e-2 | 30, 1.9e-5 | 215 MB | 16 s |
+  | rim | 10195 / 29743 | 5460.9 | 5.461e3 | **not certified** | — | 56, 2.4e-4 | 348 MB | 89 s |
+  | grid3D | 8000 / 22236 | 84319 | 8.432e4 | **certified** | 0.13 | 200 (cap), 2.3 | 616 MB | 7176 s |
+
+  - Every objective reproduces Table 1 to its 4 significant figures.
+  - **torus3D and grid3D stopped at the LM iteration cap** with a gradient far from zero, and still certify. That is
+    valid: the bound comes from weak duality (S ⪰ 0 at the multipliers Λ of the point reached), not from
+    stationarity. A non-stationary point simply gets a looser bound (grid3D: 0.13, 1.5e-4 % of f).
+  - **rim is not certified, and its test assertion is red** (gtest exit 1). λ_min ≤ −0.233 at η = 1e-10‖M‖∞
+    (9.8e-6). The η that would pass is 0.977 ≈ 1e-5‖M‖∞. The objective matches Table 1, so this is most likely an
+    under-converged Λ (gradient 2.4e-4 after 56 iterations) rather than a non-global point, but that is not shown.
+    Verdict: **unknown, not wrong**. Neither η nor the LM budget was changed after seeing it: that would be tuning
+    to pass.
+  - Cost: grid3D's two hours are the Lanczos and Cholesky passes of the 200-iteration refinement on 22 k edges. The
+    runtime path never certifies graphs this size (the flag is off and the loop backend's graphs are small).
 
 **Planted outliers, reported, not tuned** (PHASE2_PLAN §3):
 - 3 uniform SE(3) loops kept in a 60-node cost: **6/10 certified**, from each of the truth, dead-reckoning and chordal
@@ -2936,6 +2958,304 @@ verifying agent, so the broker sees pre-gated edges.
 
 **Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
 Both are main's (3.2 / 3.5).
+
+## 2026-10-22 — D86: Phase 2 acceptances, delegated to M (EuRoC 9/11, TUM fr1, D74 wording, D91 pool rule, D90 size)
+
+**Delegation.** The maintainer asked M to decide, with an advisor review, and gave this criterion: "we SHOULD NOT
+COMPROMISE ON QUALITY AND ROBUSTNESS to a reasonable degree, if we are at par with sota lit mostly im good to go".
+Each verdict below is held to that criterion against the PHASE2_PLAN §1 reference table (ORB-SLAM3 T-RO 2021
+Table II). Nothing here is from memory.
+
+1. **EuRoC 9/11 (D85): accepted as the VIO gate.** The gate bar (average ≤ 0.138) is met at 0.120.
+   - **The parity statement, exact:** VIO only, 0.120 sits beside Kimera (0.119) and below VINS-Fusion (0.138). It is
+     not at BASALT (0.051) or ORB-SLAM3 (0.035, full SLAM). So it is inside the published stereo-inertial range, at
+     the weak end, not "state of the art".
+   - V2_02 misses by 10 mm, which is inside D85's own ±10 mm single-run spread. V1_03 (0.329, 92 lost frames) is the
+     one real miss.
+   - **V1_03 is not closed as won't-fix.** It is fast motion with lost tracking, which is this project's core
+     robustness case. It becomes the regression case for Phase 5's degraded-vision work, with projection-guided
+     re-association (D85's trigger) as the candidate fix. Register: 2.1 and 5.x rows.
+   - **The full-system run is owed.** With loops on (D73 2b), three flights already sit at ORB-SLAM3's level:
+     MH_01 0.021 (ORB-SLAM3 0.036), V1_01 0.038 (0.038), V1_02 0.025 (0.014). No 11-flight loops-on run exists.
+     The SOTA-parity claim may only be made from that run, which is the like-for-like comparison with ORB-SLAM3.
+     It is a gate item for Phase 2 (heavy, so the maintainer is asked before it runs).
+2. **TUM fr1 (A2's D100 after renumbering): accepted as "regression pinned"**, which is the gate's wording.
+   - The fr1 rows are a cross-class comparison: ORB-SLAM2's RGB-D rows are full SLAM; ours is VO with loops off.
+     The deployed rig is stereo, not RGB-D, so this does not block.
+   - **Condition:** the fr1/xyz target (0.017) is tagged [UNVERIFIED]. It is sourced from the cited table, or its
+     in-class verdict is dropped, before the number is cited anywhere. Owner: A2.
+3. **D74's gate wording: accepted as "certified fraction reported".** A certificate proves optimality of the given
+   cost, not that the cost is outlier-free. The wound-ring test covers the intent of the original wording: a
+   strictly worse stationary point is not certified.
+   - **Blocks the Phase 2 checkmark:** parity with SE-Sync is shown only on parking-garage (Table 1) and two small
+     grids. sphere, torus, grid3D, cubicle and rim must land (B, about 2 h) before D74 or Phase 2 is marked done.
+4. **D91: per-thread instances accepted; the process-wide pool rule is accepted only for shared-wrapper DNN use.**
+   `cv::setNumThreads(1)` also throttles the always-on per-frame pipeline (remap, pyramids, LK), which is what the
+   COOL benchmark measures (INV2).
+   - **Carry to 7.3:** the benchmark's thread setting is decided explicitly and recorded in its manifest, and pool=1
+     is never set process-wide in the runtime that the benchmark times.
+5. **D90's sim size: accepted as provisional (640×360), to be settled by data.** The sim retrieval evaluation reports
+   a 640×360 vs 1280×720 recall row, and the default follows that row. Owner: A1 (3.1).
+
+**What the Phase 2 checkmark now waits on, in order:**
+1. the merged-main build and push;
+2. A2's merge;
+3. the integrated premerge;
+4. B's SE-Sync large graphs;
+5. the 11-flight EuRoC run with loops on;
+6. the phase-gate full run.
+
+Items 3, 5 and 6 are heavy: the maintainer is asked before each.
+
+## 2026-10-23 — D88: 5.6's real-data low-light check uses EuRoC's dark flights; OIVIO dropped (maintainer)
+
+**Context.** Plan 5.6 validates the degraded-vision path on OIVIO. On 2026-10-22 the official page said "downloads
+temporarily unavailable", and every Drive ID returned 404 (A2, `feat/ph5-dve`). The candidate substitute, CAVERS, is
+RGB-D, not stereo, so it does not match the rig.
+
+**Decision (maintainer, 2026-10-23).** "its not that deep, darkening is already a stretch goal ... go with Euroc's
+dark flights."
+- 5.6's real-data check runs on EuRoC's dark, fast flights: MH_04_difficult, MH_05_difficult and V1_03_difficult.
+- They are real stereo + IMU with ground truth, at our rig's modality. V1_03 is already the D86 regression case.
+- OIVIO is not pursued.
+
+**Claims, stated.** EuRoC's dark flights are low-light handheld/MAV footage under ambient light, **not** a
+co-mounted lamp in total darkness. They validate the low-light robustness of the pipeline on real sensors. The lamp
+falloff and active-exposure claims (5.2/5.3) rest on the sim (5.1 calibration) alone, and are written that way.
+
+**§49:**
+- catalogue: `ALGORITHMS.md` dataset note;
+- arch: the arch decision is this entry;
+- ablation matrix: the 5.6 row names the three flights;
+- benchmark config: A2's 5.6 config lists the flights;
+- manifest: unchanged, since the dataset is already recorded by name.
+
+## 2026-10-23 — D89: supersedes D88 — 5.6 runs on UMA-VI's illumination-change sequences (open, real stereo + IMU); EuRoC's dark flights stay as the full-GT companion
+
+**Maintainer, 2026-10-23:** "if there is a dataset available openly without chasing maintainers go for it, revert
+the decision". So D88's choice of EuRoC as the primary is reverted.
+
+**Checked 2026-10-23:**
+
+| dataset | access | rig match | verdict |
+|---|---|---|---|
+| OIVIO (ARPG) | page now has no download links at all | stereo + IMU + onboard lamp, the ideal | gone |
+| ViViD++ (KAIST) | request form (`forms.gle`), auto-reply mail | RGB/thermal/event/depth + IMU, not stereo RGB | out: a request, and the wrong rig |
+| SubT-MRS (CMU) | no download location confirmed | multi-camera + LiDAR + thermal | out: unconfirmed |
+| **UMA-VI** (Málaga, IJRR 2020, doi 10.1177/0278364920938439) | **Zenodo record 7809282, open**: API lists every file; a ranged GET returns 206 | **hardware-synced stereo (Bumblebee2 + a custom stereo rig) + IMU, handheld** | **chosen** |
+
+**Decision.**
+- **The 5.6 primary:** UMA-VI's five `IllChange` sequences, about 20.7 GB:
+  - third-floor-csc1 / csc2;
+  - conference-csc1 / csc2 / csc3.
+- **Metric:** the dataset's own protocol. Ground truth exists only at the start and end of each sequence, so the
+  number is the accumulated drift at the end (the authors' tools), not ATE. Report it that way.
+- **The full-GT companion:** EuRoC MH_04/MH_05/V1_03 stay as D88 set them, because they carry full-trajectory ATE.
+- **Claim scope, as in D88:** abrupt illumination changes and low light on real sensors. Not a co-mounted lamp in
+  total darkness; the lamp claims rest on the sim.
+
+**Open, for A2 to settle from the data before writing code:**
+- What `IllChange` actually shows (lights switched off and on is the expected content) [UNVERIFIED]: inspect
+  `sample.zip` first.
+- Image size and rate, the IMU model and rate, and the on-disk format: verify against the calibration files.
+- **The licence differs by source:** Zenodo's metadata says CC BY 4.0; the university repository (RIUMA) says
+  CC BY-NC-ND 4.0. Apply the stricter one. Evaluation use only, and no UMA-VI pixels in any submitted material
+  (as D35 for EuRoC).
+
+**§49:**
+- catalogue: an `ALGORITHMS.md` dataset entry;
+- ablation matrix: the 5.6 row names the 5 sequences and the 3 EuRoC flights;
+- benchmark config: a 5.6 config;
+- manifest: the dataset name plus the Zenodo file md5 (the record ships `checksum.md5`).
+
+## 2026-10-23 — D87: the full-system EuRoC run (11 flights, loops on) on AWS; the loop FIFO deadlock found and fixed
+
+**Run.** `infra/eval/euroc_full.sh` via `spinup.sh --profile cpux86`: a fresh c7i.4xlarge spot instance with the
+dev image from ECR (`sha256:04d8a7c5…`).
+- EuRoC is fetched from ETH; all 11 sha256 match the local provenance.
+- A clean build, then two flights at a time on disjoint 8-CPU sets (8 OpenCV threads each, as locally).
+- Configs `euroc_v2` (perception) and `euroc_v2_loops` (slam).
+- Metric: keyframe-refined ATE (D57).
+- Evidence: `evaluation/runs/2.6/euroc_full_aws/` (run 1 at d4a8a9c, run 2 at 36709eb).
+- Cost: $0.015 (failed attempt) + $0.049 + $0.044.
+
+**Determinism.** The VIO column reproduces D85 to 4 decimals on all 11 flights (average 0.1202) on a fresh x86 host
+with a clean build. Between runs 1 and 2, the 9 flights the fix does not touch are identical in every results.yaml
+field except timings.
+
+**Bug (run 1).** MH_04 and MH_05 closed 0 loops: about 1000 verified candidates each, `events: 0`,
+`unprocessed_at_end` about 350.
+- **Cause:**
+  - Before inertial init, the VO skips the window solve when no keyframe is free or landmarks are too few. Each
+    skip loses that exit edge.
+  - So the loop mirror (seeded by the first final odometry edge) starts at keyframe 33 on MH_04 and 77 on MH_05.
+  - A gap after the anchor would throw in `Sync`, so these are startup prefixes only.
+  - Both flights start and end in the same place, so the first candidates point into the prefix. They never become
+    `Ready`, and `Drain`'s FIFO waited on them for the rest of the run.
+- **Fix (36709eb):**
+  - `LoopBackend::Unreachable(k)` = seeded ∧ k < anchor ∧ not mirrored, which is exact for the reason above.
+  - `Drain` drops those candidates only (the query's others still run) and counts them (`unmirrorable`,
+    `mirror_anchor_kf` in results.yaml).
+  - Unit test `LoopBackend.KeyframesBeforeTheAnchorAreUnreachable`.
+- **Not done, registered (2.4 row, owner M):** the VO-side prefix itself. An uninformative bridge edge would let PCM
+  pass almost any pair spanning it. The same chain feeds the 3.2 broker.
+
+**Result (run 2, keyframe-refined ATE in m):**
+
+| flight | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 | avg |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| VIO (loops off) | 0.068 | 0.044 | 0.099 | 0.223 | 0.140 | 0.054 | 0.047 | 0.329 | 0.039 | 0.110 | 0.169 | 0.120 |
+| **full system (loops on)** | **0.021** | **0.028** | **0.033** | **0.046** | **0.044** | 0.038 | 0.027 | 0.288 | **0.030** | 0.071 | 0.097 | **0.066** |
+| ORB-SLAM3 (T-RO 2021 Table II) | 0.036 | 0.033 | 0.035 | 0.051 | 0.082 | 0.038 | 0.014 | 0.024 | 0.032 | 0.014 | 0.024 | 0.035 |
+| class worst (PHASE2_PLAN) | 0.166 | 0.152 | 0.125 | 0.280 | 0.284 | 0.076 | 0.110 | 0.120 | 0.070 | 0.100 | 0.190 | 0.138 |
+
+- **MH_04 and MH_05 after the fix:**
+  - MH_04: 272 events, 408 candidates dropped as unmirrorable, 0 bad loops among the GNC inliers.
+  - MH_05: 155 events, 536 dropped, 0 bad inliers.
+- **The statement, exact:**
+  - The full system is at or better than ORB-SLAM3 on 7/11 flights (all five MH, V1_01 and V2_01).
+  - The average is 0.066: between BASALT (0.051, VIO, 10 flights) and Kimera (0.119); not at ORB-SLAM3 (0.035).
+  - It is in the stereo-inertial class on 10/11 flights.
+  - V1_03 is the outlier: 0.288, 12× ORB-SLAM3. Without it the average is 0.043.
+  - V1_02, V2_02 and V2_03 are 2–5× ORB-SLAM3.
+  - All are single runs, seed 1.
+- **What this changes:**
+  - D86 item 1's "owed" run is done. The SOTA comparison is stated as above, not as parity.
+  - V1_03 stays the 5.x regression case (D86, D89).
+
+## 2026-10-22 — D100: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
+
+- **Loader:** `runtime::TumSource` (`cpp/runtime/datasets/tum.hpp`), with `infra/scripts/fetch_tum.py` (sha256
+  pinned). Facts are from the TUM file-format page, read 2026-10-21:
+  - depth is stored at a factor of 5000, pre-scaled, and registered to the distorted RGB;
+  - ground truth is the colour camera's pose, written `qx qy qz qw`;
+  - RGB and depth frames are associated within 20 ms.
+
+  Timestamps are parsed to nanoseconds from the decimal string.
+- **Undistortion:** we use the calibrated fr1/fr2 intrinsics with 5 coefficients. The SAME map is applied to RGB
+  (bilinear) and to depth (nearest), which is exact for depth registered to the distorted pixels.
+  - **Deviation:** the TUM page recommends its uncalibrated ROS default set. We follow ORB-SLAM2's published
+    setup instead. `--intrinsics ros_default` is the ablation (not run).
+- **Depth path (§9.6 contract):** an RGB-D source declares a `DepthSensorModel`
+  (`perception/rgbd/depth_stereo.hpp`). The runner then takes explicit RGB-D branches; stereo sources take the
+  unchanged path.
+  - The right point is synthesised: u_R = u_L − fx·B/Z, with virtual baseline B = 0.08 m (ORB-SLAM2's RGB-D virtual
+    stereo).
+  - The sensor Z fills the §9.6 slot.
+  - Keyframe records get a `StereoDepth` built from the sensor.
+  - Depth is masked to [0.4, 4] m and to a 3×3 max/min ratio of at most 1.05 (flying pixels).
+  - Depth is rectified nearest-neighbour (`StereoRectifier::RectifyLeftNearest`).
+  - The radiometric stage is refused on RGB-D sources.
+- **σ_Z model, stated:** σ_Z = k·Z² with k = 1.425e-3 m⁻¹. Source: Khoshelham & Elberink, Sensors 2012, eq. 7,
+  with |m/fb| = 2.85e-5 cm⁻¹ and σ_d′ = ½ px, transcribed from the PMC full text. It enters the triangulation gate as
+  the virtual rig's disparity noise, σ_d = k·fx·B ≈ 0.059 px, set in code and written to `results.yaml`.
+  - **Stated consequences:**
+    - the §9.6 cross-check compares Z with itself and cannot reject;
+    - BA weights the virtual right point at `ba.sigma_px`, about 15× looser than the model (ORB-SLAM2 does the same).
+- **Configs:** `tum_v1` (perception and slam) is euroc_v2's values with `imu.mode none` (TUM has no gyro) and
+  `min_depth_m` 0.4. `ba.sigma_px` stays EuRoC's calibrated 0.46 [ASSUMPTION].
+- **Regression (`configs/benchmark/tum_regression.yaml`, checked by `infra/scripts/tum_regression.py`):**
+  - It is a separate pinned check, not part of `--premerge` (maintainer).
+  - Targets were fixed before measuring: the worst of ORB-SLAM2 T-RO 2017 Table III's RGB-D class.
+  - Seed 1, full sequences, ATE with SE(3) alignment. evo_ape (`tum -a`) on TUM's raw `groundtruth.txt` agrees to
+    1e-6 m on all three.
+  - Tolerance: pin × 1.1 + 2 mm.
+
+  | sequence | frames | ATE m | target m | in class | keyframes | lost |
+  |---|---|---|---|---|---|---|
+  | fr1/xyz | 792 | **0.0496** | 0.014 (Kerl et al. IROS 2013 Table III; was 0.017 [UNVERIFIED], corrected 2026-10-23 per D86) | **no** | 305 | 0 |
+  | fr1/desk | 573 | **0.0581** | 0.037 | **no** | 343 | 0 |
+  | fr2/xyz | 3615 | **0.0139** | 0.029 | yes | 370 | 0 |
+
+- **The negative result, reported:** both fr1 sequences are 1.6–2.9× above the class bar. That class is full SLAM
+  (loops, global BA); ours is VO with loops off. Causes not yet measured: [UNATTRIBUTED].
+  - Candidates:
+    - fr1's fast handheld motion with a rolling shutter;
+    - RGB/depth time offset of up to 20 ms (unsynchronised on fr1);
+    - a keyframe every ~2 frames (305/792) under euroc_v2's `ref_ratio`;
+    - `ba.sigma_px` not re-calibrated;
+    - the calibrated-vs-ROS-default intrinsics choice.
+- **EuRoC unchanged:** MH_01, 300 frames, `euroc_v2`. `estimate_body.tum` and `vo_trace.csv` are byte-identical
+  between `main` (aa7dce2) and this change.
+- **Cost:** track ≈ 16–18 ms per frame, keyframe ≈ 24–30 ms (640×480).
+
+## 2026-10-22 — D101: L2 — the seeded sim IMU noise operator; sim_v2 runs the full inertial layer
+
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.)
+
+- **Operator:** `core/inertial/imu_noise_operator.hpp`. It applies the Kalibr/EuRoC continuous model, discretised at
+  the nominal rate, to the sim's clean canonical IMU stream at consumption time (D37), like D:
+  - white noise σ_nd/√Δt;
+  - a bias random walk, step σ_rw·√Δt, from the config's initial bias (zero).
+- **Determinism:** each sample's draws are Philox keyed by (seed, sample index): `PhiloxStream(seed, k, 0)`, with a
+  fixed draw order. The bias is the running sum of steps 0..k−1, so any replay prefix is bit-identical (tested).
+  - The seed is `DeriveSeed(DeriveSeed(run_seed, "imu_noise"), "agentK")`, the same plumbing as D's.
+- **Config:** `configs/sim/imu_noise_v1.yaml` is rig-scoped (`rig: rig_stereo_v1`). It holds the ADIS16448 densities
+  exactly as EuRoC's `imu0/sensor.yaml` gives them, so sim and EuRoC share one noise regime.
+  - It is a separate file, not keys in `rig_stereo_v1.yaml`, because worldgen snapshots the rig into
+    `mission_*.json`. New keys there would change future scene outputs for an operator that acts at consumption
+    time.
+- **Wiring:** `SimSource::SetImuNoise`, via `ariadne_sim_vo --imu-noise YAML`. The source exposes **no IMU unless
+  the operator is set**, so default sim runs, including the Phase-1 gate's `sim_v1`, see what they saw before.
+  - `ImuNoiseModel()` reports exactly the injected model.
+  - `results.yaml` records `imu_noise_config`.
+- **`sim_v2` → `imu.mode full`** (maintainer's instruction). It uses euroc_v2's imu section with noise inflation 1,
+  because the injected model is the estimator's model.
+  - The pre-switch `sim_v2` is kept verbatim as `sim_v2_vo`, as euroc_v2 → euroc_v2_attitude was. D69 and the
+    synthetic `StereoVo` tests now name it.
+  - `sim_v2` without `--imu-noise` is refused by the runner's existing "no IMU" check.
+- **Evidence:**
+  - Unit tests:
+    - prefix replay is bit-identical at n = 1/17/1000/3999 of 4000;
+    - zero densities return clean + b₀;
+    - white-noise σ matches within 2 % (60k samples × 3 axes);
+    - the bias-walk variance equals σ_rw²·T within 20 % (300 seeds × 3 axes, a ~4σ bound);
+    - the shipped config loads.
+  - The `StereoVo` lost-frame and inertial tests pass on `sim_v2_vo` (4/4).
+- **Sim run** (ci_tiny_0 agent 0, 1000 frames, seed 1, `sim_v2` + `imu_noise_v1`):
+  - initialised on the first attempt at 5.35 s, with unconstrained |g| 9.79 m/s² and χ²/dof 4.1;
+  - gravity error vs GT: median 0.13°, p90 1.3°;
+  - final gyro bias 1–4e-4 rad/s per axis. The injected walk's 1σ after 50 s is 1.4e-4;
+  - inertial χ²/dof 0.30;
+  - **ATE 3.06 mm** (keyframe-refined 2.79 mm) vs **2.76 mm** for the visual-only path on the same frames (D69's
+    clean row), 0 lost frames. The clean sim is easy, so this shows the layer works on the sim IMU; it does not
+    show a benefit.
+  - Keyframes cost ≈ 200 ms with the inertial solve (at ≤ 1 keyframe per second).
+- **Not built:** `ariadne_sim_collab --imu-noise` (multi-agent), and ground-truth inertial states for the sim (so
+  `init_vs_gt` reports −1).
+
+## 2026-10-22 — D102: 3.3 comms broker node — RFComms-derived link model with wall attenuation, scripted partitions, one ledger; L8 keeps the 1500 B MTU
+
+(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.) Design and numbers:
+`docs/design/COMMS_3.3.md`.
+
+- **`RfLinkModel` implements the COLLAB_3.2 §2 `LinkModel` seam.**
+  - RFComms' equations are transcribed from gz-sim8, with its quirks reproduced and tagged.
+  - It adds a per-wall term: solid blocks crossed, from a ray-cast against the scene's GT wall faces, counting face
+    entries once per surface. Doorways are free.
+  - `loss_p` = E[PER] over the shadowing, integrated on a fine grid. It matches a Monte Carlo of RFComms'
+    per-packet procedure.
+- **`CommsNode`** owns the link stack (base + `FaultPlan`), the `Network` and the one `ByteLedger`. Only Endpoints
+  write the ledger; forwarding adds no rows (tested).
+- **Scenarios:** `configs/comms/` holds ideal, `rf_gz_default`, `collapsed_v1` and `collapsed_partition_v1`.
+  - Parameters that depart from gz defaults are tagged [ASSUMPTION].
+  - The COST-231 heavy wall, 6.9 dB, is [UNVERIFIED-primary].
+- **Measured on ci_tiny** (`ariadne_comms_probe`):
+  - The gz-default radio is loss-free at these ranges, the stated null.
+  - `collapsed_v1` loses 1.6 / 17 / 49 % of 1500-byte datagrams at 0 / 1 / 2 walls.
+  - The partition scenario is down for exactly the scripted 25 s.
+- **Seam limit, stated:** `Sample()` has no datagram size, so `loss_p` is for 1500 B. 40-byte heartbeats would see
+  1.3–2.3× less loss near the edge. A size on the seam is the 3.2 owner's call; nothing in
+  `collaboration/protocol/` was changed.
+- **L8, conditional: keep `kPathMtuBytes` = 1500 under RFComms as modelled.**
+  - At `collapsed_v1`'s median power, goodput rises with size: 0.61 at 64 B vs 0.80 at 1472 B.
+  - At the edge (the 2-wall mean, −81.7 dBm) the best size is 512 B, and 1472 B costs ≤ 3 %.
+  - Under the physical case instead (PER in bits, slow per-link fading), 1472 B gives 0.06 against 0.59 at 64 B: a
+    3–10× loss at the edge.
+  - Recommendation to the 3.2 owner (COMMS_3.3 §4): if the link model is made physical, cap or adapt edge-link
+    fragment size. The serializer is not changed here.
+- **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
+  exists.
 
 ## 2026-10-22 — D130: the sim render is sRGB-encoded; D gains an sRGB decode (opt-in, default unchanged)
 

@@ -1,0 +1,16 @@
+# 3.3 (D102) RFComms with gz-sim8's DEFAULT radio (RangeConfiguration / RadioConfiguration, read from RFComms.cc
+# 2026-10-22: max_range 50 m, n 2.5, l0 40 dB, sigma 10 dB, 54 Mb/s, tx 27 dBm, noise floor -90 dBm), plus the
+# per-wall term. At ci_tiny ranges this radio is ~50 dB above the BER knee: expected to be loss-free (a stated null).
+name: rf_gz_default
+mode: attenuated
+rf:
+  max_range_m: 50.0
+  fading_exponent: 2.5
+  l0_db: 40.0
+  sigma_db: 10.0
+  capacity_bps: 54.0e6
+  tx_power_dbm: 27.0
+  noise_floor_dbm: -90.0
+  wall_loss_db: 6.9          # COST-231 multi-wall "heavy wall" (>10 cm concrete/brick) as commonly cited [UNVERIFIED-primary]
+  latency_s: 0.001           # [ASSUMPTION] RFComms models no latency
+  datagram_bytes: 1500       # = core::kPathMtuBytes (L8)

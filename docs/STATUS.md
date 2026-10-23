@@ -134,6 +134,25 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with
   `ARIADNE_REQUIRE_MODELS=1`. No premerge was run: phase 1 runs ORB, and none of these wrappers is on its path.
 
+## 2026-10-22 — L2: seeded sim IMU noise operator; sim_v2 runs the full inertial layer (D101)
+
+- `ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml`: ADIS16448 densities, Philox keyed per (seed, sample),
+  bit-identical on prefix replay. Without the flag the sim exposes no IMU, so default runs and the gate are unchanged.
+- `sim_v2` is now `imu.mode full`; the old `sim_v2` is `sim_v2_vo`. ci_tiny agent 0, 1000 frames: initialised at
+  5.35 s; ATE 3.06 mm vs 2.76 mm visual-only; 0 lost.
+- Decision IDs D100–D109 are claimed by this session (the claim is on `feat/2.6-tum`).
+
+## 2026-10-22 — 3.3 comms broker node: RFComms link model + wall ray-cast + partitions; L8 conditional (D102)
+
+- `CommsNode` owns the link stack, the `Network` and the one ledger (Endpoints-only rule tested). `RfLinkModel`
+  transcribes RFComms (gz-sim8) and adds per-wall attenuation from the GT wall faces.
+- ci_tiny probe: gz-default radio loss-free (null); `collapsed_v1` 1.6 / 17 / 49 % loss at 0 / 1 / 2 walls; the
+  partition scenario is down for exactly the scripted 25 s.
+- **L8:** 1500 B holds under RFComms as modelled. Under bit-wise PER and slow fading it loses 3–10× goodput at the
+  edge; that is a recommendation to the 3.2 owner.
+- **Partial:** no protocol traffic over it until 3.2's sim integration. Decision IDs D100–D109 are claimed by this
+  session (the claim is on `feat/2.6-tum`).
+
 ## 2026-10-21 — Combined EuRoC run done (D85); completion register created
 
 - **2.4 full VIO + 2.1 re-association:** average 0.120 (0.121 for 2.4 alone), 9/11 in class. V1_03 and V2_02 are
@@ -147,6 +166,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   - L2, the sim IMU noise operator;
   - L3, the sim-rig retrieval and hard-pair exports;
   - TUM.
+
+## 2026-10-22 — 2.6 TUM RGB-D: loader, depth path into StereoVo, regression pinned (D100)
+
+- `ariadne_tum_vo` runs the stereo pipeline on TUM, with sensor depth fed through a virtual rig (σ_Z = 1.425e-3·Z²,
+  Khoshelham & Elberink eq. 7). EuRoC output is byte-identical (MH_01, 300 frames).
+- **Pinned ATE (m):** fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139. evo agrees to 1e-6 m. **fr1 is not in the
+  published RGB-D class**; fr2/xyz is. Causes are unattributed (D100 lists the candidates).
+- Tests: `test_opencv` Tum* 7/7, `test_unit` *Config* 20/20.
+
+## 2026-10-21 — Session claims D100–D109 for 2.6 TUM, L2 (sim IMU noise operator) and 3.3 (comms broker node)
+
+- Decision IDs **D100–D109** are claimed by this session: D100 2.6 TUM, D101 L2, D102 3.3. Renumbered 2026-10-22
+  from D90–D99, which collided with A1's D90–D93. D74 stays 2.5's; D80–D89 stay the 3.2 session's.
+- Branches from `main` (aa7dce2): `feat/2.6-tum`, then one branch each for L2 and 3.3.
 
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
@@ -1244,3 +1277,22 @@ restoration ablations easier than reality. Neither blocks Phase 0.
 
 Arch §3's tree names `docs/ARCHITECTURE.md`; the real file is
 `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md`. Source of truth not renamed.
+
+## 2026-10-23 — main integrated (2.1, 2.5, 2.6, L2, 3.3 + B's SE-Sync evidence); pre-merge PASS on AWS (M)
+
+- **Merges:** feat/2.1-perception, feat/2.5-robust-backend, feat/2.6-tum, feat/l2-sim-imu-noise, feat/3.3-comms, plus
+  B's SE-Sync large-graph evidence (cherry-picked: sphere/torus/cubicle/grid3D certified, rim not).
+- **Pre-merge (D49) on AWS:** `infra/eval/premerge_aws_launch.sh stage|run|teardown`, run `20261022T223316Z-cpux86-0fc2f6`, commit a26bb6b.
+  - **VERDICT PASS:** 54/54 gate checks, ctest 539/539; every determinism check matched, including Phase 1's
+    `bytes.json`.
+  - Evidence: `evaluation/runs/premerge_aws/20261022T223316Z-cpux86-0fc2f6/` (summaries; renders and raw traces not committed).
+- **Found by the AWS runs and fixed:**
+  - phase1.sh never passed the D90 sim-rig exports, so A1's L3 tests failed under `ARIADNE_REQUIRE_MODELS=1`
+    (a26bb6b);
+  - the runner role reads `runs/*` only, so staging and the persistent recording moved under `runs/` (maintainer
+    kept the role's datasets/ exclusion);
+  - git safe.directory (no HOME in user-data);
+  - the gate now runs as uid 1000.
+- **Cost of the five launches:** about $0.08, compute only.
+- **Persistent:** the Phase 1 recording at `runs/_datasets/phase1_sim_record/…` (12.6 GB). Uploaded once.
+- **Not done:** the Phase 2 full exit-gate run (fresh GPU render).

@@ -10,6 +10,7 @@
 #
 # PROFILES (cheapest config that runs each workload; Stockholm prices in D28):
 #   cpu  c8g.large   Graviton4, 2 vCPU/4 GiB. Smallest size COOL is priced for.
+#   cpux86 c7i.4xlarge Ubuntu 24.04 amd64, 16 vCPU/32 GiB: x86 CPU runs in the amd64 images.
 #   cool c8g.4xlarge the COOL Marketplace AMI (Ubuntu 24.04); needs the subscription (infra/cool/day1.sh).
 #   gpu  g4dn.xlarge NVIDIA T4 16 GB, 4 vCPU. Smallest full-GPU NVIDIA type;
 #                    needs the G/VT quota raised from 0.
@@ -63,7 +64,7 @@ profile_defaults() {
       ROOT_GB=0 ;;   # 0 = the AMI's own snapshot size (75 GB for this DLAMI)
     cpux86)
       # x86 CPU work that needs the amd64 ariadne images (no arm64 image until plan 0.2): Ubuntu 24.04 amd64.
-      # c7i.4xlarge = 16 vCPU (8 cores x 2), 32 GiB. (Same profile as main's 65672e9, D86.)
+      # c7i.4xlarge = 16 vCPU (8 cores x 2), 32 GiB.
       TYPE="${TYPE:-c7i.4xlarge}"
       AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
       ROOT_GB=80 ;;

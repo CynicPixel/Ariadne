@@ -24,10 +24,12 @@
 // both through the lens like their images). Without SetDegradation the
 // manifest records degradation_config = "none" and every pixel is as before.
 // ---------------------------------------------------------------------------
+#include "core/inertial/imu_noise_operator.hpp"
 #include "core/random/seed.hpp"
 #include "perception/degradation/degradation_config.hpp"
 #include "perception/degradation/lens.hpp"
 #include "perception/radiometric/flat_field.hpp"
+#include "perception/rgbd/depth_stereo.hpp"
 #include "perception/stereo/camera_model.hpp"
 #include "runtime/datasets/sim_depth.hpp"
 #include "runtime/datasets/euroc.hpp"
@@ -42,6 +44,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <cstring>
+#include <algorithm>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -65,6 +68,9 @@ struct StereoFrame {
     int64_t t_ns = 0;
     cv::Mat left, right;   // raw 8-bit gray
     cv::Mat left_rgb;      // raw 8-bit RGB of the left camera (same pixels as `left`); empty if the source has none
+    /// RGB-D sources only (2.6, D100): CV_32F metres registered to `left`'s pixels, 0 = no return. `right` is then
+    /// empty. Empty for stereo sources.
+    cv::Mat depth;
 };
 
 class StereoSource {
@@ -92,6 +98,11 @@ public:
     /// Camera `cam`'s (0 left, 1 right) calibrated flat field for the radiometric stage; empty (K = 1) when the
     /// source has none -- EuRoC publishes none (2.2).
     virtual perception::radiometric::FlatField FlatFieldOf(int /*cam*/) const { return {}; }
+    /// RGB-D sources (2.6, D100): the depth sensor's stated noise model and the virtual rig it is fed through.
+    /// Present iff every frame carries `depth` and no `right`. Calibration() is then that virtual rig.
+    virtual std::optional<perception::DepthSensorModel> DepthSensor() const { return std::nullopt; }
+    /// The named IMU noise operator config applied to Imu() (L2, D101), "none" if none.
+    virtual std::string ImuNoiseConfig() const { return "none"; }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -177,6 +188,7 @@ public:
         t_right_ = ag["topics"]["right_image"].as<std::string>();
         if (m["rig"]["depth"]["enabled"].as<int>()) t_depth_ = ag["topics"]["depth_image"].as<std::string>();
         const std::string t_pose = ag["topics"]["gt_pose"].as<std::string>();
+        t_imu_ = ag["topics"]["imu"].as<std::string>();
         if (!m["lens"]) throw std::runtime_error("sim: mission has no rig.lens (pre-D41 recording)");
 
         // The lens: the camera the estimator sees (D41).
@@ -268,6 +280,35 @@ public:
     uint32_t Agent() const override { return uint32_t(agent_); }
     std::string DegradationConfig() const override { return degradation_ ? degradation_name_ : "none"; }
     perception::radiometric::FlatField FlatFieldOf(int cam) const override { return flat_[cam == 0 ? 0 : 1]; }
+    /// The IMU only once SetImuNoise was called (L2, D101): without it the source exposes no IMU, so default sim
+    /// runs (imu_mode none, the Phase-1 gate) see exactly what they saw before.
+    std::vector<core::ImuMeasurement> Imu() const override { return imu_; }
+    core::ImuNoise ImuNoiseModel() const override { return imu_noise_ ? imu_noise_->noise : core::ImuNoise{}; }
+    std::string ImuNoiseConfig() const override { return imu_noise_ ? imu_noise_->name : "none"; }
+
+    /// Read the canonical (clean) IMU stream and apply the seeded noise operator `p` (L2, D101;
+    /// core/inertial/imu_noise_operator.hpp). The seed derives from the run seed and the agent, as D's do. A config
+    /// with all densities 0 exposes the clean stream. ImuNoiseModel() then reports exactly the injected model.
+    void SetImuNoise(const core::ImuNoiseOperatorParams& p, uint64_t run_seed) {
+        std::vector<core::ImuMeasurement> clean;
+        RosbagReader bag;
+        bag.Open(rec_ + "/canonical/canonical_0.mcap");
+        bag.Replay([&](const RosMessage& msg) {
+            const auto m = ros_cdr::DecodeImu(msg.data, msg.size);
+            core::ImuMeasurement s;
+            s.t_ns = m.header.stamp.ns();
+            s.gyro = core::Vec3(m.angular_velocity.x, m.angular_velocity.y, m.angular_velocity.z);
+            s.accel = core::Vec3(m.linear_acceleration.x, m.linear_acceleration.y, m.linear_acceleration.z);
+            clean.push_back(s);
+        }, {t_imu_});
+        if (clean.empty()) throw std::runtime_error("sim: canonical bag has no IMU on " + t_imu_);
+        std::stable_sort(clean.begin(), clean.end(),
+                         [](const core::ImuMeasurement& a, const core::ImuMeasurement& b) { return a.t_ns < b.t_ns; });
+        const uint64_t seed = core::DeriveSeed(core::DeriveSeed(run_seed, core::seed_purpose::kImuNoise),
+                                               ("agent" + std::to_string(agent_)).c_str());
+        imu_ = core::ApplyImuNoise(clean, p, seed);
+        imu_noise_ = p;
+    }
 
     /// Apply D (named config `d`) to every frame from now on (2.2, D66). Camera seeds derive from the run seed,
     /// the agent and the side. Also calibrates each camera's flat field from D frames of a flat target under
@@ -372,7 +413,8 @@ public:
     }
 
 private:
-    std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, sensors_mcap_, checksum_ = kUnknownField;
+    std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, t_imu_, sensors_mcap_,
+        checksum_ = kUnknownField;
     int agent_ = 0;
     size_t frames_ = 0;
     int found_ = 0;
@@ -385,6 +427,8 @@ private:
     uint64_t seed_[2] = {0, 0};
     int threads_ = 1;
     perception::radiometric::FlatField flat_[2];
+    std::vector<core::ImuMeasurement> imu_;                  // L2: the noisy stream, when SetImuNoise was called
+    std::optional<core::ImuNoiseOperatorParams> imu_noise_;
 };
 
 }  // namespace ariadne::runtime

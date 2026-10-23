@@ -37,7 +37,7 @@ identical.
 | INV2 | COOL Arm-vs-Arm, same binary, loader switch | **blocked by 0.2 / 0.3** | There is no arm64 OpenCV 5 build (I3b OPEN). The COOL trial has not started (7 days, can't be paused). |
 | INV3 | the agentic claim rests only on the runtime loop | not started | 7.1. Also needs the **live closed-loop runtime (L1)** to act. |
 | INV4 | egress at ρ_responder | done (placeholder) | 1.8 uses ρ_responder 0.40 m (D45). Full spec is 4.5. |
-| INV5 | datasets before simulator | partial | EuRoC done (D53–D60). **TUM not started** (2.6). OIVIO is 5.6. |
+| INV5 | datasets before simulator | partial | EuRoC done (D53–D60). TUM done: pinned regression, fr1 not in class (D100). OIVIO is 5.6. |
 | INV6 | bytes counted at the serializer | done | D14, D82. The ≤15% byte-table gate is a Phase 3 exit item. Carries **I5**: §15.7 per-element table (node 65.8 B vs 28 B) never amended (D12). |
 | INV7 | honesty: no "optimal" without a certificate | done (mechanism) | D74: `CertifyPoseGraph`, behind `loop_closure.certificate`. A claim must cite a `certified` verdict. The verdict is for the isotropic chordal surrogate and is one-directional. |
 | INV8 | tagged facts, `[SMOKE-TEST]` first | done (practice) | |
@@ -46,7 +46,7 @@ identical.
 
 | area | state | evidence / missing |
 |---|---|---|
-| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp lit in `rig_stereo_v2` (D131, 5.1); v1 stays inert. **Sim IMU noise operator not built (—)** (built on `feat/l2-sim-imu-noise`, D101). |
+| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp lit in `rig_stereo_v2` (D131, 5.1); v1 stays inert. Sim IMU noise operator built (L2, D101). |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
 | Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, approved 2026-10-21 (exact index default, `cv::ANNIndex` the scale ablation). ALIKED+LightGlue hard pairs: D63. Sim-rig exports (1280×720 RGB): D90 (SMOKE §4t); EigenPlaces sim default size awaits approval. |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73), certificate behind a flag (D74). |
@@ -61,13 +61,13 @@ identical.
 | id | item | state | owner |
 |---|---|---|---|
 | L1 | **Live closed-loop runtime:** `ros2/ariadne_{agent,bridge,operator,sim}` hold no source. Gazebo live → bridge → estimator → mission → mover commands. Needed by 4.3/4.4 (NBV acting), 7.1 (agentic actions), 8.1/8.5 (missions, demo). | **not started** | — (must be assigned; arch §5.4, §5.10, D38–D40 note "the bridge stays for live runs") |
-| L2 | Sim IMU noise operator (seeded, consumption-time, like D) | not started | — (2.2 never built it; see `INERTIAL_2.4.md` §5) |
+| L2 | Sim IMU noise operator (seeded, consumption-time, like D) | done | A2: D101. `--imu-noise`, prefix-replay bit-identical; sim_v2 imu full initialises (ATE 3.06 mm, 1000 frames). Not wired into `ariadne_sim_collab`. |
 | L3 | Sim-rig retrieval / hard-pair exports (1280×720 RGB) for EigenPlaces and ALIKED+LightGlue | done (D90 draft on the EigenPlaces default size) | A1. `models.sh eigenplaces-sim` / `aliked-lg-sim`, RGB path `DescribeRgb` / `ExtractRgb`, exact vs upstream on recorded sim frames, regeneration bit-exact (SMOKE §4t, PERCEPTION_2.1 §14). Sim retrieval quality → 3.1 |
 | L4 | Reference-export regeneration as one command (`models.sh eigenplaces`, `aliked-lg`) | done | A1. Both subcommands check against sha256s pinned in the script; a full regeneration was bit-exact, 11/11 and 19/19 files (PERCEPTION_2.1 §13, STATUS 2026-10-21 A1) |
 | L5 | Quiet-host timings: XFeat, EigenPlaces, ALIKED+LightGlue (near-realtime demo budget) | done on g4dn.xlarge (x86, 2C/4T); demo-machine and m8g numbers open | A1. `ariadne_dnn_timing`, `evaluation/runs/l5_timing/20261021T211117Z-gpu-e2b3e3/` (STATUS 2026-10-21 A1 table). The m8g/COOL timings stay with 7.3 |
 | L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
-| L8 | MTU / IPv4 framing model revisited against the real link model | deferred → 3.3 | — |
+| L8 | MTU / IPv4 framing model revisited against the real link model | **revisited; recommendation open** | A2: D102 / COMMS_3.3 §4. Keep 1500 B under RFComms as modelled (≤3 % edge cost). Under bit-wise PER + slow fading, 1472 B loses 3–10× goodput at the edge (64–256 B wins): the 3.2 owner decides. Seam limit: `loss_p` for one size; heartbeats 1.3–2.3× over-lossy near the edge. |
 | L9 | I6 dust model fidelity (D9, D11) | **model built; decision open** (→ 5.4) | A2: D135 options + D139 headlamp model (ALGORITHMS §10.2: round-trip attenuation, near-field backscatter, lamp offset; tests 31/31, golden unchanged). Measurement on the D137 dark recording pending |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
@@ -102,16 +102,16 @@ identical.
 
 | item | state | evidence / missing | owner |
 |---|---|---|---|
-| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85), so the maintainer decides. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
+| 2.1 perception | done except stated gaps | STATUS 2026-10-22 table. D62 approved 2026-10-21. Projection-guided re-association deferred; its trigger fires for V1_03 only (D85). D86: V1_03 is not won't-fix; it is carried to 5.5 as the degraded-vision regression case, with this as the candidate fix. L4 (models.sh), L5 (timings) and L6 (D91) done. CLAHE retrieval split done for EuRoC (D92); the sim dark row is carried to 5.1. | A1 |
 | 2.2 radiometric 1–2 + VST | done except stage 4 | Stage 4 exposure normalisation deferred → **5.3**. Unrun matrix rows marked NOT RUN. | A2 |
 | 2.3 local SLAM | done | `LOCAL_SLAM_2.3.md` §11 | M |
-| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 not built. | M |
-| 2.5 robust back end | done except the large SE-Sync certificate run and the planted-outlier gate wording (maintainer) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). The certificate on sphere/torus/grid3D/cubicle/rim waits on the maintainer (heavy run). The broker wiring of D76 is M (3.2/3.5). | B |
-| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | **partial: TUM not started** | EuRoC done. "Pinned in CI" = local premerge (D49). TUM needs a loader plus an RGB-D depth source into `StereoVo`. | — |
+| 2.4 inertial | done | `INERTIAL_2.4.md` §6. L2 built (D101). **Carry (D87):** the VO graph has a disconnected prefix when the window solve is skipped before inertial init (MH_04: 33 keyframes, MH_05: 77). Loop closure now drops candidates into it; the fix on the VO side is open because an uninformative bridge edge would weaken PCM. The same chain feeds the 3.2 broker through CollabNode. | M |
+| 2.5 robust back end | done except the planted-outlier gate wording (maintainer) | D70–D76 (`ROBUST_BACKEND_2.5.md` header). Large SE-Sync certificate run done 2026-10-22: 4/5 certified, rim not (D74). The broker wiring of D76 is M (3.2/3.5). | B |
+| 2.6 datasets: EuRoC + **TUM RGB-D**; regression pinned | done | EuRoC done (premerge, D49). TUM is a **separate pinned check, not in `--premerge`** (maintainer, 2026-10-21): `configs/benchmark/tum_regression.yaml` checked by `infra/scripts/tum_regression.py`. `TumSource` + RGB-D depth path, `tum_regression.yaml` pinned (fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139 m; evo-checked). **fr1 not in class**, unattributed (D100). | A2 |
 | Gate: FD Jacobian suite | done | | |
-| Gate: oracle 100/100; certificate certified / not certified | **partial** | Oracle done (D52). Certified (D74): low-noise 10/10; garage (f 1.26252 vs Table 1 1.263), tinyGrid3D, smallGrid3D. Large SE-Sync graphs pending (heavy). Planted outliers kept in the cost: **4/10 not certified, 6/10 certified**. That is reported per PHASE2_PLAN §3, not tuned. The plan wording "not certified on planted-outlier graphs" is not met as worded: maintainer call. A stationary non-global point and a perturbed point: not certified. | B |
+| Gate: oracle 100/100; certificate certified / not certified | **partial** | Oracle done (D52). Certified (D74): low-noise 10/10; garage (f 1.26252 vs Table 1 1.263), tinyGrid3D, smallGrid3D; sphere2500, torus3D, cubicle, grid3D (every f = Table 1 to 4 s.f.). **rim: not certified** (λ_min −0.233 at η 1e-10‖M‖; f matches Table 1; reported, not re-tuned). Evidence: `evaluation/runs/2.5/certificate_sesync/`. Planted outliers kept in the cost: **4/10 not certified, 6/10 certified**. That is reported per PHASE2_PLAN §3, not tuned. Gate wording accepted as "certified fraction reported" (D86); the large graphs have landed, so D86's block is cleared. rim: f equals Table 1, so the optimum is reached; the certificate is one-directional, so "not certified" means unknown, not wrong. A stationary non-global point and a perturbed point: not certified. | B |
 | Gate: outlier ramp with breakpoint | done | D75, `evaluation/runs/2.5/outlier_ramp/`: aliasing groups. PCM → GNC breakpoint 90 % (groups of 10) / 70 % (two growing groups). GNC only: none. Success, ATE and runtime are plotted. | B |
-| Gate: EuRoC VIO in class; TUM regression pinned | partial | EuRoC done: the combined run averages 0.120, 9/11 in class (D85). TUM: —. | M / — |
+| Gate: EuRoC VIO in class; TUM regression pinned | EuRoC done | VIO 0.120, 9/11 (D85, reproduced on AWS, D87). **Full system with loops on (D87): 0.066, 10/11 in class; at or better than ORB-SLAM3 on 7/11; V1_03 0.288 is the outlier.** Loop FIFO deadlock fixed (D87). TUM: pinned (D100, D86); fr1/xyz target sourced (Kerl et al. IROS 2013, 0.014), fr1 still not in class (stated). | M / A2 |
 | Exit run (full, fresh render, clean tree) | not started | after the items above | M |
 
 ## Phase 3 (opened early, D80)
@@ -120,7 +120,7 @@ identical.
 |---|---|---|---|
 | 3.1 EigenPlaces retrieval + CLAHE split | partial | Core D62 (approved). CLAHE split built (D92, `enhance`, default none); EuRoC rows: no effect, darkened proxy turned out easier than clean (`evaluation/runs/retrieval_3.1/`). **Open: the §31.5 sim row (dark + co-moving light), needing a sim retrieval eval with revisit GT, which also settles D90's sim size.** L3 done (D90). | A1 |
 | 3.2 full protocol | partial | D81–D83: unit-level I5 54/54. Missing: robust stage in the broker solve; sim integration (`protocol: v2`); per-keyframe corrections on the wire (carries to 6.2); L7. | M |
-| 3.3 comms broker node (RFComms + attenuation + partitions) | not started | `LinkModel` seam ready (COLLAB_3.2 §2). Carries L8. | — |
+| 3.3 comms broker node (RFComms + attenuation + partitions) | **partial** | D102: `RfLinkModel` + wall ray-cast + `CommsNode` (one ledger, tested) + scenario configs + `ariadne_comms_probe` on ci_tiny. **Waits on** 3.2's sim integration (`protocol: v2`) to carry protocol traffic. | A2 |
 | 3.4 spectral prioritization | not started | literature done. Carries I5 (the cost model must use measured per-element bytes). | M |
 | 3.5 aliasing laboratory | not started | can reuse B's synthetic aliasing-outlier protocol | M |
 | 3.6 descriptor compression rows | done for global descriptors (D93); XFeat local row = stated gap | `evaluation/runs/retrieval_3.6/20261021T212015Z`: fp16/int8 lossless on EuRoC, PCA not worth it; int8 258 B is the wire candidate, **needs a wire.fbs change → 3.2 (M)**. XFeat fp16/int8 row → the first XFeat-on-the-wire config (D60 ships ORB) | A1 |
@@ -144,13 +144,13 @@ identical.
 | 5.3 active exposure + lamp co-control | **partial** (A2): D132 controller + Stage 4 + replay `lamp_power`; tests 7/7 incl. closed loop (fixed a blind-metric stall and a limit cycle). Not wired; live `light_config` loop and the overexposure scenario to do. Carries 2.2's Stage 4. Real-data evidence (D143): Hilti OAK-D auto-exposure pinned at its ~30 ms cap, only ISO moves (930–1549) -- the controller's exposure-then-gain order |
 | 5.4 degradation configs frozen | **open** (A2): L9 options built (D135: pre-sensor dust, correlated field, lamp airlight; tests 4/4, golden digest unchanged). Decision + freeze wait on one measured pair on a dark recording |
 | 5.5 confined-space worlds, baseline sweep | **partial** (A2): D138 `confined_v1` (20/20 seeds accepted, narrow passages 0.45–0.60 m) + one-pass sweep cameras `rig_stereo_sweep_v1` (right_b04/08/12/20, recorded and verified; worldgen 106/106, v1 byte-identical). Not rendered; SimSource camera selection after the 2.6/L2 merge. Carries EuRoC V1_03 as the dataset regression case (main D86; candidate fix projection-guided re-association) |
-| 5.6 real-data validation (OIVIO → **Hilti 2023 site2_robot_3**, D141) | **measured, failing** (A2): extracted on AWS (D142; 3592 stereo pairs, 200 Hz IMU, per-frame exposure, 5 LiDAR-measured GCPs, sha256-checked). Equidistant cameras via `cv::fisheye` (D143). Matrix `configs/benchmark/hilti_5.6.yaml`, fixed before measuring. **D144: all 3 rows score 0/100** (GCP rms 10–229 m; 14–22 % frames lost). Not a scoring artefact (rigid-invariant distances checked). Losses come while the robot turns with a dark far field (174–207/300 lost) and vanish while it drives straight; keyframes 200–300/300 whenever it moves. Static ring edges measured and rejected as the mechanism (≤ 10 % static tracks where it fails). Stereo FB rejection dominates (50 %), but EuRoC MH_04 with the same config is lower still: cause open, diagnosis timeboxed. Fix candidates await preflight. Evidence `evaluation/runs/ph5/hilti_5.6/` |
+| 5.6 real-data validation (OIVIO → **Hilti 2023 site2_robot_3**, D141; supersedes D88/D89) | **measured, failing** (A2): extracted on AWS (D142; 3592 stereo pairs, 200 Hz IMU, per-frame exposure, 5 LiDAR-measured GCPs, sha256-checked). Equidistant cameras via `cv::fisheye` (D143). Matrix `configs/benchmark/hilti_5.6.yaml`, fixed before measuring. **D144: all 3 rows score 0/100** (GCP rms 10–229 m; 14–22 % frames lost). Not a scoring artefact (rigid-invariant distances checked). Losses come while the robot turns with a dark far field (174–207/300 lost) and vanish while it drives straight; keyframes 200–300/300 whenever it moves. Static ring edges measured and rejected as the mechanism (≤ 10 % static tracks where it fails). Stereo FB rejection dominates (50 %), but EuRoC MH_04 with the same config is lower still: cause open, diagnosis timeboxed. Fix candidates await preflight. Evidence `evaluation/runs/ph5/hilti_5.6/` |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |
 | 6.4 console full spec | |
 | 7.1 MCP + Bedrock orchestrator | Bedrock model chosen (D84: Nova 2 Lite, DeepSeek V3.2). Needs L1. |
 | 7.2 classical-planner ablation | |
-| 7.3 COOL benchmark | **blocked by 0.2 arm64 + 0.3 trial**. Carries L5, L6. |
+| 7.3 COOL benchmark | **blocked by 0.2 arm64 + 0.3 trial**. Carries L5, L6. D86: the thread setting is decided explicitly and recorded in the manifest; D91's pool=1 is never process-wide in the timed runtime. |
 | 7.4 SQS / ASG sweeps, S3, budget alarms | |
 | 8.1–8.6 missions, failure campaign, sweeps, report, video, submission | need L1 (live demo), 7.x |

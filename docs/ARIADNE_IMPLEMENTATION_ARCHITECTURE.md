@@ -1270,6 +1270,11 @@ Rationale: byte accounting and fault injection must be deterministic and replaya
 delivery is not. The wall/rubble penetration count above is computed in the broker by ray-casting the GT mesh
 between agents and adding a per-wall attenuation term to the RFComms-derived loss.
 
+> **As built (3.3, D102, 2026-10-22).** `collaboration/comms/`: RFComms' equations (gz-sim8) are reproduced in the
+> broker rather than read from the live plugin, since replay is the substrate. The wall term counts solid blocks
+> crossed. `loss_p` is the per-packet marginal over shadowing, computed for the 1500 B MTU (a stated seam limit).
+> `CommsNode` owns the one ledger. Not yet carrying protocol traffic (needs 3.2's sim integration).
+
 ---
 
 ## 5.8 Agent motion
@@ -5299,6 +5304,9 @@ alternate route or human approval
 Use several independent datasets from the catalogue:
 
 - TUM RGB-D
+  > **As built (2.6, D100, 2026-10-22).** `TumSource` feeds the stereo pipeline. Sensor depth goes through a virtual
+  > rig (u_R = u_L − fx·B/Z) in place of SGBM and the stereo match, with σ_Z = 1.425e-3·Z² (Khoshelham & Elberink
+  > 2012) as the §9.4/§9.6 depth uncertainty. Pinned in `configs/benchmark/tum_regression.yaml`.
 - EuRoC
 - SubT / subterranean datasets where available
 - ScanNet / Matterport-type indoor sets for reconstruction

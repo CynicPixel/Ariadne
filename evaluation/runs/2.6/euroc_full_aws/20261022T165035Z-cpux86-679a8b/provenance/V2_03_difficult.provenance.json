@@ -1,0 +1,12 @@
+{
+  "dataset": "EuRoC MAV (Burri et al., IJRR 2016)",
+  "doi": "10.3929/ethz-b-000690084",
+  "sequence": "V2_03_difficult",
+  "source_url": "https://www.research-collection.ethz.ch/server/api/core/bitstreams/ea12bc01-3677-4b4c-853d-87c7870b8c44/content",
+  "archive_member": "vicon_room2/V2_03_difficult/V2_03_difficult.zip",
+  "crc32": "ba8f2bff",
+  "sha256": "98f78ae99e35a93af3f641c62d29d8826a63d013ffa89263a363ab03aab4ad7e",
+  "bytes": 820796031,
+  "licence": "In Copyright - Non-Commercial Use Permitted (http://rightsstatements.org/page/InC-NC/1.0/)",
+  "fetched_utc": "2026-10-22T16:59:44Z"
+}

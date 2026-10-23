@@ -1,0 +1,59 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: V2_01_easy-20261022T195415Z
+created_utc: "2026-10-22T19:54:15Z"
+git_commit: 36709eb
+git_dirty: false
+image_digest: "sha256:04d8a7c58de1f0bd9a8998da8cd0c4aaa45c38320b7606f4e1f8d305fe33b7e4"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: EuRoC/V2_01_easy
+seed: 1
+agent_count: 1
+execution_mode: replay
+bag_checksum: "sha256:06875e7591a883c7bfadc4604c41dce4837a475fe272e0337650141bc9530262"
+
+# Configuration
+camera_config: euroc_cam0_cam1
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: UNRECORDED
+degradation_config: none
+perception_config: euroc_v2
+slam_config: euroc_v2_loops
+
+# Backends
+feature_engine: orb
+place_recognition: UNRECORDED
+loop_backend: none
+reconstruction_backend: UNRECORDED
+imu_mode: full
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: a=-1.33741 b=0.00055167 c=-0.00209156 matches=164 keyframe=1
+lost_handling: bridge/every_frame
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+command: /work/build/aws/cpp/runtime/ariadne_euroc_vo --sequence /data/V2_01_easy --perception-config /work/configs/perception/euroc_v2.yaml --slam-config /work/configs/slam/euroc_v2_loops.yaml --out /out/V2_01_easy
+frames: 2280
+keypoint_grid: 8x6
+max_keypoints: 1000
+opencv_threads: 8
+reassociation: lost_window/latest_keyframe
+replenish_cadence: every_frame
+target_tracks: 400

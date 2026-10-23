@@ -1,0 +1,27 @@
+Running main() from /data/code/Ariadne/.cache/feat-2.5-robust-backend/fetchcontent/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = Certificate.SeSyncBenchmarkGraphs
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from Certificate
+[ RUN      ] Certificate.SeSyncBenchmarkGraphs
+rim               10195 nodes  29743 edges: f 5460.9 (chordal init 8118.5; Table 1 5461.000000), 56 its, max|grad_R| 2.4e-04, ||M|| 9.77e+04, eta_min 9.77e-01, abs-eta not certified | not certified (lambda_min <= -2.327e-01 at eta 9.77e-06): unknown, not wrong | 88.4 s
+/work/tests/unit/test_certificate.cpp:400: Failure
+Value of: r.certified
+  Actual: false
+Expected: true
+rim
+
+[  FAILED  ] Certificate.SeSyncBenchmarkGraphs (88693 ms)
+[----------] 1 test from Certificate (88693 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (88693 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] Certificate.SeSyncBenchmarkGraphs
+
+ 1 FAILED TEST
+exit 1 wall_ms 88729
+memory.peak_bytes 347598848
+oom_kill 0
+docker exit 0

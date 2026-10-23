@@ -1,0 +1,25 @@
+# D74 certificate on the large SE-Sync benchmark graphs (maintainer-approved 2026-10-22). One graph per container,
+# one container at a time, in this order: sphere2500, torus3D, cubicle, rim, then grid3D (only if projected < 6 GB).
+test: Certificate.SeSyncBenchmarkGraphs (tests/unit/test_certificate.cpp)
+command: evaluation/runs/2.5/certificate_sesync/run_one.sh <stem> [cap]   # repo root; cap default 6g
+git_commit: f8c7030   # main after the 2.5 merge; run from feat/live-runtime at 8f54d0e (docs-only on top)
+binary: build/docker/tests/test_opencv sha256:d1b2fdcb3566ecb4c2411520624c5b2e69637d9bbf813df341e25dea3c2b12f1
+binary_built_at: e078376   # cpp/slam, cpp/core and tests/unit/test_certificate.cpp are unchanged e078376..f8c7030
+image: ariadne/core-dev:dev sha256:04d8a7c58de1f0bd9a8998da8cd0c4aaa45c38320b7606f4e1f8d305fe33b7e4
+container: --memory=<cap> --memory-swap=<cap> (no swap: over budget = OOM-killed inside its own cgroup)
+peak_memory: cgroup v2 memory.peak of the container, read after the test exits (bytes, in each <stem>.log)
+graphs:   # ARIADNE_PGO_SESYNC=/data/code/Ariadne/.cache/oracle/pgo_sesync (infra/scripts/models.sh pgo-sesync)
+  sphere2500: sha256:eda250de1daa50dc37968f1127641eb8575dc72a643d08dc97372fe2c51d9184
+  torus3D:    sha256:ac2d46823ccc9fcf6259d19a3917ef4c78a61f943d8848d0b519a9f3bb84ad81
+  cubicle:    sha256:a31831d47da98e2dfe986e707b4b92f0a5a6f37e3a9370e80c65266c30c5979d
+  rim:        sha256:ddace79a7cd86168188f6676524658bfbebca4bf9b92c93391785eae4eaaf731
+  grid3D:     sha256:e850bac2a587a5385906bcd273bdd311a5a66b426c502f7649abd44c2c314f95
+options: CertificateOptions defaults (rel_eta 1e-10, refine on, LM 200 iterations, Lanczos 300 steps)
+host: 8-core x86-64, 15 GB RAM, no GPU; another session's build container was running alongside
+# grid3D go/no-go, written BEFORE its result (the rule the maintainer set: attempt only if the projected peak < 6 GB).
+grid3D_projection:
+  measured_peak_bytes: {sphere2500: 78581760, torus3D: 152264704, cubicle: 215334912, rim: 347598848}
+  measured_edges: {sphere2500: 4949, torus3D: 9048, cubicle: 16869, rim: 29743}
+  fit: peak ~ 11.7 kB per edge (rim 347.6 MB / 29743; the other three lie at 11.9-16.8 kB/edge)
+  grid3D: 8000 nodes, 22236 edges -> ~0.26-0.37 GB linear; x10 for a 3D lattice's worse Cholesky fill -> ~3.7 GB
+  verdict: projected < 6 GB -> attempted, under a 6 GB hard cap

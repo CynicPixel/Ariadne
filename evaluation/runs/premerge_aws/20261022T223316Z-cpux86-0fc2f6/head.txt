@@ -1,0 +1,1 @@
+a26bb6b302e9d3d1ff6593750ecdb6a100f19391 gate: phase1.sh requires and passes the D90 sim-rig exports (ARIADNE_EIGENPLACES_SIM_REF, ARIADNE_ALIKED_LG_SIM_REF); A1's merged L3 tests fail under ARIADNE_REQUIRE_MODELS=1 without them (caught by the AWS pre-merge); launcher stages them

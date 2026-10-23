@@ -7,6 +7,7 @@
 //   ariadne_sim_vo --rec RECDIR --scene SCENEDIR --perception-config YAML
 //                  --slam-config YAML --out DIR [--agent 0] [--frames N] [--seed S]
 //                  [--degradation YAML]   (2.2: apply D with this named config; default none)
+//                  [--imu-noise YAML]     (L2, D101: expose the IMU through this seeded noise operator; default no IMU)
 // ---------------------------------------------------------------------------
 #include "perception/degradation/degradation_config.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
@@ -18,7 +19,7 @@
 int main(int argc, char** argv) {
     ariadne::tools::StereoVoArgs a;
     a.tool = "ariadne_sim_vo";
-    std::string rec, scene, degradation;
+    std::string rec, scene, degradation, imu_noise;
     int agent = 0;
     for (int i = 1; i < argc; ++i) {
         const std::string k = argv[i];
@@ -33,11 +34,12 @@ int main(int argc, char** argv) {
         else if (k == "--frames") a.frames = std::stoi(v);
         else if (k == "--seed") a.seed = std::stoull(v);
         else if (k == "--degradation") degradation = v;
+        else if (k == "--imu-noise") imu_noise = v;
         else { std::fprintf(stderr, "unknown argument %s\n", k.c_str()); return 2; }
     }
     if (rec.empty() || scene.empty() || a.perception_config.empty() || a.slam_config.empty() || a.out.empty()) {
         std::fprintf(stderr, "usage: %s --rec RECDIR --scene SCENEDIR --perception-config YAML --slam-config YAML "
-                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML]\n", argv[0]);
+                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML] [--imu-noise YAML]\n", argv[0]);
         return 2;
     }
     try {
@@ -45,6 +47,7 @@ int main(int argc, char** argv) {
         if (!degradation.empty()) {
             source.SetDegradation(ariadne::perception::LoadDegradation(degradation), a.seed, cv::getNumThreads());
         }
+        if (!imu_noise.empty()) source.SetImuNoise(ariadne::core::LoadImuNoiseOperator(imu_noise), a.seed);
         return ariadne::tools::RunStereoVo(source, a, argc, argv);
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_sim_vo: %s\n", e.what());
