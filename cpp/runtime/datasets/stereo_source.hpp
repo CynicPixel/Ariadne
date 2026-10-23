@@ -112,6 +112,9 @@ struct StereoFrame {
     /// empty. Empty for stereo sources.
     cv::Mat depth;
     std::optional<FramePhoto> photo;   // 5.2, D146: set only when the pixels are linear in radiance
+    /// EVALUATION ONLY (5.5, D148): the GT depth on the raw left grid (CV_32F metres), set only when the source was
+    /// asked for it (SimSource::SetGtDepth). Perception never reads it; the runner's depth_eval block does.
+    cv::Mat gt_depth;
 };
 
 class StereoSource {
@@ -400,6 +403,12 @@ public:
         return degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb;
     }
     /// Failure E's scripted event (D147); needs D (the event is a radiance scale applied before D's sensor).
+    /// 5.5 (D148): attach the recording's GT depth to every frame (StereoFrame::gt_depth, evaluation only).
+    void SetGtDepth(bool on) {
+        if (on && t_depth_.empty()) throw std::runtime_error("sim: the recording has no depth camera (rig.depth off)");
+        gt_depth_ = on;
+    }
+
     void SetRadianceEvent(const RadianceEvent& e) {
         if (!degradation_) throw std::logic_error("sim: a radiance event needs --degradation");
         if (!(e.at_s >= 0.0) || !std::isfinite(e.stops)) throw std::invalid_argument("sim: radiance event at_s >= 0");
@@ -476,7 +485,7 @@ public:
         RosbagReader bag;
         bag.Open(sensors_mcap_);
         std::set<std::string> topics{t_left_, t_right_};
-        if (dust) topics.insert(t_depth_);
+        if (dust || gt_depth_) topics.insert(t_depth_);
         try {
             bag.Replay([&](const RosMessage& msg) {
                 const auto im = ros_cdr::DecodeImage(msg.data, msg.size);
@@ -500,7 +509,7 @@ public:
                     }
                     r.have[c] = true;
                 }
-                if (!r.have[0] || !r.have[1] || (dust && !r.have[2])) return;
+                if (!r.have[0] || !r.have[1] || ((dust || gt_depth_) && !r.have[2])) return;
                 // Complete pair: it must be the oldest pending stamp, or a frame went missing.
                 if (pending.begin()->first != t || t <= last_emitted) {
                     throw std::runtime_error("sim: stereo pair at " + std::to_string(t) +
@@ -516,6 +525,10 @@ public:
                     const double baseline = (T_B_left_.t - T_B_right_.t).norm();
                     depth_seen[0] = perception::ApplyLensDepth(r.depth, map_);
                     depth_seen[1] = perception::ApplyLensDepth(WarpDepthToRight(r.depth, lens_.render_fx, baseline), map_);
+                }
+                if (gt_depth_) {   // evaluation only (D148): the left camera's GT depth on the raw (lens) grid
+                    const core::ImageF32 g = dust ? depth_seen[0] : perception::ApplyLensDepth(r.depth, map_);
+                    done.gt_depth = cv::Mat(g.height, g.width, CV_32F, const_cast<float*>(g.data.data())).clone();
                 }
                 // A pending command (5.3, D147) takes effect on this pair, before D runs on it.
                 if (pending_cmd_) {
@@ -561,6 +574,7 @@ private:
         checksum_ = kUnknownField;
     int agent_ = 0;
     std::string right_camera_ = "right";               // 5.5 (D138): the right camera by name (sweep rigs)
+    bool gt_depth_ = false;                            // 5.5 (D148): attach GT depth to frames (evaluation only)
     std::optional<LampRig> lamp_;
     FramePhoto photo_;                                 // D's state as applied to the latest frame (D147)
     std::optional<PhotometricCommand> pending_cmd_;    // applied to the next complete pair

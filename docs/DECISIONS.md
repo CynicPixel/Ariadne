@@ -4116,9 +4116,15 @@ validator").
   with the range and is reported from the frontend timings.
 - **Metrics.**
   - ATE (SE(3) alignment), keyframes, lost frames, tracks.
-  - Depth: each keyframe's SGBM points, back-projected with the rectified K and placed with the GT pose, measured
-    against the GT mesh (point-to-mesh distance) in range bins 0.3–1 / 1–2 / 2–4 / 4–8 m. Reported as the median and
-    p90 relative error, plus the valid fraction per bin. The tool is built and unit-tested before the sweep is read.
+  - Depth: each keyframe's SGBM Z against the recording's GT depth camera (co-located with the left camera) in GT
+    range bins 0.3–1 / 1–2 / 2–4 / 4–8 m. Reported as the median and p90 |Z − Z_gt| / Z_gt over SGBM-valid pixels,
+    plus the valid fraction per bin, every 2nd pixel.
+  - **Amended 2026-10-23, before the render was read** (the render was still recording). The first wording was
+    point-to-GT-mesh distance of GT-pose-placed points. The per-pixel GT depth measures the same along-ray range error
+    exactly, needs no mesh sampling, and needs no multi-GB spool upload per row. GT depth goes on the raw grid
+    (ApplyLensDepth), is rectified nearest-neighbour, and Z_rect = Z_raw / (R1ᵀ K_rect⁻¹ [u v 1]ᵀ).z. Built as the
+    runner's evaluation-only `depth_eval` block (`ariadne_sim_vo --depth-eval 1`, `StereoFrame::gt_depth`, never
+    read by perception), with a unit test, before the sweep is read.
 - **Reported as measured.** One seed chooses no baseline. The lamp-asymmetry confound of D138 does not arise here: the
   render is lit.
 

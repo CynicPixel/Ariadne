@@ -11,6 +11,8 @@
 //                  [--lamp-calib YAML]    (5.2, D146: the rig's lamp calibration, for a perception falloff: section)
 //                  [--radiance-event AT_S:STOPS]  (5.3, D147: Failure E -- the scene 2^STOPS brighter from AT_S on)
 //                  [--right-camera NAME]  (5.5, D138: a sweep rig's right_b04/b08/b12/b20; default the main "right")
+//                  [--depth-eval 1]       (5.5, D148: SGBM depth vs the recording's GT depth at keyframes, by range bin;
+//                                 evaluation only: results.yaml depth_eval block)
 //                  [--spool DIR --recon-config YAML]  (6.1, D195: write a reconstruction spool of this agent, schema 2
 //                                 when a lamp calibration or a photometric state exists: the albedo proxy, the applied
 //                                 exposure/lamp state per bundle, the lamp; never changes the run)
@@ -53,12 +55,13 @@ int main(int argc, char** argv) {
         else if (k == "--radiance-event") radiance_event = v;
         else if (k == "--right-camera") right_camera = v;
         else if (k == "--spool") spool_dir = v;
+        else if (k == "--depth-eval") a.depth_eval = (v == "1");
         else if (k == "--recon-config") recon_path = v;
         else { std::fprintf(stderr, "unknown argument %s\n", k.c_str()); return 2; }
     }
     if (rec.empty() || scene.empty() || a.perception_config.empty() || a.slam_config.empty() || a.out.empty()) {
         std::fprintf(stderr, "usage: %s --rec RECDIR --scene SCENEDIR --perception-config YAML --slam-config YAML "
-                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML] [--imu-noise YAML] [--lamp-calib YAML] [--radiance-event AT_S:STOPS] [--right-camera NAME] [--spool DIR --recon-config YAML]\n", argv[0]);
+                             "--out DIR [--agent K] [--frames N] [--seed S] [--degradation YAML] [--imu-noise YAML] [--lamp-calib YAML] [--radiance-event AT_S:STOPS] [--right-camera NAME] [--depth-eval 1] [--spool DIR --recon-config YAML]\n", argv[0]);
         return 2;
     }
     try {
@@ -66,6 +69,7 @@ int main(int argc, char** argv) {
         if (!degradation.empty()) {
             source.SetDegradation(ariadne::perception::LoadDegradation(degradation), a.seed, cv::getNumThreads());
         }
+        if (a.depth_eval) source.SetGtDepth(true);
         if (!imu_noise.empty()) source.SetImuNoise(ariadne::core::LoadImuNoiseOperator(imu_noise), a.seed);
         if (!radiance_event.empty()) {
             const size_t colon = radiance_event.find(':');
