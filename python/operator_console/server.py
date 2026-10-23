@@ -93,14 +93,15 @@ async def telemetry(ws: WebSocket, speed: float = 10.0) -> None:
     lv = live()
     if lv:
         client = f"{ws.client.host}:{ws.client.port}" if ws.client else "?"
-        n, since = 0, -1.0
+        n, since, since_pose = 0, -1.0, -1.0
         try:
             while True:
                 lv.poll()
-                f = lv.frame(n, since)
+                f = lv.frame(n, since, since_pose)
                 await ws.send_json(f)
                 _live_log.put(client, f)
                 since = max(since, max((e["t_s"] for e in f["events"]), default=since))
+                since_pose = max([since_pose] + [s[0] for a in f["agents"] for s in a.get("samples", [])])
                 n += 1
                 if lv.ended:
                     await ws.send_json({"end": True, "t_s": f["t_s"]})
