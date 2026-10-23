@@ -4,7 +4,7 @@ Why: the live trainer's iterations per keyframe must be derived from the measure
 and no T4 number for gsplat is published (RECON_6 Appendix A.4). This kernel measures, on whatever GPU Kaggle gives:
 
   train   forward + backward + Adam step of gsplat.rasterization (render_mode "RGB+ED": colour and expected depth,
-          the two terms of the live loss), L1 photo + L1 depth, for N in {50k, 100k, 250k, 500k} Gaussians at
+          the live loss), 0.8 L1 + 0.2 D-SSIM + 0.1 depth L1 (RECON_6 §2), for N in {50k, 100k, 250k, 500k} Gaussians at
           320x180 and 640x360, packed False/True, SH degree 0 (the .splat export is SH0)
   render  the forward pass alone at the same points (no_grad)
   sh3     one train point at SH degree 3, for the cost of view-dependent colour
@@ -57,6 +57,21 @@ def scene(torch, n, dev, g):
     sh0 = torch.rand(n, 1, 3, generator=g)
     return {k: v.to(dev).requires_grad_(True) for k, v in
             dict(means=means, scales=scales, quats=quats, opacities=opac, sh0=sh0).items()}
+
+
+def ssim(torch, a, b):
+    """SSIM of [1, H, W, 3] images with the 11x11, sigma 1.5 Gaussian window of the 3DGS reference loss (Kerbl et al.
+    2023: L = 0.8 L1 + 0.2 (1 - SSIM)); plain torch so the timing includes it as the live loss will."""
+    F = torch.nn.functional
+    x, y = a.permute(0, 3, 1, 2), b.permute(0, 3, 1, 2)
+    g = torch.exp(-((torch.arange(11, device=a.device) - 5.0) ** 2) / (2 * 1.5 ** 2))
+    w = (g[:, None] * g[None, :]) / g.sum() ** 2
+    w = w.expand(3, 1, 11, 11).contiguous()
+    blur = lambda t: F.conv2d(t, w, padding=5, groups=3)
+    mx, my = blur(x), blur(y)
+    sxx, syy, sxy = blur(x * x) - mx * mx, blur(y * y) - my * my, blur(x * y) - mx * my
+    c1, c2 = 0.01 ** 2, 0.03 ** 2
+    return (((2 * mx * my + c1) * (2 * sxy + c2)) / ((mx * mx + my * my + c1) * (sxx + syy + c2))).mean()
 
 
 def append_gaussians(torch, params, opt, new):
@@ -127,9 +142,11 @@ def main():
                 opt = torch.optim.Adam([{"params": [v], "lr": 1e-3} for v in p.values()])
                 torch.cuda.reset_peak_memory_stats()
 
-                def step():
+                def step():   # the RECON_6 §2 live loss: 0.8 L1 + 0.2 D-SSIM + depth L1
                     img, _, _ = render(p, w, h, packed)
-                    loss = (img[..., :3] - tgt_rgb).abs().mean() + 0.1 * (img[..., 3:] - tgt_d).abs().mean()
+                    rgb = img[..., :3]
+                    loss = (0.8 * (rgb - tgt_rgb).abs().mean() + 0.2 * (1.0 - ssim(torch, rgb, tgt_rgb))
+                            + 0.1 * (img[..., 3:] - tgt_d).abs().mean())
                     opt.zero_grad(set_to_none=True)
                     loss.backward()
                     opt.step()
