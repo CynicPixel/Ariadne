@@ -220,6 +220,7 @@ int main(int argc, char** argv) {
             ReadMerge(sp["merge"], 1);
         } else {
             if (!sp["merges"] || !sp["merges"].IsSequence()) throw std::runtime_error("spool: schema 3 needs a merges list");
+            if (sp["merge"]) throw std::runtime_error("spool: schema 3 carries merges, not a merge block");
             for (const auto& mg : sp["merges"]) ReadMerge(mg, mg["agent"].as<int>());
         }
 
