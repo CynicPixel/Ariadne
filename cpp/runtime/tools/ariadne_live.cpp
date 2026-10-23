@@ -45,6 +45,8 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace fs = std::filesystem;
 using namespace ariadne;
@@ -67,6 +69,9 @@ struct LiveConfig {
                                            // hold more than one sub-step (uncapped RTF would otherwise overflow the
                                            // intra-process rings, which drop their oldest when full - rclcpp jazzy
                                            // ring_buffer_implementation.hpp L83). <= 0 restores the single 5 s jump.
+    bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
+                                           // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
+                                           // agents). false until the acceptance (live + 3 equal replays) passes.
     int hold_back_ms = 3000;
 };
 
@@ -87,6 +92,7 @@ LiveConfig LoadLive(const std::string& path) {
     c.telemetry_hz = n["telemetry_hz"].as<double>();
     if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
     if (n["lockstep_substep_ms"]) c.lockstep_substep_ms = n["lockstep_substep_ms"].as<int>();
+    if (n["estimator_processes"]) c.estimator_processes = n["estimator_processes"].as<bool>();
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
@@ -149,6 +155,128 @@ std::string Xy(double x, double y) {
 
 double YawOfCamera(const core::SE3& T_W_C) {   // heading of the optical axis (z) in the horizontal plane
     return std::atan2(T_W_C.R(1, 2), T_W_C.R(0, 2));
+}
+
+// --- D168: one estimator per PROCESS ------------------------------------------------------------------------
+// D152a serialized the two estimators with a turn lock because they shared OpenCV's one parallel_for pool (a busy
+// pool changes stripe partitioning, so the order of floating-point reductions). At 2 agents that lock is 109-126 ms
+// of waiting per 140 ms frame. A worker process per agent gives each estimator its own pool: no lock, and the
+// partitioning depends only on that process's own load. Wire = LinkFrame on a Unix socket:
+//   parent -> worker: (topic, CDR) for this agent's left/right images and gt pose, EOF at end of input;
+//   worker -> parent: #frame (t_ns, T_O_C), #kf (id, t_ns, T_O_C, spool intrinsics, Z, S, rgb), #timing
+//                     (t_ns, wait/lock/track), #done (unpaired), then EOF.
+template <typename T>
+void PutPod(std::vector<uint8_t>& b, const T& v) {
+    const auto* q = reinterpret_cast<const uint8_t*>(&v);
+    b.insert(b.end(), q, q + sizeof v);
+}
+template <typename T>
+T GetPod(const uint8_t*& q) {
+    T v;
+    std::memcpy(&v, q, sizeof v);
+    q += sizeof v;
+    return v;
+}
+void PutMat(std::vector<uint8_t>& b, const cv::Mat& m0) {
+    const cv::Mat m = m0.isContinuous() ? m0 : m0.clone();
+    PutPod(b, int32_t(m.rows)), PutPod(b, int32_t(m.cols)), PutPod(b, int32_t(m.type()));
+    const auto* q = m.ptr<uint8_t>();
+    b.insert(b.end(), q, q + m.total() * m.elemSize());
+}
+cv::Mat GetMat(const uint8_t*& q) {
+    const int rows = GetPod<int32_t>(q), cols = GetPod<int32_t>(q), type = GetPod<int32_t>(q);
+    cv::Mat m(rows, cols, type);
+    std::memcpy(m.ptr<uint8_t>(), q, m.total() * m.elemSize());
+    q += m.total() * m.elemSize();
+    return m;
+}
+void PutSe3(std::vector<uint8_t>& b, const core::SE3& T) {
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) PutPod(b, double(T.R(i, j)));
+    for (int i = 0; i < 3; ++i) PutPod(b, double(T.t(i)));
+}
+core::SE3 GetSe3(const uint8_t*& q) {
+    core::SE3 T;
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) T.R(i, j) = GetPod<double>(q);
+    for (int i = 0; i < 3; ++i) T.t(i) = GetPod<double>(q);
+    return T;
+}
+
+int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path, tools::StereoVoArgs va,
+                       const std::string& out, int argc, char** argv) {
+    const int fd = live::Connect(socket_path, std::chrono::seconds(60));
+    live::MessageQueue images{64};
+    live::GtStore gt;
+    std::mutex turn;   // never contended: one estimator per process is the point
+    live::LiveSimSource src(scene, agent, images, gt, turn, "live");
+    std::mutex send_mu;
+    auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
+        std::lock_guard<std::mutex> lk(send_mu);
+        if (!live::WriteFrame(fd, topic, b.data(), b.size())) std::_Exit(3);   // parent gone: nothing left to save
+    };
+    std::thread reader([&] {
+        live::LinkFrame f;
+        while (live::ReadFrame(fd, f)) {
+            if (f.topic == src.left_topic() || f.topic == src.right_topic()) {
+                live::StreamMessage m;
+                m.topic = f.topic;
+                m.data = std::make_shared<const std::vector<uint8_t>>(std::move(f.payload));
+                images.Push(std::move(m));
+            } else {   // this agent's gt pose, raw CDR exactly as the link delivered it
+                const auto g = runtime::ros_cdr::DecodePoseStamped(f.payload.data(), f.payload.size());
+                runtime::TimedPose tp{g.header.stamp.ns(), {}};
+                tp.T.R = Eigen::Quaterniond(g.orientation.w, g.orientation.x, g.orientation.y, g.orientation.z)
+                             .normalized()
+                             .toRotationMatrix();
+                tp.T.t = core::Vec3(g.position.x, g.position.y, g.position.z);
+                gt.Add(tp);
+            }
+        }
+        images.Close();
+    });
+    src.on_timing = [&](int64_t t_ns, double w, double l, double tr) {
+        std::vector<uint8_t> b;
+        PutPod(b, t_ns), PutPod(b, w), PutPod(b, l), PutPod(b, tr);
+        send("#timing", b);
+    };
+    tools::StereoVoArgs a = va;
+    a.out = out;
+    a.tool = std::string("ariadne_live/agent") + std::to_string(agent);
+    a.late_ground_truth = [&gt] { return gt.Snapshot(); };
+    a.on_keyframe = [&](const tools::KeyframeView& kv) {
+        const runtime::KeyframeBundle& b = kv.bundle;
+        std::vector<uint8_t> o;
+        PutPod(o, uint64_t(kv.keyframe.id)), PutPod(o, int64_t(kv.keyframe.t_ns));
+        PutSe3(o, b.T_WiC);
+        // Spool camera: u' + 0.5 = 0.5 (u + 0.5).
+        PutPod(o, double(b.K.fx * 0.5)), PutPod(o, double(b.K.fy * 0.5));
+        PutPod(o, double(0.5 * (b.K.cx + 0.5) - 0.5)), PutPod(o, double(0.5 * (b.K.cy + 0.5) - 0.5));
+        PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
+        PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
+        PutMat(o, b.rgb);
+        send("#kf", o);
+    };
+    a.on_frame = [&](const tools::FrameView& fv) {
+        std::vector<uint8_t> o;
+        PutPod(o, int64_t(fv.t_ns));
+        PutSe3(o, fv.T_O_C);
+        send("#frame", o);
+    };
+    int rc = 0;
+    try {
+        tools::RunStereoVo(src, a, argc, argv);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "ariadne_live worker %d: %s\n", agent, e.what());
+        rc = 1;
+    }
+    std::vector<uint8_t> o;
+    PutPod(o, uint64_t(src.unpaired()));
+    send("#done", o);
+    ::shutdown(fd, SHUT_RDWR);
+    reader.join();
+    ::close(fd);
+    return rc;
 }
 
 /// chooser: llm, live (AGENTIC_7 D156): one JSON line per decision request to the orchestrator's Unix socket; answers
@@ -241,7 +369,8 @@ std::string JsonEscape(const std::string& s) {
 int main(int argc, char** argv) {
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
-            directives_path, planner_cfg_path, shadow_cfg_path;
+            directives_path, planner_cfg_path, shadow_cfg_path, worker_socket;
+        int worker_agent = -1;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -261,7 +390,14 @@ int main(int argc, char** argv) {
             else if (k == "--planner-config") planner_cfg_path = v;  // A1's Phase 4 planner (mission_v2.yaml); else 1.8
             else if (k == "--shadow-map-config") shadow_cfg_path = v;   // one map for every row: p4slab snapshots
             else if (k == "--seed") va.seed = std::stoull(v);
+            else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
+            else if (k == "--worker-socket") worker_socket = v;
             else throw std::invalid_argument("unknown argument " + k);
+        }
+        if (worker_agent >= 0) {
+            if (scene.empty() || va.perception_config.empty() || va.slam_config.empty() || out.empty() || worker_socket.empty())
+                throw std::invalid_argument("worker mode: --scene --perception-config --slam-config --out --worker-socket");
+            return RunEstimatorWorker(scene, worker_agent, worker_socket, va, out, argc, argv);
         }
         if (scene.empty() || mission_cfg_path.empty() || live_cfg_path.empty() || out.empty() ||
             va.perception_config.empty() || va.slam_config.empty() || link_path.empty() == replay_path.empty()) {
@@ -396,6 +532,10 @@ int main(int argc, char** argv) {
         std::atomic<bool> past_end{false};
         uint64_t seq = 0;
         long dropped_untyped = 0;
+        int worker_fd[2] = {-1, -1};        // D168 estimator processes (lc.estimator_processes); -1 = in-process
+        std::mutex worker_mu[2];
+        pid_t worker_pid[2] = {0, 0};
+        std::thread feeders[2];
         auto Dispatch = [&](live::StreamMessage m) {
             if (past_end) return;
             const auto it = route.find(m.topic);
@@ -421,6 +561,10 @@ int main(int argc, char** argv) {
                              .toRotationMatrix();
                 tp.T.t = core::Vec3(p.position.x, p.position.y, p.position.z);
                 lanes[agent].gt.Add(tp);
+                if (worker_fd[agent] >= 0) {   // D168: the worker keeps its own GtStore for the raw outputs
+                    std::lock_guard<std::mutex> lk(worker_mu[agent]);
+                    live::WriteFrame(worker_fd[agent], m.topic, m.data->data(), m.data->size());
+                }
             } else if (role == "mover_state") {
                 const std::string js = runtime::ros_cdr::DecodeString(m.data->data(), m.data->size());
                 const auto num = [&js](const std::string& key) -> long long {
@@ -525,33 +669,131 @@ int main(int argc, char** argv) {
         // --- per-agent estimators: the replay path, unchanged ---------------------------------------------------
         std::thread vo[2];
         std::unique_ptr<live::LiveSimSource> sources[2];
-        std::mutex estimator_turn;   // D152a: one frame at a time through the estimators
+        std::mutex estimator_turn;   // D152a: one frame at a time through the estimators (in-process mode only)
         struct TimeAgg {   // D167: per-agent frame timing, for results.yaml (the raw series is timing.jsonl)
             std::mutex mu;
             long n = 0;
             double wait = 0, lock = 0, track = 0, max_track = 0, max_lock = 0;
         } tagg[2];
-        for (int k = 0; k < 2; ++k) {
-            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
-            sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) {
-                {
-                    std::lock_guard<std::mutex> g(tagg[k].mu);
-                    ++tagg[k].n, tagg[k].wait += w, tagg[k].lock += l, tagg[k].track += tr;
-                    tagg[k].max_track = std::max(tagg[k].max_track, tr);
-                    tagg[k].max_lock = std::max(tagg[k].max_lock, l);
-                }
+        // Lane plumbing shared by both estimator arrangements (D168): in-process threads behind the D152a turn lock,
+        // or one worker process per agent, each with its own OpenCV pool.
+        auto deliver_timing = [&](int k, int64_t t_ns, double w, double l, double tr) {
+            {
+                std::lock_guard<std::mutex> g(tagg[k].mu);
+                ++tagg[k].n, tagg[k].wait += w, tagg[k].lock += l, tagg[k].track += tr;
+                tagg[k].max_track = std::max(tagg[k].max_track, tr);
+                tagg[k].max_lock = std::max(tagg[k].max_lock, l);
+            }
+            std::ostringstream o;
+            o.precision(6);
+            o << "{\"agent\":" << k << ",\"t_s\":" << t_ns * 1e-9 << ",\"wait_s\":" << w << ",\"lock_s\":" << l
+              << ",\"track_s\":" << tr << "}";
+            timing_log.Put(o.str());
+        };
+        auto deliver_kf = [&](int k, KfRec r, const cv::Mat& rgb) {
+            AgentLane& L = lanes[k];
+            std::lock_guard<std::mutex> lk(L.mu);
+            L.kf_times.push_back(r.t_ns);
+            L.last_rgb = rgb.clone();
+            L.kfs.push_back(std::move(r));
+            ++L.keyframes;
+        };
+        auto deliver_frame = [&](int k, int64_t t_ns, const core::SE3& T_O_C) {
+            AgentLane& L = lanes[k];
+            {
+                std::lock_guard<std::mutex> lk(L.mu);
+                L.cams.emplace_back(t_ns, T_O_C);
+                ++L.frames;
+            }
+            {
+                std::lock_guard<std::mutex> lk(progress_mu);
+                L.progress = t_ns;
+            }
+            progress_cv.notify_all();
+            if (L.last_telemetry_ns < 0 || t_ns - L.last_telemetry_ns >= int64_t(1e9 / lc.telemetry_hz)) {
+                L.last_telemetry_ns = t_ns;
+                const core::SE3 T = brief.T_W_O[size_t(k)] * T_O_C;
                 std::ostringstream o;
-                o.precision(6);
-                o << "{\"agent\":" << k << ",\"t_s\":" << t_ns * 1e-9 << ",\"wait_s\":" << w << ",\"lock_s\":" << l
-                  << ",\"track_s\":" << tr << "}";
-                timing_log.Put(o.str());
-            };
+                o.precision(8);
+                o << "{\"type\":\"pose\",\"t_s\":" << t_ns * 1e-9 << ",\"agent\":" << k << ",\"xy\":"
+                  << Xy(T.t.x(), T.t.y()) << ",\"yaw\":" << YawOfCamera(T) << "}";
+                telemetry.Put(o.str());
+            }
+        };
+        auto lane_done = [&](int k, size_t unpaired) {
+            {
+                std::lock_guard<std::mutex> lk(progress_mu);
+                lanes[k].done = true;
+                lanes[k].unpaired = unpaired;
+            }
+            progress_cv.notify_all();
+        };
+        for (int k = 0; k < 2; ++k) {
+            if (lc.estimator_processes) {   // D168: spawn the worker, feed its images in consumed order, read back
+                // /tmp, not the run dir: a nested replay run dir overflows sun_path (108 bytes; replay1, D168)
+                const std::string wsock = "/tmp/ariadne-worker-" + std::to_string(::getpid()) + "-" + std::to_string(k) + ".sock";
+                const std::string raw_out = (run_dir / "raw").string();
+                const std::string ka = std::to_string(k), sa = std::to_string(va.seed);
+                const pid_t pid = ::fork();
+                if (pid == 0) {   // child: exec ourselves in worker mode, nothing else between fork and exec
+                    const char* cas[] = {argv[0],
+                                         "--scene", scene.c_str(),
+                                         "--perception-config", va.perception_config.c_str(),
+                                         "--slam-config", va.slam_config.c_str(),
+                                         "--out", raw_out.c_str(),
+                                         "--seed", sa.c_str(),
+                                         "--estimator-worker", ka.c_str(),
+                                         "--worker-socket", wsock.c_str(), nullptr};
+                    ::execv(cas[0], const_cast<char**>(cas));
+                    std::_Exit(127);
+                }
+                worker_pid[k] = pid;
+                worker_fd[k] = live::ListenAndAccept(wsock);
+                ::unlink(wsock.c_str());
+                feeders[k] = std::thread([&, k] {
+                    while (auto m = lanes[k].images.Pop()) {
+                        std::lock_guard<std::mutex> lk(worker_mu[k]);
+                        if (!live::WriteFrame(worker_fd[k], m->topic, m->data->data(), m->data->size())) break;
+                    }
+                    ::shutdown(worker_fd[k], SHUT_WR);   // end of input: the worker finishes and answers #done
+                });
+                vo[k] = std::thread([&, k] {
+                    live::LinkFrame f;
+                    size_t unpaired = 0;
+                    while (live::ReadFrame(worker_fd[k], f)) {
+                        const uint8_t* q = f.payload.data();
+                        if (f.topic == "#frame") {
+                            const int64_t t = GetPod<int64_t>(q);
+                            deliver_frame(k, t, GetSe3(q));
+                        } else if (f.topic == "#kf") {
+                            KfRec r;
+                            r.agent = k;
+                            r.id = GetPod<uint64_t>(q), r.t_ns = GetPod<int64_t>(q);
+                            r.T_O_C = GetSe3(q);
+                            r.fx = GetPod<double>(q), r.fy = GetPod<double>(q);
+                            r.cx = GetPod<double>(q), r.cy = GetPod<double>(q);
+                            r.Z = GetMat(q), r.S = GetMat(q);
+                            const cv::Mat rgb = GetMat(q);
+                            deliver_kf(k, std::move(r), rgb);
+                        } else if (f.topic == "#timing") {
+                            const int64_t t = GetPod<int64_t>(q);
+                            const double w = GetPod<double>(q), l = GetPod<double>(q), tr = GetPod<double>(q);
+                            deliver_timing(k, t, w, l, tr);
+                        } else if (f.topic == "#done") {
+                            unpaired = size_t(GetPod<uint64_t>(q));
+                        }
+                    }
+                    lane_done(k, unpaired);
+                });
+                continue;
+            }
+            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
+            sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) { deliver_timing(k, t_ns, w, l, tr); };
             vo[k] = std::thread([&, k] {
-                AgentLane& L = lanes[k];
                 tools::StereoVoArgs a = va;
                 a.out = (run_dir / "raw").string();
                 a.tool = std::string("ariadne_live/agent") + std::to_string(k);
-                a.late_ground_truth = [&L] { return L.gt.Snapshot(); };
+                a.late_ground_truth = [&L = lanes[k]] { return L.gt.Snapshot(); };
                 a.on_keyframe = [&, k](const tools::KeyframeView& kv) {
                     const runtime::KeyframeBundle& b = kv.bundle;
                     KfRec r;
@@ -566,44 +808,15 @@ int main(int argc, char** argv) {
                     r.fy = b.K.fy * 0.5;
                     r.cx = 0.5 * (b.K.cx + 0.5) - 0.5;
                     r.cy = 0.5 * (b.K.cy + 0.5) - 0.5;
-                    std::lock_guard<std::mutex> lk(L.mu);
-                    L.kf_times.push_back(r.t_ns);
-                    L.last_rgb = b.rgb.clone();
-                    L.kfs.push_back(std::move(r));
-                    ++L.keyframes;
+                    deliver_kf(k, std::move(r), b.rgb);
                 };
-                a.on_frame = [&, k](const tools::FrameView& fv) {
-                    {
-                        std::lock_guard<std::mutex> lk(L.mu);
-                        L.cams.emplace_back(fv.t_ns, fv.T_O_C);
-                        ++L.frames;
-                    }
-                    {
-                        std::lock_guard<std::mutex> lk(progress_mu);
-                        L.progress = fv.t_ns;
-                    }
-                    progress_cv.notify_all();
-                    if (L.last_telemetry_ns < 0 || fv.t_ns - L.last_telemetry_ns >= int64_t(1e9 / lc.telemetry_hz)) {
-                        L.last_telemetry_ns = fv.t_ns;
-                        const core::SE3 T = brief.T_W_O[size_t(k)] * fv.T_O_C;
-                        std::ostringstream o;
-                        o.precision(8);
-                        o << "{\"type\":\"pose\",\"t_s\":" << fv.t_ns * 1e-9 << ",\"agent\":" << k << ",\"xy\":"
-                          << Xy(T.t.x(), T.t.y()) << ",\"yaw\":" << YawOfCamera(T) << "}";
-                        telemetry.Put(o.str());
-                    }
-                };
+                a.on_frame = [&, k](const tools::FrameView& fv) { deliver_frame(k, fv.t_ns, fv.T_O_C); };
                 try {
                     tools::RunStereoVo(*sources[k], a, argc, argv);
                 } catch (const std::exception& e) {
                     std::fprintf(stderr, "ariadne_live: agent %d estimator: %s\n", k, e.what());
                 }
-                {
-                    std::lock_guard<std::mutex> lk(progress_mu);
-                    L.done = true;
-                    L.unpaired = sources[k]->unpaired();
-                }
-                progress_cv.notify_all();
+                lane_done(k, sources[k]->unpaired());
             });
         }
 
@@ -1180,6 +1393,14 @@ int main(int argc, char** argv) {
         // The estimators stop when the READER closes their queues (the first image past end_s, or the end of the
         // input): never earlier, or live and replay would consume different tails.
         for (auto& t : vo) t.join();
+        for (int k = 0; k < 2; ++k) {   // D168: reap the estimator workers
+            if (feeders[k].joinable()) feeders[k].join();
+            if (worker_fd[k] >= 0) ::close(worker_fd[k]);
+            if (worker_pid[k] > 0) {
+                int st = 0;
+                ::waitpid(worker_pid[k], &st, 0);
+            }
+        }
         if (is_live) ::shutdown(fd, SHUT_RDWR);
         reader.join();
         rec.Close();
@@ -1192,6 +1413,7 @@ int main(int argc, char** argv) {
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
             << "\ncommands_decided: " << commands_sent << "\nlockstep: " << (lc.lockstep ? "true" : "false")
+            << "\nestimator_processes: " << (lc.estimator_processes ? "true" : "false")
             << "\nplanner: " << planner_name << "\nshadow_map: " << (shadow ? "p4slab (Phase 4 TSDF)" : "none")
             << "\nreorder_released_on_timeout: " << reorder_timeouts
             << "\nreorder_released_out_of_order: " << reorder_order_breaks
