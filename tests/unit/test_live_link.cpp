@@ -111,6 +111,23 @@ TEST(LiveLink, CommandAndMoverStateCdrRoundTrip) {
     EXPECT_EQ(live::PeekStamp("std_msgs/msg/String", ans), 5000000001);
 }
 
+// D166: a timeout skip that lets newer stamps out first, then the straggler, is counted as an order break.
+TEST(LiveLink, OrderBreaksAreCounted) {
+    live::Reorderer ro({"/a0/imu", "/a1/imu"}, std::chrono::milliseconds(0));   // hold 0: /a1 times out at once
+    std::vector<int64_t> out;
+    auto rel = [&](live::StreamMessage m) { out.push_back(m.stamp_ns); };
+    auto msg = [](const std::string& t, int64_t s) { live::StreamMessage m; m.topic = t; m.stamp_ns = s; return m; };
+    ro.Push(msg("/a0/imu", 1000), rel);
+    ro.Push(msg("/a0/imu", 2000), rel);          // released past silent /a1 (timeout skip)
+    EXPECT_GE(ro.released_on_timeout(), 1);
+    EXPECT_EQ(ro.released_out_of_order(), 0);
+    ro.Push(msg("/a1/imu", 500), rel);           // the straggler: below what already went out
+    ro.Flush(rel);
+    EXPECT_EQ(ro.released_out_of_order(), 1);
+    ASSERT_EQ(out.size(), 3u);
+    EXPECT_EQ(out[2], 500);
+}
+
 // D165: both agents' answers to one barrier, in EITHER arrival order, are released in the same (stamp, topic) order
 // once the watermark passes them (two EGL lockstep runs had recorded them swapped).
 TEST(LiveLink, AnswersReleasedInCanonicalOrder) {
