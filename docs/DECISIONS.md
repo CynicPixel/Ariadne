@@ -3155,3 +3155,27 @@ Both are main's (3.2 / 3.5).
   - Replay: 226 B per message (was 2.4 KB), 11.8 KB per spool (was 123.4 KB), CBBA = SGA 40 / 40.
   - The L_t = 2 row: CBBA = SGA 40 / 40, the same optimum ratio (0.994), +1.4 s per replan. **L_t = 1 stays the
     default.**
+- **Phase 4 literature review of every post-design fix (2026-10-23, before any gate run; the maintainer's request).**
+  Primary-text reports: `docs/design/lit/phase4_fixes_{nbv,route_cbba}.md`.
+  - **D114, plan space: supported.** Known-free viewpoints and paths match FUEL (code), NBVP 2018 §3 and GBPlanner2
+    §IV-A. Optimistic planning through unknown space appears only for goal-directed navigation.
+  - **D114 / D158, goal risk: the max over the escape disc has no precedent.** It is replaced by the bottleneck at
+    the commanded cell, which is known-free since the plan-space change. That is the FUEL / NBVP / GBPlanner2 practice.
+  - **§21.4 return: E(return) is now computed over the known-free plan plus the agent's swept body along its flown
+    track (`FlownReturnSpace`).** This follows GBPlanner's homing over robot odometry and CERBERUS's Recovery Homing.
+    - It fixes B's finding that E(return) = inf put every replan on {hold}.
+    - A route lost even over the track is its own supervisor event and does not restrict the options `[DESIGN]`.
+    - The swept band is agent-width only: it never enters a ρ_responder claim (invariant 4).
+    - ×1.3 is the architecture's `[DESIGN]`; GBPlanner2's margin is additive.
+  - **D115: the earlier reason for L_t = 1 was wrong.** Theorem 1 holds for any L_t. Its DMG precondition fails for
+    our insertion marginal: 7.8 % of triples in a Python port, and pinned in C++.
+    - BuildBundle now warps bids (Johnson et al. CDC 2012, eq. 6). It is the identity at L_t = 1.
+    - At L_t = 2 the bids are monotone, conflict-free, and converge within N_min·D (asserted). 5 / 1000 instances
+      still differ from raw-score SGA, which is not the reference.
+    - L_t = 1 stays the default because it is trivially DMG, the planner flies one task per replan, and L_t = 2
+      costs 1.4 s per replan.
+  - **D116: "as FAR joins start/goal through its local planner" was wrong.** FAR uses visibility edges and otherwise
+    attempts the goal through unknown space. The lattice join is `[DESIGN]`.
+    - The both-directions line-of-sight check is `[DESIGN]`: it misses no crossed cell but over-blocks on 272 of 624
+      segments.
+    - The D\* Lite trigger split is supported (AAAI 2002).

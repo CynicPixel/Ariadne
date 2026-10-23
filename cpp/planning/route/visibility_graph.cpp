@@ -158,9 +158,10 @@ VisRoute VisibilityGraph::Query(const Cell& start, const std::vector<Cell>& goal
     }
     for (int v = 0; v < V; ++v)
         if (LineOfSight(free_, start, nodes_[size_t(v)])) extra[size_t(S)].push_back(v);
-    // Endpoints that see no node (nor each other) join through the LATTICE, as FAR joins start / goal through its local
-    // planner (EXPLORATION_4.6 §10: hazard seed 0's exit sat where no node was in sight; FAR routed to the far exit,
-    // 11.1 m vs 4.4 m). Edge cost = the octile lattice distance (>= the executed string-pulled length); the segment is
+    // Endpoints that see no node (nor each other) join through the LATTICE [DESIGN] (EXPLORATION_4.6 §10: hazard seed
+    // 0's exit sat where no node was in sight; the graph routed to the far exit, 11.1 m vs 4.4 m). Not FAR's: FAR joins
+    // start / goal by visibility edges only, then attempts the goal through unknown space or reports failure (§11).
+    // Edge cost = the octile lattice distance (>= the executed string-pulled length); the segment is
     // spliced in as the string-pulled A* path at reconstruction, so every executed segment stays line-of-sight valid.
     const double inf = std::numeric_limits<double>::infinity();
     std::map<std::pair<int, int>, double> lattice;   // (endpoint, node) -> octile cells
