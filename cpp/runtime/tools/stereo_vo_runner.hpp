@@ -104,6 +104,7 @@ struct KeyframeView {
     core::SE3 T_B_C;         // body <- rectified left camera
     double baseline_m = 0;
     const slam::PoseGraph* graph = nullptr;   // the VO graph right after this keyframe (read-only; D171 pass A)
+    std::optional<runtime::FramePhoto> photo;   // the applied photometric state (D147); unset without D
 };
 
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
@@ -114,6 +115,7 @@ struct FrameView {
     bool is_keyframe = false;
     core::SE3 T_O_C;
     std::function<cv::Mat()> left_rect_rgb;   // empty Mat if the source has no colour
+    std::optional<runtime::FramePhoto> photo; // the applied photometric state (D147); unset without D
 };
 
 struct StereoVoArgs {
@@ -663,6 +665,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
                     kv.graph = &vo.graph();
+                    kv.photo = frame.photo;
                     args.on_keyframe(kv);
                 }
                 if (loops) {
@@ -703,6 +706,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             fv.t_ns = vf.t_ns;
             fv.is_keyframe = made_keyframe;
             fv.T_O_C = T_W_C;
+            fv.photo = frame.photo;
             fv.left_rect_rgb = [&]() {
                 cv::Mat o;
                 if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, o);

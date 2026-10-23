@@ -3,6 +3,10 @@
 The spool is written by C++ (`cpp/reconstruction/spool/keyframe_spool.hpp`). Every
 §18.2 field must be present; a missing or malformed field is an error, never a
 default. Poses are rectified-left cameras in each agent's odometry frame O_k.
+
+Schema 2 (6.1, D195) adds the §19.1 albedo proxy per keyframe (`rgb_kind: albedo_proxy`, `_albedo.png`), the APPLIED
+photometric state per bundle (exposure x gain, lamp power, controller decision), and the run's lamp (its calibration
+copied into the spool, the render intensity, R_rect_raw). Schema 1 spools load unchanged.
 """
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ import cv2
 import numpy as np
 import yaml
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSIONS = (1, 2)
 BUNDLE_FIELDS = ("role", "agent", "kf_id", "t_ns", "frame_id_of_pose", "T_WiC", "K", "width", "height",
                  "baseline_m", "files", "rgb_kind", "exposure_state", "lamp_state", "mask")
 
@@ -35,6 +39,17 @@ def pose_from_row_major(v) -> np.ndarray:
 
 
 @dataclass(frozen=True)
+class Lamp:
+    """Schema 2: the lamp the albedo proxy was normalised with (C++ SpoolLamp)."""
+    calibration: Path      # the copied calibration YAML (dataset_tools.lamp_calib format)
+    source: str            # where it was copied from (provenance only)
+    name: str
+    rig: str
+    intensity: float       # the render's lamp intensity; / the calibration's intensity_ref = its power
+    R_rect_raw: np.ndarray  # 3x3, rectified-left <- raw-left (the calibration's camera frame)
+
+
+@dataclass(frozen=True)
 class Bundle:
     role: str            # "keyframe" | "heldout"
     agent: int
@@ -46,6 +61,16 @@ class Bundle:
     width: int
     height: int
     stem: Path
+    rgb_kind: str = "raw_radiance"          # the TRAINING image: raw_radiance (rgb) | albedo_proxy (albedo)
+    exposure_gain: float | None = None      # schema 2: applied exposure x gain; None = not modelled
+    lamp_rel: float | None = None           # schema 2: applied lamp power (D); None = inert
+    decision_id: int | None = None
+
+    def albedo(self) -> np.ndarray:
+        """HxW float32 reflectance in calibration units, NaN where the proxy is not defined (schema 2 keyframes)."""
+        if self.rgb_kind != "albedo_proxy":
+            raise SpoolError(f"{self.stem}: rgb_kind {self.rgb_kind!r} has no albedo proxy")
+        return _half_png(self.stem.with_name(self.stem.name + "_albedo.png"), self.height, self.width)
 
     def rgb(self) -> np.ndarray:
         """HxWx3 uint8, RGB order."""
@@ -65,6 +90,8 @@ class Bundle:
 @dataclass(frozen=True)
 class Spool:
     root: Path
+    schema_version: int
+    lamp: Lamp | None
     run_id: str
     scene_id: str
     merge_ok: bool
@@ -108,12 +135,29 @@ def load(root: str | Path) -> Spool:
     y = yaml.safe_load((root / "spool.yaml").read_text())
     if not isinstance(y, dict):
         raise SpoolError("spool.yaml is not a mapping")
-    if y.get("schema_version") != SCHEMA_VERSION:
-        raise SpoolError(f"schema_version {y.get('schema_version')!r} != {SCHEMA_VERSION}")
+    version = y.get("schema_version")
+    if version not in SCHEMA_VERSIONS:
+        raise SpoolError(f"schema_version {version!r} not in {SCHEMA_VERSIONS}")
     for k in ("run_id", "scene_id", "merge", "bundles"):
         if k not in y:
             raise SpoolError(f"spool.yaml: missing {k}")
     m = y["merge"]
+    lamp = None
+    if "lamp" in y:
+        if version < 2:
+            raise SpoolError("a lamp record needs schema_version 2")
+        lm = y["lamp"]
+        for k in ("calibration", "calibration_source", "calibration_name", "rig", "intensity", "R_rect_raw"):
+            if k not in lm:
+                raise SpoolError(f"spool.yaml lamp: missing {k}")
+        R = np.asarray(lm["R_rect_raw"], dtype=np.float64)
+        if R.shape != (9,) or not np.allclose(R.reshape(3, 3) @ R.reshape(3, 3).T, np.eye(3), atol=1e-6):
+            raise SpoolError("lamp R_rect_raw must be a row-major rotation")
+        cal = root / lm["calibration"]
+        if not cal.is_file():
+            raise SpoolError(f"lamp calibration {cal} missing from the spool")
+        lamp = Lamp(calibration=cal, source=str(lm["calibration_source"]), name=str(lm["calibration_name"]),
+                    rig=str(lm["rig"]), intensity=float(lm["intensity"]), R_rect_raw=R.reshape(3, 3))
     bundles = []
     for i, e in enumerate(y["bundles"]):
         missing = [f for f in BUNDLE_FIELDS if f not in e]
@@ -122,11 +166,23 @@ def load(root: str | Path) -> Spool:
         if e["role"] not in ("keyframe", "heldout"):
             raise SpoolError(f"bundle {i}: role {e['role']!r}")
         fx, fy, cx, cy = (float(v) for v in e["K"])
+        kind = str(e["rgb_kind"])
+        if kind not in ("raw_radiance", "albedo_proxy") or (kind == "albedo_proxy" and e["role"] != "keyframe"):
+            raise SpoolError(f"bundle {i}: rgb_kind {kind!r} on a {e['role']}")
+        if kind == "albedo_proxy" and lamp is None:
+            raise SpoolError(f"bundle {i}: an albedo proxy without the spool's lamp record")
+        ex, ls = e["exposure_state"], e["lamp_state"]
+        photo = isinstance(ex, dict)
+        if photo != isinstance(ls, dict) or (not photo and (ex, ls) != ("not_modeled", "inert")):
+            raise SpoolError(f"bundle {i}: exposure_state/lamp_state {ex!r}/{ls!r}")
         bundles.append(Bundle(role=e["role"], agent=int(e["agent"]), kf_id=int(e["kf_id"]), t_ns=int(e["t_ns"]),
                               frame_id_of_pose=int(e["frame_id_of_pose"]), T_O_C=pose_from_row_major(e["T_WiC"]),
                               K=np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]]), width=int(e["width"]),
-                              height=int(e["height"]), stem=root / e["files"]))
+                              height=int(e["height"]), stem=root / e["files"], rgb_kind=kind,
+                              exposure_gain=float(ex["exposure_gain"]) if photo else None,
+                              lamp_rel=float(ls["lamp_rel"]) if photo else None,
+                              decision_id=int(ex["decision_id"]) if photo else None))
     if not bundles:
         raise SpoolError("spool has no bundles")
-    return Spool(root=root, run_id=str(y["run_id"]), scene_id=str(y["scene_id"]), merge_ok=bool(m["ok"]),
+    return Spool(root=root, schema_version=int(version), lamp=lamp, run_id=str(y["run_id"]), scene_id=str(y["scene_id"]), merge_ok=bool(m["ok"]),
                  T_O0_O1=pose_from_row_major(m["T_O0_O1"]), merge_edge=str(m["edge"]), bundles=tuple(bundles))
