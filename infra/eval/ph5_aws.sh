@@ -181,11 +181,14 @@ elif [ "${ROWS:-lighting}" = d148 ]; then
   # 5.5 (D148), fixed before the confined_v1 render was read. C = the lit confined_v1 seed 0 + rig_stereo_sweep_v1
   # recording; full mission, sim_v2 (VIO) + imu_noise_v1, no D. A: corridor gate ordering (sim_v2_loops), both agents.
   # B: the baseline sweep (right_b04/b08/b12/b20 + the main pair), both agents, with the depth_eval block.
-  C=confined_v1_0 IMU=(--imu-noise /work/configs/sim/imu_noise_v1.yaml) DE=(--depth-eval 1)
+  # CONFINED names the recording (default the sweep one); SWEEP=0 runs part A and the main-pair row only, for the
+  # 2-camera rig_stereo_v1 render that replaced the unrecordable 12-camera sweep (confined_v1_v1rig_0, D148/D149).
+  C=${CONFINED:-confined_v1_0} IMU=(--imu-noise /work/configs/sim/imu_noise_v1.yaml) DE=(--depth-eval 1)
   A="0-$((PER-1))" B="$PER-$((N-1))"
   export FRAMES=0 SLAM=sim_v2
   { SLAM=sim_v2_loops AGENT=0 run corr_a0 "$C" none "$A" sim_v1 "${IMU[@]}"
     AGENT=0 run sw_b10_a0 "$C" none "$A" sim_v1 "${IMU[@]}" "${DE[@]}"
+    [ "${SWEEP:-1}" = 1 ] || exit 0
     AGENT=0 run sw_b04_a0 "$C" none "$A" sim_v1_sweep_b04 "${IMU[@]}" "${DE[@]}" --right-camera right_b04
     AGENT=0 run sw_b08_a0 "$C" none "$A" sim_v1_sweep_b08 "${IMU[@]}" "${DE[@]}" --right-camera right_b08
     AGENT=0 run sw_b12_a0 "$C" none "$A" sim_v1_sweep_b12 "${IMU[@]}" "${DE[@]}" --right-camera right_b12
@@ -193,6 +196,7 @@ elif [ "${ROWS:-lighting}" = d148 ]; then
   } | tee -a "$R/runs.txt" &
   { SLAM=sim_v2_loops AGENT=1 run corr_a1 "$C" none "$B" sim_v1 "${IMU[@]}"
     AGENT=1 run sw_b10_a1 "$C" none "$B" sim_v1 "${IMU[@]}" "${DE[@]}"
+    [ "${SWEEP:-1}" = 1 ] || exit 0
     AGENT=1 run sw_b04_a1 "$C" none "$B" sim_v1_sweep_b04 "${IMU[@]}" "${DE[@]}" --right-camera right_b04
     AGENT=1 run sw_b08_a1 "$C" none "$B" sim_v1_sweep_b08 "${IMU[@]}" "${DE[@]}" --right-camera right_b08
     AGENT=1 run sw_b12_a1 "$C" none "$B" sim_v1_sweep_b12 "${IMU[@]}" "${DE[@]}" --right-camera right_b12
@@ -206,6 +210,17 @@ elif [ "${ROWS:-lighting}" = spool ]; then
   FRAMES=0 run spool_dark_a0 "$L" "$S" "0-$((N-1))" sim_v1_ph5_falloff \
     --lamp-calib /work/configs/sim/lamp_calib_v2.yaml --spool /out/spool_spool_dark_a0 \
     --recon-config /work/configs/recon/recon_v1.yaml | tee -a "$R/runs.txt"
+elif [ "${ROWS:-lighting}" = spool_lit ]; then
+  # 6.x gate inputs (D199: the demo trains on RGB in a lit world): RGB spools of the fixed-light twin
+  # ci_tiny_dark_fixed_0, BOTH agents (the merge / double-wall check needs two), full mission, D142's fixed_noD
+  # configuration (no degradation, sim_v1, sim_v2_vo) + --spool, schema 2 with held-out frames. Uploaded to spools/.
+  F=ci_tiny_dark_fixed_0 RC=(--recon-config /work/configs/recon/recon_v1.yaml)
+  export FRAMES=0
+  AGENT=0 run spool_lit_a0 "$F" none "0-$((PER-1))" sim_v1 --spool /out/spool_spool_lit_a0 "${RC[@]}" \
+    | tee -a "$R/runs.txt" &
+  AGENT=1 run spool_lit_a1 "$F" none "$PER-$((N-1))" sim_v1 --spool /out/spool_spool_lit_a1 "${RC[@]}" \
+    | tee -a "$R/runs.txt" &
+  wait
 else
 { run lamp_noD ci_tiny_dark_0 none "0-$((PER-1))"; run lamp_sensor ci_tiny_dark_0 lampdark_sensor_v0 "0-$((PER-1))"; } \
   | tee -a "$R/runs.txt" &
