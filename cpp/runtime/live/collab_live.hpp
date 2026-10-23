@@ -8,7 +8,8 @@
 //   Send(k, fn, t)     enqueue a D175 send: fn(node k, t) runs on the fleet thread, in call order
 //   CutComms / RestoreComms / InjectFalse   enqueue the panel actions (LIVE_COLLAB §5)
 //   Drain(k, T)        agent k's coordination deliveries produced so far (ticks in order, FIFO per sender)
-//   Snapshot(T)        the latest published {T_O0_O, Linked, Telemetry, version}: ONE atomically swapped value
+//   Snapshot(T)        the latest published {T_O0_O, Linked, per-agent Component/LastHeartbeat/AckedPatchVersion,
+//                      Telemetry, version}: ONE atomically swapped value
 // The fleet thread processes the queue in order. At each tick t it commits what the collab workers sent since the last
 // tick (#ckf records are released at t, #fresp replies become answerable at t), delivers the network up to t, ticks
 // every node and publishes a snapshot. Feature hooks never block: a reply not yet committed is "not ready" (CollabNode's
@@ -52,11 +53,20 @@ struct CollabLiveParams {
     double feature_latency_s = 0.0;
 };
 
+/// What agent k's radio node knew at the snapshot's tick: the D175 coordination reads (the fork-join must never touch
+/// a node the fleet thread owns). Same values as the node accessors of the same name, frozen at publish.
+struct CollabAgentView {
+    ac::CollabNode::ComponentView component;                // Component(): broker, members, accepted epoch
+    std::map<ac::AgentId, core::HeartbeatValue> heartbeat;  // LastHeartbeat(j), only peers ever heard
+    std::map<ac::AgentId, uint64_t> acked_patch;            // AckedPatchVersion(j) for every other fleet member
+};
+
 struct CollabSnapshot {
     uint64_t version = 0;
     int64_t t_ns = 0;
     std::map<ac::AgentId, core::SE3> T_O0_O;   // agents merged with agent 0: T_G_W(0)^-1 T_G_W(k)
     std::map<ac::AgentId, bool> linked;        // in agent 0's connected component
+    std::map<ac::AgentId, CollabAgentView> agent;   // per fleet member (D175 reads)
     std::string telemetry;                     // one JSON line for the console's comms panel
 };
 
@@ -331,6 +341,16 @@ private:
             }
         const auto members = n0.Component().members;
         for (ac::AgentId k : fleet_ids_) s->linked[k] = std::find(members.begin(), members.end(), k) != members.end();
+        for (ac::AgentId k : fleet_ids_) {
+            auto& n = fleet_.node(k);
+            CollabAgentView& v = s->agent[k];
+            v.component = n.Component();
+            for (ac::AgentId j : fleet_ids_) {
+                if (j == k) continue;
+                if (auto h = n.LastHeartbeat(j)) v.heartbeat.emplace(j, std::move(*h));
+                v.acked_patch[j] = n.AckedPatchVersion(j);
+            }
+        }
         s->telemetry = BuildTelemetry(t);
         std::shared_ptr<const CollabSnapshot> c = s;
         if (replay_) history_[c->version] = c;
