@@ -33,7 +33,10 @@ for t, by in sorted(recs.items()):
             else:
                 ok = ok and src[k] == "orchestrator" and r["chosen"] == len(r["candidates"]) - 1
     elif scen == "out_of_set":
-        ok = src.get(0) == "fallback" and "out of the candidate set" in val[0] and src.get(1, "orchestrator") == "orchestrator"
+        # agent 1's pick (its last candidate, no approval) is accepted unless the gate needs an approval for it
+        a1_gated = a1 is not None and a1["candidates"] and a1["candidates"][-1]["needs_approval"]
+        a1_ok = (src.get(1) == "fallback" and "without an approval" in val[1]) if a1_gated else src.get(1, "orchestrator") == "orchestrator"
+        ok = src.get(0) == "fallback" and "out of the candidate set" in val[0] and a1_ok
     elif scen == "malformed":
         ok = all(s == "fallback" and "timeout" in val[k] for k, s in src.items())
         ok = ok and all(r["chosen"] == r["classical_choice"] or r["chosen"] >= -1 for r in by.values())
