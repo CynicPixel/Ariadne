@@ -29,6 +29,7 @@
 #include "runtime/metrics/trajectory_io.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "runtime/tools/feature_engine_glue.hpp"
+#include "runtime/tools/falloff_glue.hpp"
 #include "runtime/tools/reassociation_glue.hpp"
 #include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
@@ -115,6 +116,7 @@ struct FrameView {
 
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
+    std::string lamp_calib;   // 5.2 (D146): the rig's lamp calibration, for a perception config with a falloff: section
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
@@ -194,6 +196,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         attitude = std::make_unique<slam::AttitudeTracker>(ap, imu, source.ImuNoiseModel(), T_B_Crect.R);
     }
     const cv::Matx33d K_rect(rr.fx, 0, rr.cx, 0, rr.fy, rr.cy, 0, 0, 1);
+    // 5.2 Stage 3 (D146): the albedo proxy of every keyframe; refuses here, before any frame, if its inputs are wrong.
+    KeyframeFalloff falloff(pcfg.falloff, args.lamp_calib, source.Lamp(), source.T_B_C0(), K_rect,
+                            cv::Matx33d(rectifier.R1()));
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
@@ -455,6 +460,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                         stereo_disp_max[band] = std::max(stereo_disp_max[band], d);
                     }
                 }
+                // 5.2 (D146): never feeds tracking or the VO, so the trajectory is the same with the stage off.
+                perception::radiometric::AlbedoProxy albedo;
+                if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -616,6 +624,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     cv::Mat rgb = l;
                     if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
                     kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
+                    kv.bundle.albedo = albedo.albedo;   // empty unless Stage 3 ran (D146)
+                    kv.bundle.albedo_valid = albedo.valid;
+                    kv.bundle.albedo_feature_mask = albedo.feature_mask;
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
@@ -755,6 +766,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = source.DegradationConfig();
     m.radiometric = source.Summary();
+    if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -980,6 +992,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
+    falloff.WriteResults(res);  // 5.2; nothing when Stage 3 is off
     if (reassoc.enabled()) res << reassoc.ResultsLine();
     res << features->ResultsYaml();   // 2.1: empty for orb
     if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10

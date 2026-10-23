@@ -57,9 +57,25 @@
 
 namespace ariadne::runtime {
 
+/// §4.1 `photo` (5.2, D146): the photometric state the frame was taken with, for Stage 4 (divide out exposure x
+/// gain) and Stage 3 (the lamp power). Set only when the pixels are LINEAR in radiance: in sim, when D decodes the
+/// sRGB render (input_transfer: srgb, D130). Absent means "not known to be linear": Stage 3 refuses such frames.
+struct FramePhoto {
+    double exposure_gain = 1.0;   // exposure x analog gain x digital gain (D's relative values)
+    double lamp_scale = 1.0;      // what scales the lamp's radiance after the render: D radiance_scale x lamp_power
+};
+
+/// The carried lamp as the recording rendered it, and whether it was the only light (5.2, D146).
+struct LampRig {
+    std::string rig;               // the rig name, matched against the lamp calibration's
+    double intensity = 0.0;        // the render's lamp intensity (gz <intensity>)
+    core::Vec3 in_body_m = core::Vec3::Zero();
+    bool lamp_only = false;        // scene ambient 0 and no world lights: every photon came from the lamp
+};
+
 /// §4.1 Frame, the subset Phase 1 produces. Not modeled yet, and left absent rather than defaulted:
 ///   imu_window    (§10; every Phase 1 run is imu_mode none)
-///   photo, illumination  (§6.5 exposure / lamp state, Phase 5)
+///   illumination  (§6.5 lamp state beyond `photo`, Phase 5)
 ///   gt            ground truth never rides on the estimator's frame; sources expose it separately
 ///                 (GroundTruth()) for scoring only.
 struct StereoFrame {
@@ -71,6 +87,7 @@ struct StereoFrame {
     /// RGB-D sources only (2.6, D100): CV_32F metres registered to `left`'s pixels, 0 = no return. `right` is then
     /// empty. Empty for stereo sources.
     cv::Mat depth;
+    std::optional<FramePhoto> photo;   // 5.2, D146: set only when the pixels are linear in radiance
 };
 
 class StereoSource {
@@ -103,6 +120,8 @@ public:
     virtual std::optional<perception::DepthSensorModel> DepthSensor() const { return std::nullopt; }
     /// The named IMU noise operator config applied to Imu() (L2, D101), "none" if none.
     virtual std::string ImuNoiseConfig() const { return "none"; }
+    /// The carried lamp (5.2, D146); absent when the source has none or does not record it (EuRoC, Hilti).
+    virtual std::optional<LampRig> Lamp() const { return std::nullopt; }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -178,6 +197,16 @@ public:
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
         rig_ = m["rig"]["name"].as<std::string>();
+        if (const YAML::Node lamp = m["rig"]["lamp"]) {   // 5.2 (D146): the lamp as rendered, and its scene's light
+            LampRig l;
+            l.rig = rig_;
+            l.intensity = lamp["intensity"].as<double>();
+            const auto b = lamp["in_body_m"].as<std::vector<double>>();
+            l.in_body_m = core::Vec3(b.at(0), b.at(1), b.at(2));
+            const YAML::Node lighting = sc["preset"]["values"]["lighting"];
+            l.lamp_only = lighting && lighting["ambient"].as<double>() == 0.0 && sc["lights"] && sc["lights"].size() == 0;
+            lamp_ = l;
+        }
         YAML::Node ag;
         for (const auto& x : m["agents"]) {
             if (x["agent"].as<int>() == agent) ag.reset(x);
@@ -285,6 +314,7 @@ public:
     std::vector<core::ImuMeasurement> Imu() const override { return imu_; }
     core::ImuNoise ImuNoiseModel() const override { return imu_noise_ ? imu_noise_->noise : core::ImuNoise{}; }
     std::string ImuNoiseConfig() const override { return imu_noise_ ? imu_noise_->name : "none"; }
+    std::optional<LampRig> Lamp() const override { return lamp_; }
 
     /// Read the canonical (clean) IMU stream and apply the seeded noise operator `p` (L2, D101;
     /// core/inertial/imu_noise_operator.hpp). The seed derives from the run seed and the agent, as D's do. A config
@@ -401,6 +431,11 @@ public:
                     if (c == 0) done.left_rgb = rgb.clone();
                 }
                 pending.erase(t);
+                // Linear pixels only with D's sRGB decode (D130): then the photometric state is D's (D146).
+                if (degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb) {
+                    const perception::DegradationParams& d = *degradation_;
+                    done.photo = FramePhoto{d.exposure * d.analog_gain * d.digital_gain, d.radiance_scale * d.lamp_power};
+                }
                 done.agent = uint32_t(agent_);
                 done.id = n;
                 on_frame(done);
@@ -416,6 +451,7 @@ private:
     std::string rec_, scene_id_, rig_, frame_, t_left_, t_right_, t_depth_, t_imu_, sensors_mcap_,
         checksum_ = kUnknownField;
     int agent_ = 0;
+    std::optional<LampRig> lamp_;
     size_t frames_ = 0;
     int found_ = 0;
     perception::LensModel lens_;

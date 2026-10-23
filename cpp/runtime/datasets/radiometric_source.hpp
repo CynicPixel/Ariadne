@@ -50,6 +50,7 @@ public:
     perception::radiometric::FlatField FlatFieldOf(int cam) const override { return inner_.FlatFieldOf(cam); }
     std::optional<perception::DepthSensorModel> DepthSensor() const override { return inner_.DepthSensor(); }
     std::string ImuNoiseConfig() const override { return inner_.ImuNoiseConfig(); }
+    std::optional<LampRig> Lamp() const override { return inner_.Lamp(); }
 
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
         if (!stage_.Enabled()) return inner_.ForEachFrame(max_frames, on_frame);

@@ -13,6 +13,7 @@
 // joins the two, which is why it takes both.
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
+#include "perception/radiometric/falloff_config.hpp"
 #include "perception/radiometric/radiometric_config.hpp"
 
 #include <cmath>
@@ -171,6 +172,7 @@ struct PerceptionConfig {
     StereoParams stereo;
     StereoMatchParams stereo_match;
     radiometric::RadiometricParams radiometric;   // 2.2; mode off unless the config has a radiometric: section
+    radiometric::FalloffStageParams falloff;      // 5.2 Stage 3 (D146); mode off unless the config has a falloff: section
     ReassociationParams reassociation;
 };
 
@@ -220,6 +222,8 @@ inline void ValidatePerception(const PerceptionConfig& c) {
         throw ConfigError("perception config '" + c.name + "': " + why);
     };
     if (c.name.empty()) fail("name must not be empty");
+    // Arch §6.2 order: flat field -> VST -> falloff. Without Stage 1 the vignette would be divided into the albedo.
+    if (c.falloff.Enabled() && !c.radiometric.Enabled()) fail("falloff needs the radiometric stage (flat field) on");
 
     const FeatureParams& f = c.features;
     if (f.grid_cols < 1 || f.grid_rows < 1) fail("feature grid must be at least 1x1");
@@ -422,6 +426,11 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     if (config.Has("radiometric")) {
         StrictConfig rs = config.Section("radiometric");
         c.radiometric = radiometric::ParseRadiometric(rs);
+    }
+    // Optional section (5.2, D146): absent means mode off, Stage 3 does not run.
+    if (config.Has("falloff")) {
+        StrictConfig fs = config.Section("falloff");
+        c.falloff = radiometric::ParseFalloff(fs);
     }
 
     if (config.Has("reassociation")) {

@@ -3866,3 +3866,46 @@ BT.601 luminance. "Lit" = at least one 8-bit output step: the noise floor of `la
 - **The lamp render clips** on 3.4 % of pixels on average, 16 % at worst. The 100/50/15 % lamp sweep through
   `lamp_power` cannot recover clipped hotspot pixels. Those rows carry the clipped fraction, and a live re-render
   (`light_config`) is the reference for them.
+
+## 2026-10-23 — D146: 5.2 wiring: Stage 3 runs at keyframes; per-frame is an ablation row (maintainer choice (c))
+
+**Where depth comes from (the question put to the maintainer).** Stage 3 divides by the predicted lamp irradiance,
+which needs a depth map. The runner computes SGBM only at keyframes. The maintainer chose (c), 2026-10-23: Stage 3
+runs at keyframes now, and an every-frame SGBM row comes later as an ablation. Grounds:
+- **Arch §19.1 / §18.2:** the load-bearing consumer is the keyframe bundle (`rgb // falloff-normalized albedo-proxy`).
+  §6.2 lets features use the proxy only "when the ablation says it helps".
+- **DarkGS** (Zhang et al., arXiv 2403.10814) builds its calibrated-light model into training-view rendering, which
+  is per view used for training, not per tracked frame.
+- **The per-frame cost is not measured.** The "20–40 ms" given to the maintainer was `[ASSUMPTION]`. The keyframe
+  path now times Stage 3 (`falloff_ms`), and SGBM is already timed inside `t_kf`.
+
+**Inputs, and what Stage 3 refuses (no silent wrong division):**
+- **Linear pixels.** The sim render is sRGB-encoded (D130). Only D with `input_transfer: srgb` makes the frame linear.
+  The sim source attaches a per-frame photometric state (`StereoFrame::photo`, the §4.1 slot) only then. EuRoC,
+  Hilti and an undegraded sim run have none, and Stage 3 refuses them.
+- **Flat field first** (arch §6.2 order: flat field → VST → falloff). D's vignette would otherwise be read as albedo.
+  Stage 3 refuses `radiometric: off`.
+- **Stage 4:** gray / 255 / (exposure · analog_gain · digital_gain), D's values for that frame.
+- **Lamp power:** lamp_rel = (rig lamp intensity / calibration `intensity_ref`) · D `radiance_scale` · D `lamp_power`.
+- **A lamp-only scene:** scene `ambient` 0 and no world lights. The fixed-light and matched rows (D145) are refused.
+- **The calibration's rig:** the calibration's `rig` must equal the mission's rig, and the lamp position must agree
+  within 1 mm (the rig's lamp in body, through T_B_C0, against `lamp_in_camera`).
+- **Geometry:** depth is SGBM Z where `DenseSupportMask` holds, NaN elsewhere (no unsupported disparities). K is the
+  rectified K. `R_cam_from_raw` is the rectifier's R1.
+
+**Output, first commit:** `KeyframeBundle` gains `albedo`, `albedo_valid` and `albedo_feature_mask`. The spool (6.1)
+does not write them yet. `exposure_state` and `lamp_state` stay unset: D's exposure is a relative factor, not the
+seconds `ExposureState` holds, and 5.3's controller is what will own both. The manifest gets `falloff` under
+Additional, and the tool takes `--lamp-calib` (the calibration describes the recording's rig, like `--degradation`).
+Tracking is untouched, so a run with Stage 3 on must give the same trajectory as with it off; a test checks this.
+results.yaml gets a `falloff:` block only when the stage is on: keyframes normalised, median valid fraction, median
+feature-mask fraction, `falloff_ms` p50/p95.
+
+**Second commit, the features row.** It needs the `replenish: keyframe` cadence: detection then happens only at
+keyframes, where the proxy exists. The row's baseline is the same cadence with Stage 3 off, so the row measures
+Stage 3 and not the cadence change. The tracker gains `Replenish(gray, detect, detect_mask)`: LK keeps the raw
+pyramid, and detection uses the proxy with `feature_mask`. The proxy maps to the engines' 8 bits as reflectance:
+`255 · albedo`, clipped at 1. `FalloffNormalize` already returns reflectance in the calibration's units (the plane
+reads its known 0.5), so no scale is chosen. The clipped fraction goes into results. (A first draft of this entry
+read the proxy as "relative, 1 = the plane", following a stale comment in falloff.hpp; the glue test's exact 0.5
+error exposed it, and the comment is corrected.)
