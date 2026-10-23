@@ -65,7 +65,7 @@ cmd_compose() {
   local preset="$1" seed="$2" rtf="$3" out="build/live/scenes/${1}_${2}"
   log "compose $preset seed $seed (real-time factor $rtf) -> $out"
   sim_run "cd python && python3 -m dataset_tools.worldgen generate --preset ../configs/worldgen/$preset.yaml \
-           --seed $seed --out ../$out --rig ../configs/sim/rig_stereo_v1.yaml --live-rtf $rtf"
+           --seed $seed --out ../$out --rig ../${ARIADNE_COMPOSE_RIG:-configs/sim/rig_stereo_v1.yaml} --live-rtf $rtf"
 }
 
 CONTAINERS=()
