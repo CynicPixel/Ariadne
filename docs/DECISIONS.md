@@ -3848,3 +3848,21 @@ both recordings: sRGB-decoded median brightness, clipped fraction and above-nois
 M2DGR (arXiv 2112.13659); Ebadi et al. (arXiv 2208.01787); Crocetti et al. ICRA 2025 (arXiv 2502.13708); Dunn Beltran
 et al. NFL-BA NeurIPS 2025 (arXiv 2412.13176); Engel et al. DSO (arXiv 1607.02565); Zhang, Forster, Scaramuzza ICRA
 2017; Shim et al. TCSVT 2018 (arXiv 1708.07338); Tomasi et al. RA-L 2021 (arXiv 2102.04341); 29 CFR 1926.56 (eCFR).
+
+**D145 measurement (2026-10-23, approved S3 read).** ~55 MB of ranged reads in total: each `sensors_0.mcap`'s summary
+plus 30 chunks evenly spaced over the first 50 s of agent 0 (the replay span), left camera. sRGB-decoded (D130),
+BT.601 luminance. "Lit" = at least one 8-bit output step: the noise floor of `lampdark_sensor_v0` (10⁴ e⁻ full well,
+2.5 e⁻ read) lies well below it.
+
+| render | median linear Y (p10–p90) | clipped pixels mean / max | lit pixels |
+|---|---|---|---|
+| `ci_tiny_dark_0` (lamp) | 0.0364 (0.0117–0.0808) | 3.4 % / 16.2 % | 69 % |
+| `ci_tiny_dark_fixed_0` (zone lights) | 0.0450 (0.0209–0.0743) | 0 % / 0 % | 95 % |
+
+- **Matched row:** `configs/degradation/lampdark_fixed_matched_v0.yaml` = `lampdark_sensor_v0` with
+  `radiance_scale` 0.81. Exact, because the fixed render has ambient 0 and never clips.
+- **Brightness was not the big gap.** D142's unmatched fixed-light row was only 1.24× brighter.
+- **Coverage is the residual confound: 69 % vs 95 % lit.** The matched row cannot remove it.
+- **The lamp render clips** on 3.4 % of pixels on average, 16 % at worst. The 100/50/15 % lamp sweep through
+  `lamp_power` cannot recover clipped hotspot pixels. Those rows carry the clipped fraction, and a live re-render
+  (`light_config`) is the reference for them.
