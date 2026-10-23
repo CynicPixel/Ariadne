@@ -5058,3 +5058,155 @@ confirmed with amendments by B (2026-10-24).
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
+## 2026-10-24 — D176: 3.2 sweep (fixed) shows perceptual aliasing wins PCM under the byte budget; place-grouped PCM pre-registered
+
+**Measured** (sweep rerun `20261023T191248Z-cpux86-eee456`, with the D171 config-writer and calibration fixes; gate
+`build/collab_gate_eee456`). Outcomes PASS (31 incomplete, 5 consistent, 0 corrupt), but the geometry fails:
+- **Scene 0, every budgeted row (greedy/spectral x 25/50 %, 3 seeds) and the campaign: merged ATE 3.77-3.81 m.** The
+  unbudgeted similarity arm on the same scene: 0.017-0.037 m. Scene 1: 0.007-0.010 m everywhere.
+- Cause, from edges.csv + the pass-A stores' GT: a perceptual-aliasing group. On agent 1's side it is 1-6 query
+  keyframes within 0.5 m (one place); it verifies against 40-60 of agent 0's keyframes (1.6-1.8 m span), every edge
+  ~5 m / ~100 deg off (the 6 m lattice period: worldgen `cell_m: 6.0`). 40-154 such edges per run, mutually consistent.
+  The true loops (15-25 edges, ~3 m span on both sides) were also verified. **PCM's maximum clique chose the larger
+  false clique and rejected the true one in every scene-0 budgeted run** (D171's smoke called this "no competitor";
+  here the competitor existed and lost on edge count).
+- The budgeted selection admits more of the group (high retrieval score: median 0.905-0.919 bad vs 0.92-0.96 good,
+  overlapping), so the spectral-vs-greedy dominance rows on scene 0 compare two corrupted maps: not evidence either way.
+- The cross-scene PnP floor did not transfer: scene 1's floor (72) applied to scene 0, whose own floor is 169. Reported,
+  not switched (D171 pre-registration stands).
+- Byte table FAIL (worst 0.86): match_request predicted ~6x low (e.g. 2992 vs 18760 B); match_response ~15 % high in
+  some runs. Unexplained yet; the accounting is checked against the ledger before any change (see below).
+
+**Decision (pre-registered before any rerun): place-grouped PCM, "one place pair, one vote".** Edges are not independent
+evidence when many come from one place; ORB-SLAM3's place recognition likewise checks a candidate against several
+keyframes before merging maps [PAPER: Campos et al. 2021, §VI; verify the exact rule when citing], and DBoW2 uses temporal
+consistency. Before PCM, the broker groups inter-agent edges by (agent_a, place_a, agent_b, place_b), where a place is a
+greedy cluster of an agent's keyframes in its OWN odometry frame (the snapshot it sent; id order; a new place when the
+keyframe is farther than `radius_m` from the current place's first keyframe). PCM then runs over one representative per
+group (the most PnP inliers; ties: lowest ids); other members do not enter the solve.
+- `radius_m: 1.0`: one corridor width (worldgen corridors 1.0-1.4 m: consecutive keyframes in one corridor segment see
+  the same structure) and well under half the 6 m lattice period (aliases sit a period apart, so they never share a
+  place). Not tuned on scene 0.
+- Config `pcm_place_grouping: {enabled: false, radius_m: 1.0}` in collab_v2.yaml; default off, so the 3.2 smoke and
+  every earlier run stay byte-identical.
+- **Pass criteria (fixed now):** rerun B2 + C with it on (stores reused). Scene 0 budgeted rows merged ATE < 0.10 m in
+  >= 5 of 6 cells (arm x level, seed-mean); scene 1 rows not worse than now by more than 10 % (or 2 mm); no run
+  corrupt. Failing either is reported as a negative result and the alias group stays a documented limitation.
+- Live (D174): the known entry poses give a second, independent guard: an inter-agent edge whose implied alignment
+  disagrees with the entry-pose alignment by more than the VO drift bound is rejected before PCM. Designed separately
+  (D177) with its bound from measured VO drift, not from this failure.
+
+**Not 3.5 done:** 3.5 still needs repetition-operator worlds (§5.5), the §17.3 diagnostics (ROC/PR of retrieval score
+against GT, false-closure probability) and the degeneracy-gate-before-PCM ordering test.
+
+**D176 result (2026-10-24, NEGATIVE, reported as measured).** Pass B, scene 0, greedy 25 %, seed 1, stores of
+`0345a5`, grouping on vs off: merged ATE 3.7837 m vs 3.7835 m. The rule took effect (inter-agent edges entering the
+robust stage over the run: 89 vs 1441) but the false group still won. Why: agent 0 passed the aliased spot several
+times (its keyframes 32, 50, 69, 144, 148, 155 are > 1 m apart in its own frame, and its VO drift is only 0.02-0.03 m,
+so they really are separate places); each pass pairs with agent 1's one place and counts as its own vote. "One place
+pair, one vote" undercounts nothing on the true side and still overcounts revisits on the false side. Not retuned on
+this data. `pcm_place_grouping` stays in the code, default off, as a measured ablation row.
+
+## 2026-10-24 — D177: known-entry gate on inter-agent edges (pre-registered; known starts, maintainer 2026-10-23)
+
+**Basis.** Agents enter through known openings (maintainer: drones inserted through windows), so each agent's odometry
+frame W_k has a known placement T_World_Wk at entry. An inter-agent loop edge (a, ka) -> (b, kb) with measurement
+Z = T_Ca_Cb implies T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1 (the snapshot poses). Against the prior T_Wa_Wb = T_World_Wa^-1
+T_World_Wb, the only legitimate disagreement is VO drift accumulated since entry by both agents.
+**Measured drift** (pass-A stores of `0345a5`, 2 scenes x 3 seeds x 2 agents, camera pose vs GT aligned at the first
+released keyframe): worst 0.11 m and 1.43 deg; worst drift / path length 1.0 % (11-33 m paths).
+**Rule.** Before PCM the broker drops an inter-agent edge whose deviation D = prior^-1 implied exceeds
+  |D.t| > 0.5 m + 0.05 (L_a(ka) + L_b(kb))   or   angle(D.R) > 10 deg,
+with L_k(kf) the odometry path length of agent k from its first keyframe to kf (its snapshot). 5 % is 5x the worst
+measured drift ratio, the 0.5 m floor covers entry placement error, 10 deg is 7x the worst measured rotation drift. The
+aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-sized true loops are far inside.
+- Config `entry_gate: {enabled: false, floor_m: 0.5, per_m: 0.05, rot_deg: 10}`, default off; the entry poses come from
+  the briefing (live: B's T_W_O[k]; pass B: the scene's agent start poses, i.e. GT of the first released keyframe
+  composed with its odometry pose, the same placement an operator records at insertion).
+- **Pass criteria (fixed now, same as D176):** B2 + C rerun with it on (grouping off): scene 0 budgeted rows merged ATE
+  < 0.10 m in >= 5 of 6 cells; scene 1 not worse by > 10 % (or 2 mm); no run corrupt. Also reported: true edges the
+  gate drops (must be 0 on both scenes, else a negative result).
+- **Scope, honestly:** this guards the known-starts deployment. It does not solve aliasing between agents whose starts
+  are unknown, nor aliases smaller than the drift bound; those remain 3.5 (repetition worlds, §17.3 diagnostics).
+
+**D176/D177 status correction (2026-10-24).** Both were designed without the preflight the maintainer requires (SOTA
+literature pass + advisor before any design; no ad-hoc incremental fixes after a failed run). D177 is WITHDRAWN as a
+pre-registration: not built, not run. The D176 grouping code is parked uncommitted (git stash on feat/live-collab).
+The measurements above stand. The design restarts from a literature survey of perceptual aliasing in multi-robot loop
+closure (PCM's large-false-clique failure and its successors, systems in repetitive/subterranean environments, gating
+against known initial poses, ambiguity-aware back ends), then an advisor review, then a pre-registered decision.
+
+**D176 record correction (2026-10-24).** The negative result covers the IMPLEMENTATION tested, not spatial place
+grouping in general: places were clustered sequentially in keyframe-id order (a new place whenever a keyframe left the
+current place's seed), so a revisit always opened a new place id even when it returned to the same spot. Spatial
+grouping in each agent's own frame (revisits merged), with one-to-one support per place pair (CLIPPER-style) and an
+ambiguity test (Olson 2009), is the literature's direction for the unknown-start case and belongs to 3.5. Surveys:
+scratchpad alias_survey.md / collab_fast_survey.md, summarized in the next decision.
+
+## 2026-10-24 — Preflight for the collaboration redesign (surveys + advisor)
+
+Two literature surveys from primary sources (scratchpad `alias_survey.md`, `collab_fast_survey.md`; summarized here),
+then advisor review. Findings that drive D178/D179:
+- **PCM states its own failure mode** (Mangelson et al., ICRA 2018, Assumption 2: the measurement system must not be
+  "biased toward selecting incorrect measurements over correct ones"); revisits + top-k retrieval are that bias. Its
+  successors (group-k consistency, Forsgren et al. IROS 2022 / IJRR 2024; CLIPPER, Lusk et al. ICRA 2021; ROBIN, Shi et
+  al. ICRA 2021) still pick the set with most support: none fixes "a large false group beats a small true group".
+- **Systems with a known common frame gate candidates by proximity before consistency:** LAMP (Ebadi et al. ICRA 2020:
+  fiducials at the entrance, search radius around the estimate) and LAMP 2.0 (Chang et al. RA-L 2022: d_max = α·n_curr
+  growing with traversal in the gate-calibrated frame, α = 0.2 m/node). Olson (RAS 2009) gives the principled form:
+  Mahalanobis gating with covariance projected along the odometry path ("Dijkstra projection", conservative).
+- **GNC needs an outlier-free initial guess** (Kimera-Multi, Tian et al. T-RO 2022: "In multi-robot PGO, there is no
+  longer an outlier-free initial guess (i.e., odometry), which is crucial for the strong performance of GNC"). Ours is
+  chordal over PCM's output, which seeded the false basin.
+- **Bytes:** one side's features travel to the other side, which verifies (vertex cover: Giamou et al. ICRA 2018; Tian
+  et al. IJRR 2021; DOOR-SLAM; Kimera-Multi) - our broker fetching both endpoints deviates from the locked
+  "vertex-cover sharing". Our 60-130 kB per fetched keyframe is 3-6x D2SLAM's 20.1 kB/keyframe. No survey found an
+  information-theoretic bound: we report measured bytes against the vertex-cover minimum, never "the limit".
+- **Async + reproducible:** asynchronous multi-robot back ends (ASAPP, D2SLAM/ARock) do not address replay
+  determinism; the workable form is asynchronous compute with commits logged on the sim clock (D179).
+
+## 2026-10-24 — D178: known-entry Mahalanobis gate on inter-agent loops + GNC initialised from the entry prior (pre-registered)
+
+**Basis:** LAMP / LAMP 2.0 (known entry frame, traversal-growing proximity gate), Olson 2009 (Mahalanobis gate, covariance
+projected along the odometry path), Kimera-Multi (GNC's initial guess). Known starts: maintainer 2026-10-23.
+**Prior.** T_World_Wk for each agent from the mission briefing's start poses (live: B's T_W_O[k]; pass B: the scene's
+agent spawn poses, NOT ground truth of a keyframe), labelled in manifests as a known-start prior.
+**Residual.** For an inter-agent edge (a, ka) -> (b, kb) with Z = T_Ca_Cb: implied T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1,
+prior P = T_World_Wa^-1 T_World_Wb, r = Log(P^-1 implied) in R^6 (the left-multiplicative convention).
+**Covariance.** Σ = Σ_a(ka) ⊕ Σ_b(kb) ⊕ Σ_Z ⊕ 2Σ_entry, each transported to the residual's frame by the SE(3) adjoint
+(first order). Σ_k(kf): the odometry edges' covariances (their information^-1, in the snapshot) composed along agent k's
+chain from its first keyframe (Olson's projection; the chain IS the minimum path without intra-agent loops). Σ_entry:
+operator placement, σ = 0.10 m and 2 deg per axis [ASSUMPTION, physical: a hand-placed drone at a window]. 
+**Calibration (pre-registered, scene 1 only - never gate data).** NEES of the chain-composed odometry pose against GT
+aligned at entry, over every released keyframe of scene 1's stores (3 seeds x 2 agents): κ = mean(NEES)/6; Σ_k ← κ Σ_k
+if κ > 1 (the odometry information is overconfident), unchanged otherwise. κ and the NEES histogram are recorded.
+**Gate.** Keep the edge iff r^T Σ^-1 r ≤ χ²_6(0.999) = 22.46. Rotation alone of the observed aliases (≈100 deg) gives
+(100/σ_r)^2 ≥ 400 for any σ_r ≤ 5 deg, above every χ² cutoff from 0.95 to 0.9999: the decision does not hinge on the
+threshold.
+**GNC initial guess.** With the gate on, the joint solve initialises every agent's T_G_W from the entry prior instead of
+chordal over PCM's accepted set.
+**Config.** `entry_gate: {enabled: false, chi2_conf: 0.999, entry_sigma_m: 0.10, entry_sigma_deg: 2.0, kappa: <from
+calibration>}`; default off; the 3.2 smoke byte-identical with it off.
+**Pass criteria (fixed now).** B2 + C rerun with the gate on: scene 0 budgeted rows merged ATE < 0.10 m in >= 5 of 6
+cells (arm x level, seed-mean); scene 1 not worse by > 10 % (or 2 mm); no run corrupt; true verified edges (pose error
+<= 10 deg) rejected by the gate <= 1 % on both scenes. Failing any is a reported negative result.
+**Scope.** Known starts only. [INFERENCE] decisive against pure one-period translation aliases only up to ~100 m of
+travel per agent at 1 % drift; the demo's paths are checked against that. Unknown-start aliasing stays 3.5 (spatial
+place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio ambiguity test, repetition worlds,
+§17.3 diagnostics).
+
+## 2026-10-24 — D179: asynchronous collaboration, committed on the sim clock (maintainer: no barrier syncs)
+
+**Requirement** (maintainer 2026-10-24): collaboration "blazingly fast", no barrier syncs, asynchronous. **Semantics:**
+- All collaboration compute is asynchronous and never waited on: DNN in the per-agent collab workers; retrieval,
+  verification and broker solves on the fleet's own thread.
+- The radio stays a single owner on SIM time (D175's coordination and its D218 replay proof depend on it). Every
+  asynchronous result (a #ckf record, a #fresp, a verification, a solve) is committed at the sim tick at which the fleet
+  thread observed it, and the (tick, event) pair is logged. Live never waits for a result; replay applies the logged
+  events at their logged ticks, so replays equal the live run they log (record/replay is the substrate, CLAUDE.md §1).
+- The runtime's `Step(t)` enqueues tick t and returns. With collab on, the fleet thread owns the radio nodes; D175 sends
+  are sim-timestamped entries in a queue into the fleet thread, and coordination deliveries come back through a queue
+  the runtime drains at its barrier step 2. **Invariant 1 (B):** the drain order is per tick, FIFO per sender, ticks in
+  order, and replay reproduces exactly that order from the log. **Invariant 2 (B):** the published snapshot {T_O0_O,
+  Linked, Telemetry} is swapped atomically as one value; the planner reads it lock-free.
+- Replaces D174's lockstep (watermark waits, feature replies at ask + feature_latency_s).

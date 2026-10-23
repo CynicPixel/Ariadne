@@ -34,6 +34,7 @@
 #include "collaboration/protocol/outcome.hpp"
 #include "collaboration/retrieval/local_descriptor_codec.hpp"
 #include "perception/association/hard_pair_matcher.hpp"
+#include "planning/mission/frontier_mission.hpp"
 #include "runtime/agent/collab_fleet.hpp"
 #include "runtime/agent/collab_store.hpp"
 #include "runtime/datasets/scene_walls.hpp"
@@ -151,6 +152,12 @@ int main(int argc, char** argv) {
                 return r->gt_T_W_B * r->T_B_C;
             },
             &ecsv);
+        if (cfg.entry_gate.enabled) {   // D178 known starts: the briefing's entry placements (scene entrances), not GT
+            const auto T_W_O = planning::mission::EntryPoses(scene, int(fleet.size()));
+            std::map<ac::AgentId, core::SE3> entry;
+            for (ac::AgentId a : fleet) entry[a] = T_W_O.at(size_t(a));
+            fleet_.SetEntryPoses(entry);
+        }
         const auto& nodes = fleet_.nodes();
         std::map<ac::AgentId, ac::CollabNode*> node_of;
         for (const auto& n : nodes) node_of[n->self()] = n.get();
@@ -250,7 +257,11 @@ int main(int argc, char** argv) {
           << "\ncomms_scenario: " << scenario.name << "\nbudget: {bytes_per_s: " << cfg.budget_bytes_per_s
           << ", burst_bytes: " << cfg.budget_burst_bytes << ", source: \"" << cfg.budget_source << "\"}"
           << "\nresponse_ratio: {value: " << cfg.response_ratio << ", calibration_run: \"" << cfg.calibration_run << "\"}"
-          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nlocal_encoding: " << cfg.local_encoding
+          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nentry_gate: {enabled: "
+          << (cfg.entry_gate.enabled ? "true" : "false") << ", chi2: " << cfg.entry_gate.chi2 << ", entry_sigma_m: "
+          << cfg.entry_gate.entry_sigma_m << ", entry_sigma_rad: " << cfg.entry_gate.entry_sigma_rad << ", kappa: "
+          << cfg.entry_gate.kappa << ", tested: " << fleet_.entry_gate_stats().tested << ", rejected: "
+          << fleet_.entry_gate_stats().rejected << ", ungated: " << fleet_.entry_gate_stats().ungated << "}" << "\nlocal_encoding: " << cfg.local_encoding
           << "\nverify: {min_pnp_inliers: " << cfg.verify.min_pnp_inliers << ", calibration: \"" << cfg.verify_calibration
           << "\"}" << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";

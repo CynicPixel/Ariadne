@@ -90,6 +90,9 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_collab_sim PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_collab_sim RUNTIME DESTINATION bin COMPONENT ariadne)
+  # D178 calibration of the known-entry gate (scene 1 only, pre-registered).
+  add_executable(ariadne_entry_nees tools/ariadne_entry_nees.cpp)
+  target_link_libraries(ariadne_entry_nees PRIVATE ariadne::runtime_opencv ariadne::slam_opencv)
   # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (LIVE_COLLAB §1).
   add_executable(ariadne_collab_worker tools/ariadne_collab_worker.cpp)
   target_link_libraries(ariadne_collab_worker PRIVATE

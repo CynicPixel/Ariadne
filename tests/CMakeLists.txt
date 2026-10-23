@@ -78,6 +78,7 @@ if(OpenCV_FOUND)
     unit/test_exposure_glue.cpp
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
+    unit/test_entry_gate.cpp
     unit/test_keyframe_spool.cpp
     unit/test_live_link.cpp
     unit/test_live_planner.cpp
