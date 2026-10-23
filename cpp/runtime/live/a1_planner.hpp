@@ -178,10 +178,10 @@ public:
     /// with the peers it RECEIVED and the peers' known-mask; only agents[self] is filled, joint[self] = -1 (the
     /// component broker assigns; ApplyConsensus's pick replaces it). Maps/egress are this agent's own map.
     PlanOutput PlanOwnFor(const PlanContext& ctx, int self, const std::vector<planning::PeerKeyframe>& peers,
-                          const cv::Mat* peer_known) {
+                          const cv::Mat* peer_known, bool linked = true) {
         planning::Phase4AgentInput in;
         in.active = ctx.active[size_t(self)];
-        in.linked = true;   // link state reaches the planner through what was (not) received, never a flag
+        in.linked = linked;   // D174: the fleet's comms state; true before collab runs (coordination-only rows)
         in.position = ctx.position[size_t(self)];
         in.flown_m = ctx.flown_m[size_t(self)];
         for (const auto& [k, g] : ctx.refused_goals) if (k == self) in.refused_goals.push_back(g);
