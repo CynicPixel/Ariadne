@@ -58,7 +58,11 @@ stage() {
   "$AWS" aws s3 cp "$W/repo.bundle" "$STAGE/repo.bundle" --only-show-errors
   "$AWS" aws s3 cp "$W/inputs.tar" "$STAGE/inputs.tar" --only-show-errors
   "$AWS" aws s3 cp "$W/images.txt" "$STAGE/images.txt" --only-show-errors
-  "$AWS" aws s3 sync "$REC/" "$DATA/" --only-show-errors   # persistent: uploads only what is missing or changed
+  # Persistent: uploads only what is missing or changed. The AWS CLI runs in a container that mounts this checkout
+  # only, so a recording symlinked in from another checkout (a worktree) cannot be synced from here: it is skipped,
+  # the persistent copy is used, and the instance still checks every file against recording.SHA256SUMS.
+  if [ -L "$REC" ]; then log "recording is a symlink: sync skipped, persistent copy used"
+  else "$AWS" aws s3 sync "$REC/" "$DATA/" --only-show-errors; fi
   log "staged $commit ($mode): $(du -sh "$W/inputs.tar" | cut -f1) inputs, $(du -sh "$REC" | cut -f1) recording, ${#IMAGES[@]} images"
 }
 
