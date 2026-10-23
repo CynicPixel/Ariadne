@@ -4075,6 +4075,55 @@ service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam
   `ApplyPhotometric` and the wrapper): in `exposure_trace.csv`, every row's `applied_decision` equals the previous row's
   `decision`, and `applied_ns` is the stamp of the frame right after `decided_ns`.
 
+## 2026-10-23 — D148: 5.5 measurement plan, fixed before the confined_v1 render is read — corridor gate ordering and the baseline sweep
+
+Written while the render was still recording (run 20261023T105356Z-gpu-155842, commit `8af6c71`); nothing below has
+seen its pixels.
+
+**Recording.** `confined_v1` seed 0 + `rig_stereo_sweep_v1`, lit (ambient 0.35 + zone lights: the sweep isolates
+geometry, D138), both agents, one g4dn spot pass, uploaded to `runs/ph5-confined/<commit>/confined_v1_0`.
+
+**A. Corridor degeneracy gate ordering** (Phase 5 gate bullet 4; arch §14.4: degeneracy gate → PCM → GNC).
+- **Replay.** `ariadne_sim_vo`, agents 0 and 1, full mission, seed 1, `sim_v1` perception, `sim_v2_loops` slam
+  (sim_v2 + euroc_v2_loops' loop block verbatim; `sim_v2` itself has loop closure off, so it makes no attempts to
+  suppress), `--imu-noise imu_noise_v1`, main pair (B = 10 cm), no D. Gate thresholds as shipped (D71/D73) [ASSUMPTION
+  on the sim rig]; none is changed after looking.
+- **Labels, from GT only.** Clearance d = the scene ESDF (`esdf_f32.bin`, 5 cm cells, metres to the nearest
+  obstacle) at each keyframe's GT xy. Narrow: d ≤ 0.30 m (the 0.45–0.60 m passages). Corridor: 0.30 < d ≤ 0.50 m (the
+  0.90–0.95 m passages). Open: d > 0.50 m. A candidate is *confined* if its query or its match keyframe is narrow or
+  corridor.
+- **Hard criterion (ordering).** Every candidate with `degenerate = true` has `pcm = false` and `gnc_inlier = false`:
+  it never reaches PCM. 0 violations, counted over all candidates of both agents.
+- **Firing.** The gate fires on a candidate when `degenerate = true` for any reason code (`too_few_points`,
+  `conditioning_translation`, `conditioning_rotation`, `parallax`, `collinear`). Reported per label: candidates,
+  refusals, the reason histogram, the D71 `corridor` score (reported, not gated), and the GT label of refused and
+  accepted candidates (good/bad at 0.2 m / 2°, D73).
+- **The bullet is met** when the ordering holds, at least one confined candidate is refused, and no GT-bad confined
+  candidate ends as a GNC inlier. If GT-bad confined candidates pass the gate and PCM/GNC remove them, the report says
+  so: the later stages did that work, not the detector. If retrieval yields no confined candidate, the bullet is
+  recorded "not exercised". Neither thresholds nor the scene change after looking.
+
+**B. Baseline sweep** (5.5, §9.1 "evaluate 4/8/12/20 cm against range/depth error", §31.8 "subject to the §9.4
+validator").
+- **Rows.** B = 4, 8, 12, 20 cm (`--right-camera right_b04|b08|b12|b20`, 0bfc95b) and the main pair 10 cm. Agents 0
+  and 1, full mission, seed 1, `sim_v1` perception except `stereo.num_disparities`, `sim_v2` slam with
+  `imu_noise_v1`, no D. Same frames, poses and lighting in every row (one render).
+- **Disparity range per baseline.** The smallest multiple of 16 that passes the §9.4 validator at
+  `required_min_range_m` 0.30, with rectified f = 671.54 px. That gives B04 96 (Z_min 0.283 m), B08 192 (0.281 m),
+  B12 272 (0.297 m) and B20 464 (0.290 m). The main pair keeps its shipped 240 (0.281 m; the rule would give 224), so it
+  equals every earlier sim row. Columns without a full search range: 7.5 / 15 / 18.75 / 21 / 36 %. SGBM time scales
+  with the range and is reported from the frontend timings.
+- **Metrics.**
+  - ATE (SE(3) alignment), keyframes, lost frames, tracks.
+  - Depth: each keyframe's SGBM points, back-projected with the rectified K and placed with the GT pose, measured
+    against the GT mesh (point-to-mesh distance) in range bins 0.3–1 / 1–2 / 2–4 / 4–8 m. Reported as the median and
+    p90 relative error, plus the valid fraction per bin. The tool is built and unit-tested before the sweep is read.
+- **Reported as measured.** One seed chooses no baseline. The lamp-asymmetry confound of D138 does not arise here: the
+  render is lit.
+
+**Cost.** Render g4dn.xlarge spot $0.087/h, capped at 150 min. The replays are CPU, and their placement (local or
+c7i spot) is asked separately.
+
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
 Design: `docs/design/SPECTRAL_3.4.md`. Code:
