@@ -154,6 +154,133 @@ cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHa
     return back;
 }
 
+// --- A2's live splat tee (D220; service contract D231) -----------------------------------------------------------
+// ariadne_live CONNECTS to the recon service's Unix socket (env ARIADNE_RECON_SOCK) and tees every delivered
+// keyframe: topic "#kf" = u32 LE json_len | JSON | Z fp16 | S fp16 | RGB rgb8 (JSON carries both intrinsics: K
+// full-res for the RGB, Kz spool-scale matching Z/S; invalid depth is 0, the spool convention), topic "#t_w_o" =
+// {"agent","t_s","xyzquat"} with qw LAST (Eigen::Quaterniond - a naive quaternion breaks at the 180-degree
+// entrance), sent once per agent before any keyframe. The splat is a VIEWER: a bounded queue (8 per agent, drop
+// the oldest, drops counted) on one sender thread; absent or dying socket = silent no-op. It can never
+// back-pressure VO or the mission.
+class SplatTee {
+public:
+    SplatTee(const char* path, const std::vector<core::SE3>& T_W_O) {
+        fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd_ < 0) return;
+        sockaddr_un a{};
+        a.sun_family = AF_UNIX;
+        if (std::strlen(path) >= sizeof(a.sun_path)) { ::close(fd_), fd_ = -1; return; }
+        std::strcpy(a.sun_path, path);
+        if (::connect(fd_, reinterpret_cast<sockaddr*>(&a), sizeof(a)) != 0) { ::close(fd_), fd_ = -1; return; }
+        pending_.assign(T_W_O.size(), 0);
+        for (size_t k = 0; k < T_W_O.size(); ++k) {
+            const core::SE3& T = T_W_O[k];
+            const Eigen::Quaterniond q(T.R);
+            std::ostringstream o;
+            o.precision(17);
+            o << "{\"agent\":" << k << ",\"t_s\":0,\"xyzquat\":[" << T.t.x() << "," << T.t.y() << "," << T.t.z()
+              << "," << q.x() << "," << q.y() << "," << q.z() << "," << q.w() << "]}";
+            const std::string j = o.str();
+            Msg m;
+            m.topic = "#t_w_o";
+            m.bytes.assign(j.begin(), j.end());
+            queue_.push_back(std::move(m));
+        }
+        th_ = std::thread([this] { Run(); });
+    }
+    ~SplatTee() {
+        if (fd_ < 0) return;
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            stop_ = true;
+        }
+        cv_.notify_one();
+        th_.join();
+        ::close(fd_);
+    }
+    bool on() const { return fd_ >= 0 && !dead_.load(std::memory_order_relaxed); }
+    uint64_t drops() const { return drops_.load(); }
+    void OnKf(const KfRec& r, const cv::Mat& rgb) {
+        if (!on()) return;
+        cv::Mat z16, s16;
+        r.Z.convertTo(z16, CV_16F);
+        r.S.convertTo(s16, CV_16F);
+        const cv::Mat c = rgb.isContinuous() ? rgb : rgb.clone();
+        std::ostringstream o;
+        o.precision(17);
+        o << "{\"agent\":" << r.agent << ",\"id\":" << r.id << ",\"t_ns\":" << r.t_ns << ",\"pose_version\":0,"
+          << "\"T_O_C\":[";
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 4; ++j)
+                o << ((i || j) ? "," : "") << (j < 3 ? r.T_O_C.R(i, j) : r.T_O_C.t(i));
+        // Spool camera -> full resolution: u = 2 u' + 0.5 (the inverse of HalfAsSpool's mapping).
+        o << "],\"K\":[" << 2 * r.fx << "," << 2 * r.fy << "," << 2 * (r.cx + 0.5) - 0.5 << ","
+          << 2 * (r.cy + 0.5) - 0.5 << "],\"Kz\":[" << r.fx << "," << r.fy << "," << r.cx << "," << r.cy
+          << "],\"w\":" << c.cols << ",\"h\":" << c.rows << ",\"zw\":" << r.Z.cols << ",\"zh\":" << r.Z.rows
+          << ",\"training_image\":\"rgb\"}";
+        const std::string j = o.str();
+        Msg m;
+        m.topic = "#kf";
+        m.agent = r.agent;
+        m.bytes.reserve(4 + j.size() + z16.total() * 2 + s16.total() * 2 + c.total() * 3);
+        const uint32_t jl = uint32_t(j.size());   // u32 LE (PutPod lives further down this file)
+        m.bytes.insert(m.bytes.end(), reinterpret_cast<const uint8_t*>(&jl), reinterpret_cast<const uint8_t*>(&jl) + 4);
+        m.bytes.insert(m.bytes.end(), j.begin(), j.end());
+        const auto put = [&m](const cv::Mat& x) {
+            const auto* q = x.ptr<uint8_t>();
+            m.bytes.insert(m.bytes.end(), q, q + x.total() * x.elemSize());
+        };
+        put(z16), put(s16), put(c);
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            auto& n = pending_[size_t(r.agent)];
+            if (n >= 8) {   // the viewer lags: drop ITS oldest frame, never block
+                for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+                    if (it->topic == "#kf" && it->agent == r.agent) {
+                        queue_.erase(it), --n, ++drops_;
+                        break;
+                    }
+                }
+            }
+            queue_.push_back(std::move(m)), ++n;
+        }
+        cv_.notify_one();
+    }
+
+private:
+    struct Msg {
+        std::string topic;
+        int agent = -1;
+        std::vector<uint8_t> bytes;
+    };
+    void Run() {
+        std::unique_lock<std::mutex> lk(mu_);
+        for (;;) {
+            cv_.wait(lk, [&] { return stop_ || !queue_.empty(); });
+            if (queue_.empty()) return;   // stop_ and drained
+            Msg m = std::move(queue_.front());
+            queue_.pop_front();
+            if (m.agent >= 0) --pending_[size_t(m.agent)];
+            lk.unlock();
+            if (!dead_.load(std::memory_order_relaxed) &&
+                !live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size())) {
+                dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+            }
+            lk.lock();
+            if (stop_ && queue_.empty()) return;
+        }
+    }
+    int fd_ = -1;
+    std::atomic<bool> dead_{false};
+    std::atomic<uint64_t> drops_{0};
+    bool stop_ = false;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    std::deque<Msg> queue_;
+    std::vector<int> pending_;
+    std::thread th_;
+};
+
 struct AgentLane {
     live::MessageQueue images{64};   // ~64 x 2.8 MB per agent at most (bounded: see MessageQueue)
     live::GtStore gt;
@@ -558,6 +685,13 @@ int main(int argc, char** argv) {
             ma->max_options = lc.multiagent.max_bid_options;
             planner_name += " +multiagent(" + lc.multiagent.broker_mode + "," + ma->scenario.name + ")";
         }
+        // A2's splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
+        std::unique_ptr<SplatTee> splat;
+        if (const char* sp = std::getenv("ARIADNE_RECON_SOCK")) {
+            splat = std::make_unique<SplatTee>(sp, brief.T_W_O);
+            if (!splat->on()) std::fprintf(stderr, "ariadne_live: splat tee: %s absent or refused; tee off\n", sp);
+        }
+
         // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
         // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
@@ -845,6 +979,7 @@ int main(int argc, char** argv) {
                 j << "]}";
                 std::ofstream((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".json")).string()) << j.str();
             }
+            if (splat) splat->OnKf(r, rgb);   // D220: bounded, drop-oldest, never blocks this thread
             AgentLane& L = lanes[k];
             std::lock_guard<std::mutex> lk(L.mu);
             L.kf_times.push_back(r.t_ns);
@@ -1896,6 +2031,9 @@ int main(int argc, char** argv) {
         runtime::RecordOpenCvIdentity(man);
         runtime::RecordDeterminismDigests(man);
         std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(man);
+        if (splat && splat->on())
+            std::printf("ariadne_live: splat tee sent keyframes (%llu dropped under the viewer bound)\n",
+                        (unsigned long long)splat->drops());
         std::printf("ariadne_live[%s]: %d replans, %d decisions, consumed %llu messages (digest %016llx) -> %s\n",
                     is_live ? "live" : "replay", replans, commands_sent, (unsigned long long)rec.count(),
                     (unsigned long long)rec.digest(), run_dir.c_str());

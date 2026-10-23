@@ -145,8 +145,28 @@ cmd_run() {
     chooser=(--chooser-socket "$run/chooser.sock")
   fi
 
+  # 0b. The splat recon service (A2, D231; tee D220), only with ARIADNE_SPLAT=1: it LISTENS before the runtime
+  # connects. cpu_init backend (numpy/scipy/cv2 - A2's ariadne-recon image, never the console image). The tee is a
+  # silent no-op when this did not start, so gate runs are untouched.
+  local recon_env=()
+  # A pre-set ARIADNE_RECON_SOCK (container path) reaches the runtime as-is: the mock/test path - A2's
+  # service-side mock and my tee smoke both listen outside this script.
+  [ -n "${ARIADNE_RECON_SOCK:-}" ] && recon_env=(-e ARIADNE_RECON_SOCK="$ARIADNE_RECON_SOCK")
+  if [ "${ARIADNE_SPLAT:-0}" = "1" ]; then
+    CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-recon" --memory=2g --memory-swap=2g -u "$U" -e HOME=/tmp \
+      -v "$REPO_ROOT":/work -w /work/python "${ARIADNE_RECON_IMAGE:-ariadne-recon:1}" \
+      python -m ariadne_recon.live.service --listen "/work/$run/recon.sock" --out "/work/$run/splat" \
+      --scene "/work/$scene" --backend cpu_init --training-image rgb)")
+    local t0r; t0r=$(date +%s)
+    until [ -S "$REPO_ROOT/$run/recon.sock" ]; do
+      [ $(( $(date +%s) - t0r )) -lt 30 ] || { log "recon service not listening after 30 s (tee stays off)"; break; }
+      sleep 1
+    done
+    recon_env=(-e ARIADNE_RECON_SOCK="/work/$run/recon.sock")
+  fi
+
   # 1. The runtime listens first.
-  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work \
+  CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work "${recon_env[@]}" \
     -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
     -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
@@ -197,7 +217,8 @@ cmd_run() {
   # 4. Console, fed live, with a probe client so frames are served during the run.
   local port="${ARIADNE_CONSOLE_PORT:-8080}"
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
-    -p "127.0.0.1:$port:8080" -e ARIADNE_LIVE="/work/$run:/work/$scene" "$CONSOLE_IMAGE" \
+    -p "127.0.0.1:$port:8080" -e ARIADNE_LIVE="/work/$run:/work/$scene" \
+    -e ARIADNE_SPLAT_DIR="/work/$run/splat" -e ARIADNE_SCENE_DIR="/work/$scene" "$CONSOLE_IMAGE" \
     uvicorn operator_console.server:app --host 0.0.0.0 --port 8080 --log-level warning)")
   con="${CONTAINERS[-1]}"
   docker exec -d "$con" python3 -c "
