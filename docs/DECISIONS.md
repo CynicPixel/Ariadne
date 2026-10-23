@@ -4988,3 +4988,14 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
 
 **Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
 anchors never merge).
+
+## D218 (2026-10-24, B): D175 item 4 - the per-agent pipeline in ariadne_live, POC proven
+
+multiagent.enabled: per-agent A1 planners fed only through the radio (coordination-only CollabNodes over the
+seeded CommsNode, scenario yaml), the D175 SS5 barrier order with a 0.5 s radio tick ladder + delivery pump,
+share-nothing fork-join between barriers (no locks), auction picks replacing the centralised joint[k], the
+operator's received map + OperatorEgress driving the console. Evidence (20 s, 3 agents, lit maze_demo_0,
+lockstep, plain broker, ideal link): one component of 4 every barrier; bytes patch 6100 / bid 6880 / consensus
+1744; picks 6 coordinated / 3 no-consensus (barrier-1 lag, pre-registered) / 3 no-assignment (exactly-once
+dedup); double replay PASS; oracle A/B on the SAME binary reproduces digest 3d10d011018c42d9 byte-identical
+(multiagent:false = D175's oracle row, untouched). Runs: build/live/ma_smoke3, build/live/oracle_ab.
