@@ -1,0 +1,20 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: 7e515aabfa82486d-agent0
+frames: 1000
+dense_gt: true
+associated_poses: 1000  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 7.35476
+ate_se3: {rmse_m: 0.150596, mean_m: 0.12569, max_m: 0.534715, rotation_rmse_rad: 0.224424}
+ate_rmse_percent_of_path: 2.04761
+sim3_scale: 0.975871  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.0882064, rotation_rmse_rad: 0.0335001}
+vo: {lost_frames: 22, keyframes: 243, ba_runs: 226, ba_mean_cost_ratio: 0.879118, landmarks_alive_at_end: 257, graph_edges: 217, graph_version: 2458}
+stereo_match_valid_fraction: 0.783803
+stereo_match_by_third: {top: {valid: 4260, lk_lost: 345, fb: 471, off_row: 144, nonpositive: 17, disparity_mean_px: 55.4453, disparity_max_px: 123.765}, middle: {valid: 7525, lk_lost: 472, fb: 1157, off_row: 578, nonpositive: 161, disparity_mean_px: 48.8922, disparity_max_px: 124.729}, bottom: {valid: 4736, lk_lost: 502, fb: 534, off_row: 169, nonpositive: 7, disparity_mean_px: 58.1708, disparity_max_px: 123.732}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 4142, created: 2071, no_stereo: 2071, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 0, uncertain: 0}
+timing_ms: {track_mean: 12.7664, vo_track_mean: 4.57904, keyframe_mean: 122.9, opencv_threads: 4}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.219186, b: -0.00019959, c: -0.000273902, matches: 159, mad_px: 0.16656, slopes_fitted: true, keyframe: 2, attempts: 3, residual_after: {measured: true, a_px: -0.128696, b: 0.000108828, c: 0.000193602, max_abs_dy_px: 0.149696, matches: 117}}
+stereo_exposure_match: true
+keyframe_refined: {ate_rmse_m: 0.150415, ate_rotation_rmse_rad: 0.223998, rpe_1s_translation_rmse_m: 0.0880489}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 23, observations: 313703, invalid_at_entry: 0, chi2_failed: 2236, chi2_failed_fraction: 0.00712776, keyframe_observations_rejected: 1419, culled: 1811, exit_edges: 217, keyframes_held: 224, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 427, landmarks_ill_conditioned_at_solution: 8, marginal_degenerate: 0, inlier_sigma_px: 0.443983}
+lost: {motion: bridge, reanchor: every_frame, segments: 2, bridged_frames: 22, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 22}, keyframes_while_lost: 22, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}

@@ -4075,6 +4075,47 @@ service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam
   `ApplyPhotometric` and the wrapper): in `exposure_trace.csv`, every row's `applied_decision` equals the previous row's
   `decision`, and `applied_ns` is the stamp of the frame right after `decided_ns`.
 
+### D145–D147 Results (AWS, 2026-10-23, commit `649f156`, run 20261023T113916Z-cpux86-7b3f1b, ~$0.06)
+
+Evidence: `evaluation/runs/ph5/d145_rows_20261023T113916Z/`. Agent 0, 1000 frames, seed 1, `sim_v2_vo`, all 10 rows OK.
+
+| Row | What | ATE SE(3) | KF | lost |
+|---|---|---|---|---|
+| r01 | flat-field only (sim_v1_rad_flat), sensor D | 14.8 mm | 182 | 0 |
+| r02 | + Stage 3 at keyframes (D146) | 14.8 mm | 182 | 0 |
+| r03 | keyframe-cadence baseline | 14.6 mm | 179 | 0 |
+| r04 | + features on the proxy | 17.5 mm | 152 | 0 |
+| r05 | active exposure (replay controller) | 14.9 mm | 172 | 0 |
+| r06 | Failure E (+2 stops at 20 s), controller on | 16.1 mm | 169 | 0 |
+| r07 | Failure E, fixed exposure | 19.1 mm | 249 | 0 |
+| r08 | lamp at 50 % | 150.6 mm | 243 | 22 |
+| r09 | lamp at 15 % | 1317 mm | 749 | 223 |
+| r10 | fixed light, brightness-matched | 4.2 mm | 71 | 0 |
+
+- **D146 equality holds.** r02's `estimate_body.tum` is byte-identical to r01's (sha256 `4e4bf88c…`). The proxy runs at
+  every keyframe (182) and never touches tracking. Median proxy valid fraction 0.47; feature-mask fraction 0.22.
+- **Features on the proxy (r04 vs r03): negative.** ATE +2.9 mm and 27 fewer keyframes. Detecting on the
+  reflectance image does not help this sequence. Kept as a negative row; the default stays `features: raw`.
+- **Active exposure (r05 vs r01): neutral** without an event (14.9 vs 14.8 mm). 172 decisions: 148 metric, 24
+  overexposed, saturation ≤ 4.7 %, steps ≤ 0.5 stop. Known-gain LK rescaled the previous pyramid 69 times.
+- **D147's pre-stated trace checks pass exactly.** `applied_decision` equals the previous decision in 171/171 (r05)
+  and 168/168 (r06). `applied_ns` is the stamp of the frame after `decided_ns` in all of them. Latency is one frame
+  (50 ms at 20 Hz).
+- **Failure E (the overexposure failure-and-response scenario, plan 5.3).**
+  - With the controller, it reacts at the first keyframe after the event (t = 20.0 s, saturation 7.4 %) and steps
+    −0.5 stop per keyframe: exposure 1 → 0.71 → 0.5 → 0.35 → 0.25 → 0.18. Saturation is 0 by t = 22.35 s, and it
+    then backs off +0.375 stop.
+  - ATE 16.1 mm with the controller against 19.1 mm with fixed exposure, and 169 vs 249 keyframes (the fixed run
+    keyframes through the washed-out stretch).
+- **Lamp power (r08/r09): steep, and reported as a finding.** At 50 % the lamp costs 10× the ATE and 22 lost frames;
+  at 15 % tracking collapses (1.3 m, 223 lost, 749 keyframes). This is the OIVIO-style lamp sweep of D145.
+- **Fixed light, brightness-matched (r10): 4.2 mm, 71 KF.** That is 3.5× better than the carried lamp at matched
+  brightness, so a co-moving light costs accuracy on its own, independent of mean brightness. D145 asked exactly
+  this; the coverage difference (the fixed lights reach the far field) is the likely cause [UNVERIFIED: not
+  isolated].
+- **Not in these rows** (gate bullet 1 asks for them): repeatability, match precision and loop-closure precision per
+  radiometric stage, and the dust rows. They are recorded as open in D149.
+
 ## 2026-10-23 — D148: 5.5 measurement plan, fixed before the confined_v1 render is read — corridor gate ordering and the baseline sweep
 
 Written while the render was still recording (run 20261023T105356Z-gpu-155842, commit `8af6c71`); nothing below has
