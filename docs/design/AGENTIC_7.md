@@ -224,3 +224,44 @@ the operator endpoints and the websockets polled the telemetry tail concurrently
    the choice → the command → the mover's answer; at least one fallback or approval event exercised for real.
 2. Its replay reproduces the estimator outputs and the decisions (D152 check).
 3. The same scene with `chooser: classical`, and the §D162 comparison table, whatever it shows.
+
+## 4. Demo mode (D169): judges drive it live, so the loop must hold wall pace
+
+Gate runs stay lockstep + replay: that substrate is untouched and keeps producing the quantitative evidence. Demo
+mode is a separate live configuration (`mode: demo` in the live config) for the web endpoint, where the world runs
+at `real_time_factor` 1 and judges interact in real time. It changes four things, nothing else:
+
+1. **No lockstep.** The world never pauses. The mover keeps executing its current command until a newer one arrives
+   (receding horizon), so a slow replan degrades to a longer leg of the old plan, never a freeze.
+2. **Integration off the replan path.** Keyframes integrate into the planner's map on a background thread as they
+   arrive, serialized with `Plan` by one planner mutex (A1: `Plan` is a pure function of the integrated map plus the
+   `PlanContext`, so "the map at plan time" stays well-defined). The replan takes whatever is integrated when it
+   fires; `keyframes_integrated` in results.yaml says how far behind it ran.
+3. **Gate-only artifacts off.** The shadow TSDF and the per-replan slab/egress PNGs are skipped (`snapshots: false`);
+   the console renders from telemetry, not files.
+4. **The LLM is supervisory and non-blocking (maintainer direction, 2026-10-23).** Planning stays deterministic: at
+   every replan the classical pick (A1 planner's own choice within the risk gate) is commanded IMMEDIATELY - there is
+   no `ChooserLink::Wait` on the control path. The decision request still goes to the orchestrator with the same
+   facts; its answer is collected non-blocking at the NEXT replan and, if it names a different candidate that still
+   exists and passes the same validation (risk gate, approvals, reserve-return exemption), it is applied as an
+   override for that horizon; otherwise it is recorded `expired`. Approval-gated options are never taken
+   autonomously, exactly as in gate mode. The trace per decision still shows vision facts -> request -> answer ->
+   (applied | expired | fallback) -> command -> mover answer, which is what the agentic claim rests on (invariant 3);
+   `applied_at_s` names the horizon that acted on it.
+
+Honesty: demo runs are not the evidence substrate (no determinism claim is made from them); results.yaml carries
+`mode: demo`, and every number quoted in the submission keeps coming from lockstep + replay runs.
+
+Acceptance (M2, g4dn EGL, renderer string must name the NVIDIA device): a 2-agent then 3-agent run at RTF 1 where
+gz_stats holds >= 0.95x wall, no mover stall waits on a missing command, the per-decision trace is complete, and
+frame handling keeps up (drops, if any, are counted in the link stats and said out loud).
+
+Planner facts folded in (A1, 2026-10-23, read from phase4_planner.cpp, not memory): `Plan` is NOT pure - it carries
+incremental egress state (D* Lite + visibility graph updated in place) - so demo keeps ONE Plan caller and never
+reorders or reconstructs; "deterministic" means deterministic given the SEQUENCE of (map at plan time, context).
+`Integrate` calls may interleave arbitrarily between Plans under the single mutex; per-agent keyframe order must stay
+time order (track_ is the own-track polyline for the flown return route); cross-agent interleaving makes the demo map
+not bit-reproducible across runs, which is accepted and is exactly why the gate stays lockstep. Replan-while-moving:
+the mover's arrival rule and commanded-cell risk read the commanded cell, so a goal switch mid-leg is safe; the moving
+START is handled runtime-side - the planned path is trimmed to the waypoint nearest the agent's LATEST estimated pose
+before the command is sent (demo only), so a follow never backtracks to where the agent stood at plan time.
