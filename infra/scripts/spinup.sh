@@ -104,6 +104,8 @@ choose_placement() {
       --product-descriptions 'Linux/UNIX' --start-time "$(date -u +%FT%TZ)" \
       --query 'SpotPriceHistory[].[AvailabilityZone,SpotPrice]' --output text)"
     while read -r az p; do
+      # SPINUP_AVOID_AZ: space-separated AZs to skip, e.g. one that just answered InsufficientInstanceCapacity
+      case " ${SPINUP_AVOID_AZ:-} " in *" $az "*) continue ;; esac
       case " $SUBNETS_BY_AZ " in *" $az="*) best="$az $p"; break ;; esac
     done < <(sort -k2 -g <<< "$prices")
     [ -n "$best" ] || die "no current spot price for $TYPE in any default-subnet AZ"

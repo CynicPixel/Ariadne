@@ -30,7 +30,7 @@ account() { "$AWS" aws sts get-caller-identity --query Account --output text | t
 bucket() { "$AWS" tf main output -json runner | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifact_bucket"])'; }
 
 # local image -> ECR repo
-declare -A REPO=([ariadne/sim:dev]=ariadne/ariadne-sim [ariadne/core-dev:dev]=ariadne/ariadne-core [ariadne-console:1]=ariadne/ariadne-console)
+declare -A REPO=([ariadne/sim:dev]=ariadne/ariadne-sim [ariadne/core-dev:dev]=ariadne/ariadne-core [ariadne-console:1]=ariadne/ariadne-console [ariadne-orchestrator:1]=ariadne/ariadne-orchestrator)
 
 ref_of() {   # ECR reference of a local image, tagged by its own image id (content-addressed, not "latest")
   local img="$1" reg="$2" id
