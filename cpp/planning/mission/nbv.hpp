@@ -50,10 +50,20 @@ struct IgCounts {
     int voxels = 0;          // distinct voxels reached
 };
 
+/// What this agent's peers already know, as RECEIVED (D175): a 2D mask on the briefing grid, nonzero = some peer's
+/// patch has the column observed (free or occupied). Null everywhere in the centralised planner.
+struct PeerKnown {
+    const cv::Mat* mask = nullptr;   // CV_8U, the grid's size
+    GridFrame grid;
+    bool Known(const core::Vec3& p) const;
+};
+
 /// The frustum bundle from `eye` (world m) looking along `yaw` (rad, world, about +z). Rays stop at (and include)
-/// the first occupied voxel. `route_env` = Pack()ed voxel indices of the route envelope, or null.
+/// the first occupied voxel. `route_env` = Pack()ed voxel indices of the route envelope, or null. With `peer`, an
+/// own-unknown voxel in a peer-known column is no gain (no coverage, entropy or egress credit): the team has it.
 IgCounts RaycastIg(const TsdfMap& map, const core::Vec3& eye, double yaw, const RigFrustum& f,
-                   const std::unordered_set<int64_t>* route_env, const Box3& bounds = Box3{}, int grid = -1);
+                   const std::unordered_set<int64_t>* route_env, const Box3& bounds = Box3{}, int grid = -1,
+                   const PeerKnown* peer = nullptr);
 
 /// Binary entropy (bits) of a known voxel of weight w under D114's mapping; 1 for unknown.
 double VoxelEntropy(const TsdfVoxel* v, double w_min);
@@ -76,7 +86,7 @@ struct View {
 /// target's), the best `keep` by coverage (ties by sampling order).
 std::vector<View> SampleViews(const TsdfMap& map, const GridFrame& g, const cv::Mat& trav_a, const core::Vec3& target,
                               const SamplerParams& sp, const RigFrustum& f, const std::unordered_set<int64_t>* route_env,
-                              const Box3& bounds = Box3{});
+                              const Box3& bounds = Box3{}, const PeerKnown* peer = nullptr);
 
 struct PeerKeyframe {
     int agent = 0;
@@ -145,6 +155,7 @@ struct NbvInputs {
     bool risk_calibrated = false;              // D112's bar passed: the structural [PROXY] enters C_risk
     double t_s = 0;
     Box3 bounds;                               // the briefing's extent (rays leaving the building are not gain)
+    const cv::Mat* peer_known = nullptr;       // D175 per-agent planning: the received layer's known mask (grid), or null
 };
 
 struct NbvPlan {

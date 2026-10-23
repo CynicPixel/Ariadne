@@ -146,6 +146,11 @@ public:
     int Agents() const { return int(track_.size()); }
     /// How much of agent b's track agent a has received (its NBV peers): synced at replans while they share a component.
     size_t SharedTrack(int a, int b) const { return shared_.at(size_t(a)).at(size_t(b)); }
+    /// D175 per-agent planning: this planner is agent `self`'s OWN, fed only its own keyframes. Maps and egress on
+    /// that map, then NBV for `self` with the poses it RECEIVED (`peers`) and the received layer's known mask
+    /// (`peer_known`, null = none); no allocation (agents[self] only; the component's broker assigns).
+    Phase4Plan PlanOwn(double t_s, int self, const Phase4AgentInput& in, const std::vector<PeerKeyframe>& peers,
+                       const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs);
     std::pair<std::vector<std::pair<double, double>>, double> Route(const Phase4Plan& p, int agent, int i,
                                                                    const Cell& from) const;
     const TsdfMap& Map() const { return map_; }
@@ -154,6 +159,10 @@ public:
 
 private:
     cv::Mat PlanSpace(const TraversabilityMaps& m, const Cell& at) const;   // trav_a + the escape disc (D158)
+    void PlanMaps(Phase4Plan* out);   // traversability, body support, the egress replan (Plan and PlanOwn alike)
+    Phase4AgentPlan PlanAgent(double t_s, int a, const Phase4AgentInput& in, std::vector<PeerKeyframe> peers,
+                              const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs, const Phase4Plan& shared,
+                              const CoarseLayer& coarse) const;
     Cell CellOf(const core::Vec3& p) const;
 
     Phase4Briefing b_;

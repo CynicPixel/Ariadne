@@ -222,40 +222,70 @@ Phase4Plan Phase4Planner::Plan(double t_s, const std::vector<Phase4AgentInput>& 
     out.allocation.components = std::max(1, n_comp);
     if (n_comp > 1)
         out.allocation.partition_note = "allocation partition-aware; map and peers centralised [PROXY]";
-    out.maps = ComputeTraversability(map_, esdf_, b_.grid, p_.trav);
-    out.support = BodySupport(map_, b_.grid, p_.trav.responder, p_.support_band_lo, p_.support_band_hi);
-    EgressWeights w = p_.egress;
-    if (!p_.risk_calibrated) w.w_r = 0;   // invariant: the [PROXY] enters only after D112's bar
-    const cv::Mat pen = EgressPenalty(out.maps.clear_r, out.support, out.maps.risk, w);
-    out.egress = egress_.Replan(out.maps.trav_r, pen, out.support, out.maps.risk);
+    PlanMaps(&out);
     const CoarseLayer coarse = BuildCoarse(map_);
     for (int a = 0; a < n; ++a) {
         if (!agents[size_t(a)].active) continue;
-        NbvInputs ni;
-        ni.map = &map_, ni.frontiers = &fr_, ni.coarse = &coarse, ni.trav = &out.maps, ni.grid = b_.grid;
-        ni.route = &out.egress, ni.route_support = &out.support, ni.responder = p_.trav.responder;
-        ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
+        std::vector<PeerKeyframe> peers;
         for (int b = 0; b < n; ++b)   // every other agent's received track, ascending index (N = 2, linked: the other's)
             if (b != a)
-                for (size_t i = 0; i < shared_[size_t(a)][size_t(b)]; ++i) ni.peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
-        ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
-        ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
-        // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
-        cv::Mat ones(out.maps.trav_a.size(), CV_8U, cv::Scalar(1));
-        MaskKeepOut(a, dirs, b_.grid, &ones);
-        out.agents[a].keep_out = ones == 0;
-        TraversabilityMaps masked = out.maps;
-        masked.trav_a = out.maps.trav_a.clone();
-        masked.trav_a.setTo(0, out.agents[a].keep_out);
-        ni.trav = &masked;
-        AgentState st;
-        st.position = agents[a].position, st.e_used_m = agents[a].flown_m, st.own_keyframes = track_[a];
-        out.agents[a].nbv = PlanNbv(ni, a, st, p_.nbv);
-        out.agents[a].plan = PlanSpace(out.maps, CellOf(agents[a].position));
-        out.agents[a].plan.setTo(0, out.agents[a].keep_out);   // the escape disc never re-opens a keep_out
-        ApplyDirectives(a, dirs, agents[a].refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &out.agents[a]);
+                for (size_t i = 0; i < shared_[size_t(a)][size_t(b)]; ++i) peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
+        out.agents[size_t(a)] = PlanAgent(t_s, a, agents[size_t(a)], std::move(peers), nullptr, dirs, out, coarse);
     }
     Allocate(agents, G, component, &out);
+    return out;
+}
+
+void Phase4Planner::PlanMaps(Phase4Plan* out) {
+    out->maps = ComputeTraversability(map_, esdf_, b_.grid, p_.trav);
+    out->support = BodySupport(map_, b_.grid, p_.trav.responder, p_.support_band_lo, p_.support_band_hi);
+    EgressWeights w = p_.egress;
+    if (!p_.risk_calibrated) w.w_r = 0;   // invariant: the [PROXY] enters only after D112's bar
+    const cv::Mat pen = EgressPenalty(out->maps.clear_r, out->support, out->maps.risk, w);
+    out->egress = egress_.Replan(out->maps.trav_r, pen, out->support, out->maps.risk);
+}
+
+Phase4AgentPlan Phase4Planner::PlanAgent(double t_s, int a, const Phase4AgentInput& in, std::vector<PeerKeyframe> peers,
+                                         const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs,
+                                         const Phase4Plan& shared, const CoarseLayer& coarse) const {
+    Phase4AgentPlan ap;
+    NbvInputs ni;
+    ni.map = &map_, ni.frontiers = &fr_, ni.coarse = &coarse, ni.trav = &shared.maps, ni.grid = b_.grid;
+    ni.route = &shared.egress, ni.route_support = &shared.support, ni.responder = p_.trav.responder;
+    ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
+    ni.peers = std::move(peers);
+    ni.peer_known = peer_known;
+    ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
+    ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
+    // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
+    cv::Mat ones(shared.maps.trav_a.size(), CV_8U, cv::Scalar(1));
+    MaskKeepOut(a, dirs, b_.grid, &ones);
+    ap.keep_out = ones == 0;
+    TraversabilityMaps masked = shared.maps;
+    masked.trav_a = shared.maps.trav_a.clone();
+    masked.trav_a.setTo(0, ap.keep_out);
+    ni.trav = &masked;
+    AgentState st;
+    st.position = in.position, st.e_used_m = in.flown_m, st.own_keyframes = track_[size_t(a)];
+    ap.nbv = PlanNbv(ni, a, st, p_.nbv);
+    ap.plan = PlanSpace(shared.maps, CellOf(in.position));
+    ap.plan.setTo(0, ap.keep_out);   // the escape disc never re-opens a keep_out
+    ApplyDirectives(a, dirs, in.refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &ap);
+    return ap;
+}
+
+Phase4Plan Phase4Planner::PlanOwn(double t_s, int self, const Phase4AgentInput& in, const std::vector<PeerKeyframe>& peers,
+                                  const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs) {
+    if (self < 0 || self >= Agents()) throw std::out_of_range("Phase4Planner::PlanOwn: agent " + std::to_string(self));
+    Phase4Plan out;
+    out.t_s = t_s;
+    out.agents.resize(size_t(Agents()));
+    out.joint.assign(size_t(Agents()), -1);
+    out.allocation.method = "broker";   // allocated by the component's broker over TASK_BID (D175), not here
+    PlanMaps(&out);
+    if (!in.active) return out;
+    const CoarseLayer coarse = BuildCoarse(map_);
+    out.agents[size_t(self)] = PlanAgent(t_s, self, in, peers, peer_known, dirs, out, coarse);
     return out;
 }
 
