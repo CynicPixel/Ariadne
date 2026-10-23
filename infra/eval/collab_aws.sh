@@ -130,10 +130,12 @@ pool_b() {   # run the job file $1, P_B at a time
     -e OPENCV_FOR_THREADS_NUM=2 -e ARIADNE_GIT_COMMIT="$COMMIT" -e ARIADNE_GIT_DIRTY=false \
     ariadne/core-dev:dev bash -c "{}" < "$1"
 }
-cfg() {   # $1 = name, then key: value lines appended to the shared template
+cfg() {   # $1 = name, then top-level key: value lines that REPLACE the template's (sweep 0345a5: appending left the
+          # template's `arm: similarity` first, yaml-cpp kept the first duplicate, and every budgeted row ran unbudgeted)
   mkdir -p "$W/cfg"; local f="$W/cfg/$1"; shift
   cp "$REPO/configs/collab/collab_v2.yaml" "$f"
-  for kv in "$@"; do echo "$kv" >> "$f"; done
+  for kv in "$@"; do sed -i "/^${kv%%:*}:/d" "$f"; echo "$kv" >> "$f"; done
+  for kv in "$@"; do [ "$(grep -c "^${kv%%:*}:" "$f")" = 1 ] || fail "cfg $f: duplicate ${kv%%:*}"; done
 }
 
 if [[ " $STAGES " == *" B1 "* ]]; then
