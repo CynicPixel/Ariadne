@@ -5058,3 +5058,44 @@ confirmed with amendments by B (2026-10-24).
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
+
+## 2026-10-24 — D123–D124 (A1, proposed; 2.x SLAM's tests, M signs off): the arm64 GravityPgo divergence is a test-fixture defect
+
+**Finding** (`evaluation/runs/arm64/20261023T233147Z-cpuarm-1e25b3/README.md`, commit 1647d6b). Graviton's 2.71 deg
+against x86's 0.62 deg is not a numerical difference.
+- `Make()` builds each prior's noise as `Vec3(nz(gen), nz(gen), 0)`. The order in which C++ evaluates function
+  arguments is unspecified, so GCC x86-64 draws y first and aarch64 draws x first. The two architectures solve
+  different problems.
+- x86 forced to aarch64's order reproduces arm64 exactly (2.7104 deg, tilt 3.1702, seeds 14/100).
+- arm64's path is clean: converged, perturbation-stable, HAL ops bit-exact, and the same answer from a scalar LM and
+  with Eigen vectorisation off. **The arm64 path is not wrong; the COOL Arm-vs-Arm claim is unaffected.**
+
+**D123: brace every multi-draw RNG initialiser in the tests.**
+- 44 sites in 13 files (`sequencing_proposal.txt`, a dry run); none in `cpp/`.
+- `{a(g), b(g)}` is evaluated left to right by rule ([dcl.init.list]), even when it resolves to a constructor. Every
+  architecture then draws the same noise (aarch64's present order).
+- x86 test values change wherever the old order mattered: those tests' expectations were x86-order artefacts and
+  must be re-checked on both architectures in one run.
+- Add a CI grep that fails on the pattern (`Type(f(g), f(g)…)` with ≥ 2 draws).
+- Not applied: the files are 2.x's, and the auto-mode classifier rightly refused a scripted rewrite of them.
+
+**D124: GravityPgo's recovery test asserts something its fixture cannot deliver; redesign it, don't loosen it.**
+- Measured over 200 seeds (`conditioning.txt`), the fixture (200 keyframes, odometry rotation σ 0.01 rad per step,
+  priors every 10 keyframes at σ 2.3 deg, a 1.5 deg reference error) passes "gerr < 1 deg and tilt reduced" on
+  14–17 %. Median gerr is 2.0 deg.
+- Denser priors barely help: every keyframe at σ 1.0 deg gives median 0.80 deg and passes 61–63 %.
+- Reason [ASSUMPTION, a rough random-walk smoothing estimate, not derived in a test]:
+  - with only the anchor fixed and the tilt random-walking at 0.57 deg per step, gravity is observable mainly through
+    the priors near the anchor;
+  - that gives σ ≈ 0.7 deg per axis, a median of about 0.85 deg, matching the 0.80 measured;
+  - so the estimator looks about as efficient as the fixture allows. The bound, not the solver, is wrong.
+- **Proposed (recommended): a consistency test.**
+  - Over N = 50 seeds, compare each seed's gerr with the solver's own 2 × 2 marginal covariance of ĝ, taken from H
+    at the optimum.
+  - Assert that the mean NEES lies inside the 99 % χ²(2N)/N band. The priors are drawn with the noise the solver
+    assumes (generation σ = s/√info_scale).
+  - This tests what the feature claims ("the 2-DoF variable recovers the reference error as well as the information
+    allows") and holds on any architecture.
+- **Alternative:** a better-conditioned fixture plus a quantile bound. It needs odometry rotation noise small enough
+  that P(gerr < 1 deg) is at least 0.95, checked over 50 seeds before it becomes the bound.
+- Either way, the "tilt RMS reduced" check stays per seed.

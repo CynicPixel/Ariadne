@@ -423,7 +423,9 @@ int main(int argc, char** argv) {
         int pass_d = 0, pass_t = 0;
         for (int sd = 0; sd < N; ++sd) {
             std::mt19937 g2{uint32_t(sd)};
-            const Chain e = Make(g2, 200, 10, 2.3, 1.5);
+            const int every = std::getenv("EVERY") ? std::atoi(std::getenv("EVERY")) : 10;
+            const double sig = std::getenv("SIGMA") ? std::atof(std::getenv("SIGMA")) : 2.3;
+            const Chain e = Make(g2, 200, every, sig, 1.5);   // EVERY / SIGMA: fixture conditioning (default = the test's)
             const double t0 = TiltErrorDeg(e);
             const Out o = Solve(e, On()), t = Solve(e, Tight());
             pass_d += o.gerr < 1.0 && o.tilt < t0;
