@@ -1,0 +1,6 @@
+[remote 19:48:53] host: 16 vCPU, 30 GiB, disk 74G free
+[remote 19:49:12] build
+[remote 20:12:59] build PASSED in 1427 s
+[remote 20:13:06] save a827de5514fe
+[remote 20:14:59] upload 4.0G
+[remote 20:15:08] done: s3://ariadne-836505524290-eun1/runs/images/ariadne-recon-gpu-a827de5514fe.tar.zst (sha256:a827de5514fe8f9314f17418c9f84edd4a1c53af907a6a6d7ea8456aeb2f0caf)
