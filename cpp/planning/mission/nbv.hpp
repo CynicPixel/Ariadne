@@ -178,6 +178,15 @@ cv::Mat Bottleneck(const cv::Mat& plan, const cv::Mat& clr, const Cell& from, do
 /// passable, so views and paths ran through unobserved columns where clear_r = 0 (risk 1 on ~90 % of views; B).
 cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a);
 
+/// The return space of §21.4's hard rule: `plan` plus the agent's swept body along its own flown track (segments
+/// between consecutive track positions at body radius `body_m`, starting from the briefing entrance nearest the first
+/// position: entrances are the deployment points), minus every column the slab now marks occupied (a collapse on the
+/// way back is not passable). The forward rig never observes the space behind it, so the way back is not known-free
+/// although the body occupied it. Only the return distance and the return option's risk read it; views and the
+/// exploration plan stay known-free. `swept` (optional) receives the swept columns.
+cv::Mat FlownReturnSpace(const cv::Mat& plan, const cv::Mat& slab, const GridFrame& g, const std::vector<core::Vec3>& track,
+                         const std::vector<Cell>& entrances, double body_m, cv::Mat* swept = nullptr);
+
 /// D158's arrival rule (B, planner.hpp): the widest way to ARRIVE within `rad` cells of the goal = the max of the
 /// bottleneck map over that disc (a view goal sits at the edge of unknown space by design, so its own cell's clearance
 /// is not what a responder must pass). -1 if nothing in the disc is reachable.

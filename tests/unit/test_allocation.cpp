@@ -1,6 +1,6 @@
 // 4.4 allocation (design ALLOCATION_4.4 §7, D115 + correction): Table I row by row (expected actions written from
 // ALGORITHMS §22.3.1, not from the code); CBBA = SGA exactly at L_t = 1 (Theorem 1) within N_min D rounds; at L_t = 2
-// divergence only through eq. 6 tail releases, pinned by a hand-built stale-bid instance;
+// the insertion marginal is not DMG (pinned), so at L_t = 2 Johnson's bid warping: eq. 9, conflict-free, N_min D;
 // conflict-free convergence on a jointly connected switching graph within rho N_min; Theorem 2's 50 % bound against
 // brute force; the two-agent sorted scan equals brute force; eq. 7 holds for the time-discounted score and fails for
 // an additive one (the reason for D115's score).
@@ -143,11 +143,13 @@ TEST(Cbba, EqualsSequentialGreedyAtBundleOne) {
     }
 }
 
-TEST(Cbba, BundleTwoDivergesOnlyThroughTailReleases) {
-    // L_t = 2: converged and conflict-free always; CBBA != SGA can happen, and every divergence carries an eq. 6 tail
-    // release (D115 correction). The rounds and 50 % checks are EMPIRICAL here (Theorems 1-2 rest on SGA equality).
+TEST(Cbba, BundleTwoWithBidWarping) {
+    // L_t = 2 (the reported row): the insertion marginal is not DMG (DiscountedInsertionMarginalIsNotDmg), so
+    // Theorem 1's SGA equality does not apply. With Johnson et al.'s bid warping (CDC 2012, eq. 6) the broadcast bids
+    // never increase along a bundle (Choi eq. 9), which is asserted; conflict-free convergence within N_min D (+1
+    // detection round) is asserted; the divergence from raw-score SGA and the ratio to brute force are reported.
     std::mt19937 rng(116);
-    int diverged = 0, total = 0, over_bound = 0;
+    int diverged = 0, total = 0;
     double worst = 1;
     for (int trial = 0; trial < 1000; ++trial) {
         const int U = 2 + trial % 3, N = 3 + trial % 6;   // small enough for brute force
@@ -158,21 +160,19 @@ TEST(Cbba, BundleTwoDivergesOnlyThroughTailReleases) {
         const Allocation g = SequentialGreedy(in);
         ASSERT_TRUE(c.converged) << trial;
         std::vector<int> owners(size_t(N), 0);
-        for (const auto& a : c.agents)
+        for (const auto& a : c.agents) {
             for (int j : a.bundle) ++owners[size_t(j)];
-        for (int o : owners) ASSERT_LE(o, 1) << "conflict, trial " << trial;
-        ++total;
-        if (c.winner != g.winner) {
-            ++diverged;
-            EXPECT_GT(c.tail_releases, 0u) << "a divergence without the stale-bid signature: trial " << trial;
+            for (size_t n = 1; n < a.bids.size(); ++n) ASSERT_LE(a.bids[n], a.bids[n - 1]) << "eq. 9, trial " << trial;
         }
-        over_bound += c.rounds > std::min(N, U * 2) * D + 1;
+        for (int o : owners) ASSERT_LE(o, 1) << "conflict, trial " << trial;
+        ASSERT_LE(c.rounds, std::min(N, U * 2) * D + 1) << "N_min D, trial " << trial;
+        ++total;
+        diverged += c.winner != g.winner;
         const double opt = BruteForceOptimum(in);
         if (opt > 0) worst = std::min(worst, c.total / opt);
         EXPECT_GE(c.total, 0.5 * opt - 1e-12) << "empirical at L_t = 2; trial " << trial;
     }
-    std::printf("[cbba] L_t=2: %d / %d diverge from SGA (all with tail releases); worst CBBA/opt %.3f; rounds over N_min D: %d\n",
-                diverged, total, worst, over_bound);
+    std::printf("[cbba] L_t=2 warped: %d / %d differ from raw-score SGA; worst CBBA/opt %.3f\n", diverged, total, worst);
 }
 
 TEST(Cbba, StaleSecondSlotBidRegression) {
@@ -205,6 +205,27 @@ TEST(Cbba, StaleSecondSlotBidRegression) {
     EXPECT_GE(c.tail_releases, 1u);
     EXPECT_NEAR(Marginal(in, 0, {0}, 1), 15 * std::exp(-2.0), 1e-12) << "A's stale second-slot bid on Y";
     EXPECT_NEAR(Marginal(in, 0, {2}, 1), 15 * std::exp(-4.0), 1e-12) << "A's re-bid on Y behind W";
+}
+
+TEST(Cbba, DiscountedInsertionMarginalIsNotDmg) {
+    // Choi eq. 7 needs c_ij[b] >= c_ij[b (+)end {k}] for EVERY b; eqs. 11-12's argument (each task arrives later on a
+    // longer path) covers the path score, not its insertion marginal. The stale-bid instance's agent A: Y behind W
+    // (path W) earns 15 e^-4 = 0.275; once X is in the path (X, W), Y slots between them and earns more.
+    const std::vector<double> pos_t = {1, 2, -1, 11, 12};
+    AuctionInstance in;
+    in.n_agents = 1, in.max_bundle = 3, in.task_ids = {0, 1, 2, 3, 4};
+    in.value = {{10, 15, 8, 0, 0}};
+    in.rate = {1.0};
+    in.d0.assign(1, std::vector<double>(5));
+    in.leg.assign(1, std::vector<std::vector<double>>(5, std::vector<double>(5)));
+    for (int j = 0; j < 5; ++j) {
+        in.d0[0][size_t(j)] = std::abs(pos_t[size_t(j)]);
+        for (int k = 0; k < 5; ++k) in.leg[0][size_t(j)][size_t(k)] = std::abs(pos_t[size_t(j)] - pos_t[size_t(k)]);
+    }
+    const double before = Marginal(in, 0, {2}, 1), after = Marginal(in, 0, {0, 2}, 1);
+    EXPECT_NEAR(before, 15 * std::exp(-4.0), 1e-12);
+    EXPECT_NEAR(after, 1.6856362775989622, 1e-9);   // scratchpad dmg check (Python port of PathScore / Marginal)
+    EXPECT_GT(after, before) << "eq. 7 fails: the marginal rose when X joined the bundle";
 }
 
 TEST(Cbba, ConflictFreeOnSwitchingGraph) {
