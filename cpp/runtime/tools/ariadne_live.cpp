@@ -1443,6 +1443,26 @@ int main(int argc, char** argv) {
                 const auto ma_node = [&](int nk) -> ac::CollabNode& {
                     return ma->collab ? ma->collab->fleet().node(ac::AgentId(nk)) : *ma->nodes[size_t(nk)];
                 };
+                // D179b: under collab, ONE snapshot per barrier (taken right after the ladder) serves every
+                // component / heartbeat / acked read, so all five sites see one tick's state - frozen in Publish
+                // after Deliver+Tick, logged by version, replay-identical. Without collab the nodes are ours and
+                // the direct reads stand.
+                std::shared_ptr<const live::CollabSnapshot> csnap;
+                const auto ma_comp = [&](int nk) {
+                    return csnap ? csnap->agent.at(ac::AgentId(nk)).component : ma_node(nk).Component();
+                };
+                const auto ma_hb = [&](int nk, int nj) -> std::optional<core::HeartbeatValue> {
+                    if (!csnap) return ma_node(nk).LastHeartbeat(ac::AgentId(nj));
+                    const auto& hb = csnap->agent.at(ac::AgentId(nk)).heartbeat;
+                    const auto it = hb.find(ac::AgentId(nj));
+                    return it == hb.end() ? std::nullopt : std::optional<core::HeartbeatValue>(it->second);
+                };
+                const auto ma_acked = [&](int nk, int nj) -> uint64_t {
+                    if (!csnap) return ma_node(nk).AckedPatchVersion(ac::AgentId(nj));
+                    const auto& ap = csnap->agent.at(ac::AgentId(nk)).acked_patch;
+                    const auto it = ap.find(ac::AgentId(nj));
+                    return it == ap.end() ? 0 : it->second;
+                };
                 // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
                 // (1) The comms ticks for (T_prev, T] run BEFORE the planners (D175 SS5), nodes in ascending id
                 // per rung: the one seeded, single-threaded step. The rung spacing is the heartbeat period
@@ -1466,9 +1486,10 @@ int main(int argc, char** argv) {
                             if (int(d.to) <= NA) ma->nodes[size_t(d.to)]->OnDatagram(d, t_now);
                         for (auto& nd : ma->nodes) nd->Tick(t_now, ma->comms->network());
                     }
+                    if (ma->collab) csnap = ma->collab->Snapshot(T);   // D179b: the barrier's one atomic view
                     if (ma->collab) {   // D174 §4 feedback + the panel, at the barrier
-                        // D179: ONE atomically swapped snapshot per barrier (invariant 2), logged by version.
-                        const auto snap = ma->collab->Snapshot(T);
+                        // (csnap was taken right after the ladder: the same atomic value serves the whole barrier)
+                        const auto& snap = csnap;
                         {   // adopted frames move the briefing constants (deliver_frame's telemetry reads them)
                             std::lock_guard<std::mutex> g(ma->two_mu);
                             for (const auto& [ck, Tk] : snap->T_O0_O)
@@ -1531,7 +1552,7 @@ int main(int argc, char** argv) {
                 // (3) Component brokers assign from the bids that ARRIVED (the T - replan lag is the pre-registered
                 // coordination cost, D175 SS8.3). Sub-ms, serial. The consensus reaches members at the next tick.
                 for (int k = 0; k < NA; ++k) {
-                    const auto comp = ma_node(k).Component();
+                    const auto comp = ma_comp(k);
                     if (int(comp.broker) != k) continue;
                     multi::ComponentInfo ci;
                     ci.broker = k;
@@ -1565,12 +1586,12 @@ int main(int argc, char** argv) {
                     std::vector<std::thread> workers;
                     workers.reserve(size_t(NA));
                     for (int k = 0; k < NA; ++k) workers.emplace_back([&, k] {
-                        const auto comp = ma_node(k).Component();
+                        const auto comp = ma_comp(k);
                         const uint32_t epoch = uint32_t(comp.epoch.counter);
                         std::vector<planning::PeerKeyframe> peers;
                         for (int j = 0; j < NA; ++j) {
                             if (j == k) continue;
-                            if (const auto h = ma_node(k).LastHeartbeat(ac::AgentId(j))) {
+                            if (const auto h = ma_hb(k, j)) {
                                 const core::SE3 Twj = brief.T_W_O[size_t(j)] * ac::FromPoseValue(h->pose);
                                 peers.push_back({j, int64_t(h->keyframe_watermark), Twj.t});
                             }
@@ -1586,7 +1607,7 @@ int main(int argc, char** argv) {
                         for (int j = 0; j <= NA; ++j) {
                             if (j == k) continue;
                             auto patch = ma->exporters[size_t(k)].Export(
-                                ma_node(k).AckedPatchVersion(ac::AgentId(j)), epoch, T);
+                                ma_acked(k, j), epoch, T);
                             if (!patch.blocks.empty())
                                 patches_out[size_t(k)].push_back({j, live::ToWire(patch, core::FrameTag{ac::AgentId(k), 0})});
                         }
@@ -1636,7 +1657,9 @@ int main(int argc, char** argv) {
                 for (int k = 0; k < NA; ++k) {
                     plan_out.agents[size_t(k)] = plans[size_t(k)].agents[size_t(k)];
                     plan_out.joint[size_t(k)] = ma_picks[size_t(k)].option;
-                    const auto comp = ma_node(k).Component();
+                    // under collab: the component as the agent SAW IT when it picked (the pre-send snapshot);
+                    // the post-consensus view appears in the next barrier's line
+                    const auto comp = ma_comp(k);
                     mt << (k ? "," : "") << "{\"pick\":" << ma_picks[size_t(k)].option << ",\"why\":\""
                        << JsonEscape(ma_picks[size_t(k)].why) << "\",\"broker\":" << int(comp.broker)
                        << ",\"members\":" << comp.members.size() << ",\"epoch\":" << comp.epoch.counter << "}";
