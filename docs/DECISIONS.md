@@ -3512,6 +3512,15 @@ because Zhang's value was not transcribed. A closed-loop test settles it without
 Tests: test_opencv ExposureControl/Falloff/DegradationSrgb 14/14, test_numerical Degradation 25/25, test_unit
 Config/Degrad 20/20.
 
+- **Correction (2026-10-23, D148 run).** "Recorded and verified" overstated what had been done: the sweep had never
+  been recorded end to end. The first full render (run 20261023T105356Z-gpu-155842, g4dn, ~$0.088) failed twice:
+  - `/tf_static`: the canonical tool listed {left, right} only. It is fixed now: every `camera` sensor on base_link,
+    left and right still required, 12 transforms on confined_v1_0 checked in the sim image. Stereo rigs keep their
+    order, so their canonical bags should be unchanged; to verify in the pre-merge determinism run.
+  - Writer backlog: 12 RGB 1280×720 streams plus depth at 20 Hz exceeded the recorder's 4 GiB cap at t ≈ 70 s, and
+    it aborted rather than drop messages (D40). The one-pass sweep is therefore not recordable on a g4dn as
+    designed. Splitting it (passes or agents) is a decision for the maintainer (D148/D149).
+
 ## 2026-10-23 — D139: the headlamp dust model in D (replaces D135's lamp airlight as the physics; ALGORITHMS §10.2)
 
 `dust_model: headlamp` (opt-in; it requires `dust_order: pre_sensor` explicitly, because it is light in the medium).
