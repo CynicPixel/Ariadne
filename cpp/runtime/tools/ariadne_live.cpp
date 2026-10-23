@@ -324,7 +324,9 @@ int main(int argc, char** argv) {
         fs::create_directories(run_dir / "raw");
         Lines trace(run_dir / "trace.jsonl"), commands(run_dir / "commands.jsonl"),
             mover_state(run_dir / "mover_state.jsonl"), telemetry(run_dir / "telemetry.jsonl"),
-            link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl");
+            link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl"),
+            timing_log(run_dir / "timing.jsonl");
+        const auto wall_start = std::chrono::steady_clock::now();
 
         // --- topics (mission_live.json) -------------------------------------------------------------------
         const YAML::Node mj = YAML::LoadFile(scene + "/mission_live.json");
@@ -524,8 +526,26 @@ int main(int argc, char** argv) {
         std::thread vo[2];
         std::unique_ptr<live::LiveSimSource> sources[2];
         std::mutex estimator_turn;   // D152a: one frame at a time through the estimators
+        struct TimeAgg {   // D167: per-agent frame timing, for results.yaml (the raw series is timing.jsonl)
+            std::mutex mu;
+            long n = 0;
+            double wait = 0, lock = 0, track = 0, max_track = 0, max_lock = 0;
+        } tagg[2];
         for (int k = 0; k < 2; ++k) {
             sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
+            sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) {
+                {
+                    std::lock_guard<std::mutex> g(tagg[k].mu);
+                    ++tagg[k].n, tagg[k].wait += w, tagg[k].lock += l, tagg[k].track += tr;
+                    tagg[k].max_track = std::max(tagg[k].max_track, tr);
+                    tagg[k].max_lock = std::max(tagg[k].max_lock, l);
+                }
+                std::ostringstream o;
+                o.precision(6);
+                o << "{\"agent\":" << k << ",\"t_s\":" << t_ns * 1e-9 << ",\"wait_s\":" << w << ",\"lock_s\":" << l
+                  << ",\"track_s\":" << tr << "}";
+                timing_log.Put(o.str());
+            };
             vo[k] = std::thread([&, k] {
                 AgentLane& L = lanes[k];
                 tools::StereoVoArgs a = va;
@@ -1176,11 +1196,19 @@ int main(int argc, char** argv) {
             << "\nreorder_released_on_timeout: " << reorder_timeouts
             << "\nreorder_released_out_of_order: " << reorder_order_breaks
             << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
-            << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";
+            << "\nrefused_goals: " << refused_goals.size() << "\n";
+        const double wall_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall_start).count();
+        res << "wall_s: " << wall_s << "\nend_to_end_rtf: " << (wall_s > 0 ? lc.end_s / wall_s : 0)
+            << "   # sim seconds per wall second, whole run incl. startup; gz's own view is gz_stats.jsonl\n"
+            << "agents:\n";
         for (int k = 0; k < 2; ++k) {
+            const long n = std::max(1L, tagg[k].n);
             res << "  - {agent: " << k << ", frames: " << lanes[k].frames << ", keyframes: " << lanes[k].keyframes
                 << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k]
-                << ", image_queue_max_depth: " << lanes[k].images.max_depth() << "}\n";
+                << ", image_queue_max_depth: " << lanes[k].images.max_depth()
+                << ", track_mean_ms: " << 1000 * tagg[k].track / n << ", track_max_ms: " << 1000 * tagg[k].max_track
+                << ", lock_mean_ms: " << 1000 * tagg[k].lock / n << ", lock_max_ms: " << 1000 * tagg[k].max_lock
+                << ", queue_wait_mean_ms: " << 1000 * tagg[k].wait / n << "}\n";
         }
         res << "rays: " << rays << "\n";
         res.close();

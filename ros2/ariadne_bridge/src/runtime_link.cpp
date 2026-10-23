@@ -31,8 +31,10 @@
 #include <std_msgs/msg/string.hpp>
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <deque>
 #include <fstream>
 #include <map>
 #include <mutex>
@@ -63,10 +65,6 @@ public:
                     throw std::runtime_error("RuntimeLink: unsupported service type " + type);
                 }
                 control_ = create_client<ros_gz_interfaces::srv::ControlWorld>(e["service_name"].as<std::string>());
-                clock_sub_ = create_subscription<rosgraph_msgs::msg::Clock>(
-                    "/clock", rclcpp::QoS(10), [this](const rosgraph_msgs::msg::Clock::SharedPtr m) {
-                        clock_ns_ = int64_t(m->clock.sec) * 1000000000 + m->clock.nanosec;
-                    });
                 continue;
             }
             const std::string topic = e["ros_topic_name"].as<std::string>();
@@ -84,6 +82,16 @@ public:
                 throw std::runtime_error("RuntimeLink: unsupported direction " + dir);
             }
         }
+        // D167 timers: /clock (bridged but never forwarded) feeds a (sim ns, wall) ring; each forwarded message's
+        // bridge latency = wall at forward - wall when /clock first reached its stamp. Aggregates go out in #stats.
+        clock_sub_ = create_subscription<rosgraph_msgs::msg::Clock>(
+            "/clock", rclcpp::QoS(100), [this](const rosgraph_msgs::msg::Clock::SharedPtr m) {
+                const int64_t t = int64_t(m->clock.sec) * 1000000000 + m->clock.nanosec;
+                clock_ns_ = t;
+                std::lock_guard<std::mutex> lk(lat_mu_);
+                clock_ring_.emplace_back(t, std::chrono::steady_clock::now());
+                if (clock_ring_.size() > 8192) clock_ring_.pop_front();
+            });
         reader_ = std::thread([this] { ReadCommands(); });
         ready_timer_ = create_wall_timer(std::chrono::milliseconds(200), [this] { CheckReady(); });
         stats_timer_ = create_wall_timer(std::chrono::seconds(5), [this] { SendStats(); });
@@ -119,6 +127,8 @@ private:
                                                        ser->serialize_message(m.get(), sm.get());
                                                    }
                                                    Send(topic, r.buffer, r.buffer_length);
+                                                   const int64_t st = StampNs(*m);
+                                                   if (st >= 0) NoteLatency(topic, st);
                                                }));
         received_[topic] = 0;
     }
@@ -132,6 +142,31 @@ private:
         else if (type == "std_msgs/msg/String") SubscribeTyped<std_msgs::msg::String>(topic);
         else throw std::runtime_error("RuntimeLink: unsupported sensor type " + type + " on " + topic);
         forwarded_.push_back(topic);
+    }
+
+    template <typename T, typename = void>
+    struct HasHeader : std::false_type {};
+    template <typename T>
+    struct HasHeader<T, std::void_t<decltype(std::declval<T>().header)>> : std::true_type {};
+
+    template <typename T>
+    static int64_t StampNs(const T& m) {
+        if constexpr (HasHeader<T>::value) return int64_t(m.header.stamp.sec) * 1000000000 + m.header.stamp.nanosec;
+        else return -1;
+    }
+
+    void NoteLatency(const std::string& topic, int64_t stamp_ns) {
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lk(lat_mu_);
+        const auto it = std::lower_bound(clock_ring_.begin(), clock_ring_.end(), stamp_ns,
+                                         [](const auto& e, int64_t v) { return e.first < v; });
+        if (it == clock_ring_.end()) {   // /clock has not caught the stamp up yet: no reference, skip the sample
+            ++lat_skipped_;
+            return;
+        }
+        const double ms = std::chrono::duration<double, std::milli>(now - it->second).count();
+        auto& a = lat_[topic];
+        ++a.n, a.sum_ms += ms, a.max_ms = std::max(a.max_ms, ms);
     }
 
     void Send(const std::string& topic, const uint8_t* data, size_t n) {
@@ -222,7 +257,17 @@ private:
             js << (first ? "" : ",") << "\"" << t << "\":" << n;
             first = false;
         }
-        js << "},\"dropped_link_closed\":{";
+        js << "},\"bridge_latency_ms\":{";
+        {
+            std::lock_guard<std::mutex> lat_lk(lat_mu_);
+            bool f2 = true;
+            for (const auto& [t, a] : lat_) {
+                js << (f2 ? "" : ",") << "\"" << t << "\":{\"mean\":" << (a.n ? a.sum_ms / double(a.n) : 0)
+                   << ",\"max\":" << a.max_ms << ",\"n\":" << a.n << "}";
+                f2 = false;
+            }
+            js << "},\"latency_samples_skipped\":" << lat_skipped_ << ",\"dropped_link_closed\":{";
+        }
         first = true;
         for (const auto& [t, n] : dropped_) {
             js << (first ? "" : ",") << "\"" << t << "\":" << n;
@@ -247,6 +292,14 @@ private:
     std::thread reader_;
     rclcpp::Client<ros_gz_interfaces::srv::ControlWorld>::SharedPtr control_;   // lockstep only
     rclcpp::Subscription<rosgraph_msgs::msg::Clock>::SharedPtr clock_sub_;
+    struct Lat {
+        long n = 0;
+        double sum_ms = 0, max_ms = 0;
+    };
+    std::mutex lat_mu_;
+    std::deque<std::pair<int64_t, std::chrono::steady_clock::time_point>> clock_ring_;   // guarded by lat_mu_
+    std::map<std::string, Lat> lat_;                                                     // guarded by lat_mu_
+    long lat_skipped_ = 0;                                                               // guarded by lat_mu_
     std::atomic<int64_t> clock_ns_{-1};
     rclcpp::TimerBase::SharedPtr ready_timer_, stats_timer_;
 };

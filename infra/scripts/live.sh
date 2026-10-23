@@ -165,6 +165,12 @@ cmd_run() {
     sleep 2
   done
   log "link ready: $(cat "$REPO_ROOT/$run/link.ready")"
+  # D167 timers: gz's achieved RTF straight from the world stats topic, and the GL renderer string (D155: on g4dn
+  # this must name the NVIDIA device; llvmpipe here means the GPU was NOT used).
+  docker exec -d "$sim" bash -c "gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" || true
+  { docker exec "$sim" bash -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
+      || echo "renderer: ogre2.log not found at probe time"; } > "$REPO_ROOT/$run/renderer.txt" 2>&1 || true
+  log "renderer: $(head -1 "$REPO_ROOT/$run/renderer.txt" 2>/dev/null)"
   if grep -q '^lockstep: *true' "$REPO_ROOT/$live_cfg"; then
     log "lockstep (D165): the runtime runs the world barrier to barrier"
   else
