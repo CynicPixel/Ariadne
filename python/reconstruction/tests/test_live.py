@@ -162,7 +162,7 @@ def test_service_cpu_init_writes_table_and_chunks_labelled(tmp_path):
     assert sorted(p.name for p in (out / "chunks").iterdir()) == [row["chunk"]]     # replaced chunks are removed
     assert len((out / "service_log.jsonl").read_text().splitlines()) == 3
     m = json.loads((out / "manifest.json").read_text())
-    assert m["splat_backend"] == "cpu_init" and m["spool_schema"] == 2
+    assert m["splat_backend"] == "cpu_init" and m["spool_schema"] == [2]
 
 
 def test_service_refuses_a_keyframe_without_the_proxy(tmp_path):
@@ -291,3 +291,24 @@ def test_set_placement_moves_the_table_without_new_chunks(tmp_path):
     t = json.loads((tmp_path / "live" / "table.json").read_text())
     assert t["version"] == v + 1 and sorted(p.name for p in (tmp_path / "live" / "chunks").iterdir()) == chunks
     np.testing.assert_allclose(np.asarray(t["submaps"][0]["T_W_anchor"]).reshape(4, 4), T, atol=1e-12)
+
+
+def test_one_spool_per_agent_is_briefing_only_and_never_repeats_an_agent(tmp_path):
+    import yaml
+    from ariadne_recon.live import service
+    parts = []
+    for agent in (0, 1):   # split a 2-agent spool into per-agent spools, as ariadne_sim_vo --spool writes them
+        sp = _spool_v3_rgb(tmp_path / f"s{agent}")
+        y = yaml.safe_load((sp / "spool.yaml").read_text())
+        y["bundles"] = [b for b in y["bundles"] if b["agent"] == agent]
+        (sp / "spool.yaml").write_text(yaml.safe_dump(y))
+        parts.append(str(sp))
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 0.0), (5.0, 2.0, 180.0)])
+    base = ["--backend", "cpu_init", "--training-image", "rgb", "--scene", str(scene)]
+    assert service.main(["--spool", *parts, "--out", str(tmp_path / "b")] + base) == 0
+    _, rows = _rows(tmp_path / "b")
+    assert set(rows) == {0, 1}
+    with pytest.raises(ValueError, match="one composed spool"):
+        service.main(["--spool", *parts, "--out", str(tmp_path / "m"), "--placement", "merges"] + base)
+    with pytest.raises(SystemExit, match="one spool per agent"):
+        service.main(["--spool", parts[0], parts[0], "--out", str(tmp_path / "d")] + base)

@@ -49,15 +49,20 @@ def briefing_T_W_O(scene_dir: str | Path, agent: int) -> np.ndarray:
     return T_W_B @ T_B_C
 
 
-def placements(sp: Spool, mode: str, scene_dir: str | Path | None) -> tuple[dict[int, np.ndarray], dict[int, str]]:
-    """(agent -> T_W_O for every placeable agent, agent -> why it is not placed)."""
-    agents = sorted({b.agent for b in sp.bundles})
+def placements(spools: list[Spool], mode: str, scene_dir: str | Path | None
+               ) -> tuple[dict[int, np.ndarray], dict[int, str]]:
+    """(agent -> T_W_O for every placeable agent, agent -> why it is not placed). `briefing` takes any number of
+    spools (one per agent is the usual case); `merges` reads the merges of ONE spool that holds every agent."""
+    agents = sorted({b.agent for sp in spools for b in sp.bundles})
     if mode == "briefing":
         if scene_dir is None:
             raise ValueError("placement 'briefing' needs the scene (--scene)")
         return {k: briefing_T_W_O(scene_dir, k) for k in agents}, {}
     if mode != "merges":
         raise ValueError(f"placement {mode!r} is not briefing|merges")
+    if len(spools) != 1:
+        raise ValueError("placement 'merges' reads one composed spool (compose_mission_spool.py), not several")
+    (sp,) = spools
     T_W_O0 = briefing_T_W_O(scene_dir, 0) if scene_dir is not None else np.eye(4)
     placed, unplaced = {0: T_W_O0} if 0 in agents else {}, {}
     for k in agents:

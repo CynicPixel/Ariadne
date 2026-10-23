@@ -1,6 +1,6 @@
 """The reconstruction service loop (RECON_6 §1/§3; D190, D194, D195): keyframes in -> submap chunks + table out.
 
-  python -m ariadne_recon.live.service --spool DIR --out SPLAT_DIR [--backend gpu|cpu_init]
+  python -m ariadne_recon.live.service --spool DIR [DIR ...] --out SPLAT_DIR [--scene DIR] [--placement briefing|merges] [--backend gpu|cpu_init]
          [--training-image albedo_proxy|rgb] [--iters N | --budget-ms MS] [--export-period-s 2]
 
 Input: a spool (schema 2 for the albedo proxy; replay from files alone). The live `#kf` socket feeds the same
@@ -148,10 +148,13 @@ class Service:
         self.log.close()
 
 
-def replay(sp: Spool, svc: Service, training_image: str, max_keyframes: int = 0) -> int:
-    """Every keyframe of a placed agent, in time order; agents without a placement are skipped."""
+def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes: int = 0) -> int:
+    """Every keyframe of a placed agent, all spools merged in time order; agents without a placement are skipped."""
     n = 0
-    for b in sorted(sp.keyframes(), key=lambda b: (b.t_ns, b.agent)):
+    keyframes = [b for sp in spools for b in sp.keyframes()]
+    if len({(b.agent, b.kf_id) for b in keyframes}) != len(keyframes):
+        raise SystemExit("the spools repeat an (agent, keyframe): one spool per agent")
+    for b in sorted(keyframes, key=lambda b: (b.t_ns, b.agent)):
         if b.agent not in svc.T_W_O:
             continue
         if training_image == "albedo_proxy":
@@ -171,7 +174,7 @@ def replay(sp: Spool, svc: Service, training_image: str, max_keyframes: int = 0)
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--spool", required=True)
+    ap.add_argument("--spool", required=True, nargs="+", help="one composed spool, or one spool per agent")
     ap.add_argument("--out", required=True)
     ap.add_argument("--backend", choices=("gpu", "cpu_init"), default="gpu")
     ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="rgb")   # D199: lit demo
@@ -183,7 +186,7 @@ def main(argv=None) -> int:
     ap.add_argument("--placement", choices=("briefing", "merges"), default=None,
                     help="default: briefing with --scene, merges without")
     a = ap.parse_args(argv)
-    sp = load(a.spool)
+    spools = [load(s) for s in a.spool]
     channels = 1 if a.training_image == "albedo_proxy" else 3
     if a.backend == "gpu":
         from .trainer import LiveTrainer, TrainParams
@@ -193,17 +196,17 @@ def main(argv=None) -> int:
     out = Path(a.out)
     svc = Service(out, a.backend, a.training_image, trainer, a.export_period_s)
     mode = a.placement or ("briefing" if a.scene else "merges")
-    placed, unplaced = placements(sp, mode, a.scene)
+    placed, unplaced = placements(spools, mode, a.scene)
     for k, T in placed.items():
         svc.set_placement(k, T)
     for k, why in unplaced.items():
         print(f"service: agent {k} not placed, not drawn: {why}")
     t0 = time.time()
-    n = replay(sp, svc, a.training_image, a.max_keyframes)
+    n = replay(spools, svc, a.training_image, a.max_keyframes)
     svc.finish()
     (out / "manifest.json").write_text(json.dumps({
-        "tool": "ariadne_recon.live.service", "spool": str(a.spool), "spool_run_id": sp.run_id,
-        "spool_schema": sp.schema_version, "backend": a.backend,
+        "tool": "ariadne_recon.live.service", "spool": a.spool, "spool_run_id": [sp.run_id for sp in spools],
+        "spool_schema": [sp.schema_version for sp in spools], "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
         "iters": a.iters, "budget_ms": a.budget_ms, "keyframes": n, "wall_s": round(time.time() - t0, 2),
         "placement": {"mode": mode, "scene": a.scene, "world": "mission W" if a.scene else "agent 0 odometry frame",
