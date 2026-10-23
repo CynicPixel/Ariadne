@@ -84,8 +84,14 @@ def main():
     from ariadne_recon.live.export import chunk_bytes
 
     out = {"env": env, "runs": []}
-    for (w, h, iters) in ((320, 180, 15), (640, 360, 10)):
-        tr = LiveTrainer(channels=1, p=TrainParams(iters=iters, max_keyframes=30))
+    # Smoke 3 (D198): Gaussian-SLAM's TUM recipe. (a) its batch iterations, (b) the live budget's ~15, (c) (a) without
+    # the depth term -- a diagnostic only. 320x180 (D196's live resolution candidate).
+    variants = [("gslam_batch", 320, 180, dict(iters=100, iters_first=100)),
+                ("live_budget", 320, 180, dict(iters=15)),
+                ("gslam_batch_nodepth", 320, 180, dict(iters=100, iters_first=100, depth_loss="none"))]
+    for (name, w, h, kw) in variants:
+        iters = kw["iters"]
+        tr = LiveTrainer(channels=1, p=TrainParams(max_keyframes=30, diagnostics=True, **kw))
         n_kf, rows, psnr = 60, [], []
         for k in range(n_kf):
             s = 0.1 * k
@@ -104,8 +110,15 @@ def main():
                                                      torch.exp(P["scales"]), torch.sigmoid(P["opacities"]),
                                                      P["colors"], f(V)[None], f(K)[None], w, h, sh_degree=None,
                                                      packed=False)
+                    _, al, _ = gsplat.rasterization(P["means"], torch.nn.functional.normalize(P["quats"], dim=-1),
+                                                    torch.exp(P["scales"]), torch.sigmoid(P["opacities"]),
+                                                    P["colors"], f(V)[None], f(K)[None], w, h, sh_degree=None,
+                                                    packed=False)
                 mse = float(((img[0, ..., 0].clamp(0, 1) - f(Ah)) ** 2).mean())
+                grey = float(((f(Ah) - f(Ah).mean()) ** 2).mean())   # the predict-the-mean floor
                 psnr.append({"kf": k, "psnr_db": round(10 * np.log10(1.0 / max(mse, 1e-12)), 2),
+                             "grey_floor_db": round(10 * np.log10(1.0 / max(grey, 1e-12)), 2),
+                             "alpha_cover": round(float((al[0, ..., 0] > 0.5).float().mean()), 3),
                              "submap": sm.sid, "gaussians": len(st)})
         # Re-anchoring on the GPU: the anchor-frame parameters (hence any anchor-frame render) are untouched.
         snap = {sid: {k: v.detach().clone() for k, v in st.params.items()} for sid, st in tr.state.items()}
@@ -113,7 +126,12 @@ def main():
         unchanged = all(torch.equal(snap[sid][k], st.params[k]) for sid, st in tr.state.items() for k in st.params)
         sizes = {sid: len(chunk_bytes(tr.params_numpy(sid))) for sid in tr.state}
         ms = [r["ms_total"] for r in rows[1:]]
-        out["runs"].append({"w": w, "h": h, "iters": iters, "keyframes": n_kf, "submaps": len(tr.manager.submaps),
+        out["runs"].append({"variant": name, "w": w, "h": h, "iters": iters,
+                            "psnr_train_init_median": float(np.median([r["psnr_train_init"] for r in rows[1:]
+                                                                        if r["psnr_train_init"] is not None])),
+                            "psnr_train_after_median": float(np.median([r["psnr_train_after"] for r in rows[1:]])),
+                            "frozen_bitwise_all": all(r["frozen_bitwise"] for r in rows),
+                            "terms_last": rows[-1]["terms_last"], "keyframes": n_kf, "submaps": len(tr.manager.submaps),
                             "ms_per_kf_median": round(float(np.median(ms)), 2),
                             "ms_per_kf_p90": round(float(np.percentile(ms, 90)), 2),
                             "ms_iter_median": rows[-1]["ms_iter_median"], "gaussians_final": rows[-1]["gaussians"],

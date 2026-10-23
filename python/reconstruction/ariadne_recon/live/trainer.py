@@ -4,17 +4,21 @@ Per keyframe of agent k:
   1. assign it to k's active submap (SubmapManager); a new submap starts with no Gaussians
   2. render the submap at the keyframe (no grad) -> alpha; seed new Gaussians where alpha < 0.5 (seeding.py), append
      them to the parameters and to Adam's state (old rows keep their moments: checked on a T4 by bench_kernel.py)
-  3. `iters` optimisation steps: >= 40 % on the new keyframe, the rest on uniformly drawn keyframes of the same
-     submap (Gaussian-SLAM); loss 0.8 L1 + 0.2 D-SSIM (Kerbl 2023) on the training image + sigma-weighted depth L1
-     (§19.3 L_photo + L_depth), over pixels where both are defined
+  3. optimisation steps: >= 40 % on the new keyframe, the rest on uniformly drawn keyframes of the same submap.
+     Gaussian-SLAM's loss (arXiv 2312.10070 eq. 10-12, D198): L = l_color (0.8 L1 + 0.2 (1 - SSIM)) + l_depth
+     (metric L1, metres) + l_reg (isotropy: each Gaussian's |s - mean of its own s|), all weights 1, over pixels
+     where image and depth are defined (§19.3's L_photo + L_depth; L_light and §19.4 are the batch path's).
+     Gaussians with opacity < 0.5 are pruned at the middle and the end of a keyframe's iterations (TUM value)
   4. lifecycle (arch §18.4, D191): a Gaussian visible in the keyframe whose camera-frame depth agrees with the
      keyframe's stereo depth within 3 sigma at its centre pixel gains one count; at `stable_count` (15) it is STABLE
-     and its gradients are zeroed (frozen); opacity < 0.005 is pruned (gsplat DefaultStrategy's threshold)
+     and frozen: its rows are restored after every Adam step and their moments zeroed (zeroing the gradient alone
+     leaves Adam's exp_avg moving them)
   5. exposure (arch §18.7, D192): a per-keyframe affine on the rendered image, identity, trainable only once the
      submap's own step counter has passed 5000
 
-Iterations per keyframe: `iters` fixed (batch/gate path), or `budget_ms` (live): iterations = budget / the measured
-median ms per iteration of this submap so far (derived from measurement, D190; at least `min_iters`).
+Iterations per keyframe: fixed (batch/gate path: Gaussian-SLAM's TUM 100 for a submap's first keyframe and 100 for
+the rest), or `budget_ms` (live): iterations = budget / the measured median ms per iteration of this submap so far
+(derived from measurement, D190; at least `min_iters`).
 
 The training image is the albedo proxy (1 channel, D195) unless the run is the RGB ablation (3 channels).
 GPU only (gsplat rasterizes in CUDA); the CPU parts live in submaps.py / seeding.py / export.py.
@@ -34,15 +38,19 @@ SH_C0 = 0.28209479177387814
 
 @dataclass(frozen=True)
 class TrainParams:
-    iters: int = 0                # > 0: fixed iterations per keyframe (batch path)
+    iters: int = 0                # > 0: fixed iterations per keyframe (batch path; Gaussian-SLAM TUM: 100)
+    iters_first: int = 0          # > 0: a submap's first keyframe (Gaussian-SLAM TUM: 100); 0 = iters
     budget_ms: float = 0.0        # > 0: live, iterations from the measured ms/iteration
     min_iters: int = 3
     new_kf_fraction: float = 0.4  # Gaussian-SLAM: >= 40 % of the iterations on the new keyframe
-    lambda_dssim: float = 0.2     # Kerbl 2023
-    lambda_depth: float = 0.1     # [ASSUMPTION] depth weight relative to the photometric term; logged, not tuned live
+    lambda_dssim: float = 0.2     # Gaussian-SLAM eq. 10 (= Kerbl 2023)
+    lambda_color: float = 1.0     # Gaussian-SLAM: lambda_color = lambda_depth = lambda_reg = 1
+    lambda_depth: float = 1.0
+    lambda_reg: float = 1.0
+    depth_loss: str = "metric_l1" # metric_l1 (Gaussian-SLAM, MonoGS) | none (diagnostic only)
     stable_count: int = 15        # D191: RTG delta_eta 100 frames at 30 Hz -> 15 keyframes at 4.4 KF/s
-    prune_opacity: float = 0.005  # gsplat DefaultStrategy
-    init_opacity: float = 0.99    # RTG-SLAM's opaque discs
+    prune_opacity: float = 0.5    # Gaussian-SLAM o_thre (TUM / real data; 0.1 on synthetic Replica)
+    init_opacity: float = 0.5     # Gaussian-SLAM
     exposure_after_steps: int = 5000   # arch §18.7 / D192
     max_keyframes: int = 30       # RECON_6: arch 20-40
     lr_means: float = 1.6e-4      # gsplat simple_trainer defaults (means lr scaled by scene scale 1)
@@ -51,6 +59,7 @@ class TrainParams:
     lr_opacities: float = 5e-2
     lr_colors: float = 2.5e-3
     seed: int = 0
+    diagnostics: bool = False     # log training-view PSNR before/after a keyframe's iterations and check freezing
 
 
 def ssim(torch, a, b):
@@ -65,6 +74,19 @@ def ssim(torch, a, b):
     sxx, syy, sxy = blur(x * x) - mx * mx, blur(y * y) - my * my, blur(x * y) - mx * my
     c1, c2 = 0.01 ** 2, 0.03 ** 2
     return ((2 * mx * my + c1) * (2 * sxy + c2)) / ((mx * mx + my * my + c1) * (sxx + syy + c2))
+
+
+def freeze_rows(opt, params: dict, mask, saved: dict) -> None:
+    """Undo an optimiser step for the rows in `mask` and zero their Adam moments, so frozen rows stay bit-exact."""
+    for g in opt.param_groups:
+        p = g["params"][0]
+        name = g["name"]
+        p.data[mask] = saved[name]
+        st = opt.state.get(p)
+        if st:
+            for k in ("exp_avg", "exp_avg_sq"):
+                if k in st:
+                    st[k][mask] = 0
 
 
 class _SubmapState:
@@ -86,6 +108,7 @@ class _SubmapState:
         self.ms_iter: list[float] = []
         self.exposure: dict[int, object] = {}  # kf -> (C+1) x C affine, identity, trainable after the delay
         self.exp_opt = None
+        self.frozen_ok = True
 
     def __len__(self):
         return int(self.params["means"].shape[0])
@@ -189,16 +212,24 @@ class LiveTrainer:
             _, a, _ = self._render(st, kf, grad=False)
             alpha = a.detach().cpu().numpy()
         existing = st.params["means"].detach().cpu().numpy() if len(st) else None
-        s = seed(Z, sigma, img, K, T_A_C, alpha, existing, self.sp, self.rng)
+        s = seed(Z, sigma, img, K, T_A_C, alpha, existing, self.sp, self.rng, first=opened)
         st.append(s.means, s.scales, s.colors, self.p.init_opacity)
-        n_iter = self._iterations(st)
-        losses = [self._step(st, kf if i < max(1, round(self.p.new_kf_fraction * n_iter)) else
-                             int(self.rng.choice(sm.keyframes))) for i in range(n_iter)]
+        psnr_init = self._psnr(st, kf) if self.p.diagnostics else None
+        n_iter = self._iterations(st, opened)
+        n_new = max(1, round(self.p.new_kf_fraction * n_iter))
+        losses, terms, pruned = [], None, 0
+        for i in range(n_iter):
+            loss, terms = self._step(st, kf if i < n_new else int(self.rng.choice(sm.keyframes)))
+            losses.append(loss)
+            if i == n_iter // 2 or i == n_iter - 1:   # Gaussian-SLAM: prune at the middle and the end
+                pruned += st.prune(self.p.prune_opacity)
         newly_stable = self._lifecycle(st, kf)
-        pruned = st.prune(self.p.prune_opacity)
+        psnr_after = self._psnr(st, kf) if self.p.diagnostics else None
         torch.cuda.synchronize()
         rec = {"agent": agent, "kf": kf, "sid": sm.sid, "opened": opened, "seeded": len(s.means), "gaussians": len(st),
                "iters": n_iter, "loss_first": losses[0] if losses else None, "loss_last": losses[-1] if losses else None,
+               "terms_last": terms, "psnr_train_init": psnr_init, "psnr_train_after": psnr_after,
+               "frozen_bitwise": st.frozen_ok if self.p.diagnostics else None,
                "stable": int(st.stable.sum()), "newly_stable": newly_stable, "pruned": pruned, "steps": st.steps,
                "exposure_affine": st.steps >= self.p.exposure_after_steps,
                "ms_iter_median": float(np.median(st.ms_iter)) if st.ms_iter else None,
@@ -206,9 +237,20 @@ class LiveTrainer:
         self.log.append(rec)
         return rec
 
-    def _iterations(self, st: _SubmapState) -> int:
+    def _psnr(self, st: _SubmapState, kf: int):
+        """Masked PSNR of the submap's render at a keyframe against its training image (diagnostics only)."""
+        torch = self.torch
+        if not len(st):
+            return None
+        fr = self.frames[kf]
+        img, _, _ = self._render(st, kf, grad=False)
+        m = fr["mask"][..., None].float()
+        mse = float((((img[..., : self.channels].clamp(0, 1) - fr["img"]) ** 2) * m).sum() / (m.sum() * self.channels))
+        return round(10 * float(np.log10(1.0 / max(mse, 1e-12))), 2)
+
+    def _iterations(self, st: _SubmapState, first: bool = False) -> int:
         if self.p.iters > 0:
-            return self.p.iters
+            return self.p.iters_first if first and self.p.iters_first > 0 else self.p.iters
         if self.p.budget_ms > 0:
             if not st.ms_iter:
                 return self.p.min_iters
@@ -228,7 +270,7 @@ class LiveTrainer:
                 st.exp_opt.add_param_group({"params": [st.exposure[kf]], "lr": 1e-3})
         return st.exposure[kf]
 
-    def _step(self, st: _SubmapState, kf: int) -> float:
+    def _step(self, st: _SubmapState, kf: int) -> tuple[float, dict]:
         torch = self.torch
         t0 = time.perf_counter()
         fr = self.frames[kf]
@@ -242,23 +284,30 @@ class LiveTrainer:
         n = m.sum().clamp(min=1.0)
         l1 = ((rgb - fr["img"]).abs() * m).sum() / (n * self.channels)
         dssim = ((1.0 - ssim(torch, rgb[None], fr["img"][None])) * m.permute(2, 0, 1)[None]).sum() / (n * self.channels)
-        ld = ((depth[..., 0] - fr["Z"]).abs() / fr["S"].clamp(min=1e-3) * fr["mask"]).sum() / n
-        loss = (1 - self.p.lambda_dssim) * l1 + self.p.lambda_dssim * dssim + self.p.lambda_depth * ld
+        l_color = (1 - self.p.lambda_dssim) * l1 + self.p.lambda_dssim * dssim
+        ld = ((depth[..., 0] - fr["Z"]).abs() * fr["mask"]).sum() / n if self.p.depth_loss == "metric_l1" \
+            else torch.zeros((), device=self.dev)
+        sc = torch.exp(st.params["scales"])
+        l_reg = (sc - sc.mean(dim=1, keepdim=True)).abs().sum(dim=1).mean()
+        loss = self.p.lambda_color * l_color + self.p.lambda_depth * ld + self.p.lambda_reg * l_reg
         st.opt.zero_grad(set_to_none=True)
         if st.exp_opt is not None:
             st.exp_opt.zero_grad(set_to_none=True)
         loss.backward()
-        if bool(st.stable.any()):   # STABLE Gaussians are frozen (arch §18.4)
-            for v in st.params.values():
-                if v.grad is not None:
-                    v.grad[st.stable] = 0
+        frozen = st.stable if bool(st.stable.any()) else None
+        saved = {k: v.detach()[frozen].clone() for k, v in st.params.items()} if frozen is not None else None
         st.opt.step()
+        if frozen is not None:   # STABLE Gaussians are frozen (arch §18.4): restore the rows, clear their moments
+            freeze_rows(st.opt, st.params, frozen, saved)
+            if self.p.diagnostics:
+                st.frozen_ok = st.frozen_ok and all(torch.equal(st.params[k].detach()[frozen], saved[k]) for k in saved)
         if use_exp:
             st.exp_opt.step()
         st.steps += 1
         torch.cuda.synchronize()
         st.ms_iter.append(1e3 * (time.perf_counter() - t0))
-        return float(loss.detach())
+        return float(loss.detach()), {"color": float(l_color.detach()), "depth": float(ld.detach()),
+                                      "reg": float(l_reg.detach())}
 
     def _lifecycle(self, st: _SubmapState, kf: int) -> int:
         """Count consistent observations: visible in the keyframe and the Gaussian's camera-frame depth within 3 sigma

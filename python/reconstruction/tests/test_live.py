@@ -54,6 +54,8 @@ def test_reanchor_moves_the_placement_and_nothing_inside():
 
 
 def test_seeding_backprojects_into_the_anchor_frame_and_respects_alpha_and_rho():
+    """Gaussian-SLAM's recipe (D198): a later keyframe seeds only where alpha < 0.6; points with an existing Gaussian
+    within rho are dropped; the scale is the nearest-neighbour distance."""
     h, w, f = 40, 60, 50.0
     K = np.array([[f, 0, (w - 1) / 2], [0, f, (h - 1) / 2], [0, 0, 1]])
     Z = np.full((h, w), 2.0, np.float32)
@@ -65,36 +67,39 @@ def test_seeding_backprojects_into_the_anchor_frame_and_respects_alpha_and_rho()
     alpha = np.zeros((h, w), np.float32)
     alpha[:, : w // 2] = 0.9                             # left half already opaque
     T = se3(0.2, [1, 0, 0])
-    p = SeedParams(sample_fraction=1.0, rho_m=1e-4)
-    s = seed(Z, S, A, K, T, alpha, None, p, np.random.default_rng(0))
+    p = SeedParams(uniform_fraction=1.0, gradient_fraction=0.0, rho_m=1e-4)
+    far = np.array([[100.0, 100.0, 100.0]], np.float32)  # a non-empty submap far away: a LATER keyframe
+    s = seed(Z, S, A, K, T, alpha, far, p, np.random.default_rng(0))
     r, c = s.pixels[:, 0], s.pixels[:, 1]
     assert (r >= 3).all() and (c >= w // 2).all()
     assert len(s.means) == (h - 3) * (w - w // 2)
     X_C = np.stack([(c - K[0, 2]) / f * 2.0, (r - K[1, 2]) / f * 2.0, np.full(len(r), 2.0)], 1)
     np.testing.assert_allclose(s.means, X_C @ T[:3, :3].T + T[:3, 3], atol=1e-5)
-    # gsplat's kNN init: on a full-density grid the 3 nearest neighbours sit one pixel footprint (Z / f) away (the
-    # NaN rows shift a few edge points to sqrt(2) neighbours, so compare the median).
-    assert abs(np.median(s.scales) - 2.0 / f) < 1e-6
+    np.testing.assert_allclose(s.scales, 2.0 / f, rtol=1e-5)    # a full grid: the nearest neighbour is one footprint
     np.testing.assert_allclose(s.colors[:, 0], 0.4)
-    # rho: existing Gaussians at those exact points suppress every seed; a coarse rho merges neighbours.
+    # rho: existing Gaussians at those exact points suppress every seed.
     assert len(seed(Z, S, A, K, T, alpha, s.means, p, np.random.default_rng(0)).means) == 0
-    coarse = seed(Z, S, A, K, T, None, None, SeedParams(sample_fraction=1.0, rho_m=0.2), np.random.default_rng(0))
-    assert 0 < len(coarse.means) < (h - 3) * w / 4
+    # The first keyframe ignores alpha (nothing rendered yet) and adds colour-gradient points.
+    first = seed(Z, S, A, K, T, alpha, None, SeedParams(), np.random.default_rng(0))
+    assert (first.pixels[:, 1] < w // 2).any()
 
 
-def test_seeding_sample_fraction_is_deterministic():
-    h, w = 30, 30
-    K = np.array([[30.0, 0, 14.5], [0, 30.0, 14.5], [0, 0, 1]])
+def test_seeding_fractions_follow_gaussian_slam_and_are_deterministic():
+    h, w = 60, 80
+    K = np.array([[40.0, 0, 39.5], [0, 40.0, 29.5], [0, 0, 1]])
     Z = np.full((h, w), 1.5, np.float32)
     S = np.full((h, w), 0.01, np.float32)
-    img = np.full((h, w, 3), 0.5, np.float32)
-    p = SeedParams(sample_fraction=0.05, rho_m=1e-4)
+    img = np.zeros((h, w, 3), np.float32)
+    img[:, w // 2:] = 1.0                                # one vertical edge: the high-gradient region
+    p = SeedParams(rho_m=1e-4)
     a = seed(Z, S, img, K, np.eye(4), None, None, p, np.random.default_rng(3))
     b = seed(Z, S, img, K, np.eye(4), None, None, p, np.random.default_rng(3))
-    assert len(a.means) == round(0.05 * h * w)
     np.testing.assert_array_equal(a.pixels, b.pixels)
-    # A 5 % sample sits ~sqrt(20) px apart: the scale follows the sampling, not the 1-pixel footprint (D198).
-    assert np.median(a.scales) > 3 * (1.5 / 30.0)
+    n = h * w
+    u = round(100_000 / 307_200 * n)                     # M_u / TUM pixels
+    assert u <= len(a.means) <= u + round(50_000 / 307_200 * n)
+    later = seed(Z, S, img, K, np.eye(4), np.zeros((h, w), np.float32), a.means, p, np.random.default_rng(3))
+    assert len(later.means) < len(a.means)               # rho against what the first keyframe seeded
 
 
 def test_chunk_is_32_bytes_per_gaussian_in_the_anchor_frame_and_table_places_it():
