@@ -53,7 +53,13 @@ public:
     /// One decision at a keyframe. `photo` is the keyframe's applied state; `omega_rad_s` its angular rate (0 when
     /// unknown: the ceiling is then t_max_s). Returns the command to send to the source.
     runtime::PhotometricCommand Decide(const cv::Mat& gray, const runtime::FramePhoto& photo, int64_t t_ns,
-                                       double omega_rad_s, double focal_px) {
+                                       double omega_rad_s, double focal_px, int64_t frame_interval_ns) {
+        // An exposure cannot outlast the frame: t_max_s must fit the recording's frame interval (D147).
+        if (frame_interval_ns > 0 && p_.params.t_max_s > 1.001e-9 * double(frame_interval_ns)) {
+            throw std::runtime_error("exposure_control: t_max_s " + std::to_string(p_.params.t_max_s) +
+                                     " s exceeds the frame interval " + std::to_string(1e-9 * double(frame_interval_ns)) +
+                                     " s");
+        }
         perception::exposure::PhotometricState cur;
         cur.exposure_s = photo.exposure_rel * p_.t_ref_s;
         cur.gain = photo.gain;

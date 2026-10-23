@@ -55,8 +55,9 @@ TEST(ExposureGlue, ConfigSection) {
     EXPECT_DOUBLE_EQ(e.t_ref_s, 0.0125);   // D147's 2 stops of headroom under 50 ms
     EXPECT_EQ(e.params.metric.metric, "percentile");
     EXPECT_THROW(Parse("mode: live\n"), ariadne::core::ConfigError);                   // the live sink is B's
-    EXPECT_THROW(Parse("mode: replay\nt_ref_s: 0.1\n"), ariadne::core::ConfigError);   // above t_max_s
-    EXPECT_THROW(Parse("mode: replay\nbogus: 1\n"), ariadne::core::ConfigError);
+    EXPECT_THROW(Parse("mode: replay\nt_max_s: 0.05\nt_ref_s: 0.1\n"), ariadne::core::ConfigError);   // above t_max
+    EXPECT_THROW(Parse("mode: replay\nt_max_s: 0.05\nbogus: 1\n"), ariadne::core::ConfigError);
+    EXPECT_THROW(Parse("mode: replay\n"), ariadne::core::ConfigError);   // t_max_s required (the frame period)
 }
 
 TEST(ExposureGlue, RefusesTheVstModes) {
@@ -104,7 +105,8 @@ TEST(ExposureGlue, DecidesFromTheAppliedStateAndStepsDownWhenOverexposed) {
     cv::randu(g, 40, 200);
     g.colRange(0, 80).setTo(255);
     FramePhoto applied;   // nominal, lamp at full (the calibrated P)
-    const PhotometricCommand c = k.Decide(g, applied, 123, 0.0, 600.0);
+    EXPECT_THROW(k.Decide(g, applied, 123, 0.0, 600.0, 40'000'000), std::runtime_error);   // 50 ms > a 25 Hz frame
+    const PhotometricCommand c = k.Decide(g, applied, 123, 0.0, 600.0, 50'000'000);
     EXPECT_EQ(c.decision_id, 1u);
     EXPECT_EQ(c.decided_ns, 123);
     const double before = applied.exposure_rel * applied.gain * applied.lamp_rel;

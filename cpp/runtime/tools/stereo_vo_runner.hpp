@@ -481,7 +481,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 perception::radiometric::AlbedoProxy albedo;
                 if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
                 // 5.3 (D147): one controller decision per keyframe, from the state this frame reports as applied.
-                if (exposure.enabled()) source.SetPhotometric(exposure.Decide(l, *frame.photo, frame.t_ns, omega_rad_s, rr.fx));
+                if (exposure.enabled()) {
+                    const int64_t interval = prev_frame_t_ns >= 0 ? frame.t_ns - prev_frame_t_ns : 0;
+                    source.SetPhotometric(exposure.Decide(l, *frame.photo, frame.t_ns, omega_rad_s, rr.fx, interval));
+                }
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's

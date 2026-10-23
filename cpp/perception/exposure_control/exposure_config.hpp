@@ -46,7 +46,9 @@ inline ExposureControlStage ParseExposureControl(core::StrictConfig& s) {
     p.metric.metric = s.Optional<std::string>("metric", p.metric.metric);
     p.metric.percentile = s.Optional<double>("percentile", p.metric.percentile);
     p.t_min_s = s.Optional<double>("t_min_s", p.t_min_s);
-    p.t_max_s = s.Optional<double>("t_max_s", p.t_max_s);
+    // Required (D147): the hard ceiling is the recording's frame period, and D132's 30 ms default would silently
+    // shrink the derived headroom. The runner refuses a t_max_s longer than the measured frame interval.
+    p.t_max_s = s.Require<double>("t_max_s");
     p.max_blur_px = s.Optional<double>("max_blur_px", p.max_blur_px);
     p.gain_max = s.Optional<double>("gain_max", p.gain_max);
     p.lamp_min = s.Optional<double>("lamp_min", p.lamp_min);

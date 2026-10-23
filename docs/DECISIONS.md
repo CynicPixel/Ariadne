@@ -4053,6 +4053,23 @@ service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam
   - A refused call reports `clamped = true`, `clamp_reason = "service refused"`, and the PREVIOUS `lamp_rel` as
     applied.
   - Both are consistent with "the report says what the frame was actually lit with".
+- **`t_max_s` is required** (advisor review of fe6194c). D132's 30 ms default would silently give 1.3 stops of
+  headroom instead of 2. The first decision refuses a `t_max_s` longer than the measured frame interval.
+- **What the replay rows can and cannot show.**
+  - **The lamp does not move in replay.** Frames start at `lamp_rel` 1 = `lamp_max`, so brightening goes to exposure.
+    Darkening spends gain, then exposure, and reaches the lamp only below `t_min`, about 4.6 stops under `t_ref`.
+  - So the replay row is exposure (and gain) control, not lamp co-control, and a flat `lamp_state` is expected. Evidence
+    for the lamp half comes from B's live sink.
+- **Known bias, `[UNVERIFIED]` size.** The controller reads the keyframe AFTER Stage 1's flat field. Where K < 1
+  (D's vignette 0.28 toward the edges), a raw value above 255·K becomes 255 and counts as clipped, although the sensor
+  did not clip.
+  - **Expected size:** small under the lamp (D145: median linear Y 0.036; the hotspots are central, where K ≈ 1),
+    larger in bright, evenly lit scenes.
+  - **Not measured yet.** The AWS rows log `saturated_frac` per decision. If it diverges from the D-output clip count,
+    the guard moves before Stage 1.
+- **Checks for the first AWS run** (the SimSource pending → next-pair path is covered locally only through
+  `ApplyPhotometric` and the wrapper): in `exposure_trace.csv`, every row's `applied_decision` equals the previous row's
+  `decision`, and `applied_ns` is the stamp of the frame right after `decided_ns`.
 
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
