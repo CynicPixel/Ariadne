@@ -61,8 +61,13 @@ cmd_payload() {   # SCENE... (one or more scene directories)
   id="$(date -u +%Y%m%dT%H%M%SZ)"
   stage="$REPO_ROOT/build/live_payload/$id"
   mkdir -p "$stage/p"
+  local extra=()
+  # D221: the collab worker binary + the ONNX models ride the payload when present (.cache is gitignored, so the
+  # tree sync never ships them; the collab run needs them at the configured relative paths).
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_collab_worker" ] && extra+=(build/docker/cpp/runtime/ariadne_collab_worker)
+  [ -d "$REPO_ROOT/.cache/models" ] && extra+=(.cache/models)
   (cd "$REPO_ROOT" && tar cf - build/docker/cpp/runtime/ariadne_live build/sim-plugins/libariadne_kinematic_mover.so \
-     build/ros2/install "$@") | tar xf - -C "$stage/p"
+     build/ros2/install "${extra[@]}" "$@") | tar xf - -C "$stage/p"
   (cd "$stage/p" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
   tar czf "$stage/payload.tar.gz" -C "$stage" p
   local uri="s3://$(bucket)/runs/live-payload-$id/payload.tar.gz"
