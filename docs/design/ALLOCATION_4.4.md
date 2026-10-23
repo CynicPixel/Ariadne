@@ -237,3 +237,19 @@ replans).
 - **Size:** a 160-task event with 2 winners is 234 B on the wire. The run-level row is in §14.
 - **Not done, because it would change the algorithm, not the encoding:** announcing only top-K tasks, or deltas
   against an acknowledged state. Neither is needed at this size.
+
+## 14. Replay rows with sparse messages and the L_t = 2 row (2026-10-23; `evaluation/runs/allocation_4.4_replay/`, binary 146e769)
+
+| | L_t = 1 (default) | L_t = 2 (§31.7 reported row) |
+|---|---|---|
+| CBBA = SGA | 40 / 40 | 40 / 40 (20 eq. 6 tail releases, none diverged here) |
+| CBBA / optimum, linked replans | mean 0.994, worst 0.983 | mean 0.994, worst 0.984 |
+| TASK_CONSENSUS wire bytes per message | **226 B** (dense: 2.4 KB) | 250 B |
+| rounds, linked | 2–3 | 2–4 |
+| bytes over the spool, event-triggered | **11.8 KB** (dense: 123.4 KB, 10.5× more) | — |
+| extra planner time | — | goal → goal legs: mean 1.4 s, max 4.4 s per replan |
+
+- **The byte rationale of §21.7 now holds on this spool:** about 1.3 KB per linked event, with the same assignments
+  as dense (proved by the wire-transport test, and CBBA = SGA here too).
+- **L_t = 2 buys nothing measurable on this spool:** the same optimum ratio. It costs 1.4 s of leg Dijkstras per
+  replan, and it carries the stale-bid divergence risk (§10). L_t = 1 stays the default.

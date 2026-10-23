@@ -3149,3 +3149,9 @@ Both are main's (3.2 / 3.5).
   better (AUC 0.92, FPR 0.16) and is recorded as the next pre-registered candidate, not switched to post hoc.
   - Evidence: `evaluation/runs/risk_calibration_4.2/`, one g4dn spot run, ~$0.21.
   - Provenance: payload built at df38a12, run snapshot fc0c0a9 (diff checked: no estimator or map code differs).
+- **D115a (2026-10-23): sparse TASK_CONSENSUS.**
+  - Only tasks with a winner travel, and bids go as doubles. The encoding is exact: assignment, bids and rounds are
+    identical on 300 random instances through encode → decode → expand.
+  - Replay: 226 B per message (was 2.4 KB), 11.8 KB per spool (was 123.4 KB), CBBA = SGA 40 / 40.
+  - The L_t = 2 row: CBBA = SGA 40 / 40, the same optimum ratio (0.994), +1.4 s per replan. **L_t = 1 stays the
+    default.**
