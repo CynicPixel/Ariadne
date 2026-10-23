@@ -8,15 +8,41 @@
 #   A  pass A: 2 scenes x 3 seeds x 2 agents (ariadne_collab_passa), P_A at a time
 #   B1 the similarity arm (no budget) per (scene, seed): on collapsed_v1 for R and the compression ratios; on the
 #      ideal link for the verifier calibration (verification is geometry, not comms; D171 §5)
-#   B2 greedy + spectral x 4 budget levels per (scene, seed); levels and ratio from the OTHER scene (D171 §4-§5)
-#   C  the fault campaign on the spectral arm at the 25 % level: ideal, collapsed_partition_v1, datagram faults
+#   B2 greedy + spectral x budget levels (LEVELS, default 25 50) per (scene, seed); levels and ratio from the OTHER
+#      scene (D171 §4-§5)
+#   C  the fault campaign on the spectral arm at the 25 % level: ideal, collapsed_partition_v1, datagram faults; one
+#      seed (C_SEEDS) per variant and scene
+# Trimmed to the Phase 3 gate's rows (maintainer, 2026-10-23: no runs beyond what the gate needs): two budget levels
+# instead of D171's four, the campaign on one seed. STORES_FROM=<S3 prefix of an earlier run's results> fetches its
+# pass-A stores (checked against stores.SHA256SUMS) instead of rerunning stage A.
+# Any failure still collects what exists (the B1 runs, the pass-A stores) before the instance goes away.
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${STAGE:?}" "${DATA0:?}" "${DATA1:?}" "${COMMIT:?}" "${REG:?}"
 JOBS="${JOBS:-8}" P_A="${P_A:-4}" P_B="${P_B:-8}" SEEDS="${SEEDS:-1 2 3}" STAGES="${STAGES:-A B1 B2 C}"
+LEVELS="${LEVELS:-25 50}" C_SEEDS="${C_SEEDS:-1}" STORES_FROM="${STORES_FROM:-}"
 REPO=/opt/ariadne/repo W=/opt/ariadne/work
 step() { echo "=== $(date -u +%FT%TZ) $*" | tee -a "$R/steps.txt"; }
-fail() { step "FAILED: $*"; exit 1; }
+COLLECTING=0
+fail() { step "FAILED: $*"; [ "$COLLECTING" = 1 ] || collect; exit 1; }
+collect() {   # the small outputs of every run, and the pass-A stores for reruns (STORES_FROM)
+  COLLECTING=1
+  step "collect"
+  mkdir -p "$R/runs" "$R/cfg"
+  cp "$W"/cfg/*.yaml "$R/cfg/" 2>/dev/null
+  for d in "$W"/runs/*/; do
+    [ -d "$d" ] || continue
+    n=$(basename "$d"); mkdir -p "$R/runs/$n"
+    cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv} "$R/runs/$n/" 2>/dev/null
+    gzip -c "$d/ledger.csv" > "$R/runs/$n/ledger.csv.gz" 2>/dev/null
+    tail -2 "$W/runs/$n.log" > "$R/runs/$n/tool.log" 2>/dev/null
+  done
+  # Under runs/ (the runner role's prefix), so a rerun fetches them with STORES_FROM instead of redoing stage A.
+  if [ -d "$W/passa" ]; then
+    (cd "$W" && find ./passa -name 'store_agent*.bin' -print0 | xargs -0 -r sha256sum) > "$R/stores.SHA256SUMS"
+    (cd "$W" && find ./passa -name 'store_agent*.bin' -print0 | tar cf - --null -T -) | tar xf - -C "$R/"
+  fi
+}
 mkdir -p "$W"
 
 step "0 host"
@@ -67,7 +93,12 @@ AL=/work/.cache/models/aliked_lg_sim_ref EP=/work/.cache/models/eigenplaces_sim_
 models="--aliked-onnx $AL/aliked_n16_k1024_1280x720.onnx --lightglue-onnx $AL/lightglue_aliked.onnx"
 scene_rec() { [ "$1" = 0 ] && echo "/work/$REC0" || echo "/work/$REC1"; }
 
-if [[ " $STAGES " == *" A "* ]]; then
+if [ -n "$STORES_FROM" ]; then
+  step "A skipped: pass-A stores from $STORES_FROM"
+  aws s3 cp "$STORES_FROM/stores.SHA256SUMS" "$W/stores.SHA256SUMS" --only-show-errors || fail "stores.SHA256SUMS"
+  fetch "$STORES_FROM" "$W" "$W/stores.SHA256SUMS" > "$R/stores_check.txt" 2>&1 || fail "pass-A stores"
+  cp "$W/stores.SHA256SUMS" "$R/stores_from.SHA256SUMS"; echo "$STORES_FROM" > "$R/stores_from.txt"
+elif [[ " $STAGES " == *" A "* ]]; then
   step "A pass A"
   : > "$W/passa.jobs"
   for sc in 0 1; do for s in $SEEDS; do for ag in 0 1; do
@@ -126,7 +157,7 @@ root = sys.argv[1]
 for sc in (0, 1):
     rates, ratios, runs, bigs = [], [], [], []
     for d in sorted(glob.glob(f"{root}/sim_s{sc}_seed*")):
-        if not os.path.isdir(d): continue
+        if not os.path.isdir(d): continue   # sim_s<k>_seed<s>.log is the job's log, not a run
         rows = list(csv.DictReader(open(f"{d}/ledger.csv")))
         first = [r for r in rows if r["retransmit"] == "0"]
         if not first: continue
@@ -145,6 +176,7 @@ for sc in (0, 1):
     # the smallest PnP-inlier count >= 25 (the 1.6 verifier's) that accepts no bad candidate.
     rows = []
     for d in sorted(glob.glob(f"{root}/cal_s{sc}_seed*")):
+        if not os.path.isdir(d): continue   # cal_s<k>_seed<s>.log is the job's log, not a run
         for e in csv.DictReader(open(f"{d}/edges.csv")):
             if int(e["pnp_inliers"]) > 0 and e["reason"] in ("verified", "pnp_gate") and e["pose_err_deg"] not in ("", "nan"):
                 rows.append((int(e["pnp_inliers"]), float(e["pose_err_deg"]) <= 10.0))
@@ -173,7 +205,7 @@ if [[ " $STAGES " == *" B2 "* ]]; then
     read -r _ rate ratio eratio gratio maxfetch runs < <(grep "^scene$other " "$R/calibration.txt") \
       || fail "no calibration for scene $other"
     read -r _ vfloor vgood vkept vbad _ _ < <(grep "^verify$other " "$R/calibration.txt") || fail "no verifier floor"
-    for pct in 10 25 50 100; do
+    for pct in $LEVELS; do
       lvl=$(python3 -c "print(round($rate * $pct / 100.0, 1))")
       # Token-bucket depth >= the largest unit it must pass (RFC 2697: CBS >= the largest packet); otherwise a level
       # below one fetch per period starves the arm entirely rather than rationing it.
@@ -205,22 +237,12 @@ if [[ " $STAGES " == *" C "* ]]; then
         partition) echo "comms_scenario: configs/comms/collapsed_partition_v1.yaml" >> "$f" ;;
         faults) printf 'comms_scenario: configs/comms/collapsed_v1.yaml\nfaults: {duplicate_p: 0.1, reorder_p: 0.1, jitter_s: 0.05}\n' >> "$f" ;;
       esac
-      for s in $SEEDS; do run_b "camp_${v}_s${sc}_seed$s" $sc $s "camp_${v}_s$sc.yaml" >> "$W/c.jobs"; done
+      for s in $C_SEEDS; do run_b "camp_${v}_s${sc}_seed$s" $sc $s "camp_${v}_s$sc.yaml" >> "$W/c.jobs"; done
     done
   done
   pool_b "$W/c.jobs"
   step "C done"
 fi
 
-step "collect"
-mkdir -p "$R/runs" "$R/cfg"
-cp "$W"/cfg/*.yaml "$R/cfg/" 2>/dev/null
-for d in "$W"/runs/*/; do
-  n=$(basename "$d"); mkdir -p "$R/runs/$n"
-  cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv} "$R/runs/$n/" 2>/dev/null
-  gzip -c "$d/ledger.csv" > "$R/runs/$n/ledger.csv.gz" 2>/dev/null
-  tail -2 "$W/runs/$n.log" > "$R/runs/$n/tool.log" 2>/dev/null
-done
-# The pass-A stores persist for reruns (maintainer: no re-sync per run): under runs/ (the runner role's prefix).
-(cd "$W" && find passa -name 'store_agent*.bin' -print0 | xargs -0 sha256sum) > "$R/stores.SHA256SUMS"
+collect
 step "done"

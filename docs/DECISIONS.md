@@ -4227,6 +4227,15 @@ Branch `feat/3.4-spectral`.
   - No back-end setting can reject a self-consistent group with no competitor. The group-level defence (five edges
     from one query are one piece of evidence) is 3.5's, with its own preflight (arch §17.3). The sweep reports the
     accepted-false-edge rate and the map deformation per arm, and those runs stay in the plot.
+- **First AWS sweep (`20261023T073806Z-cpux86-7f912a`, 74 min, about $0.15): failed at calibration on a script bug.**
+  - Stage A (12 stores, 43 min) and B1 (12 runs, 25 min) completed. The calibration then globbed `cal_s<k>_seed*`,
+    which also matches the jobs' `.log` files, and crashed. Fixed: directories only.
+  - The script exited before collecting, so the instance took B1 and the stores with it. Fixed: any failure now
+    collects first, and the pass-A stores are kept under the run's results (`STORES_FROM` reuses them, checked
+    against `stores.SHA256SUMS`).
+  - **Trimmed to the gate's rows** (maintainer, 2026-10-23: no runs beyond what the gate needs). B2 runs two budget
+    levels (25 %, 50 %) instead of four, and C runs one seed per variant and scene. The plot still has three arms on
+    2 scenes × 3 seeds; the 10 % and 100 % levels are not run.
 
 **§49:**
 - catalogue: ALGORITHMS (COSMO-Bench, Tian et al.);
