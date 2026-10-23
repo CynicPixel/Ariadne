@@ -261,6 +261,14 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
         PutMat(o, b.rgb);
+        // Phase 6 training image (RECON_6, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
+        // fp16-rounded) + albedo_valid (half-res CV_8U) from KeyframeFalloff::Normalize. That code lives on
+        // feat/ph5-dve (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
+        // says "none" and the recon service refuses to train live unless the run is the RGB ablation - nothing
+        // silently falls back.
+        const std::string ti = "none";
+        PutPod(o, uint32_t(ti.size()));
+        o.insert(o.end(), ti.begin(), ti.end());
         send("#kf", o);
     };
     a.on_frame = [&](const tools::FrameView& fv) {
@@ -780,6 +788,10 @@ int main(int argc, char** argv) {
                             r.cx = GetPod<double>(q), r.cy = GetPod<double>(q);
                             r.Z = GetMat(q), r.S = GetMat(q);
                             const cv::Mat rgb = GetMat(q);
+                            const uint32_t tn = GetPod<uint32_t>(q);
+                            const std::string training(reinterpret_cast<const char*>(q), tn);   // "none" until ph5-dve
+                            q += tn;
+                            if (training != "none") { GetMat(q); GetMat(q); }   // albedo + valid: not consumed here yet
                             deliver_kf(k, std::move(r), rgb);
                         } else if (f.topic == "#timing") {
                             const int64_t t = GetPod<int64_t>(q);
