@@ -133,3 +133,26 @@ TEST(CollabSelection, V1DescriptorBytesUnchangedAndNewFieldsRoundTrip) {
     EXPECT_EQ(d.global_descriptor.n_features, 800u);
     EXPECT_EQ(d.global_descriptor.feature_bytes, 32u);
 }
+
+TEST(CollabSelection, GraphStartsAtTheFirstReleasedKeyframe) {
+    // A VO startup prefix is never released (SIMCOLLAB_3.2 §1), so ids start above 0. The selection graph spans the
+    // ids seen (min..max per agent), not 0..max: no phantom chain for keyframes no member ever had.
+    act::Scenario sc;
+    sc.advertise_features = true;
+    sc.agents = 2;
+    sc.first_keyframe = 20;
+    size_t max_nodes = 0, rounds = 0;
+    act::Swarm s(sc, {true, 0.02, 0.0, 0.0}, 3, {}, Budgeted(4000, 20000, 0), [&](ac::NodeHooks& h) {
+        UseGreedy(h);
+        h.select = [&](const ac::SelectionProblem& P) {
+            max_nodes = std::max(max_nodes, size_t(P.n)), ++rounds;
+            return ac::SelectBySimilarity(P);
+        };
+    });
+    s.RunUntil(0, 90);
+    const size_t released = size_t(sc.keyframes_until_s / sc.keyframe_dt_s) + 1 - sc.first_keyframe;
+    ASSERT_GT(rounds, 0u);
+    EXPECT_LE(max_nodes, sc.agents * released) << "nodes only for ids that were released";
+    EXPECT_GT(max_nodes, 0u);
+    EXPECT_EQ(s.Outcome().outcome, ac::Outcome::kConsistent);
+}

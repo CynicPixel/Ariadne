@@ -144,8 +144,8 @@ struct NodeParams {
     // 3.4 selection (only with hooks.select): a token bucket of predicted fetch bytes, refilled at budget_bytes_per_s
     // and capped at budget_burst_bytes, spent once per selection_interval_s.
     double selection_interval_s = 5.0;       // Swarm-SLAM inter_robot_detection_period_sec default (cslam)
-    double budget_bytes_per_s = 20000.0;
-    double budget_burst_bytes = 200000.0;
+    double budget_bytes_per_s = 20000.0;     // [PLACEHOLDER] unsourced; replaced by the derived level (25 % of the
+    double budget_burst_bytes = 200000.0;    // similarity arm's fetch rate, burst = one period) in D171's sim runs
     double candidate_ttl_s = 120.0;          // [ASSUMPTION] a pending candidate never selected by then is dropped
                                              // (counted); retrieval proposes a pair once, so this is final. The sim
                                              // runs decide it (D170).
@@ -550,20 +550,24 @@ private:
         }
         if (pending_.empty()) return;
         // Nodes and odometry as Swarm-SLAM builds them (cslam algebraic_connectivity_maximization.py, fill_odometry):
-        // every keyframe id 0..max seen per agent, consecutive ids joined at the fixed weight 1. Gaps in what the
-        // broker has seen are full chains, not one collapsed edge.
-        std::map<AgentId, uint64_t> max_kf;
-        auto see = [&](const KeyframeRef& k) { max_kf[k.agent] = std::max(max_kf[k.agent], k.keyframe); };
+        // every keyframe id min..max seen per agent, consecutive ids joined at the fixed weight 1. Gaps in what the
+        // broker has seen are full chains, not one collapsed edge. cslam starts at 0 because every keyframe is sent;
+        // ours start at the first one sent, since a VO startup prefix is never released (SIMCOLLAB_3.2 §1, D87 carry).
+        std::map<AgentId, std::pair<uint64_t, uint64_t>> span;
+        auto see = [&](const KeyframeRef& k) {
+            const auto [it, fresh] = span.try_emplace(k.agent, k.keyframe, k.keyframe);
+            if (!fresh) it->second = {std::min(it->second.first, k.keyframe), std::max(it->second.second, k.keyframe)};
+        };
         for (const auto& [k, g] : descriptor_db_) see(k);
         for (const auto& [a, g] : snapshots_)
             for (const auto& n : g.nodes) see({a, n.keyframe});
         for (const auto& [pr, c] : pending_) see(pr.first), see(pr.second);
         std::map<KeyframeRef, int> idx;
         SelectionProblem P;
-        for (const auto& [a, mk] : max_kf)
-            for (uint64_t kf = 0; kf <= mk; ++kf) {
+        for (const auto& [a, lohi] : span)
+            for (uint64_t kf = lohi.first; kf <= lohi.second; ++kf) {
                 idx.emplace(KeyframeRef{a, kf}, P.n);
-                if (kf > 0) P.fixed.push_back({P.n - 1, P.n, 1.0});
+                if (kf > lohi.first) P.fixed.push_back({P.n - 1, P.n, 1.0});
                 ++P.n;
             }
         for (const auto& [key, e] : broker_edges_) {

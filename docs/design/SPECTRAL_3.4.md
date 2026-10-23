@@ -53,7 +53,8 @@ pending: they are re-scored next round as the graph changes, and dropped after `
 
 ## 2. The candidate graph (arch §16.1)
 
-- **Nodes:** Swarm-SLAM's construction. Every keyframe id 0..max seen per member, consecutive ids joined at κ = 1, so
+- **Nodes:** Swarm-SLAM's construction. Every keyframe id min..max seen per member (cslam's 0..max, since it sends every
+  keyframe; ours start at the first released one, SIMCOLLAB_3.2 §1), consecutive ids joined at κ = 1, so
   gaps in what the broker has seen are full chains.
   - This **assumes odometry across D87's startup prefix**, where the VO skipped exit edges (registered carry, 2.4
     row). It is Swarm-SLAM's convention too; not fixed here.

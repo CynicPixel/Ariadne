@@ -39,6 +39,7 @@ struct Scenario {
     double overlap_m = 0.8;
     size_t keypoints = 200;       // feature response size: ~6 datagrams
     bool advertise_features = false;   // 3.4: descriptors carry n_features / feature_bytes
+    uint64_t first_keyframe = 0;  // ids below it are never released (a VO startup prefix, SIMCOLLAB_3.2 §1)
 
     /// Agent a's camera in the world at time t.
     core::SE3 T_World_C(size_t a, double t) const {
@@ -167,13 +168,13 @@ struct Swarm {
         for (const auto& d : net->DeliverUntil(t)) nodes[d.to]->OnDatagram(d, t);
         const double ts = t.toSeconds();
         while (sc.KfTime(next_kf) <= ts + 1e-9 && sc.KfTime(next_kf) <= sc.keyframes_until_s) {
-            for (size_t a = 0; a < sc.agents; ++a) {
+            for (size_t a = 0; a < sc.agents && next_kf >= sc.first_keyframe; ++a) {
                 core::GlobalDescriptorValue g;
                 g.keyframe_id = next_kf;
                 g.descriptor.assign(256, 0.0f);
                 if (sc.advertise_features) g.n_features = uint32_t(sc.keypoints), g.feature_bytes = 32;
                 std::optional<OdometryEdge> odo;
-                if (next_kf > 0) {
+                if (next_kf > sc.first_keyframe) {
                     odo = OdometryEdge{next_kf - 1,
                                        sc.T_W_C(a, sc.KfTime(next_kf - 1)).inverse() * sc.T_W_C(a, sc.KfTime(next_kf)),
                                        Scenario::Information()};
