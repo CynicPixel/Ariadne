@@ -3309,7 +3309,8 @@ darkness is the render's. It is not a frozen 5.4 level.
 Fixes: FetchContent cache under `build/`; `HILTI=full|extras|skip`; recordings fetched by key from the committed
 `infra/eval/ph5_dark_manifest.txt` (213 keys, sizes checked). CPU total ≈ $0.07.
 
-**Results: the no-dust lighting rows** (session 5; manifests `git_commit 380c900`, `git_dirty false`, image
+**Results: the no-dust lighting rows — PRELIMINARY** (not §31.5 exit-gate rows: they ran before the
+preflight rule of 2026-10-23, and the fixed-light / lamp definitions still need their preflight decision; session 5; manifests `git_commit 380c900`, `git_dirty false`, image
 `sha256:91643838…`). `ariadne_sim_vo`, agent 0, 1000 frames, seed 1, `sim_v1` + `sim_v2`, 0 lost frames in every
 row. All four dark rows share one trajectory (GT path 7.355 m). D69's lit row is `ci_tiny_0` with the same seed and
 agent; that its trajectory is identical (only lighting differs between the presets) is [ASSUMPTION], not re-checked.
