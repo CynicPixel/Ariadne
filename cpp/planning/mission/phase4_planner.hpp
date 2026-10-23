@@ -96,6 +96,8 @@ struct AllocationRecord {
     size_t messages = 0, bytes = 0;  // CBBA: TASK_CONSENSUS wire bytes at the serializer
     double total = 0, optimum = -1;  // auction score; the exact optimum (2 agents), -1 if not computed
     std::vector<float> scales;       // the common scales (8: five IG terms, path, bandwidth, risk)
+    int components = 1;              // connected components of the comms graph over the active agents
+    std::string partition_note;      // set only when components > 1: what a partition does and does not model
 };
 
 struct Phase4Plan {
@@ -117,9 +119,11 @@ void ApplyDirectives(int agent, const std::vector<RegionDirective>& dirs,
 void MaskKeepOut(int agent, const std::vector<RegionDirective>& dirs, const GridFrame& g, cv::Mat* plan);
 
 /// Exactly-once greedy joint pick: agents pick in descending order of their best option's utility (ties: the lower
-/// index first), each its best option whose task_id no earlier agent took. -1 = none. At N = 2: the agent with the
-/// higher best utility picks first (ties: agent 0), the other takes its best option with a different task_id.
-void JointPick(Phase4Plan* p);
+/// index first), each its best option whose task_id no earlier agent OF ITS COMPONENT took. -1 = none. `component[a]`
+/// labels agent a's connected component of the comms graph (empty = one component: the whole fleet), so a partition
+/// is never coordinated across. At N = 2, one component: the agent with the higher best utility picks first (ties:
+/// agent 0), the other takes its best option with a different task_id.
+void JointPick(Phase4Plan* p, const std::vector<int>& component = {});
 
 /// D115's auction instance from both agents' options: common scales (max over agents of each term's p90), per agent
 /// and task its best view (by D114 utility), cbar = the D114 value on the common scales net of bandwidth and risk,
@@ -140,6 +144,8 @@ public:
     /// `agents` has one entry per agent (throws std::invalid_argument otherwise).
     Phase4Plan Plan(double t_s, const std::vector<Phase4AgentInput>& agents, const std::vector<RegionDirective>& dirs);
     int Agents() const { return int(track_.size()); }
+    /// How much of agent b's track agent a has received (its NBV peers): synced at replans while they share a component.
+    size_t SharedTrack(int a, int b) const { return shared_.at(size_t(a)).at(size_t(b)); }
     std::pair<std::vector<std::pair<double, double>>, double> Route(const Phase4Plan& p, int agent, int i,
                                                                    const Cell& from) const;
     const TsdfMap& Map() const { return map_; }
@@ -158,12 +164,14 @@ private:
     EgressPlanner egress_;
     std::vector<std::vector<core::Vec3>> track_;   // per agent
     bool detected_ = false;
-    void Allocate(const std::vector<Phase4AgentInput>& agents, Phase4Plan* out);
+    void Allocate(const std::vector<Phase4AgentInput>& agents, const std::vector<std::vector<int>>& G,
+                  const std::vector<int>& component, Phase4Plan* out);
     core::WireCodec codec_;
     std::set<int64_t> last_tasks_;
     std::vector<std::vector<int>> last_graph_;   // the CBBA comms graph at the last event (the topology trigger)
     bool allocated_ = false;
     std::vector<int64_t> last_pick_;   // task ids assigned at the last event, per agent
+    std::vector<std::vector<size_t>> shared_;   // shared_[a][b]: how much of b's track a holds (synced while connected)
 };
 
 }  // namespace ariadne::planning
