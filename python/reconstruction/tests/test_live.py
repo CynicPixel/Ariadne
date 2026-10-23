@@ -72,7 +72,9 @@ def test_seeding_backprojects_into_the_anchor_frame_and_respects_alpha_and_rho()
     assert len(s.means) == (h - 3) * (w - w // 2)
     X_C = np.stack([(c - K[0, 2]) / f * 2.0, (r - K[1, 2]) / f * 2.0, np.full(len(r), 2.0)], 1)
     np.testing.assert_allclose(s.means, X_C @ T[:3, :3].T + T[:3, 3], atol=1e-5)
-    np.testing.assert_allclose(s.scales, 2.0 / f, rtol=1e-6)    # the pixel footprint
+    # gsplat's kNN init: on a full-density grid the 3 nearest neighbours sit one pixel footprint (Z / f) away (the
+    # NaN rows shift a few edge points to sqrt(2) neighbours, so compare the median).
+    assert abs(np.median(s.scales) - 2.0 / f) < 1e-6
     np.testing.assert_allclose(s.colors[:, 0], 0.4)
     # rho: existing Gaussians at those exact points suppress every seed; a coarse rho merges neighbours.
     assert len(seed(Z, S, A, K, T, alpha, s.means, p, np.random.default_rng(0)).means) == 0
@@ -91,6 +93,8 @@ def test_seeding_sample_fraction_is_deterministic():
     b = seed(Z, S, img, K, np.eye(4), None, None, p, np.random.default_rng(3))
     assert len(a.means) == round(0.05 * h * w)
     np.testing.assert_array_equal(a.pixels, b.pixels)
+    # A 5 % sample sits ~sqrt(20) px apart: the scale follows the sampling, not the 1-pixel footprint (D198).
+    assert np.median(a.scales) > 3 * (1.5 / 30.0)
 
 
 def test_chunk_is_32_bytes_per_gaussian_in_the_anchor_frame_and_table_places_it():

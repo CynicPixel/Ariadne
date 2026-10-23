@@ -7,9 +7,12 @@
               [ASSUMPTION] that RTG's RGB-D fraction transfers to half-res stereo depth
   radius      dropped if an existing Gaussian of the submap lies within rho (Gaussian-SLAM's rho = 0.01 m), and
               deduplicated among themselves on the same rho grid
-  init        mean = back-projected point in the anchor frame; isotropic scale = the pixel footprint Z / f (the
-              back-projection of one spool pixel); identity rotation; opacity `init_opacity`; colour = the
-              training image at that pixel
+  init        mean = back-projected point in the anchor frame; isotropic scale = sqrt(mean squared distance to the
+              3 nearest Gaussians, new and existing) -- gsplat simple_trainer's init (transcribed in
+              ariadne_recon/gaussians.py, RECON_1.7), which matches the scale to the SAMPLING density; identity
+              rotation; opacity `init_opacity`; colour = the training image at that pixel.
+              (The first version used the 1-pixel footprint Z/f: with a 5 % sample the seeds are ~4.5 px apart, the
+              map was mostly holes, and the trainer smoke measured a flat ~17 dB held-out PSNR -- D198.)
 
 Pure numpy (scipy KD-tree), deterministic for a given seed.
 """
@@ -69,7 +72,14 @@ def seed(Z: np.ndarray, sigma: np.ndarray, image: np.ndarray, K: np.ndarray, T_a
     uniq = np.zeros(len(X_A), bool)
     uniq[first] = True
     keep &= uniq
-    return Seeds(means=X_A[keep].astype(np.float32), scales=(z[keep] / fx).astype(np.float32),
+    X = X_A[keep]
+    allp = X if existing_means is None or not len(existing_means) else np.concatenate([existing_means, X])
+    if len(allp) >= 4:
+        d, _ = cKDTree(allp).query(X, k=4)                 # self at distance 0 is column 0
+        scale = np.sqrt((d[:, 1:] ** 2).mean(axis=1))
+    else:
+        scale = z[keep] / fx                               # too few points for neighbours: the pixel footprint
+    return Seeds(means=X.astype(np.float32), scales=scale.astype(np.float32),
                  colors=img[r[keep], c[keep]], pixels=np.stack([r[keep], c[keep]], 1).astype(np.int32))
 
 
