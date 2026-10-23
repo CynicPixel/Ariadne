@@ -5,19 +5,22 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <map>
 #include <stdexcept>
 
 namespace ariadne::planning::multi {
 
 cv::Mat EncodeCells(const TraversabilityMaps& m) {
-    cv::Mat out(m.slab.size(), CV_8U, cv::Scalar(kCellUnknown));
-    for (int r = 0; r < m.slab.rows; ++r)
-        for (int c = 0; c < m.slab.cols; ++c) {
-            const uint8_t s = m.slab.at<uint8_t>(r, c);
-            if (s == kOccupied) out.at<uint8_t>(r, c) = kCellOccupied;
-            else if (s == kFree) out.at<uint8_t>(r, c) = m.trav_r.at<uint8_t>(r, c) ? kCellFreeResponder : kCellFree;
-        }
+    cv::Mat out(m.slab.size(), CV_8U);
+    for (int r = 0; r < m.slab.rows; ++r) {   // row pointers: one pass, no per-pixel lookups
+        const uint8_t* s = m.slab.ptr<uint8_t>(r);
+        const uint8_t* t = m.trav_r.ptr<uint8_t>(r);
+        uint8_t* o = out.ptr<uint8_t>(r);
+        for (int c = 0; c < m.slab.cols; ++c)
+            o[c] = s[c] == kOccupied ? kCellOccupied : s[c] == kFree ? (t[c] ? kCellFreeResponder : kCellFree) : kCellUnknown;
+    }
     return out;
 }
 
@@ -31,10 +34,12 @@ uint64_t SlabExporter::Update(const TraversabilityMaps& m) {
     bool any = false;
     for (int by = 0; by < bh_; ++by)
         for (int bx = 0; bx < bw_; ++bx) {
-            const cv::Rect rc(bx * kBlock, by * kBlock, std::min(kBlock, g_.cols - bx * kBlock), std::min(kBlock, g_.rows - by * kBlock));
-            if (cv::countNonZero(now(rc) != codes_(rc)) == 0) continue;
+            const int x0 = bx * kBlock, y0 = by * kBlock, w = std::min(kBlock, g_.cols - x0), h = std::min(kBlock, g_.rows - y0);
+            bool diff = false;   // row memcmp, then copy only a changed block's rows
+            for (int r = 0; r < h && !diff; ++r) diff = std::memcmp(now.ptr<uint8_t>(y0 + r) + x0, codes_.ptr<uint8_t>(y0 + r) + x0, size_t(w)) != 0;
+            if (!diff) continue;
             if (!any) ++version_, any = true;
-            now(rc).copyTo(codes_(rc));
+            for (int r = 0; r < h; ++r) std::memcpy(codes_.ptr<uint8_t>(y0 + r) + x0, now.ptr<uint8_t>(y0 + r) + x0, size_t(w));
             changed_[size_t(by * bw_ + bx)] = version_;
         }
     return version_;
@@ -118,13 +123,103 @@ TaskBid BuildBid(int sender, uint32_t epoch, uint64_t seq, int64_t t_ns, const N
         for (int k = 0; k < 5; ++k) x.ig_raw[k] = float(o.ig_raw[size_t(k)]);
         x.path_m = float(o.path_m), x.cost_bandwidth = float(o.cost[1]), x.cost_risk = float(o.cost[4]);
         x.risk = float(o.risk), x.source = uint8_t(o.source);
+        x.footprint = o.footprint;
         b.options.push_back(x);
     }
     return b;
 }
 
-TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo& comp, double r_same, int64_t t_ns,
-                           uint64_t seq) {
+namespace {
+
+int64_t BlockKey(const BlockGain& b) { return (int64_t(b.by) << 32) | uint32_t(uint16_t(b.bx)); }
+
+double Marginal(const BidOption& o, const std::map<int64_t, int>& residual) {   // in voxels
+    double d = 0;
+    for (const BlockGain& b : o.footprint) {
+        const auto it = residual.find(BlockKey(b));
+        d += std::max(0, int(b.w) - (it == residual.end() ? 0 : it->second));
+    }
+    return d * kFootprintUnit;
+}
+
+// The greedy rounds of the discount (R2) and overlap (R1) modes over the members' bids (P: the common scales).
+void RoundsAssign(const std::vector<const TaskBid*>& by, const ComponentInfo& comp, const std::array<double, 8>& P,
+                  const BrokerParams& prm, TaskConsensus* out, BrokerLog* log) {
+    const size_t A = comp.members.size();
+    struct O {
+        const BidOption* o;
+        double other;   // the D114 terms but coverage, net of bandwidth and risk, on the common scales
+        double cov;     // the coverage term on its scale
+        double disc;    // exp(-rate x path)
+    };
+    std::vector<std::vector<O>> opts(A);
+    for (size_t a = 0; a < A; ++a) {
+        if (!by[a]) continue;
+        const double rate = P[5] > 0 ? by[a]->lambda_path / P[5] : 0.0;
+        for (const BidOption& o : by[a]->options) {
+            double other = 0;
+            for (int k = 1; k < 5; ++k) other += P[size_t(k)] > 0 ? o.ig_raw[k] / P[size_t(k)] : 0.0;
+            other -= (P[6] > 0 ? o.cost_bandwidth / P[6] : 0.0) + (P[7] > 0 ? o.cost_risk / P[7] : 0.0);
+            opts[a].push_back({&o, other, P[0] > 0 ? o.ig_raw[0] / P[0] : 0.0, std::exp(-rate * o.path_m)});
+        }
+    }
+    std::map<int64_t, int> residual;   // per block: max w over the assigned options
+    std::vector<std::pair<double, double>> goals;
+    std::vector<bool> done(A, false);
+    double f = 0;
+    auto Value = [&](const O& x) {
+        if (prm.mode == BrokerMode::kOverlap) {
+            const double cov = P[0] > 0 ? Marginal(*x.o, residual) / P[0] : 0.0;
+            return std::max(0.0, cov + x.other);
+        }
+        double v = std::max(0.0, x.cov + x.other);   // discount: x (1 - P(d)) per assigned goal
+        for (const auto& [gx, gy] : goals) v *= std::min(1.0, std::hypot(x.o->goal_x - gx, x.o->goal_y - gy) / prm.range_m);
+        return v;
+    };
+    auto Feasible = [&](const O& x) {
+        for (const auto& [gx, gy] : goals)
+            if (std::hypot(x.o->goal_x - gx, x.o->goal_y - gy) < prm.r_same) return false;
+        return true;
+    };
+    for (;;) {
+        size_t ba = A, bi = 0;
+        double best = -1;
+        for (size_t a = 0; a < A; ++a) {
+            if (done[a]) continue;
+            for (size_t i = 0; i < opts[a].size(); ++i) {
+                if (!Feasible(opts[a][i])) continue;
+                const double s = Value(opts[a][i]) * opts[a][i].disc;
+                if (s > best) best = s, ba = a, bi = i;   // strict: ties to member order, then the bid's order
+            }
+        }
+        if (ba == A) break;
+        const BidOption& o = *opts[ba][bi].o;
+        const double df = Marginal(o, residual);
+        for (const BlockGain& b : o.footprint) {
+            int& r = residual[BlockKey(b)];
+            r = std::max(r, int(b.w));
+        }
+        f += df;
+        goals.push_back({o.goal_x, o.goal_y});
+        done[ba] = true;
+        out->assignments.push_back({comp.members[ba], o.task_key, o.goal_x, o.goal_y});
+        if (log) log->rounds.push_back({comp.members[ba], o.task_key, df, best, f});
+    }
+    if (log) {
+        log->f = f, log->upper_bound = f;
+        for (size_t a = 0; a < A; ++a) {   // partition matroid: OPT <= f(S) + sum over parts of the best marginal
+            double m = 0;
+            for (const O& x : opts[a]) m = std::max(m, Marginal(*x.o, residual));
+            log->upper_bound += m;
+        }
+    }
+}
+
+}  // namespace
+
+TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo& comp, const BrokerParams& prm,
+                           int64_t t_ns, uint64_t seq, BrokerLog* log) {
+    const double r_same = prm.r_same;
     TaskConsensus out;
     out.broker = comp.broker, out.epoch = comp.epoch, out.seq = seq, out.t_ns = t_ns, out.members = comp.members;
     // One bid per member, the newest; the auction's agent index = the member's position in comp.members.
@@ -148,9 +243,13 @@ TaskConsensus BrokerAssign(const std::vector<TaskBid>& bids, const ComponentInfo
             P[size_t(k)] = std::max(P[size_t(k)], P90Scale(v));
         }
     }
+    const size_t A = comp.members.size();
+    if (prm.mode != BrokerMode::kPlain) {
+        RoundsAssign(by, comp, P, prm, &out, log);
+        return out;
+    }
     // Tasks: greedy spatial clustering in bid order (member order, then each bid's utility order).
     std::vector<std::pair<double, double>> task_goal;
-    const size_t A = comp.members.size();
     std::vector<std::vector<int>> task_of(A);
     for (size_t a = 0; a < A; ++a) {
         if (!by[a]) continue;
@@ -219,6 +318,28 @@ Pick ApplyConsensus(const TaskConsensus* c, int self, uint32_t epoch, int64_t no
             return p;
         }
     return Own("the assigned task is gone");
+}
+
+Pick ApplyConsensusDiscounted(const TaskConsensus* c, int self, uint32_t epoch, int64_t now_ns, double timeout_s,
+                              const std::vector<TaskCandidate>& options, double r_same, double range_m, double tau_s) {
+    Pick p = ApplyConsensus(c, self, epoch, now_ns, timeout_s, options, r_same);
+    if (p.coordinated || !c || options.empty()) return p;
+    const double age = std::max(0.0, double(now_ns - c->t_ns) * 1e-9), keep = std::exp(-age / tau_s);
+    double best = -1e300;
+    for (size_t i = 0; i < options.size(); ++i) {
+        double u = options[i].utility;
+        if (u > 0)
+            for (const Assignment& a : c->assignments) {
+                if (a.agent == self) continue;
+                const double d = std::hypot(options[i].goal_xy.first - a.goal_x, options[i].goal_xy.second - a.goal_y);
+                u *= 1.0 - std::max(0.0, 1.0 - d / range_m) * keep;
+            }
+        if (u > best) best = u, p.option = int(i);
+    }
+    char buf[96];
+    std::snprintf(buf, sizeof buf, " (peers' claims discounted: age %.1f s, tau %.0f s)", age, tau_s);
+    p.why += buf;
+    return p;
 }
 
 }  // namespace ariadne::planning::multi

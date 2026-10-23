@@ -230,7 +230,7 @@ Phase4Plan Phase4Planner::Plan(double t_s, const std::vector<Phase4AgentInput>& 
         for (int b = 0; b < n; ++b)   // every other agent's received track, ascending index (N = 2, linked: the other's)
             if (b != a)
                 for (size_t i = 0; i < shared_[size_t(a)][size_t(b)]; ++i) peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
-        out.agents[size_t(a)] = PlanAgent(t_s, a, agents[size_t(a)], std::move(peers), nullptr, dirs, out, coarse);
+        out.agents[size_t(a)] = PlanAgent(t_s, a, agents[size_t(a)], std::move(peers), nullptr, false, dirs, out, coarse);
     }
     Allocate(agents, G, component, &out);
     return out;
@@ -246,7 +246,7 @@ void Phase4Planner::PlanMaps(Phase4Plan* out) {
 }
 
 Phase4AgentPlan Phase4Planner::PlanAgent(double t_s, int a, const Phase4AgentInput& in, std::vector<PeerKeyframe> peers,
-                                         const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs,
+                                         const cv::Mat* peer_known, bool footprints, const std::vector<RegionDirective>& dirs,
                                          const Phase4Plan& shared, const CoarseLayer& coarse) const {
     Phase4AgentPlan ap;
     NbvInputs ni;
@@ -255,6 +255,7 @@ Phase4AgentPlan Phase4Planner::PlanAgent(double t_s, int a, const Phase4AgentInp
     ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
     ni.peers = std::move(peers);
     ni.peer_known = peer_known;
+    ni.footprints = footprints;
     ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
     ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
     // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
@@ -285,7 +286,7 @@ Phase4Plan Phase4Planner::PlanOwn(double t_s, int self, const Phase4AgentInput& 
     PlanMaps(&out);
     if (!in.active) return out;
     const CoarseLayer coarse = BuildCoarse(map_);
-    out.agents[size_t(self)] = PlanAgent(t_s, self, in, peers, peer_known, dirs, out, coarse);
+    out.agents[size_t(self)] = PlanAgent(t_s, self, in, peers, peer_known, true, dirs, out, coarse);
     return out;
 }
 

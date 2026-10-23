@@ -161,7 +161,7 @@ private:
     cv::Mat PlanSpace(const TraversabilityMaps& m, const Cell& at) const;   // trav_a + the escape disc (D158)
     void PlanMaps(Phase4Plan* out);   // traversability, body support, the egress replan (Plan and PlanOwn alike)
     Phase4AgentPlan PlanAgent(double t_s, int a, const Phase4AgentInput& in, std::vector<PeerKeyframe> peers,
-                              const cv::Mat* peer_known, const std::vector<RegionDirective>& dirs, const Phase4Plan& shared,
+                              const cv::Mat* peer_known, bool footprints, const std::vector<RegionDirective>& dirs, const Phase4Plan& shared,
                               const CoarseLayer& coarse) const;
     Cell CellOf(const core::Vec3& p) const;
 

@@ -29,6 +29,15 @@ enum class TaskSource : char {
 /// §21.3 IG terms, in this order (raw, then normalised by the running p90 over the candidate set).
 enum IgTerm { kCoverage = 0, kEntropy = 1, kPoseConnectivity = 2, kEgressConfidence = 3, kLoopDisambiguation = 4 };
 
+/// D175 R1: one 32x32 planner block of a view's footprint (the SUBMAP_PATCH block keys) and how many of the view's
+/// coverage voxels (own-unknown, not peer-known) fall in it, in units of kFootprintUnit voxels (rounded up, capped at
+/// 255): a 1.6 m block holds thousands of voxels, so raw counts would saturate a uint8.
+constexpr int kFootprintUnit = 16;
+struct BlockGain {
+    int16_t bx = 0, by = 0;
+    uint8_t w = 0;
+};
+
 struct TaskCandidate {
     int64_t task_id = -1;      // stable across replans for the same task: a hash of the generator and its anchor
                                // voxel (e.g. a frontier cluster's minimum voxel), so exactly-once survives re-ranking
@@ -51,6 +60,7 @@ struct TaskCandidate {
     double risk = 0;
     double risk_geometric = 0, risk_structural = 0;
     std::string risk_reason;
+    std::vector<BlockGain> footprint;   // D175 R1, per-agent planning only (empty in the centralised planner): <= 32, by w
 };
 
 /// Exactly-once helper (the runtime's OtherCluster, by task id): the best-ranked option of `options` whose task is
