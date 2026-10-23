@@ -369,3 +369,68 @@ findings that change this item:
   - the band is pinned at 4 cells.
 
 **64-ray view ranking and the gate's time axis:** being checked (`lit_gate_ig.md`); result below when it lands.
+
+## 14. Gate result (2026-10-23): the claim fails on both scenes
+
+**Verdict: "Ariadne ≥ every baseline at every time fraction" is false on `ci_tiny` and on `maze_short`.** This is a
+loss, reported as one (invariant 7).
+
+The set is 24 lockstep live runs: 4 policies × 2 scenes × 3 seeds, 200 s each, every job exit 0. They ran on AWS
+c7i.4xlarge with llvmpipe, at RTF 0 with D168, from a1p `d59ee3d`. Evidence: `evaluation/runs/nbv_4.3_gate/` (summary,
+rows, run ids, command, manifest, both diagnostic scripts and their outputs).
+
+**Primary axis: coverage at T, mean of 3 seeds.**
+
+`ci_tiny`:
+
+| policy | T = 20 s | 40 s | 60 s | 80 s | 100 s | 200 s | AUC |
+|---|---|---|---|---|---|---|---|
+| ariadne | 0.387 | 0.699 | 0.846 | **0.938** | **0.952** | **0.962** | 0.884 |
+| coverage_greedy | **0.468** | 0.805 | 0.876 | 0.900 | 0.930 | 0.955 | **0.892** |
+| uncertainty_only | **0.468** | **0.817** | 0.875 | 0.898 | 0.922 | 0.938 | 0.883 |
+| random | 0.458 | 0.760 | **0.878** | 0.910 | 0.922 | 0.933 | 0.876 |
+
+- Losses: Ariadne is below all three baselines at T = 20, 40 and 60 s.
+- From T = 80 s it is best at every point.
+
+`maze_short`:
+
+| policy | T = 20 s | 60 s | 100 s | 120 s | 160 s | 180 s | 200 s | AUC |
+|---|---|---|---|---|---|---|---|---|
+| ariadne | 0.082 | 0.302 | 0.403 | 0.455 | 0.591 | **0.696** | **0.757** | 0.440 |
+| coverage_greedy | **0.112** | **0.322** | **0.497** | **0.593** | **0.668** | 0.691 | 0.713 | **0.495** |
+| uncertainty_only | **0.112** | 0.310 | 0.429 | 0.444 | 0.489 | 0.518 | 0.532 | 0.399 |
+| random | 0.078 | 0.274 | 0.430 | 0.446 | 0.468 | 0.468 | 0.473 | 0.374 |
+
+- Losses: Ariadne is below coverage_greedy at T = 20–160 s, the largest gap 0.455 vs 0.593 at 120 s.
+- It is below uncertainty_only at T = 20–100 s, and below random at T = 80–100 s.
+- It is best at T = 180 and 200 s.
+
+The full per-T list of losses is `gate_summary.yaml` → `losses`.
+
+**Secondary view (pre-registered §5): coverage against summed metres flown.** Per seed, coverage is linearly
+interpolated between barrier points, only within the metres that run reached; the table gives the mean over seeds.
+
+| metres | 5 | 10 | 15 | 20 | 25 | 30 |
+|---|---|---|---|---|---|---|
+| ci_tiny ariadne / best baseline | 0.440 / 0.417 | 0.837 / 0.797 | 0.938 / 0.898 | 0.960 / 0.913 | 0.963 / 0.923 | 0.962 / 0.936 |
+| maze_short ariadne / best baseline | 0.187 / 0.167 | 0.349 / 0.288 | 0.422 / 0.392 | 0.485 / 0.455 | 0.556 / 0.531 | 0.641 / 0.591 |
+
+- Per metre, Ariadne is best at every point from 5 to 30 m on both scenes, all 3 seeds in every mean.
+- At 40 m only one Ariadne seed got that far, so the 40 m point is not compared.
+- This view does not rescue the claim. The claim is on the time axis, by the §5 amendment, made before any run.
+
+**Diagnostic (a read of the traces, not a causal ablation).**
+- Ariadne chooses the nearest goals. The median path of the chosen candidate over the first 60 s is 0.84–1.70 m
+  across its 6 runs, against 1.77–2.41 m for every baseline run.
+- In the same time it flies the least. Summed metres by T = 60 s:
+  - ci_tiny: 8.7–12.0 m, against greedy 14.4–17.5 m;
+  - maze_short by T = 160 s: 26.1–29.4 m, against greedy 39.6–46.3 m.
+- With a new goal every 5 s barrier and an in-place turn to each goal's yaw (the §5 pilot facts), short goals turn
+  into less distance per second. The gate's time axis then charges for exactly that.
+- **Reading [UNVERIFIED]:** U(a)'s path term (PathScore, λ_path(t)) is too strong for a time-axis objective in this
+  rig. Ariadne's coverage per metre is the best, but its metres per second are the lowest.
+- Not tested: the fix would be a time-based path cost, or goal persistence across barriers. By the design-preflight
+  rule this is a design change made through §49, not a knob tuned after the failed run. It is open, after the D175 POC.
+
+**Not in this set:** the TARE row and the 1.8 nearest-frontier row ("-"). They are batches b09–b12, the 4.6 record.
