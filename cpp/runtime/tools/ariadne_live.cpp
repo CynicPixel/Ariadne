@@ -1473,20 +1473,35 @@ int main(int argc, char** argv) {
                 // after Deliver+Tick, logged by version, replay-identical. Without collab the nodes are ours and
                 // the direct reads stand.
                 std::shared_ptr<const live::CollabSnapshot> csnap;
+                // A missing per-agent view (the initial snapshot, before the fleet thread's first Publish, has an
+                // EMPTY agent map - found the hard way: .at() from a fork-join thread killed collab60b's live run
+                // at barrier 1) means "nothing heard yet": a fresh node's own state. Never .at() into csnap.
+                const auto ma_view = [&](int nk) -> const live::CollabAgentView* {
+                    if (!csnap) return nullptr;
+                    const auto it = csnap->agent.find(ac::AgentId(nk));
+                    return it == csnap->agent.end() ? nullptr : &it->second;
+                };
                 const auto ma_comp = [&](int nk) {
-                    return csnap ? csnap->agent.at(ac::AgentId(nk)).component : ma_node(nk).Component();
+                    if (!csnap) return ma_node(nk).Component();
+                    if (const auto* v = ma_view(nk)) return v->component;
+                    ac::CollabNode::ComponentView self_only;   // what a fresh node reports: itself, broker itself
+                    self_only.broker = ac::AgentId(nk);
+                    self_only.members = {ac::AgentId(nk)};
+                    return self_only;
                 };
                 const auto ma_hb = [&](int nk, int nj) -> std::optional<core::HeartbeatValue> {
                     if (!csnap) return ma_node(nk).LastHeartbeat(ac::AgentId(nj));
-                    const auto& hb = csnap->agent.at(ac::AgentId(nk)).heartbeat;
-                    const auto it = hb.find(ac::AgentId(nj));
-                    return it == hb.end() ? std::nullopt : std::optional<core::HeartbeatValue>(it->second);
+                    const auto* v = ma_view(nk);
+                    if (!v) return std::nullopt;
+                    const auto it = v->heartbeat.find(ac::AgentId(nj));
+                    return it == v->heartbeat.end() ? std::nullopt : std::optional<core::HeartbeatValue>(it->second);
                 };
                 const auto ma_acked = [&](int nk, int nj) -> uint64_t {
                     if (!csnap) return ma_node(nk).AckedPatchVersion(ac::AgentId(nj));
-                    const auto& ap = csnap->agent.at(ac::AgentId(nk)).acked_patch;
-                    const auto it = ap.find(ac::AgentId(nj));
-                    return it == ap.end() ? 0 : it->second;
+                    const auto* v = ma_view(nk);
+                    if (!v) return 0;
+                    const auto it = v->acked_patch.find(ac::AgentId(nj));
+                    return it == v->acked_patch.end() ? 0 : it->second;
                 };
                 // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
                 // (1) The comms ticks for (T_prev, T] run BEFORE the planners (D175 SS5), nodes in ascending id
