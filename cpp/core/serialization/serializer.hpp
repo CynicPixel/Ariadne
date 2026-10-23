@@ -347,7 +347,7 @@ struct SubmapPatchValue {
 };
 struct BlockGainValue {
     int16_t bx = 0, by = 0;
-    uint8_t w = 0;   // the view's full-IG unknown voxels in this block not known to peers (cap 255; A1)
+    uint8_t w = 0;   // the view's full-IG unknown voxels in this block not known to peers, in units of 16 voxels (kFootprintUnit, rounded up, cap 255; A1 20de9e8)
 };
 inline constexpr size_t kMaxFootprintBlocks = 32;
 struct BidOptionValue {

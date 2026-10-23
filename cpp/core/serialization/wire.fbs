@@ -171,7 +171,7 @@ table SlabBlock { bx:int; by:int; cells:[ubyte]; }
 /// SUBMAP_PATCH (8): the sender's OWN observations only, in its frame W_sender (`frame`), the blocks changed since the
 /// version the receiver acknowledged.
 table SubmapPatch { sender:int; epoch:uint; version:ulong; t_ns:long; blocks:[SlabBlock]; frame:FrameTag; }
-struct BlockGain { bx:short; by:short; w:ubyte; }   // w: the view's full-IG unknown voxels in the block not known to peers (cap 255)
+struct BlockGain { bx:short; by:short; w:ubyte; }   // w: the view's full-IG unknown voxels in the block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; A1 20de9e8)
 /// One of the sender's top-M options (everything the broker's auction needs). Goals in G (`TaskBid.frame`).
 table BidOption {
   task_key:long; goal_x:double; goal_y:double;
