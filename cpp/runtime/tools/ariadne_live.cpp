@@ -443,7 +443,7 @@ int main(int argc, char** argv) {
             std::string policy;
             const auto p4 = live::LoadPhase4Params(planner_cfg_path, mc, lc.refused_radius_m, lc.max_command_m, lc.escape_m,
                                                    run_seed, &policy);
-            planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold);
+            planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold, NA);
             planner_name = "a1_phase4:" + policy;
         }
         // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,

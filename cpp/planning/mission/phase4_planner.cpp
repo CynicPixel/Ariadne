@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
+#include <stdexcept>
+#include <string>
 
 namespace ariadne::planning {
 
@@ -97,14 +100,23 @@ void ApplyDirectives(int agent, const std::vector<RegionDirective>& dirs,
 }
 
 void JointPick(Phase4Plan* p) {
-    const auto& o0 = p->agents[0].nbv.options;
-    const auto& o1 = p->agents[1].nbv.options;
-    const double u0 = o0.empty() ? -1e300 : o0[0].utility, u1 = o1.empty() ? -1e300 : o1[0].utility;
-    const int first = u1 > u0 ? 1 : 0, second = 1 - first;
-    const auto& of = p->agents[first].nbv.options;
-    if (!of.empty()) p->joint[first] = 0;
-    const int64_t taken = of.empty() ? -1 : of[0].task_id;
-    p->joint[second] = OtherTask(p->agents[second].nbv.options, taken, 1e300);
+    const size_t n = p->agents.size();
+    p->joint.assign(n, -1);
+    auto best = [&](size_t a) { const auto& o = p->agents[a].nbv.options; return o.empty() ? -1e300 : o[0].utility; };
+    std::vector<size_t> order(n);
+    for (size_t a = 0; a < n; ++a) order[a] = a;
+    std::stable_sort(order.begin(), order.end(), [&](size_t x, size_t y) { return best(x) > best(y); });
+    std::set<int64_t> taken;   // task ids are non-negative (TaskId), so none collides with "no task"
+    for (size_t k = 0; k < n; ++k) {
+        const auto& o = p->agents[order[k]].nbv.options;
+        int pick = -1;
+        if (k == 0) pick = o.empty() ? -1 : 0;   // the first picker takes its best option
+        else
+            for (size_t i = 0; i < o.size() && pick < 0; ++i)   // OtherTask's rule, over every task already taken
+                if (!taken.count(o[i].task_id) && o[i].risk <= 1e300) pick = int(i);
+        p->joint[order[k]] = pick;
+        if (pick >= 0) taken.insert(o[size_t(pick)].task_id);
+    }
 }
 
 std::vector<Cell> StringPull(const cv::Mat& plan, const std::vector<Cell>& path) {
@@ -126,11 +138,16 @@ std::vector<Cell> StringPull(const cv::Mat& plan, const std::vector<Cell>& path)
     return out;
 }
 
-Phase4Planner::Phase4Planner(const Phase4Briefing& b, const Phase4Params& p)
+Phase4Planner::Phase4Planner(const Phase4Briefing& b, const Phase4Params& p, int n_agents)
     : b_(b), p_(p), map_(p.tsdf), esdf_(p.tsdf.voxel, p.trav.responder.rho + 2 * p.tsdf.voxel), fr_(p.frontiers),
-      egress_(b.target, b.entrances, b.grid.cell) {}
+      egress_(b.target, b.entrances, b.grid.cell) {
+    if (n_agents < 1) throw std::invalid_argument("Phase4Planner: n_agents must be >= 1");
+    track_.resize(size_t(n_agents));
+    last_pick_.assign(size_t(n_agents), -1);
+}
 
 size_t Phase4Planner::Integrate(int agent, int64_t /*t_ns*/, const DepthFrame& f) {
+    if (agent < 0 || agent >= Agents()) throw std::out_of_range("Phase4Planner::Integrate: agent " + std::to_string(agent));
     const std::vector<Idx3> dirty = map_.Integrate(f);
     if (esdf_.Empty()) esdf_.Rebuild(map_);
     else esdf_.Update(map_, dirty);
@@ -161,9 +178,16 @@ cv::Mat Phase4Planner::PlanSpace(const TraversabilityMaps& m, const Cell& at) co
     return plan;
 }
 
-Phase4Plan Phase4Planner::Plan(double t_s, const Phase4AgentInput agents[2], const std::vector<RegionDirective>& dirs) {
+Phase4Plan Phase4Planner::Plan(double t_s, const std::vector<Phase4AgentInput>& agents,
+                                const std::vector<RegionDirective>& dirs) {
+    const int n = Agents();
+    if (int(agents.size()) != n)
+        throw std::invalid_argument("Phase4Planner::Plan: " + std::to_string(agents.size()) + " inputs for " +
+                                    std::to_string(n) + " agents");
     Phase4Plan out;
     out.t_s = t_s;
+    out.agents.resize(size_t(n));
+    out.joint.assign(size_t(n), -1);
     out.maps = ComputeTraversability(map_, esdf_, b_.grid, p_.trav);
     out.support = BodySupport(map_, b_.grid, p_.trav.responder, p_.support_band_lo, p_.support_band_hi);
     EgressWeights w = p_.egress;
@@ -171,13 +195,15 @@ Phase4Plan Phase4Planner::Plan(double t_s, const Phase4AgentInput agents[2], con
     const cv::Mat pen = EgressPenalty(out.maps.clear_r, out.support, out.maps.risk, w);
     out.egress = egress_.Replan(out.maps.trav_r, pen, out.support, out.maps.risk);
     const CoarseLayer coarse = BuildCoarse(map_);
-    for (int a = 0; a < 2; ++a) {
-        if (!agents[a].active) continue;
+    for (int a = 0; a < n; ++a) {
+        if (!agents[size_t(a)].active) continue;
         NbvInputs ni;
         ni.map = &map_, ni.frontiers = &fr_, ni.coarse = &coarse, ni.trav = &out.maps, ni.grid = b_.grid;
         ni.route = &out.egress, ni.route_support = &out.support, ni.responder = p_.trav.responder;
         ni.entrances = b_.entrances, ni.risk_calibrated = p_.risk_calibrated, ni.t_s = t_s;
-        for (size_t i = 0; i < track_[1 - a].size(); ++i) ni.peers.push_back({1 - a, int64_t(i), track_[1 - a][i]});
+        for (int b = 0; b < n; ++b)   // every other agent's track, ascending agent index (N = 2: the other agent)
+            if (b != a)
+                for (size_t i = 0; i < track_[size_t(b)].size(); ++i) ni.peers.push_back({b, int64_t(i), track_[size_t(b)][i]});
         ni.bounds.lo = core::Vec3(b_.grid.ox, b_.grid.oy, 0.0);
         ni.bounds.hi = core::Vec3(b_.grid.ox + b_.grid.cols * b_.grid.cell, b_.grid.oy + b_.grid.rows * b_.grid.cell, b_.z_max_m);
         // keep_out masks the agent's plan space before NBV, so neither a view nor a path to it can use the region.
@@ -202,8 +228,9 @@ Phase4Plan Phase4Planner::Plan(double t_s, const Phase4AgentInput agents[2], con
 AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bundle, std::vector<float>* scales,
                              std::vector<std::vector<int>>* view) {
     // Common scales: per term, the max over agents of that agent's p90 (P90Scale over its own options).
+    const int n = int(p.agents.size());
     std::array<double, 8> P{};
-    for (int a = 0; a < 2; ++a) {
+    for (int a = 0; a < n; ++a) {
         const auto& o = p.agents[a].nbv.options;
         for (int k = 0; k < 8; ++k) {
             std::vector<double> v;
@@ -213,19 +240,19 @@ AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bu
     }
     scales->assign(P.begin(), P.end());
     std::vector<int64_t> ids;   // the union of task ids, sorted (deterministic task order)
-    for (int a = 0; a < 2; ++a)
+    for (int a = 0; a < n; ++a)
         for (const auto& c : p.agents[a].nbv.options)
             if (c.source != TaskSource::kReturn && c.source != TaskSource::kHold) ids.push_back(c.task_id);
     std::sort(ids.begin(), ids.end());
     ids.erase(std::unique(ids.begin(), ids.end()), ids.end());
     AuctionInstance in;
-    in.n_agents = 2, in.max_bundle = max_bundle, in.task_ids = ids;
+    in.n_agents = n, in.max_bundle = max_bundle, in.task_ids = ids;
     const size_t N = ids.size();
-    in.value.assign(2, std::vector<double>(N, 0.0));
-    in.d0.assign(2, std::vector<double>(N, 0.0));
-    in.leg.assign(2, std::vector<std::vector<double>>(N, std::vector<double>(N, 0.0)));
-    view->assign(2, std::vector<int>(N, -1));
-    for (int a = 0; a < 2; ++a) {
+    in.value.assign(size_t(n), std::vector<double>(N, 0.0));
+    in.d0.assign(size_t(n), std::vector<double>(N, 0.0));
+    in.leg.assign(size_t(n), std::vector<std::vector<double>>(N, std::vector<double>(N, 0.0)));
+    view->assign(size_t(n), std::vector<int>(N, -1));
+    for (int a = 0; a < n; ++a) {
         in.rate.push_back(P[5] > 0 ? p.agents[a].nbv.lambda_path / P[5] : 0.0);
         const auto& o = p.agents[a].nbv.options;
         for (size_t i = 0; i < o.size(); ++i) {   // options are sorted by utility: the first view of a task is its best
@@ -259,38 +286,45 @@ AuctionInstance BuildAuction(const Phase4Plan& p, const GridFrame& g, int max_bu
     return in;
 }
 
-void Phase4Planner::Allocate(const Phase4AgentInput agents[2], Phase4Plan* out) {
+void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, Phase4Plan* out) {
+    const int n = Agents();
     AllocationRecord& rec = out->allocation;
     rec.method = p_.allocator == Phase4Params::Allocator::kCbba ? "cbba"
                  : p_.allocator == Phase4Params::Allocator::kSga ? "sga" : "greedy";
     // The hard rule's {return, hold} is outside the auction: such an agent takes its first option.
-    const bool hard0 = out->agents[0].nbv.reserve_rule, hard1 = out->agents[1].nbv.reserve_rule;
+    bool hard = false;
+    for (int a = 0; a < n; ++a) hard = hard || out->agents[size_t(a)].nbv.reserve_rule;
     // Only the Ariadne row allocates by auction: the auction values are Ariadne's (D114 G on common scales), so a
     // baseline policy (random, coverage, uncertainty, TARE) fed to it would be re-scored as Ariadne and the §31.6 rows
     // would collapse. Baselines coordinate by the exactly-once greedy pick over their own ranking.
     const bool baseline = p_.nbv.policy != NbvPolicy::kAriadne;
     if (baseline) rec.method = "greedy";
-    if (p_.allocator == Phase4Params::Allocator::kGreedy || baseline || hard0 || hard1) {
+    if (p_.allocator == Phase4Params::Allocator::kGreedy || baseline || hard) {
         JointPick(out);
-        if (hard0) out->joint[0] = out->agents[0].nbv.options.empty() ? -1 : 0;
-        if (hard1) out->joint[1] = out->agents[1].nbv.options.empty() ? -1 : 0;
-        rec.trigger = hard0 || hard1 ? "reserve_rule" : "every_replan";
+        for (int a = 0; a < n; ++a)
+            if (out->agents[size_t(a)].nbv.reserve_rule) out->joint[size_t(a)] = out->agents[size_t(a)].nbv.options.empty() ? -1 : 0;
+        rec.trigger = hard ? "reserve_rule" : "every_replan";
         return;
     }
     std::vector<std::vector<int>> view;
     const AuctionInstance in = BuildAuction(*out, b_.grid, p_.max_bundle, &rec.scales, &view);
     rec.tasks = in.Tasks();
     const std::set<int64_t> tasks(in.task_ids.begin(), in.task_ids.end());
-    const bool linked = agents[0].active && agents[1].active && agents[0].linked && agents[1].linked;
+    // The comms graph: an edge between two active, linked agents (N = 2: the one "both linked" edge).
+    std::vector<std::vector<int>> G(size_t(n), std::vector<int>(size_t(n), 0));
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j)
+            G[size_t(i)][size_t(j)] = i != j && agents[size_t(i)].active && agents[size_t(j)].active &&
+                                      agents[size_t(i)].linked && agents[size_t(j)].linked;
     // Event triggers (§21.7): a new or completed task (the task set changed), or a topology change.
-    rec.trigger = !allocated_ ? "first" : (tasks != last_tasks_ ? "tasks" : (linked != last_linked_ ? "topology" : "none"));
+    rec.trigger = !allocated_ ? "first" : (tasks != last_tasks_ ? "tasks" : (G != last_graph_ ? "topology" : "none"));
     if (rec.trigger == "none") {   // reuse the last assignment: each agent keeps its task while it still has a view
-        for (int a = 0; a < 2; ++a) {
-            out->joint[a] = -1;
-            const auto& o = out->agents[a].nbv.options;
+        for (int a = 0; a < n; ++a) {
+            out->joint[size_t(a)] = -1;
+            const auto& o = out->agents[size_t(a)].nbv.options;
             for (size_t i = 0; i < o.size(); ++i)
                 if (o[i].task_id == last_pick_[size_t(a)]) {
-                    out->joint[a] = int(i);
+                    out->joint[size_t(a)] = int(i);
                     break;
                 }
         }
@@ -303,22 +337,21 @@ void Phase4Planner::Allocate(const Phase4AgentInput agents[2], Phase4Plan* out) 
         CbbaParams cp;
         cp.bytes = WireBytes(codec_, rec.scales);
         cp.transport = WireTransport(codec_, rec.scales);   // CBBA runs on exactly what the wire carries (D115a)
-        const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
         al = RunCbba(in, [&](int) { return G; }, cp);
     }
     rec.rounds = al.rounds, rec.messages = al.messages, rec.bytes = al.bytes, rec.total = al.total;
     if (in.n_agents == 2 && in.max_bundle <= 2) rec.optimum = TwoAgentOptimum(in);
-    for (int a = 0; a < 2; ++a) {
-        out->joint[a] = -1;
+    for (int a = 0; a < n; ++a) {
+        out->joint[size_t(a)] = -1;
         last_pick_[size_t(a)] = -1;
-        if (!agents[a].active) continue;
+        if (!agents[size_t(a)].active) continue;
         const auto& A = al.agents[size_t(a)];
         if (A.path.empty()) continue;
         const int j = A.path.front();   // execute the first task on its path
-        out->joint[a] = view[size_t(a)][size_t(j)];
+        out->joint[size_t(a)] = view[size_t(a)][size_t(j)];
         last_pick_[size_t(a)] = in.task_ids[size_t(j)];
     }
-    last_tasks_ = tasks, last_linked_ = linked, allocated_ = true;
+    last_tasks_ = tasks, last_graph_ = G, allocated_ = true;
 }
 
 

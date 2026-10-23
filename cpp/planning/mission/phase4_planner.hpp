@@ -15,7 +15,9 @@
 //                               exactly-once pick by 4.4's allocator (D115: CBBA with L_t = 1 by default, broker
 //                               SGA, or the greedy pick as an ablation row), event-triggered: re-run only when the
 //                               task set or the topology changed.
-//   Route(plan, agent, i, from) A* on the agent's plan space, line-of-sight string-pulled (4-connected chords, so
+//                               N agents (Phase 8 §42): everything is sized by the ctor's n_agents; at N = 2 every
+//                               rule is the 2-agent one (peers = the other agent, JointPick, CBBA graph, optimum).
+//   Route(plan, agent, i, from)A* on the agent's plan space, line-of-sight string-pulled (4-connected chords, so
 //                               no corner is cut), cut at max_command_m; never a raw-cell fallback.
 // Deterministic given its inputs: sim time only, no wall clock in any decision.
 // ---------------------------------------------------------------------------
@@ -72,7 +74,7 @@ struct RegionDirective {
 
 struct Phase4AgentInput {
     bool active = false;
-    bool linked = true;              // can exchange with the other agent this replan (topology for CBBA)
+    bool linked = true;              // can exchange with the other linked agents this replan (topology for CBBA)
     core::Vec3 position = core::Vec3::Zero();
     double flown_m = 0;
     std::vector<std::pair<double, double>> refused_goals;
@@ -102,8 +104,8 @@ struct Phase4Plan {
     TraversabilityMaps maps;
     cv::Mat support;
     EgressReplan egress;
-    Phase4AgentPlan agents[2];
-    int joint[2] = {-1, -1};   // index into agents[a].nbv.options; exactly-once by task_id
+    std::vector<Phase4AgentPlan> agents;   // one per agent (Plan sizes it N)
+    std::vector<int> joint;                // index into agents[a].nbv.options, -1 none; exactly-once by task_id
 };
 
 /// Filter and rescale one agent's options by the active region directives and the mover's refusals (in place).
@@ -114,8 +116,9 @@ void ApplyDirectives(int agent, const std::vector<RegionDirective>& dirs,
 /// Zero `plan` inside every keep_out polygon that applies to `agent` (cv::fillPoly on the grid).
 void MaskKeepOut(int agent, const std::vector<RegionDirective>& dirs, const GridFrame& g, cv::Mat* plan);
 
-/// Exactly-once greedy joint pick: the agent whose best option has the higher utility picks first (ties: agent 0);
-/// the other takes its best option with a different task_id. -1 = none.
+/// Exactly-once greedy joint pick: agents pick in descending order of their best option's utility (ties: the lower
+/// index first), each its best option whose task_id no earlier agent took. -1 = none. At N = 2: the agent with the
+/// higher best utility picks first (ties: agent 0), the other takes its best option with a different task_id.
 void JointPick(Phase4Plan* p);
 
 /// D115's auction instance from both agents' options: common scales (max over agents of each term's p90), per agent
@@ -131,10 +134,12 @@ std::vector<Cell> StringPull(const cv::Mat& plan, const std::vector<Cell>& path)
 
 class Phase4Planner {
 public:
-    Phase4Planner(const Phase4Briefing& b, const Phase4Params& p);
-    /// Returns the number of dirty blocks.
+    Phase4Planner(const Phase4Briefing& b, const Phase4Params& p, int n_agents = 2);
+    /// Returns the number of dirty blocks. Throws std::out_of_range unless 0 <= agent < n_agents.
     size_t Integrate(int agent, int64_t t_ns, const DepthFrame& f);
-    Phase4Plan Plan(double t_s, const Phase4AgentInput agents[2], const std::vector<RegionDirective>& dirs);
+    /// `agents` has one entry per agent (throws std::invalid_argument otherwise).
+    Phase4Plan Plan(double t_s, const std::vector<Phase4AgentInput>& agents, const std::vector<RegionDirective>& dirs);
+    int Agents() const { return int(track_.size()); }
     std::pair<std::vector<std::pair<double, double>>, double> Route(const Phase4Plan& p, int agent, int i,
                                                                    const Cell& from) const;
     const TsdfMap& Map() const { return map_; }
@@ -151,13 +156,14 @@ private:
     Esdf esdf_;
     FrontierSet3D fr_;
     EgressPlanner egress_;
-    std::vector<core::Vec3> track_[2];
+    std::vector<std::vector<core::Vec3>> track_;   // per agent
     bool detected_ = false;
-    void Allocate(const Phase4AgentInput agents[2], Phase4Plan* out);
+    void Allocate(const std::vector<Phase4AgentInput>& agents, Phase4Plan* out);
     core::WireCodec codec_;
     std::set<int64_t> last_tasks_;
-    bool last_linked_ = false, allocated_ = false;
-    std::vector<int64_t> last_pick_{-1, -1};   // task ids assigned at the last event
+    std::vector<std::vector<int>> last_graph_;   // the CBBA comms graph at the last event (the topology trigger)
+    bool allocated_ = false;
+    std::vector<int64_t> last_pick_;   // task ids assigned at the last event, per agent
 };
 
 }  // namespace ariadne::planning

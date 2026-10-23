@@ -95,18 +95,15 @@ inline planning::Phase4Briefing Phase4BriefFrom(const mis::MissionConfig& mc, co
 class A1Planner : public MissionPlanner {
 public:
     A1Planner(const mis::MissionConfig& mc, const mis::Briefing& b, const planning::Phase4Params& p, std::string policy,
-              double autonomous_threshold)
-        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold), planner_(Phase4BriefFrom(mc, b), p) {}
+              double autonomous_threshold, int n_agents = 2)
+        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold),
+          planner_(Phase4BriefFrom(mc, b), p, n_agents) {}
 
     size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
 
     PlanOutput Plan(const PlanContext& ctx) override {
-        if (ctx.n() != 2) {   // lifted when A1's feat/ph4-nagent (vector API) merges; the 1.8 placeholder is N-ready
-            throw std::invalid_argument("A1Planner: N-agent planning pending feat/ph4-nagent (scene has " +
-                                        std::to_string(ctx.n()) + " agents)");
-        }
-        planning::Phase4AgentInput in[2];
-        for (int a = 0; a < 2; ++a) {
+        std::vector<planning::Phase4AgentInput> in(size_t(ctx.n()));   // P8 D213: N agents end to end
+        for (int a = 0; a < ctx.n(); ++a) {
             in[a].active = ctx.active[a];
             in[a].linked = true;
             in[a].position = ctx.position[a];
@@ -122,7 +119,7 @@ public:
         }
         plan_ = planner_.Plan(ctx.T * 1e-9, in, dirs);
 
-        PlanOutput out(2);
+        PlanOutput out(ctx.n());
         out.maps.slab = plan_.maps.slab;
         out.maps.trav_r = plan_.maps.trav_r;
         out.maps.trav_a = plan_.maps.trav_a;
@@ -140,8 +137,8 @@ public:
            << al.tasks << ",\"rounds\":" << al.rounds << ",\"messages\":" << al.messages << ",\"bytes\":" << al.bytes
            << ",\"total\":" << al.total << ",\"optimum\":" << al.optimum << "},\"egress\":{\"confidence\":"
            << plan_.egress.confidence << ",\"reroute\":\"" << plan_.egress.reroute << "\"},\"agents\":[";
-        for (int a = 0; a < 2; ++a) {
-            const auto& ap = plan_.agents[a];
+        for (int a = 0; a < ctx.n(); ++a) {
+            const auto& ap = plan_.agents[size_t(a)];
             AgentOptions& ao = out.agents[a];
             for (const auto& t : ap.nbv.options) {
                 TaskOption o;
