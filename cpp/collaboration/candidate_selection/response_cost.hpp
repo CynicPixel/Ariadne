@@ -59,6 +59,8 @@ public:
         f.keyframe_id = ~0ull;
         f.keypoints.assign(size_t(n_features) * 2, 0.0f);
         f.descriptors.assign(size_t(n_features) * feature_bytes, 0);
+        if (feature_bytes != 32) f.feature_bytes = feature_bytes;   // D171: non-ORB layouts carry it (a per-response
+                                                                    // header, e.g. int8's 4 B scale, is not priced)
         f.points3d.assign(size_t(n_features) * 3, 0.0f);
         f.camera.assign(5, 0.0f);
         // Envelope fields as on a real message: FlatBuffers omits zero-valued fields, so a sample encoded with seq 0,

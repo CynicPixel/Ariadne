@@ -12,7 +12,8 @@
 // Hooks (design §2):
 //   retrieve    cosine over the broker's RECEIVED global descriptors (EigenPlaces R50-256), other agents only,
 //               >= retrieval.min_score, top retrieval.top_k by score; the scores are cached for `similarity`
-//   features    the agent's own store record: ALIKED-n16 keypoints, fp16 descriptors (256 B), 3D points, camera
+//   features    the agent's own store record: ALIKED-n16 keypoints, descriptors int8 + per-keyframe scale (arch §15.7;
+//               fp16 the ablation, `local_encoding`), 3D points, camera
 //   verify      LightGlue matches -> VerifyMatched (E gate, PnP) -> the D71 gate with the loop noise model
 //               (GatedInterAgentEdge) -> the edge A -> B with its information
 //   solve       RobustMultiAgentSolve (PCM -> chordal re-init -> GNC-TLS, D76) or MultiAgentSolve (robust: false)
@@ -31,6 +32,7 @@
 #include "collaboration/comms/comms_node.hpp"
 #include "collaboration/protocol/collab_node.hpp"
 #include "collaboration/protocol/outcome.hpp"
+#include "collaboration/retrieval/local_descriptor_codec.hpp"
 #include "perception/association/hard_pair_matcher.hpp"
 #include "runtime/agent/collab_store.hpp"
 #include "runtime/datasets/scene_walls.hpp"
@@ -75,6 +77,8 @@ struct Config {
     bool robust = true;
     double selection_interval_s = 5.0, candidate_ttl_s = 120.0;
     int refine_passes = 2;
+    std::string local_encoding = "int8";      // arch §15.7 default; fp16 = the ablation row (D171)
+    std::string verify_calibration;           // where verify_min_pnp_inliers came from (manifest)
 };
 
 Config LoadConfig(const std::string& path) {
@@ -111,6 +115,9 @@ Config LoadConfig(const std::string& path) {
         get(v, "pnp_reprojection_px", c.verify.pnp_reprojection_px);
         get(v, "min_pnp_inliers", c.verify.min_pnp_inliers);
     }
+    // The calibrated PnP floor (D171 §5 procedure, from the OTHER scene); the sweep writes it as one top-level key.
+    if (n["verify_min_pnp_inliers"]) c.verify.min_pnp_inliers = n["verify_min_pnp_inliers"].as<int>();
+    get(n, "verify_calibration", c.verify_calibration);
     if (const YAML::Node g = n["gate"]) {
         get(g, "noise_model", c.gate.noise_model);
         get(g, "noise_k_t", c.gate.noise_k_t);
@@ -124,27 +131,18 @@ Config LoadConfig(const std::string& path) {
     get(n, "selection_interval_s", c.selection_interval_s);
     get(n, "candidate_ttl_s", c.candidate_ttl_s);
     get(n, "refine_passes", c.refine_passes);
+    get(n, "local_encoding", c.local_encoding);
+    ac::ParseLocalEncoding(c.local_encoding);
     return c;
 }
 
-/// fp16 on the wire (design §2): 128 x 2 B per ALIKED descriptor.
-std::vector<uint8_t> ToFp16(const std::vector<float>& v) {
-    cv::Mat f(1, int(v.size()), CV_32F, const_cast<float*>(v.data())), h;
-    f.convertTo(h, CV_16F);
-    return std::vector<uint8_t>(h.data, h.data + h.total() * h.elemSize());
-}
-cv::Mat FromFp16(const std::vector<uint8_t>& b, int dims) {
-    const int n = int(b.size() / (2 * size_t(dims)));
-    cv::Mat h(n, dims, CV_16F, const_cast<uint8_t*>(b.data())), f;
-    h.convertTo(f, CV_32F);
-    return f;
-}
-
-perception::HardPairFeatures ToHardPair(const core::FeatureResponseValue& r) {
+/// The response's descriptors as the broker decodes them (arch §15.7 encodings; D171: int8 + per-keyframe scale).
+perception::HardPairFeatures ToHardPair(const core::FeatureResponseValue& r, ac::LocalEncoding enc) {
     perception::HardPairFeatures f;
     f.size = cv::Size(1280, 720);
     for (size_t i = 0; i + 1 < r.keypoints.size(); i += 2) f.keypoints.emplace_back(r.keypoints[i], r.keypoints[i + 1], 1.0f);
-    f.descriptors = FromFp16(r.descriptors, 128);
+    const std::vector<float> d = ac::DecodeLocal(r.descriptors, enc);
+    cv::Mat(int(d.size() / 128), 128, CV_32F, const_cast<float*>(d.data())).copyTo(f.descriptors);
     return f;
 }
 
@@ -233,7 +231,8 @@ int main(int argc, char** argv) {
         // Every verify call with its ground-truth edge error: EVALUATION ONLY (threshold calibration on the other
         // scene, accepted-edge precision). Written after the decision; nothing reads it back.
         std::ofstream ecsv(fs::path(out) / "edges.csv");
-        ecsv << "agent_a,kf_a,agent_b,kf_b,score,matches,essential_inliers,pnp_inliers,reason,gt_err_t_m,gt_err_r_deg\n";
+        ecsv << "agent_a,kf_a,agent_b,kf_b,score,matches,essential_inliers,pnp_inliers,reason,gt_err_t_m,gt_err_r_deg,"
+                "gt_baseline_m,pose_err_deg\n";
         const auto gt_rel = [&](const ac::KeyframeRef& a, const ac::KeyframeRef& b) -> std::optional<core::SE3> {
             const auto* ra = rec_of.at(a.agent).at(a.keyframe);
             const auto* rb = rec_of.at(b.agent).at(b.keyframe);
@@ -242,17 +241,25 @@ int main(int argc, char** argv) {
         };
         const auto log_edge = [&](const ac::KeyframeRef& a, const ac::KeyframeRef& b, const ac::VerifyResult* v,
                                   const std::string& reason, const core::SE3* Z) {
-            double et = NAN, er = NAN;
+            // pose_err_deg: D63's protocol for this matcher (LightGlue/SuperGlue relative-pose AUC): the larger of the
+            // rotation error and the angle between the estimated and true translation directions; rotation only when
+            // the true baseline is under 0.1 m (the direction is undefined there, D63's tiny-baseline caveat).
+            double et = NAN, er = NAN, base = NAN, pe = NAN;
             if (const auto g = gt_rel(a, b); g && Z) {
                 const core::SE3 d = g->inverse() * *Z;
                 et = d.t.norm();
                 er = std::acos(std::clamp((d.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
+                base = g->t.norm();
+                pe = er;
+                if (base >= 0.1 && Z->t.norm() > 1e-9)
+                    pe = std::max(pe, std::acos(std::clamp(g->t.normalized().dot(Z->t.normalized()), -1.0, 1.0)) *
+                                          180.0 / M_PI);
             }
             const auto sc = score_cache.find({a, b});
             ecsv << a.agent << ',' << a.keyframe << ',' << b.agent << ',' << b.keyframe << ','
                  << (sc == score_cache.end() ? NAN : sc->second) << ',' << (v ? v->matches : 0) << ','
                  << (v ? v->essential_inliers : 0) << ',' << (v ? v->pnp_inliers : 0) << ',' << reason << ',' << et << ','
-                 << er << '\n';
+                 << er << ',' << base << ',' << pe << '\n';
         };
         uint64_t solve_calls = 0, robust_inter = 0, robust_inliers = 0;
 
@@ -260,11 +267,13 @@ int main(int argc, char** argv) {
         np.selection_interval_s = cfg.selection_interval_s;
         np.candidate_ttl_s = cfg.candidate_ttl_s;
         if (cfg.arm != "similarity") np.budget_bytes_per_s = cfg.budget_bytes_per_s, np.budget_burst_bytes = cfg.budget_burst_bytes;
-        if (cfg.response_ratio > 0) np.response_cost.response_ratio[256] = cfg.response_ratio,
+        const ac::LocalEncoding enc = ac::ParseLocalEncoding(cfg.local_encoding);
+        const uint16_t feature_bytes = uint16_t(128 * ac::BytesPerDim(enc));
+        if (cfg.response_ratio > 0) np.response_cost.response_ratio[feature_bytes] = cfg.response_ratio,
                                     np.response_cost.calibration_run = cfg.calibration_run;
         if (cfg.edge_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_EDGE)] = cfg.edge_ratio;
         if (cfg.graph_ratio > 0) np.response_cost.class_ratio[int(core::MessageClass::POSE_GRAPH)] = cfg.graph_ratio;
-        np.default_feature_bytes = 256;
+        np.default_feature_bytes = feature_bytes;
 
         const slam::JointRobustParams robust_params{};
         auto solve_robust = ac::RobustMultiAgentSolve(robust_params, [&](const slam::JointRobustReport& r) {
@@ -302,7 +311,9 @@ int main(int argc, char** argv) {
                 core::FeatureResponseValue v;
                 v.keyframe_id = kf;
                 v.keypoints = r.keypoints;
-                v.descriptors = ToFp16(r.descriptors);
+                v.descriptors = ac::EncodeLocal(r.descriptors, enc);
+                v.feature_bytes = feature_bytes;
+                v.header_bytes = enc == ac::LocalEncoding::kInt8 ? 4 : 0;
                 v.points3d = r.points3d;
                 v.camera.assign(r.camera.begin(), r.camera.end());
                 return v;
@@ -315,7 +326,7 @@ int main(int argc, char** argv) {
                     ++vs.reasons[why];
                     vs.ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
                 };
-                const perception::HardPairFeatures A = ToHardPair(fa), B = ToHardPair(fb);
+                const perception::HardPairFeatures A = ToHardPair(fa, enc), B = ToHardPair(fb, enc);
                 if (A.keypoints.size() < 8 || B.keypoints.size() < 8)
                     return log_edge(a, b, nullptr, "too_few_features", nullptr), done("too_few_features"), std::nullopt;
                 const std::vector<cv::DMatch> m = lightglue.Match(A, B);
@@ -375,13 +386,25 @@ int main(int argc, char** argv) {
 
         // --- scoring (evaluation only) -------------------------------------------------------------------------
         std::map<ac::AgentId, std::vector<const runtime::CollabStoreRecord*>> released;
-        auto merged_ate = [&](size_t& merged_agents, size_t& kf_merged, size_t& kf_total) {
-            std::vector<core::TrajectorySample> est, gt;
-            merged_agents = kf_merged = kf_total = 0;
+        // Agents share a frame only if they adopted estimates of the same anchor (G = W_anchor, held across epochs,
+        // COLLAB_3.2 §5). After a split brain each side has its own G: scored is the frame holding the most released
+        // keyframes (ties: the lower anchor), never a mix of frames.
+        auto merged_ate = [&](size_t& merged_agents, size_t& kf_merged, size_t& kf_total, ac::AgentId* frame = nullptr) {
+            std::map<ac::AgentId, size_t> kf_in;   // anchor -> released keyframes of agents in that frame
+            kf_total = 0;
             for (const auto& [a, rs] : released) {
                 kf_total += rs.size();
+                if (node_of.at(a)->T_G_W()) kf_in[node_of.at(a)->T_G_W_anchor()] += rs.size();
+            }
+            merged_agents = kf_merged = 0;
+            if (kf_in.empty()) return runtime::ErrorStats{};
+            ac::AgentId best = kf_in.begin()->first;
+            for (const auto& [anc, n] : kf_in) if (n > kf_in.at(best)) best = anc;
+            if (frame) *frame = best;
+            std::vector<core::TrajectorySample> est, gt;
+            for (const auto& [a, rs] : released) {
                 const auto T = node_of.at(a)->T_G_W();
-                if (!T) continue;
+                if (!T || node_of.at(a)->T_G_W_anchor() != best) continue;
                 ++merged_agents;
                 for (const auto* r : rs) {
                     if (!r->has_gt) continue;
@@ -425,7 +448,7 @@ int main(int argc, char** argv) {
                 g.stamp_ns = r.t_create_ns;
                 g.descriptor = r.global;
                 g.n_features = uint32_t(r.keypoints.size() / 2);
-                g.feature_bytes = 256;
+                g.feature_bytes = feature_bytes;
                 g.fp16 = true;   // arch §15.7's encoding (D171)
                 node_of.at(rl.agent)->AddKeyframe(r.id, r.t_create_ns, r.T_W_C, odo, g, now);
                 released[rl.agent].push_back(&r);
@@ -461,13 +484,16 @@ int main(int argc, char** argv) {
             for (const auto& s : oc.incomplete) o << "  - \"" << s << "\"\n";
         }
         size_t ma = 0, km = 0, kt = 0;
-        const runtime::ErrorStats merged = merged_ate(ma, km, kt);
+        ac::AgentId frame = 0;
+        const runtime::ErrorStats merged = merged_ate(ma, km, kt, &frame);
         std::ofstream y(fs::path(out) / "results.yaml");
         y << "tool: ariadne_collab_sim\nprotocol: v2\narm: " << cfg.arm << "\nseed: " << seed
           << "\ncomms_scenario: " << scenario.name << "\nbudget: {bytes_per_s: " << cfg.budget_bytes_per_s
           << ", burst_bytes: " << cfg.budget_burst_bytes << ", source: \"" << cfg.budget_source << "\"}"
           << "\nresponse_ratio: {value: " << cfg.response_ratio << ", calibration_run: \"" << cfg.calibration_run << "\"}"
-          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nagents: " << fleet.size()
+          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nlocal_encoding: " << cfg.local_encoding
+          << "\nverify: {min_pnp_inliers: " << cfg.verify.min_pnp_inliers << ", calibration: \"" << cfg.verify_calibration
+          << "\"}" << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";
         // Per class (COLLAB_3.2 §7, D171): first transmission outside resync (the I6 measured side) with the senders'
         // per-message predictions; overhead rows apart: retransmissions and resends to a new broker (resync).
@@ -510,7 +536,7 @@ int main(int argc, char** argv) {
         for (const auto& [k, c] : vs.reasons) y << (first ? "" : ", ") << k << ": " << c, first = false;
         y << "}}\nsolve: {calls: " << solve_calls << ", ms_total: " << solve_ms << ", robust_inter_agent: " << robust_inter
           << ", robust_inliers: " << robust_inliers << "}\n";
-        y << "ate_merged: {rmse_m: " << (merged.count ? merged.rmse : NAN) << ", merged_agents: " << ma
+        y << "ate_merged: {rmse_m: " << (merged.count ? merged.rmse : NAN) << ", frame_anchor: " << frame << ", merged_agents: " << ma
           << ", kf_merged: " << km << ", kf_released: " << kt << "}\n";
         y << "ate_solo:\n";
         for (const auto& [a, rs] : released) {
@@ -521,6 +547,14 @@ int main(int argc, char** argv) {
             const runtime::ErrorStats e = runtime::ComputeATE(est, gt);
             y << "  - {agent: " << a << ", rmse_m: " << (e.count ? e.rmse : NAN) << ", keyframes: " << rs.size()
               << ", prefix_unreleased: " << stores.at(a).prefix_unreleased << "}\n";
+        }
+        y << "endpoints:\n";
+        for (const auto& n : nodes) {
+            const auto& e = n->endpoint().stats();
+            y << "  - {agent: " << n->self() << ", first_tx: " << e.first_tx_messages << ", retx_fragments: "
+              << e.retransmitted_fragments << ", acked: " << e.acked << ", delivered: " << e.delivered << ", duplicates: "
+              << e.duplicates << ", decode_rejected: " << e.decode_rejected << ", expired: " << e.expired
+              << ", superseded: " << e.superseded << ", abandoned_reliable: " << e.abandoned_reliable << "}\n";
         }
         const auto& ns = comms.network().stats();
         y << "network: {sent: " << ns.sent << ", lost_link_down: " << ns.lost_link_down << ", lost_random: " << ns.lost_random

@@ -288,6 +288,9 @@ public:
         return issued_;
     }
     std::optional<core::SE3> T_G_W() const { return T_G_W_; }
+    /// The anchor whose G the current T_G_W is expressed in (it can predate the latest adopted estimate, which may
+    /// list this agent as a member it did not place). For scoring (D171); never read by the protocol.
+    AgentId T_G_W_anchor() const { return T_G_W_anchor_; }
     AgentId anchor() const { return mem_.anchor(); }
     const std::map<EdgeKey, LoopEdgeValue>& edges() const { return edges_; }
     /// Edges the broker holds back because a snapshot does not yet cover an endpoint (§3.4).
@@ -527,6 +530,7 @@ private:
             // Placed: adopt the anchor and my T_G_W (anchor propagation, §15.5).
             mem_.SetAnchor(g.anchor.agent);
             T_G_W_ = FromPoseValue(f.T_G_W);
+            T_G_W_anchor_ = g.anchor.agent;
             known_g_.insert({g.anchor.agent, g.anchor.epoch});
         }
     }
@@ -819,7 +823,8 @@ private:
     std::optional<EstimateRecord> adopted_;
     std::set<std::pair<AgentId, uint32_t>> known_g_;
     uint64_t edge_msg_key_ = 0, graph_msg_key_ = 0;
-    bool resyncing_ = false, resync_snapshot_ = false;   // D171: sends to a new broker are tagged resync
+    bool resyncing_ = false, resync_snapshot_ = false;
+    AgentId T_G_W_anchor_ = 0;   // D171: sends to a new broker are tagged resync
 
     // broker state (soft: rebuilt from agents after an election change)
     std::map<KeyframeRef, core::GlobalDescriptorValue> descriptor_db_;

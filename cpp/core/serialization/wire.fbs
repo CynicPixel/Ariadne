@@ -158,6 +158,10 @@ table FeatureResponse {
   descriptors:[ubyte];
   points3d:[float];
   camera:[float];
+  // D171, appended: descriptor bytes per feature (0 = ORB's 32, the v1 layout) and a per-response header before them
+  // (the int8 encoding's 4-byte scale). v1 senders never set them, so their bytes are unchanged.
+  feature_bytes:ushort;
+  header_bytes:ushort;
 }
 
 table Envelope {

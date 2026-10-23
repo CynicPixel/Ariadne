@@ -4194,6 +4194,39 @@ Branch `feat/3.4-spectral`.
   - The plain-PGO `MultiAgentSolve` is the `robust: false` ablation row.
 - **Edge noise model:** the EuRoC fit (`euroc_v2_loops.yaml`), carried to the sim [ASSUMPTION]. A sim fit from
   `edges.csv` follows the first sweep.
+- **Local descriptors: int8 with a per-keyframe scale.** This is arch §15.7's default (fp16 is its ablation), and it
+  corrects this entry's earlier fp16 choice.
+  - Measured (`LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs`, D90 sim pairs f200/f205 and
+    f700/f710): LightGlue's match set is **identical** to fp32's, precision 1 and recall 1, for both int8 and fp16.
+  - Caveat: these are near-temporal pairs. Inter-agent pairs are harder, and `edges.csv` keeps watching.
+  - The feature response carries `feature_bytes` and `header_bytes` (appended wire fields; v1 bytes unchanged).
+    The decoder had hard-coded ORB's 32 B per feature and rejected every other layout; the smoke found this, and
+    `Serialization.LargeFeatureResponseRoundTripsThroughFragmentation` now pins it.
+- **Token-bucket depth:** at least the largest single fetch (RFC 2697: CBS ≥ the largest packet). With a depth of one
+  period's level alone, a level below one fetch per period starved the arm instead of rationing it (smoke: 0 of 246
+  candidates ever selected).
+- **Verifier calibration, pre-registered (2026-10-23, before any scene-1 data).**
+  - **Label:** a candidate is *good* iff its pose error is at most 10°. That is D63's protocol for this matcher, the
+    LightGlue/SuperGlue relative-pose AUC@10°: the larger of the rotation error and the translation-direction
+    error, with rotation only when the true baseline is under 0.1 m.
+  - D73's 0.2 m / 2° rule is not used here. It would label a true 13 cm / 2.6° inter-agent edge (180 inliers) bad.
+  - **Data:** the similarity arm on the **ideal** link of the OTHER scene, all seeds. Verification is geometry; the
+    `collapsed_v1` runs deliver too few responses to calibrate on.
+  - **Candidates:** rows that reached PnP and that the D71 gate did not reject.
+  - **Floor:** the smallest PnP-inlier count ≥ 25 (the 1.6 verifier's) that accepts no bad candidate. Only this floor
+    is varied, and only upward: B1 records PnP counts only for candidates that passed the E gate.
+  - **Reported:** the recall of good candidates, and the margin between the worst bad and the weakest good.
+  - **Stop condition:** if either scene has fewer than 10 good candidates, the sweep stops before B2 (this entry's
+    precondition).
+- **Smoke finding (scene 0, 30 s, NOT gate data): perceptual aliasing reaches the merged map.**
+  - One query keyframe of agent 1 verified against five of agent 0's keyframes, each about 10 m / 80° off, with
+    25–27 PnP inliers. The true edges have 143–180.
+  - The five are mutually consistent, so PCM accepts them as a clique: D75's aliasing-group failure.
+  - On the `ideal` link the true edges also arrived, and the robust stage kept them: merged ATE 2.6 cm.
+  - On `collapsed_v1` only the false group arrived: merged ATE 3.55 m.
+  - No back-end setting can reject a self-consistent group with no competitor. The group-level defence (five edges
+    from one query are one piece of evidence) is 3.5's, with its own preflight (arch §17.3). The sweep reports the
+    accepted-false-edge rate and the map deformation per arm, and those runs stay in the plot.
 
 **§49:**
 - catalogue: ALGORITHMS (COSMO-Bench, Tian et al.);

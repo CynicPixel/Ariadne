@@ -319,9 +319,11 @@ struct MatchRequestValue {
 struct FeatureResponseValue {
     uint64_t request_id = 0, keyframe_id = 0;
     std::vector<float> keypoints;     // x0 y0 x1 y1 ...
-    std::vector<uint8_t> descriptors; // 32 bytes per keypoint
+    std::vector<uint8_t> descriptors; // header_bytes, then feature_bytes per keypoint (v1: 32, ORB, no header)
     std::vector<float> points3d;      // x y z per keypoint, NaN = no depth
     std::vector<float> camera;        // fx fy cx cy baseline_m
+    uint16_t feature_bytes = 0;       // D171: 0 = the v1 layout (32 B ORB)
+    uint16_t header_bytes = 0;        // D171: e.g. the int8 encoding's per-keyframe scale (4 B)
 };
 
 struct DecodedMessage {
@@ -496,7 +498,8 @@ public:
         const auto de = fbb.CreateVector(f.descriptors);
         const auto p3 = fbb.CreateVector(f.points3d);
         const auto ca = fbb.CreateVector(f.camera);
-        const auto off = wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca);
+        const auto off =
+            wire::CreateFeatureResponse(fbb, f.request_id, f.keyframe_id, kp, de, p3, ca, f.feature_bytes, f.header_bytes);
         return FinishEnvelope(fbb, MessageClass::MATCH_RESPONSE, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_feature_response(off); });
     }
@@ -631,7 +634,9 @@ public:
         if (const auto* f = env->feature_response()) {
             if (!f->keypoints() || !f->descriptors() || !f->points3d() || !f->camera()) return Status::kMalformed;
             const size_t n = f->keypoints()->size() / 2;
-            if (f->keypoints()->size() % 2 || f->descriptors()->size() != 32 * n || f->points3d()->size() != 3 * n ||
+            const size_t per = f->feature_bytes() ? f->feature_bytes() : 32;
+            if (f->keypoints()->size() % 2 || f->descriptors()->size() != f->header_bytes() + per * n ||
+                f->points3d()->size() != 3 * n ||
                 f->camera()->size() != 5) {
                 return Status::kMalformed;
             }
@@ -643,6 +648,8 @@ public:
             v.descriptors.assign(f->descriptors()->begin(), f->descriptors()->end());
             v.points3d.assign(f->points3d()->begin(), f->points3d()->end());
             v.camera.assign(f->camera()->begin(), f->camera()->end());
+            v.feature_bytes = f->feature_bytes();
+            v.header_bytes = f->header_bytes();
         }
         out->has_heartbeat = out->has_ack = false;
         if (const auto* h = env->heartbeat()) {

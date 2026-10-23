@@ -6,7 +6,8 @@
 #
 # Stages (each logged to $ARIADNE_RESULTS/steps.txt; the small outputs of every run come back):
 #   A  pass A: 2 scenes x 3 seeds x 2 agents (ariadne_collab_passa), P_A at a time
-#   B1 the similarity arm (no budget) per (scene, seed) on collapsed_v1: R (the fetch rate) and the response ratio
+#   B1 the similarity arm (no budget) per (scene, seed): on collapsed_v1 for R and the compression ratios; on the
+#      ideal link for the verifier calibration (verification is geometry, not comms; D171 §5)
 #   B2 greedy + spectral x 4 budget levels per (scene, seed); levels and ratio from the OTHER scene (D171 §4-§5)
 #   C  the fault campaign on the spectral arm at the 25 % level: ideal, collapsed_partition_v1, datagram faults
 set -uo pipefail
@@ -71,7 +72,7 @@ if [[ " $STAGES " == *" A "* ]]; then
   : > "$W/passa.jobs"
   for sc in 0 1; do for s in $SEEDS; do for ag in 0 1; do
     rec=$(scene_rec $sc)
-    echo "$BIN/ariadne_collab_passa --rec $rec --scene $rec/scene --perception-config configs/perception/sim_v1.yaml \
+    echo "$BIN/ariadne_collab_passa --rec $rec/rec --scene $rec/scene --perception-config configs/perception/sim_v1.yaml \
       --slam-config configs/slam/sim_v2.yaml --imu-noise configs/sim/imu_noise_v1.yaml --agent $ag --seed $s \
       --place-onnx $EP/eigenplaces_r50_256_640x360.onnx --place-size 640x360 $models \
       --out /w/passa/s$sc/seed$s > /w/passa_s${sc}_seed${s}_a$ag.log 2>&1" >> "$W/passa.jobs"
@@ -82,14 +83,14 @@ if [[ " $STAGES " == *" A "* ]]; then
     -e OPENCV_FOR_THREADS_NUM=$(( $(nproc) / P_A )) ariadne/core-dev:dev bash -c "{}" < "$W/passa.jobs"
   mkdir -p "$R/passa"
   for f in "$W"/passa_*.log; do tail -3 "$f" > "$R/passa/$(basename "$f")"; done
-  (cd "$W" && find passa -name 'passa.yaml' -o -name 'results.yaml' | tar cf - -T -) | tar xf - -C "$R/"
+  (cd "$W" && find passa -name 'passa_agent*.yaml' -o -name 'results.yaml' | tar cf - -T -) | tar xf - -C "$R/"
   n=$(find "$W/passa" -name 'store_agent*.bin' | wc -l)
   step "A done: $n stores"
   [ "$n" -eq $(( 2 * 2 * $(echo $SEEDS | wc -w) )) ] || fail "pass A: expected every store"
 fi
 
 run_b() {   # $1 = run dir name, $2 = scene, $3 = seed, $4 = config file (in /w/cfg)
-  echo "$BIN/ariadne_collab_sim --stores /w/passa/s$2/seed$3 --rec $(scene_rec $2) --scene $(scene_rec $2)/scene \
+  echo "$BIN/ariadne_collab_sim --stores /w/passa/s$2/seed$3 --rec $(scene_rec $2)/rec --scene $(scene_rec $2)/scene \
     --config /w/cfg/$4 --seed $3 --out /w/runs/$1 $models > /w/runs/$1.log 2>&1"
 }
 pool_b() {   # run the job file $1, P_B at a time
@@ -107,8 +108,12 @@ cfg() {   # $1 = name, then key: value lines appended to the shared template
 if [[ " $STAGES " == *" B1 "* ]]; then
   step "B1 similarity arm"
   cfg sim.yaml "arm: similarity"
+  grep -v '^comms_scenario:' "$W/cfg/sim.yaml" > "$W/cfg/cal.yaml"; echo "comms_scenario: configs/comms/ideal.yaml" >> "$W/cfg/cal.yaml"
   : > "$W/b1.jobs"
-  for sc in 0 1; do for s in $SEEDS; do run_b "sim_s${sc}_seed$s" $sc $s sim.yaml >> "$W/b1.jobs"; done; done
+  for sc in 0 1; do for s in $SEEDS; do
+    run_b "sim_s${sc}_seed$s" $sc $s sim.yaml >> "$W/b1.jobs"
+    run_b "cal_s${sc}_seed$s" $sc $s cal.yaml >> "$W/b1.jobs"
+  done; done
   pool_b "$W/b1.jobs"
   step "B1 done"
 fi
@@ -119,7 +124,7 @@ calibrate() {
 import csv, sys, glob, os, statistics
 root = sys.argv[1]
 for sc in (0, 1):
-    rates, ratios, runs = [], [], []
+    rates, ratios, runs, bigs = [], [], [], []
     for d in sorted(glob.glob(f"{root}/sim_s{sc}_seed*")):
         if not os.path.isdir(d): continue
         rows = list(csv.DictReader(open(f"{d}/ledger.csv")))
@@ -127,16 +132,30 @@ for sc in (0, 1):
         if not first: continue
         t0 = min(float(r["t_s"]) for r in rows); t1 = max(float(r["t_s"]) for r in rows)
         fetch = sum(int(r["wire_bytes"]) for r in first if r["class"] in ("3", "4"))
-        rates.append(fetch / max(t1 - t0, 1e-9)); runs.append(os.path.basename(d))
+        big = max([int(r["wire_bytes"]) for r in first if r["class"] == "4"] or [0])
+        rates.append(fetch / max(t1 - t0, 1e-9)); runs.append(os.path.basename(d)); bigs.append(big)
         ratio = []
         for k in ("4", "5", "6"):   # match response, pose edge, pose graph: the compressed classes
             rs = [r for r in first if r["class"] == k and r.get("resync", "0") == "0"]
             pay = sum(int(r["payload_bytes"]) for r in rs); tx = sum(int(r["transmitted_bytes"]) for r in rs)
             ratio.append(tx / pay if pay else 0.0)
         ratios.append(ratio)
+    # The verifier floor (D171 §5, pre-registered): over the ideal-link similarity runs of this scene, the candidates
+    # that reached PnP and were not rejected by the D71 gate; bad = pose error > 10 deg (D63's protocol); the floor is
+    # the smallest PnP-inlier count >= 25 (the 1.6 verifier's) that accepts no bad candidate.
+    rows = []
+    for d in sorted(glob.glob(f"{root}/cal_s{sc}_seed*")):
+        for e in csv.DictReader(open(f"{d}/edges.csv")):
+            if int(e["pnp_inliers"]) > 0 and e["reason"] in ("verified", "pnp_gate") and e["pose_err_deg"] not in ("", "nan"):
+                rows.append((int(e["pnp_inliers"]), float(e["pose_err_deg"]) <= 10.0))
+    bad = [n for n, g in rows if not g]; good = [n for n, g in rows if g]
+    floor = max([25] + [n + 1 for n in bad])
+    kept = [n for n in good if n >= floor]
+    print(f"verify{sc} {floor} {len(good)} {len(kept)} {len(bad)} {max(bad) if bad else 0} {min(good) if good else 0}")
     if rates:
         m = [statistics.mean(r[i] for r in ratios) for i in range(3)]
-        print(f"scene{sc} {statistics.mean(rates):.1f} {m[0]:.5f} {m[1]:.5f} {m[2]:.5f} {','.join(runs)}")
+        # max_fetch: the largest single feature response seen (+ a request's ~140 B): the bucket depth floor.
+        print(f"scene{sc} {statistics.mean(rates):.1f} {m[0]:.5f} {m[1]:.5f} {m[2]:.5f} {max(bigs) + 140} {','.join(runs)}")
 PY
 }
 
@@ -144,18 +163,26 @@ if [[ " $STAGES " == *" B2 "* ]]; then
   step "B2 greedy + spectral x budget levels"
   calibrate || fail "calibration"
   cat "$R/calibration.txt" >> "$R/steps.txt"
+  # D171's precondition: each scene must give the calibration at least 10 good candidates, else stop here.
+  while read -r tag floor ngood nkept nbad worstbad weakgood; do
+    [ "$ngood" -ge 10 ] || fail "$tag: only $ngood good candidates (< 10): the scene is too thin to calibrate on"
+  done < <(grep '^verify' "$R/calibration.txt")
   : > "$W/b2.jobs"
   for sc in 0 1; do
     other=$(( 1 - sc ))
-    read -r _ rate ratio eratio gratio runs < <(grep "^scene$other " "$R/calibration.txt") \
+    read -r _ rate ratio eratio gratio maxfetch runs < <(grep "^scene$other " "$R/calibration.txt") \
       || fail "no calibration for scene $other"
+    read -r _ vfloor vgood vkept vbad _ _ < <(grep "^verify$other " "$R/calibration.txt") || fail "no verifier floor"
     for pct in 10 25 50 100; do
       lvl=$(python3 -c "print(round($rate * $pct / 100.0, 1))")
-      burst=$(python3 -c "print(round($lvl * 5.0, 1))")
+      # Token-bucket depth >= the largest unit it must pass (RFC 2697: CBS >= the largest packet); otherwise a level
+      # below one fetch per period starves the arm entirely rather than rationing it.
+      burst=$(python3 -c "print(round(max($lvl * 5.0, $maxfetch), 1))")
       for arm in greedy spectral; do
         cfg "${arm}_s${sc}_p$pct.yaml" "arm: $arm" "budget_bytes_per_s: $lvl" "budget_burst_bytes: $burst" \
           "budget_source: \"$pct % of the similarity arm's fetch rate $rate B/s on scene $other ($runs)\"" \
-          "response_ratio: $ratio" "edge_ratio: $eratio" "graph_ratio: $gratio" \
+          "response_ratio: $ratio" "edge_ratio: $eratio" "graph_ratio: $gratio" "verify_min_pnp_inliers: $vfloor" \
+          "verify_calibration: \"scene $other ideal-link similarity arm: floor $vfloor keeps $vkept of $vgood good, $vbad bad seen\"" \
           "calibration_run: \"scene $other similarity arm ($runs)\""
         for s in $SEEDS; do run_b "${arm}_s${sc}_p${pct}_seed$s" $sc $s "${arm}_s${sc}_p$pct.yaml" >> "$W/b2.jobs"; done
       done

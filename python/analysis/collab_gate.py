@@ -182,8 +182,9 @@ def main():
         w = csv.DictWriter(f, fieldnames=list(erows[0].keys()) if erows else ["run"])
         w.writeheader()
         w.writerows(erows)
-    good = [e for e in erows if e["gt_err_t_m"] not in ("", "nan") and float(e["gt_err_t_m"]) <= 0.20
-            and float(e["gt_err_r_deg"]) <= 2.0]   # the D73 loop label: bad beyond 0.2 m / 2 deg
+    # D171 §5's label (D63's protocol for this matcher): good = pose error <= 10 deg (rotation, and translation
+    # direction when the true baseline is >= 0.1 m). Edges without ground truth count as not good.
+    good = [e for e in erows if e.get("pose_err_deg") not in (None, "", "nan") and float(e["pose_err_deg"]) <= 10.0]
 
     outcomes = defaultdict(int)
     for m in runs.values():
@@ -196,7 +197,7 @@ def main():
         "outcomes": {"counts": dict(outcomes), "verdict": "FAIL" if outcomes.get("corrupt") else "PASS"},
         "dominance": {"rows": dom, "spectral_le_greedy": sum(d["spectral_le_greedy"] for d in dom),
                       "of": len(dom)},
-        "edges": {"accepted": len(erows), "good_within_0.2m_2deg": len(good),
+        "edges": {"accepted": len(erows), "good_pose_err_le_10deg": len(good),
                   "precision": round(len(good) / len(erows), 4) if erows else None},
         "runs": len(runs),
     }

@@ -13,8 +13,8 @@
 // takes it, i.e. its odometry edge became final (it left the BA window), at that frame's time (t_final). Keyframes
 // before the mirror's anchor never become final (the D87 startup prefix) and are counted, never released.
 //
-// Output: DIR/store_agent<K>.bin, DIR/passa.yaml (counts, timings, the model records), plus everything the VO run
-// writes (results.yaml, trajectories, manifest) in DIR/vo/.
+// Output: DIR/store_agent<K>.bin, DIR/passa_agent<K>.yaml (counts, timings, the model records), plus everything the VO run
+// writes (results.yaml, trajectories, manifest) in DIR/vo_agent<K>/.
 // ---------------------------------------------------------------------------
 #include "perception/association/hard_pair_matcher.hpp"
 #include "perception/place/place_recognizer.hpp"
@@ -89,7 +89,7 @@ int main(int argc, char** argv) {
     }
     try {
         std::filesystem::create_directories(out);
-        a.out = (std::filesystem::path(out) / "vo").string();
+        a.out = (std::filesystem::path(out) / ("vo_agent" + std::to_string(agent))).string();
 
         perception::PlaceRecognizerParams pp;
         pp.onnx = place_onnx;
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
         store.prefix_unreleased = prefix;
         const std::string path = (std::filesystem::path(out) / ("store_agent" + std::to_string(agent) + ".bin")).string();
         runtime::WriteCollabStore(path, store);
-        std::ofstream y(std::filesystem::path(out) / "passa.yaml");
+        std::ofstream y(std::filesystem::path(out) / ("passa_agent" + std::to_string(agent) + ".yaml"));
         y << "tool: ariadne_collab_passa\nagent: " << agent << "\nseed: " << a.seed << "\nkeyframes: " << keyframes
           << "\nreleased: " << store.records.size() << "\nprefix_unreleased: " << prefix
           << "\ntail_unreleased: " << tail << "\nms_aliked_mean: " << (keyframes ? ms_aliked / keyframes : 0)

@@ -400,3 +400,36 @@ TEST(Serialization, PoseGraphsRemainHighlyCompressible) {
     EXPECT_GT(graph.record.CompressionRatio(), 3.0)
         << "pose-graph compressibility regressed; D14's byte budget assumes ~5x";
 }
+
+TEST(Serialization, LargeFeatureResponseRoundTripsThroughFragmentation) {
+    // D171: an ALIKED-n16 response at its real size (1024 features, int8 128-D + scale, 3D points): ~93 fragments.
+    // The protocol tests' scenes use ~200 features; the sim integration first exercised this size.
+    using namespace ariadne::core;
+    for (auto framing : {Framing::kWholeMessage, Framing::kFragmented}) {
+        const WireCodec codec(framing);
+        FeatureResponseValue f;
+        f.request_id = 7;
+        f.keyframe_id = 99;
+        for (int i = 0; i < 1024; ++i) {
+            f.keypoints.push_back(float(i % 1280)), f.keypoints.push_back(float(i % 720));
+            for (int k = 0; k < 3; ++k) f.points3d.push_back(i % 5 == 0 ? NAN : 0.01f * float(i + k));
+        }
+        f.descriptors.resize(4 + 1024 * 128);
+        for (size_t i = 0; i < f.descriptors.size(); ++i) f.descriptors[i] = uint8_t((i * 2654435761u) >> 13);
+        f.camera = {672.f, 672.f, 640.f, 360.f, 0.1f};
+        f.feature_bytes = 128;
+        f.header_bytes = 4;
+        const auto m = codec.EncodeFeatureResponse(f, 1, 0, Timestamp{123456789}, (1ull << 40) | 5);
+        DecodedMessage d;
+        ASSERT_EQ(codec.Decode(m.bytes, &d), WireCodec::Status::kOk) << "framing " << int(framing) << ", "
+                                                                     << m.bytes.size() << " B";
+        ASSERT_TRUE(d.has_feature_response);
+        EXPECT_EQ(d.feature_response.descriptors, f.descriptors);
+        EXPECT_EQ(d.feature_response.keypoints.size(), f.keypoints.size());
+        EXPECT_EQ(d.feature_response.feature_bytes, 128u);
+        EXPECT_EQ(d.feature_response.header_bytes, 4u);
+        f.feature_bytes = 0;   // a v1 decoder's rule: 32 B per feature, so this layout is malformed without the fields
+        EXPECT_EQ(codec.Decode(codec.EncodeFeatureResponse(f, 1, 0, Timestamp{123456789}, 5).bytes, &d),
+                  WireCodec::Status::kMalformed);
+    }
+}

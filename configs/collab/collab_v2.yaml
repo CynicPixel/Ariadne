@@ -11,6 +11,8 @@ ate_every_s: 1.0
 selection_interval_s: 5.0       # Swarm-SLAM's period (D170)
 candidate_ttl_s: 120.0          # [ASSUMPTION] D170; the sim runs report how many expire
 refine_passes: 2                # D170
+local_encoding: int8            # arch §15.7 default (per-keyframe scale); fp16 = the ablation row. D171: identical
+                                # LightGlue match sets to fp32 on the D90 sim pairs (LocalDescriptorCodec test)
 robust: true                    # PCM -> chordal re-init -> GNC-TLS (D76); false = the plain-PGO ablation row
 retrieval:
   min_score: 0.8                # Swarm-SLAM's stereo similarity_threshold (cslam_experiments kitti_stereo.yaml, on
