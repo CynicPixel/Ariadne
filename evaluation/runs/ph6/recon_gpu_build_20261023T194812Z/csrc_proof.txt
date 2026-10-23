@@ -1,0 +1,4 @@
+Step 7/15 : RUN pip install --no-cache-dir --no-build-isolation --no-binary gsplat gsplat==1.5.3     && python -c "from gsplat import csrc; print('gsplat.csrc AOT:', csrc.__file__)"
+gsplat.csrc AOT: /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so
+torch 2.11.0+cu128 gsplat 1.5.3 csrc /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so cv2 5.0.0
+run-time import, no GPU: 2.11.0+cu128 1.5.3 /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so cuda available False

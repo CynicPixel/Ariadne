@@ -162,7 +162,7 @@ def test_service_cpu_init_writes_table_and_chunks_labelled(tmp_path):
     assert sorted(p.name for p in (out / "chunks").iterdir()) == [row["chunk"]]     # replaced chunks are removed
     assert len((out / "service_log.jsonl").read_text().splitlines()) == 3
     m = json.loads((out / "manifest.json").read_text())
-    assert m["splat_backend"] == "cpu_init" and m["spool_schema"] == 2
+    assert m["splat_backend"] == "cpu_init" and m["spool_schema"] == [2]
 
 
 def test_service_refuses_a_keyframe_without_the_proxy(tmp_path):
@@ -175,3 +175,151 @@ def test_service_refuses_a_keyframe_without_the_proxy(tmp_path):
     with pytest.raises(SystemExit, match="never a fallback"):
         service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init",
                       "--training-image", "albedo_proxy"])
+
+
+def _scene(tmp, starts):
+    """A briefing: entrances (xy, yaw deg), route start z 1.0, the sim rig's optical rotation and left offset."""
+    (tmp / "routes").mkdir(parents=True)
+    (tmp / "scene.json").write_text(json.dumps({"entrances": [
+        {"agent": k, "start_xy_m": [x, y], "start_yaw_deg": yaw} for k, (x, y, yaw) in enumerate(starts)]}))
+    (tmp / "mission_default.json").write_text(json.dumps({
+        "R_B_optical_rows": [[0, 0, 1], [-1, 0, 0], [0, -1, 0]], "t_B_camera_m": {"left": [0.03, 0.05, 0.02]}}))
+    for k in range(len(starts)):
+        (tmp / "routes" / f"agent_{k}.json").write_text(json.dumps({"segments": [{"start": [0, 0, 1.0, 0, 0]}]}))
+    return tmp
+
+
+def _spool_v3_rgb(tmp, ok1=True):
+    """Schema 3, two agents x 2 RGB keyframes (lit, no photo state), agent 1 merged by a 2 m shift (or not)."""
+    import cv2
+    import yaml
+    h, w, f = 24, 32, 20.0
+    half = lambda p, a: cv2.imwrite(str(p), a.astype(np.float16).view(np.uint16))
+    bundles = []
+    for agent in (0, 1):
+        (tmp / f"agent{agent}").mkdir(parents=True)
+        for k in range(2):
+            stem = f"agent{agent}/kf_{k}"
+            cv2.imwrite(str(tmp / f"{stem}_rgb.png"), np.full((h, w, 3), 128, np.uint8))
+            half(tmp / f"{stem}_depth.png", np.full((h, w), 1.5, np.float32))
+            half(tmp / f"{stem}_sigma.png", np.full((h, w), 0.005, np.float32))
+            T = se3(0.0, [0.2 * k, 0, 0])
+            bundles.append({"role": "keyframe", "agent": agent, "kf_id": k, "t_ns": 10 * k + agent,
+                            "frame_id_of_pose": 1, "T_WiC": [float(x) for x in T[:3, :].ravel()],
+                            "K": [f, f, (w - 1) / 2, (h - 1) / 2], "width": w, "height": h, "baseline_m": 0.1,
+                            "files": stem, "rgb_kind": "raw_radiance", "exposure_state": "not_modeled",
+                            "lamp_state": "inert", "mask": "none"})
+    y = {"schema_version": 3, "run_id": "r", "scene_id": "s", "bundles": bundles, "merges": [
+        {"agent": 1, "ok": ok1, "T_O0_O": [1, 0, 0, 2.0, 0, 1, 0, 0, 0, 0, 1, 0], "edge": "agent0 kf 1 <- agent1 kf 0"}]}
+    (tmp / "spool.yaml").write_text(yaml.safe_dump(y))
+    return tmp
+
+
+def test_briefing_places_the_odometry_frame_at_the_entrance_times_the_rig_extrinsic(tmp_path):
+    from ariadne_recon.live.placement import briefing_T_W_O
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 90.0)])
+    T = briefing_T_W_O(scene, 0)
+    # body yawed 90 deg at (1, 2, 1): the camera offset (0.03, 0.05, 0.02) turns into (-0.05, 0.03, 0.02)
+    np.testing.assert_allclose(T[:3, 3], [1.0 - 0.05, 2.0 + 0.03, 1.02], atol=1e-12)
+    # optical z (forward) = body x = world +y after the yaw; optical x (right) = body -y = world +x
+    np.testing.assert_allclose(T[:3, 2], [0, 1, 0], atol=1e-12)
+    np.testing.assert_allclose(T[:3, 0], [1, 0, 0], atol=1e-12)
+
+
+def test_briefing_follows_the_live_demo_entrance_choice(tmp_path):
+    from ariadne_recon.live.placement import briefing_T_W_O
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 0.0), (5.0, 2.0, 180.0), (9.0, 2.0, 90.0)])
+    plain = [briefing_T_W_O(scene, k) for k in range(3)]
+    m = json.loads((scene / "mission_default.json").read_text())
+    m["live"] = {"demo": {"entrances": [2, 0], "target_xy_m": [0, 0]}}         # mission agent 0 ran entrance 2
+    (scene / "mission_live.json").write_text(json.dumps(m))
+    np.testing.assert_allclose(briefing_T_W_O(scene, 0), plain[2], atol=1e-12)
+    np.testing.assert_allclose(briefing_T_W_O(scene, 1), plain[0], atol=1e-12)
+
+
+def _rows(out):
+    t = json.loads((out / "table.json").read_text())
+    return t, {r["agent"]: np.asarray(r["T_W_anchor"]).reshape(4, 4) for r in t["submaps"]}
+
+
+def test_service_places_each_agent_by_its_own_briefing_or_by_the_merge(tmp_path):
+    from ariadne_recon.live import service
+    from ariadne_recon.live.placement import briefing_T_W_O
+    spool = _spool_v3_rgb(tmp_path / "spool")
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 0.0), (5.0, 2.0, 180.0)])
+    common = ["--spool", str(spool), "--backend", "cpu_init", "--training-image", "rgb", "--scene", str(scene)]
+    assert service.main(common + ["--out", str(tmp_path / "b")]) == 0                       # default: briefing
+    _, rows = _rows(tmp_path / "b")
+    for k in (0, 1):   # each submap is anchored at its agent's kf 0 = the identity in O_k
+        np.testing.assert_allclose(rows[k], briefing_T_W_O(scene, k), atol=1e-12)
+    assert service.main(common + ["--out", str(tmp_path / "m"), "--placement", "merges"]) == 0
+    _, rows = _rows(tmp_path / "m")
+    shift = np.eye(4)
+    shift[0, 3] = 2.0
+    np.testing.assert_allclose(rows[1], briefing_T_W_O(scene, 0) @ shift, atol=1e-12)    # agent 1's entrance unused
+    m = json.loads((tmp_path / "m" / "manifest.json").read_text())
+    assert m["placement"]["mode"] == "merges" and m["placement"]["unplaced"] == {}
+
+
+def test_an_agent_without_an_ok_merge_is_never_drawn(tmp_path):
+    from ariadne_recon.live import service
+    spool = _spool_v3_rgb(tmp_path / "spool", ok1=False)
+    out = tmp_path / "o"
+    assert service.main(["--spool", str(spool), "--out", str(out), "--backend", "cpu_init",
+                         "--training-image", "rgb"]) == 0                                     # no scene: merges
+    t, rows = _rows(out)
+    assert set(rows) == {0}
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["keyframes"] == 2 and "1" in m["placement"]["unplaced"]
+    assert m["placement"]["world"] == "agent 0 odometry frame"
+
+
+def test_set_placement_moves_the_table_without_new_chunks(tmp_path):
+    from ariadne_recon.live.service import Service, _CpuInit
+    from ariadne_recon.live.seeding import SeedParams
+    svc = Service(tmp_path / "live", "cpu_init", "rgb", _CpuInit(3, 30, SeedParams(), 0))
+    svc.set_placement(0, np.eye(4))
+    with pytest.raises(ValueError, match="no placement"):
+        svc.ingest(1, 0, np.eye(4), 1, np.eye(3), np.zeros((4, 4, 3), np.float32), np.ones((4, 4)), np.ones((4, 4)))
+    svc.ingest(0, 0, np.eye(4), 1, np.array([[4.0, 0, 1.5], [0, 4.0, 1.5], [0, 0, 1]]),
+               np.full((4, 4, 3), 0.5, np.float32), np.full((4, 4), 1.5, np.float32), np.full((4, 4), 0.005, np.float32))
+    svc.finish()
+    chunks = sorted(p.name for p in (tmp_path / "live" / "chunks").iterdir())
+    v = json.loads((tmp_path / "live" / "table.json").read_text())["version"]
+    T = se3(0.3, [1, 2, 3])
+    svc.set_placement(0, T)
+    t = json.loads((tmp_path / "live" / "table.json").read_text())
+    assert t["version"] == v + 1 and sorted(p.name for p in (tmp_path / "live" / "chunks").iterdir()) == chunks
+    np.testing.assert_allclose(np.asarray(t["submaps"][0]["T_W_anchor"]).reshape(4, 4), T, atol=1e-12)
+
+
+def test_one_spool_per_agent_is_briefing_only_and_never_repeats_an_agent(tmp_path):
+    import yaml
+    from ariadne_recon.live import service
+    parts = []
+    for agent in (0, 1):   # split a 2-agent spool into per-agent spools, as ariadne_sim_vo --spool writes them
+        sp = _spool_v3_rgb(tmp_path / f"s{agent}")
+        y = yaml.safe_load((sp / "spool.yaml").read_text())
+        y["bundles"] = [b for b in y["bundles"] if b["agent"] == agent]
+        (sp / "spool.yaml").write_text(yaml.safe_dump(y))
+        parts.append(str(sp))
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 0.0), (5.0, 2.0, 180.0)])
+    base = ["--backend", "cpu_init", "--training-image", "rgb", "--scene", str(scene)]
+    assert service.main(["--spool", *parts, "--out", str(tmp_path / "b")] + base) == 0
+    _, rows = _rows(tmp_path / "b")
+    assert set(rows) == {0, 1}
+    with pytest.raises(ValueError, match="one composed spool"):
+        service.main(["--spool", *parts, "--out", str(tmp_path / "m"), "--placement", "merges"] + base)
+    with pytest.raises(SystemExit, match="one spool per agent"):
+        service.main(["--spool", parts[0], parts[0], "--out", str(tmp_path / "d")] + base)
+
+
+def test_paced_replay_waits_for_each_keyframe_mission_time(tmp_path, monkeypatch):
+    from ariadne_recon.live import service
+    waits = []
+    monkeypatch.setattr(service.time, "sleep", lambda s: waits.append(s))
+    spool = _spool_v3_rgb(tmp_path / "spool")              # keyframes at t = 0, 1, 10, 11 ns
+    assert service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init",
+                         "--training-image", "rgb", "--pace", "1e-9"]) == 0   # 1 ns of mission = 1 s of wall
+    assert len(waits) == 3 and max(waits) <= 11.0 and min(waits) > 0     # one wait per later keyframe, none longer
+    assert json.loads((tmp_path / "o" / "manifest.json").read_text())["pace"] == 1e-9
