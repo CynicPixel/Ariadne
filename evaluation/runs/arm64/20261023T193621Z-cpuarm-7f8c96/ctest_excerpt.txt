@@ -1,0 +1,4 @@
+492/596 Test #504: GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt ...........................................................***Failed    0.02 sec
+gravity: reference off by 1.50 deg -> estimate off by 2.71 deg | tilt RMS 3.78 deg (odometry) -> 3.17 deg
+99% tests passed, 1 tests failed out of 596
+	504 - GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt (Failed)

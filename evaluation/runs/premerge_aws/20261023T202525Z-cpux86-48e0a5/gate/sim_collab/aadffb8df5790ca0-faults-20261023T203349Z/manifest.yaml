@@ -1,0 +1,52 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: aadffb8df5790ca0-faults-20261023T203349Z
+created_utc: "2026-10-23T20:44:31Z"
+git_commit: 2cb160fc86d2f6a75da72f01630ba304d8c59dc5
+git_dirty: false
+image_digest: "sha256:83c9e336143136a487c1dfccd50a423f83916c75b38a6876a9b6a1e23a56fec2"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim/aadffb8df5790ca0
+seed: 1
+agent_count: 2
+execution_mode: replay
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: collab_v1
+planner_config: UNRECORDED
+degradation_config: none
+perception_config: /work/configs/perception/sim_v1.yaml
+slam_config: /work/configs/slam/sim_v1.yaml
+
+# Backends
+feature_engine: orb
+place_recognition: mean_bit_orb_placeholder
+loop_backend: essential+pnp_placeholder
+reconstruction_backend: UNRECORDED
+imu_mode: none
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: not_applicable
+lost_handling: not_applicable
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+command: /work/build/docker/cpp/runtime/ariadne_sim_collab --rec /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/rec --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v1.yaml --collab-config /work/configs/collab/collab_v1.yaml --inject-faults 1 --out /work/build/premerge/aadffb8df5790ca0-20261023T202902Z/sim_collab

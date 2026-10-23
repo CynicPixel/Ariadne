@@ -1,0 +1,7 @@
+CPU_FEATURES_LINE=NEON FP16 *NEON_DOTPROD *NEON_FP16 *NEON_BF16
+    Baseline:                    NEON FP16
+      requested:                 DETECT
+    Dispatched code generation:  NEON_DOTPROD NEON_FP16 NEON_BF16
+      requested:                 NEON_FP16 NEON_BF16 NEON_DOTPROD
+  Parallel framework:            pthreads
+    Custom HAL:                  YES (carotene (ver 0.0.1) KleidiCV (ver 26.03))

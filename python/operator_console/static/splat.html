@@ -114,6 +114,10 @@ function place(mesh, rowMajor) {
 async function apply(table) {
   document.getElementById("label").textContent = table.label || "";
   let gaussians = 0, bytes = 0;
+  const live = new Set(table.submaps.map((r) => r.sid));
+  for (const [sid, have] of meshes) {          // a submap the table no longer lists (a restarted service): drop it
+    if (!live.has(sid)) { recon.scene.remove(have.mesh); have.mesh.dispose(); meshes.delete(sid); }
+  }
   for (const row of table.submaps) {
     gaussians += row.gaussians; bytes += row.bytes;
     const have = meshes.get(row.sid);

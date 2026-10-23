@@ -1,0 +1,7 @@
+exit_code: 8   (2 configure, 3 compile, 124 timeout, else ctest)
+99% tests passed, 1 tests failed out of 596
+Total Test time (real) =  73.24 sec
+The following tests FAILED:
+	504 - GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt (Failed)
+Errors while running CTest
+skipped: 64

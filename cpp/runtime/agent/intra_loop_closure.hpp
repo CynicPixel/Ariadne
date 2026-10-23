@@ -153,7 +153,8 @@ public:
                 for (const auto& s : c.gate_reasons) why += (why.empty() ? "" : ",") + ("\"" + s + "\"");
                 tr << (i ? "," : "") << "{\"a\":" << c.a << ",\"b\":" << c.b << ",\"score\":" << c.retrieval_score
                    << ",\"degenerate\":" << (c.degenerate ? "true" : "false") << ",\"reasons\":[" << why
-                   << "],\"sigma_t_m\":" << c.sigma_t << ",\"sigma_r_rad\":" << c.sigma_r << ",\"edge\":" << c.edge
+                   << "],\"sigma_t_m\":" << c.sigma_t << ",\"sigma_r_rad\":" << c.sigma_r
+                   << ",\"corridor\":" << c.corridor << ",\"edge\":" << c.edge
                    << ",\"pcm\":" << (c.pcm_accepted ? "true" : "false") << ",\"gnc_inlier\":"
                    << (c.gnc_inlier ? "true" : "false") << ",\"gnc_weight\":" << c.gnc_weight << "}";
             }
@@ -167,7 +168,7 @@ public:
         for (int i = 0; i < 6; ++i) cs << ",xi" << i;
         for (int i = 0; i < 6; ++i)
             for (int j = i; j < 6; ++j) cs << ",cov" << i << j;
-        cs << '\n';
+        cs << ",corridor\n";   // appended last (D148), so readers of the earlier columns are unchanged
         std::vector<std::pair<long, bool>> labelled_edges;   // (mirror edge, good) for the PCM diagnostic
         int good = 0, bad = 0, labelled = 0, gnc_in = 0, gnc_in_bad = 0;
         for (const Event& e : events)
@@ -206,7 +207,7 @@ public:
                 for (int i = 0; i < 6; ++i) cs << ',' << xi(i);
                 for (int i = 0; i < 6; ++i)
                     for (int j = i; j < 6; ++j) cs << ',' << c.cov_left(i, j);
-                cs << '\n';
+                cs << ',' << c.corridor << '\n';
             }
         // PCM's other input (design §8): the pair statistic over pairs of ground-truth-GOOD loops. Honest edge and
         // odometry covariances give a mean ~6 (chi^2_6); far above means overconfidence somewhere.

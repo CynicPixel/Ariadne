@@ -64,6 +64,22 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
     ρ_responder for 8 and 10 cm voxels, not for 5 cm (`VOLUMETRIC_4.1.md` §1).
   - **`scene_gt.npz` has no risk-zone labels** (both scenes), which 4.2's calibration needs; **maze_medium_0 has no
     recording**, which the gate's second scene needs.
+## 2026-10-24 (02:20 IST) — A2 splat service (D230/D231) + D174 steps 1-2 MERGED
+
+- **MERGED to main** (2cb160f, fast-forward of the combined pre-merge branch):
+  - A2's feat/ph5-dve up to e2765ec: the splat service's briefing/merge placement (D230), live #kf ingest from B's tee
+    (D231), paced replay, the recon-gpu image (Dockerfile + build evidence), recon tests 38/38.
+  - feat/live-collab: D174 steps 1-2 (`CollabFrontend` / `CollabFleet` extracted, pass A/B byte-identical; deferred
+    feature answers), the 3.2 sweep fixes (config writer, pooled calibration), the ALIKED thread-count finding.
+- **AWS pre-merge** `20261023T202525Z-cpux86-48e0a5`: **54/54**, ctest 606/606. Evidence:
+  `evaluation/runs/premerge_aws/20261023T202525Z-cpux86-48e0a5/`.
+- **3.2 sweep, fixed (`eee456`):** outcomes PASS; geometry FAILS on scene 0 under the byte budget (perceptual aliasing
+  beats PCM, merged ATE 3.8 m vs 0.03 m unbudgeted; D176). The defence is being redesigned through the preflight
+  (literature + advisor), together with the maintainer's collaboration requirements: asynchronous, no barrier sync,
+  bytes at the information-theoretic limit.
+
+---
+
 ## 2026-10-24 — Phase 5/6 round 3 (A2) + D173 injection MERGED; shared AWS slot queue
 
 - **MERGED to main** (f772dad, fast-forward of the combined pre-merge branch):

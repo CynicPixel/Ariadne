@@ -1,0 +1,29 @@
+# The §30.2 metric registry (runtime/metrics/metric_registry.hpp). Generated; do not hand-edit.
+metrics:
+  - {id: ate_rmse_m, group: localization, unit: "m", source: "ATE RMSE"}
+  - {id: ate_rotation_rmse_rad, group: localization, unit: "rad", source: "rotation error (absolute, after alignment)"}
+  - {id: rpe_translation_rmse_m, group: localization, unit: "m", source: "RPE / translation error (relative)"}
+  - {id: rpe_rotation_rmse_rad, group: localization, unit: "rad", source: "RPE / rotation error (relative)"}
+  - {id: inter_agent_rpe_m, group: registration, unit: "m", source: "inter-agent relative pose error"}
+  - {id: closure_precision, group: registration, unit: "ratio", source: "accepted/rejected closure precision"}
+  - {id: false_closure_rate, group: registration, unit: "ratio", source: "false closure rate"}
+  - {id: chamfer_m, group: mapping, unit: "m", source: "Chamfer distance"}
+  - {id: completeness, group: mapping, unit: "ratio", source: "completeness"}
+  - {id: coverage, group: mapping, unit: "ratio", source: "coverage"}
+  - {id: heldout_psnr_db, group: mapping, unit: "dB", source: "held-out-view PSNR"}
+  - {id: heldout_ssim, group: mapping, unit: "ratio", source: "SSIM"}
+  - {id: heldout_lpips, group: mapping, unit: "ratio", source: "LPIPS"}
+  - {id: bytes_total, group: communication, unit: "B", source: "total bytes"}
+  - {id: bytes_per_keyframe, group: communication, unit: "B", source: "bytes/keyframe"}
+  - {id: bytes_per_verified_loop, group: communication, unit: "B", source: "bytes/verified loop"}
+  - {id: bytes_per_map_area_m2, group: communication, unit: "B/m2", source: "bytes/map-area-reconstructed"}
+  - {id: descriptor_bytes, group: communication, unit: "B", source: "descriptor bytes"}
+  - {id: local_feature_bytes, group: communication, unit: "B", source: "local feature bytes"}
+  - {id: pose_graph_bytes, group: communication, unit: "B", source: "pose graph bytes"}
+  - {id: time_to_first_usable_map_s, group: mission, unit: "s", source: "time to first usable map"}
+  - {id: time_to_first_valid_egress_s, group: mission, unit: "s", source: "time to first valid egress route"}
+  - {id: route_validity, group: mission, unit: "ratio", source: "route validity vs GT traversability"}
+  - {id: route_confidence, group: mission, unit: "ratio", source: "route confidence"}
+  - {id: route_confidence_calibration, group: mission, unit: "ratio", source: "route-confidence calibration"}
+  - {id: distance_travelled_m, group: mission, unit: "m", source: "distance travelled"}
+  - {id: energy_proxy, group: mission, unit: "proxy", source: "energy proxy (unitless; defined with the planner, 4.3)"}
