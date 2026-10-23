@@ -312,3 +312,14 @@ def test_one_spool_per_agent_is_briefing_only_and_never_repeats_an_agent(tmp_pat
         service.main(["--spool", *parts, "--out", str(tmp_path / "m"), "--placement", "merges"] + base)
     with pytest.raises(SystemExit, match="one spool per agent"):
         service.main(["--spool", parts[0], parts[0], "--out", str(tmp_path / "d")] + base)
+
+
+def test_paced_replay_waits_for_each_keyframe_mission_time(tmp_path, monkeypatch):
+    from ariadne_recon.live import service
+    waits = []
+    monkeypatch.setattr(service.time, "sleep", lambda s: waits.append(s))
+    spool = _spool_v3_rgb(tmp_path / "spool")              # keyframes at t = 0, 1, 10, 11 ns
+    assert service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init",
+                         "--training-image", "rgb", "--pace", "1e-9"]) == 0   # 1 ns of mission = 1 s of wall
+    assert len(waits) == 3 and max(waits) <= 11.0 and min(waits) > 0     # one wait per later keyframe, none longer
+    assert json.loads((tmp_path / "o" / "manifest.json").read_text())["pace"] == 1e-9

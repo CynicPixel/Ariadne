@@ -148,15 +148,23 @@ class Service:
         self.log.close()
 
 
-def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes: int = 0) -> int:
-    """Every keyframe of a placed agent, all spools merged in time order; agents without a placement are skipped."""
+def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes: int = 0, pace: float = 0.0) -> int:
+    """Every keyframe of a placed agent, all spools merged in time order; agents without a placement are skipped.
+    pace > 0 plays the keyframes at their mission times (1 = mission speed): what the console sees during a live run,
+    so a recorded mission shows the splat growing. A keyframe is never dropped to keep up; a late one is just late."""
     n = 0
+    t_first, wall0 = None, time.monotonic()
     keyframes = [b for sp in spools for b in sp.keyframes()]
     if len({(b.agent, b.kf_id) for b in keyframes}) != len(keyframes):
         raise SystemExit("the spools repeat an (agent, keyframe): one spool per agent")
     for b in sorted(keyframes, key=lambda b: (b.t_ns, b.agent)):
         if b.agent not in svc.T_W_O:
             continue
+        if pace > 0:
+            t_first = b.t_ns if t_first is None else t_first
+            wait = (b.t_ns - t_first) * 1e-9 / pace - (time.monotonic() - wall0)
+            if wait > 0:
+                time.sleep(wait)
         if training_image == "albedo_proxy":
             if b.rgb_kind != "albedo_proxy":
                 raise SystemExit(f"keyframe {b.kf_id}: no albedo proxy (rgb_kind {b.rgb_kind}); RGB training must be "
@@ -182,6 +190,7 @@ def main(argv=None) -> int:
     ap.add_argument("--budget-ms", type=float, default=0.0)
     ap.add_argument("--export-period-s", type=float, default=2.0)
     ap.add_argument("--max-keyframes", type=int, default=0)
+    ap.add_argument("--pace", type=float, default=0.0, help="0 = as fast as possible; 1 = mission speed")
     ap.add_argument("--scene", default=None, help="worldgen scene dir: W = the mission world (the GT viewport's)")
     ap.add_argument("--placement", choices=("briefing", "merges"), default=None,
                     help="default: briefing with --scene, merges without")
@@ -202,13 +211,13 @@ def main(argv=None) -> int:
     for k, why in unplaced.items():
         print(f"service: agent {k} not placed, not drawn: {why}")
     t0 = time.time()
-    n = replay(spools, svc, a.training_image, a.max_keyframes)
+    n = replay(spools, svc, a.training_image, a.max_keyframes, a.pace)
     svc.finish()
     (out / "manifest.json").write_text(json.dumps({
         "tool": "ariadne_recon.live.service", "spool": a.spool, "spool_run_id": [sp.run_id for sp in spools],
         "spool_schema": [sp.schema_version for sp in spools], "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
-        "iters": a.iters, "budget_ms": a.budget_ms, "keyframes": n, "wall_s": round(time.time() - t0, 2),
+        "iters": a.iters, "budget_ms": a.budget_ms, "pace": a.pace, "keyframes": n, "wall_s": round(time.time() - t0, 2),
         "placement": {"mode": mode, "scene": a.scene, "world": "mission W" if a.scene else "agent 0 odometry frame",
                       "T_W_O": {str(k): [float(x) for x in T.ravel()] for k, T in placed.items()},
                       "unplaced": {str(k): why for k, why in unplaced.items()}}}, indent=2))
