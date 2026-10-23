@@ -1,0 +1,11 @@
+# ariadne_volumetric_eval manifest. Generated.
+tool: ariadne_volumetric_eval
+command: "/work/build/docker/cpp/runtime/ariadne_volumetric_eval --spool /work/build/a1/hz/spool_0/f232a40b77b3538f-20261022T224029Z --scene /work/build/worldgen/scenes/ci_tiny_hazard_0 --config /work/configs/mission/mission_v1.yaml --out /work/build/a1/hz/egress_s0_w0 --egress 1 --support-band -0.31,2.31 --risk-weight 0 --route-compare 1"
+scene_id: f232a40b77b3538f
+spool_run_id: f232a40b77b3538f-20261022T224029Z
+spool_sha256: UNRECORDED
+config: mission_v1
+layer: phase4_volumetric (TsdfMap D110)
+git_commit: 307d9f9
+git_dirty: true
+image_digest: sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a

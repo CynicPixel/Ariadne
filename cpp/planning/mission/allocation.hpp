@@ -83,6 +83,7 @@ CbbaAction TableI(int i, int k, int z_kj, int z_ij, double y_kj, double y_ij, co
 struct CbbaParams {
     int max_rounds = 1000;
     std::function<size_t(const CbbaMessage&)> bytes;   // the codec's size; null = count messages only
+    std::function<CbbaMessage(const CbbaMessage&)> transport;   // what the receiver gets; null = the snapshot itself
 };
 
 /// Synchronous CBBA from an empty state. graph(t) is the round-t adjacency (symmetric; self loops implied).

@@ -29,6 +29,8 @@ def score(routes: list[dict], gt, target: tuple, conf_key: str) -> dict:
             cells = np.array(r["cells"])
             ok = trav[cells[:, 0], cells[:, 1]]
             gl = float(geo[r["exit"]][target])
+            if "risk_zone" in gt.files:   # D112 hazard scenes: how much of the route lies in a GT risk zone
+                row["risk_zone_fraction"] = float(gt["risk_zone"].astype(bool)[cells[:, 0], cells[:, 1]].mean())
             row.update(exit=int(r["exit"]), length_m=float(r["length_m"]), gt_geodesic_m=gl,
                        length_ratio=float(r["length_m"]) / gl if np.isfinite(gl) and gl > 0 else None,
                        valid_fraction=float(ok.mean()), valid=bool(ok.all()), confidence=float(r[conf_key]),

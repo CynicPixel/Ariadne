@@ -273,8 +273,32 @@ TEST(Cbba, WireBytesAtTheSerializer) {
     CbbaMessage m;
     m.sender = 1, m.task_ids = in.task_ids, m.y.assign(6, 0.5), m.z.assign(6, 0), m.s = {1, 1};
     const size_t one = WireBytes(codec, std::vector<float>(8, 1.0f))(m);
-    EXPECT_EQ(c.bytes, c.messages * one) << "every message has the same shape here";
-    std::printf("[cbba] TASK_CONSENSUS wire bytes for 6 tasks, 2 agents: %zu (test codec %zu)\n", one, TestCodecBytes(m));
+    EXPECT_LE(c.bytes, c.messages * one) << "sparse messages are never larger than a full one";
+    std::printf("[cbba] TASK_CONSENSUS wire bytes for 6 tasks, all with winners: %zu (test codec %zu)\n", one, TestCodecBytes(m));
+}
+
+TEST(Cbba, SparseWireRoundTripIsExact) {
+    // D115a: decode(encode(sparse)) expanded onto the task list reproduces the sender's snapshot exactly, so Table I
+    // sees identical inputs; float y is the wire's precision, and the snapshot's y must survive it unchanged when
+    // CBBA runs on decoded messages (checked below by running both).
+    const ariadne::core::WireCodec codec(ariadne::core::Framing::kWholeMessage);
+    CbbaMessage m;
+    m.sender = 1, m.task_ids = {3, 8, 21, 40, 55}, m.y = {0, 0.75, 0, 1.5, 0}, m.z = {-1, 1, -1, 0, -1}, m.s = {4, 7};
+    const auto enc = codec.EncodeTaskConsensus(ToWire(m, {1.f, 2.f}), 1, 0, ariadne::core::Timestamp{0}, 0);
+    ariadne::core::DecodedMessage d;
+    ASSERT_EQ(codec.Decode(enc.bytes, &d), ariadne::core::WireCodec::Status::kOk);
+    EXPECT_EQ(d.task_consensus.tasks.size(), 2u) << "only the two tasks with a winner travel";
+    const CbbaMessage back = FromWire(d.task_consensus, 1, m.task_ids);
+    EXPECT_EQ(back.z, m.z);
+    EXPECT_EQ(back.y, m.y);   // doubles on the wire: exact
+    EXPECT_EQ(back.s, m.s);
+    // Size: a 160-task event where 2 tasks have winners.
+    CbbaMessage big;
+    big.sender = 0, big.s = {1, 1};
+    for (int j = 0; j < 160; ++j) big.task_ids.push_back(1000 + j), big.y.push_back(j < 2 ? 0.5 : 0.0), big.z.push_back(j < 2 ? 0 : -1);
+    const size_t sparse = codec.EncodeTaskConsensus(ToWire(big, std::vector<float>(8, 1.f)), 0, 1, ariadne::core::Timestamp{0}, 0).record.wire_bytes;
+    std::printf("[cbba] sparse TASK_CONSENSUS for 160 tasks, 2 with winners: %zu B\n", sparse);
+    EXPECT_LT(sparse, 300u);
 }
 
 TEST(Cbba, ConvergesWithoutAgreementAcrossComponents) {
@@ -286,4 +310,25 @@ TEST(Cbba, ConvergesWithoutAgreementAcrossComponents) {
     EXPECT_TRUE(c.converged);
     EXPECT_LE(c.rounds, 2);
     EXPECT_EQ(c.messages, 0u);
+}
+
+TEST(Cbba, WireTransportLeavesTheAssignmentUnchanged) {
+    // D115a end to end: CBBA whose every message is encoded (sparse), decoded and expanded gives the same assignment
+    // and bids as CBBA on the in-memory snapshots, and is never larger on the wire than the dense encoding.
+    std::mt19937 rng(117);
+    const ariadne::core::WireCodec codec(ariadne::core::Framing::kWholeMessage);
+    for (int trial = 0; trial < 300; ++trial) {
+        const int U = 2 + trial % 5, N = 3 + trial % 12, L = 1 + trial % 2;
+        const AuctionInstance in = RandomInstance(rng, U, N, L);
+        int D = 0;
+        const auto G = RandomConnected(rng, U, &D);
+        const Allocation a = RunCbba(in, [&](int) { return G; }, CbbaParams{});
+        CbbaParams w;
+        w.transport = WireTransport(codec, std::vector<float>(8, 1.f));
+        w.bytes = WireBytes(codec, std::vector<float>(8, 1.f));
+        const Allocation b = RunCbba(in, [&](int) { return G; }, w);
+        ASSERT_EQ(a.winner, b.winner) << trial;
+        for (int i = 0; i < U; ++i) ASSERT_EQ(a.agents[size_t(i)].bids, b.agents[size_t(i)].bids) << trial;
+        ASSERT_EQ(a.rounds, b.rounds) << trial;
+    }
 }

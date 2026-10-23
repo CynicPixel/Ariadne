@@ -1,0 +1,26 @@
+# ariadne_volumetric_eval (VOLUMETRIC_4.1 §6, D110). Generated; host timings are indicative.
+keyframes_integrated: {agent0: 325, agent1: 251}
+voxel_m: 0.05
+truncation_voxels: 3
+blocks: 3099
+map_bytes: 12693504
+esdf: {incremental: 570, rebuilds: 6, mean_voxels_recomputed: 504047, box: [382, 278, 94]}
+frontier_clusters_final: 22
+frontier_rejected_small: 114
+coarse: {cells: 4560, rle_bytes: 1134}
+ms_per_keyframe:
+  integrate: {mean: 26.7825, p95: 59.4588}
+  esdf_update: {mean: 109.641, p95: 196.943}
+  frontier_update: {mean: 90.0079, p95: 172.696}
+traversability: {ms: 673.472, responder_cells: 10653, agent_cells: 51292, risk_proxy_max: 1}   # [PROXY] risk, uncalibrated
+risk_terms: {overhang: {max: 1.000, at_xy_m: [4.475, -0.275], cells_over_0.2: 12411}, unsupported: {max: 1.000, at_xy_m: [4.225, -0.175], cells_over_0.2: 13351}}
+known_weights: {free: {n: 796074, w_p10: 0.109, w_p50: 0.7443, w_p90: 4.855, w_max: 2500, H_mean_bits: 0.6605, frac_H_over_0.9: 0.3445}, occupied: {n: 198594, w_p10: 0.1052, w_p50: 0.7857, w_p90: 9.222, w_max: 2501, H_mean_bits: 0.6220, frac_H_over_0.9: 0.3607}}   # NBV_4.3 §3 entropy-saturation check
+egress:   # 4.5 (EGRESS_4.5, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = 0
+  support_band_m: [-0.31, 2.31]
+  replans: 40
+  reroutes: 0
+  first_route_s: 140
+  final: {found: true, exit: 1, length_m: 4.48284, cells: 89, confidence_p5: 0.957927}
+  final_route_support: {min: 0.955533, p5: 0.957927, median: 0.993501, max: 1, spread: 0.0444673}
+  final_vs_fresh: {incremental_cost_cells: 96.3815, fresh_cost_cells: 96.3815, equal: true, expanded_incremental_all_replans: 686, expanded_fresh_once: 301}
+  ms_per_replan: {mean: 934.681, p95: 1099.11}

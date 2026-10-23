@@ -178,3 +178,21 @@ in `ariadne_volumetric_eval`, and `python/analysis/egress_eval.py`. Evidence: `e
 - **Open:**
   - the risk-aware rows (w_r) wait for D112's calibration;
   - the hazard seeds' spools wait for the AWS renders (the first launch failed on an S3 prefix; fixed in `66eac61`, relaunched).
+
+## 10. Hazard seeds, risk-aware rows (2026-10-23; `evaluation/runs/egress_4.5_hazard/`)
+
+D112 passed, so w_r = 1 (the calibrated [PROXY]) is compared with w_r = 0 on the three ci_tiny_hazard spools.
+
+| seed | routes GT-valid | first route | final length, w_r 0 → 1 | final route in GT risk zone, w_r 0 → 1 |
+|---|---|---|---|---|
+| 0 | 13 / 13 | 140 s | 4.483 → 4.483 m | 0.382 → 0.382 |
+| 1 | 9 / 9 | 165 s | 4.991 → 4.991 m | **0.340 → 0.000** |
+| 2 | 11 / 11 | 150 s | 5.612 → **5.861 m** (+4.4 %) | 0.000 → 0.000 |
+
+- **Seed 1:** the risk term moves the route out of the hazard zone at equal length.
+- **Seed 0:** no observed alternative avoids the zone, so the route doesn't change.
+- **Seed 2:** the route was already clear, and the saturated proxy's false positives (D112: FPR 0.34) lengthen it by
+  4.4 % for nothing. That is the measured cost of the saturation.
+- **Every route is GT-valid** in every row.
+- **No reroute occurred** on these spools either. The exit gate's "obstacle after route reroutes" stays **open**
+  for a live instance.
