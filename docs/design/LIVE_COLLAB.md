@@ -142,8 +142,24 @@ unless the measured CPU budget fails.
 
 1. **Refactor** `CollabFrontend` and `CollabFleet`. Pass A/B stay byte-identical on the smoke inputs (§1). The 3.2
    tests and protocol tests stay green.
+   - **Done (as built):** `runtime/agent/collab_frontend.hpp` (`CollabFrontend`: eager for pass A, lazy with
+     `keep_s` for live; `Features(id)` computes on request) and `runtime/agent/collab_fleet.hpp` (`CollabFleet` +
+     `CollabConfig`/`LoadCollabConfig`, which now rejects duplicate keys). Pass B on the D173 smoke: ledger, edges,
+     outcome, ate_vs_bytes byte-identical, results.yaml identical but for `ms_total`. Pass A: store byte-identical to
+     the pre-refactor binary at the same OpenCV thread count; `--check-lazy 1`: lazy == eager, 38/38 keyframes bitwise.
+   - **Finding (determinism):** `cv::ALIKED` output depends on the OpenCV thread count (`OPENCV_FOR_THREADS_NUM`):
+     the same keypoints in a different order, with float-level value differences (4 threads vs the default, 38 keyframes:
+     every keypoint matched within 1.8e-4 px, descriptors within 4.9e-6 once rows are aligned by keypoint).
+     Run to run at a fixed thread count it is bitwise stable. So pass-A stores, and live features, are reproducible
+     only with the thread count pinned. Pass A's yaml now records `opencv_threads`; the sweep pins it per job
+     (nproc / P_A). Live lockstep (§3) must pin it per worker too.
 2. **Deferred features** in CollabNode, plus a protocol test (a request answered two ticks later). Protocol tests stay
    green.
+   - **Done (as built):** `NodeHooks::features` returns `std::optional`; nullopt keeps a peer's request
+     (`AnswerDeferred`, request-id order, dropped after `response_ttl_s`) or the broker's own keyframe
+     (`ResolveOwnFeatures`, dropped after `request_give_up_s`). Stats `answers_deferred` / `answers_given_up`.
+     protocol 72/72 (DeferredFeatures 3). Pass B on the D173 smoke (`spec_inject`, seed 1): ledger.csv, edges.csv,
+     outcome.yaml and ate_vs_bytes.csv byte-identical to 15426f8; results.yaml differs only in `ms_total` timings.
 3. **Worker side:** the frontend in the worker behind `collab: true` (default false, so the D168 digests are
    unchanged), plus the #ckf/#freq/#fresp codecs. Test: lazy == eager features.
 4. **Parent side:** the fleet in ariadne_live, the lockstep watermark, the T_W_O feedback (B), and telemetry.

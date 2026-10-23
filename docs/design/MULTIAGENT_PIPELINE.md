@@ -235,7 +235,7 @@ rows. Its findings:
     peers' goals in the newest consensus it holds, with P(d) decayed by e^(−age/τ), τ = 30 s [ASSUMPTION].
 - **kOverlap (R1, Lauri et al. RA-L 2020, lifted to blocks):**
   - Each bid option carries `footprint`: ≤ 32 `{bx, by, w}`, where w is the count of the option's full-IG unknown
-    voxels in that block not known to peers. It is collected inside the existing ray cast and only when the
+    voxels in that block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; A1 20de9e8). It is collected inside the existing ray cast and only when the
     per-agent planner asks, so the oracle row is untouched.
   - The broker replaces only the coverage term with its marginal, Δcov(o | S) = Σ_b max(0, w_ob − residual_b). Costs
     are subtracted as in D114 (maintainer: cost enters as gain − λ·cost).

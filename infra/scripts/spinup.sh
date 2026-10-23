@@ -11,6 +11,7 @@
 # PROFILES (cheapest config that runs each workload; Stockholm prices in D28):
 #   cpu  c8g.large   Graviton4, 2 vCPU/4 GiB. Smallest size COOL is priced for.
 #   cpux86 c7i.4xlarge Ubuntu 24.04 amd64, 16 vCPU/32 GiB: x86 CPU runs in the amd64 images.
+#   cpuarm c8g.4xlarge Ubuntu 24.04 arm64, 16 vCPU/32 GiB: native arm64 image builds (plan 0.2, infra/eval/arm64_aws.sh).
 #   cool c8g.4xlarge the COOL Marketplace AMI (Ubuntu 24.04); needs the subscription (infra/cool/day1.sh).
 #   gpu  g4dn.xlarge NVIDIA T4 16 GB, 4 vCPU. Smallest full-GPU NVIDIA type;
 #                    needs the G/VT quota raised from 0.
@@ -68,13 +69,19 @@ profile_defaults() {
       TYPE="${TYPE:-c7i.4xlarge}"
       AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
       ROOT_GB=80 ;;
+    cpuarm)
+      # Native arm64 Docker builds (plan 0.2: OpenCV 5 + ariadne-core for linux/arm64): Ubuntu 24.04 arm64, like
+      # cpux86 but Graviton4. c8g.4xlarge = 16 vCPU (16 cores, no SMT), 32 GiB. Root sized for the OpenCV build.
+      TYPE="${TYPE:-c8g.4xlarge}"
+      AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+      ROOT_GB=60 ;;
     cool)
       # The COOL Marketplace AMI (Ubuntu 24.04, Graviton4; D28: product aajkmdd4qo3r7yhqg61a7aah9). Needs an active
       # Marketplace subscription, else launch fails with an opt-in error. Root sized for a native OpenCV build.
       TYPE="${TYPE:-c8g.4xlarge}"
       AMI_ID="ami-0a302ff85af8d8764"
       ROOT_GB=40 ;;
-    *) die "unknown profile '$1' (cpu | cpux86 | gpu | cool)" ;;
+    *) die "unknown profile '$1' (cpu | cpux86 | cpuarm | gpu | cool)" ;;
   esac
 }
 
