@@ -20,6 +20,12 @@ from .replay import TICK_HZ, frame, load_chain
 
 STATIC = Path(__file__).with_name("static")
 app = FastAPI(title="Ariadne console (stub)")
+
+# A2's splat panel (feat/ph5-dve via main 3f5e310): /splat page + chunk/table/ws + world.obj; it reads
+# ARIADNE_SPLAT_DIR (trainer output) and ARIADNE_SCENE_DIR (worldgen scene, the GT viewport). Separate page,
+# linked from the console header - never blended with the GT model (user rule: own viewport).
+from operator_console.splat import router as splat_router  # noqa: E402
+app.include_router(splat_router)
 _chain = None
 _live = None
 _live_log = None
