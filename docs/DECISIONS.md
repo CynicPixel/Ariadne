@@ -3370,7 +3370,7 @@ balance 0. That is the crop, measured. EuRoC 12/12 (incl. accept/refuse); rectif
   (930–1549). On 253 frames the right camera's ISO lags the left by one step. That is real-data evidence for 5.3's
   actuator order (exposure to its ceiling, then gain) and for the stereo exposure match.
 
-## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot moves
+## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot turns; stereo matching is the open lead
 
 **Runs** (`configs/benchmark/hilti_5.6.yaml`, fixed before measuring; commit `1468344`, clean; all 3592 frames;
 evidence `evaluation/runs/ph5/hilti_5.6/`). Hilti score, 5 GCPs, SE(3) fit / leave-one-out:
@@ -3410,24 +3410,36 @@ and the two rows' lost frames / keyframes:
 | 2400–2699 | 2.2 | 57 | 8 / 0 | 220 / 206 |
 | 2700–3591 | **0.1–0.2** | 52–54 | 0 / 0 | 34–60 per 300 |
 
-- **The quiet windows are the robot barely rotating** (0.2 °/s), not the tracker recovering. Translation in them is
-  not measured (`/track_odometry` was not exported). The first ends at frame 1499, just before the third GCP (~1508), and
-  the last contains the fifth (~3002): consistent with the robot stopping at its markers [ASSUMPTION].
+- **The quiet windows are the robot driving without turning** (0.2 °/s). It is not standing still: 62–65 % of LK
+  tracks still move there (table below).
 - **While it moves (2–7 °/s), losses are heavy only where the far field is dark** (44–50: 174–207 of 300 lost) and
   light where it is lit (70–94: 0–97). Keyframes run at 200–300 per 300 whenever it moves, dark or lit.
-- **The camera-locked lamp pattern.** The 200-frame mean keeps the lamp's concentric ring pattern on the floor sharp,
-  with its lobe and a dark smudge (likely lens dirt). For a ground robot the floor is fixed relative to the camera,
-  so the pattern is camera-locked and its edges carry no motion. Being present in every frame, it cannot explain the
-  time pattern alone. It fits as the mechanism once the far field is dark: the lit floor is then all the texture
-  there is, and it is camera-locked [UNVERIFIED: the share of tracks on the pattern is not measured]. This is
-  ALGORITHMS §17.4's lamp-anchored-edge hazard, and D142 measured the co-moving lamp as the dominant cost in sim too.
+- **The camera-locked lamp pattern exists but is NOT the mechanism (measured).** The 200-frame mean keeps the lamp's
+  ring pattern on the floor sharp, with its lobe and a dark smudge (likely lens dirt): for a ground robot the floor
+  is fixed relative to the camera. The hypothesis that tracks on it vote for zero motion was tested with
+  `cv::goodFeaturesToTrack` (500) + pyramidal LK on 30 consecutive raw-frame pairs per window. A track is static if
+  it moves < 0.5 px; the pattern mask is the strongest 10 % of the mean image's edges, dilated (31 % of the image):
+
+  | frames | gyro °/s | static % | static on pattern % |
+  |---|---|---|---|
+  | 300–599 (0 lost) | 6.3 | 4.9 | 2.4 |
+  | 900–1199 (174–182 lost) | 5.1 | 9.9 | 7.4 |
+  | 1500–1799 (203–207 lost) | 6.8 | 10.0 | 7.2 |
+  | 2700–3599 (0 lost, driving straight) | 0.2 | 36–38 | 32–34 |
+
+  In the failing windows ~90 % of tracks move with the scene. Camera-locked tracks are a minority, and they are
+  most common where nothing fails. Rejected as the cause.
+- **What is present from frame 0 in every row: stereo.** Stereo-valid fraction 0.27–0.31 (sim 0.78). In the 60-frame
+  smoke run, 6137 of 8710 triangulation candidates found no stereo match. Few landmarks per keyframe would explain
+  the keyframe churn, and a dark far field leaves fewer candidates still. This is the next measurement
+  (stereo matching on the fisheye-rectified pair), not yet a finding.
 - **Smaller, not isolated:** rotation blur ≤ 7 °/s × 30 ms ≈ 1.6 px; 10 Hz (EuRoC 20 Hz); rectified FOV 107.6° of
   ~127° (D143); ISO up to 1549.
 
 **Not done, deliberately.** No parameter was changed after the failed run (design-preflight rule). Candidate
 fixes, each to go through preflight (literature, OpenCV-native check, advisor) before any code:
-- a camera-fixed-structure mask from the running mean image's edges (the static-mask practice for self-occlusion);
-- measure first: the share of tracks and PnP inliers on the camera-locked pattern per window;
+- measure first: why stereo matching fails on ~70 % of candidates (disparity range, the fisheye-rectified periphery,
+  the left/right ISO lag on 253 frames, the photometric check);
 - Stage 3 falloff normalisation with its `feature_mask` (D134/D140): needs depth, i.e. SGBM on this rig;
 - a motion-consistency check that drops tracks with zero image motion while the gyro reports rotation.
 
