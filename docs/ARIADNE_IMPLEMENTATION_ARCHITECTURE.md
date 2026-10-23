@@ -1562,9 +1562,15 @@ measures that gap directly.
 
 > **As built (5.3, D132, 2026-10-22; not yet wired into a runner).** `perception/exposure_control/`. The metric is
 > Shim et al. eq. 1, with Zhang's gradient percentile as the comparator row (ALGORITHMS §9.4: Shim is "not robust").
-> **Deviation, pending the maintainer:** the lamp is not optimised with an energy cost term. One brightness decision is
-> spent in a fixed order (lamp → exposure → gain), the limiting case of a small energy cost. In replay, lamp power is
-> D's `lamp_power`, a radiance scale: exact for ambient 0 and a decoded render (SMOKE §4u).
+> **Approved deviation (maintainer, 2026-10-23, D147):** the lamp is not optimised with an energy cost term. One
+> brightness decision is spent in a fixed order (lamp → exposure → gain), the limiting case of a small energy cost. In
+> replay, lamp power is D's `lamp_power`, a radiance scale: exact for ambient 0 and a decoded render (SMOKE §4u).
+> **Wiring (D147):**
+> - The controller runs at keyframes and commands the source through `StereoSource::SetPhotometric`.
+> - Every frame reports the state it was actually exposed with: applied values, `applied_ns`, and clamp. A live sink
+>   (gz `light_config`, owned by the live runtime) implements the same contract.
+> - LK applies the known brightness ratio between frames (known-gain KLT).
+> - Rows run with `radiometric: flat_only`.
 
 ---
 

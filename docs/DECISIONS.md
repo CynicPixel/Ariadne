@@ -3939,6 +3939,96 @@ error exposed it, and the comment is corrected.)
   top-half mask keeps every new track in the top half; size and type mismatches throw. FalloffGlue: the detection
   image of the 0.2/0.6 checker has mean 255·0.4, and the cadence and mode guards hold.
 
+## 2026-10-23 — D147: 5.3 wiring (replay): the controller at keyframes, the applied state on every frame, known-gain LK
+
+Preflight: arch §6.5 and §6.2 Stage 4, D132, the runner and sources as built, a literature check, and advisor review
+(2026-10-23). Replay only. The live lamp path (gz `light_config`) waits on an ownership answer from M.
+
+**The loop.** At each keyframe the runner calls D132's `Decide` on the frame it just tracked (arch §6.5: keyframe
+rate; slew ≤ 0.5 stop per decision). The command goes to the source: `StereoSource::SetPhotometric` (default no-op,
+`RadiometricSource` forwards it, `SimSource` applies it to D's exposure, analog gain and lamp_power from the next
+frame on).
+- **Downstream code reads only the applied state** (`frame.photo`, what D used on that frame), never the command:
+  Stage 3, the LK ratio, the traces. Latency then cannot desynchronise anything. A test checks that the command reaches
+  `SimSource` through the wrapper (the `Lamp()` lesson, D146).
+- **Determinism:** D's noise is keyed by (seed, frame, pixel, stage), and the decisions are a function of the pixels,
+  so a replay reproduces the whole sequence.
+
+**`radiometric: flat_only` with the controller; `auto` and `on` are refused.**
+- The VST noise model is fitted once, and analog gain changes it (Poisson term ∝ g, read term ∝ g²).
+- `flat_only` has no 8-frame gate hold. In `auto`/`on`, frames are degraded before any decision could reach them.
+- Stage 3 needs only the flat field, and D69 measured the VST neutral.
+- Rescaling the fitted model by the known gain is a possible later row, not built.
+
+**Stage 4 has one owner per consumer.**
+- **LK (the cross-frame photometric comparison, arch §6.2):** when the applied brightness changes between frames,
+  the tracker rebuilds its previous pyramid from its level-0 image × r, where r = (exposure·gain·lamp_scale)_now /
+  (…)_prev. In replay D's lamp_power scales all radiance, so r is exact up to 8-bit rounding and clipping. The
+  pyramid holds Scharr derivatives (`withDerivatives`), so the image is rebuilt, not scaled in place. This is the
+  known-gain case of gain-robust KLT: Kim, Frahm & Pollefeys (ICCV 2007) and Bergmann, Wang & Cremers (RA-L 2018,
+  arXiv 1710.02081) estimate the inter-frame gain ratio inside KLT, because plain KLT fails under exposure changes.
+  We know the ratio and apply it. OpenCV's `calcOpticalFlowPyrLK` has no gain term. The ratio is at most √2 per
+  decision.
+- **Stage 3:** the falloff glue divides by `frame.photo` (D146), unchanged.
+- **The radiometric stage's step [4]** stays inert and is marked superseded. Nothing divides twice.
+- **Stereo and SGBM:** both cameras get the same D parameters, so the pair needs nothing.
+- **ORB re-association descriptors:** intensity comparisons, invariant to a gain. Nothing to do.
+
+**Units: what matters is headroom.**
+- D's exposure is relative; the controller works in seconds. D adds no motion blur (stated approximation), so the
+  blur ceiling only clamps. ω = 0 unless the run has an IMU (`--imu-noise`).
+- `t_max` = the frame period (`rig_stereo_v2`: 20 Hz → 50 ms).
+- `t_ref`, the seconds that D exposure 1 stands for, is `[ASSUMPTION]` 12.5 ms: 2 stops of headroom.
+- **Derivation, from D145:**
+  - The lamp render's median is linear Y 0.0364, and frames near walls already clip (3.4 % mean, 16 % max).
+  - The clean render's peak, about 150/255 sRGB (linear 0.30), has about 1.7 stops before clipping.
+  - So the controller's 2 % clip guard binds before a 2-stop ceiling on every measured frame type. A larger headroom
+    would change nothing measured; a smaller one would be the ceiling, not the scene, deciding.
+- `t_min` stays D132's 0.5 ms.
+
+**Overexposure event (Failure E), sensor side.**
+- **The scripted event:** a D exposure step, e.g. +2 stops at a set time, as a perception-config entry.
+- **What the response must show:** the controller pulls back at ≤ 0.5 stop per keyframe, and the trace shows it.
+- **Why not the lamp:** in replay `lamp_power` cannot recover pixels clipped before the render (up to 16 %, D145), so a
+  lamp-side event would look like a controller failure. That needs live `light_config`.
+
+**Traces.**
+- `exposure_trace.csv`, one row per keyframe: metric, saturated and shadow fractions, reason, step, command, and the
+  applied state one frame later.
+- The bundle's `exposure_state` (the applied t in seconds via `t_ref`, and gain) and `lamp_state` are now set when the
+  controller runs. 5.3 owns them.
+- This is perception evidence (Failure E), not the agentic runtime trace (CLAUDE.md invariant 3).
+
+**D132 deviation approved (maintainer, 2026-10-23).** The fixed order stays: lamp → exposure → gain, which is the
+limiting case of an energy cost below gain's noise cost. Arch §6.5 gives the lamp an energy-cost term; that text now
+records an approved deviation (§49). The trade-off is energy, which replay cannot measure anyway.
+
+**The actuator seam: the contract a live sink implements** (owner split, set by M on 2026-10-23: A2 owns the
+controller and this interface; B, `feat/live-runtime`, owns the live sink: gz `light_config` through the ros_gz/gz
+service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam is
+`StereoSource::SetPhotometric(const PhotometricCommand&)`; the report comes back on the frames.
+- **Command** (`runtime::PhotometricCommand`): `decision_id` (increasing), `decided_ns` (the stamp of the frame it
+  was decided on), and three targets:
+  - `exposure_rel`: relative to the rig's nominal exposure (1 = nominal; seconds = `exposure_rel · t_ref_s`);
+  - `gain`: linear analog gain (1 = unity);
+  - `lamp_rel`: relative to the lamp calibration's `intensity_ref`. Live, gz `<intensity>` = `lamp_rel ·
+    intensity_ref`; in replay it is D's `lamp_power`.
+- **Report, on every frame** (`StereoFrame::photo`, `runtime::FramePhoto`): the state that frame was actually exposed
+  with, i.e. `exposure_rel`, `gain`, `lamp_rel` as applied. Plus:
+  - `applied_ns`: the sim-time stamp at which the newest command reached the actuator (B's requirement; mover answers
+    already carry one);
+  - `decision_id`: the last command the sink has applied, in whole or in part;
+  - `clamped` and `clamp_reason`: true when the sink applied something other than the command (actuator limits,
+    a refused service call).
+  - **Latency** = `applied_ns − decided_ns`, as logged in the trace.
+- **The controller reads only the report.** A late command, a clamped one or a dropped one changes nothing
+  downstream except through the frames' applied values. That is how replay works too.
+- **Per actuator, live:** the sim camera has no exposure or gain element (sdformat14, D145). So live exposure and gain
+  are applied by D at consumption, same as replay, immediately. Only the lamp goes through `light_config`, so only
+  the lamp has real latency and can be refused.
+- **Ordering:** a sink applies commands in `decision_id` order. A newer command supersedes an older one that is
+  still pending: the older is dropped, not applied late.
+
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
 Design: `docs/design/SPECTRAL_3.4.md`. Code:
