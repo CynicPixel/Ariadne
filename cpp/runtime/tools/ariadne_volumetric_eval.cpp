@@ -360,7 +360,7 @@ int main(int argc, char** argv) {
             }
             last_route = r, last_support = support;
             if (p4) {
-                planning::Phase4AgentInput ag[2];
+                std::vector<planning::Phase4AgentInput> ag(2);
                 for (int a = 0; a < 2; ++a) {
                     ag[a].active = !track[a].empty();
                     if (ag[a].active) ag[a].position = track[a].back(), ag[a].flown_m = flown[a];

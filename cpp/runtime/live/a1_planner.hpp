@@ -101,7 +101,7 @@ public:
     size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
 
     PlanOutput Plan(const PlanContext& ctx) override {
-        planning::Phase4AgentInput in[2];
+        std::vector<planning::Phase4AgentInput> in(2);   // PlanContext is 2-agent; the planner takes N
         for (int a = 0; a < 2; ++a) {
             in[a].active = ctx.active[a];
             in[a].linked = true;

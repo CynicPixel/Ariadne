@@ -1,13 +1,15 @@
 // Phase4Planner (the planning side of B's MissionPlanner seam): string pulling never cuts a blocked cell and keeps few
 // waypoints; directives (keep_out drops, assign restricts, priority_region scales G and reorders) and refusals; the
 // keep_out masks paths, not only goals (B's review); the joint pick is exactly-once and the higher-utility agent
-// picks first; an Integrate -> Plan -> Route smoke on a
-// synthetic wall, deterministic across two planners.
+// picks first (also at N = 3: in descending best utility); an Integrate -> Plan -> Route smoke on a synthetic wall,
+// deterministic across two planners; a 3-agent Plan (sizes, exactly-once picks, the CBBA graph's topology trigger).
 #include "planning/mission/phase4_planner.hpp"
 
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <set>
+#include <stdexcept>
 #include <vector>
 
 using namespace ariadne;
@@ -99,12 +101,14 @@ TEST(Phase4Planner, KeepOutMasksPaths) {
 
 TEST(Phase4Planner, JointPickExactlyOnce) {
     Phase4Plan p;
+    p.agents.resize(2);
     p.agents[0].nbv.options = {Opt(7, 0, 0, 1, 0.5), Opt(8, 0, 0, 1, 0.4)};
     p.agents[1].nbv.options = {Opt(7, 0, 0, 1, 0.9), Opt(9, 0, 0, 1, 0.1)};
     JointPick(&p);
     EXPECT_EQ(p.joint[1], 0) << "agent 1's best utility is higher: it picks task 7";
     EXPECT_EQ(p.joint[0], 1) << "agent 0 takes its best other task";
     Phase4Plan q;
+    q.agents.resize(2);
     q.agents[0].nbv.options = {Opt(5, 0, 0, 1, 1.0)};
     JointPick(&q);
     EXPECT_EQ(q.joint[0], 0);
@@ -130,7 +134,7 @@ TEST(Phase4Planner, IntegratePlanRouteSmoke) {
     Phase4Planner A(b, prm), B(b, prm);
     EXPECT_GT(A.Integrate(0, 0, f), 0u);
     B.Integrate(0, 0, f);
-    Phase4AgentInput ag[2];
+    std::vector<Phase4AgentInput> ag(2);
     ag[0].active = true, ag[0].position = f.T_W_C.t;
     const Phase4Plan pa = A.Plan(5.0, ag, {}), pb = B.Plan(5.0, ag, {});
     ASSERT_EQ(pa.agents[0].nbv.options.size(), pb.agents[0].nbv.options.size());
@@ -156,6 +160,7 @@ TEST(Phase4Planner, AuctionUsesCommonScales) {
     // D115 test 8: agent 0 also holds many weak candidates (which shrink its own p90); the shared task 42, seen with
     // identical raw terms by both agents, must get the SAME value for both: the scales are common, not per agent.
     Phase4Plan p;
+    p.agents.resize(2);
     auto Raw = [](int64_t id, double cov, double ent, double path) {
         TaskCandidate c;
         c.task_id = id, c.ig_raw = {cov, ent, 0, 0, 0}, c.path_m = path, c.utility = cov;
@@ -193,7 +198,7 @@ TEST(Phase4Planner, AllocationIsEventTriggered) {
     f.fx = 84, f.fy = 84, f.cx = 80, f.cy = 45, f.width = W, f.height = H, f.depth = Z.data(), f.sigma = S.data();
     Phase4Planner P(b, prm);
     P.Integrate(0, 0, f);
-    Phase4AgentInput ag[2];
+    std::vector<Phase4AgentInput> ag(2);
     ag[0].active = true, ag[0].position = f.T_W_C.t;
     const Phase4Plan p1 = P.Plan(5.0, ag, {});
     EXPECT_EQ(p1.allocation.method, "cbba");
@@ -205,4 +210,70 @@ TEST(Phase4Planner, AllocationIsEventTriggered) {
         ASSERT_GE(p2.joint[0], 0);
         EXPECT_EQ(p2.agents[0].nbv.options[size_t(p2.joint[0])].task_id, p1.agents[0].nbv.options[size_t(p1.joint[0])].task_id);
     }
+}
+
+TEST(Phase4Planner, JointPickExactlyOnceThreeAgents) {
+    // N = 3 (Phase 8 §42): descending best utility picks first; each takes its best task no earlier agent took.
+    Phase4Plan p;
+    p.agents.resize(3);
+    p.agents[0].nbv.options = {Opt(7, 0, 0, 1, 0.5), Opt(8, 0, 0, 1, 0.4), Opt(9, 0, 0, 1, 0.3)};
+    p.agents[1].nbv.options = {Opt(7, 0, 0, 1, 0.9), Opt(9, 0, 0, 1, 0.1)};
+    p.agents[2].nbv.options = {Opt(7, 0, 0, 1, 0.7), Opt(8, 0, 0, 1, 0.6), Opt(10, 0, 0, 1, 0.2)};
+    JointPick(&p);
+    ASSERT_EQ(p.joint.size(), 3u);
+    EXPECT_EQ(p.joint[1], 0) << "agent 1 (0.9) picks first: task 7";
+    EXPECT_EQ(p.joint[2], 1) << "agent 2 (0.7) next: task 8";
+    EXPECT_EQ(p.joint[0], 2) << "agent 0 (0.5) last: tasks 7 and 8 are taken, so task 9";
+    Phase4Plan q;   // ties go to the lower index; an agent left with only taken tasks gets none
+    q.agents.resize(3);
+    q.agents[0].nbv.options = {Opt(5, 0, 0, 1, 1.0)};
+    q.agents[1].nbv.options = {Opt(5, 0, 0, 1, 1.0)};
+    q.agents[2].nbv.options = {Opt(6, 0, 0, 1, 1.0)};
+    JointPick(&q);
+    EXPECT_EQ(q.joint[0], 0);
+    EXPECT_EQ(q.joint[1], -1);
+    EXPECT_EQ(q.joint[2], 0);
+}
+
+TEST(Phase4Planner, ThreeAgentPlanAndTopology) {
+    // Three agents on the synthetic wall: Plan sizes everything N = 3, the picks are exactly-once by task_id, the
+    // CBBA graph is every active linked pair (a link change re-triggers as "topology"), and the API refuses sizes
+    // that do not match the agent count.
+    Phase4Briefing b;
+    b.grid.ox = 0, b.grid.oy = 0, b.grid.cell = 0.05, b.grid.cols = 80, b.grid.rows = 80;
+    b.target = {40, 70};
+    b.entrances = {{40, 10}};
+    Phase4Params prm;
+    const int W = 160, H = 90;
+    std::vector<float> Z(size_t(W * H), 2.0f), S(size_t(W * H), 0.02f);
+    DepthFrame f;
+    f.T_W_C.R << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+    f.T_W_C.t = core::Vec3(0.5, 2.0, 1.0);
+    f.fx = 84, f.fy = 84, f.cx = 80, f.cy = 45, f.width = W, f.height = H, f.depth = Z.data(), f.sigma = S.data();
+    Phase4Planner P(b, prm, 3);
+    EXPECT_EQ(P.Agents(), 3);
+    for (int a = 0; a < 3; ++a) {
+        DepthFrame g = f;
+        g.T_W_C.t = core::Vec3(0.5, 1.0 + 0.5 * a, 1.0);
+        P.Integrate(a, int64_t(a), g);
+    }
+    EXPECT_THROW(P.Integrate(3, 0, f), std::out_of_range);
+    std::vector<Phase4AgentInput> ag(3);
+    for (int a = 0; a < 3; ++a) ag[size_t(a)].active = true, ag[size_t(a)].position = core::Vec3(0.5, 1.0 + 0.5 * a, 1.0);
+    EXPECT_THROW(P.Plan(5.0, std::vector<Phase4AgentInput>(2), {}), std::invalid_argument);
+    const Phase4Plan p1 = P.Plan(5.0, ag, {});
+    ASSERT_EQ(p1.agents.size(), 3u);
+    ASSERT_EQ(p1.joint.size(), 3u);
+    EXPECT_EQ(p1.allocation.trigger, "first");
+    EXPECT_EQ(p1.allocation.optimum, -1) << "the exact optimum is 2-agent only";
+    std::set<int64_t> picked;
+    for (int a = 0; a < 3; ++a) {
+        const int j = p1.joint[size_t(a)];
+        if (j < 0) continue;
+        ASSERT_LT(size_t(j), p1.agents[size_t(a)].nbv.options.size());
+        EXPECT_TRUE(picked.insert(p1.agents[size_t(a)].nbv.options[size_t(j)].task_id).second) << "exactly-once";
+    }
+    EXPECT_EQ(P.Plan(10.0, ag, {}).allocation.trigger, "none");
+    ag[2].linked = false;   // agent 2 loses its link: the graph changes, the task set does not
+    EXPECT_EQ(P.Plan(15.0, ag, {}).allocation.trigger, "topology");
 }
