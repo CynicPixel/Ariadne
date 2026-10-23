@@ -4715,3 +4715,33 @@ group (the most PnP inliers; ties: lowest ids); other members do not enter the s
 
 **Not 3.5 done:** 3.5 still needs repetition-operator worlds (§5.5), the §17.3 diagnostics (ROC/PR of retrieval score
 against GT, false-closure probability) and the degeneracy-gate-before-PCM ordering test.
+
+**D176 result (2026-10-24, NEGATIVE, reported as measured).** Pass B, scene 0, greedy 25 %, seed 1, stores of
+`0345a5`, grouping on vs off: merged ATE 3.7837 m vs 3.7835 m. The rule took effect (inter-agent edges entering the
+robust stage over the run: 89 vs 1441) but the false group still won. Why: agent 0 passed the aliased spot several
+times (its keyframes 32, 50, 69, 144, 148, 155 are > 1 m apart in its own frame, and its VO drift is only 0.02-0.03 m,
+so they really are separate places); each pass pairs with agent 1's one place and counts as its own vote. "One place
+pair, one vote" undercounts nothing on the true side and still overcounts revisits on the false side. Not retuned on
+this data. `pcm_place_grouping` stays in the code, default off, as a measured ablation row.
+
+## 2026-10-24 — D177: known-entry gate on inter-agent edges (pre-registered; known starts, maintainer 2026-10-23)
+
+**Basis.** Agents enter through known openings (maintainer: drones inserted through windows), so each agent's odometry
+frame W_k has a known placement T_World_Wk at entry. An inter-agent loop edge (a, ka) -> (b, kb) with measurement
+Z = T_Ca_Cb implies T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1 (the snapshot poses). Against the prior T_Wa_Wb = T_World_Wa^-1
+T_World_Wb, the only legitimate disagreement is VO drift accumulated since entry by both agents.
+**Measured drift** (pass-A stores of `0345a5`, 2 scenes x 3 seeds x 2 agents, camera pose vs GT aligned at the first
+released keyframe): worst 0.11 m and 1.43 deg; worst drift / path length 1.0 % (11-33 m paths).
+**Rule.** Before PCM the broker drops an inter-agent edge whose deviation D = prior^-1 implied exceeds
+  |D.t| > 0.5 m + 0.05 (L_a(ka) + L_b(kb))   or   angle(D.R) > 10 deg,
+with L_k(kf) the odometry path length of agent k from its first keyframe to kf (its snapshot). 5 % is 5x the worst
+measured drift ratio, the 0.5 m floor covers entry placement error, 10 deg is 7x the worst measured rotation drift. The
+aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-sized true loops are far inside.
+- Config `entry_gate: {enabled: false, floor_m: 0.5, per_m: 0.05, rot_deg: 10}`, default off; the entry poses come from
+  the briefing (live: B's T_W_O[k]; pass B: the scene's agent start poses, i.e. GT of the first released keyframe
+  composed with its odometry pose, the same placement an operator records at insertion).
+- **Pass criteria (fixed now, same as D176):** B2 + C rerun with it on (grouping off): scene 0 budgeted rows merged ATE
+  < 0.10 m in >= 5 of 6 cells; scene 1 not worse by > 10 % (or 2 mm); no run corrupt. Also reported: true edges the
+  gate drops (must be 0 on both scenes, else a negative result).
+- **Scope, honestly:** this guards the known-starts deployment. It does not solve aliasing between agents whose starts
+  are unknown, nor aliases smaller than the drift bound; those remain 3.5 (repetition worlds, §17.3 diagnostics).
