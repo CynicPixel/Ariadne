@@ -10,6 +10,8 @@ Routes (own paths, B's console endpoints untouched):
   GET /api/splat/table            the current table
   GET /api/splat/chunk/{name}     one chunk (name checked against <int>_<int>.splat)
   WS  /ws/splat                   pushes the table whenever its version changes (polled every 0.5 s)
+  GET /api/splat/world.obj        the generated world's GROUND-TRUTH mesh (ARIADNE_SCENE_DIR; ?ceiling=1 to include
+                                  the ceiling), for the second viewport labelled "generated world (ground truth)"
 
 Mount with `app.include_router(splat.router)`, or run alone: `uvicorn operator_console.splat:app`.
 """
@@ -22,7 +24,9 @@ import re
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+
+from .world_mesh import merged_obj
 
 STATIC = Path(__file__).with_name("static")
 CHUNK = re.compile(r"^\d+_\d+\.splat$")
@@ -61,6 +65,14 @@ def chunk(name: str) -> FileResponse:
     if not p.is_file():
         raise HTTPException(404, "chunk not found (replaced?)")
     return FileResponse(p, media_type="application/octet-stream")
+
+
+@router.get("/api/splat/world.obj")
+def world(ceiling: int = 0) -> PlainTextResponse:
+    d = os.environ.get("ARIADNE_SCENE_DIR")
+    if not d:
+        raise HTTPException(503, "ARIADNE_SCENE_DIR not set: no generated world attached")
+    return PlainTextResponse(merged_obj(d, include_ceiling=bool(ceiling)), media_type="text/plain")
 
 
 @router.websocket("/ws/splat")
