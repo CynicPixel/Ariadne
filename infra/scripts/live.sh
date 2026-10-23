@@ -230,6 +230,12 @@ async def main():
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
+  # D224: an external sampler (A2's profiling) beside the run - started after the containers, stopped with them.
+  SAMPLER_PID=""
+  if [ -n "${ARIADNE_SAMPLER:-}" ]; then
+    bash "$ARIADNE_SAMPLER" "$REPO_ROOT/$run/sampler" > "$REPO_ROOT/$run/sampler.log" 2>&1 &
+    SAMPLER_PID=$!
+  fi
   local rc; rc="$(docker wait "$rt")"
   docker logs "$rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
   docker logs "$sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
@@ -237,6 +243,7 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
   docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
   [ -z "$orch" ] || docker logs "$orch" > "$REPO_ROOT/$run/orchestrator.log" 2>&1 || true
   printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
+  [ -z "${SAMPLER_PID:-}" ] || kill "$SAMPLER_PID" 2>/dev/null || true
   stop_mine
   for c in "${CONTAINERS[@]}"; do docker rm "$c" >/dev/null 2>&1 || true; done
   CONTAINERS=()

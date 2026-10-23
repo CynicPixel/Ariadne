@@ -40,6 +40,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
@@ -230,6 +231,9 @@ public:
     }
     bool on() const { return fd_ >= 0 && !dead_.load(std::memory_order_relaxed); }
     uint64_t drops() const { return drops_.load(); }
+    uint64_t sends() const { return sends_; }           // sender-thread counters: read after join (D224 profiling)
+    uint64_t sent_bytes() const { return sent_bytes_; }
+    double busy_ms() const { return busy_ms_; }
     void OnKf(const KfRec& r, const cv::Mat& rgb) {
         if (!on()) return;
         cv::Mat z16, s16;
@@ -292,9 +296,13 @@ private:
             queue_.pop_front();
             if (m.agent >= 0) --pending_[size_t(m.agent)];
             lk.unlock();
-            if (!dead_.load(std::memory_order_relaxed) &&
-                !live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size())) {
-                dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+            if (!dead_.load(std::memory_order_relaxed)) {
+                const auto w0 = std::chrono::steady_clock::now();
+                if (!live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size()))
+                    dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+                busy_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w0).count();
+                ++sends_;
+                sent_bytes_ += m.bytes.size();
             }
             lk.lock();
             if (stop_ && queue_.empty()) return;
@@ -303,6 +311,8 @@ private:
     int fd_ = -1;
     std::atomic<bool> dead_{false};
     std::atomic<uint64_t> drops_{0};
+    uint64_t sends_ = 0, sent_bytes_ = 0;   // sender thread only
+    double busy_ms_ = 0;
     bool stop_ = false;
     std::mutex mu_;
     std::condition_variable cv_;
@@ -783,6 +793,19 @@ int main(int argc, char** argv) {
             link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl"),
             timing_log(run_dir / "timing.jsonl");
         const auto wall_start = std::chrono::steady_clock::now();
+        // D224 (A2's profiling ask): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
+        // wall-clock decomposition of the barrier's stages. Default off; it only ADDS a file, never changes timing-
+        // dependent behaviour, so digests are untouched either way.
+        const bool profiling = std::getenv("ARIADNE_PROFILE") && std::string(std::getenv("ARIADNE_PROFILE")) == "1";
+        std::optional<Lines> profile;
+        if (profiling) profile.emplace(run_dir / "profile.jsonl");
+        std::array<std::chrono::steady_clock::time_point, 9> pm{};
+        const auto pmark = [&](size_t i) {
+            if (profile) {
+                pm[i] = std::chrono::steady_clock::now();
+                for (size_t j = i + 1; j < pm.size(); ++j) pm[j] = pm[i];   // unset later stages read as 0 ms
+            }
+        };
 
         // --- topics (mission_live.json) -------------------------------------------------------------------
         const YAML::Node mj = YAML::LoadFile(scene + "/mission_live.json");
@@ -1359,6 +1382,7 @@ int main(int argc, char** argv) {
                 }
             }
             const auto barrier_wall = std::chrono::steady_clock::now();
+            pmark(0);
             if (!lc.demo) {   // gate mode: keyframes stamped before T, merged across agents in (t, agent, id) order
                 std::vector<KfRec> batch;
                 for (auto& L : lanes) {
@@ -1396,6 +1420,7 @@ int main(int argc, char** argv) {
                     ++integrated[r.agent];
                 }
             }
+            pmark(1);   // integrate done
             if (is_live) {
                 std::vector<fs::path> inbox;
                 for (const auto& e : fs::directory_iterator(run_dir / "directives_inbox")) {
@@ -1528,6 +1553,7 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+                pmark(2);   // radio ladder (+ snapshot) done
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
                 // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
@@ -1549,6 +1575,7 @@ int main(int argc, char** argv) {
                     }
                     ma->mailbox[size_t(k)].clear();
                 }
+                pmark(3);   // drain done
                 // (3) Component brokers assign from the bids that ARRIVED (the T - replan lag is the pre-registered
                 // coordination cost, D175 SS8.3). Sub-ms, serial. The consensus reaches members at the next tick.
                 for (int k = 0; k < NA; ++k) {
@@ -1572,6 +1599,7 @@ int main(int argc, char** argv) {
                         ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
                     }
                 }
+                pmark(4);   // brokers done
                 // (4) Per-agent plans: share-nothing fork-join (user directive: nothing between barriers holds a
                 // lock). Thread k touches ONLY planner_k / exporter_k / layers_k / node_k reads; sends wait for (5).
                 // (the extra names avoid C++'s most-vexing parse: size_t(NA) as a parameter list - bitten at D213 too)
@@ -1623,6 +1651,7 @@ int main(int argc, char** argv) {
                     });
                     for (auto& w : workers) w.join();
                 }
+                pmark(5);   // plan fork-join done
                 // (5) Sends, serial in ascending id: the seeded link sees one deterministic order, and CommsNode
                 // stays single-writer. Bids self-deliver at the broker immediately (local, no radio hop).
                 for (int k = 0; k < NA; ++k) {
@@ -1647,6 +1676,7 @@ int main(int argc, char** argv) {
                         ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
                     }
                 }
+                pmark(6);   // sends enqueued
                 // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
                 // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
                 plan_out = live::PlanOutput(NA);
@@ -1690,6 +1720,7 @@ int main(int argc, char** argv) {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
                 plan_out = planner->Plan(ctx);
             }
+            pmark(7);   // plan/merge done (both planner paths)
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
@@ -2177,6 +2208,19 @@ int main(int argc, char** argv) {
                 }
                 if (!all) ++answer_timeouts;
                 const double paused_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - barrier_wall).count();
+                if (profile) {   // D224: the barrier's wall decomposition (ms), one line per lockstep barrier
+                    pmark(8);
+                    const auto ms = [&](size_t i, size_t j) {
+                        return std::chrono::duration<double, std::milli>(pm[j] - pm[i]).count();
+                    };
+                    std::ostringstream po;
+                    po.precision(5);
+                    po << "{\"type\":\"barrier\",\"t_s\":" << T * 1e-9 << ",\"ms\":{\"integrate\":" << ms(0, 1)
+                       << ",\"radio\":" << ms(1, 2) << ",\"drain\":" << ms(2, 3) << ",\"broker\":" << ms(3, 4)
+                       << ",\"plan_fork\":" << ms(4, 5) << ",\"sends\":" << ms(5, 6) << ",\"merge\":" << ms(6, 7)
+                       << ",\"decide_command\":" << ms(7, 8) << ",\"total\":" << ms(0, 8) << "}}";
+                    profile->Put(po.str());
+                }
                 std::string at_js;
                 for (int k = 0; k < NA; ++k) at_js += (k ? "," : "") + std::to_string(at[size_t(k)]);
                 lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + at_js +
@@ -2288,7 +2332,9 @@ int main(int argc, char** argv) {
         runtime::RecordDeterminismDigests(man);
         std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(man);
         if (splat && splat->on())
-            std::printf("ariadne_live: splat tee sent keyframes (%llu dropped under the viewer bound)\n",
+            std::printf("ariadne_live: splat tee %llu sends, %llu bytes, %.1f ms socket-busy (%llu dropped under "
+                        "the viewer bound)\n",
+                        (unsigned long long)splat->sends(), (unsigned long long)splat->sent_bytes(), splat->busy_ms(),
                         (unsigned long long)splat->drops());
         std::printf("ariadne_live[%s]: %d replans, %d decisions, consumed %llu messages (digest %016llx) -> %s\n",
                     is_live ? "live" : "replay", replans, commands_sent, (unsigned long long)rec.count(),
