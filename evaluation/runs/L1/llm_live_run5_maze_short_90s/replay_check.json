@@ -1,0 +1,71 @@
+{
+ "checks": {
+  "replay1.agent0": true,
+  "replay1.agent1": true,
+  "replay1.consumed": true,
+  "replay1.directives_sha256": true,
+  "replay1.mover_state_sha256": true,
+  "replay1.trace_records": true,
+  "replay1.trace_sha256": true,
+  "replay1==replay2": true,
+  "replay2.agent0": true,
+  "replay2.agent1": true,
+  "replay2.consumed": true,
+  "replay2.directives_sha256": true,
+  "replay2.mover_state_sha256": true,
+  "replay2.trace_records": true,
+  "replay2.trace_sha256": true
+ },
+ "live": {
+  "agent0": {
+   "estimate_body_sha256": "682267d19a010cfb3eb995f95782ce3429be1f717ddb3f93b7915d891ce287cc",
+   "frames": 1801,
+   "keyframes": 130
+  },
+  "agent1": {
+   "estimate_body_sha256": "a49bdd965f450fbaabd82b60631999a94c69fabea096aa9c3fb2c328f61cbc47",
+   "frames": 1801,
+   "keyframes": 136
+  },
+  "consumed": "{messages: 86481, digest_fnv1a64: 'e4d957e844fa7211'}",
+  "directives_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "mover_state_sha256": "a26a9b42068dd0567f003cd0cd481005d34745d3f51e7b69b27946a6b8adcc7c",
+  "trace_records": 36,
+  "trace_sha256": "9b9b06eadcf1a9e46dedf451e207a8964bc413366395bee36e88c9184dddcd36"
+ },
+ "replay1": {
+  "agent0": {
+   "estimate_body_sha256": "682267d19a010cfb3eb995f95782ce3429be1f717ddb3f93b7915d891ce287cc",
+   "frames": 1801,
+   "keyframes": 130
+  },
+  "agent1": {
+   "estimate_body_sha256": "a49bdd965f450fbaabd82b60631999a94c69fabea096aa9c3fb2c328f61cbc47",
+   "frames": 1801,
+   "keyframes": 136
+  },
+  "consumed": "{messages: 86481, digest_fnv1a64: 'e4d957e844fa7211'}",
+  "directives_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "mover_state_sha256": "a26a9b42068dd0567f003cd0cd481005d34745d3f51e7b69b27946a6b8adcc7c",
+  "trace_records": 36,
+  "trace_sha256": "9b9b06eadcf1a9e46dedf451e207a8964bc413366395bee36e88c9184dddcd36"
+ },
+ "replay2": {
+  "agent0": {
+   "estimate_body_sha256": "682267d19a010cfb3eb995f95782ce3429be1f717ddb3f93b7915d891ce287cc",
+   "frames": 1801,
+   "keyframes": 130
+  },
+  "agent1": {
+   "estimate_body_sha256": "a49bdd965f450fbaabd82b60631999a94c69fabea096aa9c3fb2c328f61cbc47",
+   "frames": 1801,
+   "keyframes": 136
+  },
+  "consumed": "{messages: 86481, digest_fnv1a64: 'e4d957e844fa7211'}",
+  "directives_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "mover_state_sha256": "a26a9b42068dd0567f003cd0cd481005d34745d3f51e7b69b27946a6b8adcc7c",
+  "trace_records": 36,
+  "trace_sha256": "9b9b06eadcf1a9e46dedf451e207a8964bc413366395bee36e88c9184dddcd36"
+ },
+ "verdict": "PASS"
+}

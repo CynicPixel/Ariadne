@@ -1,0 +1,1 @@
+{"assignments": [{"agent": 0, "candidate": 3, "reason": "continue current high-utility task", "approval_id": ""}, {"agent": 1, "candidate": 2, "reason": "new high-utility cluster, avoid conflict", "approval_id": ""}]}

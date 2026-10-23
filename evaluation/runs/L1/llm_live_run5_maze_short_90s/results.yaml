@@ -1,0 +1,21 @@
+# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.
+mode: live
+scene_id: 89e61fecbb277f69
+live_config: live_llm_v1
+mission_config: mission_v1
+end_s: 90
+consumed: {messages: 86481, digest_fnv1a64: 'e4d957e844fa7211'}
+replans: 18
+commands_sent: 36
+commands_decided: 36
+lockstep: false
+planner: a1_phase4:ariadne
+shadow_map: none
+reorder_released_on_timeout: 0
+unrouted_messages: 0
+answer_timeouts: 0
+refused_goals: 0
+agents:
+  - {agent: 0, frames: 1801, keyframes: 130, unpaired_frames_dropped: 0, keyframes_integrated: 130, image_queue_max_depth: 5}
+  - {agent: 1, frames: 1801, keyframes: 136, unpaired_frames_dropped: 0, keyframes_integrated: 136, image_queue_max_depth: 7}
+rays: 51077
