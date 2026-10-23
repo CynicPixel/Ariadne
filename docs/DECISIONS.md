@@ -4542,3 +4542,21 @@ actively developed and points to Spark (RECON_6 A.5). The user approved Spark on
   tag.
 - **§49 ritual.** The arch §29.3 sentence gets a dated update naming Spark and this entry. GaussianSplats3D stays
   allowed as a fallback only if Spark fails a measured smoke.
+
+## 2026-10-23 — D199: the live demo trains on linear RGB on the lit procedural maze; the albedo proxy is the dark-world stretch (user directive)
+
+The user's directive, relayed by M on 2026-10-23: dark, lamp-lit and dusty runs are stretch goals, taken up only
+after the core demo runs in real time. The demo world is a lit, random, seeded procedural maze. This session's demo
+parts are the incrementally updating splat in the console and a 3D model of the maze shown next to it.
+- **Default for the live demo:** `training_image: rgb`. The service trains on the keyframe's linear RGB, labelled
+  "RGB (lit world)" on the panel and in the manifest. Under fixed lights the radiance is static, so §19.1's
+  coherence problem does not arise. B's `#kf` record carries the RGB as is.
+- **D195 is narrowed, not reversed.** The albedo proxy stays the locked training image when the light source is the
+  agents' own lamp: dark and lamp-lit worlds, the stretch. D195's refusal rule still applies there. A dark-world
+  record without the proxy is refused, never silently trained on RGB.
+- **The Oct 24 offline gsplat** runs over B's lit 3-agent mission, not maze_dark_0. The glue is unchanged: per-agent
+  spools plus pass B's T_G_W per agent.
+- **Priority:** real-time incremental splat updates first.
+- **Open for M:** what "a 3D model of the maze" means here. One reading is the generator's own scene mesh (ground
+  truth, labelled as such). The other is a reconstructed model (A1's TSDF/ESDF). They make different claims and
+  must not be confused on screen.
