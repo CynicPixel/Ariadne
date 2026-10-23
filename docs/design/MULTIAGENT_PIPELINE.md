@@ -1,6 +1,6 @@
 # MULTIAGENT_PIPELINE: agents that coordinate through the radio (D175)
 
-**Owner:** M (overall design, comms classes, live collab fleet). **A1:** per-agent planning, map patches, allocation
+**Owner:** M (overall design, comms classes, live collab fleet). **A1:** per-agent planning, coverage summaries, allocation
 over messages. **B:** the live runtime wiring and the console.
 **Status:** design. No new algorithms. This wires what exists so the thesis holds in the live system.
 
@@ -32,7 +32,7 @@ own sensors ──> VO + CollabFrontend (worker k) ──> own keyframes
               v                                      v                             v
    planner_k.Integrate(own kf, at T_G_W(k))   CollabNode k (SLAM collab,   SUBMAP_SUMMARY out (own
                                               LIVE_COLLAB, D174)           coverage, 0.5 m, §20.6)
-   planner_k.IntegratePatch(peer j patch,     T_G_W(j) for every j it      TASK_BID out to k's broker
+   planner_k.IntegrateSummary(peer j sum,    T_G_W(j) for every j it      TASK_BID out to k's broker
               at T_G_W(j) as k knows it)      has an estimate of
    peers_k = heartbeat poses of the agents k hears
               │
@@ -47,7 +47,7 @@ Nothing reaches planner_k except through CommsNode, the same lossy, budgeted, pa
 collaboration uses. Every byte is counted at the serializer and tagged by class (invariant 6).
 
 **Peer alignment.** Entry poses are known (maintainer, 2026-10-23: drones inserted through windows), so every agent
-holds an entry-pose T_G_W(j) for each peer from t = 0, and peer patches are placeable before any SLAM collaboration.
+holds an entry-pose T_G_W(j) for each peer from t = 0, and peer summaries are placeable before any SLAM collaboration.
 Once LIVE_COLLAB (D174) runs, adopted broker estimates refine those values. The POSE_GRAPH estimate already carries
 every member's frame (`agent_frames`); CollabNode is changed to keep the peers' values as well as its own, with no
 wire change.
@@ -79,7 +79,7 @@ presented as the system's map.
     judged.
 - **Frames.** Patches stay in the sender's frame W_j. Receivers place them with their current T_G_W(j). When an
   adopted estimate moves T_G_W(j) by more than (`reanchor_m`, `reanchor_deg`), the receiver re-integrates that
-  sender's stored patches. Known entry poses make this rare: loops correct drift, not merge frames.
+  sender's stored summaries. Known entry poses make this rare: loops correct drift, not merge frames.
 
 ## 3. Allocation over messages: broker SGA first, full CBBA as the ablation
 
@@ -141,7 +141,7 @@ Otherwise the result is reported as measured (invariant 7).
 | 1 | M | wire tables and codec for classes 7–10, CommsNode routing to per-agent mailboxes, delivery events, ledger tags; protocol tests | — |
 | 2 | M | LIVE_COLLAB fleet (D174): CollabFrontend in the worker, CollabFleet in the parent, T_G_W per agent | — |
 | 3 | A1 | per-agent `Phase4Planner` instances, `ExportSummary` / `IntegrateSummary` on the §20.6 0.5 m coarse layer (planner_k plans on own fine map + peers' coarse coverage), the task key, `TASK_BID` building, the broker SGA over received bids, the uncoordinated fallback; the identity check that the oracle row is unchanged | 1 (message structs) |
-| 4 | B | ariadne_live: one planner per agent fed only through its mailbox; heartbeat poses as peers; the operator node and its received map; the console shows bytes by class, assignments and "uncoordinated" | 1, 3 (NOT 2: entry poses place the patches) |
+| 4 | B | ariadne_live: one planner per agent fed only through its mailbox; heartbeat poses as peers; the operator node and its received map; the console shows bytes by class, assignments and "uncoordinated" | 1, 3 (NOT 2: entry poses place the summaries) |
 | 5 | M | §4 required rows in lockstep on AWS (CPU), then evidence and plots | 1, 3, 4 |
 
 Item 2 (LIVE_COLLAB) runs in parallel. It adds drift correction and the SLAM-collaboration panel, and it is not on
@@ -165,7 +165,7 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 
 ## 7. §49
 
-- **catalogue:** no new algorithm (CBBA / SGA per arch §21.7; occupancy patch sharing per §15.3).
+- **catalogue:** no new algorithm (CBBA / SGA per arch §21.7; coarse coverage summaries per §20.6 and §15.3).
 - **arch:** an as-built note for §21.7 and §15.3: classes 7–10 implemented, the task key deviation.
 - **ablation:** the §4 rows.
 - **benchmark config:** `configs/benchmark/multiagent_v1.yaml`.
