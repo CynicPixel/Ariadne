@@ -1,0 +1,33 @@
+# Ariadne degradation config: lampdark_headlamp_v0 (Phase 5, D139/D142; NOT a frozen 5.4 level).
+# lampdark_sensor_v0's camera + the headlamp dust model: round-trip attenuation of the lamp-lit render and the
+# lamp's single-scatter backscatter along each ray (ALGORITHMS §10.2). Lamp geometry = rig_stereo_v2 in the left
+# camera's optical frame (lamp_calib_v2): centre (0.05, -0.02, 0.02) m, axis +z, half-angles 25/40 deg. D runs on the
+# LENS image (fx 680), so dust_lamp_focal_px is the lens focal. Correlated field: tau 20 frames (1 s at 20 Hz).
+name: lampdark_headlamp_v0
+input_transfer: srgb
+radiance_scale: 1.0
+enable_shot_noise: true
+photon_scale: 10000.0
+read_noise_electrons: 2.5
+vignette_strength: 0.28
+prnu_sigma: 0.012
+exposure: 1.0
+analog_gain: 1.0
+digital_gain: 1.0
+bit_depth: 8
+saturation: 1.0
+enable_dust: true
+dust_model: headlamp
+dust_order: pre_sensor
+dust_beta: 0.15
+dust_beta_backscatter: 0.15
+dust_backscatter: 0.3
+dust_near_m: 0.02
+dust_lamp_in_camera_m: [0.05, -0.02, 0.02]
+dust_lamp_focal_px: 680.0
+dust_lamp_cos_inner: 0.906
+dust_lamp_cos_outer: 0.766
+dust_field_frequency: 0.012
+dust_field_octaves: 3
+dust_field_strength: 0.5
+dust_field_tau_frames: 20

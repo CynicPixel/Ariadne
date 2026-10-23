@@ -29,6 +29,63 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **A2:** 5.6 on Hilti (D141, which replaces M's D89) is measured and **negative**, 0/100 (D144, FC-5.6-1).
   `feat/ph5-dve` 3da96eb has main merged in and is queued for an AWS pre-merge.
 
+## 2026-10-23 — Phase 5 (A2): lighting rows measured; Hilti 5.6 measured: 0/100, diagnosed
+
+- **Lighting rows (D142, AWS session 5, `380c900`):** dark + lamp is ×6 worse in ATE than dark + fixed light on
+  the same path (15.2 vs 2.5 mm; lit 3 mm), ×2.8 keyframes. Brightness and coverage were not matched, so the gap is
+  not yet attributable to the lamp's motion (D145). Sensor noise adds 2–3 mm. Dust rows and the Stage 3 row
+  are next.
+- **AWS:** five CPU sessions, ≈ $0.07 total (two failed launches, then dangling `.cache` symlink, then missing
+  ListBucket -- each fixed in `ph5_aws.sh`). GPU renders $0.1241.
+- **Hilti 5.6 (D141/D143):** export + side files (exposure, LiDAR-measured GCPs). Equidistant cameras through
+  `cv::fisheye`, trigger pairing, a scorer that places each GCP through T_W_I T_I_L p_L, and a runner path without
+  dense GT. Matrix fixed before measurement (`configs/benchmark/hilti_5.6.yaml`); the 3 rows ran locally (D144).
+- **Real auto-exposure:** OAK-D exposure pinned at 30 ms, gain alone tracks the dark: 5.3's actuator order.
+- **5.6 result (D144): 0/100 on all three rows** (sim-tuned, EuRoC-tuned, EuRoC + radiometric). The estimate is
+  wrong (rigid-invariant GCP distances checked), not the scoring. Keyframes 200–300 per 300 frames whenever the
+  robot moves; 14–22 % lost, all in windows where it turns with a dark far field. Static ring edges were measured and rejected as
+  the mechanism. Stereo forward-backward rejections dominate, but MH_04 is lower still: cause open (timeboxed). No re-tuning after the failure; fix candidates go through preflight first.
+
+## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
+
+- **GPU session (D137), maintainer-approved:** g4dn.xlarge spot at $0.0858/h, instance `i-09d36054dbc53dab8`, cap
+  150 min. It renders `ci_tiny_dark` (lamp) and `ci_tiny_dark_fixed` (fixed lights). The NVIDIA EGL smoke runs first.
+- **5.5 (D138):** `confined_v1` (20/20 accepted) and one-pass baseline-sweep cameras; v1 output byte-identical.
+- **TUM (D86's condition):** the fr1/xyz target is sourced from Kerl et al. IROS 2013 Table III: 0.014, was 0.017
+  [UNVERIFIED]. On `feat/2.6-tum` at `90d5fc8`; verdict unchanged.
+- **TUM fr1 (D136):** the scoring-side diagnosis rules out a GT clock offset, a depth scale bias and rotation drift. The
+  RGB/depth-offset rerun follows the 2.6 merge.
+
+## 2026-10-22 — Phase 5 (A2): render probe, lamp calibration, Stage 3, controller, dust options (D130–D135)
+
+- **Probe (SMOKE §4u):**
+  - the sim RGB is sRGB-encoded (D130: D gets an opt-in decode);
+  - the lamp falls off as 1/(c′ + r²), and the shipped rig was nearly flat;
+  - SDF spot angles are full-cone;
+  - the lobe is flat-topped;
+  - shadows work on llvmpipe (D131).
+- **Built:**
+  - `ci_tiny_dark` + `rig_stereo_v2` (v1 worldgen byte-identical);
+  - lamp calibration executed (D133);
+  - Stage 3 albedo proxy (D134);
+  - exposure + lamp co-controller, Stage 4, replay `lamp_power` (D132);
+  - L9 dust options (D135).
+- **Tests:** test_numerical Degradation 25/25 (golden digest unchanged), test_unit Config/Degrad 20/20, test_opencv
+  ExposureControl/Falloff/DegradationSrgb 11/11.
+- **Not done:**
+  - runner wiring: waits on the 2.6/L2 merge, which touches the same seams;
+  - dark renders, which need GPU approval;
+  - 5.5;
+  - 5.6, which is blocked: OIVIO is offline.
+- **Caveat (D130):** the 2.2 radiometric rows ran D on sRGB-encoded sim values. EuRoC's encoding (the 3.1 rows) is
+  `[UNVERIFIED]`.
+
+## 2026-10-22 — Phase 5 (DVE) opens on `feat/ph5-dve`: session A2 claims D130–D149
+
+- **Decision IDs D130–D149 are claimed by session A2** for Phase 5 (5.1–5.6 and the exit gate), the 3.1 sim dark
+  retrieval row and the TUM fr1 time-offset follow-up. D100–D109 stay A2's for 2.6/L2/3.3 (D100–D102 used).
+- Branch `feat/ph5-dve` from `main` (f8c7030). Design preflight first (literature, OpenCV-native check, review).
+
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
 - **Decision IDs D75–D79 are claimed by session B.** D75 and D76 are used; D77–D79 are free again after this merge.

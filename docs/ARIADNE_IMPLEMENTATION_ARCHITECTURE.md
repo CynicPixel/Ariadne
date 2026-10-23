@@ -1202,6 +1202,11 @@ depth rides in the recording.
 
 Parameter vectors are named configs (`dark2_dust1`, …) referenced by run manifests, never inline constants.
 
+> **As built (Phase 5, D130).** The sim render is sRGB-encoded (SMOKE §4u). D gains `input_transfer: srgb`, which
+> decodes before stage 1; the default stays `linear`, so pinned digests hold. The dust stage's daylight form above is
+> wrong for a headlamp (ALGORITHMS §10.2): the replacement, round-trip attenuation plus a near-field backscatter
+> integral with the lamp offset as a parameter, is D139.
+
 **Division of labour — this line matters.** The lamp's *optical* effect (falloff, shadows, cone profile) is real
 Gazebo rendering and is **not** part of `D`. `D` degrades the *sensor*; the renderer degrades the *scene*.
 
@@ -1554,6 +1559,12 @@ beat in §43.
 In replay mode the controller acts on the degradation operator's exposure parameters (§5.6), which closes the loop
 without re-rendering at the cost of a stated approximation: sensing changes, light transport does not. Iteration 9
 measures that gap directly.
+
+> **As built (5.3, D132, 2026-10-22; not yet wired into a runner).** `perception/exposure_control/`. The metric is
+> Shim et al. eq. 1, with Zhang's gradient percentile as the comparator row (ALGORITHMS §9.4: Shim is "not robust").
+> **Deviation, pending the maintainer:** the lamp is not optimised with an energy cost term. One brightness decision is
+> spent in a fixed order (lamp → exposure → gain), the limiting case of a small energy cost. In replay, lamp power is
+> D's `lamp_power`, a radiance scale: exact for ambient 0 and a decoded render (SMOKE §4u).
 
 ---
 
@@ -5339,6 +5350,11 @@ Particularly valuable because it contains:
 
 Source:
 - https://arpg.colorado.edu/oivio/
+
+> **As built (5.6, D141, 2026-10-23).** OIVIO could not be obtained (downloads withdrawn; Drive IDs 404). The
+> maintainer approved **Hilti 2023 `site2_robot_3`** as the 5.6 sequence: an onboard co-moving light in a dark room
+> (ALGORITHMS §8.1), OAK-D stereo + IMU, public sparse 3-DoF TLS ground truth, CC BY-NC-SA 3.0. There is no
+> light-power sweep. OIVIO remains preferred if access is granted.
 
 ### VAROS
 

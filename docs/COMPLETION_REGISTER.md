@@ -46,7 +46,7 @@ identical.
 
 | area | state | evidence / missing |
 |---|---|---|
-| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp inert until 5.1. Sim IMU noise operator built (L2, D101). |
+| Sensor rig: stereo RGB 1280×720 + IMU + lamp | partial | SDF rig built (1.1). Lamp lit in `rig_stereo_v2` (D131, 5.1); v1 stays inert. Sim IMU noise operator built (L2, D101). |
 | Sim stack: Jazzy + Harmonic | done | `ariadne-sim` image (D2x). |
 | Perception | partial | XFeat primary: D60 overrides it for the EuRoC v2 VO only (approved), and XFeat is built and exact (D50). EigenPlaces via `cv::dnn`: D62, approved 2026-10-21 (exact index default, `cv::ANNIndex` the scale ablation). ALIKED+LightGlue hard pairs: D63. Sim-rig exports (1280×720 RGB): D90 (SMOKE §4t); EigenPlaces sim default size awaits approval. |
 | SLAM | partial | Built: stereo-VIO (D59), Schur-LM (D51–D53), drop + odometry edge (2.3), chordal (D70), gate → PCM → GNC (D71–D73), certificate behind a flag (D74). |
@@ -68,7 +68,7 @@ identical.
 | L6 | DNN per-thread `Net` contract object (§7.4) | done (D91) | A1. `dnn::PerThread<T>` in XFeat / PlaceRecognizer / HardPairMatcher; two concurrent threads byte-identical to single-thread under the pool rule (OpenCV pool = 1 with several callers; measured 1e-5-level drift without it). `test_dnn_contract` 5/5 repeats. Runtime pool + manifest field → Phase 7 / 7.3 |
 | L7 | Runtime `verify` hook must gate on PnP + D71 + PCM, never essential-matrix inliers alone | **open, known risk** | M (3.2; D63 found 4 confident wrong verifications at 210–264 inliers) |
 | L8 | MTU / IPv4 framing model revisited against the real link model | **revisited; recommendation open** | A2: D102 / COMMS_3.3 §4. Keep 1500 B under RFComms as modelled (≤3 % edge cost). Under bit-wise PER + slow fading, 1472 B loses 3–10× goodput at the edge (64–256 B wins): the 3.2 owner decides. Seam limit: `loss_p` for one size; heartbeats 1.3–2.3× over-lossy near the edge. |
-| L9 | I6 dust model fidelity (D9, D11) | deferred → 5.4 | — |
+| L9 | I6 dust model fidelity (D9, D11) | **model built; decision open** (→ 5.4) | A2: D135 options + D139 headlamp model (ALGORITHMS §10.2: round-trip attenuation, near-field backscatter, lamp offset; tests 31/31, golden unchanged). Measurement on the D137 dark recording pending |
 | L10 | Stale branches `feat/phase2-foundations` and `feat/3.2-protocol` | done | Both were fully contained in `main` and were deleted locally and on origin, 2026-10-22. `main` is the integration branch. |
 
 ---
@@ -139,12 +139,12 @@ identical.
 | 4.4 allocation (CBBA + broker-greedy) | needs L1 |
 | 4.5 egress (D* Lite, 5th-percentile confidence) | |
 | 4.6 TARE / FAR scheduling | Domain 3 survey owed (D45) |
-| 5.1 dark worlds, lamp calibration | |
-| 5.2 falloff normalisation (Stage 3) | from 2.2 |
-| 5.3 active exposure + lamp co-control | **carries 2.2's Stage 4 exposure normalisation** |
-| 5.4 degradation configs frozen | carries L9 (I6 dust fidelity) |
-| 5.5 confined-space worlds, baseline sweep | D86: EuRoC V1_03 (fast motion, 92 lost frames, 0.329) is the dataset regression case; projection-guided re-association is the candidate fix. |
-| 5.6 real-data low-light validation | D89 (supersedes D88): UMA-VI `IllChange` x5 (Zenodo 7809282, open; stereo + IMU; end-drift metric, start/end GT only) primary; EuRoC MH_04/MH_05/V1_03 full-GT companion. OIVIO gone, ViViD++ needs a request. Real low light and illumination changes, not lamp-in-darkness. Owner A2. |
+| 5.1 dark worlds, lamp calibration | **partial** (A2): lamp probe SMOKE §4u; D130 sRGB, D131 lamp. `ci_tiny_dark` + `rig_stereo_v2` (v1 worldgen byte-identical). Calibration done (D133, `lamp_calib_v2.yaml`; cos-incidence in, held-out 0.048 vs 0.167). **Dark renders done** (D137: `ci_tiny_dark_0` lamp + `ci_tiny_dark_fixed_0`, T4 spot, $0.1241). **Lighting rows measured** (D142, AWS `380c900`): dark+lamp ATE 15.2 mm / 219 KF vs dark+fixed light 2.5 mm / 78 KF vs lit 3 mm, sensor D +2–3 mm; preliminary, brightness/coverage not matched (D145). Dust rows + Stage 3 row to do |
+| 5.2 falloff normalisation (Stage 3) | **partial** (A2): D134/D140 `falloff.{hpp,cpp}`. **Wired at keyframes (D146):** `falloff:` perception section + `--lamp-calib`; `runtime/tools/falloff_glue.hpp` does Stage 4 (÷ exposure·gain), lamp power from the render and D, and refuses non-linear frames, non-lamp-only scenes, another rig or lamp position, or `radiometric: off`. The proxy goes into `KeyframeBundle.albedo*`, not into tracking. Tests: test_opencv Falloff 6 + FalloffGlue 4 (median albedo error 0.25 % through exposure ×2 and lamp 0.4), test_unit PerceptionConfig 6. §6.3 split: CLAHE only on the retrieval path (`place_recognizer.cpp`, `enhance`), structural, no test. Lamp position checked by hand against `rig_stereo_v2` (exact). Open: the trajectory-equality run and the §31.5 rows on dark renders (next AWS session); features-on-proxy row (second commit, D146); the spool and `ariadne_sim_collab` (no D there) are 6.1 |
+| 5.3 active exposure + lamp co-control | **partial** (A2): D132 controller + Stage 4 + replay `lamp_power`; tests 7/7 incl. closed loop (fixed a blind-metric stall and a limit cycle). Not wired; live `light_config` loop and the overexposure scenario to do. Carries 2.2's Stage 4. Real-data evidence (D143): Hilti OAK-D auto-exposure pinned at its ~30 ms cap, only ISO moves (930–1549) -- the controller's exposure-then-gain order |
+| 5.4 degradation configs frozen | **open** (A2): L9 options built (D135: pre-sensor dust, correlated field, lamp airlight; tests 4/4, golden digest unchanged). Decision + freeze wait on one measured pair on a dark recording |
+| 5.5 confined-space worlds, baseline sweep | **partial** (A2): D138 `confined_v1` (20/20 seeds accepted, narrow passages 0.45–0.60 m) + one-pass sweep cameras `rig_stereo_sweep_v1` (right_b04/08/12/20, recorded and verified; worldgen 106/106, v1 byte-identical). Not rendered; SimSource camera selection after the 2.6/L2 merge. Carries EuRoC V1_03 as the dataset regression case (main D86; candidate fix projection-guided re-association) |
+| 5.6 real-data validation (OIVIO → **Hilti 2023 site2_robot_3**, D141; supersedes D88/D89) | **measured, failing** (A2): extracted on AWS (D142; 3592 stereo pairs, 200 Hz IMU, per-frame exposure, 5 LiDAR-measured GCPs, sha256-checked). Equidistant cameras via `cv::fisheye` (D143). Matrix `configs/benchmark/hilti_5.6.yaml`, fixed before measuring. **D144: all 3 rows score 0/100** (GCP rms 10–229 m; 14–22 % frames lost). Not a scoring artefact (rigid-invariant distances checked). Losses come while the robot turns with a dark far field (174–207/300 lost) and vanish while it drives straight; keyframes 200–300/300 whenever it moves. Static ring edges measured and rejected as the mechanism (≤ 10 % static tracks where it fails). Stereo FB rejection dominates (50 %), but EuRoC MH_04 with the same config is lower still: cause open, diagnosis timeboxed. Fix candidates await preflight. Evidence `evaluation/runs/ph5/hilti_5.6/` |
 | 6.1 albedo-proxy training | |
 | 6.2 submap lifecycle, PGO re-anchoring | **carries per-keyframe T_G_C on the wire (from 3.2/D83)** |
 | 6.3 merge pruning, affine exposure | |

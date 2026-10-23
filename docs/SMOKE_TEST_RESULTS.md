@@ -208,7 +208,13 @@ but the shaded red box renders at (95, 30, 30), so a correct render was rejected
 with a message blaming black frames. The detector now uses channel dominance, and the failure
 message distinguishes a uniform frame from an unrecognised scene.
 
-**NOT verified: the NVIDIA EGL path on g5/g6** `[UNVERIFIED]`. It depends on the NVIDIA Container
+**Verified 2026-10-22 on g4dn.xlarge (Tesla T4, driver 595.91.07; DLAMI base OSS NVIDIA, Ubuntu 24.04):**
+`infra/scripts/sim.sh` printed `render mode: nvidia-egl` and `SIM_SMOKE=PASS` with the unmodified image
+`sha256:8b780f52…` (run `20261022T200422Z-gpu-b04560`, D137). The NVIDIA Container Toolkit was already the docker
+runtime on the DLAMI. A g5/g6 instance has not been tried. One prerequisite on an instance: the shipped tree must
+belong to the image's user (uid 1000), or containers fail EACCES writing into `/work`.
+
+~~**NOT verified: the NVIDIA EGL path on g5/g6** `[UNVERIFIED]`.~~ It depends on the NVIDIA Container
 Toolkit injecting the driver's EGL vendor library via glvnd (`NVIDIA_DRIVER_CAPABILITIES` includes
 `graphics`). No GPU exists here. First task on a g5/g6: `infra/scripts/sim.sh` must print
 `render mode: nvidia-egl` and `SIM_SMOKE=PASS`.
@@ -804,3 +810,21 @@ bit-exact: 11/11 and 12/12 files. `lightglue_aliked.onnx` is byte-identical to t
 **Cost:** indicative only, shared host (load 2–5). EigenPlaces classic is 1.9 s (1280×720) and 0.46 s (640×360) on
 1 thread, 0.76 s and 0.17–0.23 s on 8. ALIKED at 1280×720 is 1.6–2.4 s per frame and LightGlue about 0.95 s per pair,
 both at the default pool. Quiet-host numbers are L5.
+
+## 4u. Lamp photometry of the gz-sim8 / ogre2 camera (Phase 5 preflight) `[SMOKE-TEST]` 2026-10-22
+
+`simulator/smoke/lamp_probe/run_lamp_probe.py` (ariadne/sim:dev, llvmpipe; 17 launches plus a 2-launch rerun, every
+`gz_rc` 0). Each world: ambient 0, no light but a spot lamp 5 cm forward and 4 cm up of the camera, a matte grey plane
+(diffuse 0.5, roughness 1) facing the camera, and an R8G8B8 and an L16 camera at the same pose. Raw frames are in
+`.cache/feat-2.2-radiometric/runs/lamp_probe/` (`lamp_probe.json`, `lamp_probe_rerun.json`, `*_c8.npy`, `*_c16.npy`).
+
+| Question | Measured | Consequence |
+|---|---|---|
+| Q1 linearity | R8G8B8 is **sRGB-encoded**: doubling lamp intensity at 1.5 m gives 49.6 → 71 → 99 → 137 (×1.43, ×1.39, ×1.38; 2^(1/2.2) = 1.37). L16 is linear (2061 → 4129 → 8177 → 16394, ×2.00) and equals sRGB-decode(R8) to 1e-5 | D's input is not linear radiance: D130 adds an sRGB decode |
+| Q3 headroom | L16 has exactly as many distinct values as R8 in every frame: it is the same 8-bit render, decoded. No extra precision exists | Keep 8-bit RGB recordings; sRGB is a compander (~12 bits of linear range at the dark end), enough for the lamp's ~400× falloff |
+| Q2 falloff | Centre pixel (lamp axis), linear: I = A / (c′ + r²) with r from the lamp. SDF attenuation (0, 0, 1): A = 0.327, **c′ ≈ 0.5 m²** (residuals < 1 % from 0.75 to 4 m). The rig's current (0.2, 0, 0.05): **c′ ≈ 10 m²**, nearly flat to 3 m | Not inverse-square as the rig ships; D131 sets (0, 0, 1) and calibrates c′ |
+| Lobe | Divided by 1/(c′ + r²) and **one** cos (Lambertian incidence): flat to ±0.6 % inside the inner half-angle, smooth roll-off to 0 at the outer half-angle; dividing by cos² over-corrects by 7 % at 22°. SDF `inner_angle`/`outer_angle` are **full** cone angles (25°/40° lit only to a 12.5°/20° half-angle) | The renderer's lobe is a flat top, not cos^μ; calibrate the edge as a table. The rig lamp lit only the centre of an ~86° FOV |
+| Q4 shadows | Rerun `shadow2`, row 360: lit plane 57–76, **hard shadow 0** for ~112 px, occluder face 153–155 | ogre2 spot shadows work on llvmpipe; with ambient 0 a shadow is exactly black |
+
+The first `shadow` case placed the occluder just outside the 20° half-angle cone, so it could not show a shadow. It is
+kept in the JSON and superseded by `shadow2`.

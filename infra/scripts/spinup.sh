@@ -5,6 +5,7 @@
 #
 #   infra/scripts/spinup.sh run --profile cpu -- 'uname -m; lscpu'
 #   infra/scripts/spinup.sh run --profile gpu --max-minutes 45 -- 'nvidia-smi'
+#   infra/scripts/spinup.sh run --profile gpu --az eu-north-1c -- '...'   # pin the AZ (spot capacity ran out in 1a)
 #   infra/scripts/spinup.sh sweep            # terminate strays, list orphan volumes
 #
 # PROFILES (cheapest config that runs each workload; Stockholm prices in D28):
@@ -101,8 +102,16 @@ print("SUBNETS_BY_AZ=" + shlex.quote(" ".join(f"{az}={sn}" for az, sn in sorted(
 # first AZ, since on-demand prices are uniform across a region. Sets SUBNET_ID,
 # AZ and PRICE.
 choose_placement() {
-  local market="$1"
-  if [ "$market" = spot ]; then
+  local market="$1" want_az="${2:-}"
+  if [ "$market" = spot ] && [ -n "$want_az" ]; then
+    # --az: the cheapest AZ can be out of capacity (InsufficientInstanceCapacity, 2026-10-22), so the caller pins
+    # one. Its current spot price is still recorded for the ledger.
+    case " $SUBNETS_BY_AZ " in *" $want_az="*) ;; *) die "--az $want_az has no default subnet ($SUBNETS_BY_AZ)" ;; esac
+    AZ="$want_az"
+    PRICE="$(awsq ec2 describe-spot-price-history --instance-types "$TYPE" --availability-zone "$AZ" \
+      --product-descriptions 'Linux/UNIX' --start-time "$(date -u +%FT%TZ)" \
+      --query 'SpotPriceHistory[0].SpotPrice' --output text)"
+  elif [ "$market" = spot ]; then
     # Captured first, then scanned: an early `break` inside `sort | while`
     # would SIGPIPE the sort, and under pipefail that kills the script.
     local prices best="" az p
@@ -126,7 +135,7 @@ choose_placement() {
 }
 
 cmd_run() {
-  local profile="" market="spot" max_minutes=30
+  local profile="" market="spot" max_minutes=30 az=""
   TYPE=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -134,6 +143,7 @@ cmd_run() {
       --type)        TYPE="$2"; shift 2 ;;
       --market)      market="$2"; shift 2 ;;
       --max-minutes) max_minutes="$2"; shift 2 ;;
+      --az)          az="$2"; shift 2 ;;
       --) shift; break ;;
       *) die "unknown option $1" ;;
     esac
@@ -145,7 +155,7 @@ cmd_run() {
   local test_cmd="$*"
   profile_defaults "$profile"
   runner_outputs
-  choose_placement "$market"
+  choose_placement "$market" "$az"
 
   local run_id; run_id="$(date -u +%Y%m%dT%H%M%SZ)-$profile-$(head -c3 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   local run_dir="$REPO_ROOT/build/runs/$run_id" s3_run="s3://$BUCKET/runs/$run_id"

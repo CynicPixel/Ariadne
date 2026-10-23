@@ -1,0 +1,18 @@
+# Phase 5 (§31.5 row "dark + fixed light", D137): ci_tiny's geometry, ambient 0, the zone point lights ON and no
+# agent lamp (render with rig_stereo_v1, whose lamp is inert). The fixed-light twin of ci_tiny_dark.
+# Derived from the nightly-CI scene (design §7): the plan's two rooms + one corridor, no loop, short
+# missions, rendered inside the CI job from (seed, preset). Fields not listed take the
+# defaults in python/dataset_tools/worldgen/params.py (part of the preset digest).
+name: ci_tiny_dark_fixed
+lattice: {nx: 2, ny: 1, cell_m: 6.0}
+rooms: {count: [2, 2], size_m: [3.5, 5.0]}
+corridors: {width_m: [1.0, 1.4], narrow_count: 0, narrow_width_m: [0.55, 0.70]}
+topology: {route_cycle: 0, cover_edges_max: 1, extra_edges: 0, dead_end_stubs: 0}
+entrances: {count: 2, vestibule_m: 2.5}
+target: {path_length_m: [4.0, 16.0], allow_entrance_room: 1}
+clearance: {rho_agent_m: 0.20, rho_responder_m: 0.40}
+structure: {grid_m: 0.05, wall_height_m: [2.6, 3.0]}
+props: {per_room: [1, 2]}
+routes: {template: return, surveys: target, calibration: 1, min_inter_pairs: 3, min_inter_rooms: 1}
+search: {max_attempts: 50}
+lighting: {ambient: 0.0, zone_lights: 1, shadows: 1}

@@ -29,6 +29,7 @@
 #include "runtime/metrics/trajectory_io.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "runtime/tools/feature_engine_glue.hpp"
+#include "runtime/tools/falloff_glue.hpp"
 #include "runtime/tools/reassociation_glue.hpp"
 #include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
@@ -115,6 +116,7 @@ struct FrameView {
 
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
+    std::string lamp_calib;   // 5.2 (D146): the rig's lamp calibration, for a perception config with a falloff: section
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
@@ -194,6 +196,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         attitude = std::make_unique<slam::AttitudeTracker>(ap, imu, source.ImuNoiseModel(), T_B_Crect.R);
     }
     const cv::Matx33d K_rect(rr.fx, 0, rr.cx, 0, rr.fy, rr.cy, 0, 0, 1);
+    // 5.2 Stage 3 (D146): the albedo proxy of every keyframe; refuses here, before any frame, if its inputs are wrong.
+    KeyframeFalloff falloff(pcfg.falloff, args.lamp_calib, source.Lamp(), source.T_B_C0(), K_rect,
+                            cv::Matx33d(rectifier.R1()));
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
@@ -260,6 +265,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
          win_unobservable_after = 0, win_dof = 0, win_degenerate = 0;
     double win_sq = 0.0;
     long stereo_valid = 0, stereo_total = 0;
+    // Keyframe stereo outcomes by reason x image third (top/middle/bottom), and the valid matches' disparity sums:
+    // diagnostic output only (D144: where and why stereo fails on a real rig).
+    long stereo_reason[3][5] = {};
+    double stereo_disp_sum[3] = {}, stereo_disp_max[3] = {};
     long usac_retries = 0, usac_skipped = 0;
     // Online row refinement (D54): estimated at keyframes until it succeeds, then frozen and disclosed.
     perception::RowCorrection row_fix, row_check;   // row_check: re-estimated AFTER the refinement (acceptance: ~0)
@@ -377,6 +386,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         if (tr.need_keyframe || tr.reanchor_probe) {
             t0 = std::chrono::steady_clock::now();
             slam::VoStereo st;
+            std::vector<uchar> stereo_reason_q;   // MatchLeftToRight's per-point reasons (stereo path only; D144 diag)
             StereoDepth depth;   // the keyframe records' dense depth (SGBM, or the sensor's on RGB-D)
             cv::Mat supported;
             if (rgbd) {
@@ -425,6 +435,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 depth.sigma_Z.convertTo(s32, CV_32F);
                 st.right = sm.right;
                 st.valid = sm.valid;
+                stereo_reason_q = sm.reason;
                 for (const cv::Point2f& p : tfv.points) {
                     const int x = cvRound(p.x), y = cvRound(p.y);
                     const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
@@ -440,6 +451,18 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             if (made_keyframe) {
                 stereo_valid += trace_valid;
                 stereo_total += static_cast<long>(st.valid.size());
+                for (size_t q = 0; q < stereo_reason_q.size(); ++q) {
+                    const int band = std::clamp(static_cast<int>(3.0f * tfv.points[q].y / rr.height), 0, 2);
+                    ++stereo_reason[band][stereo_reason_q[q]];
+                    if (stereo_reason_q[q] == 0) {
+                        const double d = tfv.points[q].x - st.right[q].x;
+                        stereo_disp_sum[band] += d;
+                        stereo_disp_max[band] = std::max(stereo_disp_max[band], d);
+                    }
+                }
+                // 5.2 (D146): never feeds tracking or the VO, so the trajectory is the same with the stage off.
+                perception::radiometric::AlbedoProxy albedo;
+                if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -601,6 +624,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     cv::Mat rgb = l;
                     if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
                     kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
+                    kv.bundle.albedo = albedo.albedo;   // empty unless Stage 3 ran (D146)
+                    kv.bundle.albedo_valid = albedo.valid;
+                    kv.bundle.albedo_feature_mask = albedo.feature_mask;
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
@@ -740,6 +766,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = source.DegradationConfig();
     m.radiometric = source.Summary();
+    if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -756,21 +783,42 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(m);
 
     std::ofstream res(run_dir / "results.yaml");
+    // A sequence without dense GT (Hilti 2023: sparse control points only, D141) has nothing to align: the metric
+    // structs then hold their zero defaults, which must not read as a 0 m error. Those fields print null, and the
+    // sequence is scored by its own protocol from estimate_body.tum (analysis.hilti_score).
+    const bool dense_gt = !gt_poses.empty();
+    const auto gt_num = [dense_gt](double v) {
+        std::ostringstream o;
+        if (dense_gt) o << v;
+        else o << "null";
+        return o.str();
+    };
     res << "# " << args.tool << " results. Generated; do not hand-edit.\n"
         << "sequence: " << source.RunName() << "\nframes: " << n << "\n"
+        << "dense_gt: " << (dense_gt ? "true" : "false  # ATE/RPE fields are null: score with the dataset's protocol")
+        << "\n"
         << "associated_poses: " << e.size() << "  # nearest GT within 0.01 s (evo default)\n"
-        << "gt_path_length_m: " << gt_length << "\n"
-        << "ate_se3: {rmse_m: " << ate.rmse << ", mean_m: " << ate.mean << ", max_m: " << ate.max
-        << ", rotation_rmse_rad: " << ate_rot.rmse << "}\n"
+        << "gt_path_length_m: " << gt_num(gt_length) << "\n"
+        << "ate_se3: {rmse_m: " << gt_num(ate.rmse) << ", mean_m: " << gt_num(ate.mean) << ", max_m: "
+        << gt_num(ate.max) << ", rotation_rmse_rad: " << gt_num(ate_rot.rmse) << "}\n"
         << "ate_rmse_percent_of_path: " << (gt_length > 0 ? 100.0 * ate.rmse / gt_length : -1.0) << "\n"
-        << "sim3_scale: " << sim3.scale << "  # 1.0 = no scale drift; stereo is metric\n"
-        << "rpe_1s: {translation_rmse_m: " << rpe.translation.rmse << ", rotation_rmse_rad: " << rpe.rotation.rmse
-        << "}\n"
+        << "sim3_scale: " << gt_num(sim3.scale) << "  # 1.0 = no scale drift; stereo is metric\n"
+        << "rpe_1s: {translation_rmse_m: " << gt_num(rpe.translation.rmse) << ", rotation_rmse_rad: "
+        << gt_num(rpe.rotation.rmse) << "}\n"
         << "vo: {lost_frames: " << lost << ", keyframes: " << keyframes << ", ba_runs: " << ba_runs
         << ", ba_mean_cost_ratio: " << (ba_runs ? ba_cost_ratio_sum / ba_runs : -1.0)
         << ", landmarks_alive_at_end: " << vo.landmark_count()
         << ", graph_edges: " << vo.graph().edges().size() << ", graph_version: " << vo.graph().version() << "}\n"
         << "stereo_match_valid_fraction: " << (stereo_total ? double(stereo_valid) / stereo_total : -1.0) << "\n"
+        << "stereo_match_by_third: {";
+    for (int b = 0; b < 3; ++b) {
+        const long* r = stereo_reason[b];
+        res << (b ? ", " : "") << (b == 0 ? "top" : b == 1 ? "middle" : "bottom") << ": {valid: " << r[0]
+            << ", lk_lost: " << r[1] << ", fb: " << r[2] << ", off_row: " << r[3] << ", nonpositive: " << r[4]
+            << ", disparity_mean_px: " << (r[0] ? stereo_disp_sum[b] / r[0] : -1.0)
+            << ", disparity_max_px: " << stereo_disp_max[b] << "}";
+    }
+    res << "}  # keyframe left->right LK outcomes per image third (diagnostic)\n"
         << "triangulation: {candidates: " << tri.candidates << ", created: " << tri.created
         << ", no_stereo: " << tri.no_stereo << ", nonpositive_disparity: " << tri.nonpositive_disparity
         << ", depth_range: " << tri.depth_range << ", reprojection: " << tri.reprojection
@@ -802,8 +850,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     if (scfg.ba.backend == "window") {
         if (loops) {
-            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << ate_loop.rmse
-                << ", ate_rotation_rmse_rad: " << ate_loop_rot.rmse << "}\n";
+            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << gt_num(ate_loop.rmse)
+                << ", ate_rotation_rmse_rad: " << gt_num(ate_loop_rot.rmse) << "}\n";
             loops->WriteOutputs(run_dir.string(),
                                 // Interpolated between the bracketing GT samples (<= 20 ms apart), not the nearest one:
                                 // nearest-sample timing error would otherwise count as loop error (design §8).
@@ -821,8 +869,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                                 },
                                 res);
         }
-        res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
-            << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
+        res << "keyframe_refined: {ate_rmse_m: " << gt_num(ate_kf.rmse) << ", ate_rotation_rmse_rad: "
+            << gt_num(ate_kf_rot.rmse) << ", rpe_1s_translation_rmse_m: " << gt_num(rpe_kf.translation.rmse)
             << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
         res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
             << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed
@@ -944,6 +992,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
+    falloff.WriteResults(res);  // 5.2; nothing when Stage 3 is off
     if (reassoc.enabled()) res << reassoc.ResultsLine();
     res << features->ResultsYaml();   // 2.1: empty for orb
     if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10

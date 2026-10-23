@@ -3257,6 +3257,674 @@ field except timings.
 - **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
   exists.
 
+## 2026-10-22 — D130: the sim render is sRGB-encoded; D gains an sRGB decode (opt-in, default unchanged)
+
+SMOKE §4u: gz-sim8/ogre2 R8G8B8 frames are sRGB-encoded (lamp ×2 gives pixel ×1.38; the L16 camera is the same render
+decoded, linear, ×2.00). D (arch §5.6) reads `input/255` as linear radiance, so every D run so far scaled, Poissoned and
+quantized **encoded** values. A dark config's `radiance_scale` 0.06 on encoded values is a 0.06^2.2 ≈ 0.002 change in
+linear light at the top and a different one at each level: not the darkness the config name claims.
+
+- `DegradationParams.input_transfer: linear | srgb`. `srgb` decodes (IEC 61966-2-1 piecewise) before stage 1. D's output
+  stays linear raw: the sensor model is a linear machine-vision camera, which is what the §6.2 Poisson–Gaussian fit and
+  the GAT assume.
+- Default `linear`: the golden digest, the gate and every pinned result are byte-identical. Phase 5's frozen configs
+  (5.4) set `srgb`.
+- **Caveat, not re-run:** D runs on SIM frames (the 2.2 radiometric rows, D67–D69) used encoded values.
+  - **What stands:** the gate decisions. D's noise is affine in D's own output whatever the input encoding, so the
+    GAT fits and the on/off calls are unaffected.
+  - **What changes:** the meaning of the darkness labels. `dark3` on encoded values is not the linear-light darkness
+    its name says.
+  - **EuRoC is untouched by this probe.** The 3.1 darkened-proxy rows, and RADIOMETRIC_2.2's `[UNVERIFIED]`
+    companded-response note, concern EuRoC's camera. A sim render measurement cannot close them, so the note stays
+    open.
+
+## 2026-10-22 — D131: lamp photometry as rendered; the rig lamp becomes inverse-square, wide and shadow-casting
+
+SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp calibration (5.1, §5.3) fit THAT law:
+
+  I(x) = A · RID(θ) · albedo · cos(incidence) / (c′ + r²),   r, θ from the lamp centre and axis (T_C_L)
+
+- **Attenuation.** The rig shipped (constant 0.2, quadratic 0.05): c′ ≈ 10 m², nearly flat to 3 m, nothing like a real
+  lamp. Set (0, 0, 1), which renders c′ ≈ 0.5 m²: inverse-square beyond ~1.5 m. c′ is a renderer artefact; the
+  calibration estimates it and Stage 3 uses the calibrated value, so the code does not assume 0.
+- **Cone.** SDF spot angles are FULL cone angles. §5.3's "inner/outer cone 25°/40°" is read as half-angles (a headlamp
+  that lights the ~86° camera view), so the SDF gets 50°/80°. As shipped the lamp lit only the central ~40°.
+- **Lobe ("cosine lobe decision", plan 5.1).** Within the inner cone the RID is flat (±0.6 %); Lambertian incidence
+  contributes exactly one cos. The calibration stores the RID as a table over θ (flat top + roll-off), not cos^μ.
+  Separating RID from incidence needs tilted planes (Park et al., CVPR 2014), so the calibration renders several plane
+  poses.
+- **Shadows.** World `<shadows>true</shadows>`, lamp `cast_shadows true`; dark worlds drop the zone point lights and set
+  ambient 0. Verified to render on llvmpipe.
+
+## 2026-10-22 — D132: 5.3 exposure + lamp co-controller; Stage 4 normalisation; the replay lamp actuator
+
+`perception/exposure_control/` (arch §6.5), CPU-only so far, not yet wired into a runner:
+- **Objective:** Shim, Lee & Kweon (IROS 2014; arXiv 1708.07338 eq. 1, transcribed): mean over pixels of
+  log(λ(m − δ) + 1)/N for m ≥ δ, δ = 0.06, λ = 10³ (the paper's values). Candidates at ±0.5 stop (0.125 grid) are
+  synthesised by scaling the linear frame and clipping (Zhang, Forster & Scaramuzza, ICRA 2017, with a known response),
+  not Shim's γ-mapping, which stands in for an unknown response. Ours is known: linear, D's model (D130).
+- **One brightness decision, spent by cost:** brighter = lamp (to its energy budget) → exposure (to the blur ceiling
+  t ≤ blur_px / (f |ω|), §10.5) → gain; darker = the reverse. Slew ≤ 0.5 stop per decision (§6.5).
+- **Fallbacks, stated:** > 2 % clipped → step down at the slew limit (clipped pixels hide how far over they are);
+  no gradient above δ in any candidate (many stops under or over) → step toward mid-grey. The second was found by the
+  closed-loop test: from 8 stops under, Shim's metric is 0 everywhere and a pure-metric controller never moves.
+  **Not a new finding:** ALGORITHMS §9.4, read from Zhang et al. ICRA 2017, already says M_shim is "better, still
+  not robust", and that a gradient-percentile metric wins 13 of 18 datasets. The stall and the limit cycle below are
+  that documented weakness. **Comparator row (§6.5):** `metric: percentile` (the p-th percentile of gradient
+  magnitude, Zhang's M_perc; our grid search needs no smooth approximation).
+- **Deviation under §49, flagged for the maintainer:** arch §6.5 has the lamp "optimizing the same objective plus an
+  energy cost term". D132 spends one brightness decision in a FIXED cost order (lamp → t → gain), which is the
+  limiting case of an energy cost below the noise cost of gain. A continuous energy-weighted split is not built.
+  The same test found a limit cycle: the metric barely penalises clipping, so it stepped up into 20 % clipped and the
+  guard stepped back, ±0.5 stop forever. Candidates whose synthesised frame would trip the guard are now excluded.
+  Closed loop from 8 stops under and 5 over: settles within 5 % of the best clip-limited metric, |step| ≤ 0.25.
+- **Stage 4:** `NormalizeExposure` scales a linear image by (t₀g₀)/(tg). Lamp power is not divided there; Stage 3
+  owns P.
+- **Replay:** the decision drives D's `exposure`/`analog_gain` and the new `lamp_power` (a radiance scale). With
+  ambient 0 and a decoded render, lamp power is exactly a radiance scale (SMOKE §4u). The approximations that remain:
+  pre-render clipping and quantisation, the lamp's shadows (unchanged by power), and exposure time adding no motion
+  blur in D. The live-vs-replay comparison (exit gate) measures them.
+
+## 2026-10-22 — D133: 5.1 lamp calibration procedure, executed for rig_stereo_v2
+
+`python -m dataset_tools.lamp_calib render|fit`: a matte grey plane (SDF diffuse 0.5) under the rig's lamp at 15 known
+poses: 0.75–4.5 m × {fronto-parallel, yaw 30°, pitch −25°}. Tilts make incidence differ from the lamp angle, which is
+what separates the lobe from cos(incidence) (Park et al., CVPR 2014 — read at abstract level only). c′ is not only a
+renderer artefact: ALGORITHMS §14.2 (DarkGS/NeLiS, IROS 2024) measured real lamps departing from 1/r² at close range
+and fitted a Lorentzian term, which is this model's form. So c′ stays a fitted parameter on real data. Fit: for a fixed c′, I(c′ + r²)/[cos inc] is a
+function of θ alone, whose per-θ median is A·RID. c′ minimises the across-pose spread (golden-section search). There
+is no initialisation to get wrong. The lamp pose is the rig's (sim truth); the procedure calibrates what the renderer
+adds.
+
+Result, `configs/sim/lamp_calib_v2.yaml` (568 k samples):
+- gain_A 1.952 at intensity 6. That is 0.325 per unit intensity; SMOKE §4u measured 0.327.
+- c′ = 0.543 m² (§4u: ≈ 0.5).
+- RID flat to ±0.5 % out to 25°, rolling off to 0.04 at 39.5°.
+- **Cosine decision (plan 5.1): Lambertian incidence is IN.** Held-out log-RMS is 0.048 with it and 0.167 without.
+- All-pose log-RMS 0.052, dominated by 8-bit quantisation in the dim tail.
+
+## 2026-10-22 — D134: 5.2 Stage 3 falloff normalisation → albedo proxy
+
+`perception/radiometric/falloff.{hpp,cpp}`: albedo = I · albedo_ref / max(E, E_max/max_gain), with
+E = gain_A · p · RID(θ) · cos(inc) / (c′ + r²).
+- r and θ are taken from the lamp centre (T_C_L, rotated into the rectified frame), not the camera.
+- Normals come from depth central differences.
+- Depth is the estimator's (the §9.6 contract: SGBM or RGB-D); never GT in production. A GT-depth row is an
+  upper-bound ablation only.
+- Pixels outside the lobe (RID < 0.05), without depth, or at grazing incidence (cos < 0.15) are invalid. Unlit pixels
+  have no albedo to recover.
+- Placement: after rectification and stereo, so it cannot feed SGBM.
+- The geometry path may consume it (§6.3: calibrated physics); whether features do is a §31.5 row.
+- Synthetic tests: exact albedo recovery on a tilted textured plane; distance and power invariance; invalidity; the
+  gain cap.
+- **Normals from stereo depth are the weak link.** The calibration's "cos is in" (D133) describes the light. Dividing
+  by an ESTIMATED cos is a separate estimator choice, so `incidence: calibrated | off` is a parameter.
+- Test: a tilted plane, depth from 10 cm-baseline disparity quantised to 1/16 px plus 0.1 px noise. Median albedo
+  error by normal baseline:
+
+  | normal baseline | median albedo error |
+  |---|---|
+  | 1 px | 88 % |
+  | 3 px | 14 % |
+  | 8 px | 4.8 % |
+  | incidence off (the shading bias) | 11.6 % |
+
+- Default 8 px, calibrated. A plane flatters long baselines (they smear normals across depth edges), so the §31.5 row
+  on renders decides between calibrated and off.
+
+## 2026-10-22 — D135 `[OPEN — measurement pending dark renders]`: L9 dust fidelity (D9, D11) — options built, decision after one measured pair
+
+All opt-in. Defaults are the §5.6 operator, so the golden digest is unchanged. Options:
+- `dust_order: pre_sensor` (D9 option c): the medium acts on radiance before shot noise. Test: over a black scene in
+  dense dust, post-sensor airlight has zero variance, while pre-sensor airlight has shot-noise variance at the same
+  mean.
+- `dust_field_tau_frames: N` (D11 option b): the field blends the epoch fields at frame/N and frame/N + 1, normalised so
+  that its variance does not pulse. `dust_drift_px_per_frame` adds advection. Test: frame-to-frame change is under ¼ of
+  the white field's.
+- `dust_airlight_mode: lamp`: the veil follows the lamp lobe and scales with `lamp_power`. **Superseded as physics
+  (preflight, 2026-10-23):** it keeps the daylight shape A·(1 − e^{−βd}), so the veil grows with scene depth. ALGORITHMS
+  §10.2 (after Akkaynak & Treibitz, CVPR 2018/2019) gives the headlamp model:
+  - **direct term:** out-and-back attenuation, e^{−2β_D d};
+  - **backscatter:** an integral along the ray, ∫ I_L(θ)/r² β_B e^{−2β_B r} dr. It is dominated by the near field,
+    saturates within tens of cm, and is nearly depth-independent beyond. β_D and β_B are two separate coefficients.
+  - The lamp offset sets where the cone enters the view, and §10.2 calls it the highest-value variable in the corpus.
+  - **Replacement:** `dust_model: headlamp` (D139).
+
+**Retracted 2026-10-23:** "dark worlds use `dust_airlight_mode: lamp`, decided on physics". That model is the wrong
+physics (above). Dark worlds will use the D139 headlamp model once it is built and tested.
+
+**To measure, one factor per row, at MATCHED mean veil.**
+- In pre_sensor mode airlight is scaled by `radiance_scale`; post-sensor it is not. Comparing them at equal
+  `dust_airlight` would therefore measure "more fog" (about 16× at dark2), not fidelity. Each row sets the airlight so
+  the mean veil matches.
+- Rows: order (post vs pre) at a fixed field, then tau (0 vs ≈ 1 s of frames) at a fixed order.
+- Metrics: match precision, track length, ATE.
+- Replay is CPU-only once one dark recording exists.
+
+**Before the 5.4 freeze:**
+- The dark0..3 levels are re-specified against lamp-lit renders with `input_transfer: srgb`.
+- With the decode, even `radiance_scale` 1 puts midtones about 2 stops lower than the encoded reading did.
+- The "ambient normal" row uses the same decode, or the matrix would compare two sensor models.
+
+## 2026-10-23 — D136: TUM fr1 follow-up (D100) — scoring-side diagnosis; the RGB/depth-offset rerun is next
+
+Analysis of the pinned D100 outputs only (`estimate_body.tum` against `groundtruth.txt`; no rerun).
+
+| Check | fr1_xyz | fr1_desk | fr2_xyz | Reading |
+|---|---|---|---|---|
+| ATE, SE(3), as pinned | 49.6 mm | 58.1 mm | 13.9 mm | — |
+| best estimate↔GT time shift (±60 ms) | 49.5 mm at +10 ms | 55.3 mm at +35 ms | 13.9 mm at 0 | a GT clock offset is not the cause |
+| Sim(3) ATE (scale) | 46.9 mm, s 0.919 | 58.0 mm, s 1.002 | 9.8 mm, s 0.974 | no global scale bias explains fr1 |
+| median 1 s ‖Δest‖/‖Δgt‖ | 0.994 | 0.992 | 1.026 | local scale is right; a depth-scale error is ruled out |
+| orientation error, first-frame aligned | 1.1 → 2.6° | 1.6–2.8° | 0.4–1.7° | no large rotation drift |
+| 1 s translation RPE | 10.7 mm | 16.2 mm | 2.7 mm | fr1 drifts 4–6× faster per second |
+| RGB↔depth stamp gap (median / p90) | 7.3 / 13.0 ms | 11.9 / 16.4 ms | 8.3 / 14.6 ms | the gaps are similar; the motion is not |
+| GT speed, median (100 ms window) | 0.33 m/s, 14°/s | 0.48 m/s, 28°/s | 0.06 m/s, 4°/s | fr1 moves 5–8× faster |
+
+- The residual over time is U-shaped (fr1_desk: 100 → 22 → 67 mm by eighths) and does not rise with instantaneous
+  speed. So it is accumulated drift, not per-frame noise.
+- **The RGB/depth-offset hypothesis is still open.**
+  - Size: a depth frame 7–12 ms stale at fr1's speeds misplaces points by about v·Δt ≈ 2–6 mm, plus about ω·Δt ≈
+    0.1–0.3° of rotation (~2–6 mm at 1 m). That is a biased per-frame depth, which could integrate into the measured
+    1 s RPE.
+  - Test: rerun fr1 with the depth association tightened (`max_dt` 20 → 5 ms; frames without a close depth are
+    dropped) and with depth warped to the RGB stamp by the previous frame's velocity.
+  - Where the flag goes: `--depth-max-dt-ms` on the TUM tool. It lands after `feat/2.6-tum` merges, not as a commit
+    to that branch mid-merge.
+
+## 2026-10-23 — D137: the first GPU render session — ci_tiny_dark + its fixed-light twin on g4dn spot
+
+Maintainer-approved 2026-10-23.
+- **Script:** `infra/scripts/remote_dark_render.sh`, through `spinup.sh --profile gpu` (spot, `--max-minutes 150`).
+- **Image:** the exact local sim image `sha256:8b780f52…`, uploaded as zstd (735 MB) to `runs/images/`, the only
+  prefix the instance role may read. The instance checks the image id before rendering.
+- **GPU smoke first:** the NVIDIA EGL path has never run (SMOKE §4); the session stops if the smoke fails.
+- **Recordings:**
+  - `ci_tiny_dark` seed 0 + `rig_stereo_v2` (lamp);
+  - `ci_tiny_dark_fixed` seed 0 + `rig_stereo_v1`: ambient 0 and the zone point lights, no lamp (§31.5 "dark +
+    fixed light").
+  - Both share ci_tiny seed 0's geometry and trajectories (only the lighting fields differ), so the existing
+    ci_tiny_0 recording is their "ambient normal" row.
+- **Upload:** each recording goes to `runs/ph5-dark/<commit>/` as soon as it finishes, because a spot reclaim skips
+  spinup's end-of-run upload.
+
+## 2026-10-23 — D138: 5.5 confined worlds and the one-pass baseline sweep
+
+**Confined worlds.** `configs/worldgen/confined_v1.yaml`: maze_short's grammar squeezed.
+- Responder corridors at the grid minimum (0.90 m).
+- Three agent-only narrow passages at 0.45–0.60 m, inside the Z_min ≤ 0.3 m regime of §9.4.
+- 2.2–2.4 m ceilings and more braids.
+- Acceptance: 20/20 seeds (`worldgen accept`, seeds 0–19). Missions 237–340 s. Where narrow passages are used, agent
+  routes are shorter than responder routes.
+
+**Baseline sweep (§9.1, §31.8).**
+- Rig option `stereo.sweep_baselines_m`: extra right cameras `right_b04/08/12/20`, rendered in the SAME pass as the
+  main pair. Every baseline sees identical frames, poses and lighting, and the sweep costs one render, not four.
+- They are bridged and recorded through the mission's bridge YAML, and `sim_record` verifies each one's count, period
+  and pairing with the left camera.
+- `configs/sim/rig_stereo_sweep_v1.yaml` = v1 + the sweep.
+- Rigs without the key are unchanged: v1 worldgen output stays byte-identical to main (0 differing files).
+- Tests: worldgen 106/106, including sweep poses, topics, the manifest and distinct baselines.
+- **Consumer side, not built yet:** SimSource picks the right camera by name and takes the baseline from the manifest's
+  `t_B_camera_m`. That change is in `stereo_source.hpp`, so it lands after the 2.6/L2 merge.
+- §9.4's validator already exists (`perception_config.hpp`, `MinObservableRange`). The B = 20 cm row needs
+  `num_disparities` 512, or it must declare its blind zone.
+- **Confound to report with the sweep:** every sweep camera sits to the right of the left camera, while the lamp
+  stays at the body centre. The lamp is centred between the cameras only at the 10 cm main pair. ALGORITHMS §10.7
+  flags asymmetric lamp placement as a stereo photometric-consistency problem. In the lit `confined_v1` render the
+  effect is absent (the zone lights are fixed); in a dark sweep it confounds baseline with lamp asymmetry.
+
+## 2026-10-23 — D140: Stage 3 uses OpenCV's normals and enforces a feature mask (preflight corrections to D134)
+
+The ALGORITHMS survey and the advisor review (2026-10-23) changed D134 in two ways.
+
+**1. Normals: `cv::depthTo3d` + `cv::RgbdNormals`** (ptcloud, OpenCV 5.0.0, `opencv_ptcloud` linked into
+`perception_opencv`). The OpenCV-native check had missed this; D134's hand-rolled cross product is removed because it
+loses. Median albedo error on the noisy-stereo tilted plane of `test_falloff` (10 cm baseline, 1/16 px quantisation
++ 0.1 px noise):
+
+| normals | median albedo error |
+|---|---|
+| **RgbdNormals FALS, window 7 (default)** | **3.9 %** |
+| RgbdNormals LINEMOD, window 5 or 7 (diff threshold 0.05 m) | 4.4 % |
+| D134 hand-rolled cross product, 8 px (removed) | 4.8 % |
+| RgbdNormals SRI, window 7 | 5.9 % |
+| RgbdNormals FALS, window 5 | 7.9 % |
+| RgbdNormals CROSS_PRODUCT (1 px neighbours) | 189 % |
+| no incidence correction | 11.6 % |
+
+- **Pinned-API trap:** OpenCV 5.0.0's `RgbdNormals::create(rows, cols, depth, K, window, diff_threshold, method)`
+  takes `diff_threshold` BEFORE `method`. Passing the method in that slot silently ran FALS for every method; it was
+  found because all methods gave identical numbers.
+- LINEMOD's threshold is in depth units: its default 50 assumes millimetres, so it is set to 0.05 m for metric depth.
+- A plane flatters every method. The §31.5 render row decides between FALS and LINEMOD.
+
+**2. No camera-fixed edges (ALGORITHMS §17.4).**
+- Invalid pixels (outside the lobe, no depth, grazing incidence) now hold the median valid albedo, not 0.
+- `AlbedoProxy::feature_mask` (valid, eroded by `feature_margin_px` 8, with the image border counted as invalid) is
+  the mask every detector or descriptor on the proxy must use.
+- The lobe edge and depth holes move WITH the camera. A detector firing on them makes keypoints that track perfectly
+  and describe nothing in the world.
+
+**Also (D132):** `metric: percentile` is built: Zhang's M_perc, the §6.5 comparator row. Its p is `[ASSUMPTION]` 0.5,
+because Zhang's value was not transcribed. A closed-loop test settles it without clipping.
+
+Tests: test_opencv ExposureControl/Falloff/DegradationSrgb 14/14, test_numerical Degradation 25/25, test_unit
+Config/Degrad 20/20.
+
+## 2026-10-23 — D139: the headlamp dust model in D (replaces D135's lamp airlight as the physics; ALGORITHMS §10.2)
+
+`dust_model: headlamp` (opt-in; it requires `dust_order: pre_sensor` explicitly, because it is light in the medium).
+- **Direct:** the rendered, lamp-lit scene is attenuated out and back, J·e^{−2β_D·range}. Range is computed from GT
+  z-depth along the pixel ray [ASSUMPTION: gz `depth_camera` stores z].
+- **Backscatter:** single scattering of the carried lamp along each pixel ray,
+  S·∫_{near}^{range} RID(θ)/|s·u − L|²·e^{−β_B(s + |s·u − L|)} ds, normalised by the coaxial on-axis infinite-range
+  value.
+  - β_D (`dust_beta`) and β_B (`dust_beta_backscatter`) are separate coefficients (Akkaynak & Treibitz, CVPR 2018).
+  - L, the lamp centre in the camera frame, is a parameter: §10.2's lamp-offset lever becomes a replay sweep.
+  - Limit, stated: a replay sweep moves only the veil, not the recorded direct light or shadows.
+  - The local particulate field scales both terms.
+- **Deterministic:** the integral depends on pixel and range only, so it is tabulated once per call on an 8 px grid
+  × 96 geometric range nodes (0.02–60 m), with DetExp/DetSqrt and a literal node ratio. Lookups are a binary search
+  plus bilinear interpolation; there is no libm on the per-pixel path.
+- **Tests** (test_numerical Degradation 31/31; the golden digest is unchanged, so the default is byte-identical):
+  - the veil is near-field dominated (wall at 0.5 m vs 5 m: within 10 %, where the daylight model grows > 7×);
+  - a 0.30 m lamp offset cuts the on-axis veil to < 20 % of coaxial;
+  - the 96-node table matches a 200k-node libm integral to < 3 % at 0.3, 1 and 3 m;
+  - the direct term is exactly e^{−2βd};
+  - output is byte-identical across row bands;
+  - the config is strict.
+- **D135 now:**
+  - `dust_airlight_mode: lamp` remains only as the daylight-shape negative-control row.
+  - pre_sensor and the correlated field stay.
+  - The 5.4 freeze measures the headlamp model at matched mean veil against Koschmieder, on the dark recording that
+    has now been rendered (D137).
+
+## 2026-10-23 — D141: 5.6 validates on Hilti 2023 `site2_robot_3`, not OIVIO (maintainer-approved substitute, §49)
+
+**Why the substitute.** OIVIO (arch §34.2, plan 5.6) cannot be obtained.
+- Its page says trajectory downloads are "temporarily unavailable" and asks people to email the authors.
+- Every sequence's Google Drive ID returns 404 (checked 2026-10-22).
+
+**Which substitute.** ALGORITHMS §8.1 names Hilti 2023 `site2_robot_3` as the only public sequence whose own paper
+confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
+- Data: OAK-D stereo + IMU; open Hugging Face `Hilti-Research/hilti-slam-challenge-2023`, ungated, CC BY-NC-SA 3.0.
+- Ground truth is public (`ground_truth/site2_robot_3.txt`): TLS-surveyed control points, 3-DoF positions only, sparse.
+- The considered alternative, CAVERS (arXiv 2604.15052), is RGB-D only, so it was not taken.
+- Approved by the maintainer 2026-10-23.
+
+**What changes against §34.2 / plan 5.6.**
+- **Not available here:** the 100/50/15 % light-power sweep (OIVIO only).
+- **Metric:** sparse-position error at the control points, Hilti's protocol, not dense ATE.
+- **Report:** names the substitute and the reason.
+- **Unchanged:** the honesty requirement. Report where sim-tuned settings transfer and where they do not.
+- **Still open:** the maintainer may email ARPG for OIVIO access. If it arrives, OIVIO runs as well.
+- **Supersedes D88/D89 (main, 2026-10-23).** D88 chose EuRoC's dark flights as the 5.6 primary; D89 then chose
+  UMA-VI's `IllChange` sequences (ambient switching, end-drift metric). This entry came after both, and the master
+  session confirmed on merge planning that it stands: Hilti `site2_robot_3` has the co-moving onboard light in a dark
+  room, which neither of those has (ALGORITHMS §8.1). EuRoC MH_04/MH_05/V1_03 remain the full-GT low-light companion,
+  cited from D87's full-system run (keyframe-refined ATE 0.046 / 0.044 / 0.288 m), not re-run here.
+
+**§49 ritual:**
+- catalogue: ALGORITHMS §8.1, already present;
+- arch decision: this entry plus the as-built note in §34.2;
+- ablation and benchmark config: `configs/benchmark/hilti_5.6.yaml`, written with the loader;
+- manifest: dataset, sequence, sha256 and licence recorded per run, as for EuRoC and TUM.
+
+## 2026-10-23 — D142: Phase 5 CPU work runs next to the data on AWS; the no-dust lighting rows first
+
+**Why AWS.** This host's link measured about 1.9 MB/s total, shared with another session's 12 GB upload. At that
+rate the two dark recordings (25 GB) plus Hilti `site2_robot_3` (35 GB) would take about 9 h. Hugging Face → EC2
+and S3 → EC2 are fast and in-region. Maintainer-approved 2026-10-23.
+
+**Session** (`infra/eval/ph5_aws.sh`, spinup `--profile cpux86 --type c7i.2xlarge`; the profile is main's D86
+`cpux86`, carried over).
+
+**Image.** ECR `ariadne-core:rc-ariadne-core-dev-91643838031ab6cbda6a`, the same image as the local
+`ariadne/core-dev:dev` the unit tests ran on (pushed 2026-10-22 21:01). The first launch asked for
+`d86-coredev-04d8a7c58de1`, a tag that exists only locally: pull failed after 70 s, $0.0013.
+
+**Hilti.**
+- Fetched from the pinned HF revision, each file sha256-checked against its LFS oid.
+- `python -m dataset_tools.hilti.to_asl` exports one stereo pair (auto-picked as the first `left`/`right` image
+  topic twin; the full topic list goes to results) plus every IMU topic, in EuRoC layout, with `calibration.zip`.
+- Only that extract comes back.
+- The converter was tested on a synthetic ROS1 bag. Its topic names were invented: the real bag's topics are unknown
+  until the session lists them.
+
+**Replays.** Four rows, agent 0, 1000 frames, sim_v1 perception + sim_v2 slam. These are the configs of D69's lit
+rows (ATE 3 mm clean) on the same ci_tiny seed-0 trajectories.
+
+| row | recording | D |
+|---|---|---|
+| dark + co-moving lamp | `ci_tiny_dark_0` | none / `lampdark_sensor_v0` |
+| dark + fixed light | `ci_tiny_dark_fixed_0` | none / `lampdark_sensor_v0` |
+
+`lampdark_sensor_v0`: the sRGB decode plus the 2.2 camera (shot + read noise, PRNU, vignette), radiance_scale 1. The
+darkness is the render's. It is not a frozen 5.4 level.
+
+**Dust rows: unblocked 2026-10-23.**
+- `runtime/datasets/sim_depth.hpp::WarpDepthToRight` gives the right camera's GT depth: a forward z-buffered splat on
+  the render grid (u − f·B/z, nearest surface wins, disocclusions unknown, so they get no dust). Test 1/1.
+- `SimSource` now buffers each stamp's left, right and (with dust) depth, then lens-maps each depth like its image
+  before D. D's frame id stays the pair index.
+- **Byte-identity checked:** a 40-frame `lampdark_sensor_v0` run before and after the change gives an identical
+  `estimate_body.tum` and `vo_trace.csv`.
+- A functional headlamp run works. At S = 0.3 on the dim 4 s probe recording (lamp intensity 2), VO is lost from
+  frame 1: the veil buries the scene, the §10.2 "glowing wall". Dust strengths are set against the intensity-6
+  recordings before the D135/D139 rows run.
+- `configs/degradation/lampdark_headlamp_v0.yaml` holds the rig v2 lamp geometry; D works on the lens image, so
+  focal 680.
+
+**Sessions and cost** (spinup ledger, compute only; EBS/IPv4 add cents):
+
+| session | outcome | cost |
+|---|---|---|
+| 1 (`d86-coredev` tag) | image tag exists only locally: pull failed after 70 s | $0.0013 |
+| 2 (1b) | spot reclaim during the Hilti fetch | ~$0.007 |
+| 3 (`e3bc7f6`) | Hilti export done (3.58 GB tar, sha256 `78d2c3bf…`); build failed: the worktree's `.cache` symlink ships dangling, so FetchContent could not write | $0.0198 |
+| 4 (`d6da28b`) | build passed (121 s); recordings fetch failed: the instance role has GetObject, not ListBucket, so `--recursive` cannot list | $0.0068 |
+| 5 (`380c900`) | Hilti side files (exposure + control points) + build + 4 replays, all OK | $0.0352 |
+
+Fixes: FetchContent cache under `build/`; `HILTI=full|extras|skip`; recordings fetched by key from the committed
+`infra/eval/ph5_dark_manifest.txt` (213 keys, sizes checked). CPU total ≈ $0.07.
+
+**Results: the no-dust lighting rows — PRELIMINARY** (not §31.5 exit-gate rows: they ran before the
+preflight rule of 2026-10-23, and the fixed-light / lamp definitions still need their preflight decision; session 5; manifests `git_commit 380c900`, `git_dirty false`, image
+`sha256:91643838…`). `ariadne_sim_vo`, agent 0, 1000 frames, seed 1, `sim_v1` + `sim_v2`, 0 lost frames in every
+row. All four dark rows share one trajectory (GT path 7.355 m). D69's lit row is `ci_tiny_0` with the same seed and
+agent; that its trajectory is identical (only lighting differs between the presets) is [ASSUMPTION], not re-checked.
+
+| row | ATE rmse | keyframes | landmarks alive | stereo valid |
+|---|---|---|---|---|
+| lit (D69 reference) | 3 mm | 80 | 770 | 0.776 |
+| dark + fixed light, no D | 2.5 mm | 78 | 674 | 0.782 |
+| dark + fixed light, `lampdark_sensor_v0` | 5.2 mm | 72 | 237 | 0.784 |
+| dark + co-moving lamp, no D | **15.2 mm** | **219** | 471 | 0.782 |
+| dark + co-moving lamp, `lampdark_sensor_v0` | **17.0 mm** | **186** | 364 | 0.777 |
+
+- **Dark + lamp is ×6 worse in ATE than dark + fixed light on the same path, with ×2.8 keyframes.** This is a
+  comparison of two lighting setups, NOT a measurement of what the lamp's motion costs: the rows also differ in
+  overall brightness (not matched) and coverage (the zone lights fill the rooms; the lamp lights a cone). Attributing
+  the gap to the co-moving falloff needs the brightness-matched fixed-light row of D145. The falloff is the
+  plausible mechanism and Stage 3 (D134/D140) targets it; not yet isolated.
+- **Sensor noise is the second-order term:** +2.7 mm fixed, +1.8 mm lamp, and roughly ⅓–½ of the landmarks lost,
+  as in D69.
+- One seed on one 50 s segment. Differences of ~1 mm are not claimed; the ×6 between these two setups is, its cause
+  is not.
+
+## 2026-10-23 — D143: equidistant (Kannala–Brandt) cameras through `cv::fisheye`; sequences without dense GT
+
+**Why.** Hilti 2023's robot OAK-D Pro W (5.6, D141) is calibrated by Kalibr as `pinhole` + `equidistant`, fx 567
+at 1280 px: about 127° horizontal field of view. Read as radial-tangential, its coefficients are silently wrong (the
+negative control in the test below fails by far more than the tolerance). Re-rectifying offline in the converter
+was the alternative. It was not taken, so that the real raw images go through the pipeline's own rectifier.
+
+**OpenCV-native check** (in the image, `/opt/opencv5`): `cv::fisheye::stereoRectify` (stereo.hpp),
+`cv::fisheye::initUndistortRectifyMap` (imgproc.hpp), `cv::fisheye::undistortPoints` / `projectPoints`
+(geometry/3d.hpp). ALGORITHMS §camera models: KB4 = `cv::fisheye`. Its fisheye warning ("rectifying to a plane
+wastes the FOV") applies, and is accepted for dense stereo.
+
+**What changed.**
+- `PinholeRadtan` gains `model` (radtan | equidistant). It is the last field, so positional init still means radtan.
+  `dist` holds k1..k4 for equidistant (cv::fisheye's D order, the same as Kalibr's).
+- `StereoRectifier`: fisheye path through the three functions above. `alpha` is passed as fisheye `balance`: the
+  endpoints share intent, the interior does not. The flag is `STEREO_ZERO_DISPARITY` (OpenCV 5's name for
+  the `CALIB_ZERO_DISPARITY` the fisheye doc still mentions). `RefineRightRows` rebuilds with the same model.
+- `loop_verify_geometry`: `fisheye::undistortPoints` for equidistant cameras. The sim source states radtan.
+- EuRoC loader: accepts Kalibr `equidistant`; any other name still throws.
+- EuRoC-layout sequences may omit `state_groundtruth_estimate0`. The runner then writes `dense_gt: false` and
+  `null` for every ATE/RPE field: the zero-default metric structs must not read as a 0 m error.
+
+**Tests.** Hilti-shaped rig (published coefficients, B 7.5 cm, points out to 55° off-axis): rows 1e-3 px, depth
+1e-4 relative. The same lens read as radtan fails. Rectified fx 468.7 px, 107.6° HFOV, 99.9 % lens-fed pixels at
+balance 0. That is the crop, measured. EuRoC 12/12 (incl. accept/refuse); rectification + loop-verify 6/6.
+
+**Hilti data preparation** (`dataset_tools.hilti`, tests 6 + 2 + 5 scorer):
+- `sensor_yaml`: T_BS = T_cam_imu⁻¹. The stereo chain matches Kalibr's T_cn_cnm1 to 2e-15, B 0.07514 m, and the
+  T_BS translation equals Hilti's own `T_imu0_cam0`.
+- **Stereo pairing by trigger.** 13 of 3592 pairs carry centre-of-exposure stamps 9.984 µs apart: same
+  `start_of_frame`, exposure 29988 vs 30008 µs. They are re-stamped to the left stamp only under those two
+  conditions; anything else is refused. Exact pairing would have dropped them (200 ms holes).
+- **Control points** are LiDAR measurements (`frame_id rslidar`, ~0.83 m from the sensor), stamped exactly at the GT
+  rows. The GT file holds the surveyed marker positions. So the scorer places each GCP as T_W_I(t)·T_I_L·p_L
+  (RA-L 2024 §V-B, Kalibr T_lidar_imu), not at the IMU.
+- **Real auto-exposure** (`exposure_info`): exposure sits at its ~30 ms cap for the whole sequence; only ISO moves
+  (930–1549). On 253 frames the right camera's ISO lags the left by one step. That is real-data evidence for 5.3's
+  actuator order (exposure to its ceiling, then gain) and for the stereo exposure match.
+
+## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot turns; cause open
+
+**Runs** (`configs/benchmark/hilti_5.6.yaml`, fixed before measuring; commit `1468344`, clean; all 3592 frames;
+evidence `evaluation/runs/ph5/hilti_5.6/`). Hilti score, 5 GCPs, SE(3) fit / leave-one-out:
+
+| row | score fit / loo | GCP error rms, fit | lost frames | keyframes | stereo valid |
+|---|---|---|---|---|---|
+| sim-tuned (`sim_v1` + `sim_v2`) | 0 / 0 | 10.1 m | 602 (17 %) | 2167 | 0.27 |
+| EuRoC-tuned (`euroc_v2` ×2) | 0 / 0 | 229 m | 779 (22 %) | 3006 | 0.31 |
+| EuRoC-tuned + radiometric gate (`euroc_rad_auto`) | 0 / 0 | 17.0 m | 485 (14 %) | 2031 | 0.31 |
+
+- **Not a scoring artefact.** Distances between the predicted GCPs do not depend on any rigid transform, so a frame
+  or extrinsic error in the chain would leave them intact. They match the survey early (ratio 0.88–0.95 between the
+  first two GCPs, 15.5 m apart) and then fall apart: 0.27 for the sim-tuned row; 0.5–50 for the EuRoC rows. The
+  estimated height spans 14 m (sim-tuned), 32 m and 527 m on one floor.
+- **No phase tracks well.** Status stays "tracking" through the first 600 frames, but the sim-tuned row makes 190
+  and then 300 keyframes per 300 frames; the lit sim made ~80 in 1000. Landmarks do not survive from frame to frame,
+  so the map is rebuilt almost continuously from frame 0. The first GCP pair (frames ~196 → ~688) is already 5–12 %
+  short.
+- **The 2.2 radiometric gate** refuses on real data: the noise fit gives a < 0 on both cameras, so the VST stays off.
+  The row differs from EuRoC-tuned only through that path, and its spread (17 vs 229 m) is one seed and is not
+  claimed.
+
+**Diagnosis (measured correlation; mechanism not isolated).** Per 300-frame window, IMU gyro rate (`imu0`, z up),
+the mean brightness of the far field (the darkest 30 % of a 200-frame mean image, where the lamp never reaches),
+and the two rows' lost frames / keyframes:
+
+| frames | yaw p90 °/s | far-field mean | lost sim / rad | keyframes sim / rad |
+|---|---|---|---|---|
+| 0–299 | 1.5 | 85 | 0 / 0 | 190 / 173 |
+| 300–599 | 3.2 | 80 | 0 / 0 | 300 / 290 |
+| 600–899 | 2.8 | 94 | 39 / 38 | 212 / 192 |
+| 900–1199 | 3.1 | **44** | **174 / 182** | 243 / 256 |
+| 1200–1499 | **0.2** | 52 | 5 / 2 | 104 / 72 |
+| 1500–1799 | 3.1 | **50** | **203 / 207** | 241 / 235 |
+| 1800–2099 | 3.5 | 71 | 97 / 37 | 299 / 298 |
+| 2100–2399 | 3.0 | 81 | 76 / 19 | 208 / 198 |
+| 2400–2699 | 2.2 | 57 | 8 / 0 | 220 / 206 |
+| 2700–3591 | **0.1–0.2** | 52–54 | 0 / 0 | 34–60 per 300 |
+
+- **The quiet windows are the robot driving without turning** (0.2 °/s). It is not standing still: 62–65 % of LK
+  tracks still move there (table below).
+- **While it moves (2–7 °/s), losses are heavy only where the far field is dark** (44–50: 174–207 of 300 lost) and
+  light where it is lit (70–94: 0–97). Keyframes run at 200–300 per 300 whenever it moves, dark or lit.
+- **The camera-locked lamp pattern exists but is NOT the mechanism (measured).** The 200-frame mean keeps the lamp's
+  ring pattern on the floor sharp, with its lobe and a dark smudge (likely lens dirt): for a ground robot the floor
+  is fixed relative to the camera. The hypothesis that tracks on it vote for zero motion was tested with
+  `cv::goodFeaturesToTrack` (500) + pyramidal LK on 30 consecutive raw-frame pairs per window. A track is static if
+  it moves < 0.5 px; the pattern mask is the strongest 10 % of the mean image's edges, dilated (31 % of the image):
+
+  | frames | gyro °/s | static % | static on pattern % |
+  |---|---|---|---|
+  | 300–599 (0 lost) | 6.3 | 4.9 | 2.4 |
+  | 900–1199 (174–182 lost) | 5.1 | 9.9 | 7.4 |
+  | 1500–1799 (203–207 lost) | 6.8 | 10.0 | 7.2 |
+  | 2700–3599 (0 lost, driving straight) | 0.2 | 36–38 | 32–34 |
+
+  In the failing windows ~90 % of tracks move with the scene. Camera-locked tracks are a minority, and they are
+  most common where nothing fails. The rejection rests on the static-track share, which does not depend on the
+  mask (a 200-frame mean inside one room also keeps lasting room structure). **What this rejects is one mechanism
+  only: static ring edges voting for zero motion.** It says nothing about the lamp's camera-locked *falloff*
+  (brightness changing with range), which D142 measured in sim as keyframe churn, the same symptom seen here.
+- **Stereo, measured and not separating.** The sim lamp rows kept stereo-valid at 0.78, as the fixed light did; on
+  Hilti it is 0.27–0.31 from frame 0. Keyframe left→right LK outcomes per image third, from the new `results.yaml`
+  field `stereo_match_by_third` (output only; estimate and trace byte-identical):
+
+  | run (sim-tuned config) | valid | forward-backward | off row | LK lost | max disparity, bottom |
+  |---|---|---|---|---|---|
+  | Hilti, 1200 frames | 29 % | 50 % | 12 % | 2.5 % | 110 px |
+  | EuRoC MH_04, 300 frames | 17 % | 40 % | 3 % | 40 % | 270 px |
+
+  Forward-backward rejection dominates on Hilti in all three thirds. But MH_04 (D87's full system reaches 0.046 m
+  on it) is lower still with the same config. So the valid fraction alone does not separate a real sequence the
+  pipeline handles from one it does not. **The cause of the Hilti failure is open.** Diagnosis stopped here
+  (timebox): what remains is a preflighted investigation, not more ad-hoc probes.
+- **Smaller, not isolated:** rotation blur ≤ 7 °/s × 30 ms ≈ 1.6 px; 10 Hz (EuRoC 20 Hz); rectified FOV 107.6° of
+  ~127° (D143); ISO up to 1549.
+
+**Not done, deliberately.** No parameter was changed after the failed run (design-preflight rule). Candidate
+fixes, each to go through preflight (literature, OpenCV-native check, advisor) before any code:
+- isolate first: what Hilti does to the pipeline that MH_04 does not (frame rate 10 vs 20 Hz, the co-moving lamp's
+  falloff under rotation, fisheye-rectified periphery, left/right ISO lag); the candidates are listed, not ranked;
+- Stage 3 falloff normalisation with its `feature_mask` (D134/D140): needs depth, i.e. SGBM on this rig;
+- a motion-consistency check that drops tracks with zero image motion while the gyro reports rotation.
+
+**What transfers, stated:** extraction, calibration, fisheye rectification (row residual 0.42 px after refinement),
+stereo pairing and the Hilti scorer. **What does not:** pose accuracy on a real dark
+sequence with a co-moving lamp. The honest 5.6 line is 0/100 until a preflighted fix moves it.
+
+## 2026-10-23 — D145: §31.5 illumination rows defined (preflight: arch, SOTA pass, OpenCV check, advisor)
+
+**Preflight.**
+- **Arch read:** §5.3 (lamp), §5.6 (D: "scene radiance scale (darkness level)", replay exposure acts on sensing only),
+  §6.2–6.5, §19.2, §31.5, and the plan's Phase 5 gate. That gate requires each radiometric stage's effect on
+  repeatability, match precision, ATE and loop-closure precision, with negatives kept.
+- **SOTA pass:** primary sources opened, list below.
+- **OpenCV-native:** not applicable to scene lighting (the renderer's job, §5.6). The radiometric stages were checked
+  in D134/D140.
+- **Advisor:** reviewed twice.
+
+**Literature facts that shape the rows.**
+- **No benchmark compares world-fixed lights with a co-moving lamp in the same dark scene.**
+  - OIVIO varies only the onboard lamp's flux: ~100 / 50 / 15 % of 9000 lm on repeated trajectories (project page;
+    paper body not opened).
+  - Hilti 2023 and M2DGR describe their darkness qualitatively, with no lux values.
+  - Crocetti et al. ICRA'25 (arXiv 2502.13708) compares a steered robot lamp against a fixed-aim robot lamp, both
+    co-moving. Their "up to 75 %" ATE gain comes with their own caveat that the fixed-light ATEs are from partial
+    trajectories.
+  - The fixed-light row is therefore **[DESIGN]**.
+- **No community lux standard for "dark" exists.** OSHA 29 CFR 1926.56 gives working-light minima (tunnels and
+  underground ≈ 54 lx, headings ≈ 108 lx). That is real-world context only: Gazebo intensity is not calibrated to lux,
+  so no row is set from it.
+- **Photometric hazard.** NFL-BA (NeurIPS'25, arXiv 2412.13176) is the evidence that dynamic near-field lighting
+  degrades SLAM, but it is a neural photometric-BA method, not sparse VIO. DSO's (arXiv 1607.02565) affine brightness
+  term is global per frame and cannot absorb per-pixel 1/r²·cos falloff, so radiometric correction and falloff
+  normalisation stay separate rows.
+- **Exposure evaluation.** Tomasi et al. RA-L'21 (arXiv 2102.04341): a controller "cannot be evaluated with
+  previously-captured data". Published fixes use parallel cameras (Zhang ICRA'17; Shim TCSVT'18, arXiv 1708.07338),
+  repeated traversals, or synthetic re-exposure.
+  - Verified in our sim image: the sdformat14 camera spec has no exposure and no blur element, and gz-sensors /
+    gz-rendering headers have no motion blur.
+  - So in sim, exposure acts only through D, live or replay alike. Live vs replay differs only in the lamp path: a true
+    re-render (`light_config`) against D's linear `lamp_power` rescale, which is exact at ambient 0 below clipping
+    (D132).
+  - The comparison measures that difference, not exposure-dependent blur, which neither mode has.
+  - No published joint controller for lamp power and exposure was found, so D132's co-controller stays **[DESIGN]**,
+    and its §49 deviation already covers the fixed cost order.
+
+**Rows** (VO/SLAM rows for the Phase 5 gate; the two reconstruction rows are plan 6.1, defined here, run in Phase 6):
+
+| §31.5 row | definition | held fixed vs the lamp row |
+|---|---|---|
+| ambient normal | lit render (`ci_tiny`, D69), no D | geometry, trajectory, seed |
+| dark | lit render × D darkness level, `input_transfer: srgb` (§5.6); levels = 5.4's frozen dark0..3 | the same |
+| dark + fixed light **[DESIGN]** | `ci_tiny_dark_fixed`: ambient 0, the world's zone lights, no lamp. **Brightness-matched** to the lamp row through D's `radiance_scale`: trajectory-median linear brightness equal, exact only if neither render clips | geometry, trajectory, seed, median brightness |
+| dark + co-moving light | `ci_tiny_dark` (rig v2 lamp, D131/D133); lamp sweep 100 / 50 / 15 % through replay `lamp_power` (OIVIO's protocol), valid where the render does not clip | — |
+| + radiometric correction | 2.2 stages 1–2 (+ Stage 4 when exposure varies) | pixels |
+| + falloff normalisation | Stage 3 albedo proxy + `feature_mask` (D134/D140) | pixels |
+| + retrieval-path enhancement only | §6.3 split: enhancement on the retrieval path, not geometry | pixels |
+| fixed vs active exposure | D exposure fixed vs D132 controller; live-vs-replay quantifies the lamp path only (above) | trajectory |
+| NFL-aware / albedo-proxy reconstruction | plan 6.1 | — |
+
+**Residual confounds, stated, not removed:**
+- **Coverage.** Zone lights fill the rooms and the lamp lights a cone. Reported as the fraction of pixels above the
+  noise floor in each row.
+- **Clipping.** A hotspot clipped in the render cannot be rescaled. Reported per row as the clipped fraction.
+
+**Consequence.** D142's rows stay preliminary. The matched-brightness `radiance_scale` comes from a measurement of
+both recordings: sRGB-decoded median brightness, clipped fraction and above-noise fraction, over ~20 chunks of each
+`sensors_0.mcap`, read by ranged GET. That needs one approved S3 read of a few hundred MB.
+
+**Citations:** OIVIO project page (arpg.colorado.edu/oivio); Nair et al. RA-L 2024 (arXiv 2404.09765); Yin et al.
+M2DGR (arXiv 2112.13659); Ebadi et al. (arXiv 2208.01787); Crocetti et al. ICRA 2025 (arXiv 2502.13708); Dunn Beltran
+et al. NFL-BA NeurIPS 2025 (arXiv 2412.13176); Engel et al. DSO (arXiv 1607.02565); Zhang, Forster, Scaramuzza ICRA
+2017; Shim et al. TCSVT 2018 (arXiv 1708.07338); Tomasi et al. RA-L 2021 (arXiv 2102.04341); 29 CFR 1926.56 (eCFR).
+
+**D145 measurement (2026-10-23, approved S3 read).** ~55 MB of ranged reads in total: each `sensors_0.mcap`'s summary
+plus 30 chunks evenly spaced over the first 50 s of agent 0 (the replay span), left camera. sRGB-decoded (D130),
+BT.601 luminance. "Lit" = at least one 8-bit output step: the noise floor of `lampdark_sensor_v0` (10⁴ e⁻ full well,
+2.5 e⁻ read) lies well below it.
+
+| render | median linear Y (p10–p90) | clipped pixels mean / max | lit pixels |
+|---|---|---|---|
+| `ci_tiny_dark_0` (lamp) | 0.0364 (0.0117–0.0808) | 3.4 % / 16.2 % | 69 % |
+| `ci_tiny_dark_fixed_0` (zone lights) | 0.0450 (0.0209–0.0743) | 0 % / 0 % | 95 % |
+
+- **Matched row:** `configs/degradation/lampdark_fixed_matched_v0.yaml` = `lampdark_sensor_v0` with
+  `radiance_scale` 0.81. Exact, because the fixed render has ambient 0 and never clips.
+- **Brightness was not the big gap.** D142's unmatched fixed-light row was only 1.24× brighter.
+- **Coverage is the residual confound: 69 % vs 95 % lit.** The matched row cannot remove it.
+- **The lamp render clips** on 3.4 % of pixels on average, 16 % at worst. The 100/50/15 % lamp sweep through
+  `lamp_power` cannot recover clipped hotspot pixels. Those rows carry the clipped fraction, and a live re-render
+  (`light_config`) is the reference for them.
+
+## 2026-10-23 — D146: 5.2 wiring: Stage 3 runs at keyframes; per-frame is an ablation row (maintainer choice (c))
+
+**Where depth comes from (the question put to the maintainer).** Stage 3 divides by the predicted lamp irradiance,
+which needs a depth map. The runner computes SGBM only at keyframes. The maintainer chose (c), 2026-10-23: Stage 3
+runs at keyframes now, and an every-frame SGBM row comes later as an ablation. Grounds:
+- **Arch §19.1 / §18.2:** the load-bearing consumer is the keyframe bundle (`rgb // falloff-normalized albedo-proxy`).
+  §6.2 lets features use the proxy only "when the ablation says it helps".
+- **DarkGS** (Zhang et al., arXiv 2403.10814) builds its calibrated-light model into training-view rendering, which
+  is per view used for training, not per tracked frame.
+- **The per-frame cost is not measured.** The "20–40 ms" given to the maintainer was `[ASSUMPTION]`. The keyframe
+  path now times Stage 3 (`falloff_ms`), and SGBM is already timed inside `t_kf`.
+
+**Inputs, and what Stage 3 refuses (no silent wrong division):**
+- **Linear pixels.** The sim render is sRGB-encoded (D130). Only D with `input_transfer: srgb` makes the frame linear.
+  The sim source attaches a per-frame photometric state (`StereoFrame::photo`, the §4.1 slot) only then. EuRoC,
+  Hilti and an undegraded sim run have none, and Stage 3 refuses them.
+- **Flat field first** (arch §6.2 order: flat field → VST → falloff). D's vignette would otherwise be read as albedo.
+  Stage 3 refuses `radiometric: off`.
+- **Stage 4:** gray / 255 / (exposure · analog_gain · digital_gain), D's values for that frame.
+- **Lamp power:** lamp_rel = (rig lamp intensity / calibration `intensity_ref`) · D `radiance_scale` · D `lamp_power`.
+- **A lamp-only scene:** scene `ambient` 0 and no world lights. The fixed-light and matched rows (D145) are refused.
+- **The calibration's rig:** the calibration's `rig` must equal the mission's rig, and the lamp position must agree
+  within 1 mm (the rig's lamp in body, through T_B_C0, against `lamp_in_camera`).
+- **Geometry:** depth is SGBM Z where `DenseSupportMask` holds, NaN elsewhere (no unsupported disparities). K is the
+  rectified K. `R_cam_from_raw` is the rectifier's R1.
+
+**Output, first commit:** `KeyframeBundle` gains `albedo`, `albedo_valid` and `albedo_feature_mask`. The spool (6.1)
+does not write them yet. `exposure_state` and `lamp_state` stay unset: D's exposure is a relative factor, not the
+seconds `ExposureState` holds, and 5.3's controller is what will own both. The manifest gets `falloff` under
+Additional, and the tool takes `--lamp-calib` (the calibration describes the recording's rig, like `--degradation`).
+Tracking is untouched, so a run with Stage 3 on must give the same trajectory as with it off; a test checks this.
+results.yaml gets a `falloff:` block only when the stage is on: keyframes normalised, median valid fraction, median
+feature-mask fraction, `falloff_ms` p50/p95.
+
+**Second commit, the features row.** It needs the `replenish: keyframe` cadence: detection then happens only at
+keyframes, where the proxy exists. The row's baseline is the same cadence with Stage 3 off, so the row measures
+Stage 3 and not the cadence change. The tracker gains `Replenish(gray, detect, detect_mask)`: LK keeps the raw
+pyramid, and detection uses the proxy with `feature_mask`. The proxy maps to the engines' 8 bits as reflectance:
+`255 · albedo`, clipped at 1. `FalloffNormalize` already returns reflectance in the calibration's units (the plane
+reads its known 0.5), so no scale is chosen. The clipped fraction goes into results. (A first draft of this entry
+read the proxy as "relative, 1 = the plane", following a stale comment in falloff.hpp; the glue test's exact 0.5
+error exposed it, and the comment is corrected.)
+
+**D146 checks after the first commit (8fab27d), before any AWS run:**
+- **No double exposure division.** The radiometric stage's own exposure normalisation (its step [4]) is inert: "no
+  source carries photometric state" (`radiometric_stage.hpp`). Stage 4 therefore happens once, in the falloff glue.
+  When 5.3 gives sources a photometric state, step [4] and the glue must not both divide. 5.3 decides where it lives.
+- **The 1 mm lamp check against the real rig, by hand.** `rig_stereo_v2`: lamp in body [0.05, 0, 0.04], left camera
+  in body [0.03, 0.05, 0.02], body x forward / y left / z up, no camera tilt. Lamp minus camera = [0.02, −0.05, 0.02].
+  In the optical axes (x = −y, y = −z, z = x) that is [0.05, −0.02, 0.02], exactly `lamp_calib_v2`'s
+  `lamp_in_camera_optical_m`. The unit test builds its lamp from the calibration, so it could not show this. A
+  recording's own `/tf_static` is checked on the first AWS run (the refusal fires before frame 0).
+- **`ariadne_sim_collab`** has neither `--degradation` nor `--lamp-calib`. Its frames carry no photometric state, so a
+  falloff config there would refuse. Wiring it is part of 6.1 (the spool writing the proxy).
+- **§6.3, plan 5.2's second clause.** Enhancement exists only on the retrieval path: CLAHE is called in
+  `perception/place/place_recognizer.cpp` (`enhance: none|clahe`) and nowhere else. The geometry path (LK, stereo,
+  SGBM, descriptors) receives only flat field, VST denoise and, now, the falloff proxy. It is enforced by structure,
+  not by a test. The retrieval-enhancement ablation row is `enhance` (§31.5).
 
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 

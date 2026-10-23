@@ -38,8 +38,9 @@ struct EurocCamera {
 };
 
 /// Parse one camera's sensor.yaml. Strict: every key is read or explicitly
-/// acknowledged, the model must be pinhole + radial-tangential, and T_BS must
-/// be a 4x4 rigid transform.
+/// acknowledged, the model must be pinhole + radial-tangential or equidistant
+/// (Kalibr's names; equidistant = cv::fisheye KB4, D143), and T_BS must be a
+/// 4x4 rigid transform.
 inline EurocCamera ParseEurocCamera(std::string text, const std::string& origin) {
     // EuRoC writes OpenCV's "%YAML:1.0" directive, which is not valid YAML
     // (the standard form is "%YAML 1.2") and which yaml-cpp rejects.
@@ -53,11 +54,14 @@ inline EurocCamera ParseEurocCamera(std::string text, const std::string& origin)
     if (c.Require<std::string>("camera_model") != "pinhole") {
         throw ConfigError(origin + ": only camera_model 'pinhole' is supported");
     }
-    if (c.Require<std::string>("distortion_model") != "radial-tangential") {
-        throw ConfigError(origin + ": only distortion_model 'radial-tangential' is supported");
+    const auto dm = c.Require<std::string>("distortion_model");
+    if (dm != "radial-tangential" && dm != "equidistant") {
+        throw ConfigError(origin + ": distortion_model must be 'radial-tangential' or 'equidistant'");
     }
 
     EurocCamera cam;
+    cam.intrinsics.model =
+        dm == "equidistant" ? perception::DistortionModel::kEquidistant : perception::DistortionModel::kRadtan;
     cam.rate_hz = c.Require<double>("rate_hz");
     const auto res = c.Require<std::vector<int>>("resolution");
     const auto k = c.Require<std::vector<double>>("intrinsics");

@@ -1,0 +1,20 @@
+# ariadne_euroc_vo results. Generated; do not hand-edit.
+sequence: site2_robot_3_asl
+frames: 3592
+dense_gt: false  # ATE/RPE fields are null: score with the dataset's protocol
+associated_poses: 0  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: null
+ate_se3: {rmse_m: null, mean_m: null, max_m: null, rotation_rmse_rad: null}
+ate_rmse_percent_of_path: -1
+sim3_scale: null  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: null, rotation_rmse_rad: null}
+vo: {lost_frames: 602, keyframes: 2167, ba_runs: 1885, ba_mean_cost_ratio: 0.611945, landmarks_alive_at_end: 182, graph_edges: 1876, graph_version: 20972}
+stereo_match_valid_fraction: 0.274306
+triangulation: {candidates: 817201, created: 102844, no_stereo: 647906, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 4671, uncertain: 61780}
+timing_ms: {track_mean: 41.2696, vo_track_mean: 8.62988, keyframe_mean: 308.487, opencv_threads: 8}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.0195285, b: 0.000941548, c: -0.00231234, matches: 155, mad_px: 0.385322, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.129895, b: -0.000373781, c: 0.000362991, max_abs_dy_px: 0.419924, matches: 276}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 2, epipolar_check_skipped_frames: 0}
+keyframe_refined: {ate_rmse_m: null, ate_rotation_rmse_rad: null, rpe_1s_translation_rmse_m: null}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 1213, observations: 2234668, invalid_at_entry: 0, chi2_failed: 30691, chi2_failed_fraction: 0.013734, keyframe_observations_rejected: 22739, culled: 100847, exit_edges: 1876, keyframes_held: 5941, keyframes_held_at_solution: 280, landmarks_ill_conditioned: 114225, landmarks_ill_conditioned_at_solution: 5615, marginal_degenerate: 0, inlier_sigma_px: 0.560011}
+lost: {motion: bridge, reanchor: every_frame, segments: 57, bridged_frames: 602, coasted_frames: 0, bridge_rotation: {H: 27, E: 574, none: 1}, keyframes_while_lost: 602, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}

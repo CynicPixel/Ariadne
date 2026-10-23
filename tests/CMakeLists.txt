@@ -47,6 +47,7 @@ gtest_discover_tests(test_phase0_gate)
 add_executable(test_unit
   unit/test_observability.cpp
   unit/test_config.cpp
+  unit/test_sim_depth.cpp
   unit/test_metrics.cpp
   unit/test_perception_config.cpp
   unit/test_euroc.cpp
@@ -67,6 +68,9 @@ if(OpenCV_FOUND)
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
     unit/test_radiometric_stage.cpp
+    unit/test_exposure_control.cpp
+    unit/test_falloff.cpp
+    unit/test_falloff_glue.cpp
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
