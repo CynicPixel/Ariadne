@@ -17,8 +17,8 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Real auto-exposure:** OAK-D exposure pinned at 30 ms, gain alone tracks the dark: 5.3's actuator order.
 - **5.6 result (D144): 0/100 on all three rows** (sim-tuned, EuRoC-tuned, EuRoC + radiometric). The estimate is
   wrong (rigid-invariant GCP distances checked), not the scoring. Keyframes 200–300 per 300 frames whenever the
-  robot moves; 14–22 % lost, all in windows where it turns with a dark far field. The lamp's camera-locked ring pattern was
-  measured and rejected as the mechanism. Open lead: stereo matching (valid 0.27–0.31 from frame 0). No re-tuning after the failure; fix candidates go through preflight first.
+  robot moves; 14–22 % lost, all in windows where it turns with a dark far field. Static ring edges were measured and rejected as
+  the mechanism. Stereo forward-backward rejections dominate, but MH_04 is lower still: cause open (timeboxed). No re-tuning after the failure; fix candidates go through preflight first.
 
 ## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
 

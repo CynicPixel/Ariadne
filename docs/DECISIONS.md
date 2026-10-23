@@ -3370,7 +3370,7 @@ balance 0. That is the crop, measured. EuRoC 12/12 (incl. accept/refuse); rectif
   (930–1549). On 253 frames the right camera's ISO lags the left by one step. That is real-data evidence for 5.3's
   actuator order (exposure to its ceiling, then gain) and for the stereo exposure match.
 
-## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot turns; stereo matching is the open lead
+## 2026-10-23 — D144: 5.6 first result: neither the sim-tuned nor the EuRoC-tuned settings transfer to Hilti `site2_robot_3` (0/100); losses track a dark far field while the robot turns; cause open
 
 **Runs** (`configs/benchmark/hilti_5.6.yaml`, fixed before measuring; commit `1468344`, clean; all 3592 frames;
 evidence `evaluation/runs/ph5/hilti_5.6/`). Hilti score, 5 GCPs, SE(3) fit / leave-one-out:
@@ -3428,18 +3428,30 @@ and the two rows' lost frames / keyframes:
   | 2700–3599 (0 lost, driving straight) | 0.2 | 36–38 | 32–34 |
 
   In the failing windows ~90 % of tracks move with the scene. Camera-locked tracks are a minority, and they are
-  most common where nothing fails. Rejected as the cause.
-- **What is present from frame 0 in every row: stereo.** Stereo-valid fraction 0.27–0.31 (sim 0.78). In the 60-frame
-  smoke run, 6137 of 8710 triangulation candidates found no stereo match. Few landmarks per keyframe would explain
-  the keyframe churn, and a dark far field leaves fewer candidates still. This is the next measurement
-  (stereo matching on the fisheye-rectified pair), not yet a finding.
+  most common where nothing fails. The rejection rests on the static-track share, which does not depend on the
+  mask (a 200-frame mean inside one room also keeps lasting room structure). **What this rejects is one mechanism
+  only: static ring edges voting for zero motion.** It says nothing about the lamp's camera-locked *falloff*
+  (brightness changing with range), which D142 measured in sim as keyframe churn, the same symptom seen here.
+- **Stereo, measured and not separating.** The sim lamp rows kept stereo-valid at 0.78, as the fixed light did; on
+  Hilti it is 0.27–0.31 from frame 0. Keyframe left→right LK outcomes per image third, from the new `results.yaml`
+  field `stereo_match_by_third` (output only; estimate and trace byte-identical):
+
+  | run (sim-tuned config) | valid | forward-backward | off row | LK lost | max disparity, bottom |
+  |---|---|---|---|---|---|
+  | Hilti, 1200 frames | 29 % | 50 % | 12 % | 2.5 % | 110 px |
+  | EuRoC MH_04, 300 frames | 17 % | 40 % | 3 % | 40 % | 270 px |
+
+  Forward-backward rejection dominates on Hilti in all three thirds. But MH_04 (D87's full system reaches 0.046 m
+  on it) is lower still with the same config. So the valid fraction alone does not separate a real sequence the
+  pipeline handles from one it does not. **The cause of the Hilti failure is open.** Diagnosis stopped here
+  (timebox): what remains is a preflighted investigation, not more ad-hoc probes.
 - **Smaller, not isolated:** rotation blur ≤ 7 °/s × 30 ms ≈ 1.6 px; 10 Hz (EuRoC 20 Hz); rectified FOV 107.6° of
   ~127° (D143); ISO up to 1549.
 
 **Not done, deliberately.** No parameter was changed after the failed run (design-preflight rule). Candidate
 fixes, each to go through preflight (literature, OpenCV-native check, advisor) before any code:
-- measure first: why stereo matching fails on ~70 % of candidates (disparity range, the fisheye-rectified periphery,
-  the left/right ISO lag on 253 frames, the photometric check);
+- isolate first: what Hilti does to the pipeline that MH_04 does not (frame rate 10 vs 20 Hz, the co-moving lamp's
+  falloff under rotation, fisheye-rectified periphery, left/right ISO lag); the candidates are listed, not ranked;
 - Stage 3 falloff normalisation with its `feature_mask` (D134/D140): needs depth, i.e. SGBM on this rig;
 - a motion-consistency check that drops tracks with zero image motion while the gyro reports rotation.
 
