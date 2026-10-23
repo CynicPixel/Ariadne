@@ -23,7 +23,10 @@
 #include "planning/mission/frontier_mission.hpp"
 #include "runtime/live/link_frame.hpp"
 #include "runtime/live/live_source.hpp"
+#include "collaboration/comms/comms_node.hpp"
+#include "collaboration/protocol/collab_node.hpp"
 #include "runtime/live/a1_planner.hpp"
+#include "runtime/live/multiagent_glue.hpp"
 #include "runtime/live/planner.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
@@ -77,6 +80,17 @@ struct LiveConfig {
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
                                            // answer applies at the next horizon or expires. Not an evidence mode.
     int hold_back_ms = 3000;
+    // D175 item 4 (MULTIAGENT_PIPELINE): per-agent planners fed only through the radio. false = the centralised
+    // loop, byte-identical to before this feature existed (the oracle row).
+    struct Multiagent {
+        bool enabled = false;
+        std::string scenario;                 // comms scenario yaml (3.3); live runs need mode: ideal (RF needs tracks)
+        std::string broker_mode = "plain";    // plain | discount | overlap (A1 R1/R2)
+        double consensus_timeout_s = 10.0;    // older consensus than this = uncoordinated
+        double discount_range_m = 4.0;        // R2 P(d) range (broker_mode discount)
+        double discount_tau_s = 10.0;         // R2 cut-off age constant [ASSUMPTION, logged]
+        int max_bid_options = 8;              // top-M options per bid (D175 wire table cap)
+    } multiagent;
 };
 
 LiveConfig LoadLive(const std::string& path) {
@@ -103,6 +117,21 @@ LiveConfig LoadLive(const std::string& path) {
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
     if (!(c.end_s > 0) || !(c.max_command_m > 0) || !(c.telemetry_hz > 0)) throw std::invalid_argument("live config: bad values");
+    if (n["multiagent"]) {
+        const YAML::Node m = n["multiagent"];
+        c.multiagent.enabled = m["enabled"].as<bool>();
+        if (c.multiagent.enabled) {
+            c.multiagent.scenario = m["scenario"].as<std::string>();
+            if (m["broker_mode"]) c.multiagent.broker_mode = m["broker_mode"].as<std::string>();
+            if (m["consensus_timeout_s"]) c.multiagent.consensus_timeout_s = m["consensus_timeout_s"].as<double>();
+            if (m["discount_range_m"]) c.multiagent.discount_range_m = m["discount_range_m"].as<double>();
+            if (m["discount_tau_s"]) c.multiagent.discount_tau_s = m["discount_tau_s"].as<double>();
+            if (m["max_bid_options"]) c.multiagent.max_bid_options = m["max_bid_options"].as<int>();
+            if (c.multiagent.broker_mode != "plain" && c.multiagent.broker_mode != "discount" &&
+                c.multiagent.broker_mode != "overlap")
+                throw std::invalid_argument("live config: multiagent.broker_mode plain|discount|overlap");
+        }
+    }
     return c;
 }
 
@@ -449,6 +478,83 @@ int main(int argc, char** argv) {
                                                    run_seed, &policy);
             planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold, NA);
             planner_name = "a1_phase4:" + policy;
+        }
+        // --- D175 item 4: the per-agent pipeline (MULTIAGENT_PIPELINE) -------------------------------------------
+        // One planner, exporter and received-layers set per agent plus the operator node, all share-nothing; one
+        // CollabNode per participant (coordination-only: no SLAM hooks until LIVE_COLLAB) over a seeded CommsNode.
+        // Nothing here exists unless multiagent.enabled - the centralised loop above is D175's oracle row, untouched.
+        namespace ac = ariadne::collaboration;
+        namespace multi = planning::multi;
+        struct MaState {
+            ac::CommsScenario scenario;
+            std::unique_ptr<ac::LinkModel> link;
+            std::unique_ptr<ac::CommsNode> comms;
+            std::deque<live::A1Planner> planners;                     // planner_k: agent k's OWN map and NBV
+            std::deque<multi::SlabExporter> exporters;
+            std::deque<multi::ReceivedLayers> layers;                 // per agent; last entry = the operator's
+            std::vector<std::unique_ptr<ac::CollabNode>> nodes;       // agents 0..NA-1, operator = NA
+            std::vector<std::vector<core::DecodedMessage>> mailbox;   // filled by the coordination hook during ticks
+            std::vector<std::map<int, multi::TaskBid>> bids_rx;       // per node: newest bid per sender
+            std::vector<std::optional<multi::TaskConsensus>> cons_rx; // per agent: newest consensus received
+            std::vector<int64_t> cons_rx_t_ns;                        // and when it arrived (sim time)
+            std::vector<multi::Rigid2> T_G_W;                         // known entry poses: the 2D part of T_W_O[k]
+            std::vector<uint64_t> kf_count, bid_seq, patch_seq, cons_seq;   // per agent counters
+            std::vector<std::optional<std::pair<uint64_t, core::SE3>>> last_kf;  // for the odometry edge
+            multi::BrokerParams broker;
+            bool discounted = false;                                  // broker_mode discount: R2 ApplyConsensus
+            double tau_s = 10.0, timeout_s = 10.0;
+            int max_options = 8;
+            core::FrameTag g_tag{0, 0};                               // G = the world frame, agreed at the briefing
+        };
+        std::unique_ptr<MaState> ma;
+        if (lc.multiagent.enabled) {
+            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (A1's planner)");
+            ma = std::make_unique<MaState>();
+            ma->scenario = ac::LoadCommsScenario(lc.multiagent.scenario);
+            if (is_live && ma->scenario.mode != "ideal")
+                throw std::invalid_argument("multiagent live: scenario mode must be ideal (RF link models need "
+                                            "recorded tracks; D175 SS5 - the RF rows run on recordings)");
+            ma->link = ac::MakeLinkModel(ma->scenario, {}, {});
+            const uint64_t run_seed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
+            ma->comms = std::make_unique<ac::CommsNode>(*ma->link, run_seed, core::Timestamp{0});
+            ma->comms->Apply(ma->scenario);
+            std::string policy;
+            const auto p4 = live::LoadPhase4Params(planner_cfg_path, mc, lc.refused_radius_m, lc.max_command_m,
+                                                   lc.escape_m, run_seed, &policy);
+            const auto p4brief = live::Phase4BriefFrom(mc, brief);
+            std::vector<ac::AgentId> fleet;
+            for (int k = 0; k <= NA; ++k) fleet.push_back(ac::AgentId(k));   // NA = the operator (no vote, no bids)
+            ma->mailbox.resize(size_t(NA) + 1), ma->bids_rx.resize(size_t(NA) + 1);
+            ma->cons_rx.resize(size_t(NA)), ma->cons_rx_t_ns.assign(size_t(NA), INT64_MIN);
+            ma->kf_count.assign(size_t(NA), 0), ma->bid_seq.assign(size_t(NA), 0), ma->patch_seq.assign(size_t(NA), 0);
+            ma->cons_seq.assign(size_t(NA), 0);
+            ma->last_kf.resize(size_t(NA));
+            for (int k = 0; k < NA; ++k) {
+                ma->planners.emplace_back(mc, brief, p4, policy, lc.autonomous_threshold, NA);
+                ma->exporters.emplace_back(k, p4brief.grid);
+                ma->layers.emplace_back(k, NA + 1, p4brief.grid);
+                const core::SE3& T = brief.T_W_O[size_t(k)];
+                ma->T_G_W.push_back({T.t.x(), T.t.y(), std::atan2(T.R(1, 0), T.R(0, 0))});
+            }
+            ma->layers.emplace_back(NA, NA + 1, p4brief.grid);   // the operator's received layers (self = NA)
+            static const core::WireCodec ma_codec(core::Framing::kFragmented);
+            for (int k = 0; k <= NA; ++k) {
+                ac::NodeHooks h;
+                auto* mb = &ma->mailbox[size_t(k)];
+                h.coordination = [mb](const core::DecodedMessage& d, core::Timestamp) { mb->push_back(d); };
+                ma->nodes.push_back(std::make_unique<ac::CollabNode>(ac::AgentId(k), fleet, ma_codec,
+                                                                     ma->comms->ledger(), std::move(h), ac::NodeParams{}));
+            }
+            ma->broker.r_same = lc.min_goal_m;
+            ma->broker.range_m = lc.multiagent.discount_range_m;
+            ma->broker.mode = lc.multiagent.broker_mode == "overlap"    ? multi::BrokerMode::kOverlap
+                              : lc.multiagent.broker_mode == "discount" ? multi::BrokerMode::kDiscount
+                                                                        : multi::BrokerMode::kPlain;
+            ma->discounted = lc.multiagent.broker_mode == "discount";
+            ma->tau_s = lc.multiagent.discount_tau_s;
+            ma->timeout_s = lc.multiagent.consensus_timeout_s;
+            ma->max_options = lc.multiagent.max_bid_options;
+            planner_name += " +multiagent(" + lc.multiagent.broker_mode + "," + ma->scenario.name + ")";
         }
         // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
@@ -1000,7 +1106,22 @@ int main(int argc, char** argv) {
                 for (const KfRec& r : batch) {
                     const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
                                                  r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
-                    rays += planner->Integrate(ki);
+                    if (ma) {
+                        // D175: agent k's keyframes reach ONLY planner_k (its own map, in W = G under known entry
+                        // poses) and its own CollabNode (radio pose in W_self = O_k; the odometry edge is carried
+                        // for the record - coordination-only mode runs no SLAM on it).
+                        const auto k = size_t(r.agent);
+                        rays += ma->planners[k].Integrate(ki);
+                        std::optional<ac::OdometryEdge> odo;
+                        if (ma->last_kf[k]) odo = ac::OdometryEdge{ma->last_kf[k]->first,
+                                                                   ma->last_kf[k]->second.inverse() * r.T_O_C,
+                                                                   core::Mat6::Identity()};
+                        ma->nodes[k]->AddKeyframe(r.id, r.t_ns, r.T_O_C, odo, {}, core::Timestamp{r.t_ns});
+                        ma->last_kf[k] = {r.id, r.T_O_C};
+                        ++ma->kf_count[k];
+                    } else {
+                        rays += planner->Integrate(ki);
+                    }
                     if (shadow) shadow->Integrate(ki.agent, ki.t_ns, live::ToDepthFrame(ki));
                     ++integrated[r.agent];
                 }
@@ -1046,7 +1167,130 @@ int main(int argc, char** argv) {
             }
             for (int k = 0; k < NA; ++k) ctx.flown_m[size_t(k)] = lanes[size_t(k)].gt.PathLength(T);
             live::PlanOutput plan_out;
-            {
+            std::vector<multi::Pick> ma_picks;
+            if (ma) {
+                // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
+                // (1) The comms tick for T runs BEFORE the planners (D175 SS5), nodes in ascending id: the one
+                // seeded, single-threaded step. Deliveries land in the mailboxes via the coordination hook.
+                for (auto& nd : ma->nodes) nd->Tick(core::Timestamp{T}, ma->comms->network());
+                // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
+                // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
+                for (int k = 0; k <= NA; ++k) {
+                    for (const auto& d : ma->mailbox[size_t(k)]) {
+                        if (d.has_submap_patch && d.submap_patch.sender < NA)
+                            ma->layers[size_t(k)].Integrate(live::FromWire(d.submap_patch), {});
+                        if (d.has_task_bid) {
+                            auto bb = live::FromWire(d.task_bid);
+                            ma->bids_rx[size_t(k)][bb.sender] = std::move(bb);
+                        }
+                        if (d.has_task_consensus && k < NA) {
+                            ma->cons_rx[size_t(k)] = live::FromWire(d.task_consensus);
+                            ma->cons_rx_t_ns[size_t(k)] = T;
+                        }
+                    }
+                    ma->mailbox[size_t(k)].clear();
+                }
+                // (3) Component brokers assign from the bids that ARRIVED (the T - replan lag is the pre-registered
+                // coordination cost, D175 SS8.3). Sub-ms, serial. The consensus reaches members at the next tick.
+                for (int k = 0; k < NA; ++k) {
+                    const auto comp = ma->nodes[size_t(k)]->Component();
+                    if (int(comp.broker) != k) continue;
+                    multi::ComponentInfo ci;
+                    ci.broker = k;
+                    ci.epoch = uint32_t(comp.epoch.counter);
+                    for (auto m : comp.members) if (int(m) < NA) ci.members.push_back(int(m));
+                    std::vector<multi::TaskBid> bids;
+                    bids.reserve(ma->bids_rx[size_t(k)].size());
+                    for (const auto& [snd, bb] : ma->bids_rx[size_t(k)]) bids.push_back(bb);
+                    const auto cons = multi::BrokerAssign(bids, ci, ma->broker, T, ++ma->cons_seq[size_t(k)]);
+                    ma->nodes[size_t(k)]->SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                }
+                // (4) Per-agent plans: share-nothing fork-join (user directive: nothing between barriers holds a
+                // lock). Thread k touches ONLY planner_k / exporter_k / layers_k / node_k reads; sends wait for (5).
+                // (the extra names avoid C++'s most-vexing parse: size_t(NA) as a parameter list - bitten at D213 too)
+                std::vector<live::PlanOutput> plans;
+                plans.resize(size_t(NA));
+                std::vector<multi::TaskBid> bids_out;
+                bids_out.resize(size_t(NA));
+                std::vector<std::vector<std::pair<int, core::SubmapPatchValue>>> patches_out;
+                patches_out.resize(size_t(NA));
+                ma_picks.resize(size_t(NA));
+                {
+                    std::vector<std::thread> workers;
+                    workers.reserve(size_t(NA));
+                    for (int k = 0; k < NA; ++k) workers.emplace_back([&, k] {
+                        const auto comp = ma->nodes[size_t(k)]->Component();
+                        const uint32_t epoch = uint32_t(comp.epoch.counter);
+                        std::vector<planning::PeerKeyframe> peers;
+                        for (int j = 0; j < NA; ++j) {
+                            if (j == k) continue;
+                            if (const auto h = ma->nodes[size_t(k)]->LastHeartbeat(ac::AgentId(j))) {
+                                const core::SE3 Twj = brief.T_W_O[size_t(j)] * ac::FromPoseValue(h->pose);
+                                peers.push_back({j, int64_t(h->keyframe_watermark), Twj.t});
+                            }
+                        }
+                        plans[size_t(k)] = ma->planners[size_t(k)].PlanOwnFor(ctx, k, peers,
+                                                                              &ma->layers[size_t(k)].KnownMask());
+                        const auto& lp = ma->planners[size_t(k)].LastPlan();
+                        ma->exporters[size_t(k)].Update(lp.maps);
+                        for (int j = 0; j <= NA; ++j) {
+                            if (j == k) continue;
+                            auto patch = ma->exporters[size_t(k)].Export(
+                                ma->nodes[size_t(k)]->AckedPatchVersion(ac::AgentId(j)), epoch, T);
+                            if (!patch.blocks.empty())
+                                patches_out[size_t(k)].push_back({j, live::ToWire(patch, core::FrameTag{ac::AgentId(k), 0})});
+                        }
+                        bids_out[size_t(k)] = multi::BuildBid(k, epoch, ++ma->bid_seq[size_t(k)], T,
+                                                              lp.agents[size_t(k)].nbv, ma->max_options, {});
+                        // (6, in-thread) the pick from the newest consensus RECEIVED by T - reads only this agent's state
+                        const multi::TaskConsensus* c = ma->cons_rx[size_t(k)] ? &*ma->cons_rx[size_t(k)] : nullptr;
+                        const auto& opts = lp.agents[size_t(k)].nbv.options;
+                        ma_picks[size_t(k)] = ma->discounted
+                            ? multi::ApplyConsensusDiscounted(c, k, epoch, T, ma->timeout_s, opts, ma->broker.r_same,
+                                                              ma->broker.range_m, ma->tau_s)
+                            : multi::ApplyConsensus(c, k, epoch, T, ma->timeout_s, opts, ma->broker.r_same);
+                    });
+                    for (auto& w : workers) w.join();
+                }
+                // (5) Sends, serial in ascending id: the seeded link sees one deterministic order, and CommsNode
+                // stays single-writer. Bids self-deliver at the broker immediately (local, no radio hop).
+                for (int k = 0; k < NA; ++k) {
+                    for (auto& [j, pv] : patches_out[size_t(k)])
+                        ma->nodes[size_t(k)]->SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
+                    ma->nodes[size_t(k)]->SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                }
+                // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
+                // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
+                plan_out = live::PlanOutput(NA);
+                std::ostringstream mt;
+                mt.precision(10);
+                mt << "{\"name\":\"a1_phase4_multiagent\",\"broker_mode\":\"" << lc.multiagent.broker_mode
+                   << "\",\"scenario\":\"" << ma->scenario.name << "\",\"agents\":[";
+                for (int k = 0; k < NA; ++k) {
+                    plan_out.agents[size_t(k)] = plans[size_t(k)].agents[size_t(k)];
+                    plan_out.joint[size_t(k)] = ma_picks[size_t(k)].option;
+                    const auto comp = ma->nodes[size_t(k)]->Component();
+                    mt << (k ? "," : "") << "{\"pick\":" << ma_picks[size_t(k)].option << ",\"why\":\""
+                       << JsonEscape(ma_picks[size_t(k)].why) << "\",\"broker\":" << int(comp.broker)
+                       << ",\"members\":" << comp.members.size() << ",\"epoch\":" << comp.epoch.counter << "}";
+                }
+                const auto& lg = ma->comms->ledger();
+                mt << "],\"bytes\":{\"patch\":" << lg.TotalForClass(core::MessageClass::SUBMAP_PATCH)
+                   << ",\"bid\":" << lg.TotalForClass(core::MessageClass::TASK_BID)
+                   << ",\"consensus\":" << lg.TotalForClass(core::MessageClass::TASK_CONSENSUS)
+                   << ",\"heartbeat\":" << lg.TotalForClass(core::MessageClass::HEARTBEAT) << "}}";
+                plan_out.trace_json = mt.str();
+                // The console map is what the OPERATOR received over the radio (D175: the honest behaviour), the
+                // slab convention of occupancy_grid.hpp. Egress stays agent 0's own-map route until the operator's
+                // D* Lite over the merged layer lands (Phase C of this item).
+                const cv::Mat merged = ma->layers[size_t(NA)].Merged();
+                cv::Mat slab(merged.size(), CV_8U, cv::Scalar(planning::kUnknown));
+                slab.setTo(planning::kOccupied, merged == multi::kCellOccupied);
+                slab.setTo(planning::kFree, merged == multi::kCellFree);
+                slab.setTo(planning::kFree, merged == multi::kCellFreeResponder);
+                plan_out.maps = plans[0].maps;
+                plan_out.maps.slab = slab;
+            } else {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
                 plan_out = planner->Plan(ctx);
             }
@@ -1460,7 +1704,8 @@ int main(int argc, char** argv) {
                     const auto g = po.goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
-                    auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
+                    auto [path, face_yaw] = ma ? ma->planners[size_t(k)].Route(plan_out, k, pick, pd.ac)
+                                               : planner->Route(plan_out, k, pick, pd.ac);
                     if (lc.demo && path.size() > 1) {   // D169: never backtrack to where the agent was at plan time
                         core::SE3 latest;
                         bool have_latest = false;
