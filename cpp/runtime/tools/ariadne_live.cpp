@@ -72,6 +72,10 @@ struct LiveConfig {
     bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
                                            // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
                                            // agents). false until the acceptance (live + 3 equal replays) passes.
+    bool demo = false;                     // D169 (AGENTIC_7 §4): judges-live mode. No lockstep, keyframes integrate
+                                           // on a background thread, no per-replan PNGs, and the LLM is supervisory
+                                           // and NON-BLOCKING: the deterministic pick is commanded immediately, the
+                                           // answer applies at the next horizon or expires. Not an evidence mode.
     int hold_back_ms = 3000;
 };
 
@@ -93,6 +97,8 @@ LiveConfig LoadLive(const std::string& path) {
     if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
     if (n["lockstep_substep_ms"]) c.lockstep_substep_ms = n["lockstep_substep_ms"].as<int>();
     if (n["estimator_processes"]) c.estimator_processes = n["estimator_processes"].as<bool>();
+    if (n["mode"]) c.demo = n["mode"].as<std::string>() == "demo";
+    if (c.demo) c.lockstep = false;   // demo never pauses the world, whatever the lockstep key says
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
@@ -850,6 +856,44 @@ int main(int argc, char** argv) {
             int64_t since_ns = 0;
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
         } current[2];
+        // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu. A1
+        // (2026-10-23): Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
+        // sequence is never reordered; per-agent keyframe order stays time order (each lane already is, and the
+        // (t, agent, id) sort keeps it); cross-agent interleaving makes the demo map not bit-reproducible, which is
+        // accepted - demo is not the evidence substrate.
+        std::mutex planner_mu;
+        std::atomic<bool> integ_stop{false};
+        std::thread integrator;
+        if (lc.demo) {
+            integrator = std::thread([&] {
+                while (!integ_stop) {
+                    std::vector<KfRec> batch;
+                    for (auto& L : lanes) {
+                        std::lock_guard<std::mutex> lk(L.mu);
+                        while (!L.kfs.empty()) {
+                            batch.push_back(std::move(L.kfs.front()));
+                            L.kfs.pop_front();
+                        }
+                    }
+                    if (batch.empty()) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                        continue;
+                    }
+                    std::sort(batch.begin(), batch.end(), [](const KfRec& a, const KfRec& b) {
+                        return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
+                    });
+                    std::lock_guard<std::mutex> lk(planner_mu);
+                    for (const KfRec& r : batch) {
+                        const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
+                                                     r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
+                        rays += planner->Integrate(ki);
+                        ++integrated[r.agent];
+                    }
+                }
+            });
+        }
+        std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
+        std::vector<std::pair<double, double>> demo_prev_goals[2];   // its candidate goals, for the index mapping
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
@@ -889,24 +933,25 @@ int main(int argc, char** argv) {
                 }
             }
             const auto barrier_wall = std::chrono::steady_clock::now();
-            // Keyframes stamped before T, merged across agents in (t, agent, id) order.
-            std::vector<KfRec> batch;
-            for (auto& L : lanes) {
-                std::lock_guard<std::mutex> lk(L.mu);
-                while (!L.kfs.empty() && L.kfs.front().t_ns < T) {
-                    batch.push_back(std::move(L.kfs.front()));
-                    L.kfs.pop_front();
+            if (!lc.demo) {   // gate mode: keyframes stamped before T, merged across agents in (t, agent, id) order
+                std::vector<KfRec> batch;
+                for (auto& L : lanes) {
+                    std::lock_guard<std::mutex> lk(L.mu);
+                    while (!L.kfs.empty() && L.kfs.front().t_ns < T) {
+                        batch.push_back(std::move(L.kfs.front()));
+                        L.kfs.pop_front();
+                    }
                 }
-            }
-            std::sort(batch.begin(), batch.end(), [](const KfRec& a, const KfRec& b) {
-                return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
-            });
-            for (const KfRec& r : batch) {
-                const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
-                                             r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
-                rays += planner->Integrate(ki);
-                if (shadow) shadow->Integrate(ki.agent, ki.t_ns, live::ToDepthFrame(ki));
-                ++integrated[r.agent];
+                std::sort(batch.begin(), batch.end(), [](const KfRec& a, const KfRec& b) {
+                    return std::tie(a.t_ns, a.agent, a.id) < std::tie(b.t_ns, b.agent, b.id);
+                });
+                for (const KfRec& r : batch) {
+                    const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
+                                                 r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
+                    rays += planner->Integrate(ki);
+                    if (shadow) shadow->Integrate(ki.agent, ki.t_ns, live::ToDepthFrame(ki));
+                    ++integrated[r.agent];
+                }
             }
             if (is_live) {
                 std::vector<fs::path> inbox;
@@ -948,11 +993,15 @@ int main(int argc, char** argv) {
                 }
             }
             for (int k = 0; k < 2; ++k) ctx.flown_m[k] = lanes[k].gt.PathLength(T);
-            const live::PlanOutput plan_out = planner->Plan(ctx);
+            live::PlanOutput plan_out;
+            {
+                std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
+                plan_out = planner->Plan(ctx);
+            }
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
-            cv::imwrite((run_dir / snap).string(), maps.slab);
+            if (!lc.demo) cv::imwrite((run_dir / snap).string(), maps.slab);   // D169: no per-replan PNGs in demo
             if (shadow) {
                 const std::string p4 = "snapshots/p4slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
                 cv::imwrite((run_dir / p4).string(),
@@ -1197,11 +1246,29 @@ int main(int argc, char** argv) {
                 }
                 q << "]}";
                 std::string ans, top_problem;
+                std::string vdid = did;   // the request the processed answer belongs to (demo: the PREVIOUS horizon)
+                std::vector<std::pair<double, double>> prev_goals[2];
                 try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
                         // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
                     chooser->Send(q.str());
-                    ans = chooser->Wait(did, std::chrono::steady_clock::now() +
-                                                 std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                    if (lc.demo) {   // D169: never wait on the control path - poll the previous horizon's answer
+                        vdid = demo_prev_did;
+                        for (int k = 0; k < 2; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
+                        demo_prev_did = did;
+                        for (int k = 0; k < 2; ++k) {
+                            demo_prev_goals[k].clear();
+                            for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
+                        }
+                        if (vdid.empty()) {
+                            top_problem = "first horizon: no previous request";
+                        } else {
+                            ans = chooser->Wait(vdid, std::chrono::steady_clock::now());
+                            if (ans.empty()) top_problem = "expired: no answer within one horizon";
+                        }
+                    } else {
+                        ans = chooser->Wait(did, std::chrono::steady_clock::now() +
+                                                     std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                    }
                 } catch (const std::exception& e) {
                     top_problem = std::string("chooser link down: ") + e.what();
                 }
@@ -1233,11 +1300,24 @@ int main(int argc, char** argv) {
                             if (e["reason"]) pick_reason[k] = e["reason"].as<std::string>();
                         }
                     }
+                    if (lc.demo && want[k] >= 0) {   // D169: the answer names the PREVIOUS horizon's candidate;
+                        int j = -2;                  // map it by goal, the same rule that continues current_task
+                        if (size_t(want[k]) < prev_goals[k].size()) {
+                            const auto g = prev_goals[k][size_t(want[k])];
+                            double best = lc.refused_radius_m;
+                            for (size_t i = 0; i < plan_out.agents[k].options.size(); ++i) {
+                                const auto& o2 = plan_out.agents[k].options[i].goal_xy;
+                                const double d = std::hypot(o2.first - g.first, o2.second - g.second);
+                                if (d < best) best = d, j = int(i);
+                            }
+                        }
+                        want[k] = j;   // -2 = the override's goal is gone: the generic fallback below says so
+                    }
                     if (want[k] < -1 || want[k] >= int(P[k].cands.size())) {
                         source[k] = "fallback", validation[k] = "missing or out of the candidate set";
                     } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold &&
                                !P[k].exempt[size_t(want[k])]) {
-                        const std::string expect = did + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
+                        const std::string expect = vdid + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
                         std::ifstream f(run_dir / "approvals" / (expect + ".json"));
                         approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
                         bool approved = false;
@@ -1262,7 +1342,9 @@ int main(int argc, char** argv) {
                 for (int k = 0; k < 2; ++k) {
                     if (!P[k].active) continue;
                     std::ostringstream c;
-                    c << ",\"choice\":{\"source\":\"" << source[k] << "\",\"decision_id\":\"" << did
+                    c << ",\"choice\":{\"source\":\""
+                      << (lc.demo && source[k] == "orchestrator" ? "orchestrator_delayed" : source[k])
+                      << "\",\"decision_id\":\"" << (lc.demo ? vdid : did)
                       << "\",\"validation\":\"" << JsonEscape(validation[k]) << "\",\"approval\":"
                       << (approval_raw[k].empty() ? "null" : "\"" + JsonEscape(approval_raw[k]) + "\"")
                       << (k == 0 ? std::string(",\"answer\":") + (ans.empty() ? "null" : ans) : std::string(",\"answer\":\"see agent 0's record\""))
@@ -1314,7 +1396,25 @@ int main(int argc, char** argv) {
                     const auto g = po.goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
-                    const auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
+                    auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
+                    if (lc.demo && path.size() > 1) {   // D169: never backtrack to where the agent was at plan time
+                        core::SE3 latest;
+                        bool have_latest = false;
+                        {
+                            std::lock_guard<std::mutex> lk2(lanes[k].mu);
+                            if (!lanes[k].cams.empty()) latest = lanes[k].cams.back().second, have_latest = true;
+                        }
+                        if (have_latest) {
+                            const core::SE3 Tw = brief.T_W_O[size_t(k)] * latest;
+                            size_t nearest = 0;
+                            double best = std::numeric_limits<double>::max();
+                            for (size_t i = 0; i < path.size(); ++i) {
+                                const double d = std::hypot(path[i].first - Tw.t.x(), path[i].second - Tw.t.y());
+                                if (d < best) best = d, nearest = i;
+                            }
+                            path.erase(path.begin(), path.begin() + long(std::min(nearest, path.size() - 1)));
+                        }
+                    }
                     if (!path.empty()) last_goal[k] = path.back();
                     for (const auto& [x, y] : path) {
                         runtime::ros_cdr::Pose p;
@@ -1393,6 +1493,8 @@ int main(int argc, char** argv) {
         // The estimators stop when the READER closes their queues (the first image past end_s, or the end of the
         // input): never earlier, or live and replay would consume different tails.
         for (auto& t : vo) t.join();
+        integ_stop = true;
+        if (integrator.joinable()) integrator.join();
         for (int k = 0; k < 2; ++k) {   // D168: reap the estimator workers
             if (feeders[k].joinable()) feeders[k].join();
             if (worker_fd[k] >= 0) ::close(worker_fd[k]);
@@ -1408,7 +1510,7 @@ int main(int argc, char** argv) {
 
         std::ofstream res(run_dir / "results.yaml");
         res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
-            << "mode: " << (is_live ? "live" : "replay") << "\nscene_id: " << brief.scene_id
+            << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec
             << "'}\nreplans: " << replans << "\ncommands_sent: " << (is_live ? commands_sent : 0)
