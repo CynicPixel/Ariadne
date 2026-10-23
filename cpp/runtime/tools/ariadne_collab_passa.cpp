@@ -5,7 +5,7 @@
 //
 //   ariadne_collab_passa --rec RECDIR --scene SCENEDIR --perception-config YAML --slam-config YAML --out DIR
 //       --agent K --seed S --imu-noise YAML --place-onnx ONNX --place-size WxH --aliked-onnx ONNX
-//       --lightglue-onnx ONNX [--frames N] [--check-lazy 1]
+//       --lightglue-onnx ONNX [--frames N] [--check-lazy 1] [--check-live 1]
 //
 // Per keyframe, at its creation (t_create): ALIKED-n16 on the rectified RGB (the D90 1280x720 sim export, K = 1024),
 // its 3D points from the masked SGBM depth, and EigenPlaces R50-256 on the same RGB. Then the keyframe waits: a
@@ -15,7 +15,9 @@
 //
 // The per-keyframe work is runtime/agent/collab_frontend.hpp (D174: the live estimator worker runs the same class).
 // --check-lazy 1 runs a lazy twin of it on the same keyframes and checks, per released keyframe, that its on-request
-// features are bitwise the eager ones (LIVE_COLLAB §2: lazy == eager); a mismatch exits 3.
+// features are bitwise the eager ones (LIVE_COLLAB §2: lazy == eager); a mismatch exits 3. --check-live 1 runs the live
+// split in-process (the estimator worker's release tracker -> the collab worker's core, through the #ckin/#crel/#ckf/
+// #freq/#fresp encoders) and checks every #ckf record and #fresp reply bitwise against the store; a mismatch exits 3.
 //
 // Output: DIR/store_agent<K>.bin, DIR/passa_agent<K>.yaml (counts, timings, the model records), plus everything the VO run
 // writes (results.yaml, trajectories, manifest) in DIR/vo_agent<K>/.
@@ -24,6 +26,7 @@
 #include "perception/place/place_recognizer.hpp"
 #include "runtime/agent/collab_frontend.hpp"
 #include "runtime/agent/collab_store.hpp"
+#include "runtime/live/collab_worker_core.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
 #include "slam/loop_closure/loop_backend.hpp"
 
@@ -62,7 +65,7 @@ int main(int argc, char** argv) {
     a.tool = "ariadne_collab_passa";
     std::string rec, scene, imu_noise, place_onnx, place_size = "640x360", aliked_onnx, lightglue_onnx, out;
     int agent = 0;
-    bool check_lazy = false;
+    bool check_lazy = false, check_live = false;
     for (int i = 1; i < argc; ++i) {
         const std::string k = argv[i];
         if (i + 1 >= argc) { std::fprintf(stderr, "missing value for %s\n", k.c_str()); return 2; }
@@ -81,6 +84,7 @@ int main(int argc, char** argv) {
         else if (k == "--aliked-onnx") aliked_onnx = v;
         else if (k == "--lightglue-onnx") lightglue_onnx = v;
         else if (k == "--check-lazy") check_lazy = v == "1";
+        else if (k == "--check-live") check_live = v == "1";
         else { std::fprintf(stderr, "unknown argument %s\n", k.c_str()); return 2; }
     }
     if (rec.empty() || scene.empty() || a.perception_config.empty() || a.slam_config.empty() || out.empty() ||
@@ -111,6 +115,20 @@ int main(int argc, char** argv) {
         store.agent = uint32_t(agent);
         runtime::CollabFrontend front(place, aliked);   // eager: the store carries the local features
         runtime::CollabFrontend twin(place, aliked, {/*eager=*/false, /*keep_s=*/1e18});
+        // The live split, in-process: tracker (estimator worker) -> core (collab worker), messages encoded/decoded.
+        runtime::CollabFeatureExtractor live_x(place, aliked, 1e18);
+        runtime::CollabReleaseTracker live_tracker;
+        std::map<uint64_t, runtime::CollabStoreRecord> live_records;
+        std::map<uint64_t, runtime::live::CollabFeatureReply> live_replies;
+        runtime::live::CollabWorkerCore live_core(live_x, [&](const std::string& topic, const std::vector<uint8_t>& b) {
+            if (topic == "#ckf") {
+                runtime::CollabStoreRecord r = runtime::live::DecodeRecord(b, nullptr);
+                live_records[r.id] = std::move(r);
+            } else if (topic == "#fresp") {
+                auto f = runtime::live::DecodeFeatureReply(b);
+                live_replies[f.kf] = std::move(f);
+            }
+        }, 1024);
 
         a.on_keyframe = [&](const tools::KeyframeView& kv) {
             const auto& kf = kv.keyframe;
@@ -128,15 +146,47 @@ int main(int argc, char** argv) {
             in.graph = kv.graph;
             for (auto& r : front.OnKeyframe(in)) store.records.push_back(std::move(r));
             if (check_lazy) twin.OnKeyframe(in);
+            if (check_live) {
+                runtime::live::CollabKeyframeIn k;
+                k.id = in.id, k.t_ns = in.t_ns, k.fx = in.fx, k.fy = in.fy, k.cx = in.cx, k.cy = in.cy;
+                k.baseline_m = in.baseline_m, k.T_B_C = in.T_B_C, k.gt_T_W_B = in.gt_T_W_B;
+                k.rgb = kv.bundle.rgb, k.depth16 = kv.bundle.depth, k.mask = kv.bundle.mask;
+                live_core.Dispatch("#ckin", runtime::live::EncodeKeyframeIn(k));
+                for (const auto& rel : live_tracker.OnKeyframe(k.id, k.t_ns, *kv.graph))
+                    live_core.Dispatch("#crel", runtime::live::EncodeRelease(rel));
+            }
         };
         const int rc = tools::RunStereoVo(source, a, argc, argv);
         // Never final: the startup prefix (ids below the first released one) and the tail still in the window.
-        const auto [prefix, tail] = front.Unreleased(store.records.empty() ? std::nullopt
-                                                                           : std::optional<uint64_t>(store.records.front().id));
+        const auto [prefix, tail] = front.Unreleased();
         store.prefix_unreleased = prefix;
         const uint64_t keyframes = front.stats().keyframes;
         const double ms_aliked = front.stats().ms_aliked, ms_place = front.stats().ms_place;
         uint64_t lazy_compared = 0, lazy_mismatch = 0;
+        uint64_t live_compared = 0, live_mismatch = 0;
+        if (check_live) {
+            auto same = [](const std::vector<float>& x, const std::vector<float>& y) {
+                return x.size() == y.size() && std::memcmp(x.data(), y.data(), x.size() * sizeof(float)) == 0;
+            };
+            auto se3 = [](const core::SE3& x, const core::SE3& y) { return x.R == y.R && x.t == y.t; };
+            for (const auto& r : store.records) {
+                ++live_compared;
+                const auto it = live_records.find(r.id);
+                live_core.Dispatch("#freq", runtime::live::EncodeFeatureRequest(r.id));
+                const auto rp = live_replies.find(r.id);
+                const bool ok = it != live_records.end() && rp != live_replies.end() && rp->second.features &&
+                    it->second.t_create_ns == r.t_create_ns && it->second.t_final_ns == r.t_final_ns &&
+                    se3(it->second.T_W_C, r.T_W_C) && it->second.odo_from == r.odo_from && se3(it->second.odo_Z, r.odo_Z) &&
+                    it->second.odo_information == r.odo_information && same(it->second.global, r.global) &&
+                    it->second.camera == r.camera && it->second.has_gt == r.has_gt &&
+                    (!r.has_gt || se3(it->second.gt_T_W_B, r.gt_T_W_B)) && se3(it->second.T_B_C, r.T_B_C) &&
+                    same(rp->second.features->keypoints, r.keypoints) &&
+                    same(rp->second.features->descriptors, r.descriptors) &&
+                    same(rp->second.features->points3d, r.points3d);
+                if (!ok) ++live_mismatch;
+            }
+            if (live_records.size() != store.records.size()) ++live_mismatch;
+        }
         if (check_lazy) {
             auto same = [](const std::vector<float>& x, const std::vector<float>& y) {
                 return x.size() == y.size() && std::memcmp(x.data(), y.data(), x.size() * sizeof(float)) == 0;
@@ -158,13 +208,16 @@ int main(int argc, char** argv) {
           << "\nms_place_mean: " << (keyframes ? ms_place / keyframes : 0) << "\nplace: {model: " << place.Name()
           << ", size: " << place_size << "}\naliked: {model: " << aliked.Name() << "}\nvo_exit: " << rc
           << "\nstore: " << path << "\nopencv_threads: " << cv::getNumThreads() << "\n";   // ALIKED's output depends on it (D174)
+        if (check_live) y << "live_check: {compared: " << live_compared << ", mismatches: " << live_mismatch << "}\n";
         if (check_lazy) y << "lazy_check: {compared: " << lazy_compared << ", mismatches: " << lazy_mismatch << "}\n";
         std::printf("passa agent %d: %llu keyframes, %zu released, prefix %llu, tail %llu -> %s\n", agent,
                     (unsigned long long)keyframes, store.records.size(), (unsigned long long)prefix,
                     (unsigned long long)tail, path.c_str());
         if (check_lazy) std::printf("lazy check: %llu compared, %llu mismatches\n", (unsigned long long)lazy_compared,
                                     (unsigned long long)lazy_mismatch);
-        return lazy_mismatch ? 3 : rc;
+        if (check_live) std::printf("live check: %llu compared, %llu mismatches\n", (unsigned long long)live_compared,
+                                    (unsigned long long)live_mismatch);
+        return lazy_mismatch || live_mismatch ? 3 : rc;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_collab_passa: %s\n", e.what());
         return 1;

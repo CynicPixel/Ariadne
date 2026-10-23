@@ -31,39 +31,45 @@ Acceptance for the refactor:
 - Pass B's results.yaml (excluding timing fields), ledger.csv, edges.csv and outcome.yaml are byte-identical before
   and after.
 
-Why the frontend runs in the worker and not on the parent's `#kf` record:
-- `#kf` carries half-res depth, and pass A's points3d use full-res depth.
-- The odometry edge's information lives in the worker's VO graph and is not exported.
-- Recomputing either from `#kf` would be a second implementation.
+**Amendment (2026-10-24, D174): the DNN work runs in its own process per agent, not in the estimator worker.**
+- D152a/D168: OpenCV's parallel_for pool is per process, and a busy pool changes stripe partitioning, hence the order
+  of floating-point reductions. EigenPlaces (~0.5 s/kf) and ALIKED (~2.3 s/kf) on a side thread of the estimator
+  worker would contend for its pool, and VO would stop being reproducible (the D168 digests). Measured on ALIKED itself
+  (§7 step 1 finding): its output depends on the thread count.
+- So `CollabFrontend` splits into a cheap **release tracker** (the LoopBackend mirror: needs the VO graph, no DNN) and
+  a **feature extractor** (EigenPlaces at t_create, ALIKED lazily). Pass A composes both in one process; live puts the
+  tracker in the estimator worker and the extractor in an `ariadne_collab_worker` process per agent (one thread, sim
+  order, `OPENCV_FOR_THREADS_NUM` pinned and recorded). Same classes either way.
+- Per-agent processes, not one shared: three agents' place descriptors serialized in one process exceed real time.
 
 ## 2. Live data flow
 
 ```
-worker k (estimator process, D168)                      parent (ariadne_live)
-  VO -> on_keyframe -> CollabFrontend                     reader thread k
-     place descriptor (side thread)                         #ckf -> CollabFleet::Release(k, record at t_final)
-     release at t_final  ---------------- #ckf -------->
-     keeps image + full-res depth per released kf          CollabFleet (one, parent)
-  <------------------- #freq kf -------------------------     features hook: request -> pending
-     ALIKED + points3d (side thread) ---- #fresp ------>      pending -> FeatureResponse when it arrives
-                                                            Tick(sim t): CommsNode, CollabNodes, broker solve
-                                                            T_G_W(k) -> T_W_O[k] (B's mutex-guarded refactor)
-                                                            telemetry -> console panel (B)
+estimator worker k (D168, no DNN)        ariadne_collab_worker k (DNN, own pool)        parent (ariadne_live)
+  VO -> on_keyframe                         #ckin: place descriptor, keep rgb+depth
+     #ckin (id, t, full-res rgb, masked       (until keep_s after t_final)
+      full-res depth, pinhole, T_B_C) ---->
+     release tracker (mirror)
+     #crel (id, t_final, T_W_C, odometry   -> assemble record ------ #ckf ------------->  CollabFleet::Release at t_final
+      Z + information) ------------------->  then #cwm (watermark t) ---------------->  lockstep watermark (§3)
+                                           <------------------------ #freq (kf) -------  features hook: pending
+                                            ALIKED + points3d ------ #fresp ---------->  answered on a later Tick
+                                                                                         Tick(sim t): CommsNode, nodes
+                                                                                         T_G_W(k) -> T_W_O[k] (B)
 ```
 
+- The collab worker listens on its own Unix socket (LinkFrame, `runtime/live/link_frame.hpp`); the estimator worker
+  and the parent each connect to it. Messages to one peer stay in order, so a keyframe's #ckin is always processed
+  before the #crel that releases it.
 - **#ckf** is a `CollabStoreRecord` without local features: id, t_create, t_final, T_W_C, the odometry edge and its
-  information, the global descriptor, camera, T_B_C, and GT (evaluation).
-- **Lazy local features.** CollabNode asks for features only for budgeted, selected candidates (3.4), so ALIKED
-  (~2.3 s/kf on the 8-core laptop, cv::dnn CPU) runs per request, not per keyframe. The worker keeps the image and
-  full-res depth of released keyframes for `candidate_ttl_s` (120 s, D170). A request older than that is answered
-  "gone", and the broker gives up as it does today.
-  - Eager and lazy give identical features for the same image, because the model is deterministic. Test: lazy ==
-    eager on the smoke keyframes.
-- **Deferred features in CollabNode (protocol change).** `NodeHooks::features` may answer "not ready". The node then
-  keeps the request and answers it on a later `Tick` when the hook is ready. Today a synchronous hook is assumed: a
-  slow answer would block the tick, and a dropped one costs the broker's 10 s `request_retry_s`.
-  - Replay hooks are always ready, so replay behaviour and bytes are unchanged (protocol tests plus the §1
-    acceptance).
+  information, the global descriptor, camera, T_B_C, GT (evaluation), plus the keypoint count to advertise (unknown
+  before extraction: the model's K, 1024, is advertised; the byte predictor prices fetches with it).
+- **#cwm t**: every release with t_final <= t has been sent. The parent's barrier waits on it like the image progress.
+- **Lazy local features** as before: ALIKED runs per request; the collab worker keeps the image and full-res depth of
+  released keyframes for `candidate_ttl_s` (120 s, D170); older requests are answered "gone" (#fresp with no
+  features), and the broker gives up as it does today.
+  - Eager and lazy give identical features for the same image at the same thread count (§7 step 1: 38/38 bitwise).
+- **Deferred features in CollabNode (protocol change)**: done (§7 step 2).
 
 ## 3. Clock and determinism
 
@@ -129,6 +135,8 @@ Per agent, at the lit-maze keyframe rate of ~1.6 KF/s (D142: 78 KF per 1000 fram
 - EigenPlaces at 640×360 is ~0.5 s/kf on the laptop, i.e. **~0.8 core per agent**.
 - ALIKED: per request only, a few per 5 s selection period under the budget.
 - This model work is cv::dnn on CPU: the image has no ONNX Runtime, and the pinned OpenCV 5 build has no CUDA.
+- It runs in the collab workers (§1 amendment), one process per agent: 3 estimator workers + 3 collab workers + gz +
+  the parent.
 
 With gz, 3 estimators and 3 collab frontends, a g4dn.xlarge (4 vCPU) will not hold real time. A g4dn.2xlarge
 (8 vCPU) or g4dn.4xlarge (16 vCPU), with the same single T4, is the realistic target. The maintainer is filing the on-demand

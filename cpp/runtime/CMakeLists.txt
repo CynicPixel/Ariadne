@@ -90,6 +90,11 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_collab_sim PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_collab_sim RUNTIME DESTINATION bin COMPONENT ariadne)
+  # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (LIVE_COLLAB §1).
+  add_executable(ariadne_collab_worker tools/ariadne_collab_worker.cpp)
+  target_link_libraries(ariadne_collab_worker PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  install(TARGETS ariadne_collab_worker RUNTIME DESTINATION bin COMPONENT ariadne)
 
   # 1.9 the §30.2 report gate (design HARNESS_1.9): registry dump + MissingMetrics/UnknownMetrics.
   add_executable(ariadne_report_check tools/ariadne_report_check.cpp)
