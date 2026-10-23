@@ -84,6 +84,7 @@ TEST(CoordinationWire, TaskBidRoundTrips) {
         for (int j = 0; j < 5; ++j) o.ig_raw[size_t(j)] = float(i + j) * 0.1f;
         o.path_m = 3.0f + float(i), o.cost_bandwidth = 0.2f, o.cost_risk = 0.05f, o.risk = 0.01f;
         o.source = uint8_t('F');
+        if (i % 2) for (int k = 0; k < 3 + i; ++k) o.footprint.push_back({int16_t(k - 2), int16_t(i), uint8_t(17 * k)});
         b.options.push_back(o);
     }
     const auto m = codec.EncodeTaskBid(b, 1, 0, ac::Timestamp{b.t_ns}, 4);
@@ -103,6 +104,12 @@ TEST(CoordinationWire, TaskBidRoundTrips) {
         EXPECT_EQ(q.options[i].ig_raw, b.options[i].ig_raw);
         EXPECT_FLOAT_EQ(q.options[i].path_m, b.options[i].path_m);
         EXPECT_EQ(q.options[i].source, b.options[i].source);
+        ASSERT_EQ(q.options[i].footprint.size(), b.options[i].footprint.size());
+        for (size_t k = 0; k < b.options[i].footprint.size(); ++k) {
+            EXPECT_EQ(q.options[i].footprint[k].bx, b.options[i].footprint[k].bx);
+            EXPECT_EQ(q.options[i].footprint[k].by, b.options[i].footprint[k].by);
+            EXPECT_EQ(q.options[i].footprint[k].w, b.options[i].footprint[k].w);
+        }
     }
 }
 

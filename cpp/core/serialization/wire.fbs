@@ -171,11 +171,15 @@ table SlabBlock { bx:int; by:int; cells:[ubyte]; }
 /// SUBMAP_PATCH (8): the sender's OWN observations only, in its frame W_sender (`frame`), the blocks changed since the
 /// version the receiver acknowledged.
 table SubmapPatch { sender:int; epoch:uint; version:ulong; t_ns:long; blocks:[SlabBlock]; frame:FrameTag; }
+struct BlockGain { bx:short; by:short; w:ubyte; }   // w: the view's full-IG unknown voxels in the block not known to peers (cap 255)
 /// One of the sender's top-M options (everything the broker's auction needs). Goals in G (`TaskBid.frame`).
 table BidOption {
   task_key:long; goal_x:double; goal_y:double;
   ig_raw:[float];        // the five raw IG terms (D114)
   path_m:float; cost_bandwidth:float; cost_risk:float; risk:float; source:ubyte;
+  // Appended (D175 R1): the view's footprint for the overlap-aware broker: the planner blocks its full-IG rays hit and
+  // the unknown voxels hit in each (collected during the existing ray cast), at most 32.
+  footprint:[BlockGain];
 }
 /// TASK_BID (9): to the sender's component broker, once per replan.
 table TaskBid { sender:int; epoch:uint; seq:ulong; t_ns:long; lambda_path:float; options:[BidOption]; frame:FrameTag; }

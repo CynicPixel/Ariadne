@@ -218,3 +218,36 @@ at the operator. Sizing:
 - **Estimate:** 0.5–3 KB per 5 s patch [ESTIMATE; A1 measures on a real run].
 
 `SUBMAP_SUMMARY` (7) stays reserved.
+
+## 9. Broker modes: R1 overlap-aware and R2 discounting (maintainer-approved, 2026-10-23)
+
+Backed by a survey; the report is in the session scratchpad and is to be copied into evaluation evidence with the
+rows. Its findings:
+- Per-view IG stays unknown-voxel counting. That equals MI for a noise-free sensor (Corah & Michael ICRA 2021), and
+  per-ray MI models (FSMI, CSQMI) cost more for less.
+- The information-per-compute gain is in joint, multi-view accounting at the broker.
+
+`BrokerMode {kPlain, kDiscount, kOverlap}` is one config key, so the three are rows on equal footing:
+- **kPlain:** today's exactly-once SGA on bid utilities, with r_same.
+- **kDiscount (R2, Burgard et al. T-RO 2005):** after each assignment, every other option's value is multiplied by
+  (1 − P(d)), with P(d) = max(0, 1 − d / max_range_m) and d the distance to an assigned goal.
+  - **Remembered claims (zero bytes):** an agent that falls back to "uncoordinated" re-ranks its own options by the
+    peers' goals in the newest consensus it holds, with P(d) decayed by e^(−age/τ), τ = 30 s [ASSUMPTION].
+- **kOverlap (R1, Lauri et al. RA-L 2020, lifted to blocks):**
+  - Each bid option carries `footprint`: ≤ 32 `{bx, by, w}`, where w is the count of the option's full-IG unknown
+    voxels in that block not known to peers. It is collected inside the existing ray cast and only when the
+    per-agent planner asks, so the oracle row is untouched.
+  - The broker replaces only the coverage term with its marginal, Δcov(o | S) = Σ_b max(0, w_ob − residual_b). Costs
+    are subtracted as in D114 (maintainer: cost enters as gain − λ·cost).
+  - Per round it logs Δf, the pure-gain f(S) and the data-dependent upper bound UB, reported as f/UB on the gain
+    proxy only. The ½ partition-matroid bound applies to the pure-gain variant only, never to exploration time
+    (invariant 7).
+- **Bytes:** a footprint is 5 B per entry, ≤ 160 B per option, ≈ 0.4–1 KB per bid per 5 s, inside the 1 KB/s
+  coordination bucket. Measured in the rows.
+
+**Rows** (added to §4's required set): plain, discount and overlap, each at ariadne's budget, 2 scenes × 3 seeds.
+Reported per row:
+- time-to-90 % coverage;
+- redundant-observation ratio;
+- bytes by class;
+- broker ms, timed by the caller.

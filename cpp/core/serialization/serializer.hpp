@@ -345,12 +345,18 @@ struct SubmapPatchValue {
     std::vector<SlabBlockValue> blocks;
     FrameTag frame;               // W_sender
 };
+struct BlockGainValue {
+    int16_t bx = 0, by = 0;
+    uint8_t w = 0;   // the view's full-IG unknown voxels in this block not known to peers (cap 255; A1)
+};
+inline constexpr size_t kMaxFootprintBlocks = 32;
 struct BidOptionValue {
     int64_t task_key = 0;
     double goal_x = 0, goal_y = 0;
     std::array<float, 5> ig_raw{};
     float path_m = 0, cost_bandwidth = 0, cost_risk = 0, risk = 0;
     uint8_t source = 0;
+    std::vector<BlockGainValue> footprint;   // D175 R1; empty = not sent (the plain / R2 rows)
 };
 struct TaskBidValue {
     int32_t sender = 0;
@@ -606,10 +612,18 @@ public:
                                     uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(256 + 96 * b.options.size());
         std::vector<flatbuffers::Offset<wire::BidOption>> opts;
-        for (const auto& o : b.options)
-            opts.push_back(wire::CreateBidOption(fbb, o.task_key, o.goal_x, o.goal_y,
-                                                 fbb.CreateVector(o.ig_raw.data(), o.ig_raw.size()), o.path_m,
-                                                 o.cost_bandwidth, o.cost_risk, o.risk, o.source));
+        for (const auto& o : b.options) {
+            if (o.footprint.size() > kMaxFootprintBlocks) throw std::invalid_argument("TaskBid: footprint > 32 blocks");
+            const auto ig = fbb.CreateVector(o.ig_raw.data(), o.ig_raw.size());
+            flatbuffers::Offset<flatbuffers::Vector<const wire::BlockGain*>> fp;
+            if (!o.footprint.empty()) {
+                std::vector<wire::BlockGain> v;
+                for (const auto& g : o.footprint) v.emplace_back(g.bx, g.by, g.w);
+                fp = fbb.CreateVectorOfStructs(v);
+            }
+            opts.push_back(wire::CreateBidOption(fbb, o.task_key, o.goal_x, o.goal_y, ig, o.path_m, o.cost_bandwidth,
+                                                 o.cost_risk, o.risk, o.source, fp));
+        }
         const auto ov = fbb.CreateVector(opts);
         const auto frame = detail::ToWire(b.frame);
         const auto off = wire::CreateTaskBid(fbb, b.sender, b.epoch, b.seq, b.t_ns, b.lambda_path, ov, &frame);
@@ -818,6 +832,10 @@ public:
                     for (uint32_t i = 0; i < 5; ++i) ov.ig_raw[i] = o->ig_raw()->Get(i);
                     ov.path_m = o->path_m(), ov.cost_bandwidth = o->cost_bandwidth(), ov.cost_risk = o->cost_risk();
                     ov.risk = o->risk(), ov.source = o->source();
+                    if (const auto* fp = o->footprint()) {
+                        if (fp->size() > kMaxFootprintBlocks) return Status::kMalformed;
+                        for (const auto* g : *fp) ov.footprint.push_back({g->bx(), g->by(), g->w()});
+                    }
                     v.options.push_back(ov);
                 }
             }
