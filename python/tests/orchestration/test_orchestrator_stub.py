@@ -113,3 +113,48 @@ def test_no_assign_is_not_a_fallback(tmp_path):
     o = ans["orchestrator"]
     assert ans["assignments"] is None
     assert (o["model"], o["fallback_used"], o["calls"], o["errors"]) == (PRIMARY, False, 2, [])
+
+
+def test_oversized_request_line_is_answered(tmp_path, monkeypatch):
+    # Run 4 (2026-10-23): the request crossed asyncio's default 64 KiB line limit, readline raised LimitOverrunError
+    # outside the per-line guard, and the runtime lost its socket. The server's handler must take a 300 KiB line.
+    import orchestration.orchestrator as orch
+
+    async def fake_decide(req, *a):
+        return {"decision_id": req["decision_id"], "assignments": []}
+    monkeypatch.setattr(orch, "decide", fake_decide)
+    sock = str(tmp_path / "s.sock")
+
+    async def go():
+        # no `async with srv`: 3.12's __aexit__ awaits wait_closed(), which waits for every client transport
+        srv = await asyncio.start_unix_server(orch.make_handler(None, None, None, None, 1), path=sock,
+                                              limit=orch.LINE_LIMIT)
+        reader, writer = await asyncio.open_unix_connection(sock, limit=orch.LINE_LIMIT)
+        writer.write((json.dumps({"decision_id": "big", "pad": "x" * 300_000}) + "\n").encode())
+        await writer.drain()
+        ans = json.loads(await reader.readline())
+        writer.close()
+        srv.close()
+        return ans
+    ans = asyncio.run(go())
+    assert ans["decision_id"] == "big" and ans["assignments"] == []
+
+
+def test_any_failure_answers_at_once(tmp_path):
+    # Expired credentials raise RuntimeError, not a ClientError (live run 3, 2026-10-23): decide must still answer
+    # (null assignment, error logged), so the runtime falls back now instead of waiting out its timeout.
+    ddir = tmp_path / "decisions"
+    ddir.mkdir()
+
+    class Broken:
+        def converse(self, **kw):
+            raise RuntimeError("Credentials were refreshed, but the refreshed credentials are still expired.")
+
+    async def go():
+        async with Client(mcp_params(ddir, False)) as mm, Client(mcp_params(ddir, True)) as tx:
+            mcps = {"multimodal": mm, "text": tx}
+            cfgs = {k: tool_config((await c.list_tools()).tools) for k, c in mcps.items()}
+            return await decide(_request(tmp_path), ddir, mcps, cfgs, Broken(), 10)
+    ans = asyncio.run(go())
+    assert ans["assignments"] is None
+    assert "RuntimeError" in ans["orchestrator"]["errors"][0] and not ans["orchestrator"]["fallback_used"]

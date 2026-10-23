@@ -48,7 +48,9 @@ SYSTEM = (
     "Changing an agent's goal costs a turn in place and the progress made so far: keep its current_task (its "
     "`candidate`) unless that task is reached or gone, an operator directive points elsewhere, or another candidate "
     "is clearly better, and say which of these when you switch. A candidate with supervisor_return true is the "
-    "energy-reserve return ordered by the planner: take it (it needs no approval). Keep each reason to one sentence.")
+    "energy-reserve return ordered by the planner: take it (it needs no approval). Candidates come best-first by "
+    "the planner's own utility (information gain net of costs; `rank` 0 = best): prefer the top-ranked ones, and do "
+    "not pick a goal under 1 m away unless nothing else serves the mission. Keep each reason to one sentence.")
 
 
 def mcp_params(ddir: Path, text_only: bool) -> StdioServerParameters:
@@ -141,10 +143,50 @@ async def decide(req: dict, ddir: Path, mcps: dict, cfgs: dict, br, max_calls: i
         except (ClientError, BotoCoreError) as e:
             log["errors"].append(f"{model}: {type(e).__name__}: {str(e)[:200]}")
             log["fallback_used"] = model == PRIMARY
+        except Exception as e:  # noqa: BLE001 - e.g. expired credentials (RuntimeError): answer now, no fallback
+            log["errors"].append(f"{model}: {type(e).__name__}: {str(e)[:200]}")
+            break
     log["latency_s"] = round(time.time() - t0, 3)
     choice = ddir / f"{did}.choice.json"
     return {"decision_id": did, "assignments": json.loads(choice.read_text())["assignments"] if choice.exists() else None,
             "orchestrator": log}
+
+
+LINE_LIMIT = 1 << 24   # bytes per request/answer line; the request grows with the map (16 MiB >> any map seen)
+
+
+def make_handler(ddir, mcps, cfgs, br, max_calls):
+    """One handler per runtime connection. Run 4 (live-20261023T073340Z-e971): the request crossed asyncio's default
+    64 KiB line limit at t=55 s; readline raised LimitOverrunError OUTSIDE the per-line guard, the handler died
+    unobserved and the runtime segfaulted on the dropped socket. The server now reads with LINE_LIMIT, and a stream
+    error is logged, never left to kill the handler silently."""
+    lock = asyncio.Lock()
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        pending = set()
+
+        async def one(line: bytes) -> None:
+            try:
+                ans = await decide(json.loads(line), ddir, mcps, cfgs, br, max_calls)
+            except Exception as e:  # noqa: BLE001 - the runtime must get an answer, not wait out its timeout
+                did = json.loads(line).get("decision_id", "?") if line.strip().startswith(b"{") else "?"
+                ans = {"decision_id": did, "assignments": None,
+                       "orchestrator": {"errors": [f"{type(e).__name__}: {str(e)[:200]}"]}}
+            async with lock:
+                writer.write((json.dumps(ans) + "\n").encode())
+                await writer.drain()
+
+        try:
+            while line := await reader.readline():
+                t = asyncio.create_task(one(line))
+                pending.add(t)
+                t.add_done_callback(pending.discard)
+        except Exception as e:  # noqa: BLE001
+            print(f"orchestrator: request stream error: {type(e).__name__}: {str(e)[:200]}", flush=True)
+        await asyncio.gather(*pending)
+        writer.close()   # 3.12: Server.wait_closed() waits on every client TRANSPORT; an unclosed writer holds it open
+
+    return handle
 
 
 async def serve(args) -> None:
@@ -156,24 +198,8 @@ async def serve(args) -> None:
         mcps = {"multimodal": m_mm, "text": m_tx}
         cfgs = {k: tool_config((await c.list_tools()).tools) for k, c in mcps.items()}
         (ddir / "tools.json").write_text(json.dumps(cfgs, indent=1))
-        lock = asyncio.Lock()
-
-        async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-            pending = set()
-
-            async def one(line: bytes) -> None:
-                ans = await decide(json.loads(line), ddir, mcps, cfgs, br, args.max_calls)
-                async with lock:
-                    writer.write((json.dumps(ans) + "\n").encode())
-                    await writer.drain()
-
-            while line := await reader.readline():
-                t = asyncio.create_task(one(line))
-                pending.add(t)
-                t.add_done_callback(pending.discard)
-            await asyncio.gather(*pending)
-
-        srv = await asyncio.start_unix_server(handle, path=args.socket)
+        srv = await asyncio.start_unix_server(make_handler(ddir, mcps, cfgs, br, args.max_calls),
+                                              path=args.socket, limit=LINE_LIMIT)
         print(f"orchestrator: tools {[t['toolSpec']['name'] for t in cfgs['multimodal']['tools']]}; "
               f"listening on {args.socket}", flush=True)
         async with srv:

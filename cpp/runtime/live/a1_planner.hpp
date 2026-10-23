@@ -145,6 +145,7 @@ public:
                 o.standoff_m = t.standoff_m, o.centroid_xy = t.centroid_xy, o.cells = t.cells;
                 o.risk = t.risk, o.risk_reason = t.risk_reason;
                 o.supervisor_return = ap.nbv.reserve_rule && t.source == planning::TaskSource::kReturn;
+                o.utility = t.utility;
                 o.c.cluster = int(t.task_id & 0x7fffffff);   // only for the runtime's map rendering
                 o.c.goal = b_.ToCell(t.goal_xy.first, t.goal_xy.second);
                 o.c.cells = t.cells;

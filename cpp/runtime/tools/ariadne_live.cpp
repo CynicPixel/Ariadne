@@ -822,7 +822,8 @@ int main(int argc, char** argv) {
                             if (d.kind == "priority_region") weight *= d.weight;
                         }
                     }
-                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << t.task_id << ",\"path_m\":"
+                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"rank\":" << i << ",\"utility\":" << t.utility
+                       << ",\"cluster\":" << t.task_id << ",\"path_m\":"
                        << t.path_m << ",\"goal_xy_m\":" << Xy(t.goal_xy.first, t.goal_xy.second) << ",\"standoff_m\":"
                        << t.standoff_m << ",\"centroid_xy_m\":" << Xy(t.centroid_xy.first, t.centroid_xy.second)
                        << ",\"cells\":" << t.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << t.risk_reason
@@ -933,14 +934,19 @@ int main(int argc, char** argv) {
                     first = false;
                 }
                 q << "]}";
-                chooser->Send(q.str());
-                const std::string ans = chooser->Wait(did, std::chrono::steady_clock::now() +
-                                                                std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                std::string ans, top_problem;
+                try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
+                        // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
+                    chooser->Send(q.str());
+                    ans = chooser->Wait(did, std::chrono::steady_clock::now() +
+                                                 std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                } catch (const std::exception& e) {
+                    top_problem = std::string("chooser link down: ") + e.what();
+                }
                 YAML::Node assigned;
-                std::string top_problem;
-                if (ans.empty()) {
+                if (top_problem.empty() && ans.empty()) {
                     top_problem = "timeout or no orchestrator";
-                } else {
+                } else if (top_problem.empty()) {
                     try {
                         assigned = YAML::Load(ans)["assignments"];
                         if (!assigned || assigned.IsNull()) top_problem = "no assignment recorded";

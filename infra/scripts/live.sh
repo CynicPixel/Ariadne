@@ -72,19 +72,30 @@ CONTAINERS=()
 stop_mine() {
   local c
   for c in "${CONTAINERS[@]}"; do docker stop -t 10 "$c" >/dev/null 2>&1 || true; done
+  [ -z "$CRED_PID" ] || kill "$CRED_PID" 2>/dev/null || true
+  [ -z "$CRED_DIR" ] || rm -rf "$CRED_DIR"
 }
 
+CRED_DIR="" CRED_PID=""
 start_orchestrator() {   # -> appends its container id; returns once <run>/chooser.sock exists
-  local id="$1" run="$2" envfile awscli=(aws)
+  local id="$1" run="$2" awscli=(aws)
   command -v aws >/dev/null || awscli=("$REPO_ROOT/infra/scripts/aws.sh" aws)   # the dev host has no aws install
-  envfile="$(mktemp)"; chmod 600 "$envfile"
-  if ! "${awscli[@]}" configure export-credentials --format env-no-export > "$envfile" 2>/dev/null; then
-    rm -f "$envfile"; log "no AWS credentials for Bedrock (infra/scripts/aws.sh login)"; exit 1
+  # Credentials (2026-10-23: a one-time export of the session's keys expired ~15 min into a run and the orchestrator
+  # died): the session is re-exported every 4 min into a mode-700 directory; the container reads it through a
+  # credential_process profile, so botocore refreshes before each expiry. Keys never reach a command line or a log.
+  CRED_DIR="$(mktemp -d)"; chmod 700 "$CRED_DIR"
+  if ! "${awscli[@]}" configure export-credentials --format process > "$CRED_DIR/creds.json" 2>/dev/null; then
+    rm -rf "$CRED_DIR"; log "no AWS credentials for Bedrock (infra/scripts/aws.sh login)"; exit 1
   fi
+  printf '[default]\ncredential_process = cat /creds/creds.json\nregion = %s\n' "${AWS_REGION:-eu-north-1}" > "$CRED_DIR/config"
+  ( while sleep 240; do
+      "${awscli[@]}" configure export-credentials --format process > "$CRED_DIR/creds.tmp" 2>/dev/null \
+        && mv "$CRED_DIR/creds.tmp" "$CRED_DIR/creds.json"
+    done ) &
+  CRED_PID=$!
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-orch" --memory=1g --memory-swap=1g -u "$U" -e HOME=/tmp \
-    --env-file "$envfile" -v "$REPO_ROOT":/work -w /work/python "$ORCH_IMAGE" \
+    -e AWS_CONFIG_FILE=/creds/config -v "$CRED_DIR":/creds:ro -v "$REPO_ROOT":/work -w /work/python "$ORCH_IMAGE" \
     python -m orchestration.orchestrator --socket "/work/$run/chooser.sock" --dir "/work/$run/decisions")")
-  rm -f "$envfile"
   orch="${CONTAINERS[-1]}"
   local t0; t0=$(date +%s)
   until [ -S "$REPO_ROOT/$run/chooser.sock" ]; do
