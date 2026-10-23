@@ -168,6 +168,12 @@ unless the measured CPU budget fails.
      (`ResolveOwnFeatures`, dropped after `request_give_up_s`). Stats `answers_deferred` / `answers_given_up`.
      protocol 72/72 (DeferredFeatures 3). Pass B on the D173 smoke (`spec_inject`, seed 1): ledger.csv, edges.csv,
      outcome.yaml and ate_vs_bytes.csv byte-identical to 15426f8; results.yaml differs only in `ms_total` timings.
+   - **Steps 3-4 as built (2026-10-24):** `CollabReleaseTracker` + `CollabFeatureExtractor` (split of
+     `CollabFrontend`), `runtime/live/collab_link.hpp` (messages), `collab_worker_core.hpp` + `ariadne_collab_worker`,
+     `collab_tee.hpp` (estimator side), `collab_live.hpp` (parent). Pass A `--check-live 1` on the smoke runs the live
+     split in-process through the encoders: every #ckf record and #fresp reply bitwise equal to the store, 38/38; the
+     store byte-identical to step 1's at the same thread count; lazy == eager 38/38. CollabLink round-trip tests.
+     Call sites in ariadne_live (spawn, tee calls, barrier tick, T_W_O feedback, panel): B, after the D175 POC.
 3. **Worker side:** the frontend in the worker behind `collab: true` (default false, so the D168 digests are
    unchanged), plus the #ckf/#freq/#fresp codecs. Test: lazy == eager features.
 4. **Parent side:** the fleet in ariadne_live, the lockstep watermark, the T_W_O feedback (B), and telemetry.
