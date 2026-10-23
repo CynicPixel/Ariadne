@@ -3909,3 +3909,19 @@ pyramid, and detection uses the proxy with `feature_mask`. The proxy maps to the
 reads its known 0.5), so no scale is chosen. The clipped fraction goes into results. (A first draft of this entry
 read the proxy as "relative, 1 = the plane", following a stale comment in falloff.hpp; the glue test's exact 0.5
 error exposed it, and the comment is corrected.)
+
+**D146 checks after the first commit (8fab27d), before any AWS run:**
+- **No double exposure division.** The radiometric stage's own exposure normalisation (its step [4]) is inert: "no
+  source carries photometric state" (`radiometric_stage.hpp`). Stage 4 therefore happens once, in the falloff glue.
+  When 5.3 gives sources a photometric state, step [4] and the glue must not both divide. 5.3 decides where it lives.
+- **The 1 mm lamp check against the real rig, by hand.** `rig_stereo_v2`: lamp in body [0.05, 0, 0.04], left camera
+  in body [0.03, 0.05, 0.02], body x forward / y left / z up, no camera tilt. Lamp minus camera = [0.02, −0.05, 0.02].
+  In the optical axes (x = −y, y = −z, z = x) that is [0.05, −0.02, 0.02], exactly `lamp_calib_v2`'s
+  `lamp_in_camera_optical_m`. The unit test builds its lamp from the calibration, so it could not show this. A
+  recording's own `/tf_static` is checked on the first AWS run (the refusal fires before frame 0).
+- **`ariadne_sim_collab`** has neither `--degradation` nor `--lamp-calib`. Its frames carry no photometric state, so a
+  falloff config there would refuse. Wiring it is part of 6.1 (the spool writing the proxy).
+- **§6.3, plan 5.2's second clause.** Enhancement exists only on the retrieval path: CLAHE is called in
+  `perception/place/place_recognizer.cpp` (`enhance: none|clahe`) and nowhere else. The geometry path (LK, stereo,
+  SGBM, descriptors) receives only flat field, VST denoise and, now, the falloff proxy. It is enforced by structure,
+  not by a test. The retrieval-enhancement ablation row is `enhance` (§31.5).
