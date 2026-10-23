@@ -4691,6 +4691,8 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
   `entrances[k]`, z from `routes/agent_k.json`) times the rig extrinsic (mission `R_B_optical_rows`,
   `t_B_camera_m.left`). This is the live demo's known-starts rule (B, D216), transcribed from `ariadne_mission.cpp`'s
   world anchor and generalised from agent 0 to agent k.
+  A live scene's `mission_live.json` is read first: `live.demo.entrances[k]` is the WORLD entrance mission agent k
+  ran (worldgen `mission.py`; B, 2026-10-24); without the block, agent k = entrance k.
 - **merges**: agent 0 from the briefing, agent k as T_W_O0 T_O0_Ok from the spool (schema 3 `merges:`, D213; or
   schema < 3's `merge:`). Agent k's own entrance is not used, as in `ariadne_mission.cpp`.
 - An agent with no placement is skipped and listed under `unplaced` in the manifest. It is never drawn in someone
@@ -4698,6 +4700,6 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
 
 **Not decided here.** Cross-agent overlap pruning (6.3, double walls) is unchanged: each agent's submaps are separate.
 
-**Tests.** `tests/test_live.py` 11/11: the briefing transform on a yawed entrance, both modes on a 2-agent schema-3
+**Tests.** `tests/test_live.py` 12/12: the briefing transform on a yawed entrance, the live.demo entrance choice, both modes on a 2-agent schema-3
 spool, an unmerged agent never drawn, and set_placement moving the table without new chunks. All reconstruction
-python tests 22/22 (ariadne-recon:1).
+python tests 23/23 (ariadne-recon:1).

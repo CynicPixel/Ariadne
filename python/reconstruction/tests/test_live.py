@@ -226,6 +226,17 @@ def test_briefing_places_the_odometry_frame_at_the_entrance_times_the_rig_extrin
     np.testing.assert_allclose(T[:3, 0], [1, 0, 0], atol=1e-12)
 
 
+def test_briefing_follows_the_live_demo_entrance_choice(tmp_path):
+    from ariadne_recon.live.placement import briefing_T_W_O
+    scene = _scene(tmp_path / "scene", [(1.0, 2.0, 0.0), (5.0, 2.0, 180.0), (9.0, 2.0, 90.0)])
+    plain = [briefing_T_W_O(scene, k) for k in range(3)]
+    m = json.loads((scene / "mission_default.json").read_text())
+    m["live"] = {"demo": {"entrances": [2, 0], "target_xy_m": [0, 0]}}         # mission agent 0 ran entrance 2
+    (scene / "mission_live.json").write_text(json.dumps(m))
+    np.testing.assert_allclose(briefing_T_W_O(scene, 0), plain[2], atol=1e-12)
+    np.testing.assert_allclose(briefing_T_W_O(scene, 1), plain[0], atol=1e-12)
+
+
 def _rows(out):
     t = json.loads((out / "table.json").read_text())
     return t, {r["agent"]: np.asarray(r["T_W_anchor"]).reshape(4, 4) for r in t["submaps"]}

@@ -5,7 +5,10 @@ ground truth):
 
   briefing  T_W_Ok = T_W_Bk x T_B_C for EVERY agent: entrance k's start pose (scene.json entrances[k].start_xy_m,
             start_yaw_deg; z = routes/agent_k.json segments[0].start[2]) times the rig extrinsic
-            (mission_default.json R_B_optical_rows, t_B_camera_m.left). The live demo's known-starts rule (B, D216):
+            (mission_default.json R_B_optical_rows, t_B_camera_m.left). A live scene's mission_live.json is read
+            first: its live.demo.entrances[k] names the WORLD entrance mission agent k ran (worldgen mission.py; B,
+            2026-10-24), and that entrance's route gives z; without the block, agent k = entrance k.
+            The live demo's known-starts rule (B, D216):
             what B's tee sends until LIVE_COLLAB's adopted estimates move it. Transcribed from ariadne_mission.cpp's
             world anchor (T_W_Oa = T_W_B0 * T_B_C), generalised from the anchor agent to agent k.
   merges    agent 0 from the briefing, agent k through the spool's merge into agent 0's frame:
@@ -28,11 +31,14 @@ from ..spool import Spool
 def briefing_T_W_O(scene_dir: str | Path, agent: int) -> np.ndarray:
     scene_dir = Path(scene_dir)
     scene = json.loads((scene_dir / "scene.json").read_text())
-    mission = json.loads((scene_dir / "mission_default.json").read_text())
-    route = json.loads((scene_dir / "routes" / f"agent_{agent}.json").read_text())
-    e = scene["entrances"][agent]
-    if int(e["agent"]) != agent:
-        raise ValueError("briefing: entrance order != agent id")
+    live = scene_dir / "mission_live.json"
+    mission = json.loads((live if live.is_file() else scene_dir / "mission_default.json").read_text())
+    demo = mission.get("live", {}).get("demo", {})
+    entrance = int(demo["entrances"][agent]) if "entrances" in demo else agent
+    route = json.loads((scene_dir / "routes" / f"agent_{entrance}.json").read_text())
+    e = scene["entrances"][entrance]
+    if int(e["agent"]) != entrance:
+        raise ValueError("briefing: entrance order != entrance id")
     yaw = np.deg2rad(float(e["start_yaw_deg"]))
     T_W_B = np.eye(4)
     T_W_B[:2, :2] = [[np.cos(yaw), -np.sin(yaw)], [np.sin(yaw), np.cos(yaw)]]
