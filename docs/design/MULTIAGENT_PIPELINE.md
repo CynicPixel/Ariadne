@@ -30,8 +30,8 @@ own sensors ──> VO + CollabFrontend (worker k) ──> own keyframes
                                                      │
               ┌──────────────────────────────────────┼─────────────────────────────┐
               v                                      v                             v
-   planner_k.Integrate(own kf, at T_G_W(k))   CollabNode k (SLAM collab,   SUBMAP_PATCH out (own
-                                              LIVE_COLLAB, D174)           observations only, budgeted)
+   planner_k.Integrate(own kf, at T_G_W(k))   CollabNode k (SLAM collab,   SUBMAP_SUMMARY out (own
+                                              LIVE_COLLAB, D174)           coverage, 0.5 m, §20.6)
    planner_k.IntegratePatch(peer j patch,     T_G_W(j) for every j it      TASK_BID out to k's broker
               at T_G_W(j) as k knows it)      has an estimate of
    peers_k = heartbeat poses of the agents k hears
@@ -53,7 +53,7 @@ every member's frame (`agent_frames`); CollabNode is changed to keep the peers' 
 wire change.
 
 **The operator's map.** The operator station is a comms node at the building entrance. It has no sensors and no vote
-in allocation, and receives the agents' patches over the same link model. The console's top-view map and splat
+in allocation, and receives the agents' coverage summaries over the same link model. The console's top-view map and splat
 therefore show what the operator has RECEIVED, and agents out of radio range stop updating it, which is the honest
 behaviour. A separate view, labelled "ground truth / evaluation", shows the GT coverage for comparison and is never
 presented as the system's map.
@@ -63,7 +63,7 @@ presented as the system's map.
 | Class | Content | Cadence | Priority (§15.3) |
 |---|---|---|---|
 | `HEARTBEAT` (exists) | pose summary in G (already in §15.2), plus the keyframe watermark | 1 s | 1 |
-| `SUBMAP_PATCH` (7/8) | the sender's OWN occupancy changes since the last patch each receiver acked: changed 2D slab blocks (planner grid, run-length coded + zstd), in the sender's frame W_j, tagged with frame and epoch | event: ≥ N new cells or ≥ 5 s | 5 (cancellable under the budget) |
+| `SUBMAP_SUMMARY` (7) | arch §20.6: the sender's OWN coverage on the 0.5 m global coarse layer (occupancy / uncertainty states), the cells changed since the last summary each receiver acked, run-length coded + zstd, in the sender's frame W_j, tagged with frame and epoch. Never raw maps (§15.1). `SUBMAP_PATCH` (8) stays reserved | event: ≥ N new coarse cells or ≥ 5 s | 5 (the first class cancelled under budget, §20.6) |
 | `TASK_BID` (9) | the sender's top-M options: goal (x, y) in G, task key, utility terms on the common scales | per replan (5 s) or on event | 2 |
 | `TASK_CONSENSUS` (10) | the broker's assignment for its component: per member, a task key and goal, plus the component member set and epoch | after each SGA round | 2 |
 
@@ -73,7 +73,7 @@ presented as the system's map.
   "the same place" to the planner. This approximates CBBA's shared task list, and the deviation is stated.
 - **Byte budget.** One link budget per agent (D170's token bucket), split into two shares, each with its own bucket:
   - SLAM collaboration (classes 1, 3, 4) gets 1 - s_x, and the spectral policy runs inside this share as today;
-  - exploration (classes 7–10) gets s_x. Under it, SUBMAP_PATCH is cancellable, oldest first, and bids are not.
+  - exploration (classes 7–10) gets s_x. Under it, SUBMAP_SUMMARY is cancellable, oldest first, and bids are not.
   - Heartbeats, pose edges and pose-graph batches stay outside both shares (small, "the product", §15.3).
   - s_x = 0.3 [ASSUMPTION], fixed for every row and reported. Per-class bytes are reported so the split can be
     judged.
@@ -112,7 +112,7 @@ is reported, not tuned away.
 |---|---|---|---|
 | oracle | everything (centralised) | centralised CBBA | upper bound |
 | independent | nothing | each agent its own best | lower bound: no communication |
-| **ariadne** | `SUBMAP_PATCH` under budget | broker SGA over messages | the thesis |
+| **ariadne** | `SUBMAP_SUMMARY` (§20.6) under budget | broker SGA over messages | the thesis |
 | ariadne, partition | as ariadne, `collapsed_partition_v1` | per-component brokers | graceful degradation |
 | ariadne, budget sweep | budget at {10, 25, 50, 100} % | as ariadne | coverage vs bytes |
 
@@ -140,7 +140,7 @@ Otherwise the result is reported as measured (invariant 7).
 |---|---|---|---|
 | 1 | M | wire tables and codec for classes 7–10, CommsNode routing to per-agent mailboxes, delivery events, ledger tags; protocol tests | — |
 | 2 | M | LIVE_COLLAB fleet (D174): CollabFrontend in the worker, CollabFleet in the parent, T_G_W per agent | — |
-| 3 | A1 | per-agent `Phase4Planner` instances, `ExportPatch` / `IntegratePatch` on the slab, the task key, `TASK_BID` building, the broker SGA over received bids, the uncoordinated fallback; the identity check that the oracle row is unchanged | 1 (message structs) |
+| 3 | A1 | per-agent `Phase4Planner` instances, `ExportSummary` / `IntegrateSummary` on the §20.6 0.5 m coarse layer (planner_k plans on own fine map + peers' coarse coverage), the task key, `TASK_BID` building, the broker SGA over received bids, the uncoordinated fallback; the identity check that the oracle row is unchanged | 1 (message structs) |
 | 4 | B | ariadne_live: one planner per agent fed only through its mailbox; heartbeat poses as peers; the operator node and its received map; the console shows bytes by class, assignments and "uncoordinated" | 1, 3 (NOT 2: entry poses place the patches) |
 | 5 | M | §4 required rows in lockstep on AWS (CPU), then evidence and plots | 1, 3, 4 |
 
