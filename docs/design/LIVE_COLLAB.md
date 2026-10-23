@@ -193,3 +193,30 @@ unless the measured CPU budget fails.
 - **ablation:** `collab: true|false` in the live config.
 - **benchmark:** the §7 acceptance runs.
 - **manifest:** `collab`, the comms scenario, the budget level, lag statistics, and which model backend ran.
+
+## 9. Asynchronous collaboration (D179, 2026-10-24) - replaces §3's lockstep
+
+**Live (never waits).** One fleet thread owns CollabFleet and its radio nodes. The runtime calls, all non-blocking:
+- `Step(t)`: enqueue sim tick t. `Send(k, fn, t)`: enqueue a D175 send (a closure on node k) stamped t.
+- `Drain(k, T)`: take agent k's coordination deliveries the fleet thread has produced so far (ticks <= T, per-sender
+  FIFO, ticks in order).
+- `Snapshot(T)`: the latest published {T_O0_O, Linked, Telemetry, version}, one atomically swapped value.
+The fleet thread processes queued items in order. At each tick t it commits everything that arrived from the collab
+workers since the previous tick (#ckf records released at t, #fresp replies made available at t), then delivers the
+network up to t, ticks every node, and publishes a new snapshot version. Feature hooks never block: a reply not yet
+committed answers "not ready" (CollabNode's deferred path).
+
+**Log (`collab_events.jsonl`).** Every nondeterministic choice is recorded with the sim tick it was taken at:
+`commit` (t, agent, kind ckf|fresp, keyframe), `drain` (T, agent, the delivered message keys in order) and `snapshot`
+(T, version read). Payloads are NOT logged: features are recomputed by the collab workers, which are deterministic at
+a pinned OpenCV thread count (§7 step 1).
+
+**Replay (deterministic).** The same classes run synchronously from the log. A tick commits exactly the logged
+arrivals (waiting for the workers if needed, which costs replay wall time only). `Drain(k, T)` returns exactly the
+logged keys, keeping the rest for later drains. `Snapshot(T)` returns the logged version (the fleet keeps its published
+versions in replay). So replays equal the live run they log - B's invariant 1 (drain order) and invariant 2 (one
+consistent snapshot) hold both ways.
+
+**What it costs.** Live decisions now depend on wall-clock arrival (as on real robots); determinism is a property of
+the logged run, not of re-running live. Acceptance: a live 60 s 3-agent run with collab on, then 3 replays from its log
+give identical fleet decisions (estimates digest, kept edges, ledger) and identical runtime digests.
