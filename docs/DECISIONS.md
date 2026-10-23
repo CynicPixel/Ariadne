@@ -3437,3 +3437,41 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
     - The both-directions line-of-sight check is `[DESIGN]`: it misses no crossed cell but over-blocks on 272 of 624
       segments.
     - The D\* Lite trigger split is supported (AAAI 2002).
+
+## 2026-10-24 — D117–D122 (A1, proposed; §49 preflight, docs only): the 4.3 time-axis loss is turning — charge the mover's executed time
+
+Full record: `docs/design/NBV_4.3.md` §15; literature `docs/design/lit/early_coverage.md`; evidence
+`evaluation/runs/nbv_4.3_gate/{time_budget,turn_back,turn_episodes}.{py,txt}` (the 36 gate runs' GT; no new run).
+
+**Cause, measured.**
+- Ariadne turns in place for 45–46 % of the mission and moves for 31–32 % (coverage-greedy: 31–42 % and 44–48 %), at
+  1.6–1.7 rad of yaw per metre against 0.7–1.1.
+- About half of that turning (47–50 %; 67 % in maze_short's first 60 s) is "face the waypoint, drive, turn back to the
+  view's yaw", because every view faces its target and views are sampled around it.
+- U(a) charges metres only, while one radian at ω_max 0.44 rad/s costs the time of 1.4 m.
+- No single turn exceeds 180° (the wrap is correct).
+
+**Decisions (proposed).**
+- **D117:** C_time = the duration of `PlanCommand` over the polyline `Route` will send, from the current heading.
+  This is the mover's own profile, so cost and execution cannot drift apart.
+  - §4's "time ∝ path" collapse is dropped for this rig, and the arch's separate C_motion/C_time terms return, with
+    weights summing to 1 at t = 0.
+  - [PAPER] Schmid 2020 Eq. 6 (execution time), FUEL Eq. 1 (time with yaw; max() there because a quadrotor yaws
+    while it flies), TARE Eq. 4 (a per-stop penalty for an in-place turner).
+- **D118:** every kept view also gets an arrival-heading twin (own IG, no final turn), and U chooses. [DESIGN]: no
+  surveyed planner keeps the arrival heading. FUEL's alternative (≤ 15 views at ≥ 0.8× coverage) is cited.
+- **D119 (defect, every Phase 4 row):** a command cut at `max_length_m` carries no final yaw. Today the rig turns to
+  the view's yaw mid-route.
+- **D120:** the trace logs each candidate's normalised IG terms, C_path, C_time and turn time.
+- **D121 (reserved):** efficiency over the local tour, Schmid's v_GN. Our linear `g − αc` was the worst form in their
+  Table V. Not part of this change.
+- **D122 (reserved):** one per-voxel gain scale (Schmid Eq. 5) instead of per-term p90, which is the likeliest cause of
+  the residual ci_tiny gap against TARE. Decided on D120's log.
+
+**Pre-registered ablation (§15.5).** 7 rows × 2 scenes × 3 seeds = 42 lockstep runs:
+- the four Phase 4 baselines re-run with D119;
+- ariadne_v0, ariadne_t (D117) and ariadne_ta (D117 + D118);
+- the 1.8 row reused under a replay identity check.
+
+The claim is unchanged ("≥ every baseline at every T"), with a non-regression bound at 200 s and no tuning after
+the runs. Spend needs the maintainer's OK.
