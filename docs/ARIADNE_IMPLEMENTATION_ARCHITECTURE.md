@@ -4453,6 +4453,11 @@ This is much more compelling than simply displaying a 3D viewer.
 **Frontend:** Three.js with a Gaussian-splat web renderer (e.g. the GaussianSplats3D library), streaming submap
 exports from S3 (§18.2).
 
+> **Update 2026-10-23 (D197, §49 ritual, user-approved):** the renderer is **Spark** (sparkjs, MIT). GaussianSplats3D's
+> README declares it unmaintained and points to Spark. Spark sorts many `SplatMesh` objects together, each with its
+> own transform, which is what keyframe-anchored submaps need (D190): one mesh per submap, and re-anchoring is a new
+> transform, never a re-download.
+
 Panels, per §29.1–29.2: raw vs restored feeds side by side, budget gauges, negotiation timeline, uncertainty
 overlay, the thread, and the approval modal wired to `HUMAN_APPROVAL_REQUEST` (§23).
 

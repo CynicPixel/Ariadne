@@ -1,0 +1,59 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: 7e515aabfa82486d-agent0-20261023T121632Z
+created_utc: "2026-10-23T12:16:32Z"
+git_commit: 649f15617a8ae654b698230945b09ce233e46fa8
+git_dirty: false
+image_digest: "sha256:91643838031ab6cbda6ae2a5dec9de51591b4b433ff26c390e3fbef83f39985a"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim/7e515aabfa82486d/agent0
+seed: 1
+agent_count: 1
+execution_mode: replay
+bag_checksum: "sha256:721ad1e0cec6fdcde67ad79b3e17fbfbe72b3106c513a1926ca00250d6cdae75"
+
+# Configuration
+camera_config: rig_stereo_v2+lens(D41)
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: UNRECORDED
+degradation_config: lampdark_sensor_v0
+perception_config: sim_v1_ph5_kfcad_proxy
+slam_config: sim_v2_vo
+
+# Backends
+feature_engine: orb
+place_recognition: UNRECORDED
+loop_backend: none
+reconstruction_backend: UNRECORDED
+imu_mode: none
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: a=0.0642517 b=-0.000158131 c=8.55081e-05 matches=147 keyframe=0
+lost_handling: bridge/every_frame
+radiometric: "flat_only: flat_only; flat field L=calibrated: 16 D frames of flat 200, seed 2261050810793054239 R=calibrated: 16 D frames of flat 200, seed 11677331908753660168"
+final_state_hash: UNRECORDED
+
+# Additional
+command: /work/build/aws/cpp/runtime/ariadne_sim_vo --rec /rec/ci_tiny_dark_0/rec --scene /rec/ci_tiny_dark_0/scene --agent 0 --frames 1000 --seed 1 --perception-config /work/configs/perception/sim_v1_ph5_kfcad_proxy.yaml --slam-config /work/configs/slam/sim_v2_vo.yaml --degradation /work/configs/degradation/lampdark_sensor_v0.yaml --lamp-calib /work/configs/sim/lamp_calib_v2.yaml --out /out/r04_kfcad_proxy
+falloff: "keyframe: lamp_calib_v2 (/work/configs/sim/lamp_calib_v2.yaml), incidence calibrated, normals rgbd_fals w7, features proxy"
+frames: 1000
+keypoint_grid: 12x7
+max_keypoints: 1500
+opencv_threads: 4
+replenish_cadence: keyframe
+target_tracks: 500

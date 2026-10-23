@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- The splat panel (6.4; RECON_6 §1/§3, D190/D197/D199). Two viewports sharing one camera:
+     left  the RECONSTRUCTION: one Spark SplatMesh per keyframe-anchored submap, placed at the table's T_W_anchor
+           (row-major 4x4, anchor frame -> mission world W). A pose-graph update is a new matrix, never a re-download;
+           a chunk is fetched only when its file name (sid_n) changes. Labelled with what it shows (RGB lit world /
+           albedo proxy / initialisation only, D194-D195, D199).
+     right the GENERATED WORLD (ground truth): worldgen's scene meshes (/api/splat/world.obj), for setup and
+           comparison only, never blended with the reconstruction (user decision 2026-10-23).
+     Spark 2.3.1 + three 0.180.0, exact versions (Spark's README pairing). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ariadne splats</title>
+<style>
+  :root { --bg: #0e1116; --fg: #d8dee9; --muted: #8b95a5; --recon: #e0a458; --gt: #7fb3d5; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; }
+  #views { display: flex; height: 100%; }
+  .view { position: relative; flex: 1; min-width: 0; border-left: 1px solid #222; }
+  .view canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+  .tag { background: rgba(0,0,0,.6); padding: 4px 8px; border-radius: 4px; }
+  .recon { color: var(--recon); font-weight: 600; }
+  .gt { color: var(--gt); font-weight: 600; }
+  .muted { color: var(--muted); }
+  label.tag { pointer-events: auto; cursor: pointer; }
+  @media (max-width: 700px) { #views { flex-direction: column; } .view { border-left: 0; border-top: 1px solid #222; } }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.js" } }
+</script>
+</head>
+<body>
+<div id="views">
+  <div class="view" id="v-recon"><div class="hud">
+    <span class="tag recon">reconstruction: <span id="label">connecting…</span></span>
+    <span class="tag muted" id="status"></span></div></div>
+  <div class="view" id="v-gt"><div class="hud">
+    <span class="tag gt">generated world (ground truth)</span>
+    <label class="tag muted"><input type="checkbox" id="ceiling"> ceiling</label>
+    <span class="tag muted" id="gtstatus"></span></div></div>
+</div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+function makeView(el) {
+  const renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  el.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0e1116);
+  scene.add(new THREE.AxesHelper(0.5));
+  return { el, renderer, scene };
+}
+const recon = makeView(document.getElementById("v-recon"));
+const gt = makeView(document.getElementById("v-gt"));
+recon.scene.add(new SparkRenderer({ renderer: recon.renderer }));
+gt.scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+sun.position.set(5, -3, 10);
+gt.scene.add(sun);
+
+// One camera for both views: the same viewpoint on reconstruction and ground truth.
+const camera = new THREE.PerspectiveCamera(60, 1, 0.02, 300);
+camera.up.set(0, 0, 1);                       // mission world W is z-up
+camera.position.set(-4, -4, 6);
+const controls = new OrbitControls(camera, recon.renderer.domElement);
+const controls2 = new OrbitControls(camera, gt.renderer.domElement);
+function resize() {
+  for (const v of [recon, gt]) v.renderer.setSize(v.el.clientWidth, v.el.clientHeight, false);
+  camera.aspect = recon.el.clientWidth / Math.max(1, recon.el.clientHeight);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+resize();
+
+// --- ground truth: the generator's meshes ----------------------------------------------------------------------
+let world = null;
+async function loadWorld() {
+  const r = await fetch(`/api/splat/world.obj?ceiling=${document.getElementById("ceiling").checked ? 1 : 0}`);
+  if (!r.ok) { document.getElementById("gtstatus").textContent = "no generated world attached"; return; }
+  const obj = new OBJLoader().parse(await r.text());
+  const colours = { wall: 0xb8bcc4, floor: 0x6b7280, ceiling: 0x9aa0a8, prop: 0xc9a66b, board: 0xeeeeee };
+  obj.traverse((m) => {
+    if (m.isMesh) m.material = new THREE.MeshStandardMaterial({ color: colours[m.name] ?? 0xaaaaaa, side: THREE.DoubleSide });
+  });
+  if (world) gt.scene.remove(world);
+  world = obj;
+  gt.scene.add(obj);
+  const box = new THREE.Box3().setFromObject(obj);
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  controls.target.copy(c); controls2.target.copy(c);
+  camera.position.set(c.x - 0.6 * s.x, c.y - 0.6 * s.y, c.z + Math.max(s.x, s.y));
+  document.getElementById("gtstatus").textContent = `${s.x.toFixed(1)} × ${s.y.toFixed(1)} m`;
+}
+document.getElementById("ceiling").addEventListener("change", loadWorld);
+loadWorld();
+
+// --- reconstruction: submap chunks ------------------------------------------------------------------------------
+const meshes = new Map();                     // sid -> {chunk, mesh}
+function place(mesh, rowMajor) {
+  const m = new THREE.Matrix4();
+  m.set(...rowMajor);                         // Matrix4.set takes row-major arguments
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.copy(m);
+  mesh.matrixWorldNeedsUpdate = true;
+}
+async function apply(table) {
+  document.getElementById("label").textContent = table.label || "";
+  let gaussians = 0, bytes = 0;
+  for (const row of table.submaps) {
+    gaussians += row.gaussians; bytes += row.bytes;
+    const have = meshes.get(row.sid);
+    if (row.chunk && (!have || have.chunk !== row.chunk)) {
+      const r = await fetch(`/api/splat/chunk/${row.chunk}`);
+      if (!r.ok) continue;                    // replaced meanwhile: the next table brings the new name
+      const mesh = new SplatMesh({ fileBytes: new Uint8Array(await r.arrayBuffer()), fileType: "splat" });
+      await mesh.initialized;
+      place(mesh, row.T_W_anchor);
+      recon.scene.add(mesh);
+      if (have) { recon.scene.remove(have.mesh); have.mesh.dispose(); }
+      meshes.set(row.sid, { chunk: row.chunk, mesh });
+    } else if (have) {
+      place(have.mesh, row.T_W_anchor);       // re-anchoring: a matrix, no download
+    }
+  }
+  document.getElementById("status").textContent =
+    `${table.submaps.length} submaps · ${gaussians.toLocaleString()} Gaussians · ${(bytes / 1e6).toFixed(1)} MB · v${table.version}`;
+}
+let busy = Promise.resolve();
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/splat`);
+  ws.onmessage = (e) => { const t = JSON.parse(e.data); busy = busy.then(() => apply(t)).catch(console.error); };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+
+function frame() {
+  controls.update(); controls2.update();
+  recon.renderer.render(recon.scene, camera);
+  gt.renderer.render(gt.scene, camera);
+}
+recon.renderer.setAnimationLoop(frame);
+</script>
+</body>
+</html>

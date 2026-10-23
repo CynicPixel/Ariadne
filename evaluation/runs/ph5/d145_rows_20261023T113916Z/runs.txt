@@ -1,0 +1,10 @@
+RUN_OK r01_flat 437s
+RUN_OK r06_failE_expo 440s
+RUN_OK r07_failE_fixed 447s
+RUN_OK r02_falloff 473s
+RUN_OK r08_lamp50 440s
+RUN_OK r03_kfcad 435s
+RUN_OK r04_kfcad_proxy 471s
+RUN_OK r09_lamp15 506s
+RUN_OK r10_fixed_matched 429s
+RUN_OK r05_expo 446s

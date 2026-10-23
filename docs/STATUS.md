@@ -64,6 +64,22 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
     ρ_responder for 8 and 10 cm voxels, not for 5 cm (`VOLUMETRIC_4.1.md` §1).
   - **`scene_gt.npz` has no risk-zone labels** (both scenes), which 4.2's calibration needs; **maze_medium_0 has no
     recording**, which the gate's second scene needs.
+## 2026-10-24 — Phase 5/6 round 3 (A2) + D173 injection MERGED; shared AWS slot queue
+
+- **MERGED to main** (f772dad, fast-forward of the combined pre-merge branch):
+  - A2's 6b05fa5: Phase 5/6 work, including the canonical tool fix 698eb6b and the RECON_6 pieces.
+  - feat/3.2-inject 15426f8 (D173): `CollabNode::InjectVerifiedEdge`, pass-B evidence (`estimates`,
+    `kept_inter_edges`, injected fate), and the schema-3 mission spool composer `compose_mission_spool.py`.
+- **AWS pre-merge** `20261023T160829Z-cpux86-512e55`: **54/54**, ctest 596/596, every determinism check
+  byte-identical. Evidence: `evaluation/runs/premerge_aws/20261023T160829Z-cpux86-512e55/`, $0.044.
+- **AWS slots are never left idle** (maintainer, 2026-10-23). One dispatcher, `infra/scripts/slotq.sh`, launches
+  queued jobs (`build/slotq/queue/NN-owner-name.job`) in name order as soon as the 32-vCPU CPU spot quota has room;
+  sessions run no retry loops of their own.
+- **Maintainer, 2026-10-24:** dark / lighting / dust / noise work is PAUSED in every session until the multi-agent
+  POC (D175 in the live loop) runs. Afterwards, the demo's world setup gets a toggle for it, off by default.
+
+---
+
 ## 2026-10-23 — Phase 2 CLOSED: full gate on AWS (D172); 3.x in flight
 
 - **The Phase 2 full gate:**
@@ -78,6 +94,11 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
   `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
   budget defaults are labelled placeholders until D171's derived levels.
+- **3.2 sim integration MERGED** (3c5b8ae, fast-forward; D171): two-pass causal replay (`ariadne_collab_passa` per
+  agent, `ariadne_collab_sim` over CommsNode with comms scenarios, partitions and disconnects), ALIKED+LightGlue
+  verification, the D76 robust broker solve, int8 local descriptors, per-message byte predictions. AWS pre-merge
+  `20261023T114451Z-cpux86-bc1d75`: **54/54**, ctest 592/592 + protocol 19/19. The gate sweep (byte table, ATE vs
+  bytes, campaign) is still to run; the first attempt failed on a calibration bug, fixed (D171 note).
 - **Phase 5 round 2 (A2) MERGED** (eb976de, fast-forward: 5.2 features-on-proxy D146, 5.3 replay wiring D147). AWS
   pre-merge `20261023T085348Z-cpux86-3d2b9a`: **54/54**, ctest 587/587 + protocol 18/18, every determinism check
   byte-identical (defaults unchanged, as claimed). Evidence: `evaluation/runs/premerge_aws/20261023T085348Z-cpux86-3d2b9a/`,
