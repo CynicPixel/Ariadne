@@ -4132,6 +4132,52 @@ Branch `feat/3.4-spectral`.
 | benchmark config | the budget sweep (`budget_bytes_per_s`) for the ATE-vs-bytes plot: with the 3.2 sim integration |
 | manifest | policy, `budget_bytes_per_s` / `budget_burst_bytes`, `selection_interval_s`, `refine_passes`, response ratio + calibration run; emitted by the runtime once wired |
 
+## 2026-10-23 — D171: 3.2 sim integration — the v2 protocol over CommsNode on sim recordings (design SIMCOLLAB_3.2)
+
+**Preflight:**
+- **Literature.** COSMO-Bench (arXiv 2508.16731) for the method: the front-end runs over recorded data, and a
+  distance-driven comms model fitted to real Wi-Fi gates the exchange. Swarm-SLAM for the front-end/back-end split
+  and the arm comparison. Tian et al. RSS 2018 for budgeted exchange and the greedy-coverage row. RFComms (D102) for
+  per-size PER.
+- **OpenCV-native check:** cv::dnn EigenPlaces; cv::ALIKED + cv::LightGlueMatcher; findEssentialMat; solvePnPRansac.
+- **Advisor:** review 1, folded into the design.
+
+**Decisions:**
+1. **Two passes.**
+   - Pass A: each agent's shipped front-end (the D69 configuration), cached per (scene, seed).
+   - Pass B: a discrete-event run on the recording clock, CollabNode × CommsNode.
+   - A keyframe is released whole at `t_final`, when it leaves the BA window, so nothing reaches pass B before the
+     agent would know it. A test checks there is no lookahead.
+   - Broker compute takes zero sim time [ASSUMPTION]; the measured time is reported.
+2. **The VO startup prefix (D87 carry) is never released.** 3.4's chain spans min..max ids seen, not 0..max.
+3. **Inter-agent features are ALIKED-n16 + LightGlue** (the hard-pair path, D63: AUC@10° 0.607 against ORB's 0.284).
+   - fp16 on the wire; int8 is a 3.6 row.
+   - The verify chain is COLLAB_3.2 §11.
+   - Thresholds are calibrated on the other scene.
+   - ORB/mean-bit becomes the `orb_meanbit` ablation. Intra-agent loops stay ORB (a registered carry).
+4. **Datagram size goes on the link seam.** Loss is evaluated per datagram at its size with RFComms `ExpectedPer`. The
+   MTU stays 1500 (D102 L8).
+5. **Arms** map to D170 and §31.1 (design §4). Budget levels are {10, 25, 50, 100} % of the similarity arm's
+   measured fetch rate on the calibration scene. D170's 20 kB/s and 200 kB defaults are unsourced placeholders until
+   that measurement replaces them.
+6. **The byte gate is completed:**
+   - per-message pairing of predictions with first transmissions;
+   - a predictor per class;
+   - retransmit, ack and resync (after an election) as overhead rows;
+   - predictions summed over every broker;
+   - cross-scene calibration.
+7. **"3 seeds"** = one seed driving both passes: IMU noise and VO RANSAC in pass A, link loss and verifier RANSAC in
+   pass B. D is `none`.
+8. **Scene 1's inter-agent opportunities are measured first.** If there are fewer than 10, a third scene (maze_short)
+   is rendered before the gate.
+
+**§49:**
+- catalogue: ALGORITHMS (COSMO-Bench, Tian et al.);
+- arch: §5.7/§15.6 as-built note at merge;
+- ablation matrix: §31.1 rows mapped;
+- benchmark config: `configs/benchmark/collab_3.x.yaml` with the sweep;
+- manifest: protocol, arm, budget level and its derivation run, comms scenario, seed, pass-A cache sha.
+
 ## 2026-10-23 — D172: Phase 2 full gate on AWS — 53/54; the 54th was the D55 reference's own dirty flag; `report.yaml` re-pinned
 
 **The run.** `phase1.sh` in full mode on clean commit b59a77d, on AWS (cpux86 spot, 32 min), with a fresh Kaggle
