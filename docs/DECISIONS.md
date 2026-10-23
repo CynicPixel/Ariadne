@@ -4674,3 +4674,44 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
 
 **Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
 anchors never merge).
+
+## 2026-10-24 — D176: 3.2 sweep (fixed) shows perceptual aliasing wins PCM under the byte budget; place-grouped PCM pre-registered
+
+**Measured** (sweep rerun `20261023T191248Z-cpux86-eee456`, with the D171 config-writer and calibration fixes; gate
+`build/collab_gate_eee456`). Outcomes PASS (31 incomplete, 5 consistent, 0 corrupt), but the geometry fails:
+- **Scene 0, every budgeted row (greedy/spectral x 25/50 %, 3 seeds) and the campaign: merged ATE 3.77-3.81 m.** The
+  unbudgeted similarity arm on the same scene: 0.017-0.037 m. Scene 1: 0.007-0.010 m everywhere.
+- Cause, from edges.csv + the pass-A stores' GT: a perceptual-aliasing group. On agent 1's side it is 1-6 query
+  keyframes within 0.5 m (one place); it verifies against 40-60 of agent 0's keyframes (1.6-1.8 m span), every edge
+  ~5 m / ~100 deg off (the 6 m lattice period: worldgen `cell_m: 6.0`). 40-154 such edges per run, mutually consistent.
+  The true loops (15-25 edges, ~3 m span on both sides) were also verified. **PCM's maximum clique chose the larger
+  false clique and rejected the true one in every scene-0 budgeted run** (D171's smoke called this "no competitor";
+  here the competitor existed and lost on edge count).
+- The budgeted selection admits more of the group (high retrieval score: median 0.905-0.919 bad vs 0.92-0.96 good,
+  overlapping), so the spectral-vs-greedy dominance rows on scene 0 compare two corrupted maps: not evidence either way.
+- The cross-scene PnP floor did not transfer: scene 1's floor (72) applied to scene 0, whose own floor is 169. Reported,
+  not switched (D171 pre-registration stands).
+- Byte table FAIL (worst 0.86): match_request predicted ~6x low (e.g. 2992 vs 18760 B); match_response ~15 % high in
+  some runs. Unexplained yet; the accounting is checked against the ledger before any change (see below).
+
+**Decision (pre-registered before any rerun): place-grouped PCM, "one place pair, one vote".** Edges are not independent
+evidence when many come from one place; ORB-SLAM3's place recognition likewise checks a candidate against several
+keyframes before merging maps [PAPER: Campos et al. 2021, §VI; verify the exact rule when citing], and DBoW2 uses temporal
+consistency. Before PCM, the broker groups inter-agent edges by (agent_a, place_a, agent_b, place_b), where a place is a
+greedy cluster of an agent's keyframes in its OWN odometry frame (the snapshot it sent; id order; a new place when the
+keyframe is farther than `radius_m` from the current place's first keyframe). PCM then runs over one representative per
+group (the most PnP inliers; ties: lowest ids); other members do not enter the solve.
+- `radius_m: 1.0`: one corridor width (worldgen corridors 1.0-1.4 m: consecutive keyframes in one corridor segment see
+  the same structure) and well under half the 6 m lattice period (aliases sit a period apart, so they never share a
+  place). Not tuned on scene 0.
+- Config `pcm_place_grouping: {enabled: false, radius_m: 1.0}` in collab_v2.yaml; default off, so the 3.2 smoke and
+  every earlier run stay byte-identical.
+- **Pass criteria (fixed now):** rerun B2 + C with it on (stores reused). Scene 0 budgeted rows merged ATE < 0.10 m in
+  >= 5 of 6 cells (arm x level, seed-mean); scene 1 rows not worse than now by more than 10 % (or 2 mm); no run
+  corrupt. Failing either is reported as a negative result and the alias group stays a documented limitation.
+- Live (D174): the known entry poses give a second, independent guard: an inter-agent edge whose implied alignment
+  disagrees with the entry-pose alignment by more than the VO drift bound is rejected before PCM. Designed separately
+  (D177) with its bound from measured VO drift, not from this failure.
+
+**Not 3.5 done:** 3.5 still needs repetition-operator worlds (§5.5), the §17.3 diagnostics (ROC/PR of retrieval score
+against GT, false-closure probability) and the degeneracy-gate-before-PCM ordering test.
