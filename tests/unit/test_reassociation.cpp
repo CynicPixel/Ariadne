@@ -309,6 +309,33 @@ TEST(TrackerCadence, EveryFrameIsThePhaseOneBehaviourAndReplenishIsANoOp) {
     EXPECT_THROW(kf.Replenish(f0(cv::Rect(0, 0, 320, 240)).clone()), std::logic_error);   // not that image
 }
 
+// 5.2 (D146): Replenish can detect on another image of the same pixels (the albedo proxy) inside its mask, while LK
+// keeps the tracked image.
+TEST(TrackerCadence, ReplenishDetectsOnTheDetectionImageInsideItsMask) {
+    const OrbEngine orb(Euroc().features);
+    const auto [f0, f1] = HalfThenFull();
+    KltTracker blank(CadenceParams("keyframe", 0), orb);
+    blank.Process(f0, 0, 1);
+    blank.Process(f1, 1, 1);
+    // A flat detection image: nothing to detect, although the tracked image has new texture on the right.
+    EXPECT_EQ(blank.Replenish(f1, cv::Mat(f1.size(), CV_8U, cv::Scalar(128)), cv::Mat()), 0);
+
+    KltTracker tracker(CadenceParams("keyframe", 0), orb);
+    const TrackedFrame t0 = tracker.Process(f0, 0, 1);
+    tracker.Process(f1, 1, 1);
+    cv::Mat top(f1.size(), CV_8U, cv::Scalar(0));
+    top.rowRange(0, f1.rows / 2).setTo(255);
+    const int added = tracker.Replenish(f1, f1, top);
+    EXPECT_GT(added, 5);
+    const TrackedFrame t2 = tracker.Process(f1, 2, 1);
+    int outside = 0;
+    for (size_t i = 0; i < t2.ids.size(); ++i) outside += t2.ids[i] > t0.ids.back() && t2.points[i].y >= f1.rows / 2 + 1;
+    EXPECT_EQ(outside, 0);   // every new track was started inside the mask (and LK held it on the static pair)
+
+    EXPECT_THROW(tracker.Replenish(f1, f1(cv::Rect(0, 0, 320, 240)).clone(), cv::Mat()), std::invalid_argument);
+    EXPECT_THROW(tracker.Replenish(f1, f1, top(cv::Rect(0, 0, 320, 240)).clone()), std::invalid_argument);
+}
+
 TEST(TrackerCadence, QualityGateKeepsNewTracksOffWeakGradients) {
     // Left half: full-contrast texture. Right half: the same texture at 12% contrast, still detectable by ORB's low
     // FAST threshold, but with a structure-tensor eigenvalue ~0.12^2 = 1.4% of the left's: below a 0.1 gate.

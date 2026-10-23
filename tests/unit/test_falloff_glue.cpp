@@ -54,12 +54,22 @@ TEST(FalloffGlue, ConfigSection) {
     EXPECT_THROW(Parse("mode: every_frame\n"), ariadne::core::ConfigError);   // the ablation row is not built yet
     EXPECT_THROW(Parse("mode: keyframe\nnormal_window_px: 4\n"), ariadne::core::ConfigError);
     EXPECT_THROW(Parse("mode: keyframe\nbogus: 1\n"), ariadne::core::ConfigError);
+    EXPECT_EQ(p.features, "raw");
+    EXPECT_EQ(Parse("mode: keyframe\nfeatures: proxy\n").features, "proxy");
+    EXPECT_THROW(Parse("mode: off\nfeatures: proxy\n"), ariadne::core::ConfigError);   // no proxy to detect on
+    EXPECT_THROW(Parse("mode: keyframe\nfeatures: albedo\n"), ariadne::core::ConfigError);
 }
 
 TEST(FalloffGlue, NeedsTheFlatFieldFirst) {
     // A shipped sim config with the radiometric stage on, then the same with it off: falloff needs Stage 1 (§6.2).
     auto c = ariadne::perception::LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/sim_v1_rad_auto.yaml");
     c.falloff = On();
+    EXPECT_NO_THROW(ariadne::perception::ValidatePerception(c));
+    // features: proxy needs the keyframe cadence (the proxy exists only at keyframes).
+    c.falloff.features = "proxy";
+    c.tracker.replenish = "every_frame";
+    EXPECT_THROW(ariadne::perception::ValidatePerception(c), ariadne::core::ConfigError);
+    c.tracker.replenish = "keyframe";
     EXPECT_NO_THROW(ariadne::perception::ValidatePerception(c));
     c.radiometric.mode = "off";
     EXPECT_THROW(ariadne::perception::ValidatePerception(c), ariadne::core::ConfigError);
@@ -130,4 +140,9 @@ TEST(FalloffGlue, UndoesExposureAndLampPower) {
     const double med = err[err.size() / 2];
     std::printf("falloff glue: median albedo error %.4f over %zu feature-mask pixels\n", med, err.size());
     EXPECT_LT(med, 0.02);   // 8-bit quantisation of the dim checker squares; ignoring exposure would be 100 %
+
+    // The detection image is 255 x reflectance: the 0.2 / 0.6 checker reads ~51 / ~153, nothing clipped.
+    const cv::Mat det = f.DetectionImage(a);
+    ASSERT_EQ(det.type(), CV_8UC1);
+    EXPECT_NEAR(cv::mean(det, a.feature_mask)[0], 255.0 * 0.4, 3.0);
 }

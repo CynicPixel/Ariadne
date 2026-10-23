@@ -224,6 +224,10 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (c.name.empty()) fail("name must not be empty");
     // Arch §6.2 order: flat field -> VST -> falloff. Without Stage 1 the vignette would be divided into the albedo.
     if (c.falloff.Enabled() && !c.radiometric.Enabled()) fail("falloff needs the radiometric stage (flat field) on");
+    // D146: the proxy exists at keyframes only, so detection on it needs the keyframe cadence.
+    if (c.falloff.features == "proxy" && c.tracker.replenish != "keyframe") {
+        fail("falloff features: proxy needs tracker replenish: keyframe");
+    }
 
     const FeatureParams& f = c.features;
     if (f.grid_cols < 1 || f.grid_rows < 1) fail("feature grid must be at least 1x1");

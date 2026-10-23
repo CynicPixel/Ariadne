@@ -74,6 +74,19 @@ public:
     }
 
     bool enabled() const { return p_.Enabled(); }
+    bool detects_on_proxy() const { return p_.features == "proxy"; }
+
+    /// The proxy as the feature engines' 8-bit input (D146): 255 x reflectance, clipped at 1. FalloffNormalize
+    /// returns reflectance in the calibration's units, so no scale is chosen here. The fraction of feature-mask
+    /// pixels clipped (reflectance > 1: specular, or a model/depth error) goes into results.
+    cv::Mat DetectionImage(const perception::radiometric::AlbedoProxy& a) {
+        cv::Mat det;
+        a.albedo.convertTo(det, CV_8U, 255.0);   // saturate_cast: > 1 clips to 255, < 0 cannot occur
+        const int in_mask = cv::countNonZero(a.feature_mask);
+        const cv::Mat over = (a.albedo > 1.0f) & a.feature_mask;
+        clipped_.push_back(in_mask > 0 ? double(cv::countNonZero(over)) / in_mask : 0.0);
+        return det;
+    }
 
     /// One keyframe. `gray`: rectified left, CV_8U. `Z`: SGBM depth (any float type, metres) on the same grid;
     /// `supported`: CV_8U, nonzero where the depth is usable (DenseSupportMask). Pixels without support get NaN, so
@@ -104,7 +117,7 @@ public:
     /// Manifest entry (runs with the stage on only).
     std::string Summary() const {
         return p_.mode + ": " + calib_.name + " (" + calib_path_ + "), incidence " + p_.params.incidence + ", normals " +
-               p_.params.normals + " w" + std::to_string(p_.params.normal_window_px);
+               p_.params.normals + " w" + std::to_string(p_.params.normal_window_px) + ", features " + p_.features;
     }
 
     /// results.yaml block; nothing when the stage is off.
@@ -114,7 +127,10 @@ public:
         out << "falloff: {mode: " << p_.mode << ", lamp_calib: " << calib_.name << ", keyframes: " << ms_.size()
             << ", lamp_rel: " << num(lamp_rel_) << ", valid_fraction_p50: " << num(Quantile(valid_, 0.5))
             << ", feature_mask_fraction_p50: " << num(Quantile(feature_, 0.5)) << ",\n"
-            << "  ms_p50: " << num(Quantile(ms_, 0.5)) << ", ms_p95: " << num(Quantile(ms_, 0.95)) << "}\n";
+            << "  ms_p50: " << num(Quantile(ms_, 0.5)) << ", ms_p95: " << num(Quantile(ms_, 0.95));
+        if (detects_on_proxy()) out << ", features: proxy, clipped_fraction_p50: " << num(Quantile(clipped_, 0.5))
+                                    << ", clipped_fraction_max: " << num(Quantile(clipped_, 1.0));
+        out << "}\n";
     }
 
 private:
@@ -131,7 +147,7 @@ private:
     std::string calib_path_;
     cv::Matx33d K_, R1_;
     double intensity_rel_ = 1.0, lamp_rel_ = std::numeric_limits<double>::quiet_NaN();
-    std::vector<double> ms_, valid_, feature_;
+    std::vector<double> ms_, valid_, feature_, clipped_;
 };
 
 }  // namespace ariadne::tools

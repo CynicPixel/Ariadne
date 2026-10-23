@@ -460,7 +460,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                         stereo_disp_max[band] = std::max(stereo_disp_max[band], d);
                     }
                 }
-                // 5.2 (D146): never feeds tracking or the VO, so the trajectory is the same with the stage off.
+                // 5.2 (D146): with features: raw it never feeds tracking or the VO (the trajectory is the same as with
+                // the stage off); features: proxy uses it only for detection at Replenish below.
                 perception::radiometric::AlbedoProxy albedo;
                 if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
@@ -492,7 +493,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 gp_edges += kr.gravity_prior_emitted;
                 t_kf.push_back(Ms(t0));
                 reassoc.AfterKeyframe(l, vo, vf);   // 2.1: landmark descriptors at this keyframe
-                tracker.Replenish(l);   // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise)
+                // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise); 5.2 (D146) row
+                // features: proxy detects them on the albedo proxy, inside its feature mask.
+                if (falloff.detects_on_proxy()) tracker.Replenish(l, falloff.DetectionImage(albedo), albedo.feature_mask);
+                else tracker.Replenish(l);
                 ++keyframes;
                 keyframes_lost += tr.status == slam::VoStatus::kLost;
                 if (attitude && !gt_poses.empty()) {

@@ -120,6 +120,10 @@ public:
     /// learned engine's forward for that image is shared with the keyframe's description. Returns the tracks
     /// started; a no-op (0) under every_frame, where Process() already replenished.
     int Replenish(const cv::Mat& gray);
+    /// The same, detecting on another image of the same pixels (5.2, D146: the albedo proxy at keyframes) and only
+    /// where `detect_mask` (CV_8U, nonzero = allowed; the proxy's feature_mask) allows. LK keeps tracking `gray`'s
+    /// pyramid, and the §7.2 quality check still reads `gray`.
+    int Replenish(const cv::Mat& gray, const cv::Mat& detect, const cv::Mat& detect_mask);
 
     /// The pyramid LK consumes, exposed so it can be timed on its own.
     static LkPyramid BuildPyramid(const cv::Mat& gray, const TrackerParams& params);
@@ -134,8 +138,10 @@ private:
     uint64_t next_id_ = 0;
 
     /// Step 4: append engine detections outside `mask` (updated as they are accepted) until target_tracks.
-    int AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64_t>& ids, std::vector<cv::Point2f>& points,
-                  std::vector<cv::Point2f>* prev_points, std::vector<int>& ages);
+    /// Detect on `detect`; the §7.2 eigenvalue quality is read on `lk_gray`, the image LK will track (D146: they
+    /// differ when detection runs on the albedo proxy).
+    int AddTracks(const cv::Mat& detect, const cv::Mat& lk_gray, cv::Mat& mask, std::vector<uint64_t>& ids,
+                  std::vector<cv::Point2f>& points, std::vector<cv::Point2f>* prev_points, std::vector<int>& ages);
 };
 
 }  // namespace ariadne::perception

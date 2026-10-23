@@ -3926,6 +3926,19 @@ error exposed it, and the comment is corrected.)
   SGBM, descriptors) receives only flat field, VST denoise and, now, the falloff proxy. It is enforced by structure,
   not by a test. The retrieval-enhancement ablation row is `enhance` (§31.5).
 
+**Second commit, as built.**
+- `falloff: features: raw | proxy` (default raw). `proxy` is refused unless `mode` makes a proxy and the tracker runs
+  `replenish: keyframe`.
+- `KltTracker::Replenish(gray, detect, detect_mask)`: detection reads `detect`, inside the live-track discs AND the
+  proxy's `feature_mask`. LK keeps `gray`'s pyramid, and the §7.2 eigenvalue quality check still reads `gray`
+  (it is about LK's conditioning on the image it tracks). The one-argument form delegates with `detect = gray` and
+  no mask, so it is unchanged.
+- results gain `features: proxy, clipped_fraction_p50/max` (reflectance > 1 inside the feature mask) on that row only.
+- Re-association descriptors (2.1) stay on the raw gray. Describing on the proxy would be a further row, not built.
+- Tests: TrackerCadence.ReplenishDetectsOnTheDetectionImageInsideItsMask. A flat detection image adds nothing; a
+  top-half mask keeps every new track in the top half; size and type mismatches throw. FalloffGlue: the detection
+  image of the 0.2/0.6 checker has mean 255·0.4, and the cadence and mode guards hold.
+
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
 Design: `docs/design/SPECTRAL_3.4.md`. Code:
