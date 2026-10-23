@@ -164,6 +164,28 @@ table FeatureResponse {
   header_bytes:ushort;
 }
 
+/// D175 (MULTIAGENT_PIPELINE): coordination through the radio. Mirrors A1's planning::multi structs field for field.
+/// One 32 x 32 block of the briefing grid (0.05 m): 1024 cell codes (0 unknown, 1 occupied, 2 free not
+/// rho_responder-passable, 3 free and passable), packed 4 per byte (cell i in bits 2*(i%4)..+1 of byte i/4): 256 B.
+table SlabBlock { bx:int; by:int; cells:[ubyte]; }
+/// SUBMAP_PATCH (8): the sender's OWN observations only, in its frame W_sender (`frame`), the blocks changed since the
+/// version the receiver acknowledged.
+table SubmapPatch { sender:int; epoch:uint; version:ulong; t_ns:long; blocks:[SlabBlock]; frame:FrameTag; }
+/// One of the sender's top-M options (everything the broker's auction needs). Goals in G (`TaskBid.frame`).
+table BidOption {
+  task_key:long; goal_x:double; goal_y:double;
+  ig_raw:[float];        // the five raw IG terms (D114)
+  path_m:float; cost_bandwidth:float; cost_risk:float; risk:float; source:ubyte;
+}
+/// TASK_BID (9): to the sender's component broker, once per replan.
+table TaskBid { sender:int; epoch:uint; seq:ulong; t_ns:long; lambda_path:float; options:[BidOption]; frame:FrameTag; }
+table Assignment { agent:int; task_key:long; goal_x:double; goal_y:double; }
+/// TASK_CONSENSUS (10): the broker's exactly-once assignment for its component. Goals in G (`frame`).
+table TaskConsensus {
+  broker:int; epoch:uint; seq:ulong; t_ns:long; bids_t_ns:long;
+  members:[int]; assignments:[Assignment]; frame:FrameTag;
+}
+
 table Envelope {
   cls:MessageClass;
   sender:uint;
@@ -179,6 +201,10 @@ table Envelope {
   feature_response:FeatureResponse;
   // Appended (3.2): a standalone ACK.
   ack:Ack;
+  // Appended (D175): coordination messages.
+  submap_patch:SubmapPatch;
+  task_bid:TaskBid;
+  task_consensus:TaskConsensus;
 }
 
 root_type Envelope;

@@ -203,3 +203,13 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 - `ApplyConsensus(consensus, options, timeout)` → a pick, or "uncoordinated"
 
 **Oracle row:** the current Phase4Planner code path, untouched; proven identical by A1's replay/eval check.
+
+**Deviation from §20.6, decided 2026-10-23 (A1 and M).** Coverage travels as `SUBMAP_PATCH` (8) at the PLANNER grid
+(0.05 m, 32 × 32 blocks, 2-bit codes: unknown / occupied / free / free-and-ρ_responder-passable), not as §20.6's
+0.5 m coarse summary. Reason: egress at ρ_responder (0.40 m) on 0.5 m cells would erase doorways, breaking invariant 4
+at the operator. Sizing:
+- **Wire:** 256 B packed per block plus ≤ 64 B FlatBuffers overhead, zstd-compressed (protocol test
+  `CoordinationWire.*`).
+- **Estimate:** 0.5–3 KB per 5 s patch [ESTIMATE; A1 measures on a real run].
+
+`SUBMAP_SUMMARY` (7) stays reserved.
