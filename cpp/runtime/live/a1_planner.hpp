@@ -101,6 +101,10 @@ public:
     size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
 
     PlanOutput Plan(const PlanContext& ctx) override {
+        if (ctx.n() != 2) {   // lifted when A1's feat/ph4-nagent (vector API) merges; the 1.8 placeholder is N-ready
+            throw std::invalid_argument("A1Planner: N-agent planning pending feat/ph4-nagent (scene has " +
+                                        std::to_string(ctx.n()) + " agents)");
+        }
         planning::Phase4AgentInput in[2];
         for (int a = 0; a < 2; ++a) {
             in[a].active = ctx.active[a];
@@ -118,7 +122,7 @@ public:
         }
         plan_ = planner_.Plan(ctx.T * 1e-9, in, dirs);
 
-        PlanOutput out;
+        PlanOutput out(2);
         out.maps.slab = plan_.maps.slab;
         out.maps.trav_r = plan_.maps.trav_r;
         out.maps.trav_a = plan_.maps.trav_a;

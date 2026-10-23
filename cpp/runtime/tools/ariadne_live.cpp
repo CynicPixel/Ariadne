@@ -426,7 +426,8 @@ int main(int argc, char** argv) {
         const auto recorded = lc.chooser == "llm" && !decisions_path.empty() ? LoadRecordedChoices(decisions_path)
                                                               : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
-        const mis::Briefing brief = mis::LoadBriefing(scene, mc, 2, "live");
+        const int NA = int(YAML::LoadFile(scene + "/mission_live.json")["agents"].size());   // P8 D213: N agents
+        const mis::Briefing brief = mis::LoadBriefing(scene, mc, NA, "live");
         live::PlaceholderParams pp;   // the placeholder planner's knobs (live config), not part of the seam
         pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
         pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
@@ -498,9 +499,9 @@ int main(int argc, char** argv) {
             // would land in ARRIVAL order against a same-stamp message of another topic (camera_info vs image_raw)
             for (const char* r : {"left_image", "right_image", "left_info", "right_info", "gt_pose", "imu"}) timed.insert(t[r].as<std::string>());
         }
-        if (cmd_topic.size() != 2) throw std::runtime_error("live: expected 2 agents in mission_live.json");
+        if (int(cmd_topic.size()) != NA) throw std::runtime_error("live: mission_live.json agents and command topics disagree");
 
-        AgentLane lanes[2];
+        std::deque<AgentLane> lanes(static_cast<size_t>(NA));
         // The mover's answers (D153b): (agent, command stamp) -> accepted. Part of the recorded input, so the wait for
         // them below is deterministic in replay.
         std::map<std::pair<int, int64_t>, bool> answers;
@@ -546,10 +547,10 @@ int main(int argc, char** argv) {
         std::atomic<bool> past_end{false};
         uint64_t seq = 0;
         long dropped_untyped = 0;
-        int worker_fd[2] = {-1, -1};        // D168 estimator processes (lc.estimator_processes); -1 = in-process
-        std::mutex worker_mu[2];
-        pid_t worker_pid[2] = {0, 0};
-        std::thread feeders[2];
+        std::vector<int> worker_fd(static_cast<size_t>(NA), -1);   // D168 estimator processes; -1 = in-process
+        std::deque<std::mutex> worker_mu(static_cast<size_t>(NA));
+        std::vector<pid_t> worker_pid(static_cast<size_t>(NA), 0);
+        std::vector<std::thread> feeders(static_cast<size_t>(NA));
         auto Dispatch = [&](live::StreamMessage m) {
             if (past_end) return;
             const auto it = route.find(m.topic);
@@ -681,14 +682,15 @@ int main(int argc, char** argv) {
         }
 
         // --- per-agent estimators: the replay path, unchanged ---------------------------------------------------
-        std::thread vo[2];
-        std::unique_ptr<live::LiveSimSource> sources[2];
+        std::vector<std::thread> vo(static_cast<size_t>(NA));
+        std::vector<std::unique_ptr<live::LiveSimSource>> sources(static_cast<size_t>(NA));
         std::mutex estimator_turn;   // D152a: one frame at a time through the estimators (in-process mode only)
         struct TimeAgg {   // D167: per-agent frame timing, for results.yaml (the raw series is timing.jsonl)
             std::mutex mu;
             long n = 0;
             double wait = 0, lock = 0, track = 0, max_track = 0, max_lock = 0;
-        } tagg[2];
+        };
+        std::deque<TimeAgg> tagg(static_cast<size_t>(NA));
         // Lane plumbing shared by both estimator arrangements (D168): in-process threads behind the D152a turn lock,
         // or one worker process per agent, each with its own OpenCV pool.
         auto deliver_timing = [&](int k, int64_t t_ns, double w, double l, double tr) {
@@ -742,7 +744,7 @@ int main(int argc, char** argv) {
             }
             progress_cv.notify_all();
         };
-        for (int k = 0; k < 2; ++k) {
+        for (int k = 0; k < NA; ++k) {
             if (lc.estimator_processes) {   // D168: spawn the worker, feed its images in consumed order, read back
                 // /tmp, not the run dir: a nested replay run dir overflows sun_path (108 bytes; replay1, D168)
                 const std::string wsock = "/tmp/ariadne-worker-" + std::to_string(::getpid()) + "-" + std::to_string(k) + ".sock";
@@ -857,7 +859,8 @@ int main(int argc, char** argv) {
         if (is_live) fs::create_directories(run_dir / "directives_inbox");
         Lines directives_log(run_dir / "directives.jsonl"), directives_rejected(run_dir / "directives_rejected.jsonl");
         if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
-        size_t integrated[2] = {0, 0}, rays = 0;
+        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
+        size_t rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
         // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
@@ -867,7 +870,8 @@ int main(int argc, char** argv) {
             double gx = 0, gy = 0;
             int64_t since_ns = 0;
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
-        } current[2];
+        };
+        std::vector<CurrentTask> current(static_cast<size_t>(NA));
         // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu. A1
         // (2026-10-23): Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
         // sequence is never reordered; per-agent keyframe order stays time order (each lane already is, and the
@@ -905,7 +909,7 @@ int main(int argc, char** argv) {
             });
         }
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
-        std::vector<std::pair<double, double>> demo_prev_goals[2];   // its candidate goals, for the index mapping
+        std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
@@ -931,14 +935,16 @@ int main(int argc, char** argv) {
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
                 if (T > replan_ns) {
                     const auto have = [&] {
-                        return input_done || (answers.count({0, T - replan_ns}) && answers.count({1, T - replan_ns}));
+                        if (input_done) return true;
+                        for (int k = 0; k < NA; ++k) if (!answers.count({k, T - replan_ns})) return false;
+                        return true;
                     };
                     if (is_live) {
                         if (!progress_cv.wait_for(lk, std::chrono::seconds(30), have)) ++answer_timeouts;
                     } else {
                         progress_cv.wait(lk, have);
                     }
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         const auto a = answers.find({k, T - replan_ns});
                         if (a != answers.end() && !a->second && last_goal.count(k)) refused_goals.push_back({k, last_goal[k]});
                     }
@@ -988,12 +994,12 @@ int main(int argc, char** argv) {
                 }
             }
             const std::vector<mis::Directive> active = mis::ActiveDirectives(directives, T);
-            live::PlanContext ctx;
+            live::PlanContext ctx(NA);
             ctx.T = T;
             ctx.directives = active;
             ctx.refused_goals = refused_goals;
-            for (int k = 0; k < 2; ++k) {
-                std::lock_guard<std::mutex> lk(lanes[k].mu);
+            for (int k = 0; k < NA; ++k) {
+                std::lock_guard<std::mutex> lk(lanes[size_t(k)].mu);
                 for (auto it = lanes[k].cams.rbegin(); it != lanes[k].cams.rend(); ++it) {
                     if (it->first < T) {
                         const core::SE3 Tw = brief.T_W_O[size_t(k)] * it->second;
@@ -1004,7 +1010,7 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            for (int k = 0; k < 2; ++k) ctx.flown_m[k] = lanes[k].gt.PathLength(T);
+            for (int k = 0; k < NA; ++k) ctx.flown_m[size_t(k)] = lanes[size_t(k)].gt.PathLength(T);
             live::PlanOutput plan_out;
             {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
@@ -1048,12 +1054,13 @@ int main(int argc, char** argv) {
                 std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
-            } P[2];
+            };
+            std::vector<Pending> P(static_cast<size_t>(NA));
             const double rho_a = mc.rho_a, rho_r = mc.rho_r;
             const int free_cells = cv::countNonZero(maps.slab == planning::kFree),
                       occ_cells = cv::countNonZero(maps.slab == planning::kOccupied),
                       unknown_cells = int(maps.slab.total()) - free_cells - occ_cells;
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 std::ostringstream o;
                 o.precision(10);
                 o << "{\"t_s\":" << ts << ",\"agent\":" << k << ",\"mode\":\"" << (is_live ? "live" : "replay")
@@ -1080,7 +1087,9 @@ int main(int argc, char** argv) {
                 }
                 std::ostringstream vision;
                 vision.precision(10);
-                vision << "{\"keyframes_integrated\":[" << integrated[0] << "," << integrated[1] << "],\"rays\":" << rays
+                vision << "{\"keyframes_integrated\":[";
+                for (int a2 = 0; a2 < NA; ++a2) vision << (a2 ? "," : "") << integrated[size_t(a2)];
+                vision << "],\"rays\":" << rays
                        << ",\"free_cells\":" << free_cells << ",\"occupied_cells\":" << occ_cells << ",\"unknown_cells\":"
                        << unknown_cells << ",\"frontier_clusters\":" << maps.frontiers.clusters.size()
                        << ",\"rejected_small\":" << maps.frontiers.rejected_small << ",\"egress_found\":"
@@ -1177,8 +1186,8 @@ int main(int argc, char** argv) {
                 }
             }
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
-            int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
-            std::string choice[2], pick_reason[2] = {"classical choice", "classical choice"};
+            std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
+            std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
             const auto cluster_of = [&](int k, int i) { return live::TaskOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
@@ -1187,7 +1196,7 @@ int main(int argc, char** argv) {
                 std::ostringstream t;
                 t.precision(10);
                 t << ts;
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     const auto it = recorded.find({t.str(), k});
                     if (it == recorded.end()) throw std::runtime_error("replay: no recorded choice at t=" + t.str());
@@ -1213,18 +1222,18 @@ int main(int argc, char** argv) {
                 const auto px = [&](const Cell& c) { return cv::Point(c.c * scale + scale / 2, (maps.slab.rows - 1 - c.r) * scale + scale / 2); };
                 for (size_t i = 1; i < maps.egress.cells.size(); ++i)
                     cv::line(img, px(maps.egress.cells[i - 1]), px(maps.egress.cells[i]), {255, 80, 0}, 2);
-                const cv::Scalar col[2] = {{0, 0, 230}, {0, 160, 0}};
-                for (int k = 0; k < 2; ++k) {
+                const cv::Scalar col[] = {{0, 0, 230}, {0, 160, 0}, {200, 80, 0}};   // index mod 3
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     for (size_t i = 0; i < P[k].cands.size(); ++i) {
                         const cv::Point g = px(P[k].cands[i].goal);
-                        cv::drawMarker(img, g, col[k], cv::MARKER_TILTED_CROSS, 10, 2);
+                        cv::drawMarker(img, g, col[k % 3], cv::MARKER_TILTED_CROSS, 10, 2);
                         cv::putText(img, "a" + std::to_string(k) + ":c" + std::to_string(i), g + cv::Point(5, -5),
-                                    cv::FONT_HERSHEY_SIMPLEX, 0.4, col[k], 1, cv::LINE_AA);
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.4, col[k % 3], 1, cv::LINE_AA);
                     }
-                    cv::circle(img, px(P[k].ac), 7, col[k], cv::FILLED);
+                    cv::circle(img, px(P[k].ac), 7, col[k % 3], cv::FILLED);
                     cv::putText(img, "agent " + std::to_string(k), px(P[k].ac) + cv::Point(9, 4), cv::FONT_HERSHEY_SIMPLEX,
-                                0.45, col[k], 1, cv::LINE_AA);
+                                0.45, col[k % 3], 1, cv::LINE_AA);
                 }
                 const fs::path map_png = fs::absolute(ddir / (did + "_map.png"));
                 cv::imwrite(map_png.string(), img);
@@ -1238,7 +1247,7 @@ int main(int argc, char** argv) {
                 for (size_t i = 0; i < active.size(); ++i) q << (i ? "," : "") << mis::DirectiveJson(active[i]);
                 q << "],\"agents\":[";
                 bool first = true;
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     std::string kf_png;
                     {
@@ -1259,15 +1268,15 @@ int main(int argc, char** argv) {
                 q << "]}";
                 std::string ans, top_problem;
                 std::string vdid = did;   // the request the processed answer belongs to (demo: the PREVIOUS horizon)
-                std::vector<std::pair<double, double>> prev_goals[2];
+                std::vector<std::vector<std::pair<double, double>>> prev_goals(static_cast<size_t>(NA));
                 try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
                         // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
                     chooser->Send(q.str());
                     if (lc.demo) {   // D169: never wait on the control path - poll the previous horizon's answer
                         vdid = demo_prev_did;
-                        for (int k = 0; k < 2; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
+                        for (int k = 0; k < NA; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
                         demo_prev_did = did;
-                        for (int k = 0; k < 2; ++k) {
+                        for (int k = 0; k < NA; ++k) {
                             demo_prev_goals[k].clear();
                             for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
                         }
@@ -1296,9 +1305,10 @@ int main(int argc, char** argv) {
                     }
                 }
                 // Per agent: a bad pick for one agent does not discard the other's.
-                int want[2] = {-2, -2};
-                std::string approval_id[2], validation[2], source[2], approval_raw[2];
-                for (int k = 0; k < 2; ++k) {
+                std::vector<int> want(static_cast<size_t>(NA), -2);
+                std::vector<std::string> approval_id(static_cast<size_t>(NA)), validation(static_cast<size_t>(NA)), source(static_cast<size_t>(NA)),
+                    approval_raw(static_cast<size_t>(NA));
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     source[k] = "orchestrator", validation[k] = "ok";
                     if (!top_problem.empty()) {
@@ -1343,15 +1353,23 @@ int main(int argc, char** argv) {
                     if (source[k] == "orchestrator") picks[k] = want[k];
                     else pick_reason[k] = "fallback: " + validation[k];
                 }
-                if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 && source[1] == "orchestrator" &&
-                    cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
-                    const int alt = other_cluster(1, cluster_of(0, picks[0]));
-                    if (alt >= 0) {
-                        picks[1] = alt;
-                        source[1] = "fallback", validation[1] = "same cluster as agent 0 while another was eligible";
+                {   // exactly-once across agents, ascending index (P8 D213; at N=2 the old agent-1-yields rule)
+                    std::set<int64_t> taken2;
+                    for (int k = 0; k < NA; ++k) {
+                        if (!P[size_t(k)].active || picks[size_t(k)] < 0) continue;
+                        const int64_t cl = cluster_of(k, picks[size_t(k)]);
+                        if (taken2.count(cl) && source[size_t(k)] == "orchestrator") {
+                            const int alt = other_cluster(k, cl);
+                            if (alt >= 0) {
+                                picks[size_t(k)] = alt;
+                                source[size_t(k)] = "fallback";
+                                validation[size_t(k)] = "same cluster as an earlier agent while another was eligible";
+                            }
+                        }
+                        if (picks[size_t(k)] >= 0) taken2.insert(cluster_of(k, picks[size_t(k)]));
                     }
                 }
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     std::ostringstream c;
                     c << ",\"choice\":{\"source\":\""
@@ -1365,19 +1383,19 @@ int main(int argc, char** argv) {
                 }
             }
             // Operator authority (§23): hold / goto override whatever was chosen; recorded like every directive.
-            const mis::Directive* direct[2] = {nullptr, nullptr};
+            std::vector<const mis::Directive*> direct(static_cast<size_t>(NA), nullptr);
             for (const auto& d : active) {
                 if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < 2) direct[d.agent] = &d;
             }
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 if (!P[k].active || !direct[k]) continue;
                 picks[k] = -1;
                 choice[k] = ",\"choice\":{\"source\":\"operator\",\"directive\":\"" + JsonEscape(direct[k]->id) + "\",\"kind\":\"" +
                             direct[k]->kind + "\"}";
             }
             // Phase 3: the command for each pick (the same code for every chooser).
-            bool sent_at_T[2] = {false, false};
-            for (int k = 0; k < 2; ++k) {
+            std::vector<char> sent_at_T(static_cast<size_t>(NA), false);
+            for (int k = 0; k < NA; ++k) {
                 Pending& pd = P[k];
                 if (!pd.active) continue;
                 const int pick = picks[k];
@@ -1457,9 +1475,9 @@ int main(int argc, char** argv) {
             // (frames past end_s close the lanes).
             if (is_live && lc.lockstep) {
                 std::vector<std::pair<int, int64_t>> wait_for;   // (agent, command stamp) answers to have before resuming
-                for (int k = 0; k < 2; ++k) if (sent_at_T[k]) wait_for.push_back({k, T});
+                for (int k = 0; k < NA; ++k) if (sent_at_T[k]) wait_for.push_back({k, T});
                 if (T == end_ns) {   // the end of the run: every agent holds, applied at end_s while still paused
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         runtime::ros_cdr::PoseArray hold;   // stamp end + 1 ns: a separate answer from this barrier's
                         hold.header.stamp.sec = int32_t((end_ns + 1) / 1000000000);
                         hold.header.stamp.nanosec = uint32_t((end_ns + 1) % 1000000000);
@@ -1468,7 +1486,7 @@ int main(int argc, char** argv) {
                         wait_for.push_back({k, end_ns + 1});
                     }
                 }
-                int64_t at[2] = {-1, -1};
+                std::vector<int64_t> at(static_cast<size_t>(NA), -1);
                 bool all = false;
                 {
                     std::unique_lock<std::mutex> lk(progress_mu);
@@ -1477,15 +1495,17 @@ int main(int argc, char** argv) {
                         for (const auto& w : wait_for) if (!arrived.count(w)) return false;
                         return true;
                     });
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         const auto a = applied_at.find({k, T});
                         if (a != applied_at.end()) at[k] = a->second;
                     }
                 }
                 if (!all) ++answer_timeouts;
                 const double paused_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - barrier_wall).count();
-                lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + std::to_string(at[0]) + "," +
-                                 std::to_string(at[1]) + "],\"answered\":" + (all ? "true" : "false") +
+                std::string at_js;
+                for (int k = 0; k < NA; ++k) at_js += (k ? "," : "") + std::to_string(at[size_t(k)]);
+                lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + at_js +
+                                 "],\"answered\":" + (all ? "true" : "false") +
                                  ",\"wall_paused_s\":" + std::to_string(paused_s) + ",\"resume_to_ns\":" +
                                  std::to_string(std::min(T + substep_ns, end_ns + substep_ns)) + "}");
                 RunTo(T + substep_ns);   // D166: one sub-step; the next barrier's wait loop paces the rest
@@ -1494,7 +1514,7 @@ int main(int argc, char** argv) {
         }
         // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
         if (is_live && !lc.lockstep) {
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
                 hold.header.stamp.sec = int32_t(end_ns / 1000000000);
                 hold.header.stamp.nanosec = uint32_t(end_ns % 1000000000);
@@ -1507,7 +1527,7 @@ int main(int argc, char** argv) {
         for (auto& t : vo) t.join();
         integ_stop = true;
         if (integrator.joinable()) integrator.join();
-        for (int k = 0; k < 2; ++k) {   // D168: reap the estimator workers
+        for (int k = 0; k < NA; ++k) {   // D168: reap the estimator workers
             if (feeders[k].joinable()) feeders[k].join();
             if (worker_fd[k] >= 0) ::close(worker_fd[k]);
             if (worker_pid[k] > 0) {
@@ -1537,7 +1557,7 @@ int main(int argc, char** argv) {
         res << "wall_s: " << wall_s << "\nend_to_end_rtf: " << (wall_s > 0 ? lc.end_s / wall_s : 0)
             << "   # sim seconds per wall second, whole run incl. startup; gz's own view is gz_stats.jsonl\n"
             << "agents:\n";
-        for (int k = 0; k < 2; ++k) {
+        for (int k = 0; k < NA; ++k) {
             const long n = std::max(1L, tagg[k].n);
             res << "  - {agent: " << k << ", frames: " << lanes[k].frames << ", keyframes: " << lanes[k].keyframes
                 << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k]
