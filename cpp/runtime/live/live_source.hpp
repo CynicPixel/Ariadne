@@ -53,8 +53,23 @@ struct StreamMessage {
 
 /// The header stamp of a CDR message that starts with std_msgs/Header (Image, CameraInfo, Imu, PoseStamped):
 /// bytes 4..12 after the encapsulation header. -1 for untimed types.
+/// The mover's answer (std_msgs/String JSON): its "applied_ns" + 1, else -1 (untimed). The +1 orders an answer after
+/// the sensor data of the instant it was applied, so the reorderer HOLDS both agents' answers until the watermark
+/// passes and releases them in (stamp, topic) order: canonical, whichever arrived first (D165: at a paused barrier the
+/// two answers arrived in either order, and two EGL lockstep runs recorded them swapped, 2026-10-23).
+inline int64_t AnswerStamp(const std::vector<uint8_t>& b) {
+    if (b.size() < 8) return -1;
+    uint32_t n;
+    std::memcpy(&n, b.data() + 4, 4);
+    if (b.size() < 8 + size_t(n)) return -1;
+    const std::string js(reinterpret_cast<const char*>(b.data() + 8), n ? n - 1 : 0);
+    const auto p = js.find("\"applied_ns\":");
+    if (p == std::string::npos) return -1;
+    return std::stoll(js.substr(p + 13)) + 1;
+}
+
 inline int64_t PeekStamp(const std::string& type, const std::vector<uint8_t>& b) {
-    if (type == "std_msgs/msg/String") return -1;
+    if (type == "std_msgs/msg/String") return AnswerStamp(b);
     if (b.size() < 12 || b[1] != 0x01) throw std::runtime_error("live: short or non-little-endian CDR message");
     int32_t sec;
     uint32_t nsec;

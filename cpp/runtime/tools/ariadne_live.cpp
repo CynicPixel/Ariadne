@@ -331,7 +331,9 @@ int main(int argc, char** argv) {
             route[t["right_info"].as<std::string>()] = {k, "info"};
             route[a["live_topics"]["mover_state"].as<std::string>()] = {k, "mover_state"};
             cmd_topic[k] = a["live_topics"]["cmd"].as<std::string>();
-            for (const char* r : {"left_image", "right_image", "gt_pose", "imu"}) timed.insert(t[r].as<std::string>());
+            // every stamped sensor stream is timed (D165): a message released on arrival (watermark already past it)
+            // would land in ARRIVAL order against a same-stamp message of another topic (camera_info vs image_raw)
+            for (const char* r : {"left_image", "right_image", "left_info", "right_info", "gt_pose", "imu"}) timed.insert(t[r].as<std::string>());
         }
         if (cmd_topic.size() != 2) throw std::runtime_error("live: expected 2 agents in mission_live.json");
 
@@ -340,6 +342,8 @@ int main(int argc, char** argv) {
         // them below is deterministic in replay.
         std::map<std::pair<int, int64_t>, bool> answers;
         std::map<std::pair<int, int64_t>, int64_t> applied_at;   // the mover's applied_ns per answer (lockstep log)
+        std::set<std::pair<int, int64_t>> arrived;   // answers seen on the link (lockstep waits on these: the reorderer
+                                                     // holds an answer until the world resumes, so `answers` would never fill)
         bool input_done = false;
         std::mutex progress_mu;
         std::condition_variable progress_cv;
@@ -446,6 +450,15 @@ int main(int argc, char** argv) {
                         m.topic = f.topic;
                         const auto it = route.find(f.topic);
                         const std::string role = it == route.end() ? "" : it->second.second;
+                        if (role == "mover_state" && lc.lockstep) {
+                            const std::string js = runtime::ros_cdr::DecodeString(f.payload.data(), f.payload.size());
+                            const auto q = js.find("\"cmd_stamp_ns\":");
+                            if (q != std::string::npos) {
+                                std::lock_guard<std::mutex> lk(progress_mu);
+                                arrived.insert({it->second.first, std::stoll(js.substr(q + 15))});
+                                progress_cv.notify_all();
+                            }
+                        }
                         m.type = role == "image" ? "sensor_msgs/msg/Image"
                                  : role == "gt" ? "geometry_msgs/msg/PoseStamped"
                                  : role == "imu" ? "sensor_msgs/msg/Imu"
@@ -1068,7 +1081,7 @@ int main(int argc, char** argv) {
                     std::unique_lock<std::mutex> lk(progress_mu);
                     all = progress_cv.wait_for(lk, std::chrono::seconds(30), [&] {
                         if (input_done) return true;
-                        for (const auto& w : wait_for) if (!answers.count(w)) return false;
+                        for (const auto& w : wait_for) if (!arrived.count(w)) return false;
                         return true;
                     });
                     for (int k = 0; k < 2; ++k) {
