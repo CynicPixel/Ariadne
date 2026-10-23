@@ -267,8 +267,11 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default", l
     agents = "".join(agent_xml(scene, k, rig, scene_json, scripts[k], live) for k in range(len(scripts)))
     world = world_xml(scene, model_xml, extra=agents)
     if live:
-        if not rtf > 0:
-            raise MissionError("live: rtf must be > 0")
+        # rtf 0 = unthrottled ("as fast as possible"): gz-sim8 SimulationRunner.cc L205-208 sets updatePeriod=0ms
+        # for desiredRtf < 1e-9 [VERIFIED web 2026-10-23]. Negative stays an error. Lockstep gate runs use 0; the
+        # value is recorded in the manifest either way.
+        if rtf < 0:
+            raise MissionError("live: rtf must be >= 0 (0 = unthrottled)")
         if "<real_time_factor>1.0</real_time_factor>" not in world:
             raise MissionError("live: the world's real_time_factor element was not found")
         world = world.replace("<real_time_factor>1.0</real_time_factor>", f"<real_time_factor>{_f(rtf)}</real_time_factor>", 1)
