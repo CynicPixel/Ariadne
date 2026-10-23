@@ -180,7 +180,7 @@ fi
 mkdir -p /opt/ariadne/src /opt/ariadne/results
 cd /opt/ariadne/src
 aws s3 cp \$RUN/input/repo.tar.gz - | tar xz
-export ARIADNE_RESULTS=/opt/ariadne/results
+export ARIADNE_RESULTS=/opt/ariadne/results ARIADNE_RESULTS_URI=\$RUN/output/results   # jobs may upload as they go
 echo '$cmd_b64' | base64 -d > /opt/ariadne/test.sh
 bash /opt/ariadne/test.sh
 EOF

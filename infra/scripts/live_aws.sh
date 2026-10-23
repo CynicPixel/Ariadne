@@ -7,6 +7,13 @@
 #   infra/scripts/live_aws.sh payload SCENE        build outputs + the live scene -> S3 (SHA256SUMS); prints the URI
 #   infra/scripts/live_aws.sh smoke                [SMOKE-TEST] NVIDIA EGL in ariadne/sim on g4dn (~15 min)
 #   infra/scripts/live_aws.sh run SCENE END_S      payload + images -> live.sh run + replay x2 on the instance
+#   infra/scripts/live_aws.sh batch JOBS MAX_MIN   lockstep jobs, one after another on one instance (D165; 4.3 gate):
+#       JOBS: one job per line "PRESET SEED END_S PLANNER_CONFIG|-" (- = the 1.8 placeholder row); every job runs
+#       with ARIADNE_LOCKSTEP=1 and ARIADNE_SHADOW_MAP_CONFIG=configs/mission/mission_v2.yaml. Scenes must be composed
+#       locally first (live.sh compose PRESET SEED 0.15). FIRST, an EGL reproducibility check: ci_tiny seed 0, 20 s,
+#       twice, lockstep_repro_check.py; the batch STOPS if it fails. Each job's slim result (everything but
+#       inputs.mcap, ~10 GB per 200 s run, and sockets) goes to S3 as soon as it ends, so a spot interruption loses
+#       one job only. MAX_MIN <= 240 (spinup's cap): split long gates into several batches.
 #
 # The build outputs are made locally (the 2-job dev container) and shipped, not rebuilt on 4 vCPUs:
 #   build/docker/cpp/runtime/ariadne_live, build/sim-plugins/*.so, build/ros2/install/, SCENE/.
@@ -44,13 +51,13 @@ cmd_push() {
   done
 }
 
-cmd_payload() {
-  local scene="$1" id stage
+cmd_payload() {   # SCENE... (one or more scene directories)
+  local id stage
   id="$(date -u +%Y%m%dT%H%M%SZ)"
   stage="$REPO_ROOT/build/live_payload/$id"
   mkdir -p "$stage/p"
   (cd "$REPO_ROOT" && tar cf - build/docker/cpp/runtime/ariadne_live build/sim-plugins/libariadne_kinematic_mover.so \
-     build/ros2/install "$scene") | tar xf - -C "$stage/p"
+     build/ros2/install "$@") | tar xf - -C "$stage/p"
   (cd "$stage/p" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
   tar czf "$stage/payload.tar.gz" -C "$stage" p
   local uri="s3://$(bucket)/runs/live-payload-$id/payload.tar.gz"
@@ -113,10 +120,65 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes 60 -- "$(cat "$script")"
 }
 
+cmd_batch() {
+  local jobs="$1" max_min="$2"
+  [ -f "$REPO_ROOT/$jobs" ] || { log "no job file $jobs"; exit 2; }
+  local scenes=(build/live/scenes/ci_tiny_0) preset seed end_s cfg
+  while read -r preset seed end_s cfg; do
+    { [ -z "$preset" ] || [ "${preset:0:1}" = "#" ]; } && continue
+    [ -f "$REPO_ROOT/build/live/scenes/${preset}_${seed}/mission_live.sdf" ] || { log "compose ${preset} ${seed} first"; exit 2; }
+    [ "$cfg" = "-" ] || [ -f "$REPO_ROOT/$cfg" ] || { log "no planner config $cfg"; exit 2; }
+    [ $(( ${end_s%.*} % 5 )) = 0 ] || { log "END_S $end_s: lockstep needs a multiple of the 5 s replan"; exit 2; }
+    scenes+=("build/live/scenes/${preset}_${seed}")
+  done < "$REPO_ROOT/$jobs"
+  local refs; refs="$(cmd_push)"
+  local uri; uri="$(cmd_payload $(printf '%s\n' "${scenes[@]}" | sort -u))"
+  local script="$REPO_ROOT/build/live_payload/batch-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<BATCH
+aws s3 cp $uri - | tar xz -C /tmp
+(cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
+cp -a /tmp/p/. . && cp /tmp/p/SHA256SUMS \$R/
+cp $jobs \$R/jobs.txt
+BATCH
+  cat <<'BATCH'
+export ARIADNE_LOCKSTEP=1 ARIADNE_SHADOW_MAP_CONFIG=configs/mission/mission_v2.yaml
+slim() {   # a run directory without its recording -> $R/$2.tar.gz, uploaded at once
+  tar czf $R/$2.tar.gz --exclude='*.sock' --exclude='inputs.mcap' "$1"
+  if [ -n "${ARIADNE_RESULTS_URI:-}" ]; then aws s3 cp $R/$2.tar.gz $ARIADNE_RESULTS_URI/$2.tar.gz --only-show-errors || true; fi
+}
+# 1. EGL reproducibility (lockstep is verified on llvmpipe only): the same seed twice, compared; stop if it differs.
+for i in 1 2; do infra/scripts/live.sh run build/live/scenes/ci_tiny_0 build/live/repro 20 > $R/repro_run$i.log 2>&1 || true; done
+if ! python3 python/analysis/lockstep_repro_check.py $(ls -d build/live/repro/live-*/ | head -1) \
+     $(ls -d build/live/repro/live-*/ | tail -1) $R/repro_check.json > $R/repro_check.txt 2>&1; then
+  echo "EGL repro check FAILED: batch stopped" | tee -a $R/batch.log
+  slim build/live/repro repro
+  exit 4
+fi
+echo "EGL repro check PASS" | tee -a $R/batch.log
+slim build/live/repro repro
+# 2. The jobs, in file order.
+n=0
+while read -r preset seed end_s cfg; do
+  { [ -z "$preset" ] || [ "${preset:0:1}" = "#" ]; } && continue
+  n=$((n + 1)); name=$(printf 'job%02d_%s_%s_%s' $n "$preset" "$seed" "$(basename "${cfg%.yaml}")")
+  t0=$(date +%s)
+  if [ "$cfg" = "-" ]; then unset ARIADNE_PLANNER_CONFIG; else export ARIADNE_PLANNER_CONFIG="$cfg"; fi
+  rc=0
+  infra/scripts/live.sh run build/live/scenes/${preset}_${seed} build/live/batch/$name $end_s > $R/$name.log 2>&1 || rc=$?
+  echo "$name exit $rc wall_s $(( $(date +%s) - t0 ))" | tee -a $R/batch.log
+  slim build/live/batch/$name $name
+  if [ -n "${ARIADNE_RESULTS_URI:-}" ]; then aws s3 cp $R/batch.log $ARIADNE_RESULTS_URI/batch.log --only-show-errors || true; fi
+done < $R/jobs.txt
+BATCH
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes "$max_min" -- "$(cat "$script")"
+}
+
 case "${1:-}" in
   push) shift; cmd_push "$@" ;;
   payload) shift; cmd_payload "$@" ;;
   smoke) shift; cmd_smoke "$@" ;;
   run) shift; cmd_run "$@" ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  batch) shift; cmd_batch "$@" ;;
+  *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
