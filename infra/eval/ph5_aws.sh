@@ -12,7 +12,9 @@
 #      Calibration files go to results. HILTI=extras|skip for reruns (below).
 #   3. build ariadne_sim_vo from the shipped tree in the image
 #   4. the dark recordings from S3 (keys in ph5_dark_manifest.txt) -> 4 replay rows (dark lamp / dark fixed x no D / sensor D), agent 0, 1000 frames,
-#      sim_v1 perception + sim_v2 slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0)
+#      sim_v1 perception + sim_v2_vo slam: the configs of D69's lit rows on the same trajectories (ci_tiny seed 0).
+#      sim_v2_vo IS D142's "sim_v2" (L2/D101 renamed the visual-only v2 path, values unchanged, and made sim_v2 full
+#      VIO, which refuses to run without --imu-noise: run 20261023T105733Z-cpux86-dbfd05 failed all 10 rows on it)
 #      ROWS=d145 instead runs the §31.5 rows of D145-D147 (below): Stage 3 equality, features on the proxy, active
 #      exposure, Failure E, the lamp sweep and the brightness-matched fixed-light row. ROWS=lighting (default) = D142's.
 set -uo pipefail
@@ -140,7 +142,7 @@ run() {   # name rec degradation cpus [perception config] [extra tool args...]
        -e ARIADNE_GIT_COMMIT="$GIT_COMMIT" -e ARIADNE_GIT_DIRTY=false -e ARIADNE_IMAGE_DIGEST="$(cat "$R/image_id.txt")" \
        "$IMAGE" /work/build/aws/cpp/runtime/ariadne_sim_vo --rec "/rec/$rec/rec" --scene "/rec/$rec/scene" --agent 0 \
        --frames 1000 --seed 1 --perception-config "/work/configs/perception/$pcfg.yaml" \
-       --slam-config /work/configs/slam/sim_v2.yaml "${extra[@]}" --out "/out/$name" > "$R/run_$name.log" 2>&1; then
+       --slam-config /work/configs/slam/sim_v2_vo.yaml "${extra[@]}" --out "/out/$name" > "$R/run_$name.log" 2>&1; then
     echo "RUN_OK $name $(( $(date +%s) - s0 ))s"
   else
     echo "RUN_FAILED $name"
