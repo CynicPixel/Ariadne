@@ -99,11 +99,11 @@ public:
         }
         const auto t0 = std::chrono::steady_clock::now();
         cv::Mat lin;
-        gray.convertTo(lin, CV_32F, 1.0 / (255.0 * photo->exposure_gain));   // Stage 4: to the reference exposure
+        gray.convertTo(lin, CV_32F, 1.0 / (255.0 * photo->ExposureGain()));   // Stage 4: to the reference exposure
         cv::Mat z;
         Z.convertTo(z, CV_32F);
         z.setTo(std::numeric_limits<float>::quiet_NaN(), supported == 0);
-        const double lamp_rel = intensity_rel_ * photo->lamp_scale;
+        const double lamp_rel = intensity_rel_ * photo->LampScale();
         perception::radiometric::AlbedoProxy a =
             perception::radiometric::FalloffNormalize(lin, z, K_, calib_, lamp_rel, p_.params, R1_);
         ms_.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());

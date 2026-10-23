@@ -13,6 +13,7 @@
 // joins the two, which is why it takes both.
 // ---------------------------------------------------------------------------
 #include "core/config/config.hpp"
+#include "perception/exposure_control/exposure_config.hpp"
 #include "perception/radiometric/falloff_config.hpp"
 #include "perception/radiometric/radiometric_config.hpp"
 
@@ -173,6 +174,7 @@ struct PerceptionConfig {
     StereoMatchParams stereo_match;
     radiometric::RadiometricParams radiometric;   // 2.2; mode off unless the config has a radiometric: section
     radiometric::FalloffStageParams falloff;      // 5.2 Stage 3 (D146); mode off unless the config has a falloff: section
+    exposure::ExposureControlStage exposure_control;   // 5.3 (D147); mode off unless the config has the section
     ReassociationParams reassociation;
 };
 
@@ -224,6 +226,10 @@ inline void ValidatePerception(const PerceptionConfig& c) {
     if (c.name.empty()) fail("name must not be empty");
     // Arch §6.2 order: flat field -> VST -> falloff. Without Stage 1 the vignette would be divided into the albedo.
     if (c.falloff.Enabled() && !c.radiometric.Enabled()) fail("falloff needs the radiometric stage (flat field) on");
+    // D147: the VST noise model is fitted once and gain changes it; auto/on also hold 8 frames before any decision.
+    if (c.exposure_control.Enabled() && c.radiometric.Vst()) {
+        fail("exposure_control needs radiometric mode off or flat_only (the VST fit does not follow gain changes)");
+    }
     // D146: the proxy exists at keyframes only, so detection on it needs the keyframe cadence.
     if (c.falloff.features == "proxy" && c.tracker.replenish != "keyframe") {
         fail("falloff features: proxy needs tracker replenish: keyframe");
@@ -435,6 +441,11 @@ inline PerceptionConfig ParsePerception(StrictConfig& config) {
     if (config.Has("falloff")) {
         StrictConfig fs = config.Section("falloff");
         c.falloff = radiometric::ParseFalloff(fs);
+    }
+    // Optional section (5.3, D147): absent means mode off, the controller does not exist.
+    if (config.Has("exposure_control")) {
+        StrictConfig es = config.Section("exposure_control");
+        c.exposure_control = exposure::ParseExposureControl(es);
     }
 
     if (config.Has("reassociation")) {

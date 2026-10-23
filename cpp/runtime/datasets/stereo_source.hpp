@@ -57,12 +57,35 @@
 
 namespace ariadne::runtime {
 
-/// §4.1 `photo` (5.2, D146): the photometric state the frame was taken with, for Stage 4 (divide out exposure x
-/// gain) and Stage 3 (the lamp power). Set only when the pixels are LINEAR in radiance: in sim, when D decodes the
-/// sRGB render (input_transfer: srgb, D130). Absent means "not known to be linear": Stage 3 refuses such frames.
+/// §4.1 `photo` (5.2 D146, 5.3 D147): the photometric state the frame was ACTUALLY taken with -- the report half of
+/// the actuator contract (D147). Stage 4 (exposure x gain), Stage 3 (the lamp power), the known-gain LK ratio and
+/// the exposure controller read only this, never a command. Set only when the pixels are LINEAR in radiance: in
+/// sim, when D decodes the sRGB render (input_transfer: srgb, D130). Absent means "not known to be linear".
 struct FramePhoto {
-    double exposure_gain = 1.0;   // exposure x analog gain x digital gain (D's relative values)
-    double lamp_scale = 1.0;      // what scales the lamp's radiance after the render: D radiance_scale x lamp_power
+    double exposure_rel = 1.0;    // relative to the rig's nominal exposure (seconds = exposure_rel x t_ref_s)
+    double gain = 1.0;            // linear analog gain
+    double digital_gain = 1.0;    // D's digital gain (fixed by the config; not actuated)
+    double lamp_rel = 1.0;        // lamp power relative to the lamp calibration's intensity_ref (replay: D lamp_power)
+    double radiance_scale = 1.0;  // D's radiance scale (fixed by the config; scales the lamp's light in a lamp-only scene)
+    /// The newest command this frame reflects, in whole or in part (0: none yet), and the stamp at which it reached
+    /// the actuator (-1: none). Replay applies a command on the next frame, so applied_ns is that frame's stamp.
+    uint64_t decision_id = 0;
+    int64_t applied_ns = -1;
+    bool clamped = false;         // the sink applied something other than the command
+    std::string clamp_reason;
+
+    double ExposureGain() const { return exposure_rel * gain * digital_gain; }
+    double LampScale() const { return radiance_scale * lamp_rel; }
+    /// What multiplies every pixel's signal: the known brightness ratio between two frames of one scene.
+    double Brightness() const { return ExposureGain() * LampScale(); }
+};
+
+/// The command half of the actuator contract (5.3, D147): what the controller asks for. A sink applies commands in
+/// decision_id order; a newer command supersedes a pending older one (the older is dropped, never applied late).
+struct PhotometricCommand {
+    uint64_t decision_id = 0;   // increasing, from 1
+    int64_t decided_ns = 0;     // the stamp of the frame the decision was made on
+    double exposure_rel = 1.0, gain = 1.0, lamp_rel = 1.0;   // the FramePhoto units
 };
 
 /// The carried lamp as the recording rendered it, and whether it was the only light (5.2, D146).
@@ -122,6 +145,12 @@ public:
     virtual std::string ImuNoiseConfig() const { return "none"; }
     /// The carried lamp (5.2, D146); absent when the source has none or does not record it (EuRoC, Hilti).
     virtual std::optional<LampRig> Lamp() const { return std::nullopt; }
+    /// The actuator seam (5.3, D147). A source that can act on exposure, gain and lamp says so; SetPhotometric then
+    /// takes effect on a LATER frame, whose `photo` reports what was applied. A source that cannot actuate throws.
+    virtual bool CanActuatePhotometric() const { return false; }
+    virtual void SetPhotometric(const PhotometricCommand& /*cmd*/) {
+        throw std::logic_error("this source has no photometric actuator");
+    }
 };
 
 // --- EuRoC ---------------------------------------------------------------------
@@ -186,6 +215,31 @@ private:
     StereoPairs pairs_;
     std::vector<TimedPose> gt_;
 };
+
+// --- Replay actuator (5.3, D147) ------------------------------------------------------
+
+/// D's photometric state in the FramePhoto units (no command applied yet).
+inline FramePhoto PhotoOf(const perception::DegradationParams& d) {
+    FramePhoto p;
+    p.exposure_rel = d.exposure;
+    p.gain = d.analog_gain;
+    p.digital_gain = d.digital_gain;
+    p.lamp_rel = d.lamp_power;
+    p.radiance_scale = d.radiance_scale;
+    return p;
+}
+
+/// Apply a command to D from the frame stamped `t_ns` on, and report it. D itself has no limits (the controller
+/// keeps its own), so replay never clamps; a live sink may.
+inline void ApplyPhotometric(perception::DegradationParams& d, const PhotometricCommand& cmd, int64_t t_ns,
+                             FramePhoto& photo) {
+    d.exposure = cmd.exposure_rel;
+    d.analog_gain = cmd.gain;
+    d.lamp_power = cmd.lamp_rel;
+    photo = PhotoOf(d);
+    photo.decision_id = cmd.decision_id;
+    photo.applied_ns = t_ns;
+}
 
 // --- Simulator recording ---------------------------------------------------------
 
@@ -315,6 +369,17 @@ public:
     core::ImuNoise ImuNoiseModel() const override { return imu_noise_ ? imu_noise_->noise : core::ImuNoise{}; }
     std::string ImuNoiseConfig() const override { return imu_noise_ ? imu_noise_->name : "none"; }
     std::optional<LampRig> Lamp() const override { return lamp_; }
+    /// Replay actuator (D147): D's exposure, analog gain and lamp_power, only on linear frames (D's sRGB decode).
+    bool CanActuatePhotometric() const override {
+        return degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb;
+    }
+    void SetPhotometric(const PhotometricCommand& cmd) override {
+        if (!CanActuatePhotometric()) throw std::logic_error("sim: photometric commands need D with input_transfer: srgb");
+        if (cmd.decision_id <= photo_.decision_id || (pending_cmd_ && cmd.decision_id <= pending_cmd_->decision_id)) {
+            throw std::invalid_argument("sim: photometric decision_id must increase");
+        }
+        pending_cmd_ = cmd;   // supersedes any pending older one (dropped, never applied late)
+    }
 
     /// Read the canonical (clean) IMU stream and apply the seeded noise operator `p` (L2, D101;
     /// core/inertial/imu_noise_operator.hpp). The seed derives from the run seed and the agent, as D's do. A config
@@ -350,6 +415,7 @@ public:
         }
         degradation_ = d.params;
         degradation_name_ = d.name;
+        photo_ = PhotoOf(d.params);
         threads_ = threads;
         const uint64_t root = core::DeriveSeed(run_seed, core::seed_purpose::kDegradation);
         const std::string agent = "agent" + std::to_string(agent_);
@@ -419,6 +485,11 @@ public:
                     depth_seen[0] = perception::ApplyLensDepth(r.depth, map_);
                     depth_seen[1] = perception::ApplyLensDepth(WarpDepthToRight(r.depth, lens_.render_fx, baseline), map_);
                 }
+                // A pending command (5.3, D147) takes effect on this pair, before D runs on it.
+                if (pending_cmd_) {
+                    ApplyPhotometric(*degradation_, *pending_cmd_, t, photo_);
+                    pending_cmd_.reset();
+                }
                 for (int c = 0; c < 2; ++c) {
                     core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
                     if (degradation_) {
@@ -432,10 +503,7 @@ public:
                 }
                 pending.erase(t);
                 // Linear pixels only with D's sRGB decode (D130): then the photometric state is D's (D146).
-                if (degradation_ && degradation_->input_transfer == perception::InputTransfer::kSrgb) {
-                    const perception::DegradationParams& d = *degradation_;
-                    done.photo = FramePhoto{d.exposure * d.analog_gain * d.digital_gain, d.radiance_scale * d.lamp_power};
-                }
+                if (CanActuatePhotometric()) done.photo = photo_;
                 done.agent = uint32_t(agent_);
                 done.id = n;
                 on_frame(done);
@@ -452,6 +520,8 @@ private:
         checksum_ = kUnknownField;
     int agent_ = 0;
     std::optional<LampRig> lamp_;
+    FramePhoto photo_;                                 // D's state as applied to the latest frame (D147)
+    std::optional<PhotometricCommand> pending_cmd_;    // applied to the next complete pair
     size_t frames_ = 0;
     int found_ = 0;
     perception::LensModel lens_;

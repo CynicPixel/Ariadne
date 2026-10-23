@@ -106,7 +106,9 @@ TEST(FalloffGlue, UndoesExposureAndLampPower) {
     const rm::LampCalibration c = rm::LoadLampCalibration(kCalib);
     LampRig lamp = Rig(c);
     lamp.intensity = 0.5 * c.intensity_ref;
-    const FramePhoto photo{2.0, 0.8};
+    FramePhoto photo;
+    photo.exposure_rel = 2.0;   // exposure x gain = 2
+    photo.lamp_rel = 0.8;       // D lamp_power 0.8
     const double lamp_rel = 0.5 * 0.8;
     const int w = 640, h = 480;
     const double z0 = 1.5;
@@ -121,7 +123,7 @@ TEST(FalloffGlue, UndoesExposureAndLampPower) {
             const double ci = c.cos_incidence ? L[2] / r : 1.0;   // plane normal -z, towards the lamp
             const double a = 0.2 + 0.4 * (((x / 16) + (y / 16)) % 2);
             const double I = a / c.calib_albedo * c.gain_A * lamp_rel * rid * ci / (c.c_prime_m2 + r * r);
-            gray.at<uchar>(y, x) = cv::saturate_cast<uchar>(255.0 * I * photo.exposure_gain);
+            gray.at<uchar>(y, x) = cv::saturate_cast<uchar>(255.0 * I * photo.ExposureGain());
             truth.at<float>(y, x) = static_cast<float>(a);
         }
     sup.colRange(0, 40).setTo(0);   // no SGBM support on the left: no depth there, so no albedo either

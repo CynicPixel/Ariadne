@@ -29,6 +29,7 @@
 #include "runtime/metrics/trajectory_io.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "runtime/tools/feature_engine_glue.hpp"
+#include "runtime/tools/exposure_glue.hpp"
 #include "runtime/tools/falloff_glue.hpp"
 #include "runtime/tools/reassociation_glue.hpp"
 #include "slam/inertial/attitude.hpp"
@@ -199,6 +200,11 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     // 5.2 Stage 3 (D146): the albedo proxy of every keyframe; refuses here, before any frame, if its inputs are wrong.
     KeyframeFalloff falloff(pcfg.falloff, args.lamp_calib, source.Lamp(), source.T_B_C0(), K_rect,
                             cv::Matx33d(rectifier.R1()));
+    // 5.3 (D147): the exposure + lamp co-controller at keyframes, commanding the source; refuses a source that
+    // cannot actuate. prev_photo / lk_rescales: known-gain LK (below), a no-op while the applied state is constant.
+    KeyframeExposure exposure(pcfg.exposure_control, source.CanActuatePhotometric());
+    std::optional<runtime::FramePhoto> prev_photo;
+    long lk_rescales = 0;
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
@@ -290,6 +296,13 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             rectifier.Rectify(frame.left, frame.right, l, r);
         }
 
+        // 5.3 (D147): known-gain LK. When the applied brightness changed since the last frame, the tracker's previous
+        // pyramid is brought to this frame's level first (LK has no gain term).
+        if (frame.photo && prev_photo && frame.photo->Brightness() != prev_photo->Brightness()) {
+            tracker.RescalePrevious(frame.photo->Brightness() / prev_photo->Brightness());
+            ++lk_rescales;
+        }
+        prev_photo = frame.photo;
         auto t0 = std::chrono::steady_clock::now();
         bool have_rot = false;
         core::Mat3 R_pc = core::Mat3::Identity();
@@ -302,6 +315,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 for (int c = 0; c < 3; ++c) Rt(r, c) = R_pc(c, r);   // R_C(cur)_C(prev): prev-camera rays into the current one
             H_pred = K_rect * Rt * K_rect.inv();
         }
+        // The angular rate for the exposure controller's blur ceiling (§10.5); 0 without an IMU (ceiling = t_max_s).
+        const double omega_rad_s =
+            have_rot ? core::SO3Log(R_pc).norm() / (1e-9 * double(frame.t_ns - prev_frame_t_ns)) : 0.0;
         const bool seed_lk = have_rot && scfg.imu.seed_lk;
         gyro_seeded += seed_lk;
         const TrackedFrame tf = tracker.Process(l, static_cast<uint64_t>(i), args.seed, seed_lk ? &H_pred : nullptr);
@@ -464,6 +480,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 // the stage off); features: proxy uses it only for detection at Replenish below.
                 perception::radiometric::AlbedoProxy albedo;
                 if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
+                // 5.3 (D147): one controller decision per keyframe, from the state this frame reports as applied.
+                if (exposure.enabled()) source.SetPhotometric(exposure.Decide(l, *frame.photo, frame.t_ns, omega_rad_s, rr.fx));
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -631,6 +649,11 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     kv.bundle.albedo = albedo.albedo;   // empty unless Stage 3 ran (D146)
                     kv.bundle.albedo_valid = albedo.valid;
                     kv.bundle.albedo_feature_mask = albedo.feature_mask;
+                    if (exposure.enabled()) {   // §18.2 states, owned by 5.3 (D147): what this keyframe was taken with
+                        kv.bundle.exposure_state = runtime::ExposureState{exposure.ExposureSeconds(*frame.photo),
+                                                                          frame.photo->gain};
+                        kv.bundle.lamp_state = runtime::LampState{frame.photo->lamp_rel > 0.0, frame.photo->lamp_rel};
+                    }
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
@@ -739,6 +762,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     runtime::WriteTum((run_dir / "estimate_body.tum").string(), est_body);
     std::ofstream(run_dir / "vo_trace.csv") << trace.str();
     if (reassoc.enabled()) std::ofstream(run_dir / "reassoc_trace.csv") << reassoc.Trace();
+    if (exposure.enabled()) std::ofstream(run_dir / "exposure_trace.csv") << exposure.Trace();   // 5.3, D147
     // Ground truth goes under raw/, which .gitignore excludes: for EuRoC it is
     // the dataset's own data (InC-NC, D35), so evidence commits carry our
     // estimate and derived numbers but never a copy of the dataset.
@@ -771,6 +795,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.degradation_config = source.DegradationConfig();
     m.radiometric = source.Summary();
     if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
+    if (exposure.enabled()) m.extra["exposure_control"] = exposure.Summary();   // 5.3
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -997,6 +1022,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
     falloff.WriteResults(res);  // 5.2; nothing when Stage 3 is off
+    exposure.WriteResults(res); // 5.3; nothing when the controller is off
+    if (lk_rescales > 0) res << "known_gain_lk_rescales: " << lk_rescales << "\n";   // 5.3: only when the state varied
     if (reassoc.enabled()) res << reassoc.ResultsLine();
     res << features->ResultsYaml();   // 2.1: empty for orb
     if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10

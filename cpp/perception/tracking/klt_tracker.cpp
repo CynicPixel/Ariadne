@@ -7,6 +7,7 @@
 #include <opencv2/video/tracking.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <numeric>
 #include <set>
@@ -259,6 +260,14 @@ int KltTracker::AddTracks(const cv::Mat& detect, const cv::Mat& lk_gray, cv::Mat
         ++added;
     }
     return added;
+}
+
+void KltTracker::RescalePrevious(double ratio) {
+    if (!(ratio > 0.0) || !std::isfinite(ratio)) throw std::invalid_argument("KltTracker::RescalePrevious: ratio > 0");
+    if (ratio == 1.0 || prev_pyramid_.empty()) return;
+    cv::Mat level0;
+    prev_pyramid_.images[0].convertTo(level0, CV_8U, ratio);   // a copy: images[0] views the padded pyramid buffer
+    prev_pyramid_ = BuildPyramid(level0, params_);
 }
 
 int KltTracker::Replenish(const cv::Mat& gray) { return Replenish(gray, gray, cv::Mat()); }

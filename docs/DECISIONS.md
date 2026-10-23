@@ -4029,6 +4029,31 @@ service wrapper). No ROS or gz type goes below runtime (CLAUDE.md §3). The seam
 - **Ordering:** a sink applies commands in `decision_id` order. A newer command supersedes an older one that is
   still pending: the older is dropped, not applied late.
 
+**As built (5.3 replay code).**
+- **Structs** in `runtime/datasets/stereo_source.hpp`:
+  - `PhotometricCommand` (the command);
+  - `FramePhoto` (the report: `exposure_rel`, `gain`, `digital_gain`, `lamp_rel`, `radiance_scale`, `decision_id`,
+    `applied_ns`, `clamped`, `clamp_reason`; `Brightness()` is the LK ratio's input);
+  - `StereoSource::CanActuatePhotometric` / `SetPhotometric`;
+  - replay helpers `PhotoOf` / `ApplyPhotometric`.
+- **Glue:** `runtime/tools/exposure_glue.hpp`.
+- **Config:** `exposure_control:` in `perception/exposure_control/exposure_config.hpp`. The params moved to
+  `exposure_params.hpp`, OpenCV-free, so test_unit can parse them.
+- **Known-gain LK measured** (TrackerCadence.RescalePreviousAppliesTheKnownGain). The scene is shifted (2.3, 1.6) px
+  and made √2 brighter, half a stop, the controller's largest step:
+
+  | previous pyramid | tracks | median error |
+  |---|---|---|
+  | rebuilt × √2 | 327 | 0.015 px |
+  | not rescaled | 290 | 0.263 px |
+
+- **B's live-side notes (ack of the contract, 2026-10-23):**
+  - In lockstep the world pauses at 5 s barriers. A `light_config` call near a barrier is applied at the first step
+    after resume, and `applied_ns` is that sim time. Latency then quantises to the step.
+  - A refused call reports `clamped = true`, `clamp_reason = "service refused"`, and the PREVIOUS `lamp_rel` as
+    applied.
+  - Both are consistent with "the report says what the frame was actually lit with".
+
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
 Design: `docs/design/SPECTRAL_3.4.md`. Code:
