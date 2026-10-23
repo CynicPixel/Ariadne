@@ -12,6 +12,7 @@
  "markers_per_board": 17,
  "boards": [
   {"index": 0, "file": "board_0.pgm", "first_id": 0, "last_id": 16},
-  {"index": 1, "file": "board_1.pgm", "first_id": 17, "last_id": 33}
+  {"index": 1, "file": "board_1.pgm", "first_id": 17, "last_id": 33},
+  {"index": 2, "file": "board_2.pgm", "first_id": 34, "last_id": 50}
  ]
 }

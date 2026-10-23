@@ -331,8 +331,10 @@ def _validate_rest(p: Preset, g: float) -> None:
         raise PresetError(f"rooms.size_m lower bound must be >= {need:.2f} to contain corridor mouths")
     if r.size_m[1] > L.cell_m - 2 * 0.5:
         raise PresetError("rooms.size_m upper bound must leave >= 0.5 m of wall to the cell border")
-    if not 1 <= p.entrances.count <= 2:
-        raise PresetError("entrances.count must be 1 or 2")
+    if not 1 <= p.entrances.count <= 3:
+        raise PresetError("entrances.count must be 1..3")   # P8 D212: 3 agents; layout picks greedy-maximin rooms
+    if p.entrances.count > 2 and p.routes.template == "cross":
+        raise PresetError("routes.template 'cross' pairs two agents; use 'return' or 'loop' with 3 entrances")
     _range("target.path_length_m", p.target.path_length_m, lo=0.0)
     _range("structure.wall_height_m", p.structure.wall_height_m, lo=2.0)
     t = p.topology

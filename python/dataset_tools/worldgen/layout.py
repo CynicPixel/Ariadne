@@ -303,11 +303,19 @@ def build_base(preset: Preset, seed: int, attempt: int) -> Layout:
         raise Reject("not enough boundary rooms for the entrances")
     first = st.choice(boundary_rooms)
     chosen = [first]
-    if P.entrances.count == 2:
-        hops = hop_distances(adjacency(all_cells, L.tree_edges), first)
-        others = [c for c in boundary_rooms if c != first]
-        best = max(hops[c] for c in others)
-        chosen.append(st.choice([c for c in others if hops[c] == best]))
+    # Each further entrance maximizes the MINIMUM tree hop distance to those already chosen (greedy maximin,
+    # P8 D212) - for count 2 this is exactly the old farthest-room rule, so 2-entrance scenes are unchanged.
+    adj = adjacency(all_cells, L.tree_edges)
+    hops_from = {first: hop_distances(adj, first)}
+    while len(chosen) < P.entrances.count:
+        others = [c for c in boundary_rooms if c not in chosen]
+        if not others:
+            raise Reject("not enough boundary rooms for the entrances")
+        score = {c: min(hops_from[e][c] for e in chosen) for c in others}
+        best = max(score.values())
+        pick = st.choice([c for c in others if score[c] == best])
+        chosen.append(pick)
+        hops_from[pick] = hop_distances(adj, pick)
     for c in chosen:
         side = st.choice(exterior_sides(c))
         width = _grid_int_range(st, *P.corridors.width_m, g)

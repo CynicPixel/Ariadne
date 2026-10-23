@@ -4,13 +4,14 @@
 # target.path_length_m: set from the 1000-seed census (evaluation/runs/phase1/worldgen_census/).
 name: maze_dark
 lattice: {nx: 3, ny: 3, cell_m: 6.0}
-rooms: {count: [3, 4], size_m: [3.5, 5.0]}
+rooms: {count: [4, 5], size_m: [3.5, 5.0]}   # P8 D212: 3 entrance rooms + a separate target room
 corridors: {width_m: [1.0, 1.4], narrow_count: 1, narrow_width_m: [0.55, 0.70]}
 topology: {cover_edges_max: 2, extra_edges: 1, dead_end_stubs: 1}
-entrances: {count: 2, vestibule_m: 2.5}
+entrances: {count: 3, vestibule_m: 2.5}   # P8 D212: three agents, greedy-maximin start rooms
 target: {path_length_m: [10.0, 20.0]}
 clearance: {rho_agent_m: 0.20, rho_responder_m: 0.40}
 structure: {grid_m: 0.05, wall_height_m: [2.6, 3.0]}
+routes: {template: return}   # P8 D212: per-agent template; 'cross' pairs exactly two
 search: {max_attempts: 50}
 # Phase 8 (D211): maze_short's geometry, DARK (D131 lighting semantics, as ci_tiny_dark): ambient 0, no zone
 # lights, shadows on; the agent lamp (rig_stereo_v2) is the only light. The demo world per arch §42 items 1-2.
