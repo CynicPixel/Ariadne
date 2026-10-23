@@ -140,10 +140,12 @@ TEST(Phase4Planner, IntegratePlanRouteSmoke) {
     }
     EXPECT_FALSE(pa.egress.found) << "the target is behind the wall, unobserved";
     if (!pa.agents[0].nbv.options.empty()) {
-        EXPECT_EQ(pa.joint[0], 0);
+        // The joint pick is CBBA's (auction value, D115), not necessarily the utility-top option: any valid option.
+        ASSERT_GE(pa.joint[0], 0);
+        ASSERT_LT(size_t(pa.joint[0]), pa.agents[0].nbv.options.size());
         const Cell from{40, 10};
-        const auto [wp, yaw] = A.Route(pa, 0, 0, from);
-        EXPECT_DOUBLE_EQ(yaw, pa.agents[0].nbv.options[0].goal_yaw);
+        const auto [wp, yaw] = A.Route(pa, 0, pa.joint[0], from);
+        EXPECT_DOUBLE_EQ(yaw, pa.agents[0].nbv.options[size_t(pa.joint[0])].goal_yaw);
         double len = 0, px = (from.c + 0.5) * 0.05, py = (from.r + 0.5) * 0.05;
         for (const auto& [x, y] : wp) len += std::hypot(x - px, y - py), px = x, py = y;
         EXPECT_LE(len, prm.max_command_m + 1e-9);
