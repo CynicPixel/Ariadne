@@ -1,0 +1,103 @@
+<!doctype html>
+<!-- The splat panel (6.4; RECON_6 §1/§3, D190/D197). One Spark SplatMesh per keyframe-anchored submap, placed at the
+     table's T_W_anchor (row-major 4x4, anchor frame -> mission world W): a pose-graph update is a new matrix, never a
+     re-download. A chunk is fetched only when its file name (sid_n) changes. The label says what is shown (albedo
+     proxy / RGB ablation / initialisation only, D194-D195). Spark 2.3.1 + three 0.180.0, exact versions (Spark's
+     README pairing). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ariadne splats</title>
+<style>
+  :root { --bg: #0e1116; --fg: #d8dee9; --muted: #8b95a5; --accent: #e0a458; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; }
+  #hud { position: fixed; top: 8px; left: 8px; right: 8px; display: flex; gap: 12px; flex-wrap: wrap; pointer-events: none; }
+  .tag { background: rgba(0,0,0,.55); padding: 4px 8px; border-radius: 4px; }
+  #label { color: var(--accent); font-weight: 600; }
+  #status { color: var(--muted); }
+  canvas { display: block; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.js" } }
+</script>
+</head>
+<body>
+<div id="hud"><span class="tag" id="label">connecting…</span><span class="tag" id="status"></span></div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1116);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.02, 200);
+camera.up.set(0, 0, 1);                       // mission world W is z-up
+camera.position.set(-4, -4, 5);
+const controls = new OrbitControls(camera, renderer.domElement);
+scene.add(new SparkRenderer({ renderer }));
+scene.add(new THREE.AxesHelper(0.5));
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const meshes = new Map();                     // sid -> {chunk, mesh}
+let centred = false;
+
+function place(mesh, rowMajor) {
+  const m = new THREE.Matrix4();
+  m.set(...rowMajor);                         // Matrix4.set takes row-major arguments
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.copy(m);
+  mesh.matrixWorldNeedsUpdate = true;
+}
+
+async function apply(table) {
+  document.getElementById("label").textContent = table.label || "";
+  let gaussians = 0, bytes = 0;
+  for (const row of table.submaps) {
+    gaussians += row.gaussians; bytes += row.bytes;
+    const have = meshes.get(row.sid);
+    if (row.chunk && (!have || have.chunk !== row.chunk)) {
+      const r = await fetch(`/api/splat/chunk/${row.chunk}`);
+      if (!r.ok) continue;                    // replaced meanwhile: the next table brings the new name
+      const mesh = new SplatMesh({ fileBytes: new Uint8Array(await r.arrayBuffer()), fileType: "splat" });
+      await mesh.initialized;
+      place(mesh, row.T_W_anchor);
+      scene.add(mesh);
+      if (have) { scene.remove(have.mesh); have.mesh.dispose(); }
+      meshes.set(row.sid, { chunk: row.chunk, mesh });
+    } else if (have) {
+      place(have.mesh, row.T_W_anchor);       // re-anchoring: a matrix, no download
+    }
+  }
+  if (!centred && table.submaps.length) {     // look at the first anchor once
+    const T = table.submaps[0].T_W_anchor;
+    controls.target.set(T[3], T[7], T[11]);
+    camera.position.set(T[3] - 3, T[7] - 3, T[11] + 3);
+    centred = true;
+  }
+  document.getElementById("status").textContent =
+    `${table.submaps.length} submaps · ${gaussians.toLocaleString()} Gaussians · ${(bytes / 1e6).toFixed(1)} MB · v${table.version}`;
+}
+
+let busy = Promise.resolve();
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/splat`);
+  ws.onmessage = (e) => { const t = JSON.parse(e.data); busy = busy.then(() => apply(t)).catch(console.error); };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>

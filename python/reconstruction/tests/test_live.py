@@ -108,3 +108,59 @@ def test_chunk_is_32_bytes_per_gaussian_in_the_anchor_frame_and_table_places_it(
     assert t["label"] == "albedo proxy" and t["submaps"][0]["bytes"] == 32 * n
     np.testing.assert_allclose(np.reshape(t["submaps"][0]["T_W_anchor"], (4, 4)), se3(0.0, [1, 5, 0]))
     np.testing.assert_allclose(inv_se3(se3(0.4, [1, 2, 3])) @ se3(0.4, [1, 2, 3]), np.eye(4), atol=1e-12)
+
+
+def _spool_v2_one_agent(tmp, n=3):
+    """n keyframes of agent 0 with an albedo proxy (schema 2), the writer's exact format."""
+    import cv2
+    import yaml
+    h, w, f = 24, 32, 20.0
+    (tmp / "agent0").mkdir(parents=True)
+    (tmp / "lamp_calibration.yaml").write_text("name: t\n")
+    half = lambda p, a: cv2.imwrite(str(p), a.astype(np.float16).view(np.uint16))
+    bundles = []
+    for k in range(n):
+        stem = f"agent0/kf_{k}"
+        cv2.imwrite(str(tmp / f"{stem}_rgb.png"), np.zeros((h, w, 3), np.uint8))
+        half(tmp / f"{stem}_depth.png", np.full((h, w), 1.5, np.float32))
+        half(tmp / f"{stem}_sigma.png", np.full((h, w), 0.005, np.float32))
+        half(tmp / f"{stem}_albedo.png", np.full((h, w), 0.4, np.float32))
+        T = se3(0.0, [0.3 * k, 0, 0])
+        bundles.append({"role": "keyframe", "agent": 0, "kf_id": k, "t_ns": k, "frame_id_of_pose": 1,
+                        "T_WiC": [float(x) for x in T[:3, :].ravel()], "K": [f, f, (w - 1) / 2, (h - 1) / 2],
+                        "width": w, "height": h, "baseline_m": 0.1, "files": stem, "rgb_kind": "albedo_proxy",
+                        "exposure_state": {"exposure_gain": 1.0, "decision_id": 0}, "lamp_state": {"lamp_rel": 1.0},
+                        "mask": "none"})
+    y = {"schema_version": 2, "run_id": "r", "scene_id": "s", "lamp": {
+        "calibration": "lamp_calibration.yaml", "calibration_source": "x", "calibration_name": "t", "rig": "r",
+        "intensity": 6.0, "R_rect_raw": [1, 0, 0, 0, 1, 0, 0, 0, 1]},
+        "merge": {"ok": False, "T_O0_O1": [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0], "edge": "none"}, "bundles": bundles}
+    (tmp / "spool.yaml").write_text(yaml.safe_dump(y))
+    return tmp
+
+
+def test_service_cpu_init_writes_table_and_chunks_labelled(tmp_path):
+    from ariadne_recon.live import service
+    spool = _spool_v2_one_agent(tmp_path / "spool")
+    out = tmp_path / "splat"
+    assert service.main(["--spool", str(spool), "--out", str(out), "--backend", "cpu_init"]) == 0
+    t = json.loads((out / "table.json").read_text())
+    assert t["label"] == "albedo proxy — initialisation only, no GPU" and t["backend"] == "cpu_init"
+    (row,) = t["submaps"]
+    chunk = out / "chunks" / row["chunk"]
+    assert chunk.stat().st_size == row["bytes"] == SPLAT_BYTES * row["gaussians"] > 0
+    assert sorted(p.name for p in (out / "chunks").iterdir()) == [row["chunk"]]     # replaced chunks are removed
+    assert len((out / "service_log.jsonl").read_text().splitlines()) == 3
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["splat_backend"] == "cpu_init" and m["spool_schema"] == 2
+
+
+def test_service_refuses_a_keyframe_without_the_proxy(tmp_path):
+    import yaml
+    from ariadne_recon.live import service
+    spool = _spool_v2_one_agent(tmp_path / "spool")
+    y = yaml.safe_load((spool / "spool.yaml").read_text())
+    y["bundles"][1]["rgb_kind"] = "raw_radiance"
+    (spool / "spool.yaml").write_text(yaml.safe_dump(y))
+    with pytest.raises(SystemExit, match="never a fallback"):
+        service.main(["--spool", str(spool), "--out", str(tmp_path / "o"), "--backend", "cpu_init"])
