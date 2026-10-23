@@ -4339,3 +4339,105 @@ render.
 - the VO-side startup prefix (D87);
 - D91's pool rule goes to 7.3.
 
+
+## 2026-10-23 — D190: Phase 6 architecture — the GPU trains, the browser renders; only the active submap trains; budgets derived from a T4 measurement
+
+Design `docs/design/RECON_6.md` (preflight: arch §18–19, §29, D44, plan 6.1–6.4 and the exit gate; ALGORITHMS §2–4;
+SOTA survey RECON_6 Appendix A; OpenCV-native check Appendix B; advisor review). M reviewed it on 2026-10-23: the
+design is sound. Benchmark approved; the rest is built once D191–D195 are written.
+- **Split.** The python service (PyTorch + gsplat v1.5.3 pinned, Apache-2.0) trains. A browser renderer draws
+  the splats on the client GPU (every web renderer surveyed rasterises client-side, A.5). Two budgets, kept apart:
+  - T4 ms per iteration × iterations per keyframe ≤ the keyframe interval;
+  - browser splat count, sort rate and bytes per update.
+- **Measured inputs.**
+  - Keyframe rate: dark + lamp 4.4 KF/s per agent, lit 1.6 (D142 rows). That gives ~110 ms of GPU per keyframe for
+    two agents in the dark demo.
+  - No published T4 number exists for any candidate or for gsplat (A.3/A.4), so the iteration count comes from
+    `kaggle.sh bench`: train and render ms/iter against N, resolution and packed, with and without D-SSIM, plus the
+    append path.
+  - The demo T4 is shared with gz EGL and B's estimators on one g4dn.xlarge (B, 2026-10-23). The idle number is an
+    upper bound; the budget is measured with gz rendering.
+- **Bounded work.** Only the active submap trains (Gaussian-SLAM / GLC-SLAM). Closed submaps are frozen and sent once.
+  Submaps are anchored to their first keyframe in the agent's odometry frame O and close at 30 KF (arch §18.6: 20–40).
+  A PGO or O→W change is one 4×4 per submap, applied as a per-object transform in the renderer: no retraining and no
+  re-download. Exit-gate bullet 2 becomes a CPU unit test of that algebra.
+- **Seeding and loss.**
+  - Seeding: half-res Z back-projected where the current render's α < 0.5, with a radius check (Gaussian-SLAM); the
+    initial scale is the pixel footprint Z/f.
+  - Iterations: at least 40 % on the new keyframe (Gaussian-SLAM).
+  - Loss: 0.8 L1 + 0.2 D-SSIM (Kerbl 2023) plus a σ-weighted depth L1 (§19.3 L_photo + L_depth). L_light and the
+    §19.4 specular weight belong to the batch path (6.3).
+- **Interfaces** (agreed with B): `ariadne_live` tees each D168 `#kf` record (LinkFrame framing) to a recon socket, and
+  sends T_W_O[k] once per agent. The replay spool (RECON_1.7, schema bumped) feeds the same reader. The splat panel is
+  its own JS module on its own `/splat` websocket inside B's console.
+- **Open, with the user (through M):** judging-week GPU hosting (one T4 shared with gz, or a second GPU; on-demand
+  $0.558/h, quota 0; spot reclaimed 3× on 2026-10-23), and Spark instead of GaussianSplats3D (arch §29.3's example
+  is unmaintained per its own README).
+
+## 2026-10-23 — D191: the RTG-SLAM stability threshold, converted to keyframes rather than copied — δη_KF = 15 [ASSUMPTION]
+
+RTG-SLAM (arXiv 2404.19706) freezes a Gaussian once its confidence count reaches δη. δη = 100 gives 35.43 dB at
+17.31 FPS against 33.63 dB at δη = 50 (Table 15). That count is per **frame**: Replica processes every frame at
+30 Hz, so δη = 100 is about 3.3 s of consistent observation. Ariadne counts **keyframe updates**. Converted at equal
+observation time with the measured dark keyframe rate: 3.3 s × 4.4 KF/s ≈ **15**.
+- [ASSUMPTION] Equal time stands in for equal evidence. Keyframes are more distinct views than consecutive frames, so
+  15 errs towards freezing late (more optimisation, never a premature freeze).
+- In the lit (ablation) rate of 1.6 KF/s the same rule gives ~5. The lifecycle reads the run's measured rate, not a
+  constant.
+- Reported from the first spool run: the stable fraction over time, and the PSNR of frozen against unfrozen
+  Gaussians. Changed only through a measured ablation, never by eye.
+
+## 2026-10-23 — D192: the per-keyframe 3×4 exposure transform likely never switches on live; the batch path carries the evidence
+
+Arch §18.7 enables the affine only after ~5000 optimisation steps (Hierarchical 3DGS; skipping the delay is the
+"geometry mush" failure). Live, ~110 ms of GPU per keyframe at the dark rate leaves on the order of 10 iterations per
+keyframe (to be derived from the D190 benchmark). A 30-KF submap then gets ~300 steps, far below 5000.
+- **Decision.** The rule is kept exactly: a per-submap step counter, transform identity until 5000. It will therefore
+  most likely stay off live, and the live trace says so (`exposure_affine: off (steps N < 5000)` per submap).
+- **Evidence path.** The exit-gate exposure-delay ablation (on-time vs early) runs on the batch path (Kaggle or g4dn
+  on a spool), where submaps reach 5000 steps. Live never claims the transform.
+- With §19.1's normalisation in place the transform's job is small (arch §18.7), so its absence live costs little.
+  That claim is [UNVERIFIED] until the batch ablation measures it.
+
+## 2026-10-23 — D193: no clone/split densification on the live path — depth seeding is the only growth
+
+On the live path, Gaussians are added only by depth seeding at keyframes (α < 0.5 plus a radius check, D190) and
+removed only by pruning opacity < 0.005 (gsplat DefaultStrategy's threshold). No gradient-driven clone or split.
+- **Backing.** Gaussian-SLAM runs without clone or prune (RECON_6 A.2). LoopSplat and GLC-SLAM inherit that, and
+  RTG-SLAM grows from depth-sampled pixels only. gsplat's DefaultStrategy refines from step 500 to 15,000 with an
+  opacity reset every 3000 steps. A live submap never reaches those schedules (D192's step count), so running it would
+  be untested behaviour.
+- **Growth bound.** The live Gaussian count follows the observed surface area, which is what keeps the browser budget
+  (D190) predictable.
+- **Batch path.** The batch trainer may run DefaultStrategy or MCMC as an ablation row with its own entry. The default
+  stays depth-seeded on both paths, so live and batch reconstructions are the same model.
+
+## 2026-10-23 — D194: without a GPU the console still grows a map, labelled "initialisation only, no GPU"
+
+With no CUDA device, the service runs the RECON_1.7 CPU path (fuse + init, D44) on each keyframe. It streams those
+depth-seeded, **unoptimised** Gaussians to the same `/splat` panel: geometry from stereo depth, colour from the
+training image, no photometric optimisation.
+- The panel and the manifest say `splat_backend: cpu_init` and "initialisation only, no GPU". No PSNR/SSIM/LPIPS is
+  computed or quoted on this path; Chamfer against the GT mesh may be.
+- The realtime demo still needs a GPU (maintainer, D44). This path exists so a reclaimed or missing GPU degrades the
+  demo instead of blanking the panel.
+
+## 2026-10-23 — D195: training images are the albedo proxy by default; linear RGB on lit worlds is an ablation row
+
+Locked (CLAUDE.md §1, arch §19.1): the training images are the falloff-normalised albedo proxy. M's review
+(2026-10-23) adds that the demo world is dark, lit by the agents' own lamps (arch §42–43).
+- **Default.** The trainer refuses a record without the proxy: a `#kf` or spool record tagged `training_image: none`.
+  That refusal applies unless the run is configured as the RGB ablation. There is no silent fallback.
+- **Ablation row** (`training_image: rgb`, lit worlds only). Linear RGB, where the radiance is static (fixed lights),
+  so §19.1's coherence problem does not arise. It is labelled in the manifest and on the panel, and compared with the
+  proxy only on its own scene.
+- **The live chain to the proxy** (stated so nobody expects it sooner):
+  1. B's 5.3 lamp sink, because `KeyframeFalloff::Normalize` needs the frame's applied photometric state and live has
+     no D;
+  2. a dark demo world (Phase 8, unowned; M is raising it with the user);
+  3. a lamp calibration for that world's rig.
+- **Until then.** B's `#kf` carries the fields, tagged `none`. The trainer is built and gated on replay spools of
+  `ci_tiny_dark_0` (lamp-only, calibrated, proxy in `KeyframeBundle`, D146). The spool writer emitting the proxy is
+  6.1's first item.
+- **Display.** The panel shows the albedo proxy directly and is labelled so. §19.1's relit view needs a custom
+  renderer shader and is out of scope.

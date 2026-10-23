@@ -18,10 +18,16 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
 - **The GPU trains, the browser renders.** Every web splat renderer surveyed rasterises client-side (A.5), so the T4
   does no display rendering. Two budgets, kept separate:
   - **Train/update budget (T4):** ms per iteration at keyframe resolution × iterations per keyframe must fit the
-    keyframe interval (1–3 KF/s per agent, 2 agents). Unknown on a T4 — nobody publishes one (A.3/A.4) — so the
+    keyframe interval. **Measured keyframe rate:** dark + lamp 219 KF / 1000 frames at 20 Hz = 4.4 KF/s per agent,
+    lit 78 KF = 1.6 KF/s (D142 rows). For the dark demo (arch §42–43), two agents: ~9 KF/s, **~110 ms of GPU per
+    keyframe in total**; a 30-KF submap closes every ~7 s. Unknown on a T4 — nobody publishes one (A.3/A.4) — so the
     **first deliverable is a Kaggle T4 microbenchmark** (free): forward+backward ms/iter for N = 50k/100k/250k/500k
-    Gaussians at 320×180 and 640×360, packed vs unpacked, plus the append-Gaussians path. Iterations per keyframe
-    are then derived, not chosen.
+    Gaussians at 320×180 and 640×360, packed vs unpacked, plus the append-Gaussians path, with and without the
+    D-SSIM term. Iterations per keyframe are then derived, not chosen.
+  - **The T4 is shared** (B, 2026-10-23): demo mode today is ONE g4dn.xlarge running gz EGL + bridge + the runtime
+    (parent + two estimator workers) + console. The idle-T4 benchmark is an upper bound; the budget is measured with gz
+    rendering on the same GPU, and the demo's GPU sizing (a second instance, or g5/g6) is a Phase 8 decision for M and
+    the user.
   - **Render budget (browser):** splat count (Spark's stated budget is 1–5 M on a computer, A.5), sort rate, and bytes
     per update (32 B/Gaussian .splat; 16 B Spark packed). Closed submaps are sent once; only the active submap is
     re-sent, at most every ~2 s [ASSUMPTION].
@@ -37,10 +43,11 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
 | Seeding | back-project the keyframe's half-res Z where the current render's α < 0.5, only if no Gaussian lies within ρ; initial scale from the pixel footprint Z/f; colour from the training image | Gaussian-SLAM α-mask + radius check (A.2); RTG-SLAM opaque-disc init (A.2) |
 | Optimisation | per keyframe: ≥ 40 % of the iterations on the new keyframe, the rest over the active submap's keyframes; L1 + D-SSIM + σ-weighted depth L1 (§19.3's L_photo + L_depth) | Gaussian-SLAM ≥ 40 % rule (A.2); arch §19.3 |
 | Densify / prune | no clone/split live (seeding is the only growth); prune opacity < 0.005 | Gaussian-SLAM "no clone/prune" (A.2); gsplat DefaultStrategy prune threshold (A.4) |
-| Lifecycle | NEW → UNSTABLE → SUPPORTED → STABLE by a per-Gaussian count of keyframe updates in which it was visible and consistent; STABLE are frozen (gradients masked) | arch §18.4; RTG-SLAM Tables 13/15 (A.6 item 1). Its δη = 100 counts FRAMES at frame rate; ours counts keyframes, so the threshold is re-derived [ASSUMPTION], not copied |
-| Exposure | per-keyframe 3×4 affine, identity, enabled when the submap's own step counter passes 5000 | arch §18.7. Live, a 30-KF submap may never reach 5000 steps; the transform then stays off live, and the exposure-delay ablation runs on the batch path (exit gate) |
+| Lifecycle | NEW → UNSTABLE → SUPPORTED → STABLE by a per-Gaussian count of keyframe updates in which it was visible and consistent; STABLE are frozen (gradients masked) | arch §18.4; RTG-SLAM Tables 13/15 (A.6 item 1). RTG's δη = 100 counts consecutive FRAMES (Replica, every frame processed): ~3.3 s of observation at 30 Hz. Ours counts keyframes, so the threshold is converted at equal observation time: 3.3 s × 4.4 KF/s ≈ **15 keyframe updates** (D191) [ASSUMPTION: equal time ≈ equal evidence; keyframes are more distinct views than consecutive frames, so this errs towards freezing late] |
+| Exposure | per-keyframe 3×4 affine, identity, enabled when the submap's own step counter passes 5000 | arch §18.7. Live: ~110 ms/KF total at the dark KF rate leaves order 10 iterations per keyframe [to be derived from the benchmark], so a 30-KF submap gets ~300 steps ≪ 5000 — **the transform likely never switches on live** (D192); the exposure-delay ablation and the gate's geometry-mush evidence run on the batch path |
 | Merge | nearest-chunk overlap pruning between submaps/agents | arch §18.7 (Hierarchical 3DGS) — baseline; §18.5 fusion only if it beats it |
-| Training image | lamp-only scenes: the albedo proxy (§19.1, KeyframeFalloff); lit scenes: linear RGB (static radiance — §19.1's coherence problem does not arise). Labelled per run | arch §19.1; D146 (the proxy refuses non-lamp-only scenes) |
+| Training image | **the albedo proxy, always by default** (§19.1 via KeyframeFalloff; locked, CLAUDE.md §1). Linear RGB on lit worlds is an **ablation row** with its own D-entry (D195), never a silent fallback: a record tagged `training_image: none` is refused unless the run is configured as that ablation | arch §19.1; D146 (the proxy refuses non-lamp-only scenes); M's review 2026-10-23 |
+| Display | the console shows the albedo proxy directly and labels the panel "albedo proxy" (§19.1's "honest, slightly flat" option); relighting with a virtual lamp needs a custom shader in Spark and is not in scope | arch §19.1 |
 
 ## 3. Interfaces
 
@@ -48,9 +55,15 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
   `ariadne_live` to a recon socket (a tee of the bytes B's worker already holds; LinkFrame length-prefixed typed
   records; unix socket, TCP if the service is off-host), plus a pose-version record when PGO re-anchors. B confirmed
   (2026-10-23) that today's live/demo worlds are LIT (ci_tiny_0, maze_short_6: per-room point lights, ambient 0.35,
-  rig lamps at intensity 0), so the live path trains on linear RGB and `#kf` is enough as-is. When B's 5.3 lamp sink
-  lands and a dark demo scene exists, `#kf` gains the half-res albedo + valid mask (an additive record change). The
-  live loop runs per-agent VO without global PGO today, so pose-version records will be rare until collaboration
+  rig lamps at intensity 0). Arch §42–43 require a dark demo lit by the agents' lamps (M, 2026-10-23), so those
+  worlds are not the demo and train only as the RGB ablation (D195). B added `training_image` + half-res albedo
+  (fp16) + `albedo_valid` to `#kf` on 2026-10-23, tagged `none` until the chain below exists. **Live proxy training
+  needs three things first:** B's 5.3 lamp sink (Normalize needs the frame's applied photometric state, and live has
+  no D to provide it), a dark demo world (Phase 8, unowned), and a lamp calibration for that world's rig. Until then
+  the trainer is built and gated on replay spools of `ci_tiny_dark_0` (lamp-only, calibrated; the proxy already sits
+  in `KeyframeBundle`, D146). **Frames:** `#kf` carries T_O_C (per-agent odometry); B's tee adds T_W_O[k] per agent
+  (the scene briefing's entry pose, the frame the console draws trajectories in). Submaps anchor in O; the console
+  places one at T_W_O[k] · T_O_anchor. The live loop runs per-agent VO without global PGO today, so pose-version records will be rare until collaboration
   lands live; the re-anchoring path is exercised by the replay gate. Console: B owns `operator_console`; the splat
   panel is its own JS module and its own websocket path (`/splat`), no change to B's endpoints or telemetry sections.
 - **Replay input:** the RECON_1.7 spool (schema bumped for the albedo proxy and pose versions) — "replay from files
