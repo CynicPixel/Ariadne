@@ -63,6 +63,19 @@ TEST(Euroc, ParsesSensorYamlIncludingTheOpenCvDirective) {
     EXPECT_DOUBLE_EQ(c.rate_hz, 20.0);
 }
 
+// Kalibr's "equidistant" (KB4) is accepted and tagged, so the rectifier takes the cv::fisheye path (D143); any other
+// model name is refused rather than read as radtan.
+TEST(Euroc, AcceptsEquidistantAndRefusesUnknownModels) {
+    std::string y = CameraYaml(kCam0TBS, "567.76, 567.13, 651.56, 402.91", "-0.00326, 0.00433, 0.00356, -0.00202");
+    const auto at = y.find("radial-tangential");
+    const EurocCamera c = ParseEurocCamera(y.replace(at, 17, "equidistant"), "cam0");
+    EXPECT_EQ(c.intrinsics.model, perception::DistortionModel::kEquidistant);
+    EXPECT_DOUBLE_EQ(c.intrinsics.dist[2], 0.00356);
+    EXPECT_EQ(Cam0().intrinsics.model, perception::DistortionModel::kRadtan);
+    std::string bad = CameraYaml(kCam0TBS, "1, 1, 1, 1", "0, 0, 0, 0");
+    EXPECT_THROW(ParseEurocCamera(bad.replace(bad.find("radial-tangential"), 17, "fov"), "cam0"), ConfigError);
+}
+
 // THE convention test. ORB-SLAM3 publishes the same rig as Stereo.T_c1_c2
 // (right camera expressed in the left camera's frame). Composing the Kalibr
 // T_BS values must reproduce it; a flipped composition would not.
@@ -85,9 +98,10 @@ TEST(Euroc, RejectsNonRigidOrUnsupportedCalibration) {
     const std::string bad_r =
         "2.0, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1";
     EXPECT_THROW(ParseEurocCamera(CameraYaml(bad_r, "1, 1, 1, 1", "0, 0, 0, 0"), "x"), ConfigError);
-    std::string fisheye = CameraYaml(kCam0TBS, "1, 1, 1, 1", "0, 0, 0, 0");
-    fisheye.replace(fisheye.find("radial-tangential"), 17, "equidistant");
-    EXPECT_THROW(ParseEurocCamera(fisheye, "x"), ConfigError);
+    // equidistant is supported since D143 (AcceptsEquidistantAndRefusesUnknownModels); an unknown model still throws.
+    std::string omni = CameraYaml(kCam0TBS, "1, 1, 1, 1", "0, 0, 0, 0");
+    omni.replace(omni.find("radial-tangential"), 17, "omni");
+    EXPECT_THROW(ParseEurocCamera(omni, "x"), ConfigError);
     // Strictness: an unexpected key is an error, not silently ignored.
     EXPECT_THROW(ParseEurocCamera(CameraYaml(kCam0TBS, "1, 1, 1, 1", "0, 0, 0, 0") + "rolling_shutter: 1\n",
                                   "x"),

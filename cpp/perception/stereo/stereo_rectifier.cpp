@@ -25,6 +25,10 @@ StereoRectifier::StereoRectifier(const RawStereoCalibration& calib, double alpha
         throw std::invalid_argument("StereoRectifier: left and right image sizes differ");
     }
     if (!(alpha >= 0.0 && alpha <= 1.0)) throw std::invalid_argument("StereoRectifier: alpha in [0, 1]");
+    if (calib.left.model != calib.right.model) {
+        throw std::invalid_argument("StereoRectifier: left and right distortion models differ");
+    }
+    fisheye_ = calib.left.model == DistortionModel::kEquidistant;
     size_ = cv::Size(calib.left.width, calib.left.height);
 
     cv::Mat R(3, 3, CV_64F), T(3, 1, CV_64F);
@@ -34,8 +38,14 @@ StereoRectifier::StereoRectifier(const RawStereoCalibration& calib, double alpha
     }
     const cv::Mat K1 = K(calib.left), K2 = K(calib.right);
     const cv::Mat D1 = D(calib.left), D2 = D(calib.right);
-    cv::stereoRectify(K1, D1, K2, D2, size_, R, T, R1_, R2_, P1_, P2_, Q_,
-                      cv::STEREO_ZERO_DISPARITY, alpha, size_);
+    if (fisheye_) {
+        // The fisheye doc still names CALIB_ZERO_DISPARITY; OpenCV 5 spells that flag STEREO_ZERO_DISPARITY.
+        cv::fisheye::stereoRectify(K1, D1, K2, D2, size_, R, T, R1_, R2_, P1_, P2_, Q_, cv::STEREO_ZERO_DISPARITY,
+                                   size_, alpha);
+    } else {
+        cv::stereoRectify(K1, D1, K2, D2, size_, R, T, R1_, R2_, P1_, P2_, Q_,
+                          cv::STEREO_ZERO_DISPARITY, alpha, size_);
+    }
 
     // A horizontal rig puts the baseline in P2(0,3) = -fx * B and nothing in
     // P2(1,3). A vertical result means the rig or the transform direction is
@@ -54,12 +64,16 @@ StereoRectifier::StereoRectifier(const RawStereoCalibration& calib, double alpha
     rig_.cy = P1_.at<double>(1, 2);
     rig_.baseline_m = baseline;
 
-    cv::initUndistortRectifyMap(K1, D1, R1_, P1_(cv::Rect(0, 0, 3, 3)), size_, CV_16SC2,
-                                map_left_[0], map_left_[1]);
-    cv::initUndistortRectifyMap(K2, D2, R2_, P2_(cv::Rect(0, 0, 3, 3)), size_, CV_16SC2,
-                                map_right_[0], map_right_[1]);
+    BuildMap(K1, D1, R1_, P1_(cv::Rect(0, 0, 3, 3)), map_left_);
+    BuildMap(K2, D2, R2_, P2_(cv::Rect(0, 0, 3, 3)), map_right_);
     K2_ = K2.clone();
     D2_ = D2.clone();
+}
+
+void StereoRectifier::BuildMap(const cv::Mat& K, const cv::Mat& D, const cv::Mat& R, const cv::Mat& P,
+                               cv::Mat (&map)[2]) const {
+    if (fisheye_) cv::fisheye::initUndistortRectifyMap(K, D, R, P, size_, CV_16SC2, map[0], map[1]);
+    else cv::initUndistortRectifyMap(K, D, R, P, size_, CV_16SC2, map[0], map[1]);
 }
 
 void StereoRectifier::RefineRightRows(double a, double b, double c) {
@@ -69,7 +83,7 @@ void StereoRectifier::RefineRightRows(double a, double b, double c) {
     const cv::Matx33d A(1.0, 0.0, 0.0, -b, 1.0 - c, -a, 0.0, 0.0, 1.0);
     const cv::Mat P2k = P2_(cv::Rect(0, 0, 3, 3));
     const cv::Mat newK = cv::Mat(A) * P2k;
-    cv::initUndistortRectifyMap(K2_, D2_, R2_, newK, size_, CV_16SC2, map_right_[0], map_right_[1]);
+    BuildMap(K2_, D2_, R2_, newK, map_right_);
     row_a_ = a;
     row_b_ = b;
     row_c_ = c;
@@ -90,6 +104,11 @@ void StereoRectifier::Rectify(const cv::Mat& left, const cv::Mat& right, cv::Mat
 void StereoRectifier::RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const {
     if (left.size() != size_) throw std::invalid_argument("StereoRectifier: image size does not match the calibration");
     cv::remap(left, left_out, map_left_[0], map_left_[1], cv::INTER_LINEAR, cv::BORDER_CONSTANT);
+}
+
+void StereoRectifier::RectifyLeftNearest(const cv::Mat& left, cv::Mat& left_out) const {
+    if (left.size() != size_) throw std::invalid_argument("StereoRectifier: image size does not match the calibration");
+    cv::remap(left, left_out, map_left_[0], map_left_[1], cv::INTER_NEAREST, cv::BORDER_CONSTANT);
 }
 
 }  // namespace ariadne::perception

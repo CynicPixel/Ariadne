@@ -75,6 +75,10 @@ struct KeyframeBundle {
     std::optional<ExposureState> exposure_state;   // unset until §6.5
     std::optional<LampState> lamp_state;           // unset until §6.5
     cv::Mat mask;                        // CV_8U 255 = depth usable (valid AND densely supported, D34)
+    /// 5.2 Stage 3 (D146), only when the runner's falloff stage is on; empty otherwise. The §19.1 albedo proxy of
+    /// the rectified left (CV_32F reflectance: the lamp calibration plane reads calib_albedo), where it is defined (CV_8U
+    /// 255), and the mask any detector on it must use (D140). The spool does not write them yet (6.1).
+    cv::Mat albedo, albedo_valid, albedo_feature_mask;
 };
 
 /// Export a keyframe for reconstruction at the graph's CURRENT version, so the

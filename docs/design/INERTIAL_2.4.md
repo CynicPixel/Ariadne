@@ -325,6 +325,9 @@ The IMU noise operator was planned as part of 2.2's degradation wiring. **2.2 di
 IMU work. So `sim_v2` stays `imu: none`. The sim recordings carry clean IMU streams, but no seeded IMU noise or bias
 operator consumes them. The item is open and unowned (§6).
 
+> **Built (L2, D101, 2026-10-22).** `core/inertial/imu_noise_operator.hpp`, through `ariadne_sim_vo --imu-noise
+> configs/sim/imu_noise_v1.yaml`. `sim_v2` is now `imu.mode full`; the old `sim_v2` is `sim_v2_vo`.
+
 ## 6. Status (2026-10-21, on `main` 3cf5f0c; premerge PASS)
 
 The plan 2.4 line, item by item:

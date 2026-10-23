@@ -14,6 +14,7 @@ StereoMatches MatchLeftToRight(const cv::Mat& left, const cv::Mat& right,
     StereoMatches m;
     m.right.assign(points.size(), cv::Point2f(0, 0));
     m.valid.assign(points.size(), 0);
+    m.reason.assign(points.size(), 0);
     if (points.empty()) return m;
     const cv::Size win(p.win_size, p.win_size);
     const cv::TermCriteria crit(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
@@ -25,11 +26,12 @@ StereoMatches MatchLeftToRight(const cv::Mat& left, const cv::Mat& right,
     cv::calcOpticalFlowPyrLK(right, left, fwd, back, st_back, err, win, p.max_level, crit,
                              cv::OPTFLOW_USE_INITIAL_FLOW);
     for (size_t i = 0; i < points.size(); ++i) {
-        if (!st[i] || !st_back[i]) { ++m.lk_lost; continue; }
-        if (cv::norm(back[i] - points[i]) > p.fb_threshold_px) { ++m.fb_rejected; continue; }
-        if (std::abs(fwd[i].y - points[i].y) > p.max_dy_px) { ++m.row_rejected; continue; }
+        if (!st[i] || !st_back[i]) { ++m.lk_lost; m.reason[i] = 1; continue; }
+        if (cv::norm(back[i] - points[i]) > p.fb_threshold_px) { ++m.fb_rejected; m.reason[i] = 2; continue; }
+        if (std::abs(fwd[i].y - points[i].y) > p.max_dy_px) { ++m.row_rejected; m.reason[i] = 3; continue; }
         if (!(points[i].x - fwd[i].x > 0.0f) || fwd[i].x < 0.0f || fwd[i].x > right.cols - 1) {
             ++m.nonpositive;
+            m.reason[i] = 4;
             continue;
         }
         m.right[i] = fwd[i];

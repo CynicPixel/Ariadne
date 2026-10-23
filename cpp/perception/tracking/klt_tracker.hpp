@@ -120,6 +120,17 @@ public:
     /// learned engine's forward for that image is shared with the keyframe's description. Returns the tracks
     /// started; a no-op (0) under every_frame, where Process() already replenished.
     int Replenish(const cv::Mat& gray);
+    /// The same, detecting on another image of the same pixels (5.2, D146: the albedo proxy at keyframes) and only
+    /// where `detect_mask` (CV_8U, nonzero = allowed; the proxy's feature_mask) allows. LK keeps tracking `gray`'s
+    /// pyramid, and the §7.2 quality check still reads `gray`.
+    int Replenish(const cv::Mat& gray, const cv::Mat& detect, const cv::Mat& detect_mask);
+
+    /// Known-gain LK (5.3, D147): the next frame's signal is `ratio` x the last one's (the applied exposure, gain and
+    /// lamp changed by that factor). LK compares raw intensities and has no gain term, so the previous pyramid is
+    /// rebuilt from its level-0 image x ratio (8-bit, saturating) -- the known-ratio case of gain-robust KLT (Kim,
+    /// Frahm & Pollefeys ICCV 2007; Bergmann, Wang & Cremers RA-L 2018). The pyramid carries Scharr derivatives, so
+    /// it is rebuilt rather than scaled in place. ratio 1, or no previous frame: nothing happens.
+    void RescalePrevious(double ratio);
 
     /// The pyramid LK consumes, exposed so it can be timed on its own.
     static LkPyramid BuildPyramid(const cv::Mat& gray, const TrackerParams& params);
@@ -134,8 +145,10 @@ private:
     uint64_t next_id_ = 0;
 
     /// Step 4: append engine detections outside `mask` (updated as they are accepted) until target_tracks.
-    int AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64_t>& ids, std::vector<cv::Point2f>& points,
-                  std::vector<cv::Point2f>* prev_points, std::vector<int>& ages);
+    /// Detect on `detect`; the §7.2 eigenvalue quality is read on `lk_gray`, the image LK will track (D146: they
+    /// differ when detection runs on the albedo proxy).
+    int AddTracks(const cv::Mat& detect, const cv::Mat& lk_gray, cv::Mat& mask, std::vector<uint64_t>& ids,
+                  std::vector<cv::Point2f>& points, std::vector<cv::Point2f>* prev_points, std::vector<int>& ages);
 };
 
 }  // namespace ariadne::perception

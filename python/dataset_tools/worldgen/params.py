@@ -102,6 +102,7 @@ class Lighting:
     zone_lights: int = 1                     # 1 = a point light over every room and junction
     light_diffuse: float = 0.8
     light_range_m: float = 12.0
+    shadows: int = 0                         # world <scene><shadows> (D131: 1 for lamp-lit dark worlds)
 
 
 @dataclass(frozen=True)
@@ -189,8 +190,12 @@ class Preset:
 
     def to_canonical(self) -> dict:
         d = dataclasses.asdict(self)
-        if self.hazards == Hazards():   # opt-in section: absent at its default, so pre-D112 digests are unchanged
+        # Fields added after presets were pinned are dropped at their default, so every older preset keeps its
+        # digest (and its scene ids). D112: hazards; D131: lighting.shadows.
+        if self.hazards == Hazards():
             del d["hazards"]
+        if d["lighting"]["shadows"] == 0:
+            del d["lighting"]["shadows"]
         return d
 
     def digest(self) -> str:
@@ -391,5 +396,5 @@ def _validate_rest(p: Preset, g: float) -> None:
     if min(ro.min_inter_pairs, ro.min_inter_rooms, ro.min_intra_pairs) < 0:
         raise PresetError("routes: gate thresholds must be >= 0")
     li = p.lighting
-    if not 0.0 <= li.ambient <= 1.0 or li.zone_lights not in (0, 1) or li.light_diffuse < 0:
-        raise PresetError("lighting: ambient in [0,1], zone_lights 0/1, light_diffuse >= 0")
+    if not 0.0 <= li.ambient <= 1.0 or li.zone_lights not in (0, 1) or li.light_diffuse < 0 or li.shadows not in (0, 1):
+        raise PresetError("lighting: ambient in [0,1], zone_lights 0/1, light_diffuse >= 0, shadows 0/1")

@@ -29,6 +29,8 @@
 #include "runtime/metrics/trajectory_io.hpp"
 #include "runtime/metrics/trajectory_metrics.hpp"
 #include "runtime/tools/feature_engine_glue.hpp"
+#include "runtime/tools/exposure_glue.hpp"
+#include "runtime/tools/falloff_glue.hpp"
 #include "runtime/tools/reassociation_glue.hpp"
 #include "slam/inertial/attitude.hpp"
 #include "slam/odometry/stereo_vo.hpp"
@@ -115,6 +117,7 @@ struct FrameView {
 
 struct StereoVoArgs {
     std::string perception_config, slam_config, out;
+    std::string lamp_calib;   // 5.2 (D146): the rig's lamp calibration, for a perception config with a falloff: section
     int frames = 0;
     uint64_t seed = 1;
     std::string tool = "ariadne_euroc_vo";   // results.yaml header
@@ -137,13 +140,21 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     const PerceptionConfig pcfg = LoadPerception(args.perception_config);
     // 2.2: the radiometric front end between the source and the rectifier (a call-through when mode is off).
     runtime::RadiometricSource source(inner_source, pcfg.radiometric);
-    const slam::SlamConfig scfg = slam::LoadSlam(args.slam_config);
+    // 2.6 (D100): an RGB-D source feeds sensor depth through a virtual rig (perception/rgbd/depth_stereo.hpp) in
+    // place of the right image, SGBM and the LK stereo matcher. Stereo sources take the unchanged path.
+    const std::optional<DepthSensorModel> depth_model = source.DepthSensor();
+    const bool rgbd = depth_model.has_value();
+    if (rgbd && pcfg.radiometric.Enabled()) throw std::runtime_error("the radiometric stage needs a stereo pair");
+    slam::SlamConfig scfg_loaded = slam::LoadSlam(args.slam_config);
 
     StereoRectifier rectifier(source.Calibration(), 0.0);   // not const: the right map takes the row refinement
     const RectifiedStereoRig& rr = rectifier.Rig();
     const core::RectifiedStereo rig{{rr.fx, rr.fy, rr.cx, rr.cy}, rr.baseline_m};
     const core::SE3 T_B_Crect = runtime::BodyFromRectifiedLeft(source.T_B_C0(), ToEigen3(rectifier.R1()));
-    if (scfg.triangulation.min_depth_m < MinObservableRange(pcfg.stereo, rr)) {
+    // RGB-D: the sensor's sigma_Z = k Z^2 enters the triangulation gate as the virtual rig's disparity noise.
+    if (rgbd) scfg_loaded.triangulation.disparity_sigma_px = depth_model->DisparitySigmaPx(rr.fx);
+    const slam::SlamConfig& scfg = scfg_loaded;
+    if (!rgbd && scfg.triangulation.min_depth_m < MinObservableRange(pcfg.stereo, rr)) {
         std::fprintf(stderr, "warning: slam min_depth_m %.3f is below the stereo Z_min %.3f\n",
                      scfg.triangulation.min_depth_m, MinObservableRange(pcfg.stereo, rr));
     }
@@ -189,6 +200,14 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         attitude = std::make_unique<slam::AttitudeTracker>(ap, imu, source.ImuNoiseModel(), T_B_Crect.R);
     }
     const cv::Matx33d K_rect(rr.fx, 0, rr.cx, 0, rr.fy, rr.cy, 0, 0, 1);
+    // 5.2 Stage 3 (D146): the albedo proxy of every keyframe; refuses here, before any frame, if its inputs are wrong.
+    KeyframeFalloff falloff(pcfg.falloff, args.lamp_calib, source.Lamp(), source.T_B_C0(), K_rect,
+                            cv::Matx33d(rectifier.R1()));
+    // 5.3 (D147): the exposure + lamp co-controller at keyframes, commanding the source; refuses a source that
+    // cannot actuate. prev_photo / lk_rescales: known-gain LK (below), a no-op while the applied state is constant.
+    KeyframeExposure exposure(pcfg.exposure_control, source.CanActuatePhotometric());
+    std::optional<runtime::FramePhoto> prev_photo;
+    long lk_rescales = 0;
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
@@ -255,6 +274,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
          win_unobservable_after = 0, win_dof = 0, win_degenerate = 0;
     double win_sq = 0.0;
     long stereo_valid = 0, stereo_total = 0;
+    // Keyframe stereo outcomes by reason x image third (top/middle/bottom), and the valid matches' disparity sums:
+    // diagnostic output only (D144: where and why stereo fails on a real rig).
+    long stereo_reason[3][5] = {};
+    double stereo_disp_sum[3] = {}, stereo_disp_max[3] = {};
     long usac_retries = 0, usac_skipped = 0;
     // Online row refinement (D54): estimated at keyframes until it succeeds, then frozen and disclosed.
     perception::RowCorrection row_fix, row_check;   // row_check: re-estimated AFTER the refinement (acceptance: ~0)
@@ -268,9 +291,21 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         if (frame.agent != source.Agent() || frame.id != static_cast<uint64_t>(i)) {
             throw std::logic_error("stereo source: frame identity out of sequence at " + std::to_string(i));
         }
-        cv::Mat l, r;
-        rectifier.Rectify(frame.left, frame.right, l, r);
+        cv::Mat l, r, dz;   // dz: RGB-D depth on the rectified left grid (nearest: no invented depths)
+        if (rgbd) {
+            rectifier.RectifyLeft(frame.left, l);
+            rectifier.RectifyLeftNearest(frame.depth, dz);
+        } else {
+            rectifier.Rectify(frame.left, frame.right, l, r);
+        }
 
+        // 5.3 (D147): known-gain LK. When the applied brightness changed since the last frame, the tracker's previous
+        // pyramid is brought to this frame's level first (LK has no gain term).
+        if (frame.photo && prev_photo && frame.photo->Brightness() != prev_photo->Brightness()) {
+            tracker.RescalePrevious(frame.photo->Brightness() / prev_photo->Brightness());
+            ++lk_rescales;
+        }
+        prev_photo = frame.photo;
         auto t0 = std::chrono::steady_clock::now();
         bool have_rot = false;
         core::Mat3 R_pc = core::Mat3::Identity();
@@ -283,6 +318,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 for (int c = 0; c < 3; ++c) Rt(r, c) = R_pc(c, r);   // R_C(cur)_C(prev): prev-camera rays into the current one
             H_pred = K_rect * Rt * K_rect.inv();
         }
+        // The angular rate for the exposure controller's blur ceiling (§10.5); 0 without an IMU (ceiling = t_max_s).
+        const double omega_rad_s =
+            have_rot ? core::SO3Log(R_pc).norm() / (1e-9 * double(frame.t_ns - prev_frame_t_ns)) : 0.0;
         const bool seed_lk = have_rot && scfg.imu.seed_lk;
         gyro_seeded += seed_lk;
         const TrackedFrame tf = tracker.Process(l, static_cast<uint64_t>(i), args.seed, seed_lk ? &H_pred : nullptr);
@@ -366,58 +404,90 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         // only if StereoVo::ShouldReanchor says the next frame's PnP would then have enough landmarks.
         if (tr.need_keyframe || tr.reanchor_probe) {
             t0 = std::chrono::steady_clock::now();
-            // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
-            // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
-            // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
-            const auto condition = [&](const cv::Mat& right) {
-                return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
-            };
-            cv::Mat rs = condition(r);
-            if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
-                ++row_attempts;
-                CollectRowSamples(l, rs, tfv.points, pcfg.stereo_match, row_samples);
-                const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
-                if (est.ok) {
-                    row_fix = est;
-                    row_keyframe = keyframes;
-                    rectifier.RefineRightRows(est.a, est.b, est.c);
-                    cv::Mat l_again;
-                    rectifier.Rectify(frame.left, frame.right, l_again, r);
-                    rs = condition(r);
-                    std::printf("  stereo row refinement at keyframe %d: dy = %+.3f %+.5f x %+.5f y px (%d matches, "
-                                "MAD %.3f px%s)\n", keyframes, est.a, est.b, est.c, est.matches, est.mad_px,
-                                est.slopes_fitted ? "" : ", offset only");
-                } else {
-                    row_last_refusal = est.why;
-                }
-            } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
-                // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
-                row_check = EstimateRowCorrection(l, rs, tfv.points, pcfg.stereo_match);
-            }
-            const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
-            const StereoDepth depth = sgbm.Compute(l, rs);
-            if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
-            const cv::Mat supported = DenseSupportMask(depth, pcfg.stereo);
-            cv::Mat z32, s32;
-            depth.Z.convertTo(z32, CV_32F);
-            depth.sigma_Z.convertTo(s32, CV_32F);
             slam::VoStereo st;
-            st.right = sm.right;
-            st.valid = sm.valid;
-            for (const cv::Point2f& p : tfv.points) {
-                const int x = cvRound(p.x), y = cvRound(p.y);
-                const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
-                st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
-                st.sgbm_sigma.push_back(ok ? s32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+            std::vector<uchar> stereo_reason_q;   // MatchLeftToRight's per-point reasons (stereo path only; D144 diag)
+            StereoDepth depth;   // the keyframe records' dense depth (SGBM, or the sensor's on RGB-D)
+            cv::Mat supported;
+            if (rgbd) {
+                depth = DenseDepthFromSensor(dz, rr.fx, *depth_model);
+                supported = depth.valid;
+                const VirtualStereo vs = VirtualStereoFromDepth(dz, tfv.points, rr.fx, *depth_model);
+                st.right = vs.right;
+                st.valid = vs.valid;
+                st.sgbm_z = vs.z;          // the §9.6 slot: sensor depth where supported
+                st.sgbm_sigma = vs.sigma_z;
+            } else {
+                // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
+                // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
+                // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
+                const auto condition = [&](const cv::Mat& right) {
+                    return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
+                };
+                cv::Mat rs = condition(r);
+                if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_fix.ok) {
+                    ++row_attempts;
+                    CollectRowSamples(l, rs, tfv.points, pcfg.stereo_match, row_samples);
+                    const RowCorrection est = FitRowCorrection(row_samples, pcfg.stereo_match);
+                    if (est.ok) {
+                        row_fix = est;
+                        row_keyframe = keyframes;
+                        rectifier.RefineRightRows(est.a, est.b, est.c);
+                        cv::Mat l_again;
+                        rectifier.Rectify(frame.left, frame.right, l_again, r);
+                        rs = condition(r);
+                        std::printf("  stereo row refinement at keyframe %d: dy = %+.3f %+.5f x %+.5f y px (%d matches, "
+                                    "MAD %.3f px%s)\n", keyframes, est.a, est.b, est.c, est.matches, est.mad_px,
+                                    est.slopes_fitted ? "" : ", offset only");
+                    } else {
+                        row_last_refusal = est.why;
+                    }
+                } else if (tr.need_keyframe && pcfg.stereo_match.row_refinement && !row_check.ok && keyframes > row_keyframe) {
+                    // Acceptance, measured once on a later pair: the residual left after the refinement (not applied).
+                    row_check = EstimateRowCorrection(l, rs, tfv.points, pcfg.stereo_match);
+                }
+                const StereoMatches sm = MatchLeftToRight(l, rs, tfv.points, pcfg.stereo_match);
+                depth = sgbm.Compute(l, rs);
+                if (!depth.confidence_is_placeholder) t_conf.push_back(depth.confidence_ms);
+                supported = DenseSupportMask(depth, pcfg.stereo);
+                cv::Mat z32, s32;
+                depth.Z.convertTo(z32, CV_32F);
+                depth.sigma_Z.convertTo(s32, CV_32F);
+                st.right = sm.right;
+                st.valid = sm.valid;
+                stereo_reason_q = sm.reason;
+                for (const cv::Point2f& p : tfv.points) {
+                    const int x = cvRound(p.x), y = cvRound(p.y);
+                    const bool ok = x >= 0 && y >= 0 && x < rr.width && y < rr.height && supported.at<uchar>(y, x);
+                    st.sgbm_z.push_back(ok ? z32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+                    st.sgbm_sigma.push_back(ok ? s32.at<float>(y, x) : std::numeric_limits<float>::quiet_NaN());
+                }
             }
             trace_valid = 0;
-            for (uchar v : sm.valid) trace_valid += v;
+            for (uchar v : st.valid) trace_valid += v;
             reanchor_probes += !tr.need_keyframe;
             made_keyframe = tr.need_keyframe || vo.ShouldReanchor(st);
             reanchor_refused += !made_keyframe;
             if (made_keyframe) {
                 stereo_valid += trace_valid;
-                stereo_total += static_cast<long>(sm.valid.size());
+                stereo_total += static_cast<long>(st.valid.size());
+                for (size_t q = 0; q < stereo_reason_q.size(); ++q) {
+                    const int band = std::clamp(static_cast<int>(3.0f * tfv.points[q].y / rr.height), 0, 2);
+                    ++stereo_reason[band][stereo_reason_q[q]];
+                    if (stereo_reason_q[q] == 0) {
+                        const double d = tfv.points[q].x - st.right[q].x;
+                        stereo_disp_sum[band] += d;
+                        stereo_disp_max[band] = std::max(stereo_disp_max[band], d);
+                    }
+                }
+                // 5.2 (D146): with features: raw it never feeds tracking or the VO (the trajectory is the same as with
+                // the stage off); features: proxy uses it only for detection at Replenish below.
+                perception::radiometric::AlbedoProxy albedo;
+                if (falloff.enabled()) albedo = falloff.Normalize(l, depth.Z, supported, frame.photo);
+                // 5.3 (D147): one controller decision per keyframe, from the state this frame reports as applied.
+                if (exposure.enabled()) {
+                    const int64_t interval = prev_frame_t_ns >= 0 ? frame.t_ns - prev_frame_t_ns : 0;
+                    source.SetPhotometric(exposure.Decide(l, *frame.photo, frame.t_ns, omega_rad_s, rr.fx, interval));
+                }
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
                 // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
@@ -447,7 +517,10 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 gp_edges += kr.gravity_prior_emitted;
                 t_kf.push_back(Ms(t0));
                 reassoc.AfterKeyframe(l, vo, vf);   // 2.1: landmark descriptors at this keyframe
-                tracker.Replenish(l);   // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise)
+                // 2.1 §4.2: new tracks at keyframes under replenish: keyframe (no-op otherwise); 5.2 (D146) row
+                // features: proxy detects them on the albedo proxy, inside its feature mask.
+                if (falloff.detects_on_proxy()) tracker.Replenish(l, falloff.DetectionImage(albedo), albedo.feature_mask);
+                else tracker.Replenish(l);
                 ++keyframes;
                 keyframes_lost += tr.status == slam::VoStatus::kLost;
                 if (attitude && !gt_poses.empty()) {
@@ -579,6 +652,14 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                     cv::Mat rgb = l;
                     if (!frame.left_rgb.empty()) rectifier.RectifyLeft(frame.left_rgb, rgb);
                     kv.bundle = runtime::BuildKeyframeBundle(vo.graph(), kr.keyframe_id, rig.cam, rgb, depth, supported);
+                    kv.bundle.albedo = albedo.albedo;   // empty unless Stage 3 ran (D146)
+                    kv.bundle.albedo_valid = albedo.valid;
+                    kv.bundle.albedo_feature_mask = albedo.feature_mask;
+                    if (exposure.enabled()) {   // §18.2 states, owned by 5.3 (D147): what this keyframe was taken with
+                        kv.bundle.exposure_state = runtime::ExposureState{exposure.ExposureSeconds(*frame.photo),
+                                                                          frame.photo->gain};
+                        kv.bundle.lamp_state = runtime::LampState{frame.photo->lamp_rel > 0.0, frame.photo->lamp_rel};
+                    }
                     kv.left_rect = l;
                     kv.T_B_C = T_B_Crect;
                     kv.baseline_m = rr.baseline_m;
@@ -688,6 +769,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     runtime::WriteTum((run_dir / "estimate_body.tum").string(), est_body);
     std::ofstream(run_dir / "vo_trace.csv") << trace.str();
     if (reassoc.enabled()) std::ofstream(run_dir / "reassoc_trace.csv") << reassoc.Trace();
+    if (exposure.enabled()) std::ofstream(run_dir / "exposure_trace.csv") << exposure.Trace();   // 5.3, D147
     // Ground truth goes under raw/, which .gitignore excludes: for EuRoC it is
     // the dataset's own data (InC-NC, D35), so evidence commits carry our
     // estimate and derived numbers but never a copy of the dataset.
@@ -719,6 +801,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     m.lost_handling = scfg.lost.motion + "/" + scfg.lost.reanchor;
     m.degradation_config = source.DegradationConfig();
     m.radiometric = source.Summary();
+    if (falloff.enabled()) m.extra["falloff"] = falloff.Summary();   // 5.2; default manifests unchanged
+    if (exposure.enabled()) m.extra["exposure_control"] = exposure.Summary();   // 5.3
     RecordFeatureEngine(m, *features, pcfg);   // 2.1: engine, caps, cadence
     m.loop_backend = "none";
     m.imu_mode = scfg.imu.mode;
@@ -735,21 +819,42 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(m);
 
     std::ofstream res(run_dir / "results.yaml");
+    // A sequence without dense GT (Hilti 2023: sparse control points only, D141) has nothing to align: the metric
+    // structs then hold their zero defaults, which must not read as a 0 m error. Those fields print null, and the
+    // sequence is scored by its own protocol from estimate_body.tum (analysis.hilti_score).
+    const bool dense_gt = !gt_poses.empty();
+    const auto gt_num = [dense_gt](double v) {
+        std::ostringstream o;
+        if (dense_gt) o << v;
+        else o << "null";
+        return o.str();
+    };
     res << "# " << args.tool << " results. Generated; do not hand-edit.\n"
         << "sequence: " << source.RunName() << "\nframes: " << n << "\n"
+        << "dense_gt: " << (dense_gt ? "true" : "false  # ATE/RPE fields are null: score with the dataset's protocol")
+        << "\n"
         << "associated_poses: " << e.size() << "  # nearest GT within 0.01 s (evo default)\n"
-        << "gt_path_length_m: " << gt_length << "\n"
-        << "ate_se3: {rmse_m: " << ate.rmse << ", mean_m: " << ate.mean << ", max_m: " << ate.max
-        << ", rotation_rmse_rad: " << ate_rot.rmse << "}\n"
+        << "gt_path_length_m: " << gt_num(gt_length) << "\n"
+        << "ate_se3: {rmse_m: " << gt_num(ate.rmse) << ", mean_m: " << gt_num(ate.mean) << ", max_m: "
+        << gt_num(ate.max) << ", rotation_rmse_rad: " << gt_num(ate_rot.rmse) << "}\n"
         << "ate_rmse_percent_of_path: " << (gt_length > 0 ? 100.0 * ate.rmse / gt_length : -1.0) << "\n"
-        << "sim3_scale: " << sim3.scale << "  # 1.0 = no scale drift; stereo is metric\n"
-        << "rpe_1s: {translation_rmse_m: " << rpe.translation.rmse << ", rotation_rmse_rad: " << rpe.rotation.rmse
-        << "}\n"
+        << "sim3_scale: " << gt_num(sim3.scale) << "  # 1.0 = no scale drift; stereo is metric\n"
+        << "rpe_1s: {translation_rmse_m: " << gt_num(rpe.translation.rmse) << ", rotation_rmse_rad: "
+        << gt_num(rpe.rotation.rmse) << "}\n"
         << "vo: {lost_frames: " << lost << ", keyframes: " << keyframes << ", ba_runs: " << ba_runs
         << ", ba_mean_cost_ratio: " << (ba_runs ? ba_cost_ratio_sum / ba_runs : -1.0)
         << ", landmarks_alive_at_end: " << vo.landmark_count()
         << ", graph_edges: " << vo.graph().edges().size() << ", graph_version: " << vo.graph().version() << "}\n"
         << "stereo_match_valid_fraction: " << (stereo_total ? double(stereo_valid) / stereo_total : -1.0) << "\n"
+        << "stereo_match_by_third: {";
+    for (int b = 0; b < 3; ++b) {
+        const long* r = stereo_reason[b];
+        res << (b ? ", " : "") << (b == 0 ? "top" : b == 1 ? "middle" : "bottom") << ": {valid: " << r[0]
+            << ", lk_lost: " << r[1] << ", fb: " << r[2] << ", off_row: " << r[3] << ", nonpositive: " << r[4]
+            << ", disparity_mean_px: " << (r[0] ? stereo_disp_sum[b] / r[0] : -1.0)
+            << ", disparity_max_px: " << stereo_disp_max[b] << "}";
+    }
+    res << "}  # keyframe left->right LK outcomes per image third (diagnostic)\n"
         << "triangulation: {candidates: " << tri.candidates << ", created: " << tri.created
         << ", no_stereo: " << tri.no_stereo << ", nonpositive_disparity: " << tri.nonpositive_disparity
         << ", depth_range: " << tri.depth_range << ", reprojection: " << tri.reprojection
@@ -768,14 +873,21 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                      std::abs(row_check.a + row_check.b * (rr.width - 1) + row_check.c * (rr.height - 1))})
         << ", matches: " << row_check.matches << "}}\n"
         << "stereo_exposure_match: " << (pcfg.stereo_match.exposure_match ? "true" : "false") << "\n";
+    if (rgbd) {   // 2.6 (D100): only for RGB-D sources, so stereo results stay byte-identical
+        res << "rgbd_depth: {sigma_z_model: \"k*Z^2 (Khoshelham & Elberink 2012 eq. 7)\", k_per_m: "
+            << depth_model->sigma_k_per_m << ", z_min_m: " << depth_model->z_min_m << ", z_max_m: " << depth_model->z_max_m
+            << ", max_neighbour_ratio: " << depth_model->max_neighbour_ratio << ", virtual_baseline_m: "
+            << depth_model->virtual_baseline_m << ", disparity_sigma_px: " << scfg.triangulation.disparity_sigma_px
+            << ", valid_fraction_at_keyframes: " << (stereo_total ? double(stereo_valid) / stereo_total : -1.0) << "}\n";
+    }
     if (usac_retries > 0 || usac_skipped > 0) {
         res << "tracker_opencv_usac_defect: {redraws: " << usac_retries << ", epipolar_check_skipped_frames: "
             << usac_skipped << "}\n";
     }
     if (scfg.ba.backend == "window") {
         if (loops) {
-            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << ate_loop.rmse
-                << ", ate_rotation_rmse_rad: " << ate_loop_rot.rmse << "}\n";
+            res << "loop_closed_keyframe_refined: {ate_rmse_m: " << gt_num(ate_loop.rmse)
+                << ", ate_rotation_rmse_rad: " << gt_num(ate_loop_rot.rmse) << "}\n";
             loops->WriteOutputs(run_dir.string(),
                                 // Interpolated between the bracketing GT samples (<= 20 ms apart), not the nearest one:
                                 // nearest-sample timing error would otherwise count as loop error (design §8).
@@ -793,8 +905,8 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                                 },
                                 res);
         }
-        res << "keyframe_refined: {ate_rmse_m: " << ate_kf.rmse << ", ate_rotation_rmse_rad: " << ate_kf_rot.rmse
-            << ", rpe_1s_translation_rmse_m: " << rpe_kf.translation.rmse
+        res << "keyframe_refined: {ate_rmse_m: " << gt_num(ate_kf.rmse) << ", ate_rotation_rmse_rad: "
+            << gt_num(ate_kf_rot.rmse) << ", rpe_1s_translation_rmse_m: " << gt_num(rpe_kf.translation.rmse)
             << "}  # ORB-SLAM protocol: frames re-composed on final keyframe poses\n";
         res << "ba_window: {not_found: " << win_not_found << ", observations: " << win_obs
             << ", invalid_at_entry: " << win_invalid_entry << ", chi2_failed: " << win_chi2_failed
@@ -808,6 +920,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     }
     if (attitude) {
         const core::Vec3 b = attitude->Bias();
+        if (source.ImuNoiseConfig() != "none") res << "imu_noise_config: " << source.ImuNoiseConfig() << "\n";   // L2
         res << "imu: {mode: " << scfg.imu.mode << ", seed_lk: " << (scfg.imu.seed_lk ? "true" : "false")
             << ", stationary_start: " << (attitude->StationaryStart() ? "true" : "false") << ", gyro_bias_final: [" << b.x()
             << ", " << b.y() << ", " << b.z() << "], bias_samples: " << attitude->BiasSamples()
@@ -915,6 +1028,9 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             << ", reanchor_refused: " << reanchor_refused << ", bridge_usac_redraws: " << bridge_retries << "}\n";
     }
     source.WriteResults(res);   // 2.2; nothing when the radiometric stage is off
+    falloff.WriteResults(res);  // 5.2; nothing when Stage 3 is off
+    exposure.WriteResults(res); // 5.3; nothing when the controller is off
+    if (lk_rescales > 0) res << "known_gain_lk_rescales: " << lk_rescales << "\n";   // 5.3: only when the state varied
     if (reassoc.enabled()) res << reassoc.ResultsLine();
     res << features->ResultsYaml();   // 2.1: empty for orb
     if (!t_conf.empty()) res << StereoConfidenceResults(t_conf);   // 2.1 §10

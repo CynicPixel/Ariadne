@@ -70,6 +70,9 @@ log "0. build + full ctest"
 # ARIADNE_REQUIRE_MODELS=1. Produced offline by python/model_tools/{eigenplaces,aliked_lightglue}_reference.py.
 [ -f .cache/models/eigenplaces_ref/manifest.yaml ] || die "no EigenPlaces export in .cache/models/eigenplaces_ref (D62)"
 [ -f .cache/models/aliked_lg_ref/manifest.yaml ] || die "no ALIKED+LightGlue export in .cache/models/aliked_lg_ref (D63)"
+# ...and the sim-rig exports of D90 (L3; infra/scripts/models.sh eigenplaces-sim / aliked-lg-sim), required the same way.
+[ -f .cache/models/eigenplaces_sim_ref/manifest.yaml ] || die "no sim EigenPlaces export (run: infra/scripts/models.sh eigenplaces-sim)"
+[ -f .cache/models/aliked_lg_sim_ref/manifest.yaml ] || die "no sim ALIKED+LightGlue export (run: infra/scripts/models.sh aliked-lg-sim)"
 # Build and ctest parallelism: 2 by default. The 15 GB host crashed at 8 (2026-10-21); raise only deliberately.
 JOBS="${ARIADNE_BUILD_JOBS:-2}"
 cmd "$S/core.sh dev    # configure, build, full ctest (--parallel $JOBS), with ARIADNE_REQUIRE_MODELS=1"
@@ -77,6 +80,8 @@ $S/core.sh dev bash -c "cmake -S /work -B /work/build/docker -G Ninja -DARIADNE_
   -DFETCHCONTENT_BASE_DIR=/work/.cache/fetchcontent-docker >/dev/null && cmake --build /work/build/docker --parallel $JOBS \
   && ARIADNE_XFEAT_REF=/work/.cache/models/xfeat_ref ARIADNE_PGO_ORACLE=/work/.cache/oracle/pgo ARIADNE_REQUIRE_MODELS=1 \
      ARIADNE_EIGENPLACES_REF=/work/.cache/models/eigenplaces_ref ARIADNE_ALIKED_LG_REF=/work/.cache/models/aliked_lg_ref \
+     ARIADNE_EIGENPLACES_SIM_REF=/work/.cache/models/eigenplaces_sim_ref \
+     ARIADNE_ALIKED_LG_SIM_REF=/work/.cache/models/aliked_lg_sim_ref \
      ctest --test-dir /work/build/docker --output-on-failure --parallel $JOBS" > "$BIG/ctest.log" 2>&1 \
   || { tail -30 "$BIG/ctest.log"; die "build or ctest failed"; }
 grep -E "tests passed|tests failed" "$BIG/ctest.log" > "$G/ctest.txt"
@@ -110,9 +115,12 @@ $S/recon.sh prepare "$SPOOL" "$SCENE" "$C/recon_eval.yaml" "$BIG/recon" > "$BIG/
   || { tail -20 "$BIG/recon_prepare.log"; die "recon prepare failed"; }
 pkg="$(sha256sum "$BIG/recon/package/render_package.npz" | cut -d' ' -f1)"
 if [ "$mode" = full ]; then
+  # ARIADNE_RENDER_CMD takes kaggle.sh render's arguments (PKG_DIR OUT). The AWS gate sets it to
+  # infra/eval/render_relay.sh: the same fresh Kaggle render, run by the launching host, whose token stays there.
+  render="${ARIADNE_RENDER_CMD:-$S/kaggle.sh render}"
   log "2. Kaggle render (remote GPU)"
-  cmd "$S/kaggle.sh render $BIG/recon/package $BIG/render"
-  $S/kaggle.sh render "$BIG/recon/package" "$BIG/render" > "$BIG/kaggle.log" 2>&1 \
+  cmd "$render $BIG/recon/package $BIG/render"
+  $render "$BIG/recon/package" "$BIG/render" > "$BIG/kaggle.log" 2>&1 \
     || { tail -20 "$BIG/kaggle.log"; die "Kaggle render failed"; }
   mkdir -p "$CACHE/$pkg" && cp "$BIG/render/renders.npz" "$BIG/render/remote.json" "$CACHE/$pkg/"
 else

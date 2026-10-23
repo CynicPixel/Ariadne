@@ -1,0 +1,8 @@
+=== 2026-10-23T05:02:03Z 0 host
+=== 2026-10-23T05:02:03Z 1 docker + images
+=== 2026-10-23T05:02:58Z 2 checkout
+=== 2026-10-23T05:02:59Z 3 inputs
+=== 2026-10-23T05:05:01Z 4 full gate (JOBS=8)
+gate_exit 1 seconds 1927
+=== 2026-10-23T05:37:08Z 5 collect
+=== 2026-10-23T05:37:08Z done (full exit 1)

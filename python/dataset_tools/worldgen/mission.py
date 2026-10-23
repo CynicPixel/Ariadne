@@ -55,6 +55,11 @@ def load_rig(path: str) -> dict:
     check_lens(rig)
     if not 10.0 < cam["hfov_deg"] < 170.0 or cam["rate_hz"] <= 0 or rig["stereo"]["baseline_m"] <= 0:
         raise MissionError("rig: hfov in (10, 170) deg, rate > 0, baseline > 0")
+    sw = rig["stereo"].get("sweep_baselines_m", [])
+    if set(rig["stereo"]) - {"baseline_m", "sweep_baselines_m"}:
+        raise MissionError(f"rig.stereo: unknown {sorted(set(rig['stereo']) - {'baseline_m', 'sweep_baselines_m'})}")
+    if any(b <= 0 for b in sw) or len({round(b * 100) for b in sw}) != len(sw):
+        raise MissionError("rig.stereo.sweep_baselines_m: positive, distinct to the centimetre")
     if 1_000_000_000 % rig["imu"]["period_ns"] != 0:
         raise MissionError("rig.imu.period_ns must divide one second")
     return rig
@@ -109,18 +114,31 @@ def intrinsics(rig: dict) -> dict:
             "note": "nominal from hfov; the gz camera_info on the bag and the §6 recovery are authoritative"}
 
 
+def sweep_cameras(rig: dict) -> list:
+    """5.5 baseline sweep (§9.1, D138): extra right cameras, one per baseline, named right_b<cm>. Rendered in the
+    same pass as the main pair, so every baseline sees identical frames, poses and lighting. Absent = none (v1)."""
+    return [(f"right_b{round(b * 100):02d}", b) for b in rig["stereo"].get("sweep_baselines_m", [])]
+
+
 def camera_poses(rig: dict) -> dict:
     lx, ly, lz = rig["left_camera_in_body_m"]
     b = rig["stereo"]["baseline_m"]
-    return {"left": [lx, ly, lz], "right": [lx, ly - b, lz]}
+    out = {"left": [lx, ly, lz], "right": [lx, ly - b, lz]}
+    for name, bs in sweep_cameras(rig):
+        out[name] = [lx, ly - bs, lz]
+    return out
 
 
-def topics(k: int) -> dict:
+def topics(k: int, rig: dict = None) -> dict:
     ns = f"/ariadne/agent_{k}"
-    return {"left_image": f"{ns}/left/image_raw", "left_info": f"{ns}/left/camera_info",
-            "right_image": f"{ns}/right/image_raw", "right_info": f"{ns}/right/camera_info",
-            "depth_image": f"{ns}/depth/image_raw", "depth_info": f"{ns}/depth/camera_info",
-            "imu": f"{ns}/imu", "gt_pose": f"{ns}/gt/pose"}
+    out = {"left_image": f"{ns}/left/image_raw", "left_info": f"{ns}/left/camera_info",
+           "right_image": f"{ns}/right/image_raw", "right_info": f"{ns}/right/camera_info",
+           "depth_image": f"{ns}/depth/image_raw", "depth_info": f"{ns}/depth/camera_info",
+           "imu": f"{ns}/imu", "gt_pose": f"{ns}/gt/pose"}
+    for name, _ in (sweep_cameras(rig) if rig else []):
+        out[f"{name}_image"] = f"{ns}/{name}/image_raw"
+        out[f"{name}_info"] = f"{ns}/{name}/camera_info"
+    return out
 
 
 def _camera(name, pose, rig, topic, info_topic, depth=False) -> str:
@@ -169,10 +187,13 @@ def _live_xml(scene, k: int) -> str:
 def agent_xml(scene, k: int, rig: dict, scene_json: dict, script=None, live: bool = False) -> str:
     sc = script if script is not None else scene.scripts[k]
     x, y, z, yaw, pitch = sc.segments[0].start
-    t = topics(k)
+    t = topics(k, rig)
     cams = camera_poses(rig)
     lamp = rig["lamp"]
     lx, ly, lz = lamp["in_body_m"]
+    # D131: optional keys; their defaults reproduce rig v1's SDF byte for byte.
+    att_c, att_l, att_q = lamp.get("attenuation", (0.2, 0.0, 0.05))
+    shadows = "true" if lamp.get("cast_shadows", 0) else "false"
     es = scene_json["esdf"]
     g = es["cell_m"]
     ox, oy = (round(v / g) for v in es["origin_m"])
@@ -185,14 +206,16 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict, script=None, live: boo
         f'      <link name="base_link">\n'
         + _camera("left", cams["left"], rig, t["left_image"], t["left_info"])
         + _camera("right", cams["right"], rig, t["right_image"], t["right_info"])
+        + "".join(_camera(n, cams[n], rig, t[f"{n}_image"], t[f"{n}_info"]) for n, _ in sweep_cameras(rig))
         + depth
         + f'        <light type="spot" name="lamp"><pose>{_f(lx)} {_f(ly)} {_f(lz)} 0 0 0</pose>'
           f'<direction>1 0 0</direction><intensity>{_f(lamp["intensity"])}</intensity>'
           f'<diffuse>1 1 1 1</diffuse><specular>0.2 0.2 0.2 1</specular>'
-          f'<attenuation><range>20</range><constant>0.2</constant><linear>0.0</linear><quadratic>0.05</quadratic></attenuation>'
+          f'<attenuation><range>{_f(lamp["range_m"]) if "range_m" in lamp else "20"}</range><constant>{_f(att_c)}</constant>'
+          f'<linear>{_f(att_l)}</linear><quadratic>{_f(att_q)}</quadratic></attenuation>'
           f'<spot><inner_angle>{_f(math.radians(lamp["inner_deg"]))}</inner_angle>'
           f'<outer_angle>{_f(math.radians(lamp["outer_deg"]))}</outer_angle><falloff>1.0</falloff></spot>'
-          f'<cast_shadows>false</cast_shadows></light>\n'
+          f'<cast_shadows>{shadows}</cast_shadows></light>\n'
         + '      </link>\n'
         + f'      <plugin filename="ariadne_kinematic_mover" name="ariadne::sim::KinematicMover">\n'
           f'        <frame_id>{body}</frame_id><gravity>{_f(9.80665)}</gravity>'
@@ -206,11 +229,11 @@ def agent_xml(scene, k: int, rig: dict, scene_json: dict, script=None, live: boo
         + '      </plugin>\n    </model>\n')
 
 
-def bridge_entries(n_agents: int, depth: bool, live: bool = False, world: str = "") -> list:
+def bridge_entries(n_agents: int, depth: bool, rig: dict = None, live: bool = False, world: str = "") -> list:
     out = [{"ros_topic_name": "/clock", "gz_topic_name": "/clock", "ros_type_name": "rosgraph_msgs/msg/Clock",
             "gz_type_name": "gz.msgs.Clock", "direction": "GZ_TO_ROS"}]
     for k in range(n_agents):
-        t = topics(k)
+        t = topics(k, rig)
         pairs = [("left_image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
                  ("left_info", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo"),
                  ("right_image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
@@ -220,6 +243,9 @@ def bridge_entries(n_agents: int, depth: bool, live: bool = False, world: str = 
         if depth:
             pairs += [("depth_image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
                       ("depth_info", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo")]
+        for name, _ in (sweep_cameras(rig) if rig else []):
+            pairs += [(f"{name}_image", "sensor_msgs/msg/Image", "gz.msgs.Image"),
+                      (f"{name}_info", "sensor_msgs/msg/CameraInfo", "gz.msgs.CameraInfo")]
         for key, ros_t, gz_t in pairs:
             e = {"ros_topic_name": t[key], "gz_topic_name": t[key], "ros_type_name": ros_t,
                  "gz_type_name": gz_t, "direction": "GZ_TO_ROS"}
@@ -280,7 +306,7 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default", l
         f.write(world)
     depth = bool(rig["depth"]["enabled"])
     with open(os.path.join(scene_dir, f"bridge_{name}.yaml"), "w", newline="\n") as f:
-        yaml.safe_dump(bridge_entries(len(scripts), depth, live, f"scene_{scene.scene_id}"), f, sort_keys=False)
+        yaml.safe_dump(bridge_entries(len(scene.scripts), depth, rig, live, f"scene_{scene.scene_id}"), f, sort_keys=False)
     cams = camera_poses(rig)
     manifest = {
         "mission": name, "scene_id": scene.scene_id, "rig": rig, "rig_path": rig_path,
@@ -298,11 +324,11 @@ def write_mission(scene, scene_dir: str, rig_path: str, name: str = "default", l
         "camera_info_convention": "gz camera_info states cx = W/2, cy = H/2; the pixel-centre truth is "
                                   "(W-1)/2, (H-1)/2 (SMOKE 4n). Its D is [0]*5: the render is pinhole.",
         "lens": dict(rig["lens"], applied="read time, perception/degradation/lens.hpp (D41)"),
-        "agents": [dict({"agent": k, "topics": topics(k), "frame_id": f"agent_{k}/base_link",
+        "agents": [dict({"agent": k, "topics": topics(k, rig), "frame_id": f"agent_{k}/base_link",
                          "script_duration_s": s.duration, "start_delay_s": scene.start_delays_s[k]
                          if k < len(scene.start_delays_s) else 0.0},
                         **({"live_topics": live_topics(k), "mover_log": f"mover_agent_{k}.jsonl"} if live else {}))
-                   for k, s in enumerate(scripts)],
+                   for k, s in enumerate(scene.scripts)],
         "imu": {"period_ns": rig["imu"]["period_ns"], "noise": "none (clean); consumption-time operator, D37",
                 "orientation_field": "identity, NOT measured: consumers must ignore it"},
     }

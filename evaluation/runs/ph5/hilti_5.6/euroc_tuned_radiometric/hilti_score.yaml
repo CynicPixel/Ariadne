@@ -1,0 +1,41 @@
+n_gcp: 5
+reached:
+- 0
+- 1
+- 2
+- 3
+- 4
+unreached: []
+predicted_point: T_W_I(t) T_I_F p_F (robot-measured GCP)
+gcp_frames:
+- rslidar
+fit:
+  error_m:
+    0: 20.1772
+    1: 15.8458
+    2: 13.1283
+    3: 12.837
+    4: 21.0248
+  points:
+    0: 0
+    1: 0
+    2: 0
+    3: 0
+    4: 0
+  score_0_100: 0.0
+  rms_m: 16.9552
+loo:
+  error_m:
+    0: 27.1834
+    1: 20.1685
+    2: 36.7452
+    3: 34.5785
+    4: 26.2935
+  points:
+    0: 0
+    1: 0
+    2: 0
+    3: 0
+    4: 0
+  score_0_100: 0.0
+  rms_m: 29.6072

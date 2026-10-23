@@ -1,0 +1,19 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: 7e515aabfa82486d-agent0
+frames: 1000
+associated_poses: 1000  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 7.35476
+ate_se3: {rmse_m: 0.0170037, mean_m: 0.0147473, max_m: 0.0361697, rotation_rmse_rad: 0.0148119}
+ate_rmse_percent_of_path: 0.231193
+sim3_scale: 1.00498  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00646944, rotation_rmse_rad: 0.00427744}
+vo: {lost_frames: 0, keyframes: 186, ba_runs: 185, ba_mean_cost_ratio: 0.884257, landmarks_alive_at_end: 364, graph_edges: 176, graph_version: 1991}
+stereo_match_valid_fraction: 0.777233
+triangulation: {candidates: 7191, created: 3834, no_stereo: 3338, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 19, uncertain: 0}
+timing_ms: {track_mean: 14.8482, vo_track_mean: 5.34424, keyframe_mean: 127.581, opencv_threads: 4}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.16521, b: -0.000118552, c: -0.000190019, matches: 132, mad_px: 0.221547, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.063558, b: 4.37782e-05, c: -0.00024238, max_abs_dy_px: 0.11955, matches: 143}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 1, epipolar_check_skipped_frames: 0}
+keyframe_refined: {ate_rmse_m: 0.0175454, ate_rotation_rmse_rad: 0.0163171, rpe_1s_translation_rmse_m: 0.00591613}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 35, observations: 483871, invalid_at_entry: 0, chi2_failed: 3675, chi2_failed_fraction: 0.007595, keyframe_observations_rejected: 2325, culled: 3443, exit_edges: 176, keyframes_held: 0, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 957, landmarks_ill_conditioned_at_solution: 26, marginal_degenerate: 0, inlier_sigma_px: 0.469464}
+lost: {motion: bridge, reanchor: every_frame, segments: 0, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 0, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}

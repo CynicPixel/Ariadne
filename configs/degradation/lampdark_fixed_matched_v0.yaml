@@ -1,0 +1,22 @@
+# D145 brightness-matched "dark + fixed light" row: lampdark_sensor_v0 with the fixed-light render scaled to the
+# co-moving-lamp render's trajectory-median linear brightness (exact: ambient 0, the fixed render never clips).
+# Ariadne degradation config: lampdark_sensor_v0 (Phase 5, D142; NOT one of the frozen 5.4 levels).
+#
+# For lamp-lit dark renders (ci_tiny_dark / _fixed, D131): the DARKNESS is the render itself (ambient 0, the lamp or
+# the fixed lights are the only light), so radiance_scale is 1. What D adds is the sensor: the sRGB render decoded
+# to linear (D130), then the same camera as every 2.2 config (shot + read noise, PRNU, vignette, 8 bits). No dust:
+# the dust rows wait on GT depth for the right camera (D142).
+name: lampdark_fixed_matched_v0
+input_transfer: srgb
+radiance_scale: 0.81           # D145: fixed-light render median linear Y 0.0450 -> the lamp render's 0.0364 (30 frames each, replay span)
+enable_shot_noise: true
+photon_scale: 10000.0
+read_noise_electrons: 2.5
+vignette_strength: 0.28
+prnu_sigma: 0.012
+exposure: 1.0
+analog_gain: 1.0
+digital_gain: 1.0
+bit_depth: 8
+saturation: 1.0
+enable_dust: false

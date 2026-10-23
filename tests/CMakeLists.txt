@@ -33,7 +33,8 @@ add_executable(test_protocol
   protocol/test_network.cpp
   protocol/test_transport.cpp
   protocol/test_membership.cpp
-  protocol/test_collab_v2.cpp)
+  protocol/test_collab_v2.cpp
+  protocol/test_collab_selection.cpp)
 target_link_libraries(test_protocol PRIVATE ariadne::core GTest::gtest_main)
 gtest_discover_tests(test_protocol)
 
@@ -47,9 +48,12 @@ gtest_discover_tests(test_phase0_gate)
 add_executable(test_unit
   unit/test_observability.cpp
   unit/test_config.cpp
+  unit/test_sim_depth.cpp
   unit/test_metrics.cpp
   unit/test_perception_config.cpp
   unit/test_euroc.cpp
+  unit/test_imu_noise.cpp
+  unit/test_comms.cpp
   unit/test_ros_cdr.cpp)
 target_link_libraries(test_unit PRIVATE ariadne::runtime ariadne::perception ariadne::slam GTest::gtest_main)
 # Tests read the shipped configs from the source tree.
@@ -61,9 +65,14 @@ if(OpenCV_FOUND)
   add_executable(test_opencv
     unit/test_opencv_identity.cpp
     unit/test_perception_cv.cpp
+    unit/test_tum.cpp
     unit/test_stereo_vo.cpp
     unit/test_lens.cpp
     unit/test_radiometric_stage.cpp
+    unit/test_exposure_control.cpp
+    unit/test_falloff.cpp
+    unit/test_falloff_glue.cpp
+    unit/test_exposure_glue.cpp
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
     unit/test_keyframe_spool.cpp
@@ -82,6 +91,7 @@ if(OpenCV_FOUND)
     unit/test_certificate.cpp
     unit/test_aliasing_ramp.cpp
     unit/test_joint_robust.cpp
+    unit/test_spectral_selector.cpp
     unit/test_window_ba_levmarq.cpp
     unit/test_reassociation.cpp
     unit/test_xfeat_engine.cpp

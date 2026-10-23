@@ -301,6 +301,8 @@ struct GlobalDescriptorValue {
     int64_t stamp_ns = 0;
     std::vector<float> descriptor;
     float quality = 0.0f;
+    uint32_t n_features = 0;     // 3.4: the feature response's size, advertised for pricing; 0 = not advertised
+    uint16_t feature_bytes = 0;
 };
 
 struct MatchRequestValue {
@@ -469,7 +471,8 @@ public:
                                              Timestamp t, uint64_t sequence) const {
         flatbuffers::FlatBufferBuilder fbb(1024 + 4 * g.descriptor.size());
         const auto d = fbb.CreateVector(g.descriptor);
-        const auto off = wire::CreateGlobalDescriptor(fbb, g.keyframe_id, g.stamp_ns, d, g.quality);
+        const auto off = wire::CreateGlobalDescriptor(fbb, g.keyframe_id, g.stamp_ns, d, g.quality, g.n_features,
+                                                        g.feature_bytes);
         return FinishEnvelope(fbb, MessageClass::GLOBAL_DESCRIPTOR, sender, receiver, t, sequence,
                               [&](wire::EnvelopeBuilder& eb) { eb.add_global_descriptor(off); });
     }
@@ -621,6 +624,8 @@ public:
             v.stamp_ns = g->stamp_ns();
             v.descriptor.assign(g->descriptor()->begin(), g->descriptor()->end());
             v.quality = g->quality();
+            v.n_features = g->n_features();
+            v.feature_bytes = g->feature_bytes();
         }
         if (const auto* r = env->match_request()) {
             out->has_match_request = true;
