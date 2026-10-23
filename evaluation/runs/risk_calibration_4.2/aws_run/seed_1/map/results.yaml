@@ -1,0 +1,16 @@
+# ariadne_volumetric_eval (VOLUMETRIC_4.1 §6, D110). Generated; host timings are indicative.
+keyframes_integrated: {agent0: 333, agent1: 255}
+voxel_m: 0.05
+truncation_voxels: 3
+blocks: 3027
+map_bytes: 12398592
+esdf: {incremental: 582, rebuilds: 6, mean_voxels_recomputed: 476311, box: [310, 310, 94]}
+frontier_clusters_final: 15
+frontier_rejected_small: 126
+coarse: {cells: 4224, rle_bytes: 1637}
+ms_per_keyframe:
+  integrate: {mean: 24.3218, p95: 45.81}
+  esdf_update: {mean: 78.0782, p95: 140.292}
+  frontier_update: {mean: 63.6308, p95: 115.101}
+traversability: {ms: 952.219, responder_cells: 10368, agent_cells: 48213, risk_proxy_max: 1}   # [PROXY] risk, uncalibrated
+risk_terms: {overhang: {max: 1.000, at_xy_m: [9.825, -0.275], cells_over_0.2: 11432}, unsupported: {max: 1.000, at_xy_m: [9.775, -0.225], cells_over_0.2: 12292}}

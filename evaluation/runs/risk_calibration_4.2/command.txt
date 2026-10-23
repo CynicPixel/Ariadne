@@ -1,0 +1,14 @@
+# 4.2 risk-proxy calibration (docs/design/RISK_ZONES_4.2.md §3, D112), protocol fixed before the data existed.
+# Renders + estimator chain + map: ONE AWS g4dn.xlarge spot run (spinup id 20261022T215952Z-gpu-277b5e, eu-north-1a,
+# $0.0858/h, 8613 s wall, ~$0.21 compute), infra/eval/risk_calib_aws.sh via risk_calib_aws_launch.sh run.
+# PROVENANCE: the instance ran the repo snapshot at fc0c0a9 (run_params.txt "commit"), but the PAYLOAD BINARIES
+# (ariadne_sim_collab, ariadne_volumetric_eval) were built and staged at df38a12 (pinned by inputs.SHA256SUMS); the
+# map/estimator code they contain is identical between df38a12 and fc0c0a9 for these tools' default paths (later
+# commits add opt-in flags only). Images by id: image_ids.txt. The manifests' git_commit field names fc0c0a9.
+# Recordings deleted on the instance after their spools were built (re-renderable; recording.SHA256SUMS kept);
+# spools (~200 MB each) kept git-ignored at build/runs/20261022T215952Z-gpu-277b5e/output/results/seed_*/spool.tar.gz.
+# Two earlier launches failed before any render: 403 on staging/ (fixed 66eac61), PermissionError on the EGL smoke
+# output dir (fixed fc0c0a9); ~$0.03 together.
+python3 -I python/analysis/risk_calibration.py --seed-dir 0=MAP0:build/worldgen/scenes/ci_tiny_hazard_0 \
+  --seed-dir 1=MAP1:build/worldgen/scenes/ci_tiny_hazard_1 --seed-dir 2=MAP2:build/worldgen/scenes/ci_tiny_hazard_2 \
+  --control build/a1/vol42:SCENE_ci_tiny_0 --out OUT    # control = the evidence spool's map (hazard-free)

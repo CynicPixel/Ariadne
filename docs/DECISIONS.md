@@ -3143,3 +3143,9 @@ Both are main's (3.2 / 3.5).
     flown at the barrier points.
   - **Map:** every row is scored from one shadow Phase 4 map.
   - `e_total_m` stays 120 m; the reserve rule and λ_e do not engage at the pilot's ≈ 0.15 m/s (stated).
+
+- **D112 result (2026-10-23):** the risk proxy passes its pre-registered bar (evaluation AUC 0.831 ≥ 0.75; control
+  FPR 0) and **enters planning**. It saturates, though: the threshold falls at 1.0, with FPR 0.34. Overhang alone is
+  better (AUC 0.92, FPR 0.16) and is recorded as the next pre-registered candidate, not switched to post hoc.
+  - Evidence: `evaluation/runs/risk_calibration_4.2/`, one g4dn spot run, ~$0.21.
+  - Provenance: payload built at df38a12, run snapshot fc0c0a9 (diff checked: no estimator or map code differs).

@@ -835,3 +835,29 @@ average. This is `[UNVERIFIED]` as to cause; one candidate is a voxel-corner vs 
 **So:** 4.1 builds the from-scratch voxel-hash TSDF of §20.1's fallback, and `cv::Volume` HashTSDF stays as its
 correctness oracle: same frames, same voxel size and truncation, unit weights, compared on the raycast surface at a
 tolerance of one voxel. The oracle's own half-voxel bias, measured here, is why the tolerance is not tighter.
+
+## 4v. NVIDIA EGL headless render path on AWS g4dn.xlarge `[SMOKE-TEST]` 2026-10-23
+
+**Gate:** does Gazebo Harmonic render camera frames headless through the NVIDIA EGL path (not a silent llvmpipe
+fallback) on the GPU instance class the arch names for rendering (§5.10)?
+
+**Run:**
+- infra/scripts/sim.sh acceptance (`sim_smoke.py`), as step 3 of the D112 render job, on one g4dn.xlarge spot
+  instance in eu-north-1a;
+- driver 595.91.07, CUDA 13.2; the ariadne/sim:dev image by id `sha256:8b780f52…`;
+- evidence in `evaluation/runs/risk_calibration_4.2/aws_run/egl_smoke/`.
+
+**Result: PASS.**
+- `[sim_smoke] render mode: nvidia-egl`, then `SIM_SMOKE=PASS (3 good frames, render mode nvidia-egl)`.
+- Frames are 320×240 rgb8, luma std 73.9, with the scene's colour structure (red 0.318, blue 0.195).
+- The job then rendered three full ci_tiny_hazard missions on the same path: wall 2188 / 1323 / 469 s for seeds
+  0 / 1 / 2, about 200 s of sim each.
+  - The spread is not explained here; seed 0 also paid the first-render shader warm-up. `[UNVERIFIED]`
+
+**Notes:**
+- The `wall=` field in sim_smoke's timing lines is `time.monotonic()`, the host's monotonic clock, not time since
+  start: 192.9 s on frame 1 is uptime, not a slow frame.
+- Two failed launches before this one were both the job script's: an S3 prefix outside the instance role's
+  `runs/*`, then output dirs owned by root while the containers run as uid 1000. Neither was the render path.
+- **Unblocks:** B's live runs on g4dn (L1 `live_aws.sh`). The 4.3 / 4.6 lockstep gate on g4dn needs B's EGL
+  lockstep check first: lockstep is verified on llvmpipe only.

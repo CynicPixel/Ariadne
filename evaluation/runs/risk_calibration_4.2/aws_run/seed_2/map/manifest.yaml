@@ -1,0 +1,11 @@
+# ariadne_volumetric_eval manifest. Generated.
+tool: ariadne_volumetric_eval
+command: "/p/ariadne_volumetric_eval --spool /work/build/risk_calib/seed_2/spool/3406f0792c57a975-20261022T235513Z --scene /work/build/worldgen/scenes/ci_tiny_hazard_2 --config /work/configs/mission/mission_v1.yaml --out /work/build/risk_calib/seed_2/map"
+scene_id: 3406f0792c57a975
+spool_run_id: 3406f0792c57a975-20261022T235513Z
+spool_sha256: UNRECORDED
+config: mission_v1
+layer: phase4_volumetric (TsdfMap D110)
+git_commit: fc0c0a91d838f1930fbab80fad8903cef24cc190
+git_dirty: false
+image_digest: UNRECORDED
