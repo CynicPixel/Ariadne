@@ -148,7 +148,8 @@ unless the measured CPU budget fails.
      outcome, ate_vs_bytes byte-identical, results.yaml identical but for `ms_total`. Pass A: store byte-identical to
      the pre-refactor binary at the same OpenCV thread count; `--check-lazy 1`: lazy == eager, 38/38 keyframes bitwise.
    - **Finding (determinism):** `cv::ALIKED` output depends on the OpenCV thread count (`OPENCV_FOR_THREADS_NUM`):
-     the same keypoint set (1023-1024 of 1024 shared), in a different order, with descriptors differing up to 0.53.
+     the same keypoints in a different order, with float-level value differences (4 threads vs the default, 38 keyframes:
+     every keypoint matched within 1.8e-4 px, descriptors within 4.9e-6 once rows are aligned by keypoint).
      Run to run at a fixed thread count it is bitwise stable. So pass-A stores, and live features, are reproducible
      only with the thread count pinned. Pass A's yaml now records `opencv_threads`; the sweep pins it per job
      (nproc / P_A). Live lockstep (§3) must pin it per worker too.
