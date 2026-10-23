@@ -150,11 +150,17 @@ public:
     /// End of input: release everything still held, in order.
     template <typename F>
     void Flush(F&& release) {
-        for (auto& [k, m] : held_) release(std::move(m));
+        for (auto& [k, m] : held_) {
+            Count(std::get<0>(k));
+            release(std::move(m));
+        }
         held_.clear();
     }
 
     long released_on_timeout() const { return timeouts_; }
+    /// Releases whose stamp went BACKWARDS (a timeout skip let newer stamps out first, then the stragglers arrived):
+    /// the consumed order was not canonical. 0 means the stream order was canonical end to end (A1, 2026-10-23).
+    long released_out_of_order() const { return order_breaks_; }
 
     /// Every timed topic counts as heard from now (D165 lockstep): after a pause the runtime asked for, the silence was
     /// requested, not a stall, so the hold-back (wall time) restarts instead of releasing the first burst on timeout.
@@ -181,9 +187,15 @@ private:
         }
         while (!held_.empty() && std::get<0>(held_.begin()->first) <= wm) {
             if (timed_out) ++timeouts_;
+            Count(std::get<0>(held_.begin()->first));
             release(std::move(held_.begin()->second));
             held_.erase(held_.begin());
         }
+    }
+    void Count(int64_t stamp) {
+        if (stamp < 0) return;
+        if (stamp < last_released_) ++order_breaks_;
+        last_released_ = std::max(last_released_, stamp);
     }
     std::chrono::steady_clock::time_point first_wall(std::chrono::steady_clock::time_point now) {
         if (!first_) first_ = now;
@@ -199,7 +211,8 @@ private:
     std::map<std::string, Latest> latest_;
     std::map<std::tuple<int64_t, std::string, uint64_t>, StreamMessage> held_;
     uint64_t arrival_ = 0;
-    long timeouts_ = 0;
+    long timeouts_ = 0, order_breaks_ = 0;
+    int64_t last_released_ = std::numeric_limits<int64_t>::min();
     std::optional<std::chrono::steady_clock::time_point> first_;
 };
 

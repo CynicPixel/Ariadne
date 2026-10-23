@@ -1,0 +1,1 @@
+orchestrator: tools ['observe_map', 'observe_image', 'query_uncertainty', 'query_route', 'list_candidates', 'request_human_approval', 'propose_directive', 'assign']; listening on /work/build/live/runs/live-20261023T084158Z-64df/chooser.sock

@@ -62,6 +62,11 @@ struct LiveConfig {
     double llm_timeout_s = 0;              // chooser llm: wall seconds to wait for the orchestrator
     bool face_frontier = true;
     bool lockstep = false;                 // D165: gz paused at every barrier until the commands are applied
+    int lockstep_substep_ms = 500;         // D166: gz paced toward each barrier in sub-steps of this much sim time,
+                                           // gated on consumption, so no queue between gz and the estimators can
+                                           // hold more than one sub-step (uncapped RTF would otherwise overflow the
+                                           // intra-process rings, which drop their oldest when full - rclcpp jazzy
+                                           // ring_buffer_implementation.hpp L83). <= 0 restores the single 5 s jump.
     int hold_back_ms = 3000;
 };
 
@@ -81,6 +86,7 @@ LiveConfig LoadLive(const std::string& path) {
     c.hold_back_ms = n["reorder"]["hold_back_ms"].as<int>();
     c.telemetry_hz = n["telemetry_hz"].as<double>();
     if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
+    if (n["lockstep_substep_ms"]) c.lockstep_substep_ms = n["lockstep_substep_ms"].as<int>();
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
@@ -304,6 +310,11 @@ int main(int argc, char** argv) {
         }
         const int64_t end_ns = int64_t(std::llround(lc.end_s * 1e9));
         const int64_t replan_ns = int64_t(std::llround(mc.replan_s * 1e9));
+        // D166 pacing: the next sub-step is requested once consumption is within grace of the last target.
+        const int64_t substep_ns = lc.lockstep_substep_ms > 0
+                                       ? std::min<int64_t>(int64_t(lc.lockstep_substep_ms) * 1000000, replan_ns)
+                                       : replan_ns;
+        const int64_t grace_ns = 100000000;   // one camera period (20 Hz) behind the paused sim is "caught up"
         if (lc.lockstep && end_ns % replan_ns != 0) {   // the last barrier must BE the end (its holds go out paused)
             throw std::invalid_argument("lockstep: end_s must be a multiple of the replan period");
         }
@@ -427,10 +438,13 @@ int main(int argc, char** argv) {
         };
 
         std::thread reader;
-        long reorder_timeouts = 0;
+        long reorder_timeouts = 0, reorder_order_breaks = 0;
         if (is_live) {
             reader = std::thread([&] {
-                live::Reorderer ro(timed, std::chrono::milliseconds(lc.hold_back_ms));
+                // D166: the wall-clock timeout skip made release order hardware-dependent under lockstep
+                // (~80 skips per 200 s run, at the barriers). Lockstep guarantees every timed topic reaches the
+                // watermark, so the hold is effectively infinite there; free-run keeps the configured hold.
+                live::Reorderer ro(timed, std::chrono::milliseconds(lc.lockstep ? 86400000 : lc.hold_back_ms));
                 live::LinkFrame f;
                 uint64_t seen_gen = 0;
                 try {
@@ -438,7 +452,7 @@ int main(int argc, char** argv) {
                         if (f.topic[0] == '#') {
                             const std::string payload(f.payload.begin(), f.payload.end());
                             link_log.Put("{\"control\":\"" + f.topic + "\",\"payload\":" + payload + "}");
-                            if (f.topic == "#ready") RunTo(replan_ns);   // lockstep: the world starts at the runtime's word
+                            if (f.topic == "#ready") RunTo(substep_ns);   // lockstep: the world starts at the runtime's word (D166: one sub-step)
                             if (f.topic == "#run_to_ack") lockstep_log.Put("{\"ack\":" + payload + "}");
                             continue;
                         }
@@ -475,6 +489,7 @@ int main(int argc, char** argv) {
                     std::fprintf(stderr, "ariadne_live: link reader: %s\n", e.what());
                 }
                 reorder_timeouts = ro.released_on_timeout();
+                reorder_order_breaks = ro.released_out_of_order();
                 for (auto& l : lanes) l.images.Close();
                 {
                     std::lock_guard<std::mutex> lk(progress_mu);
@@ -602,12 +617,26 @@ int main(int argc, char** argv) {
             int64_t since_ns = 0;
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
         } current[2];
+        int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
-                progress_cv.wait(lk, [&] {
-                    return (lanes[0].done || lanes[0].progress >= T) && (lanes[1].done || lanes[1].progress >= T);
-                });
+                for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on both lanes' consumption
+                    if ((lanes[0].done || lanes[0].progress >= T) && (lanes[1].done || lanes[1].progress >= T)) break;
+                    if (is_live && lc.lockstep && paced_to < T && !input_done) {
+                        const int64_t c0 = lanes[0].done ? INT64_MAX : lanes[0].progress;
+                        const int64_t c1 = lanes[1].done ? INT64_MAX : lanes[1].progress;
+                        if (std::min(c0, c1) >= paced_to - grace_ns) {
+                            const int64_t next = std::min(paced_to + substep_ns, T);
+                            lk.unlock();
+                            RunTo(next);
+                            lk.lock();
+                            paced_to = next;
+                            continue;
+                        }
+                    }
+                    progress_cv.wait_for(lk, std::chrono::milliseconds(200));
+                }
                 if (lanes[0].done && lanes[1].done && lanes[0].progress < T && lanes[1].progress < T) break;
                 // The previous decision's outcome is an input to this one: wait for both answers to the commands sent
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
@@ -722,6 +751,7 @@ int main(int argc, char** argv) {
                 cv::Mat plan;
                 std::vector<mis::Candidate> cands;   // ELIGIBLE only (path >= min_goal_m), nearest first
                 std::vector<double> risk;
+                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
             } P[2];
@@ -806,6 +836,7 @@ int main(int argc, char** argv) {
                     const double r = t.risk;
                     pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
+                    pd.exempt.push_back(t.supervisor_return);
                     // Operator intent at this goal (§0b): the region directives for this agent covering it, the product
                     // of their priority weights, the distance to the nearest one (0 inside; null if none is active).
                     std::string covering;
@@ -820,11 +851,13 @@ int main(int argc, char** argv) {
                             if (d.kind == "priority_region") weight *= d.weight;
                         }
                     }
-                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"cluster\":" << t.task_id << ",\"path_m\":"
+                    cj << (i ? "," : "") << "{\"index\":" << i << ",\"rank\":" << i << ",\"utility\":" << t.utility
+                       << ",\"cluster\":" << t.task_id << ",\"path_m\":"
                        << t.path_m << ",\"goal_xy_m\":" << Xy(t.goal_xy.first, t.goal_xy.second) << ",\"standoff_m\":"
                        << t.standoff_m << ",\"centroid_xy_m\":" << Xy(t.centroid_xy.first, t.centroid_xy.second)
                        << ",\"cells\":" << t.cells << ",\"risk\":" << r << ",\"risk_reason\":\"" << t.risk_reason
-                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold ? "true" : "false")
+                       << "\",\"needs_approval\":" << (r > lc.autonomous_threshold && !t.supervisor_return ? "true" : "false")
+                       << (t.supervisor_return ? ",\"supervisor_return\":true" : "")
                        << ",\"directives\":[" << covering << "],\"priority_weight\":" << weight << ",\"to_directive_m\":";
                     if (std::isfinite(to_dir)) cj << to_dir; else cj << "null";
                     cj << "}";
@@ -930,14 +963,19 @@ int main(int argc, char** argv) {
                     first = false;
                 }
                 q << "]}";
-                chooser->Send(q.str());
-                const std::string ans = chooser->Wait(did, std::chrono::steady_clock::now() +
-                                                                std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                std::string ans, top_problem;
+                try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
+                        // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
+                    chooser->Send(q.str());
+                    ans = chooser->Wait(did, std::chrono::steady_clock::now() +
+                                                 std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
+                } catch (const std::exception& e) {
+                    top_problem = std::string("chooser link down: ") + e.what();
+                }
                 YAML::Node assigned;
-                std::string top_problem;
-                if (ans.empty()) {
+                if (top_problem.empty() && ans.empty()) {
                     top_problem = "timeout or no orchestrator";
-                } else {
+                } else if (top_problem.empty()) {
                     try {
                         assigned = YAML::Load(ans)["assignments"];
                         if (!assigned || assigned.IsNull()) top_problem = "no assignment recorded";
@@ -964,7 +1002,8 @@ int main(int argc, char** argv) {
                     }
                     if (want[k] < -1 || want[k] >= int(P[k].cands.size())) {
                         source[k] = "fallback", validation[k] = "missing or out of the candidate set";
-                    } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold) {
+                    } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold &&
+                               !P[k].exempt[size_t(want[k])]) {
                         const std::string expect = did + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
                         std::ifstream f(run_dir / "approvals" / (expect + ".json"));
                         approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
@@ -1030,7 +1069,16 @@ int main(int argc, char** argv) {
                     last_goal[k] = {direct[k]->x, direct[k]->y};
                     current[k] = {true, direct[k]->x, direct[k]->y, T, "operator goto " + direct[k]->id};
                 } else if (pick >= 0) {
-                    const auto g = plan_out.agents[k].options[size_t(pick)].goal_xy;
+                    const auto& po = plan_out.agents[k].options[size_t(pick)];
+                    if (po.supervisor_return && po.risk > lc.autonomous_threshold) {   // taken ungated: say so loudly
+                        std::ostringstream al;
+                        al.precision(3);
+                        al << "{\"type\":\"alert\",\"t_s\":" << ts << ",\"agent\":" << k << ",\"text\":\"agent " << k
+                           << ": energy-reserve RETURN taken without approval (risk " << po.risk << " > " << lc.autonomous_threshold
+                           << "; reserve returns are exempt)\"}";
+                        telemetry.Put(al.str());
+                    }
+                    const auto g = po.goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
                     const auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
@@ -1094,8 +1142,9 @@ int main(int argc, char** argv) {
                 lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + std::to_string(at[0]) + "," +
                                  std::to_string(at[1]) + "],\"answered\":" + (all ? "true" : "false") +
                                  ",\"wall_paused_s\":" + std::to_string(paused_s) + ",\"resume_to_ns\":" +
-                                 std::to_string(T + replan_ns) + "}");
-                RunTo(T + replan_ns);
+                                 std::to_string(std::min(T + substep_ns, end_ns + substep_ns)) + "}");
+                RunTo(T + substep_ns);   // D166: one sub-step; the next barrier's wait loop paces the rest
+                paced_to = T + substep_ns;
             }
         }
         // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
@@ -1125,6 +1174,7 @@ int main(int argc, char** argv) {
             << "\ncommands_decided: " << commands_sent << "\nlockstep: " << (lc.lockstep ? "true" : "false")
             << "\nplanner: " << planner_name << "\nshadow_map: " << (shadow ? "p4slab (Phase 4 TSDF)" : "none")
             << "\nreorder_released_on_timeout: " << reorder_timeouts
+            << "\nreorder_released_out_of_order: " << reorder_order_breaks
             << "\nunrouted_messages: " << dropped_untyped << "\nanswer_timeouts: " << answer_timeouts
             << "\nrefused_goals: " << refused_goals.size() << "\nagents:\n";
         for (int k = 0; k < 2; ++k) {

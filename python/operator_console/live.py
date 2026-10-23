@@ -94,6 +94,8 @@ class LiveRun:
                                     f"agent {r['agent']}: {r['result']} ({c.get('kind', 'none')}{to}) — "
                                     f"{r['chooser']} choice of {r.get('candidates_total', 0)} candidates · "
                                     f"{'executed' if r['executed'] else 'not executed'}"))
+            elif kind == "alert":
+                self.events.append((d["t_s"], "alert", d["text"]))
             elif kind == "mover_state":
                 s = d["state"]
                 verdict = "accepted" if s["accepted"] else f"REFUSED ({s['reason']})"
