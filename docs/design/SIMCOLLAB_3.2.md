@@ -224,9 +224,14 @@ opportunities (v1, the 1.6 retrieval row).
 
 ## Open items
 
-1. **"greedy coverage" (§31.1).** Check Tian et al. RSS 2018 / IJRR 2021 for a budgeted maximum-coverage
-   formulation with a (1 − 1/e) greedy. If it is there, that is the sourced definition. It is built after the three
-   gate arms.
+1. **"greedy coverage" (§31.1): sourced, built after the gate arms.**
+   - Tian, Khosoussi, Giamou, How & Kelly, RSS 2018 (arXiv 1806.00188) pose budgeted exchange as monotone submodular
+     maximisation under a transmission budget. The utility is the expected number of candidate loop closures whose
+     verification the exchanged vertex set enables. It generalises maximum coverage and is NP-hard, and a greedy
+     over vertices is a (1 − 1/e) approximation (their RSS/WAFR slides).
+   - The row is that greedy over keyframes priced in bytes, with candidate probability set to the retrieval
+     similarity.
+   - [UNVERIFIED] the exact theorem statement. Transcribe it from the paper when the row is built.
 2. **Seam change.** Confirm that `ExpectedPer(L)` is D102 L8's "RFComms as modelled" case, so the 1500 MTU stands.
    Under the physical case (PER in bits, slow fading) the recommendation flips to capping fragment size, and that
    becomes its own decision.
