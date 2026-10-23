@@ -9,13 +9,14 @@
 // budgeted and partitionable; every byte is counted at the serializer (invariant 6), not here.
 //   SlabExporter     own maps -> versioned blocks -> SubmapPatch (only blocks changed after the receiver's ack)
 //   ReceivedLayers   peers' patches placed at T_G_W(j) -> the known mask (NBV gain, PeerKnown) and the merged layer
-//                    (the operator's map; its egress at rho_responder, invariant 4)
+//                    (the operator's map; its egress at rho_responder, invariant 4: OperatorEgress)
 //   BuildBid / BrokerAssign / ApplyConsensus   bids -> SGA over what arrived -> the member's pick, or "uncoordinated"
 // Task identity across agents is spatial (r_same; frontier ids are per-agent hashes): the stated D175 deviation from
 // CBBA's shared task list. Deterministic: sim time only, no wall clock.
 // ---------------------------------------------------------------------------
 #include "planning/mission/allocation.hpp"
 #include "planning/mission/nbv.hpp"
+#include "planning/route/egress.hpp"
 #include "planning/volumetric/traversability.hpp"
 
 #include <opencv2/core.hpp>
@@ -128,8 +129,10 @@ public:
     void Integrate(const SubmapPatch& p, const Rigid2& T_G_Wj = {});
     /// CV_8U, nonzero where some peer observed the column (free or occupied): PeerKnown's mask.
     const cv::Mat& KnownMask() const { return known_; }
-    /// CellCode per cell over every peer (and `own`, if given): occupied if anyone says occupied, else free with the
-    /// responder bit if anyone has it, else free, else unknown [DESIGN: conservative for the operator's egress].
+    /// CellCode per cell over every peer (and `own`, if given): occupied if anyone says occupied, else free if anyone
+    /// saw it free WITHOUT the responder bit, else free with the bit, else unknown. The bit survives only if every
+    /// observer of the cell had it: a sender's bit also carries its 3D capsule test (an overhang only it saw), which a
+    /// peer that lacks the overhang cannot overrule [DESIGN: conservative for the operator's egress, invariant 4].
     cv::Mat Merged(const cv::Mat* own = nullptr) const;
     uint64_t AckedVersion(int sender) const { return acked_.at(size_t(sender)); }
 
@@ -139,6 +142,30 @@ private:
     std::vector<cv::Mat> layer_;        // per peer: CellCodes in G
     std::vector<uint64_t> acked_;       // per peer: the newest version integrated
     cv::Mat known_;
+};
+
+/// D175 §8.2: the operator node's egress claim, computed on what it RECEIVED (its own codes folded in by Merged).
+/// The lattice is the merged layer's responder bit AND the observed rule re-applied on the merged layer: a free cell
+/// whose 2D edge clearance to the nearest non-free cell (EdgeClearance, the GT convention) is >= rho_responder. So a
+/// wall one agent saw next to another agent's certified cells removes them; never more than any sender certified
+/// (invariant 4). Penalty: EgressPenalty's clearance term on that clearance; support and risk are not on the wire
+/// (the patch is tri-state + the bit), so the w_u and w_r terms are 0 and `confidence` is -1 = not computed.
+/// D* Lite, replanned incrementally like EgressPlanner. One instance per operator node (single writer).
+class OperatorEgress {
+public:
+    OperatorEgress(const GridFrame& g, const Cell& target, std::vector<Cell> exits, double rho_responder,
+                   const EgressWeights& w = {});
+    /// `merged`: CV_8U CellCodes on the briefing grid (ReceivedLayers::Merged(&own)).
+    EgressReplan Replan(const cv::Mat& merged);
+    const cv::Mat& Lattice() const { return trav_r_; }   // CV_8U 0/1, the last replan's
+    const cv::Mat& Clearance() const { return clear_; }  // CV_32F (m), the last replan's
+
+private:
+    GridFrame g_;
+    double rho_;
+    EgressWeights w_;
+    EgressPlanner planner_;
+    cv::Mat trav_r_, clear_, ones_;
 };
 
 /// The sender's top-M options as a bid (return / hold are outside the auction, as in BuildAuction), goals in G.
