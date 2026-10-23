@@ -127,7 +127,7 @@ table Heartbeat {
 /// allocation event). Class TASK_CONSENSUS; never compressed (§15.7 compresses classes 4-5 only).
 table TaskConsensus {
   tasks:[ulong];
-  y:[float];
+  y:[double];   // double: CBBA compares bids exactly (Table I), so the wire must not round them (D115a)
   z:[byte];
   s:[long];
   scales:[float];

@@ -220,3 +220,20 @@ replans).
   - Each would need its own review and a byte-table row; none is applied here.
 - **The first replay exposed a convergence bug,** fixed in `63fdbee`: single-agent events ran to the 1000-round cap
   because "converged" required agreement across disconnected agents.
+
+## 13. Sparse TASK_CONSENSUS (D115a, 2026-10-23)
+
+- **The cause:** §12 measured 2.4 KB per message, because every task (≈ 160) travelled with its (y, z), almost all
+  of them (0, none). Every CBBA event starts from y = 0, z = none, and with L_t = 1 only a handful of tasks ever
+  have a winner.
+- **The change: only tasks with a winner are sent.** The receiver expands every missing task to (0, none), which is
+  literally the sender's state, so Table I gets identical inputs. Bids travel as **doubles** (`y:[double]`), so the
+  wire never rounds a comparison.
+- **Proven end to end, not argued:**
+  - `CbbaParams.transport` delivers each message through encode → decode → expand;
+  - on 300 random instances (N_u 2–6, N_t 3–14, L_t 1–2) the assignment, the bids and the round count are
+    identical with and without the wire (`Cbba.WireTransportLeavesTheAssignmentUnchanged`).
+  - `Phase4Planner` and the replay evaluator now run CBBA through the wire transport.
+- **Size:** a 160-task event with 2 winners is 234 B on the wire. The run-level row is in §14.
+- **Not done, because it would change the algorithm, not the encoding:** announcing only top-K tasks, or deltas
+  against an acknowledged state. Neither is needed at this size.

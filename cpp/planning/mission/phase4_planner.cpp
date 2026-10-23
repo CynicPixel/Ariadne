@@ -302,6 +302,7 @@ void Phase4Planner::Allocate(const Phase4AgentInput agents[2], Phase4Plan* out) 
     } else {
         CbbaParams cp;
         cp.bytes = WireBytes(codec_, rec.scales);
+        cp.transport = WireTransport(codec_, rec.scales);   // CBBA runs on exactly what the wire carries (D115a)
         const std::vector<std::vector<int>> G = {{0, linked ? 1 : 0}, {linked ? 1 : 0, 0}};
         al = RunCbba(in, [&](int) { return G; }, cp);
     }

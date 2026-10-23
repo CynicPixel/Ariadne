@@ -319,7 +319,7 @@ struct FeatureResponseValue {
 /// D115: one CBBA consensus message (see wire.fbs TaskConsensus).
 struct TaskConsensusValue {
     std::vector<uint64_t> tasks;
-    std::vector<float> y;
+    std::vector<double> y;      // exact: Table I compares bids, so they travel unrounded
     std::vector<int8_t> z;      // winner agent, -1 = none
     std::vector<int64_t> s;     // per agent (eq. 5)
     std::vector<float> scales;  // the auction's common scales

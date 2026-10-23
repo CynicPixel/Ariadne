@@ -172,11 +172,14 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
             snap[size_t(k)].sender = k, snap[size_t(k)].task_ids = in.task_ids;
             snap[size_t(k)].y = st[size_t(k)].y, snap[size_t(k)].z = st[size_t(k)].z, snap[size_t(k)].s = st[size_t(k)].s;
         }
+        std::vector<CbbaMessage> recv = snap;   // what crosses the link (the wire, when a transport is given)
+        if (prm.transport)
+            for (int k = 0; k < U; ++k) recv[size_t(k)] = prm.transport(snap[size_t(k)]);
         for (int i = 0; i < U; ++i) {
             AgentState& me = st[size_t(i)];
             for (int k = 0; k < U; ++k) {
                 if (k == i || !G[size_t(i)][size_t(k)]) continue;
-                const CbbaMessage& m = snap[size_t(k)];
+                const CbbaMessage& m = recv[size_t(k)];
                 ++out.messages;
                 if (prm.bytes) out.bytes += prm.bytes(m);
                 for (int j = 0; j < N; ++j) {
@@ -198,7 +201,7 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
                     s_new[size_t(k)] = t;
                 } else {
                     for (int m = 0; m < U; ++m)
-                        if (m != i && G[size_t(i)][size_t(m)]) s_new[size_t(k)] = std::max(s_new[size_t(k)], snap[size_t(m)].s[size_t(k)]);
+                        if (m != i && G[size_t(i)][size_t(m)]) s_new[size_t(k)] = std::max(s_new[size_t(k)], recv[size_t(m)].s[size_t(k)]);
                 }
             }
             me.s = s_new;
