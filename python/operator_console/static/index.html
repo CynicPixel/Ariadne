@@ -9,13 +9,13 @@
   :root {
     --bg: #eef0ec; --panel: #fbfbf9; --ink: #1c1f1d; --muted: #66706a; --rule: #d9ddd6;
     --unknown: #3a3f3c; --free: #e9ece6; --occupied: #121413;
-    --agent0: #2a78d6; --agent1: #eb6834; --route: #c2410c; --route-agent: #0f766e; --exit: #2f855a; --target: #c53030;
+    --agent0: #2a78d6; --agent1: #eb6834; --agent2: #2f9e44; --route: #c2410c; --route-agent: #0f766e; --exit: #2f855a; --target: #c53030;
     --ok: #2f855a; --warn: #b7791f;
     --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #141716; --panel: #1c201e; --ink: #e7ebe8; --muted: #9aa49e; --rule: #2e3431;
-      --unknown: #262a28; --free: #c9cec8; --occupied: #050606; --agent0: #3987e5; --agent1: #d95926;
+      --unknown: #262a28; --free: #c9cec8; --occupied: #050606; --agent0: #3987e5; --agent1: #d95926; --agent2: #37b24d;
       --route: #f08a4b; --route-agent: #2dd4bf; color-scheme: dark; }
   }
   * { box-sizing: border-box; }
@@ -88,9 +88,20 @@
       <span><span class="sw" style="background:var(--unknown); outline:1px solid var(--rule)"></span>unknown</span>
       <span><span class="sw" style="background:var(--agent0)"></span>agent 0</span>
       <span><span class="sw" style="background:var(--agent1)"></span>agent 1</span>
+      <span><span class="sw" style="background:var(--agent2)"></span>agent 2</span>
+      <span><span class="sw" style="opacity:.35; background:var(--agent0)"></span>ground-truth ghost</span>
       <span><span class="sw" style="background:var(--route)"></span>egress route (0.40 m)</span>
       <span><span class="sw" style="background:var(--route-agent)"></span>agent route (0.20 m)</span>
     </div>
+  </section>
+  <section class="panel" aria-label="Agent cameras">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px">
+      <div><select id="camsel0" aria-label="left camera agent"></select>
+        <img id="cam0" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown)"></div>
+      <div><select id="camsel1" aria-label="right camera agent"></select>
+        <img id="cam1" alt="agent camera (latest keyframe)" style="width:100%; border-radius:4px; background:var(--unknown)"></div>
+    </div>
+    <small>latest keyframe per agent (what the estimator keyframed, not a raw stream)</small>
   </section>
   <div style="display:grid; gap:16px; align-content:start; min-width:0">
     <section id="operator" hidden aria-label="Operator">
@@ -146,7 +157,7 @@ let lastFrame = null, meta, ws, slab = null, frameCache = null, maxBytes = {};
 // Smooth motion (entity interpolation): every pose sample is kept with its sim time; the page draws at a render clock
 // that runs at the measured sim speed a little behind the newest sample, interpolating between the two samples around
 // it. Nothing is extrapolated: the drawn pose is always between two poses the runtime reported.
-let samples = {0: [], 1: []};
+let samples = {};   // agent id -> pose samples (P8: N agents)
 const clk = {t: null, rate: 0, newest: null, seenWall: null, seenT: null, lastAnim: null};
 const LAG_WALL_S = 0.6;   // how far (in wall seconds of sim progress) the render clock trails the newest sample
 
@@ -167,10 +178,11 @@ function poseAt(id, t) {
 function addSamples(f) {
   for (const a of f.agents) {
     const add = a.samples ?? (a.x === null ? [] : [[f.t_s, a.x, a.y, a.yaw]]);   // replay frames: one pose per frame
-    const S = samples[a.id];
+    const S = samples[a.id] ??= [];
     for (const s of add) if (!S.length || s[0] > S[S.length - 1][0]) S.push(s);
   }
-  const newest = Math.max(...[0, 1].map((k) => samples[k].length ? samples[k][samples[k].length - 1][0] : -Infinity));
+  const ids = Object.keys(samples);
+  const newest = Math.max(...(ids.length ? ids : ["0"]).map((k) => samples[k].length ? samples[k][samples[k].length - 1][0] : -Infinity));
   if (!isFinite(newest)) return;
   const now = performance.now() / 1000;
   if (clk.seenT !== null && newest > clk.seenT) {   // sim speed = sim progress per wall second, smoothed
@@ -235,10 +247,18 @@ function draw(f) {
   const dot = (x, y, r, color) => { const [u, v] = w2c(x, y); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(u, v, r, 0, 7); ctx.fill(); };
   meta.exits_xy.forEach(([x, y]) => dot(x, y, 7, css("--exit")));
   dot(meta.target_xy[0], meta.target_xy[1], 7, css("--target"));
-  for (const id of [0, 1]) {
+  const AGENT_VARS = ["--agent0", "--agent1", "--agent2"];
+  if (lastFrame) for (const ag of lastFrame.agents) {   // the faint ground-truth ghosts (P8: estimation made visible)
+    if (!ag.gt) continue;
+    const [u, v] = w2c(ag.gt[0], ag.gt[1]);
+    ctx.save(); ctx.globalAlpha = 0.3; ctx.translate(u, v); ctx.rotate(-ag.gt[2]);
+    ctx.fillStyle = css(AGENT_VARS[ag.id % 3]);
+    ctx.beginPath(); ctx.moveTo(11, 0); ctx.lineTo(-7, 6); ctx.lineTo(-4, 0); ctx.lineTo(-7, -6); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+  for (const id of Object.keys(samples).map(Number)) {
     const a = poseAt(id, clk.t);   // interpolated between the two samples around the render time
     if (!a) continue;
-    const color = css(id ? "--agent1" : "--agent0");
+    const color = css(AGENT_VARS[id % 3]);
     const S = samples[id], tr = [];
     for (const s of S) { if (s[0] > clk.t) break; tr.push([s[1], s[2]]); }
     tr.push([a.x, a.y]);
@@ -276,7 +296,7 @@ function timeline(f) {
 async function onFrame(f) {
   if (f.end) { $("source").textContent = "replay finished"; return; }
   $("t").textContent = f.t_s.toFixed(1);
-  const merged = f.agents.find((a) => a.id === 1).merged;
+  const merged = f.agents.find((a) => a.id === 1)?.merged ?? true;
   $("merged").textContent = merged ? "agent 1 merged" : "agent 1 not merged"; $("merged").className = `pill ${merged ? "ok" : "wait"}`;
   $("route").textContent = f.route.egress ? "valid egress route" : "no valid egress route"; $("route").className = `pill ${f.route.egress ? "ok" : "wait"}`;
   if (f.map_version !== null && f.map_version !== frameCache) {
@@ -292,7 +312,7 @@ async function onFrame(f) {
 
 async function start() {
   if (ws) ws.close();
-  samples = {0: [], 1: []}; Object.assign(clk, {t: null, rate: 0, newest: null, seenWall: null, seenT: null});
+  samples = {}; Object.assign(clk, {t: null, rate: 0, newest: null, seenWall: null, seenT: null});
   frameCache = null; slab = null; $("timeline").innerHTML = "";
   meta = meta || await (await fetch("/api/meta")).json();
   canvas.height = Math.round(canvas.width * meta.grid.rows / meta.grid.cols);
@@ -489,6 +509,20 @@ if (at !== null) {
   start();
   requestAnimationFrame(animate);
 }
+// P8: camera windows - two panes, each selecting any agent (item 7), latest keyframe jpg per agent
+const camSel = [document.getElementById("camsel0"), document.getElementById("camsel1")];
+const camImg = [document.getElementById("cam0"), document.getElementById("cam1")];
+function camAgents() { return lastFrame ? lastFrame.agents.map((a) => a.id) : [0, 1]; }
+setInterval(() => {
+  const ids = camAgents();
+  camSel.forEach((sel, i) => {
+    if (sel.options.length !== ids.length) {
+      sel.innerHTML = ids.map((k) => `<option value="${k}">agent ${k} camera</option>`).join("");
+      sel.value = ids[Math.min(i, ids.length - 1)];
+    }
+    camImg[i].src = `/api/cam/${sel.value}.jpg?t=${Date.now()}`;
+  });
+}, 1000);
 </script>
 </body>
 </html>

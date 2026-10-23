@@ -26,6 +26,7 @@ class LiveRun:
     offset: int = 0
     t_s: float = 0.0
     poses: dict = field(default_factory=dict)        # agent -> (t_s, x, y, yaw)
+    gt: dict = field(default_factory=dict)           # agent -> (t_s, x, y, yaw), the GT ghost (P8)
     history: dict = field(default_factory=dict)      # agent -> [(t_s, x, y, yaw)], every pose: the page interpolates
     snapshots: list = field(default_factory=list)    # (t_s, path)
     egress: list | None = None
@@ -78,21 +79,29 @@ class LiveRun:
         for line in data[: nl + 1].decode().splitlines():
             d = json.loads(line)
             kind = d.get("type")
-            if kind == "pose":
+            if kind == "gt_pose":   # P8: the faint ground-truth ghost per agent
+                self.gt[d["agent"]] = (d["t_s"], d["xy"][0], d["xy"][1], d["yaw"])
+            elif kind == "pose":
                 self.poses[d["agent"]] = (d["t_s"], d["xy"][0], d["xy"][1], d["yaw"])
                 self.history.setdefault(d["agent"], []).append(self.poses[d["agent"]])
                 self.t_s = max(self.t_s, d["t_s"])
             elif kind == "snapshot":
                 self.snapshots.append((d["t_s"], src / d["png"]))
-                self.egress = d.get("egress_xy")
+                new_egress = d.get("egress_xy")
+                if new_egress and self.egress and (len(new_egress) != len(self.egress)
+                                                   or new_egress[-1] != self.egress[-1]):
+                    self.events.append((d["t_s"], "route", "return route updated (new evidence; rho 0.40 m)"))
+                self.egress = new_egress
             elif kind == "decision":
                 r = d["record"]
                 c = r.get("command", {})
                 wp = c.get("waypoints_xy_m") or []
                 to = f" to ({wp[-1][0]:.1f}, {wp[-1][1]:.1f})" if wp else ""
+                ch = r.get("choice", {})
+                why = f" [{ch['source']}]" if ch.get("source") else ""
                 self.events.append((r["t_s"], "decision",
                                     f"agent {r['agent']}: {r['result']} ({c.get('kind', 'none')}{to}) — "
-                                    f"{r['chooser']} choice of {r.get('candidates_total', 0)} candidates · "
+                                    f"{r['chooser']} choice of {r.get('candidates_total', 0)} candidates{why} · "
                                     f"{'executed' if r['executed'] else 'not executed'}"))
             elif kind == "alert":
                 self.events.append((d["t_s"], "alert", d["text"]))
@@ -107,7 +116,7 @@ class LiveRun:
         """`samples`: every pose of the agent stamped after `since_pose` (sim time), [t_s, x, y, yaw] each, so the page
         can interpolate between them instead of jumping to the newest one."""
         agents = []
-        for k in (0, 1):
+        for k in sorted(set(self.poses) | set(self.gt)) or [0, 1]:   # P8: N agents
             if k in self.poses:
                 t, x, y, yaw = self.poses[k]
                 h = self.history.get(k, [])
@@ -115,8 +124,10 @@ class LiveRun:
                 while i > 0 and h[i - 1][0] > since_pose:   # the new tail only (history is in stamp order)
                     i -= 1
                 samples = [[round(a, 3), round(b, 3), round(c, 3), round(e, 4)] for a, b, c, e in h[i:]]
+                g = self.gt.get(k)
                 agents.append({"id": k, "merged": True, "x": round(x, 3), "y": round(y, 3), "yaw": round(yaw, 4),
-                               "t": round(t, 3), "samples": samples})
+                               "t": round(t, 3), "samples": samples,
+                               "gt": [round(g[1], 3), round(g[2], 3), round(g[3], 4)] if g else None})
             else:
                 agents.append({"id": k, "merged": True, "x": None, "y": None, "yaw": None})
         mv = len(self.snapshots) - 1 if self.snapshots else None

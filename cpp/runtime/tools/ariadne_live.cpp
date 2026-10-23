@@ -548,6 +548,7 @@ int main(int argc, char** argv) {
         uint64_t seq = 0;
         long dropped_untyped = 0;
         std::vector<int> worker_fd(static_cast<size_t>(NA), -1);   // D168 estimator processes; -1 = in-process
+        std::vector<int64_t> last_gt_tel_ns(static_cast<size_t>(NA), -1);   // P8: GT ghost arrows, at telemetry_hz
         std::deque<std::mutex> worker_mu(static_cast<size_t>(NA));
         std::vector<pid_t> worker_pid(static_cast<size_t>(NA), 0);
         std::vector<std::thread> feeders(static_cast<size_t>(NA));
@@ -576,6 +577,15 @@ int main(int argc, char** argv) {
                              .toRotationMatrix();
                 tp.T.t = core::Vec3(p.position.x, p.position.y, p.position.z);
                 lanes[agent].gt.Add(tp);
+                if (last_gt_tel_ns[size_t(agent)] < 0 ||
+                    tp.t_ns - last_gt_tel_ns[size_t(agent)] >= int64_t(1e9 / lc.telemetry_hz)) {
+                    last_gt_tel_ns[size_t(agent)] = tp.t_ns;
+                    std::ostringstream g;
+                    g.precision(8);
+                    g << "{\"type\":\"gt_pose\",\"t_s\":" << tp.t_ns * 1e-9 << ",\"agent\":" << agent << ",\"xy\":"
+                      << Xy(tp.T.t.x(), tp.T.t.y()) << ",\"yaw\":" << std::atan2(tp.T.R(1, 0), tp.T.R(0, 0)) << "}";
+                    telemetry.Put(g.str());
+                }
                 if (worker_fd[agent] >= 0) {   // D168: the worker keeps its own GtStore for the raw outputs
                     std::lock_guard<std::mutex> lk(worker_mu[agent]);
                     live::WriteFrame(worker_fd[agent], m.topic, m.data->data(), m.data->size());
@@ -707,6 +717,13 @@ int main(int argc, char** argv) {
             timing_log.Put(o.str());
         };
         auto deliver_kf = [&](int k, KfRec r, const cv::Mat& rgb) {
+            {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
+                cv::Mat bgr;
+                if (rgb.channels() == 3) cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+                else bgr = rgb;
+                cv::imwrite((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".jpg")).string(), bgr,
+                            {cv::IMWRITE_JPEG_QUALITY, 80});
+            }
             AgentLane& L = lanes[k];
             std::lock_guard<std::mutex> lk(L.mu);
             L.kf_times.push_back(r.t_ns);

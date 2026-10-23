@@ -73,6 +73,18 @@ def map_png(i: int) -> FileResponse:
     return FileResponse(snaps[i][1], media_type="image/png")
 
 
+@app.get("/api/cam/{k}.jpg")
+def cam_jpg(k: int) -> FileResponse:
+    """The agent's latest keyframe image (P8: the demo camera windows; the runtime overwrites it per keyframe)."""
+    lv = live()
+    if not lv:
+        raise HTTPException(404, "live only")
+    f = lv.src() / "snapshots" / f"cam_{k}.jpg"
+    if not f.exists():
+        raise HTTPException(404, "no camera frame yet")
+    return FileResponse(f, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/frame")
 def frame_at(t: float, speed: float = 10.0) -> JSONResponse:
     """One frame at mission time t (static view, screenshots): events from 0..t included."""
