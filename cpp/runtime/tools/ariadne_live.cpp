@@ -1103,9 +1103,9 @@ int main(int argc, char** argv) {
                              "gt_err_t_m,gt_err_r_deg,gt_baseline_m,pose_err_deg\n";
             std::vector<ac::AgentId> fleet_ids;
             for (int k2 = 0; k2 <= NA; ++k2) fleet_ids.push_back(ac::AgentId(k2));
-            live::CollabLiveParams cp;
-            cp.lockstep = lc.lockstep;
-            cp.feature_latency_s = lc.collab.feature_latency_s;
+            live::CollabLiveParams cp;   // D179: async; the event log is the reproducibility substrate
+            if (is_live) cp.log_path = (run_dir / "collab_events.jsonl").string();
+            else cp.replay_log = (fs::path(replay_path).parent_path() / "collab_events.jsonl").string();
             const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
             ma->collab = std::make_unique<live::CollabLive>(
                 ccfg, fleet_ids, *ma->comms, *ma->lightglue, cseed, /*t_first_ns=*/0, cp, &ma->edges_csv,
@@ -1139,6 +1139,11 @@ int main(int argc, char** argv) {
             }
             for (int k2 = 0; k2 < NA; ++k2)
                 ma->collab->Attach(ac::AgentId(k2), live::Connect(ma->collab_socks[size_t(k2)], std::chrono::seconds(60)));
+            {   // D178 entry gate: the known entry poses, set before the fleet thread processes anything
+                std::map<ac::AgentId, core::SE3> ep;
+                for (int k2 = 0; k2 < NA; ++k2) ep[ac::AgentId(k2)] = brief.T_W_O[size_t(k2)];
+                ma->collab->fleet().SetEntryPoses(ep);
+            }
         }
         for (int k = 0; k < NA; ++k) {
             if (lc.estimator_processes) {   // D168: spawn the worker, feed its images in consumed order, read back
@@ -1462,13 +1467,15 @@ int main(int argc, char** argv) {
                         for (auto& nd : ma->nodes) nd->Tick(t_now, ma->comms->network());
                     }
                     if (ma->collab) {   // D174 §4 feedback + the panel, at the barrier
+                        // D179: ONE atomically swapped snapshot per barrier (invariant 2), logged by version.
+                        const auto snap = ma->collab->Snapshot(T);
                         {   // adopted frames move the briefing constants (deliver_frame's telemetry reads them)
                             std::lock_guard<std::mutex> g(ma->two_mu);
-                            for (const auto& [ck, Tk] : ma->collab->T_O0_O())
+                            for (const auto& [ck, Tk] : snap->T_O0_O)
                                 if (int(ck) < NA && int(ck) > 0) brief.T_W_O[size_t(ck)] = brief.T_W_O[0] * Tk;
                         }
-                        ma->linked = ma->collab->Linked();
-                        telemetry.Put(ma->collab->Telemetry(core::Timestamp{T}));
+                        ma->linked = snap->linked;
+                        if (!snap->telemetry.empty()) telemetry.Put(snap->telemetry);
                         const fs::path cib = run_dir / "collab_inbox";   // panel buttons, recorded inputs
                         if (fs::exists(cib)) {
                             std::vector<fs::path> files;
@@ -1503,7 +1510,11 @@ int main(int argc, char** argv) {
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
                 // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
-                    for (const auto& d : ma->mailbox[size_t(k)]) {
+                    // D179: with the async fleet, deliveries come from its logged drain (my mailboxes stay empty);
+                    // ticks in order, FIFO per sender, identical in replay (invariant 1).
+                    const std::vector<core::DecodedMessage> drained =
+                        ma->collab ? ma->collab->Drain(ac::AgentId(k), T) : std::vector<core::DecodedMessage>{};
+                    for (const auto& d : ma->collab ? drained : ma->mailbox[size_t(k)]) {
                         if (d.has_submap_patch && d.submap_patch.sender < NA)
                             ma->layers[size_t(k)].Integrate(live::FromWire(d.submap_patch), {});
                         if (d.has_task_bid) {
@@ -1530,7 +1541,15 @@ int main(int argc, char** argv) {
                     bids.reserve(ma->bids_rx[size_t(k)].size());
                     for (const auto& [snd, bb] : ma->bids_rx[size_t(k)]) bids.push_back(bb);
                     const auto cons = multi::BrokerAssign(bids, ci, ma->broker, T, ++ma->cons_seq[size_t(k)]);
-                    ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                    if (ma->collab) {
+                        ma->collab->Send(ac::AgentId(k),
+                                         [cw = live::ToWire(cons, ma->g_tag)](ac::CollabNode& n, core::Timestamp t) {
+                                             n.SendConsensus(cw, t);
+                                         },
+                                         core::Timestamp{T});
+                    } else {
+                        ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                    }
                 }
                 // (4) Per-agent plans: share-nothing fork-join (user directive: nothing between barriers holds a
                 // lock). Thread k touches ONLY planner_k / exporter_k / layers_k / node_k reads; sends wait for (5).
@@ -1586,9 +1605,26 @@ int main(int argc, char** argv) {
                 // (5) Sends, serial in ascending id: the seeded link sees one deterministic order, and CommsNode
                 // stays single-writer. Bids self-deliver at the broker immediately (local, no radio hop).
                 for (int k = 0; k < NA; ++k) {
-                    for (auto& [j, pv] : patches_out[size_t(k)])
-                        ma_node(k).SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
-                    ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                    if (ma->collab) {   // D179: enqueued in call order onto the fleet thread
+                        for (auto& jp : patches_out[size_t(k)]) {   // no structured bindings: init-capture needs names
+                            ma->collab->Send(ac::AgentId(k),
+                                             [j2 = jp.first, pv2 = std::move(jp.second)](ac::CollabNode& n,
+                                                                                         core::Timestamp t) {
+                                                 n.SendPatch(ac::AgentId(j2), pv2, t);
+                                             },
+                                             core::Timestamp{T});
+                        }
+                        ma->collab->Send(ac::AgentId(k),
+                                         [bw = live::ToWire(bids_out[size_t(k)], ma->g_tag)](ac::CollabNode& n,
+                                                                                             core::Timestamp t) {
+                                             n.SendBid(bw, t);
+                                         },
+                                         core::Timestamp{T});
+                    } else {
+                        for (auto& [j, pv] : patches_out[size_t(k)])
+                            ma_node(k).SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
+                        ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                    }
                 }
                 // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
                 // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
