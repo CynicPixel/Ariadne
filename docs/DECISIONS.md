@@ -4575,6 +4575,50 @@ actively developed and points to Spark (RECON_6 A.5). The user approved Spark on
 - **§49 ritual.** The arch §29.3 sentence gets a dated update naming Spark and this entry. GaussianSplats3D stays
   allowed as a fallback only if Spark fails a measured smoke.
 
+## 2026-10-23 — D198: the live trainer follows Gaussian-SLAM's own recipe; three T4 smokes, measured honestly
+
+The first trainer (D190–D193) mixed three systems: RTG's 5 % sample, a 1-px footprint scale, a σ-normalised depth
+term of my own and RTG's opaque discs. Two Kaggle T4 smokes on a synthetic corridor showed it. The corridor has exact
+ray-cast depth and an analytic albedo with std 0.226, so predicting the mean scores **12.9 dB**.
+- **Smoke 1** (`fbbe641`): held-out PSNR flat at ~17 dB. The 1-px scale at a 5 % sample left ~4.5 px holes.
+- **Smoke 2** (`da9d9d4`, kNN scale): 13–16 dB. It seeded nothing after the first keyframe, and the uncited
+  σ-normalised depth term dominated the loss (~5 per pixel against ~0.15 for the photometric term).
+
+**Decision.** Transcribe Gaussian-SLAM (arXiv 2312.10070; TUM-RGBD values, the real-sensor setting), the system D193
+already rests on, without mixing:
+- **Seeding.** A submap's first keyframe takes a uniform M_u plus colour-gradient M_c, as fractions of 307,200 pixels
+  (0.326 / 0.163). Later keyframes sample uniformly where α < 0.6. ρ = 0.01 m; scale = the nearest-neighbour
+  distance; opacity 0.5.
+- **Loss.** L = (0.8 L1 + 0.2 D-SSIM) + metric depth L1 + an isotropy term |s − mean(s)|, all weights 1. MonoGS's
+  code uses the same metric-L1 form: α·L1_rgb + (1−α)·L1_depth, with α = 0.9 on TUM.
+- **Pruning and iterations.** Prune opacity < 0.5 at the middle and the end of a keyframe's iterations. Batch path:
+  100 iterations for a submap's first keyframe and 100 for the rest.
+- **Unspecified in the main text:** M_k (the supplement's value; the uniform fraction is used), and what "high
+  colour gradient" means (above the median Sobel magnitude here). Both are tagged [UNVERIFIED] / [ASSUMPTION] in the
+  code.
+- **Freezing fix.** STABLE rows (D191) are restored after each Adam step and their moments zeroed. Zeroing the
+  gradient alone let `exp_avg` keep moving them.
+
+**Smoke 3** (`c09d202`, evidence `evaluation/runs/ph6/train_smoke_20261023T1340Z`, 320×180, 60 KF, 30-KF submaps):
+
+| Variant | Iterations/KF | ms/KF | Train-view PSNR, init → after (median) | Held-out PSNR | α coverage |
+|---|---|---|---|---|---|
+| Gaussian-SLAM batch | 100 | 715 | 22.2 → 25.1 (early KFs 19.5 → 26.7–29.6) | 17.8–20.1 | 0.93–0.96 |
+| live budget | 15 | 123 | 20.8 → 21.3 | 17.7–18.5 | 0.91–0.96 |
+| batch, no depth term (diagnostic) | 100 | 694 | 22.8 → 26.5 (early 32.3) | 18.6–19.8 | 0.94–0.97 |
+
+- **No pipeline bug.** The model fits the views it trains on, so the earlier 17 dB was the recipe. Freezing and
+  re-anchoring are bitwise exact on the GPU.
+- **The live budget barely moves the seeds.** At 15 iterations per keyframe the training view gains ~0.5 dB.
+  Pruning at the middle of so few iterations removes fresh seeds before they are optimised: the first keyframe goes
+  19.5 → 16 dB. Live quality is therefore essentially the seed quality. That is a measured property of the live path
+  at this budget, not a defect to tune away by eye.
+- **The held-out gap** (train 25–30 dB, held-out 18–20 dB) is a generalisation gap on a hard 6-rad/m checker with a
+  fine sinusoid, seen from a forward-walking camera.
+- **Both are open.** Real-scene quality is the next measurement: a lit sim spool (D199, the demo world) at the batch
+  and live budgets, with the PSNR, SSIM and LPIPS of the exit gate. Any change to the live recipe (iteration
+  placement, pruning at low iteration counts) goes through its own entry with backing.
+
 ## 2026-10-23 — D199: the live demo trains on linear RGB on the lit procedural maze; the albedo proxy is the dark-world stretch (user directive)
 
 The user's directive, relayed by M on 2026-10-23: dark, lamp-lit and dusty runs are stretch goals, taken up only
