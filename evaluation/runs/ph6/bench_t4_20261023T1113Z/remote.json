@@ -1,0 +1,220 @@
+{
+  "env": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "gpu": "Tesla T4",
+    "gsplat_install": "pypi source (JIT CUDA build)",
+    "gsplat": "1.5.3",
+    "install_s": 5.0
+  },
+  "points": [
+    {
+      "w": 320,
+      "h": 180,
+      "n": 50000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 5.287,
+      "train_ms_p90": 6.557,
+      "render_ms_med": 1.292,
+      "render_ms_p90": 1.671,
+      "peak_mem_mb": 28.8
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 50000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 4.421,
+      "train_ms_p90": 4.581,
+      "render_ms_med": 1.484,
+      "render_ms_p90": 1.567,
+      "peak_mem_mb": 30.3
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 100000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 4.709,
+      "train_ms_p90": 4.783,
+      "render_ms_med": 1.632,
+      "render_ms_p90": 1.693,
+      "peak_mem_mb": 46.3
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 100000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 5.482,
+      "train_ms_p90": 5.71,
+      "render_ms_med": 1.784,
+      "render_ms_p90": 1.902,
+      "peak_mem_mb": 50.8
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 250000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 8.064,
+      "train_ms_p90": 8.261,
+      "render_ms_med": 2.768,
+      "render_ms_p90": 2.817,
+      "peak_mem_mb": 102.7
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 250000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 9.746,
+      "train_ms_p90": 10.029,
+      "render_ms_med": 2.953,
+      "render_ms_p90": 3.036,
+      "peak_mem_mb": 113.7
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 500000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 12.207,
+      "train_ms_p90": 13.049,
+      "render_ms_med": 4.144,
+      "render_ms_p90": 4.191,
+      "peak_mem_mb": 191.3
+    },
+    {
+      "w": 320,
+      "h": 180,
+      "n": 500000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 16.347,
+      "train_ms_p90": 17.126,
+      "render_ms_med": 4.662,
+      "render_ms_p90": 4.68,
+      "peak_mem_mb": 208.2
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 50000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 3.771,
+      "train_ms_p90": 3.831,
+      "render_ms_med": 1.335,
+      "render_ms_p90": 1.375,
+      "peak_mem_mb": 49.0
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 50000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 4.284,
+      "train_ms_p90": 4.43,
+      "render_ms_med": 1.509,
+      "render_ms_p90": 1.592,
+      "peak_mem_mb": 50.4
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 100000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 5.273,
+      "train_ms_p90": 5.367,
+      "render_ms_med": 1.654,
+      "render_ms_p90": 1.72,
+      "peak_mem_mb": 63.9
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 100000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 6.055,
+      "train_ms_p90": 6.198,
+      "render_ms_med": 1.775,
+      "render_ms_p90": 1.856,
+      "peak_mem_mb": 67.9
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 250000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 10.246,
+      "train_ms_p90": 10.445,
+      "render_ms_med": 2.977,
+      "render_ms_p90": 3.063,
+      "peak_mem_mb": 115.3
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 250000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 11.885,
+      "train_ms_p90": 12.272,
+      "render_ms_med": 3.237,
+      "render_ms_p90": 3.336,
+      "peak_mem_mb": 121.0
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 500000,
+      "packed": false,
+      "sh": 0,
+      "train_ms_med": 15.937,
+      "train_ms_p90": 16.789,
+      "render_ms_med": 5.02,
+      "render_ms_p90": 5.13,
+      "peak_mem_mb": 196.2
+    },
+    {
+      "w": 640,
+      "h": 360,
+      "n": 500000,
+      "packed": true,
+      "sh": 0,
+      "train_ms_med": 19.692,
+      "train_ms_p90": 20.452,
+      "render_ms_med": 5.476,
+      "render_ms_p90": 5.575,
+      "peak_mem_mb": 214.0
+    }
+  ],
+  "sh3": {
+    "w": 640,
+    "h": 360,
+    "n": 250000,
+    "train_ms_med": 15.263,
+    "train_ms_p90": 15.508
+  },
+  "append": {
+    "n_before": 100000,
+    "n_added": 10000,
+    "n_after": 110000,
+    "append_ms": 1.433,
+    "adam_state_kept": true,
+    "steps_after_ok": true
+  }
+}

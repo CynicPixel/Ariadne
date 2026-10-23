@@ -4442,3 +4442,47 @@ Locked (CLAUDE.md §1, arch §19.1): the training images are the falloff-normali
   6.1's first item.
 - **Display.** The panel shows the albedo proxy directly and is labelled so. §19.1's relit view needs a custom
   renderer shader and is out of scope.
+
+## 2026-10-23 — D196: T4 measured — gsplat 1.5.3 train/render cost; iterations per keyframe derived from it
+
+`infra/scripts/kaggle.sh bench` ran on a Kaggle Tesla T4 (idle) with torch 2.11.0+cu128 and gsplat 1.5.3. Evidence:
+`evaluation/runs/ph6/bench_t4_20261023T1113Z` (L1 + depth) and `bench_t4_dssim_*` (the RECON_6 §2 loss). Each point is
+the median of 40 timed iterations after 8 warm-up. Times are ms per iteration (forward + backward + Adam), unpacked:
+
+| N Gaussians | 320×180 full loss | 640×360 full loss | 640×360 without D-SSIM | render 640×360 |
+|---|---|---|---|---|
+| 50k | 5.9 | 9.0 | 3.8 | 1.4 |
+| 100k | 6.3 | 10.9 | 5.3 | 1.7 |
+| 250k | 9.1 | 15.3 | 10.2 | 3.0 |
+| 500k | 13.5 | 20.7 | 15.9 | 4.9 |
+
+- **Packed** is slower at every point here (by 10–25 %), as gsplat's docs predict for small scenes. The live path runs
+  unpacked.
+- **D-SSIM** costs ~5 ms per iteration at 640×360: a plain-torch 11×11 convolution SSIM. A fused SSIM kernel is the
+  obvious lever, measured before it is adopted.
+- **The append path works.** 100k + 10k Gaussians took 1.4–2.0 ms, the Adam moments of the old rows stayed bitwise
+  unchanged, and 10 steps after the append were finite. That is the mechanism the live seeding relies on (D193).
+- **SH degree 3** costs 15.3 ms at 250k / 640×360, against 10.2 ms at SH0 without D-SSIM. Live stays SH0, which is
+  what the .splat chunk carries anyway.
+- **Derived budget.**
+  - Dark demo: ~110 ms per keyframe for two agents (D190). At a 100k–250k active submap that allows **~7–10
+    iterations per keyframe at 640×360, or ~12–17 at 320×180**, on an idle T4.
+  - The trainer's `budget_ms` mode computes the count from its own measured median, never from this table. The table
+    is the planning number.
+  - Whether live trains at 320×180 is decided by the first spool run's held-out PSNR at each resolution, not here.
+- **Caveats.**
+  - [ASSUMPTION] The synthetic scene is representative: ~2 px footprints filling the view. Real submaps with larger
+    Gaussians touch more pixels each.
+  - The demo T4 also renders gz, so these are upper bounds until measured under gz load (B, D190).
+
+## 2026-10-23 — D197: the console splat renderer is Spark, not GaussianSplats3D (user-approved)
+
+Arch §29.3 names GaussianSplats3D "e.g." as the in-browser Gaussian renderer. Its README now says it is no longer
+actively developed and points to Spark (RECON_6 A.5). The user approved Spark on 2026-10-23, through M.
+- **Spark (sparkjs, MIT, v2.4.0 at 2026-10-20).** Many `SplatMesh` objects are sorted together, each with its own
+  transform, and they resize incrementally. That is exactly the shape D190 needs: one mesh per submap, re-anchoring
+  = a new transform, and the active submap replaced in place. Formats include .splat (32 B/Gaussian), .spz and .sog.
+- **The version is pinned exactly** in the page's import (an exact version at least two weeks old), never a floating
+  tag.
+- **§49 ritual.** The arch §29.3 sentence gets a dated update naming Spark and this entry. GaussianSplats3D stays
+  allowed as a fallback only if Spark fails a measured smoke.
