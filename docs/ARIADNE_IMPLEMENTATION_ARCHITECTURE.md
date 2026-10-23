@@ -3016,6 +3016,22 @@ same point. Only once the component is connected does the algorithm optimize alg
 
 An exact enumeration oracle for `|candidates| ≤ 15` is the correctness reference (Iteration 6).
 
+> **As built (3.4, D170; merged c720e77).**
+> - **Fiedler space:** the full candidate graph, solved by block inverse iteration (grounded sparse LDLT,
+>   warm-started, a degenerate cluster handled as one).
+> - **Selection:** connectivity bootstrap, then greedy on `gain / marginal bytes` with a shared keyframe cost, then
+>   1-swap refinement (`refine_passes` 2).
+> - **Per-instance bound:** a dual bound (MAC) over the shared-cost LP (`cv::solveLP`). Measured valid 60/60 against
+>   the oracle, and loose (1.3–6.4×).
+> - **Graph:** Swarm-SLAM's construction, verified from the cslam source: ids min..max per agent (D171), with fixed
+>   odometry and accepted edges at κ = 1.
+> - **Integration:** selection runs behind `NodeHooks::select` with a token bucket of predicted bytes. Unset = the
+>   "similarity" (request-all) baseline; `SelectBySimilarity` = "greedy".
+> - **Pricing:** the fetch cost is the exact codec payload times a calibrated ratio, plus framing.
+> - **Not built:** the vertex-cover *direction* choice of Giamou et al. Its residual bytes are reported on the sim
+>   runs.
+> - **Budget defaults (20 kB/s, 200 kB):** placeholders until D171's derived levels.
+
 ---
 
 ## 16.3 Communication budget
