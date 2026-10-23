@@ -5259,3 +5259,28 @@ squared Mahalanobis distance and decision. Logging only; the gate's inputs and o
 - Every rerun cell must reproduce e31421's merged ATE and first-transmission bytes exactly. Bytes are compared after
   folding D180's `wire_resend` back in, since the rerun's build includes D180. If any cell differs, the rerun is not
   the same experiment: the true-edge criterion is then reported UNSCORED, with the reason.
+
+## 2026-10-24 — D181: endpoint (vertex-cover) verification measured before design: no 2-agent payoff on budgeted rows; deferred
+
+**Question:** would moving verification to one endpoint, with the vertex-cover direction choice of Giamou 2018 and Tian
+2021, cut the bytes the gate rows move? It was measured from existing data before any design was written (preflight;
+advisor).
+**Method:** sweep `20261023T213707Z-cpux86-e31421`, every run's attempted inter-agent pairs (`edges.csv`). With N = 2
+and broker 0, today's scheme already moves features one way: it fetches each distinct agent-1 endpoint. Per agent
+pair the exact optimum is a minimum bipartite vertex cover (König: = maximum matching). Its weighted form is an LP
+with integral optima, solvable by `cv::solveLP` (OpenCV-native check). Keyframes were compared at unit weight.
+**Result:**
+- **Budgeted gate rows (greedy and spectral, 24/24):** 0.0 % saving. Today's fetch set already is the minimum cover,
+  because the policy's shared-keyframe pricing selects candidates that share fetched keyframes.
+- **Elsewhere:** the unbudgeted calibration rows save 2.6–4.3 % on scene 1 and 55–56 % on scene 0, campaign
+  `ideal_s0` saves 59.1 %, and the other campaign rows and the similarity arm save 0.
+- **Pooled over all runs:** 1450 keyframes moved against a minimum of 997, a 31.2 % saving, almost all of it in rows
+  that do not count toward I6.
+**Decision:**
+- The protocol change is NOT built now. Its only gate-relevant benefit is the third-party saving at N ≥ 3 (a non-broker
+  pair fetched to the broker on both sides), which no Phase 3 scene exercises.
+- It is re-measured when 3-agent stores exist (B's 3-agent maze runs), with the same script and pre-registered:
+  "build if the selected rows of the 3-agent demo move ≥ 20 % more keyframes than their minimum cover".
+- The speed side (LightGlue serialized on the fleet thread) is decided by A2's AWS profile. If it is the bottleneck,
+  the remedy is a verify pool with D179-logged commits, which needs no protocol change.
+- Bytes work moves to the 3.6 compression rows and to diagnosing the match_response prediction miss.
