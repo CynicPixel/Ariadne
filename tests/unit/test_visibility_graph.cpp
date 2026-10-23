@@ -6,6 +6,7 @@
 #include "planning/route/visibility_graph.hpp"
 
 #include <gtest/gtest.h>
+#include <opencv2/imgcodecs.hpp>
 
 #include <cmath>
 #include <random>
@@ -100,4 +101,34 @@ TEST(VisibilityGraph, MultiGoalAndNoRoute) {
     ASSERT_TRUE(r.found);
     EXPECT_EQ(r.goal_index, 1);
     EXPECT_FALSE(vg.Query({10, 5}, {{10, 30}}).found);
+}
+
+TEST(VisibilityGraph, Hazard0Regression) {
+    // EXPLORATION_4.6 §10: on ci_tiny_hazard seed 0's final egress map (rho_responder traversable, 200 x 320 cells),
+    // the FAR route from the target to the exits was 11.115 m vs the string-pulled A* 4.424 m. Fixture: the run's
+    // trav_responder.png (evaluation/runs/egress_4.5_hazard/s0_w0, build artefact), copied verbatim.
+    const cv::Mat png = cv::imread(std::string(ARIADNE_SOURCE_DIR) + "/tests/data/planning/far_regression_hazard0_trav_r.png",
+                                   cv::IMREAD_UNCHANGED);
+    ASSERT_FALSE(png.empty());
+    const cv::Mat free = png != 0;
+    cv::Mat f8;
+    free.convertTo(f8, CV_8U, 1.0 / 255.0);
+    // Cells exactly as the evaluator's ToCell computes them (std::floor((v - origin) / cell) in double): the first
+    // reproduction used Python's floor of 167.999.. = 167 and missed the defect; the evaluator gets 168.
+    auto ToCell = [](double x, double y) { return Cell{int(std::floor((y - -0.5) / 0.05)), int(std::floor((x - -3.5) / 0.05))}; };
+    const Cell target = ToCell(9.125, 3.5250000000000004);
+    const std::vector<Cell> exits = {ToCell(-1.9000000000000001, 3.0), ToCell(9.0, 7.9)};
+    std::printf("[far] cells: target (%d, %d) exits (%d, %d) (%d, %d)\n", target.r, target.c, exits[0].r, exits[0].c,
+                exits[1].r, exits[1].c);
+    VisibilityGraph vg;
+    vg.Build(f8);
+    const VisRoute r = vg.Query(target, exits);
+    const GridPath lat = AStar(f8, target, exits);
+    ASSERT_TRUE(lat.found);
+    ASSERT_TRUE(r.found);
+    const auto pulled = StringPull(f8, lat.cells);
+    const size_t bends = r.cells.size() >= 2 ? r.cells.size() - 2 : 0;
+    std::printf("[far] hazard0: FAR %.3f cells (%zu bends, exit %d) vs pulled A* %.3f cells (exit %d); nodes %zu\n", r.length_cells,
+                bends, r.goal_index, PolyLen(pulled), lat.goal_index, vg.Nodes().size());
+    EXPECT_LE(r.length_cells, PolyLen(pulled) + 2.0 * std::sqrt(2.0) * double(bends) + 1e-9);
 }

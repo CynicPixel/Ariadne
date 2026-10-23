@@ -274,3 +274,33 @@ replans, agent 1 at the 12 after the merge):
 - Both missing producers are named in every line's notes.
 - The early views' Δcoverage (≈ 15k voxels) is real: at t = 5 s the building's interior is unknown and inside the
   extent.
+
+## 12. Amendment: plan space and the risk rule (2026-10-23, before any gate run)
+
+**Found by B on a replay of the A1Planner pilot:** risk 1.0 on 27/28 → 162/172 options. Two causes, fixed in order:
+1. **The arrival rule** (`30ac351`). I read D158's bottleneck at the goal cell alone. B's D158 takes the max over
+   the goal's escape_m disc, the widest way to arrive near the goal. That's now `ArrivalBottleneck`.
+   - It barely helped: 154/172 were still at 1.0.
+2. **The plan space.**
+   - D111's `trav_a` (the agent capsule on the occupied-only field) counts unknown space as passable. So views and
+     paths ran through unobserved columns, where the egress clearance `clear_r` is 0, and every maximin was 0.
+   - **Now:** the plan space and every view goal are restricted to `trav_a ∧ clear_r ≥ ρ_agent`: known-free
+     columns with ρ_agent clearance to anything not observed free (`KnownFreePlan`).
+     - That is B's D153b standoff rule, adopted live after the mover refused 10/10 goals next to unseen walls.
+
+**Literature check** (asked by the maintainer, done before this was committed):
+- **TARE** (Cao et al., RSS 2021), read in primary text:
+  - §III defines a viewpoint position p_v ∈ Q_trav, the traversable subspace;
+  - the local horizon's candidates come from H_trav, "the traversable subspace identified by considering collision
+    and connectivity";
+  - the surfaces to cover are the boundary between free and non-free space, the latter "includes both occupied and
+    unknown spaces".
+  - So TARE also keeps viewpoints in traversable, connected space and treats unknown as non-free. The amendment
+    follows it.
+- **FUEL** (Zhou et al., RA-L 2021): `[UNVERIFIED]` for this point. arXiv served an HTML page instead of the PDF on
+  two attempts, so its viewpoint constraint is not cited from memory.
+- **FAR** (Yang et al., IROS 2022): routes "attemptably" through unknown space, but for goal-directed navigation,
+  not exploration viewpoints. It stays a §31.6 comparator; `Route` doesn't use it.
+
+**Effect:** to be measured on B's replay of the same recording after the rebuild (risk histogram per replan), before
+the gate starts. The gate waits on it (YIELD set by A1).

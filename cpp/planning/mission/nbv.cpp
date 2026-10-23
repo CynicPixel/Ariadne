@@ -1,6 +1,7 @@
 #include "planning/mission/nbv.hpp"
 
 #include "core/random/philox.hpp"
+#include "planning/volumetric/clearance.hpp"
 #include "planning/volumetric/occupancy_grid.hpp"
 
 #include <opencv2/core.hpp>
@@ -243,6 +244,13 @@ double P90Scale(std::vector<double> v) {
     return v.back() > 0 ? v.back() : 0.0;
 }
 
+cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a) {
+    cv::Mat ok = tm.clear_r >= float(rho_a - kTravEpsM);   // 255 where the egress clearance allows the agent
+    cv::Mat plan = tm.trav_a.clone();
+    plan.setTo(0, ok == 0);
+    return plan;
+}
+
 double ArrivalBottleneck(const cv::Mat& B, const Cell& goal, int rad) {
     double best = -1;
     for (int dy = -rad; dy <= rad; ++dy)
@@ -293,7 +301,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
 
     // Plan space (D158): trav_a, plus the agent's own escape disc where the slab is not occupied.
     const Cell me = CellOf(g, st.position.x(), st.position.y());
-    cv::Mat plan = tm.trav_a.clone();
+    cv::Mat plan = KnownFreePlan(tm, p.rho_a);
     const double esc = p.escape_m / g.cell;
     for (int r = std::max(0, me.r - int(esc) - 1); r <= std::min(plan.rows - 1, me.r + int(esc) + 1); ++r)
         for (int c = std::max(0, me.c - int(esc) - 1); c <= std::min(plan.cols - 1, me.c + int(esc) + 1); ++c)
@@ -416,9 +424,10 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     }
     const std::unordered_set<int64_t>* envp = env.empty() ? nullptr : &env;
 
+    const cv::Mat known = KnownFreePlan(tm, p.rho_a);   // view goals only in known-free agent space (D153b)
     // --- views, raw terms, costs ---------------------------------------------------------------------------------
     for (const auto& t : targets) {
-        for (const View& v : SampleViews(map, g, tm.trav_a, t.p, p.sampler, p.frustum, envp, in.bounds)) {
+        for (const View& v : SampleViews(map, g, known, t.p, p.sampler, p.frustum, envp, in.bounds)) {
             if (!In(dist, v.cell) || !std::isfinite(dist.at<double>(v.cell.r, v.cell.c))) continue;
             TaskCandidate c;
             c.task_id = TaskId(t.src, t.anchor), c.source = t.src;
