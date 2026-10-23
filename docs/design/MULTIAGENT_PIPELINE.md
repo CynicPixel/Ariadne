@@ -170,3 +170,36 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 - **ablation:** the §4 rows.
 - **benchmark config:** `configs/benchmark/multiagent_v1.yaml`.
 - **manifest:** row, budget, scenario, per-class bytes, task-key radius.
+
+## 8. Planner-side decisions (A1 and M, 2026-10-23)
+
+1. **Received layer.** planner_k's TSDF is built from its OWN keyframes only. Each peer's coverage summary lands in a
+   separate per-peer received layer: tri-state, on the §20.6 0.5 m grid. That layer:
+   - suppresses frontier clusters and candidates whose target lies in peer-known space;
+   - zeroes the IG of voxels whose column a peer already knows.
+
+   Paths and risk use only the agent's own map: no routing through space only a peer saw (the conservative safety
+   choice).
+2. **Egress (invariant 4).** Each summary cell also carries the sender's ρ_responder traversable/support bit,
+   computed by the sender from its own TSDF: 2 bits per cell. The operator node runs D* Lite egress on its received
+   layers, so the §22 claim holds at the operator.
+3. **Coordination lag (pre-registered as part of what the ariadne row measures).** At barrier T each agent executes
+   the TASK_CONSENSUS it RECEIVED by T, which was computed from the T−5 s bids.
+   - It takes the assigned goal if that task key is still present among its own options.
+   - Otherwise, or with nothing received within `consensus_timeout_s`, it takes its own best option, logged
+     "uncoordinated".
+   - CommsNode's latency and capacity apply. Zero latency is never assumed.
+4. **Broker identity per barrier:** `ComponentOf(agent) -> {broker, members, epoch}` from the comms layer (§15.4: the
+   lowest id in the component, with an epoch). TASK_CONSENSUS from a stale epoch is ignored.
+5. **Task key:** spatial only. Frontier ids are per-agent hashes. The broker dedups bids greedily by utility; a bid
+   within `r_same = min_goal_m` of an already-assigned goal counts as the same task.
+
+**Planning-library interfaces (no comms types; the wire tables mirror these structs):**
+- `PlanAgent(t, own inputs, received layers, peer poses)` → options
+- `ExportSummary(since_version)` → changed coarse cells
+- `IntegrateSummary(sender, cells, T_G_W(sender))`
+- `BuildBid(options, M)` → TASK_BID payload
+- `BrokerAssign(bids, members, r_same)` → consensus
+- `ApplyConsensus(consensus, options, timeout)` → a pick, or "uncoordinated"
+
+**Oracle row:** the current Phase4Planner code path, untouched; proven identical by A1's replay/eval check.
