@@ -1,0 +1,5 @@
+run,job,sequence,frames,keyframes,track_mean_ms,vo_track_mean_ms,keyframe_mean_ms,opencv_threads
+20261023T202525Z-cpux86-48e0a5,sim_collab/aadffb8df5790ca0-20261023T203349Z/raw/aadffb8df5790ca0-agent0-20261023T203931Z,aadffb8df5790ca0-agent0,3981,320,17.9517,2.65559,95.4277,16
+20261023T202525Z-cpux86-48e0a5,sim_collab/aadffb8df5790ca0-20261023T203349Z/raw/aadffb8df5790ca0-agent1-20261023T204426Z,aadffb8df5790ca0-agent1,3981,251,11.4039,2.10576,93.9211,16
+20261023T202525Z-cpux86-48e0a5,sim_collab/aadffb8df5790ca0-faults-20261023T203349Z/raw/aadffb8df5790ca0-agent0-20261023T203929Z,aadffb8df5790ca0-agent0,3981,320,18.175,2.64985,94.7802,16
+20261023T202525Z-cpux86-48e0a5,sim_collab/aadffb8df5790ca0-faults-20261023T203349Z/raw/aadffb8df5790ca0-agent1-20261023T204429Z,aadffb8df5790ca0-agent1,3981,251,12.1542,2.09755,93.129,16

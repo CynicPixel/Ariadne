@@ -70,6 +70,15 @@ if(OpenCV_FOUND)
   add_executable(ariadne_dnn_timing tools/ariadne_dnn_timing.cpp)
   target_link_libraries(ariadne_dnn_timing PRIVATE ariadne::perception_opencv opencv_imgcodecs)
 
+  # Pipeline profile (A2, 2026-10-24; measurement only): the keyframe inputs of the knob study, and the DNN bench
+  # (engine / thread / input-size / LightGlue-K timing + the knobs' verdicts through the fleet's verify path).
+  add_executable(ariadne_perf_kfdump tools/ariadne_perf_kfdump.cpp)
+  target_link_libraries(ariadne_perf_kfdump PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  add_executable(ariadne_perf_bench tools/ariadne_perf_bench.cpp)
+  target_link_libraries(ariadne_perf_bench PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+
   # 2.1 hard-pair evaluation: loop-candidate verification (PERCEPTION_2.1 §12.4). Offline, no runner hunk.
   add_executable(ariadne_loop_verify tools/ariadne_loop_verify.cpp)
   target_link_libraries(ariadne_loop_verify PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
