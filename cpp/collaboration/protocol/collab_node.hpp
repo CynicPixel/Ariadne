@@ -129,9 +129,15 @@ struct NodeHooks {
     /// candidate as it appears (the Phase-1 behaviour: the "similarity" baseline, and the default). SelectBySimilarity
     /// is the "greedy" baseline; SelectSpectral (spectral_selector.hpp, links OpenCV) is the policy.
     std::function<SelectionReport(const SelectionProblem&)> select;
+    /// D175: coordination messages (SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS) addressed to this agent, delivered as they
+    /// arrive (sim time), for the agent's planner mailbox. Unset = such messages are dropped.
+    std::function<void(const core::DecodedMessage&, core::Timestamp)> coordination;
 };
 
 struct NodeParams {
+    // D175 coordination TTLs: a patch is superseded by later ones (it carries everything since the acked version), a
+    // bid or a consensus older than one replan period is worthless.
+    double patch_ttl_s = 30.0, bid_ttl_s = 5.0, consensus_ttl_s = 5.0;
     MembershipParams membership;
     EndpointParams endpoint;
     double descriptor_ttl_s = 120.0;
@@ -438,6 +444,15 @@ private:
         return known_g_.count({f.agent, f.epoch}) > 0;
     }
 
+    template <typename Fill>
+    void DeliverLocal(core::MessageClass cls, core::Timestamp t, Fill fill) {
+        if (!hooks_.coordination) return;
+        core::DecodedMessage d;
+        d.cls = cls, d.sender = self_, d.receiver = self_, d.stamp_ns = t.ns;
+        fill(d);
+        hooks_.coordination(d, t);
+    }
+
     void Handle(core::DecodedMessage m, core::Timestamp t) {
         using MC = core::MessageClass;
         if (m.has_heartbeat) {
@@ -481,6 +496,11 @@ private:
                     snapshots_[m.sender] = std::move(m.pose_graph);
                     dirty_ = true;
                 }
+                break;
+            case MC::SUBMAP_PATCH:
+            case MC::TASK_BID:
+            case MC::TASK_CONSENSUS:
+                if (hooks_.coordination) hooks_.coordination(m, t);
                 break;
             default: break;
         }
@@ -722,6 +742,71 @@ private:
     }
 
 public:
+    // --- D175: coordination through the radio (MULTIAGENT_PIPELINE) ---------------------------------------------
+    struct ComponentView {
+        AgentId broker = 0;
+        std::vector<AgentId> members;
+        core::EpochValue epoch;
+    };
+    /// This agent's connected component as its membership sees it now (§15.4: lowest id brokers, epoch accepted).
+    ComponentView Component() const { return {mem_.broker(), mem_.ComponentMembers(), mem_.accepted()}; }
+    /// The highest SUBMAP_PATCH version `to` has acknowledged (0 = none): the next patch carries what changed since.
+    uint64_t AckedPatchVersion(AgentId to) {
+        const auto& d = ep_.Delivered(to, core::MessageClass::SUBMAP_PATCH);
+        return d.empty() ? 0 : *d.rbegin();
+    }
+    void SendPatch(AgentId to, const core::SubmapPatchValue& p, core::Timestamp t) {
+        if (to == self_) return;
+        OutMessage m;
+        m.cls = core::MessageClass::SUBMAP_PATCH;
+        m.key = p.version;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.patch_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeSubmapPatch(p, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// To this agent's component broker; the broker's own bid is delivered locally at once (no radio hop).
+    void SendBid(const core::TaskBidValue& b, core::Timestamp t) {
+        const AgentId to = mem_.broker();
+        if (to == self_) return DeliverLocal(core::MessageClass::TASK_BID, t, [&](core::DecodedMessage& d) {
+            d.has_task_bid = true, d.task_bid = b;
+        });
+        OutMessage m;
+        m.cls = core::MessageClass::TASK_BID;
+        m.key = b.seq;
+        m.created = t;
+        m.ttl = core::Duration::SecondsFromDouble(p_.bid_ttl_s);
+        const AgentId self = self_;
+        const core::WireCodec* codec = &codec_;
+        m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskBid(b, self, to, ts, seq); };
+        Plan(m, t);
+        ep_.Enqueue(to, std::move(m));
+    }
+    /// Broker: the assignment to every member of `c` (self locally).
+    void SendConsensus(const core::TaskConsensusValue& c, core::Timestamp t) {
+        for (AgentId to : c.members) {
+            if (to == self_) {
+                DeliverLocal(core::MessageClass::TASK_CONSENSUS, t, [&](core::DecodedMessage& d) {
+                    d.has_task_consensus = true, d.task_consensus = c;
+                });
+                continue;
+            }
+            OutMessage m;
+            m.cls = core::MessageClass::TASK_CONSENSUS;
+            m.key = c.seq;
+            m.created = t;
+            m.ttl = core::Duration::SecondsFromDouble(p_.consensus_ttl_s);
+            const AgentId self = self_;
+            const core::WireCodec* codec = &codec_;
+            m.encode = [=](uint64_t seq, core::Timestamp ts) { return codec->EncodeTaskConsensus(c, self, to, ts, seq); };
+            Plan(m, t);
+            ep_.Enqueue(to, std::move(m));
+        }
+    }
+
     /// EVALUATION ONLY (arch §42 item 7: "at least one false closure is generated intentionally"): plant `e` at the
     /// broker exactly as if its verify hook had returned it, so it travels and is solved like any verified edge and
     /// only the robust stage can reject it. Returns false (nothing planted) unless this node is the broker.

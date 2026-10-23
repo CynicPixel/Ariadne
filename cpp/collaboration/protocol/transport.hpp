@@ -111,7 +111,9 @@ inline int PriorityOf(MessageClass c) {
         case MessageClass::HEARTBEAT:
         case MessageClass::ACK: return 1;
         case MessageClass::POSE_EDGE:
-        case MessageClass::POSE_GRAPH: return 2;
+        case MessageClass::POSE_GRAPH:
+        case MessageClass::TASK_BID:          // arch §21.7: consensus rides class 2 (D175)
+        case MessageClass::TASK_CONSENSUS: return 2;
         case MessageClass::GLOBAL_DESCRIPTOR:
         case MessageClass::MATCH_REQUEST: return 3;
         case MessageClass::MATCH_RESPONSE:
@@ -408,8 +410,11 @@ private:
     /// descriptors (single datagram, but the broker cannot re-request one it
     /// never heard of), and any multi-datagram message that is not periodic.
     static bool IsTracked(MessageClass c, size_t fragments) {
+        // D175: coordination messages are acked too. A patch's ack is how the sender knows which map version a
+        // receiver holds; a lost bid or consensus is retransmitted within its TTL rather than silently dropped.
         return !IsLatestWinsClass(c) &&
-               (IsReliableClass(c) || c == MessageClass::GLOBAL_DESCRIPTOR || fragments > 1);
+               (IsReliableClass(c) || c == MessageClass::GLOBAL_DESCRIPTOR || c == MessageClass::SUBMAP_PATCH ||
+                c == MessageClass::TASK_BID || c == MessageClass::TASK_CONSENSUS || fragments > 1);
     }
 
     struct Inflight {

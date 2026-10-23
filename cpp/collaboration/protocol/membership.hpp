@@ -143,6 +143,17 @@ public:
         return m;
     }
 
+    /// D175: my connected component as seen from here, at any node: me + symmetric neighbours that elected the same
+    /// broker as I did (sorted). At the broker this equals Members().
+    std::vector<AgentId> ComponentMembers() const {
+        std::vector<AgentId> m{self_};
+        for (const auto& [id, pr] : peers_)
+            if (pr.neighbor && (pr.last.broker == broker_ || id == broker_)) m.push_back(id);
+        std::sort(m.begin(), m.end());
+        m.erase(std::unique(m.begin(), m.end()), m.end());
+        return m;
+    }
+
     /// The epoch for a solve I run now over `members` (call only as broker).
     EpochValue NextEpoch(const std::vector<AgentId>& members) const {
         uint64_t c = accepted_.counter;

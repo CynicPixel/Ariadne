@@ -34,7 +34,8 @@ add_executable(test_protocol
   protocol/test_membership.cpp
   protocol/test_collab_v2.cpp
   protocol/test_collab_selection.cpp
-  protocol/test_coordination_wire.cpp)
+  protocol/test_coordination_wire.cpp
+  protocol/test_coordination_node.cpp)
 target_link_libraries(test_protocol PRIVATE ariadne::core GTest::gtest_main)
 gtest_discover_tests(test_protocol)
 

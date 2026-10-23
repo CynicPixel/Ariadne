@@ -71,15 +71,20 @@ presented as the system's map.
   ids differ between agents. The broker treats two bids whose goals lie within `r_same` as the same task when it
   enforces exactly-once. `r_same` = the planner's `min_goal_m` (1.0 m in live_v1): goals closer than that are already
   "the same place" to the planner. This approximates CBBA's shared task list, and the deviation is stated.
-- **Byte budget.** One link budget per agent (D170's token bucket), split into two shares, each with its own bucket:
-  - SLAM collaboration (classes 1, 3, 4) gets 1 - s_x, and the spectral policy runs inside this share as today;
-  - exploration (classes 7–10) gets s_x. Under it, SUBMAP_SUMMARY is cancellable, oldest first, and bids are not.
-  - Heartbeats, pose edges and pose-graph batches stay outside both shares (small, "the product", §15.3).
-  - s_x = 0.3 [ASSUMPTION], fixed for every row and reported. Per-class bytes are reported so the split can be
-    judged.
-- **Frames.** Patches stay in the sender's frame W_j. Receivers place them with their current T_G_W(j). When an
-  adopted estimate moves T_G_W(j) by more than (`reanchor_m`, `reanchor_deg`), the receiver re-integrates that
-  sender's stored summaries. Known entry poses make this rare: loops correct drift, not merge frames.
+- **Byte budget (revised with A1's measurement, 2026-10-23).** Measured on the D168 c7i run (ci_tiny_0 × ariadne,
+  200 s, changed blocks only, 2-bit packed plus a 4 B header per block, zlib -9 standing in for zstd):
+  - per 5 s patch: median 238 B, p90 463 B, max 508 B;
+  - per agent over the run: about 53 B/s; bids about 64 B/s.
+
+  Coordination therefore costs about 0.1–0.2 KB/s per agent, against the SLAM collaboration's tens of KB/s. A
+  proportional share (the earlier s_x = 0.3) would be meaningless at that ratio, so instead:
+  - classes 8–10 get their own token bucket of 1 KB/s per agent (≥ 5× the measured p90 rate; burst = one full-map
+    patch, ~16 KB packed), outside the SLAM budget the spectral policy manages;
+  - they are counted and reported per class like everything else;
+  - under that bucket SUBMAP_PATCH is cancellable, oldest first; bids and consensus are not.
+
+  Caveats: the ρ_responder bit and maze-sized scenes are not yet measured (A1 expects < 2× and 2–3×). The budget sweep
+  (§4) varies only the SLAM share.
 
 ## 3. Allocation over messages: broker SGA first, full CBBA as the ablation
 
