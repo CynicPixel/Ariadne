@@ -1,0 +1,1 @@
+eb976de517953e8b63921a9f744a082fd156734b ph5(5.3, D147): t_max_s required and checked against the frame interval (D132's 30 ms default would cut D147's headroom); D147 records that replay moves exposure/gain only (lamp starts at lamp_max), the unmeasured post-flat-field clip bias, and the trace checks for the first AWS run; tests test_opencv 48/48, test_unit 33/33

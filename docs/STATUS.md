@@ -18,6 +18,10 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
   `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
   budget defaults are labelled placeholders until D171's derived levels.
+- **Phase 5 round 2 (A2) MERGED** (eb976de, fast-forward: 5.2 features-on-proxy D146, 5.3 replay wiring D147). AWS
+  pre-merge `20261023T085348Z-cpux86-3d2b9a`: **54/54**, ctest 587/587 + protocol 18/18, every determinism check
+  byte-identical (defaults unchanged, as claimed). Evidence: `evaluation/runs/premerge_aws/20261023T085348Z-cpux86-3d2b9a/`,
+  about $0.04.
 - **Phase 5 (A2) MERGED** (64059fa via merge 2594ac6: 5.1-5.6 work, D130-D146). AWS pre-merge
   `20261023T071522Z-cpux86-42ce81`: **54/54**, ctest 580/580 + protocol 18/18, render reused (A2's pipeline changes
   keep the defaults; the render package sha256 matches). Evidence: `evaluation/runs/premerge_aws/20261023T071522Z-cpux86-42ce81/`,
