@@ -82,17 +82,26 @@ worker k (estimator process, D168)                      parent (ariadne_live)
 
 ## 4. Feedback into the live loop
 
-- `T_G_W(k)` from the fleet's adopted estimate maps agent k's odometry frame into the merged frame G.
+- `T_G_W(k)` from the fleet's adopted estimate maps agent k's odometry frame into the shared frame G.
   B's refactor replaces the briefing's constant `T_W_O[k]` with a mutex-guarded value:
-  - **Before the first merge:** each agent stays in its own frame and the planner sees it as unlinked. Agent 0 is the
-    reference frame, which matches the gate convention (D45).
-  - **After:** `T_W_O[k] = T_G_W(0)^-1 * T_G_W(k)`, the same formula as the D173 composer.
-- A1's planner gets `linked[k]` from the fleet's membership/comms state, not a constant.
+  - **Initial value:** the known entry pose.
+  - **Updated:** to `T_G_W(0)^-1 * T_G_W(k)` after each adopted broker estimate (the same formula as the D173
+    composer).
+- A1's planner gets `linked[k]` from the fleet's comms state (a partitioned agent is unlinked), not a constant.
 
-**Open item for B and A1.** The briefing currently gives each agent its GROUND-TRUTH start alignment. With live
-collaboration, that briefing is the evaluation reference only. Either the planner tolerates unlinked agents until they
-merge (A1 says the N-agent planner already handles `linked`), or a shared start ("agents enter through a common
-entrance with known relative pose") stays an explicit, labelled assumption. Decide before the build.
+**Decided (maintainer, 2026-10-23): known starts.** Think of drones inserted through the building's windows: the
+operator places them, so each entry pose is known when it goes in.
+- The briefing's start alignment `T_W_O[k]` is a legitimate prior, labelled as the known entry pose. It is not hidden
+  ground truth.
+- Arrows, the top-view map and the planner are coherent from t = 0.
+- Inter-agent loops then correct accumulated drift, rather than merge unknown frames: the panel shows "drift corrected
+  by loop agent i <-> agent j". The robust stage still rejects false closures, which the inject button shows.
+- The fleet's broker solve therefore gets each agent's entry pose as a prior on its first keyframe.
+  - Today: the gauge agent is fixed, and the other agents are free until a loop exists.
+  - New: a weak entry-pose prior per agent, its information a config value, recorded in the manifest.
+  - Without that prior, an agent with no loops would be unplaced, contradicting the known entry.
+  - This changes the fleet's solve input, so it ships behind a config key (`entry_prior`, default off). Replays and
+    the 3.2 gate are unchanged.
 
 ## 5. Panel controls
 
@@ -122,8 +131,8 @@ Per agent, at the lit-maze keyframe rate of ~1.6 KF/s (D142: 78 KF per 1000 fram
 - This model work is cv::dnn on CPU: the image has no ONNX Runtime, and the pinned OpenCV 5 build has no CUDA.
 
 With gz, 3 estimators and 3 collab frontends, a g4dn.xlarge (4 vCPU) will not hold real time. A g4dn.2xlarge
-(8 vCPU) or g4dn.4xlarge (16 vCPU), with the same single T4, is the realistic target. That also sizes the on-demand
-quota request: 8–16 vCPU. Measured, not assumed, in the M2-style acceptance below.
+(8 vCPU) or g4dn.4xlarge (16 vCPU), with the same single T4, is the realistic target. The maintainer is filing the on-demand
+G/VT quota at 16 vCPU (one g4dn.4xlarge). Measured, not assumed, in the M2-style acceptance below.
 
 A GPU path for the two models (ONNX Runtime with CUDA; CLAUDE.md §1 allows an ORT fallback if it logs which ran)
 would cut this to a few ms per keyframe. It is a separate image change and an [UNVERIFIED] gain, so it is out of scope
