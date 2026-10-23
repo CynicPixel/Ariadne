@@ -54,6 +54,7 @@ stage() {
     echo "$REG/$REPO_ECR:$tag $name sha256:$id" >> "$W/images.txt"
     echo "$tag" >> "$W/ecr_tags.txt"
   done
+  "$AWS" aws s3 rm --recursive "$STAGE/relay/" --only-show-errors   # a stale package.done would start the relay early
   "$AWS" aws s3 cp "$W/repo.bundle" "$STAGE/repo.bundle" --only-show-errors
   "$AWS" aws s3 cp "$W/inputs.tar" "$STAGE/inputs.tar" --only-show-errors
   "$AWS" aws s3 cp "$W/images.txt" "$STAGE/images.txt" --only-show-errors
@@ -65,6 +66,9 @@ stage() {
 # Every key is a fresh object under $STAGE/relay (teardown removes it); a failure is reported to the instance.
 relay() {
   local r="$W/relay" k="$STAGE/relay"; rm -rf "$r"; mkdir -p "$r/package" "$r/render"
+  # Any failure still reaches the instance (which would otherwise wait out RELAY_TIMEOUT_MIN).
+  trap 'echo "host relay error (line $LINENO)" > "$r/render.failed"
+        "$AWS" aws s3 cp "$r/render.failed" "$k/render.failed" --only-show-errors; log "relay: FAILED"' ERR
   until "$AWS" aws s3 cp "$k/package.done" "$r/package.done" --only-show-errors >/dev/null 2>&1; do sleep 30; done
   "$AWS" aws s3 cp "$k/package.tar" "$r/package.tar" --only-show-errors
   "$AWS" aws s3 cp "$k/package.sha256" "$r/package.sha256" --only-show-errors
