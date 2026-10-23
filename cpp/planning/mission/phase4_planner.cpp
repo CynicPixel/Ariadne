@@ -153,7 +153,7 @@ Cell Phase4Planner::CellOf(const core::Vec3& p) const {
 }
 
 cv::Mat Phase4Planner::PlanSpace(const TraversabilityMaps& m, const Cell& at) const {
-    cv::Mat plan = m.trav_a.clone();
+    cv::Mat plan = KnownFreePlan(m, p_.nbv.rho_a);   // known-free agent space (D153b), as PlanNbv
     const double esc = p_.nbv.escape_m / b_.grid.cell;
     for (int r = std::max(0, at.r - int(esc) - 1); r <= std::min(plan.rows - 1, at.r + int(esc) + 1); ++r)
         for (int c = std::max(0, at.c - int(esc) - 1); c <= std::min(plan.cols - 1, at.c + int(esc) + 1); ++c)

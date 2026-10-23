@@ -173,6 +173,11 @@ double P90Scale(std::vector<double> v);
 /// corner rule); cells within escape_cells of `from` count as unbounded. CV_64F, -1 unreachable.
 cv::Mat Bottleneck(const cv::Mat& plan, const cv::Mat& clr, const Cell& from, double escape_cells);
 
+/// The agent's plan space (D114 amendment, = B's D153b standoff rule): trav_a AND egress clearance >= rho_agent, i.e.
+/// known-free columns with rho_agent clearance to anything not observed free. trav_a alone counts unknown space as
+/// passable, so views and paths ran through unobserved columns where clear_r = 0 (risk 1 on ~90 % of views; B).
+cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a);
+
 /// D158's arrival rule (B, planner.hpp): the widest way to ARRIVE within `rad` cells of the goal = the max of the
 /// bottleneck map over that disc (a view goal sits at the edge of unknown space by design, so its own cell's clearance
 /// is not what a responder must pass). -1 if nothing in the disc is reachable.
