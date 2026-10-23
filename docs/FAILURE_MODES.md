@@ -41,8 +41,8 @@ turning, losses are 0–39. Whenever the robot moves, keyframes run at 200–300
 **Measured, not separating:** keyframe stereo matching (forward-backward rejections 50 %, valid 29 %). EuRoC MH_04,
 which the pipeline handles (0.046 m, D87), is at 17 % valid with the same configuration.
 
-**Open (candidates, not ranked):** the co-moving lamp's range-dependent falloff under rotation (D142 measured this as
-the dominant cost in sim: ×6 ATE, ×2.8 keyframes); 10 Hz frames; the fisheye-rectified periphery (107.6° kept of
+**Open (candidates, not ranked):** the co-moving lamp's range-dependent falloff under rotation (in sim, D142, dark + lamp
+was ×6 worse than dark + fixed light, but brightness and coverage were not matched, so the falloff is not isolated); 10 Hz frames; the fisheye-rectified periphery (107.6° kept of
 ~127°); left/right ISO lag on 253 frames.
 
 **Evidence.** `evaluation/runs/ph5/hilti_5.6/` (results, manifests, estimates, control-point scores). The per-window

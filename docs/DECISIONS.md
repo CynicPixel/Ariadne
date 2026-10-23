@@ -3643,13 +3643,15 @@ agent; that its trajectory is identical (only lighting differs between the prese
 | dark + co-moving lamp, no D | **15.2 mm** | **219** | 471 | 0.782 |
 | dark + co-moving lamp, `lampdark_sensor_v0` | **17.0 mm** | **186** | 364 | 0.777 |
 
-- **The co-moving lamp, not the darkness, costs accuracy:** ×6 ATE against the fixed light on the same path and
-  ×2.8 keyframes. Its illumination is locked to the camera, so a surface's brightness changes as the range to it
-  changes, and tracks are renewed far more often. This is the case Stage 3 (falloff normalisation, D134/D140) exists
-  for; its row is the next measurement once it is wired into the runner.
+- **Dark + lamp is ×6 worse in ATE than dark + fixed light on the same path, with ×2.8 keyframes.** This is a
+  comparison of two lighting setups, NOT a measurement of what the lamp's motion costs: the rows also differ in
+  overall brightness (not matched) and coverage (the zone lights fill the rooms; the lamp lights a cone). Attributing
+  the gap to the co-moving falloff needs the brightness-matched fixed-light row of D145. The falloff is the
+  plausible mechanism and Stage 3 (D134/D140) targets it; not yet isolated.
 - **Sensor noise is the second-order term:** +2.7 mm fixed, +1.8 mm lamp, and roughly ⅓–½ of the landmarks lost,
   as in D69.
-- One seed on one 50 s segment. Differences of ~1 mm are not claimed; the ×6 is.
+- One seed on one 50 s segment. Differences of ~1 mm are not claimed; the ×6 between these two setups is, its cause
+  is not.
 
 ## 2026-10-23 — D143: equidistant (Kannala–Brandt) cameras through `cv::fisheye`; sequences without dense GT
 

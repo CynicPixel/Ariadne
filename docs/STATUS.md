@@ -6,8 +6,9 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ## 2026-10-23 — Phase 5 (A2): lighting rows measured; Hilti 5.6 measured: 0/100, diagnosed
 
-- **Lighting rows (D142, AWS session 5, `380c900`):** the co-moving lamp costs ×6 ATE against a fixed light on the
-  same path (15.2 vs 2.5 mm; lit 3 mm) and ×2.8 keyframes. Sensor noise adds 2–3 mm. Dust rows and the Stage 3 row
+- **Lighting rows (D142, AWS session 5, `380c900`):** dark + lamp is ×6 worse in ATE than dark + fixed light on
+  the same path (15.2 vs 2.5 mm; lit 3 mm), ×2.8 keyframes. Brightness and coverage were not matched, so the gap is
+  not yet attributable to the lamp's motion (D145). Sensor noise adds 2–3 mm. Dust rows and the Stage 3 row
   are next.
 - **AWS:** five CPU sessions, ≈ $0.07 total (two failed launches, then dangling `.cache` symlink, then missing
   ListBucket -- each fixed in `ph5_aws.sh`). GPU renders $0.1241.
