@@ -29,6 +29,11 @@ log() { printf '[live_aws %s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
 account() { "$AWS" aws sts get-caller-identity --query Account --output text | tr -d '\r'; }
 bucket() { "$AWS" tf main output -json runner | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifact_bucket"])'; }
 
+# Profile/cap knobs (D219): LIVE_AWS_PROFILE=cpux86 runs the same flow on the c7i CPU profile (llvmpipe render,
+# proven deterministic across machines at D168 M1); LIVE_AWS_MAX_MIN raises cmd_run's instance cap for long runs.
+PROFILE="${LIVE_AWS_PROFILE:-gpu}"
+RUN_MAX_MIN="${LIVE_AWS_MAX_MIN:-60}"
+
 # local image -> ECR repo
 declare -A REPO=([ariadne/sim:dev]=ariadne/ariadne-sim [ariadne/core-dev:dev]=ariadne/ariadne-core [ariadne-console:1]=ariadne/ariadne-console [ariadne-orchestrator:1]=ariadne/ariadne-orchestrator)
 
@@ -98,7 +103,7 @@ ARIADNE_SMOKE_OUT_HOST=$R/sim-smoke ARIADNE_SMOKE_TIMEOUT=120 infra/scripts/sim.
 docker run --rm --gpus all ariadne/sim:dev bash -c 'ls -la /usr/share/glvnd/egl_vendor.d/; ldconfig -p | grep -iE "libEGL_nvidia|libnvidia-egl" | head' > $R/egl_vendor.txt 2>&1 || true
 EOF
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes 25 -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes 25 -- "$(cat "$script")"
 }
 
 cmd_run() {
@@ -111,13 +116,14 @@ aws s3 cp $uri - | tar xz -C /tmp
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
 cp -a /tmp/p/. . && cp /tmp/p/SHA256SUMS \$R/
 mkdir -p build/live/runs
-infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
+ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} \
+  infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
 run=\$(ls -d build/live/runs/live-* | tail -1)
 infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
 tar czf \$R/run.tar.gz --exclude='*.sock' \$run
 EOF
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes 60 -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
 cmd_batch() {
@@ -171,7 +177,7 @@ while read -r preset seed end_s cfg; do
 done < $R/jobs.txt
 BATCH
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes "$max_min" -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$max_min" -- "$(cat "$script")"
 }
 
 case "${1:-}" in
