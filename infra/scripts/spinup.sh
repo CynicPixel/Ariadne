@@ -275,8 +275,15 @@ EOF
   RUN_FINISHED=1
   local end_epoch; end_epoch="$(date +%s)"
 
-  # 5. Results.
-  "$AWS" aws s3 cp --recursive "$s3_run/output" "build/runs/$run_id/output" --only-show-errors >/dev/null 2>&1 || true
+  # 5. Results. SPINUP_FETCH_EXCLUDE (space-separated globs, e.g. '*.tar.gz *.mcap') leaves bulky outputs in S3: the
+  #    download runs over the host's link while the slot queue still counts the job as running (2026-10-24: two
+  #    live runs held their slots ~70 min after their instances ended, fetching multi-GB run tarballs). Fetch those
+  #    later, or analyse them in-region.
+  local excl=() globs=()
+  read -r -a globs <<< "${SPINUP_FETCH_EXCLUDE:-}"   # read -a: the globs are never expanded against the cwd
+  for g in "${globs[@]}"; do excl+=(--exclude "$g"); done
+  [ ${#excl[@]} -gt 0 ] && log "fetch skips: ${SPINUP_FETCH_EXCLUDE} (left in $s3_run/output)"
+  "$AWS" aws s3 cp --recursive "$s3_run/output" "build/runs/$run_id/output" "${excl[@]}" --only-show-errors >/dev/null 2>&1 || true
   local exit_code="missing"
   [ -f "$run_dir/output/exit_code" ] && exit_code="$(cut -d= -f2 < "$run_dir/output/exit_code")"
   local secs=$(( end_epoch - start_epoch ))
