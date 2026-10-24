@@ -1232,11 +1232,25 @@ int main(int argc, char** argv) {
             live::CollabLiveParams cp;   // D179: async; the event log is the reproducibility substrate
             if (is_live) cp.log_path = (run_dir / "collab_events.jsonl").string();
             else cp.replay_log = (fs::path(replay_path).parent_path() / "collab_events.jsonl").string();
-            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ
+            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ.
+                // The build component is the BINARY's own fnv1a64 (/proc/self/exe): invariant between the live
+                // and replay legs of one payload, different for any byte-different build. It was ARIADNE_GIT_COMMIT
+                // first, which cmd_run sets and cmd_replay does not - every gate-on replay was refused at the
+                // CollabLive ctor ("payload:src" vs "unknown") and died as collab60e's naked terminate (diag5).
                 char hx[17];
                 std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
-                const char* gc = std::getenv("ARIADNE_GIT_COMMIT");
-                cp.identity = std::string(hx) + ":" + (gc && *gc ? gc : "unknown");
+                core::Fnv1a64 bh;
+                {
+                    std::ifstream exe("/proc/self/exe", std::ios::binary);
+                    char buf[1 << 16];
+                    while (exe.read(buf, sizeof buf) || exe.gcount() > 0) {
+                        for (std::streamsize i = 0; i < exe.gcount(); ++i) bh.AbsorbByte(uint8_t(buf[i]));
+                        if (!exe) break;
+                    }
+                }
+                char bx[17];
+                std::snprintf(bx, sizeof bx, "%016llx", (unsigned long long)bh.value());
+                cp.identity = std::string(hx) + ":bin-" + bx;
             }
             const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
             ma->collab = std::make_unique<live::CollabLive>(
