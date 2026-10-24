@@ -86,12 +86,14 @@ prefix.
 - Knobs and fidelity: kfdump's re-extraction reproduces the pass-A stores (every keypoint ≤ 6.1e-5 px; 70,
   `fidelity_summary.csv`), and the store replay reproduces production on 120/120 pairs (`replay_exactness.csv`).
 
-## Recommendations (for B and the maintainer; none applied here; post-demo list under the 2026-10-24 freeze)
-1. Lane pipelining (D232 a2): ingest of frame n+1 overlapping the track of frame n. The lane is now ≈ the 50 ms
-   frame period, and this is the lever to RTF ≥ 1. Then copy cuts (a3).
-2. Worker OpenCV pool = 5 (3 × 5 of 16 vCPU). It barely changes wall time but removes the CPU pressure (PSI 26 % →
-   1 %). This is a config change on B's runtime.
+## Recommendations and their status (none applied by A2; status per M, 2026-10-24 ~12:00 IST)
+1. **Lane pipelining** (D232 a2): ingest of frame n+1 overlapping the track of frame n. The lane is now ≈ the 50 ms
+   frame period, and this is the lever to RTF ≥ 1. **Approved by the maintainer under the freeze; in progress, B.**
+   Copy cuts (a3) come after.
+2. **Worker OpenCV pool = 5** (3 × 5 of 16 vCPU). It barely changes wall time but removes the CPU pressure (PSI 26 % →
+   1 %). This is a config change on B's runtime. **Approved by the maintainer under the freeze; in progress, B.**
 3. Replay reader: the ConsumedRecorder/ZSTD thread (~36 ms per step) is the next single thread to watch as the lane
-   speeds up.
+   speeds up. This is on the post-demo backlog (`docs/POST_DEMO_BACKLOG.md`), with leads 8–10 of M's summary:
+   adaptive LightGlue export, an ORT engine mix, and the replay reader.
 4. Graph-level ALIKED speed-ups need a fidelity bar with a seed and 1-ulp envelope. D182's 0-flip and 4.9e-6 bars
    sit at the numeric floor (D234 post-hoc: a lossless coding flips a pair).
