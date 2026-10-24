@@ -1,0 +1,9 @@
+=== 2026-10-23T11:39:50Z 0 host
+=== 2026-10-23T11:39:50Z 1 tools
+=== 2026-10-23T11:40:27Z 2 hilti skipped (HILTI=skip)
+=== 2026-10-23T11:40:27Z 3 build
+build_seconds 123
+=== 2026-10-23T11:42:41Z 4 recordings
+=== 2026-10-23T11:46:04Z 4b replays
+=== 2026-10-23T12:24:06Z 5 collect
+=== 2026-10-23T12:24:07Z done

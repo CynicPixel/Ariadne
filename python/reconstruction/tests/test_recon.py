@@ -132,3 +132,63 @@ def test_splat_encoding_matches_the_viewer_format():
     q = rot_to_quat_wxyz(Rz)
     assert np.allclose(q, [np.sqrt(0.5), 0, 0, np.sqrt(0.5)])
     assert np.allclose(quat_mul(q, np.array([[1.0, 0, 0, 0]]))[0], q)
+
+
+def make_spool_v2(tmp, with_lamp=True):
+    """Schema 2 (6.1, D195): agent 0 keyframe with an albedo proxy and an applied photometric state, plus the lamp."""
+    make_spool(tmp)
+    y = yaml.safe_load((tmp / "spool.yaml").read_text())
+    y["schema_version"] = 2
+    a = np.full((H, W), 0.25, np.float32)
+    a[2, 3] = np.nan
+    write_half(tmp / "agent0/kf_0_albedo.png", a)
+    y["bundles"][0].update({"rgb_kind": "albedo_proxy", "exposure_state": {"exposure_gain": 2.0, "decision_id": 7},
+                            "lamp_state": {"lamp_rel": 0.5}})
+    if with_lamp:
+        (tmp / "lamp_calibration.yaml").write_text("name: test\n")
+        y["lamp"] = {"calibration": "lamp_calibration.yaml", "calibration_source": "configs/sim/x.yaml",
+                     "calibration_name": "test", "rig": "rig_stereo_v2", "intensity": 3.0,
+                     "R_rect_raw": [1, 0, 0, 0, 1, 0, 0, 0, 1]}
+    (tmp / "spool.yaml").write_text(yaml.safe_dump(y))
+    return tmp
+
+
+def test_schema2_albedo_photo_and_lamp(tmp_path):
+    sp = load(make_spool_v2(tmp_path))
+    assert sp.schema_version == 2 and sp.lamp.intensity == 3.0 and sp.lamp.R_rect_raw.shape == (3, 3)
+    kf0, kf1 = sp.keyframes()
+    assert kf0.rgb_kind == "albedo_proxy" and kf0.exposure_gain == 2.0 and kf0.lamp_rel == 0.5 and kf0.decision_id == 7
+    A = kf0.albedo()
+    assert A[0, 0] == np.float32(0.25) and np.isnan(A[2, 3])   # undefined stays NaN, never a guessed reflectance
+    assert kf1.rgb_kind == "raw_radiance" and kf1.exposure_gain is None
+    with pytest.raises(SpoolError, match="no albedo proxy"):
+        kf1.albedo()
+
+
+def test_schema2_albedo_needs_the_lamp(tmp_path):
+    with pytest.raises(SpoolError, match="lamp record"):
+        load(make_spool_v2(tmp_path, with_lamp=False))
+
+
+def test_schema1_still_loads_without_photo(tmp_path):
+    sp = load(make_spool(tmp_path))
+    assert sp.schema_version == 1 and sp.lamp is None and sp.keyframes()[0].lamp_rel is None
+
+
+def test_schema3_merges_list_places_every_agent(tmp_path):
+    """Schema 3 (A1/M/A2, 2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
+    make_spool(tmp_path)
+    y = yaml.safe_load((tmp_path / "spool.yaml").read_text())
+    y["schema_version"] = 3
+    y.pop("merge")
+    T = np.eye(4)
+    T[:3, 3] = [1.0, 2.0, 0.0]
+    y["merges"] = [{"agent": 1, "ok": True, "T_O0_O": row_major(T), "edge": "agent0 kf 3 <- agent1 kf 5"}]
+    (tmp_path / "spool.yaml").write_text(yaml.safe_dump(y))
+    sp = load(tmp_path)
+    b1 = [b for b in sp.keyframes() if b.agent == 1][0]
+    np.testing.assert_allclose(sp.T_O0_C(b1), T @ b1.T_O_C)
+    y["merge"] = {"ok": True, "T_O0_O1": row_major(T), "edge": "e"}
+    (tmp_path / "spool.yaml").write_text(yaml.safe_dump(y))
+    with pytest.raises(SpoolError, match="not merge"):
+        load(tmp_path)

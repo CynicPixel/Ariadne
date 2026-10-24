@@ -1,0 +1,20 @@
+# ariadne_mission results (design MISSION_1.8). Generated; do not hand-edit.
+scene_id: aadffb8df5790ca0
+config: mission_v1
+agents: 0
+anchor_agent: 0
+keyframes_integrated: {agent0: 320, agent1: 0}
+rays: 2528284
+t_merge_s: -1
+replans: 40
+replan_ms_mean: 8.479226
+time_to_first_valid_route_s: 195   # egress, observed free at rho_responder; -1 = none
+time_to_first_agent_route_s: 195
+final_egress: {found: 1, length_m: 11.25710678, exit: 0}
+final_agent_route: {found: 1, length_m: 11.25710678, exit: 0}
+final_frontiers: {clusters: 8, rejected_small: 46}
+target_cell: [80, 252]
+exit_cells: [[70,31],[168,250]]
+T_W_Oanchor: [0, 0, 1, -1.87, -1, 0, 0, 3.05, 0, -1, 0, 1.02]
+T_W_Oanchor_source: briefing (the anchor agent's entry pose x mission t_B_camera_m/R_B_optical_rows)
+T_O0_O1: [-0.008693740576, 0.00232878996, 0.999959497, -4.815403233, -0.002428582, 0.9999942898, -0.002349985306, 0.01411420891, -0.9999592596, -0.002448913798, -0.008688035276, 10.95145653]

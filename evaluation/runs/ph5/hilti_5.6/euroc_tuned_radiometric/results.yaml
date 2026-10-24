@@ -1,0 +1,27 @@
+# ariadne_euroc_vo results. Generated; do not hand-edit.
+sequence: site2_robot_3_asl
+frames: 3592
+dense_gt: false  # ATE/RPE fields are null: score with the dataset's protocol
+associated_poses: 0  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: null
+ate_se3: {rmse_m: null, mean_m: null, max_m: null, rotation_rmse_rad: null}
+ate_rmse_percent_of_path: -1
+sim3_scale: null  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: null, rotation_rmse_rad: null}
+vo: {lost_frames: 485, keyframes: 2031, ba_runs: 2030, ba_mean_cost_ratio: 0.251941, landmarks_alive_at_end: 148, graph_edges: 2021, graph_version: 22489}
+stereo_match_valid_fraction: 0.313974
+triangulation: {candidates: 681724, created: 84419, no_stereo: 518117, nonpositive_disparity: 0, depth_range: 15, reprojection: 0, sgbm_inconsistent: 3696, uncertain: 75477}
+timing_ms: {track_mean: 36.9474, vo_track_mean: 8.47798, keyframe_mean: 143.796, opencv_threads: 8}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.153245, b: 0.000758008, c: -0.00251652, matches: 157, mad_px: 0.396781, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.11436, b: -0.000524751, c: 0.000704638, max_abs_dy_px: 0.677366, matches: 268}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 1, epipolar_check_skipped_frames: 0}
+keyframe_refined: {ate_rmse_m: null, ate_rotation_rmse_rad: null, rpe_1s_translation_rmse_m: null}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 1820, observations: 1931964, invalid_at_entry: 0, chi2_failed: 71645, chi2_failed_fraction: 0.037084, keyframe_observations_rejected: 56385, culled: 78717, exit_edges: 2021, keyframes_held: 0, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 25262, landmarks_ill_conditioned_at_solution: 4403, marginal_degenerate: 0, inlier_sigma_px: 0.383111}
+imu: {mode: full, seed_lk: false, stationary_start: true, gyro_bias_final: [-0.00243983, 0.000292242, 0.000462181], bias_samples: 200, lk_seeded_frames: 0}
+imu_full: {initialized: true, init_attempts: 21, init_refused: 20, init_t_s: 6.6, init: {gravity_norm_unconstrained: 9.76324, chi2_per_dof: 77.2252, condition: 33485.1, rotation_rms_deg: 0.0317822, last_refusal: ""}, init_vs_gt: {gravity_angle_deg: -1, v_rms_m_s: -1}, inertial_solves: 2000, v0_held: 787, inertial_chi2_per_dof: 1.19287, repropagated: 7, bias_prior: {marginal: 2000, carried: 0}, lost_inertial_frames: 0, tilt_correction_deg: {sum: 0, max: 0}, refinements: [{t_s: 11.6, keyframes: 50, ok: true, gravity_change_deg: 4.72408, chi2_per_dof: 2.05913, gravity_norm_unconstrained: 9.60843, why: ""}, {t_s: 21.6, keyframes: 92, ok: true, gravity_change_deg: 0.709009, chi2_per_dof: 4.07268, gravity_norm_unconstrained: 9.70621, why: ""}]}
+gravity_prior: {source: attitude, stride_keyframes: 10, edges: 203, candidates: {}}
+lost: {motion: bridge, reanchor: every_frame, segments: 41, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 485, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}
+radiometric: {mode: auto, decision: vst_off, reason: "left: no valid noise fit (fitted a = -0.004506 is not positive); right: no valid noise fit (fitted a = -0.002625 is not positive); ", denoiser: gaussian, inverse: exact, ms_per_image: 0.443359, images: 7184,
+  exposure_norm: "inert: no source carries photometric state (t, g); the §6.5 controller is Phase 5",
+  left: {flat_field: "none", k_min: 1, fit_valid: false, why: "fitted a = -0.004506 is not positive", a: -0.00450619, b: 2.97084, bins: 54, sigma_z: 0, median_level: 125.667, snr_at_median: 81.0404, passes_gate: false},
+  right: {flat_field: "none", k_min: 1, fit_valid: false, why: "fitted a = -0.002625 is not positive", a: -0.00262501, b: 2.76803, bins: 55, sigma_z: 0, median_level: 124.778, snr_at_median: 79.8728, passes_gate: false}}

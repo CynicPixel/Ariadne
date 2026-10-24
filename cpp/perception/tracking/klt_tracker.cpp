@@ -7,6 +7,7 @@
 #include <opencv2/video/tracking.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <numeric>
 #include <set>
@@ -206,7 +207,7 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
     const bool replenish_here = params_.replenish == "every_frame" || !have_previous ||
                                 survivors < params_.replenish_min_tracks;
     if (replenish_here) {
-        stats.replenished = AddTracks(gray, mask, out.ids, out.points, &out.prev_points, out.ages);
+        stats.replenished = AddTracks(gray, gray, mask, out.ids, out.points, &out.prev_points, out.ages);
     }
 
     if (!have_previous) {
@@ -223,21 +224,21 @@ TrackedFrame KltTracker::Process(const cv::Mat& gray, uint64_t frame_id, uint64_
     return out;
 }
 
-int KltTracker::AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64_t>& ids,
+int KltTracker::AddTracks(const cv::Mat& detect, const cv::Mat& lk_gray, cv::Mat& mask, std::vector<uint64_t>& ids,
                           std::vector<cv::Point2f>& points, std::vector<cv::Point2f>* prev_points,
                           std::vector<int>& ages) {
     const int need = params_.target_tracks - static_cast<int>(ids.size());
     if (need <= 0) return 0;
-    const cv::Size size = gray.size();
+    const cv::Size size = lk_gray.size();
     const int radius = static_cast<int>(std::lround(params_.min_track_distance_px));
     int added = 0;
-    const std::vector<cv::KeyPoint> fresh = replenisher_.Detect(gray, mask, need * params_.replenish_request_factor);
+    const std::vector<cv::KeyPoint> fresh = replenisher_.Detect(detect, mask, need * params_.replenish_request_factor);
     // §7.2 image-gradient quality (off unless configured): LK needs a well-conditioned 2x2 structure tensor at the
     // point, which a learned detector does not promise.
     cv::Mat eig;
     double eig_min = 0.0;
     if (params_.replenish_min_eig_quality > 0.0 && !fresh.empty()) {
-        cv::cornerMinEigenVal(gray, eig, /*blockSize=*/3, /*ksize=*/3);
+        cv::cornerMinEigenVal(lk_gray, eig, /*blockSize=*/3, /*ksize=*/3);
         double eig_max = 0.0;
         cv::minMaxLoc(eig, nullptr, &eig_max);
         eig_min = eig_max * params_.replenish_min_eig_quality;
@@ -261,7 +262,17 @@ int KltTracker::AddTracks(const cv::Mat& gray, cv::Mat& mask, std::vector<uint64
     return added;
 }
 
-int KltTracker::Replenish(const cv::Mat& gray) {
+void KltTracker::RescalePrevious(double ratio) {
+    if (!(ratio > 0.0) || !std::isfinite(ratio)) throw std::invalid_argument("KltTracker::RescalePrevious: ratio > 0");
+    if (ratio == 1.0 || prev_pyramid_.empty()) return;
+    cv::Mat level0;
+    prev_pyramid_.images[0].convertTo(level0, CV_8U, ratio);   // a copy: images[0] views the padded pyramid buffer
+    prev_pyramid_ = BuildPyramid(level0, params_);
+}
+
+int KltTracker::Replenish(const cv::Mat& gray) { return Replenish(gray, gray, cv::Mat()); }
+
+int KltTracker::Replenish(const cv::Mat& gray, const cv::Mat& detect, const cv::Mat& detect_mask) {
     if (params_.replenish == "every_frame") return 0;
     if (gray.empty() || gray.type() != CV_8UC1) {
         throw std::invalid_argument("KltTracker::Replenish: expected a non-empty CV_8UC1 image");
@@ -275,7 +286,16 @@ int KltTracker::Replenish(const cv::Mat& gray) {
     for (const cv::Point2f& p : points_) {
         cv::circle(mask, cv::Point(cvRound(p.x), cvRound(p.y)), radius, cv::Scalar(0), cv::FILLED);
     }
-    return AddTracks(gray, mask, ids_, points_, nullptr, ages_);
+    if (detect.type() != CV_8UC1 || detect.size() != gray.size()) {
+        throw std::invalid_argument("KltTracker::Replenish: the detection image must be CV_8UC1 of the tracked size");
+    }
+    if (!detect_mask.empty()) {
+        if (detect_mask.type() != CV_8UC1 || detect_mask.size() != gray.size()) {
+            throw std::invalid_argument("KltTracker::Replenish: detect_mask must be CV_8UC1 of the tracked size");
+        }
+        cv::bitwise_and(mask, detect_mask, mask);
+    }
+    return AddTracks(detect, gray, mask, ids_, points_, nullptr, ages_);
 }
 
 void KltTracker::Relabel(const std::vector<uint64_t>& from, const std::vector<uint64_t>& to) {

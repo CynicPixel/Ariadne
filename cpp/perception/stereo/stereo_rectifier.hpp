@@ -38,7 +38,10 @@ namespace ariadne::perception {
 
 class StereoRectifier {
 public:
-    /// alpha in [0, 1]: 0 keeps only valid pixels, 1 keeps every source pixel.
+    /// alpha in [0, 1]: 0 keeps only valid pixels, 1 keeps every source pixel. Equidistant (fisheye) pairs go through
+    /// cv::fisheye, whose knob is `balance` (the new focal between the min and max candidates); alpha is passed as
+    /// balance, which shares the endpoints' intent (0 = crop to valid, 1 = keep the field of view) but not the
+    /// interior. Both cameras must use the same model.
     explicit StereoRectifier(const RawStereoCalibration& calib, double alpha = 0.0);
 
     /// The ideal pinhole rig after rectification: fx, cx, cy from P1, and the
@@ -52,6 +55,9 @@ public:
     /// Rectify a left image only, with the same maps (e.g. the colour frame
     /// the reconstruction service needs alongside the gray VO input).
     void RectifyLeft(const cv::Mat& left, cv::Mat& left_out) const;
+    /// The same left map, nearest-neighbour: for a registered depth image (2.6, D100), where interpolating across
+    /// a depth edge would invent depths that exist nowhere.
+    void RectifyLeftNearest(const cv::Mat& left, cv::Mat& left_out) const;
 
     /// Fold a measured residual misalignment dy = a + b x + c y (right image pixels; EstimateRowCorrection) into the
     /// RIGHT map only: its new camera matrix becomes A * P2(:, 0:3) with A = [1 0 0; -b 1-c -a; 0 0 1], so a right
@@ -71,10 +77,13 @@ public:
     const cv::Mat& P2() const { return P2_; }
 
 private:
+    void BuildMap(const cv::Mat& K, const cv::Mat& D, const cv::Mat& R, const cv::Mat& P, cv::Mat (&map)[2]) const;
+
     RectifiedStereoRig rig_;
     cv::Size size_;
     cv::Mat R1_, R2_, P1_, P2_, Q_;
     cv::Mat K2_, D2_;   // kept to rebuild the right map (RefineRightRows)
+    bool fisheye_ = false;
     cv::Mat map_left_[2], map_right_[2];
     double row_a_ = 0.0, row_b_ = 0.0, row_c_ = 0.0;
 };

@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,12 +39,16 @@ struct KeyframeInput {
     double fx = 0, fy = 0, cx = 0, cy = 0;
 };
 
-struct PlanContext {
+struct PlanContext {   // sized by the scene's agent count (P8 D213: N agents; 2 everywhere before that)
+    explicit PlanContext(int n_agents = 2)
+        : active(size_t(n_agents), false), at(size_t(n_agents)),
+          position(size_t(n_agents), core::Vec3::Zero()), flown_m(size_t(n_agents), 0) {}
+    int n() const { return int(active.size()); }
     int64_t T = 0;
-    bool active[2] = {false, false};                                       // agent has an estimated pose before T
-    Cell at[2];                                                            // its cell
-    core::Vec3 position[2] = {core::Vec3::Zero(), core::Vec3::Zero()};     // its estimated position in W
-    double flown_m[2] = {0, 0};   // metres flown to T: the ground-truth path length (the rig's executed motion)
+    std::vector<char> active;                 // agent has an estimated pose before T (char: vector<bool> has no refs)
+    std::vector<Cell> at;                     // its cell
+    std::vector<core::Vec3> position;         // its estimated position in W
+    std::vector<double> flown_m;   // metres flown to T: the ground-truth path length (the rig's executed motion)
     std::vector<std::pair<int, std::pair<double, double>>> refused_goals;  // the mover's refusals (agent, goal xy)
     std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
 };
@@ -76,9 +81,10 @@ struct AgentOptions {
 };
 
 struct PlanOutput {
+    explicit PlanOutput(int n_agents = 2) : agents(size_t(n_agents)), joint(size_t(n_agents), -1) {}
     mis::ReplanMaps maps;              // map summary: slab, egress route, frontiers (console, LLM images)
-    AgentOptions agents[2];
-    int joint[2] = {-1, -1};           // the allocated picks (exactly-once across agents)
+    std::vector<AgentOptions> agents;
+    std::vector<int> joint;            // the allocated picks (exactly-once across agents)
     std::string trace_json = "{}";     // the planner's own record for the trace (which planner, allocation event, ...)
 };
 
@@ -187,10 +193,10 @@ public:
     }
 
     PlanOutput Plan(const PlanContext& ctx) override {
-        PlanOutput out;
+        PlanOutput out(ctx.n());
         out.maps = map_.Replan();
         const double rho_a = mc_.rho_a, rho_r = mc_.rho_r;
-        for (int k = 0; k < 2; ++k) {
+        for (int k = 0; k < ctx.n(); ++k) {
             if (!ctx.active[k]) continue;
             AgentOptions& ao = out.agents[k];
             const Cell ac = ctx.at[k];
@@ -284,12 +290,18 @@ public:
             }
         }
         // Allocation (placeholder for A1's CBBA, 4.4): greedy, agent 0 first, exactly-once (ALGORITHMS line 1165).
-        out.joint[0] = out.agents[0].classical;
-        out.joint[1] = out.agents[1].classical;
-        if (ctx.active[0] && ctx.active[1] && out.joint[0] >= 0 && out.joint[1] >= 0 &&
-            ClusterOf(out, 0, out.joint[0]) == ClusterOf(out, 1, out.joint[1])) {
-            const int alt = OtherCluster(out, 1, ClusterOf(out, 0, out.joint[0]));
-            if (alt >= 0) out.joint[1] = alt;
+        // Exactly-once across agents, ascending index (P8 D213: N agents; at N=2 this is the old pairwise rule:
+        // agent 1 moves to its best other cluster when it collides with agent 0's pick).
+        for (int k = 0; k < ctx.n(); ++k) out.joint[size_t(k)] = out.agents[size_t(k)].classical;
+        std::set<int64_t> taken;
+        for (int k = 0; k < ctx.n(); ++k) {
+            if (!ctx.active[size_t(k)] || out.joint[size_t(k)] < 0) continue;
+            int64_t cl = ClusterOf(out, k, out.joint[size_t(k)]);
+            if (taken.count(cl)) {
+                const int alt = OtherCluster(out, k, cl);
+                if (alt >= 0) out.joint[size_t(k)] = alt, cl = ClusterOf(out, k, alt);
+            }
+            taken.insert(cl);
         }
         return out;
     }

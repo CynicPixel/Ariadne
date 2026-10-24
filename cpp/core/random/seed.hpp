@@ -44,6 +44,7 @@ inline constexpr const char* kFalseClosureInjection = "false_closure_injection";
 inline constexpr const char* kRansac = "ransac";
 inline constexpr const char* kGaussianInit = "gaussian_init";
 inline constexpr const char* kTaskAllocation = "task_allocation";
+inline constexpr const char* kImuNoise = "imu_noise";   // L2 (D101): the sim IMU noise operator
 }  // namespace seed_purpose
 
 /// Derive a subsystem seed. Mixing uses splitmix64's finalizer, which

@@ -23,7 +23,12 @@
 #include "planning/mission/frontier_mission.hpp"
 #include "runtime/live/link_frame.hpp"
 #include "runtime/live/live_source.hpp"
+#include "collaboration/comms/comms_node.hpp"
+#include "collaboration/protocol/collab_node.hpp"
 #include "runtime/live/a1_planner.hpp"
+#include "runtime/live/collab_live.hpp"
+#include "runtime/live/collab_tee.hpp"
+#include "runtime/live/multiagent_glue.hpp"
 #include "runtime/live/planner.hpp"
 #include "runtime/manifest/build_identity.hpp"
 #include "runtime/manifest/determinism.hpp"
@@ -77,6 +82,29 @@ struct LiveConfig {
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
                                            // answer applies at the next horizon or expires. Not an evidence mode.
     int hold_back_ms = 3000;
+    // D175 item 4 (MULTIAGENT_PIPELINE): per-agent planners fed only through the radio. false = the centralised
+    // loop, byte-identical to before this feature existed (the oracle row).
+    struct Multiagent {
+        bool enabled = false;
+        std::string scenario;                 // comms scenario yaml (3.3); live runs need mode: ideal (RF needs tracks)
+        std::string broker_mode = "plain";    // plain | discount | overlap (A1 R1/R2)
+        double consensus_timeout_s = 10.0;    // older consensus than this = uncoordinated
+        double discount_range_m = 4.0;        // R2 P(d) range (broker_mode discount)
+        double discount_tau_s = 10.0;         // R2 cut-off age constant [ASSUMPTION, logged]
+        int max_bid_options = 8;              // top-M options per bid (D175 wire table cap)
+    } multiagent;
+    // D174 (LIVE_COLLAB): the live SLAM collaboration. The DNN work runs in per-agent ariadne_collab_worker
+    // processes (cv::ALIKED output depends on the thread count; inside the estimator it would break the D168
+    // digests); the estimator only TEES. false = D168 digests unchanged. Requires multiagent.enabled: SLAM and
+    // coordination share one radio and one ledger.
+    struct Collab {
+        bool enabled = false;
+        std::string config;                 // CollabConfig yaml (arm, budget, retrieval, verify, local_encoding)
+        double feature_latency_s = 3.0;     // sim-time model of one ALIKED extraction (lockstep; manifest)
+        int worker_threads = 4;             // OpenCV threads per collab worker, pinned (output depends on it)
+        double keep_s = 120;
+        std::string place_onnx, place_size, aliked_onnx, lightglue_onnx;
+    } collab;
 };
 
 LiveConfig LoadLive(const std::string& path) {
@@ -103,6 +131,37 @@ LiveConfig LoadLive(const std::string& path) {
     c.autonomous_threshold = n["risk_gate"]["autonomous_threshold"].as<double>();
     if (c.chooser == "llm") c.llm_timeout_s = n["llm"]["timeout_s"].as<double>();
     if (!(c.end_s > 0) || !(c.max_command_m > 0) || !(c.telemetry_hz > 0)) throw std::invalid_argument("live config: bad values");
+    if (n["multiagent"]) {
+        const YAML::Node m = n["multiagent"];
+        c.multiagent.enabled = m["enabled"].as<bool>();
+        if (c.multiagent.enabled) {
+            c.multiagent.scenario = m["scenario"].as<std::string>();
+            if (m["broker_mode"]) c.multiagent.broker_mode = m["broker_mode"].as<std::string>();
+            if (m["consensus_timeout_s"]) c.multiagent.consensus_timeout_s = m["consensus_timeout_s"].as<double>();
+            if (m["discount_range_m"]) c.multiagent.discount_range_m = m["discount_range_m"].as<double>();
+            if (m["discount_tau_s"]) c.multiagent.discount_tau_s = m["discount_tau_s"].as<double>();
+            if (m["max_bid_options"]) c.multiagent.max_bid_options = m["max_bid_options"].as<int>();
+            if (c.multiagent.broker_mode != "plain" && c.multiagent.broker_mode != "discount" &&
+                c.multiagent.broker_mode != "overlap")
+                throw std::invalid_argument("live config: multiagent.broker_mode plain|discount|overlap");
+        }
+    }
+    if (n["collab"]) {
+        const YAML::Node m = n["collab"];
+        c.collab.enabled = m["enabled"].as<bool>();
+        if (c.collab.enabled) {
+            if (!c.multiagent.enabled) throw std::invalid_argument("live config: collab.enabled requires multiagent.enabled");
+            c.collab.config = m["config"].as<std::string>();
+            if (m["feature_latency_s"]) c.collab.feature_latency_s = m["feature_latency_s"].as<double>();
+            if (m["worker_threads"]) c.collab.worker_threads = m["worker_threads"].as<int>();
+            if (m["keep_s"]) c.collab.keep_s = m["keep_s"].as<double>();
+            const YAML::Node mo = m["models"];
+            c.collab.place_onnx = mo["place"].as<std::string>();
+            c.collab.place_size = mo["place_size"].as<std::string>();
+            c.collab.aliked_onnx = mo["aliked"].as<std::string>();
+            c.collab.lightglue_onnx = mo["lightglue"].as<std::string>();
+        }
+    }
     return c;
 }
 
@@ -114,6 +173,7 @@ struct KfRec {
     core::SE3 T_O_C;
     cv::Mat Z, S;   // CV_32F, half resolution, fp16-rounded exactly as the spool stores them
     double fx = 0, fy = 0, cx = 0, cy = 0;
+    std::vector<cv::Point2f> track_px;   // the tracker's left-pixel observations (full-res; console overlay)
 };
 
 cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHalf, without the PNG round trip
@@ -123,6 +183,133 @@ cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHa
     h.convertTo(back, CV_32F);
     return back;
 }
+
+// --- A2's live splat tee (D220; service contract D231) -----------------------------------------------------------
+// ariadne_live CONNECTS to the recon service's Unix socket (env ARIADNE_RECON_SOCK) and tees every delivered
+// keyframe: topic "#kf" = u32 LE json_len | JSON | Z fp16 | S fp16 | RGB rgb8 (JSON carries both intrinsics: K
+// full-res for the RGB, Kz spool-scale matching Z/S; invalid depth is 0, the spool convention), topic "#t_w_o" =
+// {"agent","t_s","xyzquat"} with qw LAST (Eigen::Quaterniond - a naive quaternion breaks at the 180-degree
+// entrance), sent once per agent before any keyframe. The splat is a VIEWER: a bounded queue (8 per agent, drop
+// the oldest, drops counted) on one sender thread; absent or dying socket = silent no-op. It can never
+// back-pressure VO or the mission.
+class SplatTee {
+public:
+    SplatTee(const char* path, const std::vector<core::SE3>& T_W_O) {
+        fd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd_ < 0) return;
+        sockaddr_un a{};
+        a.sun_family = AF_UNIX;
+        if (std::strlen(path) >= sizeof(a.sun_path)) { ::close(fd_), fd_ = -1; return; }
+        std::strcpy(a.sun_path, path);
+        if (::connect(fd_, reinterpret_cast<sockaddr*>(&a), sizeof(a)) != 0) { ::close(fd_), fd_ = -1; return; }
+        pending_.assign(T_W_O.size(), 0);
+        for (size_t k = 0; k < T_W_O.size(); ++k) {
+            const core::SE3& T = T_W_O[k];
+            const Eigen::Quaterniond q(T.R);
+            std::ostringstream o;
+            o.precision(17);
+            o << "{\"agent\":" << k << ",\"t_s\":0,\"xyzquat\":[" << T.t.x() << "," << T.t.y() << "," << T.t.z()
+              << "," << q.x() << "," << q.y() << "," << q.z() << "," << q.w() << "]}";
+            const std::string j = o.str();
+            Msg m;
+            m.topic = "#t_w_o";
+            m.bytes.assign(j.begin(), j.end());
+            queue_.push_back(std::move(m));
+        }
+        th_ = std::thread([this] { Run(); });
+    }
+    ~SplatTee() {
+        if (fd_ < 0) return;
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            stop_ = true;
+        }
+        cv_.notify_one();
+        th_.join();
+        ::close(fd_);
+    }
+    bool on() const { return fd_ >= 0 && !dead_.load(std::memory_order_relaxed); }
+    uint64_t drops() const { return drops_.load(); }
+    void OnKf(const KfRec& r, const cv::Mat& rgb) {
+        if (!on()) return;
+        cv::Mat z16, s16;
+        r.Z.convertTo(z16, CV_16F);
+        r.S.convertTo(s16, CV_16F);
+        const cv::Mat c = rgb.isContinuous() ? rgb : rgb.clone();
+        std::ostringstream o;
+        o.precision(17);
+        o << "{\"agent\":" << r.agent << ",\"id\":" << r.id << ",\"t_ns\":" << r.t_ns << ",\"pose_version\":0,"
+          << "\"T_O_C\":[";
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 4; ++j)
+                o << ((i || j) ? "," : "") << (j < 3 ? r.T_O_C.R(i, j) : r.T_O_C.t(i));
+        // Spool camera -> full resolution: u = 2 u' + 0.5 (the inverse of HalfAsSpool's mapping).
+        o << "],\"K\":[" << 2 * r.fx << "," << 2 * r.fy << "," << 2 * (r.cx + 0.5) - 0.5 << ","
+          << 2 * (r.cy + 0.5) - 0.5 << "],\"Kz\":[" << r.fx << "," << r.fy << "," << r.cx << "," << r.cy
+          << "],\"w\":" << c.cols << ",\"h\":" << c.rows << ",\"zw\":" << r.Z.cols << ",\"zh\":" << r.Z.rows
+          << ",\"training_image\":\"rgb\"}";
+        const std::string j = o.str();
+        Msg m;
+        m.topic = "#kf";
+        m.agent = r.agent;
+        m.bytes.reserve(4 + j.size() + z16.total() * 2 + s16.total() * 2 + c.total() * 3);
+        const uint32_t jl = uint32_t(j.size());   // u32 LE (PutPod lives further down this file)
+        m.bytes.insert(m.bytes.end(), reinterpret_cast<const uint8_t*>(&jl), reinterpret_cast<const uint8_t*>(&jl) + 4);
+        m.bytes.insert(m.bytes.end(), j.begin(), j.end());
+        const auto put = [&m](const cv::Mat& x) {
+            const auto* q = x.ptr<uint8_t>();
+            m.bytes.insert(m.bytes.end(), q, q + x.total() * x.elemSize());
+        };
+        put(z16), put(s16), put(c);
+        {
+            std::lock_guard<std::mutex> g(mu_);
+            auto& n = pending_[size_t(r.agent)];
+            if (n >= 8) {   // the viewer lags: drop ITS oldest frame, never block
+                for (auto it = queue_.begin(); it != queue_.end(); ++it) {
+                    if (it->topic == "#kf" && it->agent == r.agent) {
+                        queue_.erase(it), --n, ++drops_;
+                        break;
+                    }
+                }
+            }
+            queue_.push_back(std::move(m)), ++n;
+        }
+        cv_.notify_one();
+    }
+
+private:
+    struct Msg {
+        std::string topic;
+        int agent = -1;
+        std::vector<uint8_t> bytes;
+    };
+    void Run() {
+        std::unique_lock<std::mutex> lk(mu_);
+        for (;;) {
+            cv_.wait(lk, [&] { return stop_ || !queue_.empty(); });
+            if (queue_.empty()) return;   // stop_ and drained
+            Msg m = std::move(queue_.front());
+            queue_.pop_front();
+            if (m.agent >= 0) --pending_[size_t(m.agent)];
+            lk.unlock();
+            if (!dead_.load(std::memory_order_relaxed) &&
+                !live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size())) {
+                dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+            }
+            lk.lock();
+            if (stop_ && queue_.empty()) return;
+        }
+    }
+    int fd_ = -1;
+    std::atomic<bool> dead_{false};
+    std::atomic<uint64_t> drops_{0};
+    bool stop_ = false;
+    std::mutex mu_;
+    std::condition_variable cv_;
+    std::deque<Msg> queue_;
+    std::vector<int> pending_;
+    std::thread th_;
+};
 
 struct AgentLane {
     live::MessageQueue images{64};   // ~64 x 2.8 MB per agent at most (bounded: see MessageQueue)
@@ -209,9 +396,14 @@ core::SE3 GetSe3(const uint8_t*& q) {
     return T;
 }
 
-int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path, tools::StereoVoArgs va,
-                       const std::string& out, int argc, char** argv) {
+int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
+                       const std::string& collab_socket, tools::StereoVoArgs va, const std::string& out, int argc,
+                       char** argv) {
     const int fd = live::Connect(socket_path, std::chrono::seconds(60));
+    // D174: the collab tee - serialization only, NO DNN in this process (cv::ALIKED output depends on the thread
+    // count; here it would break the D168 digests). A dead collab worker quiets the tee, never the estimator.
+    std::optional<live::CollabTee> tee;
+    if (!collab_socket.empty()) tee.emplace(live::Connect(collab_socket, std::chrono::seconds(60)), uint32_t(agent));
     live::MessageQueue images{64};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
@@ -261,9 +453,30 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
         PutMat(o, b.rgb);
+        // Phase 6 training image (RECON_6, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
+        // fp16-rounded) + albedo_valid (half-res CV_8U) from KeyframeFalloff::Normalize. That code lives on
+        // feat/ph5-dve (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
+        // says "none" and the recon service refuses to train live unless the run is the RGB ablation - nothing
+        // silently falls back.
+        const std::string ti = "none";
+        PutPod(o, uint32_t(ti.size()));
+        o.insert(o.end(), ti.begin(), ti.end());
+        if (tee) {   // D174: #ckin + the releases whose odometry became final at this keyframe (gt EVAL ONLY)
+            std::optional<core::SE3> gt_T_W_B;
+            const auto snap = gt.Snapshot();   // ~20 kf/run: the copy is noise
+            for (const auto& tp : snap)
+                if (std::llabs(tp.t_ns - kv.keyframe.t_ns) <= 10000000 &&
+                    (!gt_T_W_B || std::llabs(tp.t_ns - kv.keyframe.t_ns) < 5000000))
+                    gt_T_W_B = tp.T;
+            tee->OnKeyframe(kv, gt_T_W_B);
+        }
+        // Console overlay (P8): the tracked observations, one CV_32FC2 row. Appended last so older readers
+        // (there are none - worker and parent are the same binary) would simply stop before it.
+        PutMat(o, kv.track_px.empty() ? cv::Mat(0, 1, CV_32FC2) : cv::Mat(kv.track_px).reshape(2, 1));
         send("#kf", o);
     };
     a.on_frame = [&](const tools::FrameView& fv) {
+        if (tee) tee->OnFrame(fv.t_ns);   // D174: the lockstep watermark source (#cprog)
         std::vector<uint8_t> o;
         PutPod(o, int64_t(fv.t_ns));
         PutSe3(o, fv.T_O_C);
@@ -375,7 +588,7 @@ std::string JsonEscape(const std::string& s) {
 int main(int argc, char** argv) {
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
-            directives_path, planner_cfg_path, shadow_cfg_path, worker_socket;
+            directives_path, planner_cfg_path, shadow_cfg_path, worker_socket, collab_socket;
         int worker_agent = -1;
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
@@ -398,12 +611,13 @@ int main(int argc, char** argv) {
             else if (k == "--seed") va.seed = std::stoull(v);
             else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
             else if (k == "--worker-socket") worker_socket = v;
+            else if (k == "--collab-socket") collab_socket = v;   // D174: this agent's ariadne_collab_worker
             else throw std::invalid_argument("unknown argument " + k);
         }
         if (worker_agent >= 0) {
             if (scene.empty() || va.perception_config.empty() || va.slam_config.empty() || out.empty() || worker_socket.empty())
                 throw std::invalid_argument("worker mode: --scene --perception-config --slam-config --out --worker-socket");
-            return RunEstimatorWorker(scene, worker_agent, worker_socket, va, out, argc, argv);
+            return RunEstimatorWorker(scene, worker_agent, worker_socket, collab_socket, va, out, argc, argv);
         }
         if (scene.empty() || mission_cfg_path.empty() || live_cfg_path.empty() || out.empty() ||
             va.perception_config.empty() || va.slam_config.empty() || link_path.empty() == replay_path.empty()) {
@@ -418,7 +632,10 @@ int main(int argc, char** argv) {
         const auto recorded = lc.chooser == "llm" && !decisions_path.empty() ? LoadRecordedChoices(decisions_path)
                                                               : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
-        const mis::Briefing brief = mis::LoadBriefing(scene, mc, 2, "live");
+        const int NA = int(YAML::LoadFile(scene + "/mission_live.json")["agents"].size());   // P8 D213: N agents
+        // Non-const since D174: the collaboration's adopted frames move T_W_O[k] at barriers (the "known entry
+        // pose" is the INITIAL value, refined by fleet estimates); everything else in it stays fixed.
+        mis::Briefing brief = mis::LoadBriefing(scene, mc, NA, "live");
         live::PlaceholderParams pp;   // the placeholder planner's knobs (live config), not part of the seam
         pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
         pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
@@ -434,9 +651,106 @@ int main(int argc, char** argv) {
             std::string policy;
             const auto p4 = live::LoadPhase4Params(planner_cfg_path, mc, lc.refused_radius_m, lc.max_command_m, lc.escape_m,
                                                    run_seed, &policy);
-            planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold);
+            planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold, NA);
             planner_name = "a1_phase4:" + policy;
         }
+        // --- D175 item 4: the per-agent pipeline (MULTIAGENT_PIPELINE) -------------------------------------------
+        // One planner, exporter and received-layers set per agent plus the operator node, all share-nothing; one
+        // CollabNode per participant (coordination-only: no SLAM hooks until LIVE_COLLAB) over a seeded CommsNode.
+        // Nothing here exists unless multiagent.enabled - the centralised loop above is D175's oracle row, untouched.
+        namespace ac = ariadne::collaboration;
+        namespace multi = planning::multi;
+        struct MaState {
+            ac::CommsScenario scenario;
+            std::unique_ptr<ac::LinkModel> link;
+            std::unique_ptr<ac::CommsNode> comms;
+            std::deque<live::A1Planner> planners;                     // planner_k: agent k's OWN map and NBV
+            std::deque<multi::SlabExporter> exporters;
+            std::deque<multi::ReceivedLayers> layers;                 // per agent; last entry = the operator's
+            std::vector<std::unique_ptr<ac::CollabNode>> nodes;       // agents 0..NA-1, operator = NA
+            std::vector<std::vector<core::DecodedMessage>> mailbox;   // filled by the coordination hook during ticks
+            std::vector<std::map<int, multi::TaskBid>> bids_rx;       // per node: newest bid per sender
+            std::vector<std::optional<multi::TaskConsensus>> cons_rx; // per agent: newest consensus received
+            std::vector<int64_t> cons_rx_t_ns;                        // and when it arrived (sim time)
+            std::vector<multi::Rigid2> T_G_W;                         // known entry poses: the 2D part of T_W_O[k]
+            std::vector<uint64_t> kf_count, bid_seq, patch_seq, cons_seq;   // per agent counters
+            std::vector<std::optional<std::pair<uint64_t, core::SE3>>> last_kf;  // for the odometry edge
+            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (A1 e82307f)
+            // D174 (collab: true): the fleet OWNS the radio nodes; `nodes` stays empty then. The DNN runs in
+            // per-agent ariadne_collab_worker processes; LightGlue verification runs in the parent (collab.Step).
+            std::unique_ptr<perception::HardPairMatcher> lightglue;
+            std::unique_ptr<live::CollabLive> collab;
+            std::vector<pid_t> collab_pids;
+            std::vector<std::string> collab_socks;
+            std::ofstream edges_csv;
+            std::map<ac::AgentId, bool> linked;   // the fleet's comms state, for A1's linked[k]
+            std::mutex two_mu;                    // brief.T_W_O: barrier writes vs the telemetry readers
+            multi::BrokerParams broker;
+            bool discounted = false;                                  // broker_mode discount: R2 ApplyConsensus
+            double tau_s = 10.0, timeout_s = 10.0;
+            int max_options = 8;
+            core::FrameTag g_tag{0, 0};                               // G = the world frame, agreed at the briefing
+        };
+        std::unique_ptr<MaState> ma;
+        if (lc.multiagent.enabled) {
+            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (A1's planner)");
+            ma = std::make_unique<MaState>();
+            ma->scenario = ac::LoadCommsScenario(lc.multiagent.scenario);
+            if (is_live && ma->scenario.mode != "ideal")
+                throw std::invalid_argument("multiagent live: scenario mode must be ideal (RF link models need "
+                                            "recorded tracks; D175 SS5 - the RF rows run on recordings)");
+            ma->link = ac::MakeLinkModel(ma->scenario, {}, {});
+            const uint64_t run_seed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
+            ma->comms = std::make_unique<ac::CommsNode>(*ma->link, run_seed, core::Timestamp{0});
+            ma->comms->Apply(ma->scenario);
+            std::string policy;
+            const auto p4 = live::LoadPhase4Params(planner_cfg_path, mc, lc.refused_radius_m, lc.max_command_m,
+                                                   lc.escape_m, run_seed, &policy);
+            const auto p4brief = live::Phase4BriefFrom(mc, brief);
+            std::vector<ac::AgentId> fleet;
+            for (int k = 0; k <= NA; ++k) fleet.push_back(ac::AgentId(k));   // NA = the operator (no vote, no bids)
+            ma->mailbox.resize(size_t(NA) + 1), ma->bids_rx.resize(size_t(NA) + 1);
+            ma->cons_rx.resize(size_t(NA)), ma->cons_rx_t_ns.assign(size_t(NA), INT64_MIN);
+            ma->kf_count.assign(size_t(NA), 0), ma->bid_seq.assign(size_t(NA), 0), ma->patch_seq.assign(size_t(NA), 0);
+            ma->cons_seq.assign(size_t(NA), 0);
+            ma->last_kf.resize(size_t(NA));
+            for (int k = 0; k < NA; ++k) {
+                ma->planners.emplace_back(mc, brief, p4, policy, lc.autonomous_threshold, NA);
+                ma->exporters.emplace_back(k, p4brief.grid);
+                ma->layers.emplace_back(k, NA + 1, p4brief.grid);
+                const core::SE3& T = brief.T_W_O[size_t(k)];
+                ma->T_G_W.push_back({T.t.x(), T.t.y(), std::atan2(T.R(1, 0), T.R(0, 0))});
+            }
+            ma->layers.emplace_back(NA, NA + 1, p4brief.grid);   // the operator's received layers (self = NA)
+            ma->op_egress = std::make_unique<multi::OperatorEgress>(p4brief.grid, brief.target, brief.exits, mc.rho_r);
+            static const core::WireCodec ma_codec(core::Framing::kFragmented);
+            if (!lc.collab.enabled) {   // D174: with collab the FLEET owns the radio nodes (one radio, one ledger)
+                for (int k = 0; k <= NA; ++k) {
+                    ac::NodeHooks h;
+                    auto* mb = &ma->mailbox[size_t(k)];
+                    h.coordination = [mb](const core::DecodedMessage& d, core::Timestamp) { mb->push_back(d); };
+                    ma->nodes.push_back(std::make_unique<ac::CollabNode>(ac::AgentId(k), fleet, ma_codec,
+                                                                         ma->comms->ledger(), std::move(h), ac::NodeParams{}));
+                }
+            }
+            ma->broker.r_same = lc.min_goal_m;
+            ma->broker.range_m = lc.multiagent.discount_range_m;
+            ma->broker.mode = lc.multiagent.broker_mode == "overlap"    ? multi::BrokerMode::kOverlap
+                              : lc.multiagent.broker_mode == "discount" ? multi::BrokerMode::kDiscount
+                                                                        : multi::BrokerMode::kPlain;
+            ma->discounted = lc.multiagent.broker_mode == "discount";
+            ma->tau_s = lc.multiagent.discount_tau_s;
+            ma->timeout_s = lc.multiagent.consensus_timeout_s;
+            ma->max_options = lc.multiagent.max_bid_options;
+            planner_name += " +multiagent(" + lc.multiagent.broker_mode + "," + ma->scenario.name + ")";
+        }
+        // A2's splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
+        std::unique_ptr<SplatTee> splat;
+        if (const char* sp = std::getenv("ARIADNE_RECON_SOCK")) {
+            splat = std::make_unique<SplatTee>(sp, brief.T_W_O);
+            if (!splat->on()) std::fprintf(stderr, "ariadne_live: splat tee: %s absent or refused; tee off\n", sp);
+        }
+
         // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
         // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
@@ -490,9 +804,9 @@ int main(int argc, char** argv) {
             // would land in ARRIVAL order against a same-stamp message of another topic (camera_info vs image_raw)
             for (const char* r : {"left_image", "right_image", "left_info", "right_info", "gt_pose", "imu"}) timed.insert(t[r].as<std::string>());
         }
-        if (cmd_topic.size() != 2) throw std::runtime_error("live: expected 2 agents in mission_live.json");
+        if (int(cmd_topic.size()) != NA) throw std::runtime_error("live: mission_live.json agents and command topics disagree");
 
-        AgentLane lanes[2];
+        std::deque<AgentLane> lanes(static_cast<size_t>(NA));
         // The mover's answers (D153b): (agent, command stamp) -> accepted. Part of the recorded input, so the wait for
         // them below is deterministic in replay.
         std::map<std::pair<int, int64_t>, bool> answers;
@@ -538,10 +852,11 @@ int main(int argc, char** argv) {
         std::atomic<bool> past_end{false};
         uint64_t seq = 0;
         long dropped_untyped = 0;
-        int worker_fd[2] = {-1, -1};        // D168 estimator processes (lc.estimator_processes); -1 = in-process
-        std::mutex worker_mu[2];
-        pid_t worker_pid[2] = {0, 0};
-        std::thread feeders[2];
+        std::vector<int> worker_fd(static_cast<size_t>(NA), -1);   // D168 estimator processes; -1 = in-process
+        std::vector<int64_t> last_gt_tel_ns(static_cast<size_t>(NA), -1);   // P8: GT ghost arrows, at telemetry_hz
+        std::deque<std::mutex> worker_mu(static_cast<size_t>(NA));
+        std::vector<pid_t> worker_pid(static_cast<size_t>(NA), 0);
+        std::vector<std::thread> feeders(static_cast<size_t>(NA));
         auto Dispatch = [&](live::StreamMessage m) {
             if (past_end) return;
             const auto it = route.find(m.topic);
@@ -567,6 +882,15 @@ int main(int argc, char** argv) {
                              .toRotationMatrix();
                 tp.T.t = core::Vec3(p.position.x, p.position.y, p.position.z);
                 lanes[agent].gt.Add(tp);
+                if (last_gt_tel_ns[size_t(agent)] < 0 ||
+                    tp.t_ns - last_gt_tel_ns[size_t(agent)] >= int64_t(1e9 / lc.telemetry_hz)) {
+                    last_gt_tel_ns[size_t(agent)] = tp.t_ns;
+                    std::ostringstream g;
+                    g.precision(8);
+                    g << "{\"type\":\"gt_pose\",\"t_s\":" << tp.t_ns * 1e-9 << ",\"agent\":" << agent << ",\"xy\":"
+                      << Xy(tp.T.t.x(), tp.T.t.y()) << ",\"yaw\":" << std::atan2(tp.T.R(1, 0), tp.T.R(0, 0)) << "}";
+                    telemetry.Put(g.str());
+                }
                 if (worker_fd[agent] >= 0) {   // D168: the worker keeps its own GtStore for the raw outputs
                     std::lock_guard<std::mutex> lk(worker_mu[agent]);
                     live::WriteFrame(worker_fd[agent], m.topic, m.data->data(), m.data->size());
@@ -673,14 +997,15 @@ int main(int argc, char** argv) {
         }
 
         // --- per-agent estimators: the replay path, unchanged ---------------------------------------------------
-        std::thread vo[2];
-        std::unique_ptr<live::LiveSimSource> sources[2];
+        std::vector<std::thread> vo(static_cast<size_t>(NA));
+        std::vector<std::unique_ptr<live::LiveSimSource>> sources(static_cast<size_t>(NA));
         std::mutex estimator_turn;   // D152a: one frame at a time through the estimators (in-process mode only)
         struct TimeAgg {   // D167: per-agent frame timing, for results.yaml (the raw series is timing.jsonl)
             std::mutex mu;
             long n = 0;
             double wait = 0, lock = 0, track = 0, max_track = 0, max_lock = 0;
-        } tagg[2];
+        };
+        std::deque<TimeAgg> tagg(static_cast<size_t>(NA));
         // Lane plumbing shared by both estimator arrangements (D168): in-process threads behind the D152a turn lock,
         // or one worker process per agent, each with its own OpenCV pool.
         auto deliver_timing = [&](int k, int64_t t_ns, double w, double l, double tr) {
@@ -697,6 +1022,23 @@ int main(int argc, char** argv) {
             timing_log.Put(o.str());
         };
         auto deliver_kf = [&](int k, KfRec r, const cv::Mat& rgb) {
+            {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
+                cv::Mat bgr;
+                if (rgb.channels() == 3) cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
+                else bgr = rgb;
+                cv::imwrite((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".jpg")).string(), bgr,
+                            {cv::IMWRITE_JPEG_QUALITY, 80});
+                // The feature overlay: the observations the estimator recorded at this keyframe, as pixel
+                // coordinates in the image just written (full-res rectified left). The console draws them.
+                std::ostringstream j;
+                j << "{\"t_ns\":" << r.t_ns << ",\"w\":" << bgr.cols << ",\"h\":" << bgr.rows << ",\"pts\":[";
+                j.setf(std::ios::fixed), j.precision(1);
+                for (size_t i = 0; i < r.track_px.size(); ++i)
+                    j << (i ? "," : "") << '[' << r.track_px[i].x << ',' << r.track_px[i].y << ']';
+                j << "]}";
+                std::ofstream((run_dir / "snapshots" / ("cam_" + std::to_string(k) + ".json")).string()) << j.str();
+            }
+            if (splat) splat->OnKf(r, rgb);   // D220: bounded, drop-oldest, never blocks this thread
             AgentLane& L = lanes[k];
             std::lock_guard<std::mutex> lk(L.mu);
             L.kf_times.push_back(r.t_ns);
@@ -718,7 +1060,12 @@ int main(int argc, char** argv) {
             progress_cv.notify_all();
             if (L.last_telemetry_ns < 0 || t_ns - L.last_telemetry_ns >= int64_t(1e9 / lc.telemetry_hz)) {
                 L.last_telemetry_ns = t_ns;
-                const core::SE3 T = brief.T_W_O[size_t(k)] * T_O_C;
+                core::SE3 Two = brief.T_W_O[size_t(k)];
+                if (ma && ma->collab) {   // D174 feedback moves it at barriers; this thread only READS
+                    std::lock_guard<std::mutex> g(ma->two_mu);
+                    Two = brief.T_W_O[size_t(k)];
+                }
+                const core::SE3 T = Two * T_O_C;
                 std::ostringstream o;
                 o.precision(8);
                 o << "{\"type\":\"pose\",\"t_s\":" << t_ns * 1e-9 << ",\"agent\":" << k << ",\"xy\":"
@@ -734,23 +1081,85 @@ int main(int argc, char** argv) {
             }
             progress_cv.notify_all();
         };
-        for (int k = 0; k < 2; ++k) {
+        // --- D174: the live collaboration (collab: true) ----------------------------------------------------------
+        // One ariadne_collab_worker per agent (the DNN: EigenPlaces + lazy ALIKED, its own pinned OpenCV pool);
+        // the parent runs CollabLive: the fleet owns the radio nodes (customize installs the D175 mailboxes),
+        // LightGlue verification runs inside Step. The estimator workers tee (#ckin/#crel/#cprog) and never touch
+        // a DNN. collab: false = none of this exists (D168 digests unchanged).
+        if (ma && lc.collab.enabled) {
+            if (!lc.estimator_processes)
+                throw std::invalid_argument("collab: true requires estimator_processes: true (the tee lives in the worker)");
+            const auto ccfg = runtime::LoadCollabConfig(lc.collab.config);
+            if (ccfg.comms_scenario != lc.multiagent.scenario)
+                throw std::invalid_argument("collab config comms_scenario (" + ccfg.comms_scenario +
+                                            ") != multiagent.scenario (" + lc.multiagent.scenario + "): ONE radio");
+            perception::HardPairParams hp;
+            hp.aliked_onnx = lc.collab.aliked_onnx;
+            hp.lightglue_onnx = lc.collab.lightglue_onnx;
+            hp.width = 1280, hp.height = 720;
+            ma->lightglue = std::make_unique<perception::HardPairMatcher>(hp);
+            ma->edges_csv.open((run_dir / "collab_edges.csv").string());
+            ma->edges_csv << "agent_a,kf_a,agent_b,kf_b,score,matches,essential_inliers,pnp_inliers,reason,"
+                             "gt_err_t_m,gt_err_r_deg,gt_baseline_m,pose_err_deg\n";
+            std::vector<ac::AgentId> fleet_ids;
+            for (int k2 = 0; k2 <= NA; ++k2) fleet_ids.push_back(ac::AgentId(k2));
+            live::CollabLiveParams cp;
+            cp.lockstep = lc.lockstep;
+            cp.feature_latency_s = lc.collab.feature_latency_s;
+            const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
+            ma->collab = std::make_unique<live::CollabLive>(
+                ccfg, fleet_ids, *ma->comms, *ma->lightglue, cseed, /*t_first_ns=*/0, cp, &ma->edges_csv,
+                [&](ac::AgentId ck, ac::NodeHooks& h) {
+                    auto* mb = &ma->mailbox[size_t(ck)];
+                    h.coordination = [mb](const core::DecodedMessage& d, core::Timestamp) { mb->push_back(d); };
+                });
+            const std::string wt = std::to_string(lc.collab.worker_threads);
+            const std::string ks = std::to_string(int(lc.collab.keep_s));
+            const std::string cbin = (fs::path(argv[0]).parent_path() / "ariadne_collab_worker").string();
+            for (int k2 = 0; k2 < NA; ++k2) {
+                // /tmp, not the run dir: sun_path is 108 bytes (D168's replay lesson)
+                const std::string sock =
+                    "/tmp/ariadne-collab-" + std::to_string(::getpid()) + "-" + std::to_string(k2) + ".sock";
+                ma->collab_socks.push_back(sock);
+                const std::string ka2 = std::to_string(k2);
+                const pid_t pid = ::fork();
+                if (pid == 0) {   // child: nothing between fork and exec
+                    const char* cas[] = {cbin.c_str(),           "--socket",         sock.c_str(),
+                                         "--agent",              ka2.c_str(),        "--place-onnx",
+                                         lc.collab.place_onnx.c_str(),               "--place-size",
+                                         lc.collab.place_size.c_str(),               "--aliked-onnx",
+                                         lc.collab.aliked_onnx.c_str(),              "--lightglue-onnx",
+                                         lc.collab.lightglue_onnx.c_str(),           "--threads",
+                                         wt.c_str(),             "--keep-s",         ks.c_str(),
+                                         nullptr};
+                    ::execv(cas[0], const_cast<char**>(cas));
+                    std::_Exit(127);
+                }
+                ma->collab_pids.push_back(pid);
+            }
+            for (int k2 = 0; k2 < NA; ++k2)
+                ma->collab->Attach(ac::AgentId(k2), live::Connect(ma->collab_socks[size_t(k2)], std::chrono::seconds(60)));
+        }
+        for (int k = 0; k < NA; ++k) {
             if (lc.estimator_processes) {   // D168: spawn the worker, feed its images in consumed order, read back
                 // /tmp, not the run dir: a nested replay run dir overflows sun_path (108 bytes; replay1, D168)
                 const std::string wsock = "/tmp/ariadne-worker-" + std::to_string(::getpid()) + "-" + std::to_string(k) + ".sock";
                 const std::string raw_out = (run_dir / "raw").string();
                 const std::string ka = std::to_string(k), sa = std::to_string(va.seed);
+                const std::string csock = ma && ma->collab ? ma->collab_socks[size_t(k)] : "";   // D174: the tee's target
                 const pid_t pid = ::fork();
                 if (pid == 0) {   // child: exec ourselves in worker mode, nothing else between fork and exec
-                    const char* cas[] = {argv[0],
-                                         "--scene", scene.c_str(),
-                                         "--perception-config", va.perception_config.c_str(),
-                                         "--slam-config", va.slam_config.c_str(),
-                                         "--out", raw_out.c_str(),
-                                         "--seed", sa.c_str(),
-                                         "--estimator-worker", ka.c_str(),
-                                         "--worker-socket", wsock.c_str(), nullptr};
-                    ::execv(cas[0], const_cast<char**>(cas));
+                    std::vector<const char*> cas = {argv[0],
+                                                    "--scene", scene.c_str(),
+                                                    "--perception-config", va.perception_config.c_str(),
+                                                    "--slam-config", va.slam_config.c_str(),
+                                                    "--out", raw_out.c_str(),
+                                                    "--seed", sa.c_str(),
+                                                    "--estimator-worker", ka.c_str(),
+                                                    "--worker-socket", wsock.c_str()};
+                    if (!csock.empty()) cas.insert(cas.end(), {"--collab-socket", csock.c_str()});
+                    cas.push_back(nullptr);
+                    ::execv(cas[0], const_cast<char**>(cas.data()));
                     std::_Exit(127);
                 }
                 worker_pid[k] = pid;
@@ -780,6 +1189,13 @@ int main(int argc, char** argv) {
                             r.cx = GetPod<double>(q), r.cy = GetPod<double>(q);
                             r.Z = GetMat(q), r.S = GetMat(q);
                             const cv::Mat rgb = GetMat(q);
+                            const uint32_t tn = GetPod<uint32_t>(q);
+                            const std::string training(reinterpret_cast<const char*>(q), tn);   // "none" until ph5-dve
+                            q += tn;
+                            if (training != "none") { GetMat(q); GetMat(q); }   // albedo + valid: not consumed here yet
+                            const cv::Mat px = GetMat(q);   // 1xN CV_32FC2 tracked observations
+                            if (!px.empty())
+                                r.track_px.assign(px.ptr<cv::Point2f>(), px.ptr<cv::Point2f>() + px.total());
                             deliver_kf(k, std::move(r), rgb);
                         } else if (f.topic == "#timing") {
                             const int64_t t = GetPod<int64_t>(q);
@@ -814,6 +1230,7 @@ int main(int argc, char** argv) {
                     r.fy = b.K.fy * 0.5;
                     r.cx = 0.5 * (b.K.cx + 0.5) - 0.5;
                     r.cy = 0.5 * (b.K.cy + 0.5) - 0.5;
+                    r.track_px = kv.track_px;
                     deliver_kf(k, std::move(r), b.rgb);
                 };
                 a.on_frame = [&, k](const tools::FrameView& fv) { deliver_frame(k, fv.t_ns, fv.T_O_C); };
@@ -845,7 +1262,8 @@ int main(int argc, char** argv) {
         if (is_live) fs::create_directories(run_dir / "directives_inbox");
         Lines directives_log(run_dir / "directives.jsonl"), directives_rejected(run_dir / "directives_rejected.jsonl");
         if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
-        size_t integrated[2] = {0, 0}, rays = 0;
+        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
+        size_t rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
         // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
@@ -855,7 +1273,8 @@ int main(int argc, char** argv) {
             double gx = 0, gy = 0;
             int64_t since_ns = 0;
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
-        } current[2];
+        };
+        std::vector<CurrentTask> current(static_cast<size_t>(NA));
         // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu. A1
         // (2026-10-23): Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
         // sequence is never reordered; per-agent keyframe order stays time order (each lane already is, and the
@@ -893,7 +1312,7 @@ int main(int argc, char** argv) {
             });
         }
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
-        std::vector<std::pair<double, double>> demo_prev_goals[2];   // its candidate goals, for the index mapping
+        std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
@@ -919,14 +1338,16 @@ int main(int argc, char** argv) {
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
                 if (T > replan_ns) {
                     const auto have = [&] {
-                        return input_done || (answers.count({0, T - replan_ns}) && answers.count({1, T - replan_ns}));
+                        if (input_done) return true;
+                        for (int k = 0; k < NA; ++k) if (!answers.count({k, T - replan_ns})) return false;
+                        return true;
                     };
                     if (is_live) {
                         if (!progress_cv.wait_for(lk, std::chrono::seconds(30), have)) ++answer_timeouts;
                     } else {
                         progress_cv.wait(lk, have);
                     }
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         const auto a = answers.find({k, T - replan_ns});
                         if (a != answers.end() && !a->second && last_goal.count(k)) refused_goals.push_back({k, last_goal[k]});
                     }
@@ -948,7 +1369,24 @@ int main(int argc, char** argv) {
                 for (const KfRec& r : batch) {
                     const live::KeyframeInput ki{r.agent, r.id, r.t_ns, brief.T_W_O[size_t(r.agent)] * r.T_O_C,
                                                  r.Z, r.S, r.fx, r.fy, r.cx, r.cy};
-                    rays += planner->Integrate(ki);
+                    if (ma) {
+                        // D175: agent k's keyframes reach ONLY planner_k (its own map, in W = G under known entry
+                        // poses) and its own CollabNode (radio pose in W_self = O_k; the odometry edge is carried
+                        // for the record - coordination-only mode runs no SLAM on it).
+                        const auto k = size_t(r.agent);
+                        rays += ma->planners[k].Integrate(ki);
+                        if (!ma->collab) {   // D174: with the fleet, keyframes enter ONLY via Release (#ckf)
+                            std::optional<ac::OdometryEdge> odo;
+                            if (ma->last_kf[k]) odo = ac::OdometryEdge{ma->last_kf[k]->first,
+                                                                       ma->last_kf[k]->second.inverse() * r.T_O_C,
+                                                                       core::Mat6::Identity()};
+                            ma->nodes[k]->AddKeyframe(r.id, r.t_ns, r.T_O_C, odo, {}, core::Timestamp{r.t_ns});
+                        }
+                        ma->last_kf[k] = {r.id, r.T_O_C};
+                        ++ma->kf_count[k];
+                    } else {
+                        rays += planner->Integrate(ki);
+                    }
                     if (shadow) shadow->Integrate(ki.agent, ki.t_ns, live::ToDepthFrame(ki));
                     ++integrated[r.agent];
                 }
@@ -976,12 +1414,12 @@ int main(int argc, char** argv) {
                 }
             }
             const std::vector<mis::Directive> active = mis::ActiveDirectives(directives, T);
-            live::PlanContext ctx;
+            live::PlanContext ctx(NA);
             ctx.T = T;
             ctx.directives = active;
             ctx.refused_goals = refused_goals;
-            for (int k = 0; k < 2; ++k) {
-                std::lock_guard<std::mutex> lk(lanes[k].mu);
+            for (int k = 0; k < NA; ++k) {
+                std::lock_guard<std::mutex> lk(lanes[size_t(k)].mu);
                 for (auto it = lanes[k].cams.rbegin(); it != lanes[k].cams.rend(); ++it) {
                     if (it->first < T) {
                         const core::SE3 Tw = brief.T_W_O[size_t(k)] * it->second;
@@ -992,9 +1430,204 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            for (int k = 0; k < 2; ++k) ctx.flown_m[k] = lanes[k].gt.PathLength(T);
+            for (int k = 0; k < NA; ++k) ctx.flown_m[size_t(k)] = lanes[size_t(k)].gt.PathLength(T);
             live::PlanOutput plan_out;
-            {
+            std::vector<multi::Pick> ma_picks;
+            if (ma) {
+                // The radio node of participant k: the fleet's with collab (one radio, one ledger), else ours.
+                const auto ma_node = [&](int nk) -> ac::CollabNode& {
+                    return ma->collab ? ma->collab->fleet().node(ac::AgentId(nk)) : *ma->nodes[size_t(nk)];
+                };
+                // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
+                // (1) The comms ticks for (T_prev, T] run BEFORE the planners (D175 SS5), nodes in ascending id
+                // per rung: the one seeded, single-threaded step. The rung spacing is the heartbeat period
+                // (membership needs >= m_in of the last `window` periods mutually heard to form a component - one
+                // tick per barrier starves it; found on the first POC smoke: every agent stayed a component of 1),
+                // and the endpoint pumps what the previous barrier enqueued. Heartbeat poses are the last keyframe
+                // added by the barrier's integrate step, so a pose is at most one replan stale. Deliveries land in
+                // the mailboxes via the coordination hook.
+                {
+                    const int64_t tick_dt = 500000000;   // = MembershipParams.period_s
+                    for (int64_t tt = T - replan_ns + tick_dt; tt <= T; tt += tick_dt) {
+                        const core::Timestamp t_now{tt};
+                        if (ma->collab) {   // D174: the fleet owns delivery, releases and ticks (lockstep watermark)
+                            ma->collab->Step(t_now);
+                            continue;
+                        }
+                        // The network is a discrete-event queue: arrived datagrams must be ROUTED to their
+                        // destination node before the tick (pass B's loop does exactly this; without it nothing
+                        // is ever received - found on the second POC smoke: heartbeats sent, none heard).
+                        for (const auto& d : ma->comms->network().DeliverUntil(t_now))
+                            if (int(d.to) <= NA) ma->nodes[size_t(d.to)]->OnDatagram(d, t_now);
+                        for (auto& nd : ma->nodes) nd->Tick(t_now, ma->comms->network());
+                    }
+                    if (ma->collab) {   // D174 §4 feedback + the panel, at the barrier
+                        {   // adopted frames move the briefing constants (deliver_frame's telemetry reads them)
+                            std::lock_guard<std::mutex> g(ma->two_mu);
+                            for (const auto& [ck, Tk] : ma->collab->T_O0_O())
+                                if (int(ck) < NA && int(ck) > 0) brief.T_W_O[size_t(ck)] = brief.T_W_O[0] * Tk;
+                        }
+                        ma->linked = ma->collab->Linked();
+                        telemetry.Put(ma->collab->Telemetry(core::Timestamp{T}));
+                        const fs::path cib = run_dir / "collab_inbox";   // panel buttons, recorded inputs
+                        if (fs::exists(cib)) {
+                            std::vector<fs::path> files;
+                            for (const auto& e : fs::directory_iterator(cib))
+                                if (e.path().extension() == ".json") files.push_back(e.path());
+                            std::sort(files.begin(), files.end());
+                            for (const auto& f : files) {
+                                try {
+                                    const YAML::Node n2 = YAML::LoadFile(f.string());
+                                    const std::string act = n2["action"].as<std::string>();
+                                    if (act == "cut_comms") {
+                                        std::vector<std::vector<ac::AgentId>> groups;
+                                        for (const auto& g2 : n2["groups"]) groups.push_back(g2.as<std::vector<ac::AgentId>>());
+                                        ma->collab->CutComms(core::Timestamp{T}, std::move(groups));
+                                    } else if (act == "restore_comms") {
+                                        ma->collab->RestoreComms(core::Timestamp{T});
+                                    } else if (act == "inject_false") {
+                                        ma->collab->InjectFalse(core::Timestamp{T});
+                                    } else {
+                                        throw std::invalid_argument("action " + act);
+                                    }
+                                    telemetry.Put("{\"type\":\"collab_action\",\"t_s\":" + std::to_string(T * 1e-9) +
+                                                  ",\"action\":\"" + act + "\"}");
+                                    fs::rename(f, fs::path(f.string() + ".applied"));
+                                } catch (const std::exception&) {
+                                    fs::rename(f, fs::path(f.string() + ".rejected"));
+                                }
+                            }
+                        }
+                    }
+                }
+                // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
+                // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
+                for (int k = 0; k <= NA; ++k) {
+                    for (const auto& d : ma->mailbox[size_t(k)]) {
+                        if (d.has_submap_patch && d.submap_patch.sender < NA)
+                            ma->layers[size_t(k)].Integrate(live::FromWire(d.submap_patch), {});
+                        if (d.has_task_bid) {
+                            auto bb = live::FromWire(d.task_bid);
+                            ma->bids_rx[size_t(k)][bb.sender] = std::move(bb);
+                        }
+                        if (d.has_task_consensus && k < NA) {
+                            ma->cons_rx[size_t(k)] = live::FromWire(d.task_consensus);
+                            ma->cons_rx_t_ns[size_t(k)] = T;
+                        }
+                    }
+                    ma->mailbox[size_t(k)].clear();
+                }
+                // (3) Component brokers assign from the bids that ARRIVED (the T - replan lag is the pre-registered
+                // coordination cost, D175 SS8.3). Sub-ms, serial. The consensus reaches members at the next tick.
+                for (int k = 0; k < NA; ++k) {
+                    const auto comp = ma_node(k).Component();
+                    if (int(comp.broker) != k) continue;
+                    multi::ComponentInfo ci;
+                    ci.broker = k;
+                    ci.epoch = uint32_t(comp.epoch.counter);
+                    for (auto m : comp.members) if (int(m) < NA) ci.members.push_back(int(m));
+                    std::vector<multi::TaskBid> bids;
+                    bids.reserve(ma->bids_rx[size_t(k)].size());
+                    for (const auto& [snd, bb] : ma->bids_rx[size_t(k)]) bids.push_back(bb);
+                    const auto cons = multi::BrokerAssign(bids, ci, ma->broker, T, ++ma->cons_seq[size_t(k)]);
+                    ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                }
+                // (4) Per-agent plans: share-nothing fork-join (user directive: nothing between barriers holds a
+                // lock). Thread k touches ONLY planner_k / exporter_k / layers_k / node_k reads; sends wait for (5).
+                // (the extra names avoid C++'s most-vexing parse: size_t(NA) as a parameter list - bitten at D213 too)
+                std::vector<live::PlanOutput> plans;
+                plans.resize(size_t(NA));
+                std::vector<multi::TaskBid> bids_out;
+                bids_out.resize(size_t(NA));
+                std::vector<std::vector<std::pair<int, core::SubmapPatchValue>>> patches_out;
+                patches_out.resize(size_t(NA));
+                ma_picks.resize(size_t(NA));
+                {
+                    std::vector<std::thread> workers;
+                    workers.reserve(size_t(NA));
+                    for (int k = 0; k < NA; ++k) workers.emplace_back([&, k] {
+                        const auto comp = ma_node(k).Component();
+                        const uint32_t epoch = uint32_t(comp.epoch.counter);
+                        std::vector<planning::PeerKeyframe> peers;
+                        for (int j = 0; j < NA; ++j) {
+                            if (j == k) continue;
+                            if (const auto h = ma_node(k).LastHeartbeat(ac::AgentId(j))) {
+                                const core::SE3 Twj = brief.T_W_O[size_t(j)] * ac::FromPoseValue(h->pose);
+                                peers.push_back({j, int64_t(h->keyframe_watermark), Twj.t});
+                            }
+                        }
+                        const bool lkd = !ma->collab || [&] {   // the fleet's comms state (D174); true pre-collab
+                            const auto it = ma->linked.find(ac::AgentId(k));
+                            return it != ma->linked.end() && it->second;
+                        }();
+                        plans[size_t(k)] = ma->planners[size_t(k)].PlanOwnFor(ctx, k, peers,
+                                                                              &ma->layers[size_t(k)].KnownMask(), lkd);
+                        const auto& lp = ma->planners[size_t(k)].LastPlan();
+                        ma->exporters[size_t(k)].Update(lp.maps);
+                        for (int j = 0; j <= NA; ++j) {
+                            if (j == k) continue;
+                            auto patch = ma->exporters[size_t(k)].Export(
+                                ma_node(k).AckedPatchVersion(ac::AgentId(j)), epoch, T);
+                            if (!patch.blocks.empty())
+                                patches_out[size_t(k)].push_back({j, live::ToWire(patch, core::FrameTag{ac::AgentId(k), 0})});
+                        }
+                        bids_out[size_t(k)] = multi::BuildBid(k, epoch, ++ma->bid_seq[size_t(k)], T,
+                                                              lp.agents[size_t(k)].nbv, ma->max_options, {});
+                        // (6, in-thread) the pick from the newest consensus RECEIVED by T - reads only this agent's state
+                        const multi::TaskConsensus* c = ma->cons_rx[size_t(k)] ? &*ma->cons_rx[size_t(k)] : nullptr;
+                        const auto& opts = lp.agents[size_t(k)].nbv.options;
+                        ma_picks[size_t(k)] = ma->discounted
+                            ? multi::ApplyConsensusDiscounted(c, k, epoch, T, ma->timeout_s, opts, ma->broker.r_same,
+                                                              ma->broker.range_m, ma->tau_s)
+                            : multi::ApplyConsensus(c, k, epoch, T, ma->timeout_s, opts, ma->broker.r_same);
+                    });
+                    for (auto& w : workers) w.join();
+                }
+                // (5) Sends, serial in ascending id: the seeded link sees one deterministic order, and CommsNode
+                // stays single-writer. Bids self-deliver at the broker immediately (local, no radio hop).
+                for (int k = 0; k < NA; ++k) {
+                    for (auto& [j, pv] : patches_out[size_t(k)])
+                        ma_node(k).SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
+                    ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                }
+                // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
+                // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
+                plan_out = live::PlanOutput(NA);
+                std::ostringstream mt;
+                mt.precision(10);
+                mt << "{\"name\":\"a1_phase4_multiagent\",\"broker_mode\":\"" << lc.multiagent.broker_mode
+                   << "\",\"scenario\":\"" << ma->scenario.name << "\",\"agents\":[";
+                for (int k = 0; k < NA; ++k) {
+                    plan_out.agents[size_t(k)] = plans[size_t(k)].agents[size_t(k)];
+                    plan_out.joint[size_t(k)] = ma_picks[size_t(k)].option;
+                    const auto comp = ma_node(k).Component();
+                    mt << (k ? "," : "") << "{\"pick\":" << ma_picks[size_t(k)].option << ",\"why\":\""
+                       << JsonEscape(ma_picks[size_t(k)].why) << "\",\"broker\":" << int(comp.broker)
+                       << ",\"members\":" << comp.members.size() << ",\"epoch\":" << comp.epoch.counter << "}";
+                }
+                const auto& lg = ma->comms->ledger();
+                mt << "],\"bytes\":{\"patch\":" << lg.TotalForClass(core::MessageClass::SUBMAP_PATCH)
+                   << ",\"bid\":" << lg.TotalForClass(core::MessageClass::TASK_BID)
+                   << ",\"consensus\":" << lg.TotalForClass(core::MessageClass::TASK_CONSENSUS)
+                   << ",\"heartbeat\":" << lg.TotalForClass(core::MessageClass::HEARTBEAT) << "}}";
+                plan_out.trace_json = mt.str();
+                // The console map and the return route are what the OPERATOR received over the radio (D175 SS8.2,
+                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and A1's
+                // incremental D* Lite over it at rho_responder. Its confidence is NOT computed (support is not on
+                // the wire) - the console must not show one.
+                const cv::Mat merged = ma->layers[size_t(NA)].Merged();
+                cv::Mat slab(merged.size(), CV_8U, cv::Scalar(planning::kUnknown));
+                slab.setTo(planning::kOccupied, merged == multi::kCellOccupied);
+                slab.setTo(planning::kFree, merged == multi::kCellFree);
+                slab.setTo(planning::kFree, merged == multi::kCellFreeResponder);
+                plan_out.maps = plans[0].maps;
+                plan_out.maps.slab = slab;
+                const planning::EgressReplan oe = ma->op_egress->Replan(merged);
+                plan_out.maps.egress.found = oe.found;
+                plan_out.maps.egress.cells = oe.cells;
+                plan_out.maps.egress.goal_index = oe.exit;
+                plan_out.maps.egress.length_cells = oe.length_m / brief.gs.cell;
+            } else {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
                 plan_out = planner->Plan(ctx);
             }
@@ -1036,12 +1669,13 @@ int main(int argc, char** argv) {
                 std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
-            } P[2];
+            };
+            std::vector<Pending> P(static_cast<size_t>(NA));
             const double rho_a = mc.rho_a, rho_r = mc.rho_r;
             const int free_cells = cv::countNonZero(maps.slab == planning::kFree),
                       occ_cells = cv::countNonZero(maps.slab == planning::kOccupied),
                       unknown_cells = int(maps.slab.total()) - free_cells - occ_cells;
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 std::ostringstream o;
                 o.precision(10);
                 o << "{\"t_s\":" << ts << ",\"agent\":" << k << ",\"mode\":\"" << (is_live ? "live" : "replay")
@@ -1068,7 +1702,9 @@ int main(int argc, char** argv) {
                 }
                 std::ostringstream vision;
                 vision.precision(10);
-                vision << "{\"keyframes_integrated\":[" << integrated[0] << "," << integrated[1] << "],\"rays\":" << rays
+                vision << "{\"keyframes_integrated\":[";
+                for (int a2 = 0; a2 < NA; ++a2) vision << (a2 ? "," : "") << integrated[size_t(a2)];
+                vision << "],\"rays\":" << rays
                        << ",\"free_cells\":" << free_cells << ",\"occupied_cells\":" << occ_cells << ",\"unknown_cells\":"
                        << unknown_cells << ",\"frontier_clusters\":" << maps.frontiers.clusters.size()
                        << ",\"rejected_small\":" << maps.frontiers.rejected_small << ",\"egress_found\":"
@@ -1165,8 +1801,8 @@ int main(int argc, char** argv) {
                 }
             }
             // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
-            int picks[2] = {plan_out.joint[0], plan_out.joint[1]};   // the planner's allocation (exactly-once)
-            std::string choice[2], pick_reason[2] = {"classical choice", "classical choice"};
+            std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
+            std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
             const auto cluster_of = [&](int k, int i) { return live::TaskOf(plan_out, k, i); };
             if (lc.chooser == "classical") {
@@ -1175,7 +1811,7 @@ int main(int argc, char** argv) {
                 std::ostringstream t;
                 t.precision(10);
                 t << ts;
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     const auto it = recorded.find({t.str(), k});
                     if (it == recorded.end()) throw std::runtime_error("replay: no recorded choice at t=" + t.str());
@@ -1201,18 +1837,18 @@ int main(int argc, char** argv) {
                 const auto px = [&](const Cell& c) { return cv::Point(c.c * scale + scale / 2, (maps.slab.rows - 1 - c.r) * scale + scale / 2); };
                 for (size_t i = 1; i < maps.egress.cells.size(); ++i)
                     cv::line(img, px(maps.egress.cells[i - 1]), px(maps.egress.cells[i]), {255, 80, 0}, 2);
-                const cv::Scalar col[2] = {{0, 0, 230}, {0, 160, 0}};
-                for (int k = 0; k < 2; ++k) {
+                const cv::Scalar col[] = {{0, 0, 230}, {0, 160, 0}, {200, 80, 0}};   // index mod 3
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     for (size_t i = 0; i < P[k].cands.size(); ++i) {
                         const cv::Point g = px(P[k].cands[i].goal);
-                        cv::drawMarker(img, g, col[k], cv::MARKER_TILTED_CROSS, 10, 2);
+                        cv::drawMarker(img, g, col[k % 3], cv::MARKER_TILTED_CROSS, 10, 2);
                         cv::putText(img, "a" + std::to_string(k) + ":c" + std::to_string(i), g + cv::Point(5, -5),
-                                    cv::FONT_HERSHEY_SIMPLEX, 0.4, col[k], 1, cv::LINE_AA);
+                                    cv::FONT_HERSHEY_SIMPLEX, 0.4, col[k % 3], 1, cv::LINE_AA);
                     }
-                    cv::circle(img, px(P[k].ac), 7, col[k], cv::FILLED);
+                    cv::circle(img, px(P[k].ac), 7, col[k % 3], cv::FILLED);
                     cv::putText(img, "agent " + std::to_string(k), px(P[k].ac) + cv::Point(9, 4), cv::FONT_HERSHEY_SIMPLEX,
-                                0.45, col[k], 1, cv::LINE_AA);
+                                0.45, col[k % 3], 1, cv::LINE_AA);
                 }
                 const fs::path map_png = fs::absolute(ddir / (did + "_map.png"));
                 cv::imwrite(map_png.string(), img);
@@ -1226,7 +1862,7 @@ int main(int argc, char** argv) {
                 for (size_t i = 0; i < active.size(); ++i) q << (i ? "," : "") << mis::DirectiveJson(active[i]);
                 q << "],\"agents\":[";
                 bool first = true;
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     std::string kf_png;
                     {
@@ -1247,15 +1883,15 @@ int main(int argc, char** argv) {
                 q << "]}";
                 std::string ans, top_problem;
                 std::string vdid = did;   // the request the processed answer belongs to (demo: the PREVIOUS horizon)
-                std::vector<std::pair<double, double>> prev_goals[2];
+                std::vector<std::vector<std::pair<double, double>>> prev_goals(static_cast<size_t>(NA));
                 try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
                         // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
                     chooser->Send(q.str());
                     if (lc.demo) {   // D169: never wait on the control path - poll the previous horizon's answer
                         vdid = demo_prev_did;
-                        for (int k = 0; k < 2; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
+                        for (int k = 0; k < NA; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
                         demo_prev_did = did;
-                        for (int k = 0; k < 2; ++k) {
+                        for (int k = 0; k < NA; ++k) {
                             demo_prev_goals[k].clear();
                             for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
                         }
@@ -1284,9 +1920,10 @@ int main(int argc, char** argv) {
                     }
                 }
                 // Per agent: a bad pick for one agent does not discard the other's.
-                int want[2] = {-2, -2};
-                std::string approval_id[2], validation[2], source[2], approval_raw[2];
-                for (int k = 0; k < 2; ++k) {
+                std::vector<int> want(static_cast<size_t>(NA), -2);
+                std::vector<std::string> approval_id(static_cast<size_t>(NA)), validation(static_cast<size_t>(NA)), source(static_cast<size_t>(NA)),
+                    approval_raw(static_cast<size_t>(NA));
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     source[k] = "orchestrator", validation[k] = "ok";
                     if (!top_problem.empty()) {
@@ -1331,15 +1968,23 @@ int main(int argc, char** argv) {
                     if (source[k] == "orchestrator") picks[k] = want[k];
                     else pick_reason[k] = "fallback: " + validation[k];
                 }
-                if (P[0].active && P[1].active && picks[0] >= 0 && picks[1] >= 0 && source[1] == "orchestrator" &&
-                    cluster_of(0, picks[0]) == cluster_of(1, picks[1])) {
-                    const int alt = other_cluster(1, cluster_of(0, picks[0]));
-                    if (alt >= 0) {
-                        picks[1] = alt;
-                        source[1] = "fallback", validation[1] = "same cluster as agent 0 while another was eligible";
+                {   // exactly-once across agents, ascending index (P8 D213; at N=2 the old agent-1-yields rule)
+                    std::set<int64_t> taken2;
+                    for (int k = 0; k < NA; ++k) {
+                        if (!P[size_t(k)].active || picks[size_t(k)] < 0) continue;
+                        const int64_t cl = cluster_of(k, picks[size_t(k)]);
+                        if (taken2.count(cl) && source[size_t(k)] == "orchestrator") {
+                            const int alt = other_cluster(k, cl);
+                            if (alt >= 0) {
+                                picks[size_t(k)] = alt;
+                                source[size_t(k)] = "fallback";
+                                validation[size_t(k)] = "same cluster as an earlier agent while another was eligible";
+                            }
+                        }
+                        if (picks[size_t(k)] >= 0) taken2.insert(cluster_of(k, picks[size_t(k)]));
                     }
                 }
-                for (int k = 0; k < 2; ++k) {
+                for (int k = 0; k < NA; ++k) {
                     if (!P[k].active) continue;
                     std::ostringstream c;
                     c << ",\"choice\":{\"source\":\""
@@ -1353,19 +1998,19 @@ int main(int argc, char** argv) {
                 }
             }
             // Operator authority (§23): hold / goto override whatever was chosen; recorded like every directive.
-            const mis::Directive* direct[2] = {nullptr, nullptr};
+            std::vector<const mis::Directive*> direct(static_cast<size_t>(NA), nullptr);
             for (const auto& d : active) {
                 if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < 2) direct[d.agent] = &d;
             }
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 if (!P[k].active || !direct[k]) continue;
                 picks[k] = -1;
                 choice[k] = ",\"choice\":{\"source\":\"operator\",\"directive\":\"" + JsonEscape(direct[k]->id) + "\",\"kind\":\"" +
                             direct[k]->kind + "\"}";
             }
             // Phase 3: the command for each pick (the same code for every chooser).
-            bool sent_at_T[2] = {false, false};
-            for (int k = 0; k < 2; ++k) {
+            std::vector<char> sent_at_T(static_cast<size_t>(NA), false);
+            for (int k = 0; k < NA; ++k) {
                 Pending& pd = P[k];
                 if (!pd.active) continue;
                 const int pick = picks[k];
@@ -1396,7 +2041,8 @@ int main(int argc, char** argv) {
                     const auto g = po.goal_xy;
                     const bool same = current[k].set && std::hypot(g.first - current[k].gx, g.second - current[k].gy) < lc.refused_radius_m;
                     current[k] = {true, g.first, g.second, same ? current[k].since_ns : T, pick_reason[k]};
-                    auto [path, face_yaw] = planner->Route(plan_out, k, pick, pd.ac);
+                    auto [path, face_yaw] = ma ? ma->planners[size_t(k)].Route(plan_out, k, pick, pd.ac)
+                                               : planner->Route(plan_out, k, pick, pd.ac);
                     if (lc.demo && path.size() > 1) {   // D169: never backtrack to where the agent was at plan time
                         core::SE3 latest;
                         bool have_latest = false;
@@ -1445,9 +2091,9 @@ int main(int argc, char** argv) {
             // (frames past end_s close the lanes).
             if (is_live && lc.lockstep) {
                 std::vector<std::pair<int, int64_t>> wait_for;   // (agent, command stamp) answers to have before resuming
-                for (int k = 0; k < 2; ++k) if (sent_at_T[k]) wait_for.push_back({k, T});
+                for (int k = 0; k < NA; ++k) if (sent_at_T[k]) wait_for.push_back({k, T});
                 if (T == end_ns) {   // the end of the run: every agent holds, applied at end_s while still paused
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         runtime::ros_cdr::PoseArray hold;   // stamp end + 1 ns: a separate answer from this barrier's
                         hold.header.stamp.sec = int32_t((end_ns + 1) / 1000000000);
                         hold.header.stamp.nanosec = uint32_t((end_ns + 1) % 1000000000);
@@ -1456,7 +2102,7 @@ int main(int argc, char** argv) {
                         wait_for.push_back({k, end_ns + 1});
                     }
                 }
-                int64_t at[2] = {-1, -1};
+                std::vector<int64_t> at(static_cast<size_t>(NA), -1);
                 bool all = false;
                 {
                     std::unique_lock<std::mutex> lk(progress_mu);
@@ -1465,15 +2111,17 @@ int main(int argc, char** argv) {
                         for (const auto& w : wait_for) if (!arrived.count(w)) return false;
                         return true;
                     });
-                    for (int k = 0; k < 2; ++k) {
+                    for (int k = 0; k < NA; ++k) {
                         const auto a = applied_at.find({k, T});
                         if (a != applied_at.end()) at[k] = a->second;
                     }
                 }
                 if (!all) ++answer_timeouts;
                 const double paused_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - barrier_wall).count();
-                lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + std::to_string(at[0]) + "," +
-                                 std::to_string(at[1]) + "],\"answered\":" + (all ? "true" : "false") +
+                std::string at_js;
+                for (int k = 0; k < NA; ++k) at_js += (k ? "," : "") + std::to_string(at[size_t(k)]);
+                lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + at_js +
+                                 "],\"answered\":" + (all ? "true" : "false") +
                                  ",\"wall_paused_s\":" + std::to_string(paused_s) + ",\"resume_to_ns\":" +
                                  std::to_string(std::min(T + substep_ns, end_ns + substep_ns)) + "}");
                 RunTo(T + substep_ns);   // D166: one sub-step; the next barrier's wait loop paces the rest
@@ -1482,7 +2130,7 @@ int main(int argc, char** argv) {
         }
         // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
         if (is_live && !lc.lockstep) {
-            for (int k = 0; k < 2; ++k) {
+            for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
                 hold.header.stamp.sec = int32_t(end_ns / 1000000000);
                 hold.header.stamp.nanosec = uint32_t(end_ns % 1000000000);
@@ -1495,13 +2143,21 @@ int main(int argc, char** argv) {
         for (auto& t : vo) t.join();
         integ_stop = true;
         if (integrator.joinable()) integrator.join();
-        for (int k = 0; k < 2; ++k) {   // D168: reap the estimator workers
+        for (int k = 0; k < NA; ++k) {   // D168: reap the estimator workers
             if (feeders[k].joinable()) feeders[k].join();
             if (worker_fd[k] >= 0) ::close(worker_fd[k]);
             if (worker_pid[k] > 0) {
                 int st = 0;
                 ::waitpid(worker_pid[k], &st, 0);
             }
+        }
+        if (ma && ma->collab) {   // D174: the estimator tees are closed; the fleet drains, then the workers exit
+            ma->collab->Shutdown();
+            for (const pid_t cp : ma->collab_pids) {
+                int st = 0;
+                ::waitpid(cp, &st, 0);
+            }
+            for (const auto& sp : ma->collab_socks) ::unlink(sp.c_str());
         }
         if (is_live) ::shutdown(fd, SHUT_RDWR);
         reader.join();
@@ -1525,7 +2181,7 @@ int main(int argc, char** argv) {
         res << "wall_s: " << wall_s << "\nend_to_end_rtf: " << (wall_s > 0 ? lc.end_s / wall_s : 0)
             << "   # sim seconds per wall second, whole run incl. startup; gz's own view is gz_stats.jsonl\n"
             << "agents:\n";
-        for (int k = 0; k < 2; ++k) {
+        for (int k = 0; k < NA; ++k) {
             const long n = std::max(1L, tagg[k].n);
             res << "  - {agent: " << k << ", frames: " << lanes[k].frames << ", keyframes: " << lanes[k].keyframes
                 << ", unpaired_frames_dropped: " << lanes[k].unpaired << ", keyframes_integrated: " << integrated[k]
@@ -1551,6 +2207,17 @@ int main(int argc, char** argv) {
         man.planner_config = mc.name;
         man.extra["planner"] = "frontier candidates (1.8) + chooser " + lc.chooser;
         man.extra["live_config"] = live_cfg_path;
+        if (lc.multiagent.enabled) {
+            man.extra["multiagent"] = "broker_mode=" + lc.multiagent.broker_mode + " scenario=" + lc.multiagent.scenario;
+        }
+        man.extra["collab"] = lc.collab.enabled ? "true" : "false";
+        if (lc.collab.enabled) {
+            man.extra["collab_config"] = lc.collab.config;
+            man.extra["collab_feature_latency_s"] = std::to_string(lc.collab.feature_latency_s);
+            man.extra["collab_worker_threads"] = std::to_string(lc.collab.worker_threads);
+            man.extra["collab_parent_threads"] = std::to_string(cv::getNumThreads());
+            man.extra["collab_models"] = lc.collab.place_onnx + " + " + lc.collab.aliked_onnx;
+        }
         man.extra["perception_config"] = va.perception_config;
         man.extra["slam_config"] = va.slam_config;
         if (!replay_path.empty()) man.extra["replay_of"] = replay_path;
@@ -1561,6 +2228,9 @@ int main(int argc, char** argv) {
         runtime::RecordOpenCvIdentity(man);
         runtime::RecordDeterminismDigests(man);
         std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(man);
+        if (splat && splat->on())
+            std::printf("ariadne_live: splat tee sent keyframes (%llu dropped under the viewer bound)\n",
+                        (unsigned long long)splat->drops());
         std::printf("ariadne_live[%s]: %d replans, %d decisions, consumed %llu messages (digest %016llx) -> %s\n",
                     is_live ? "live" : "replay", replans, commands_sent, (unsigned long long)rec.count(),
                     (unsigned long long)rec.digest(), run_dir.c_str());

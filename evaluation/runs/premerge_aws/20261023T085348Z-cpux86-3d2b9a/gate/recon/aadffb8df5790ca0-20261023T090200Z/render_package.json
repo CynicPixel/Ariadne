@@ -1,0 +1,19 @@
+{
+  "package_version": 1,
+  "run_id": "aadffb8df5790ca0-20261023T090200Z",
+  "scene_id": "aadffb8df5790ca0",
+  "gaussians": 300000,
+  "views": 37,
+  "width": 640,
+  "height": 360,
+  "sh_degree": 3,
+  "frame": "agent 0 odometry (viewmats are world-to-camera, OpenCV camera axes)",
+  "rasterization": {
+    "packed": false,
+    "rasterize_mode": "classic",
+    "near_plane": 0.01,
+    "far_plane": 10000000000.0,
+    "background": "black (gsplat default)"
+  },
+  "sha256": "f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a"
+}

@@ -1,0 +1,12 @@
+stage: prepare
+git_commit: c720e77ab72399e1c7b7e1fb9e9b7e02766382fd
+git_dirty: 'false'
+image_id: sha256:ac7d351bf93b04ccb6956f6355017af8e072ea784edb907fb243ba6f6fbe883d
+config: recon_v1
+seed: 1
+spool_sha256: f3c4704ceeac427eda59474a4d2f76b1d83f4c0c98139e0a07fcbaf74fbc6cf8
+splat_backend: none (local)
+command: /work/python/reconstruction/ariadne_recon/cli.py prepare --spool /work/build/phase1_gate/aadffb8df5790ca0-20261023T063159Z/spool/aadffb8df5790ca0-20261023T063616Z
+  --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+  --eval-record /work/build/premerge/aadffb8df5790ca0-20261023T063159Z/sim_collab/aadffb8df5790ca0-20261023T063616Z/recon_eval.yaml
+  --config /work/configs/recon/recon_v1.yaml --out /work/build/phase1_gate/aadffb8df5790ca0-20261023T063159Z/recon

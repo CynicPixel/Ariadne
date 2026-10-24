@@ -1,0 +1,8 @@
+=== 2026-10-23T11:45:23Z 0 host
+=== 2026-10-23T11:45:23Z 1 docker + images
+=== 2026-10-23T11:46:14Z 2 checkout
+=== 2026-10-23T11:46:15Z 3 inputs
+=== 2026-10-23T11:48:17Z 4 premerge gate (JOBS=8)
+gate_exit 0 seconds 988
+=== 2026-10-23T12:04:45Z 5 collect
+=== 2026-10-23T12:04:45Z done (premerge exit 0)

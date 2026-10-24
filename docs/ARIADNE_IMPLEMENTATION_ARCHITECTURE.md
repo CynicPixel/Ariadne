@@ -1202,6 +1202,11 @@ depth rides in the recording.
 
 Parameter vectors are named configs (`dark2_dust1`, …) referenced by run manifests, never inline constants.
 
+> **As built (Phase 5, D130).** The sim render is sRGB-encoded (SMOKE §4u). D gains `input_transfer: srgb`, which
+> decodes before stage 1; the default stays `linear`, so pinned digests hold. The dust stage's daylight form above is
+> wrong for a headlamp (ALGORITHMS §10.2): the replacement, round-trip attenuation plus a near-field backscatter
+> integral with the lamp offset as a parameter, is D139.
+
 **Division of labour — this line matters.** The lamp's *optical* effect (falloff, shadows, cone profile) is real
 Gazebo rendering and is **not** part of `D`. `D` degrades the *sensor*; the renderer degrades the *scene*.
 
@@ -1264,6 +1269,11 @@ through the **Ariadne comms broker node**, which:
 Rationale: byte accounting and fault injection must be deterministic and replayable (C6), and gz-transport
 delivery is not. The wall/rubble penetration count above is computed in the broker by ray-casting the GT mesh
 between agents and adding a per-wall attenuation term to the RFComms-derived loss.
+
+> **As built (3.3, D102, 2026-10-22).** `collaboration/comms/`: RFComms' equations (gz-sim8) are reproduced in the
+> broker rather than read from the live plugin, since replay is the substrate. The wall term counts solid blocks
+> crossed. `loss_p` is the per-packet marginal over shadowing, computed for the 1500 B MTU (a stated seam limit).
+> `CommsNode` owns the one ledger. Not yet carrying protocol traffic (needs 3.2's sim integration).
 
 ---
 
@@ -1549,6 +1559,18 @@ beat in §43.
 In replay mode the controller acts on the degradation operator's exposure parameters (§5.6), which closes the loop
 without re-rendering at the cost of a stated approximation: sensing changes, light transport does not. Iteration 9
 measures that gap directly.
+
+> **As built (5.3, D132, 2026-10-22; not yet wired into a runner).** `perception/exposure_control/`. The metric is
+> Shim et al. eq. 1, with Zhang's gradient percentile as the comparator row (ALGORITHMS §9.4: Shim is "not robust").
+> **Approved deviation (maintainer, 2026-10-23, D147):** the lamp is not optimised with an energy cost term. One
+> brightness decision is spent in a fixed order (lamp → exposure → gain), the limiting case of a small energy cost. In
+> replay, lamp power is D's `lamp_power`, a radiance scale: exact for ambient 0 and a decoded render (SMOKE §4u).
+> **Wiring (D147):**
+> - The controller runs at keyframes and commands the source through `StereoSource::SetPhotometric`.
+> - Every frame reports the state it was actually exposed with: applied values, `applied_ns`, and clamp. A live sink
+>   (gz `light_config`, owned by the live runtime) implements the same contract.
+> - LK applies the known brightness ratio between frames (known-gain KLT).
+> - Rows run with `radiometric: flat_only`.
 
 ---
 
@@ -3014,6 +3036,22 @@ same point. Only once the component is connected does the algorithm optimize alg
 
 An exact enumeration oracle for `|candidates| ≤ 15` is the correctness reference (Iteration 6).
 
+> **As built (3.4, D170; merged c720e77).**
+> - **Fiedler space:** the full candidate graph, solved by block inverse iteration (grounded sparse LDLT,
+>   warm-started, a degenerate cluster handled as one).
+> - **Selection:** connectivity bootstrap, then greedy on `gain / marginal bytes` with a shared keyframe cost, then
+>   1-swap refinement (`refine_passes` 2).
+> - **Per-instance bound:** a dual bound (MAC) over the shared-cost LP (`cv::solveLP`). Measured valid 60/60 against
+>   the oracle, and loose (1.3–6.4×).
+> - **Graph:** Swarm-SLAM's construction, verified from the cslam source: ids min..max per agent (D171), with fixed
+>   odometry and accepted edges at κ = 1.
+> - **Integration:** selection runs behind `NodeHooks::select` with a token bucket of predicted bytes. Unset = the
+>   "similarity" (request-all) baseline; `SelectBySimilarity` = "greedy".
+> - **Pricing:** the fetch cost is the exact codec payload times a calibrated ratio, plus framing.
+> - **Not built:** the vertex-cover *direction* choice of Giamou et al. Its residual bytes are reported on the sim
+>   runs.
+> - **Budget defaults (20 kB/s, 200 kB):** placeholders until D171's derived levels.
+
 ---
 
 ## 16.3 Communication budget
@@ -4415,6 +4453,11 @@ This is much more compelling than simply displaying a 3D viewer.
 **Frontend:** Three.js with a Gaussian-splat web renderer (e.g. the GaussianSplats3D library), streaming submap
 exports from S3 (§18.2).
 
+> **Update 2026-10-23 (D197, §49 ritual, user-approved):** the renderer is **Spark** (sparkjs, MIT). GaussianSplats3D's
+> README declares it unmaintained and points to Spark. Spark sorts many `SplatMesh` objects together, each with its
+> own transform, which is what keyframe-anchored submaps need (D190): one mesh per submap, and re-anchoring is a new
+> transform, never a re-download.
+
 Panels, per §29.1–29.2: raw vs restored feeds side by side, budget gauges, negotiation timeline, uncertainty
 overlay, the thread, and the approval modal wired to `HUMAN_APPROVAL_REQUEST` (§23).
 
@@ -5307,6 +5350,9 @@ alternate route or human approval
 Use several independent datasets from the catalogue:
 
 - TUM RGB-D
+  > **As built (2.6, D100, 2026-10-22).** `TumSource` feeds the stereo pipeline. Sensor depth goes through a virtual
+  > rig (u_R = u_L − fx·B/Z) in place of SGBM and the stereo match, with σ_Z = 1.425e-3·Z² (Khoshelham & Elberink
+  > 2012) as the §9.4/§9.6 depth uncertainty. Pinned in `configs/benchmark/tum_regression.yaml`.
 - EuRoC
 - SubT / subterranean datasets where available
 - ScanNet / Matterport-type indoor sets for reconstruction
@@ -5334,6 +5380,11 @@ Particularly valuable because it contains:
 
 Source:
 - https://arpg.colorado.edu/oivio/
+
+> **As built (5.6, D141, 2026-10-23).** OIVIO could not be obtained (downloads withdrawn; Drive IDs 404). The
+> maintainer approved **Hilti 2023 `site2_robot_3`** as the 5.6 sequence: an onboard co-moving light in a dark room
+> (ALGORITHMS §8.1), OAK-D stereo + IMU, public sparse 3-DoF TLS ground truth, CC BY-NC-SA 3.0. There is no
+> light-power sweep. OIVIO remains preferred if access is granted.
 
 ### VAROS
 

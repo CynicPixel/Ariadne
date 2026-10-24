@@ -1,0 +1,20 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: 7e515aabfa82486d-agent0
+frames: 1000
+dense_gt: true
+associated_poses: 1000  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 7.35476
+ate_se3: {rmse_m: 1.31711, mean_m: 0.971598, max_m: 3.5519, rotation_rmse_rad: 0.457435}
+ate_rmse_percent_of_path: 17.9083
+sim3_scale: 1.67308  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.23727, rotation_rmse_rad: 0.0252663}
+vo: {lost_frames: 223, keyframes: 749, ba_runs: 526, ba_mean_cost_ratio: 0.872626, landmarks_alive_at_end: 47, graph_edges: 525, graph_version: 6008}
+stereo_match_valid_fraction: 0.547753
+stereo_match_by_third: {top: {valid: 2358, lk_lost: 537, fb: 508, off_row: 550, nonpositive: 120, disparity_mean_px: 57.7773, disparity_max_px: 122.679}, middle: {valid: 8853, lk_lost: 1960, fb: 2483, off_row: 3625, nonpositive: 948, disparity_mean_px: 42.7202, disparity_max_px: 122.61}, bottom: {valid: 2674, lk_lost: 287, fb: 212, off_row: 222, nonpositive: 12, disparity_mean_px: 53.5777, disparity_max_px: 120.431}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 6054, created: 468, no_stereo: 5586, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 0, uncertain: 0}
+timing_ms: {track_mean: 10.6678, vo_track_mean: 2.19989, keyframe_mean: 114.98, opencv_threads: 4}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.00449942, b: 0, c: 0, matches: 103, mad_px: 0.026886, slopes_fitted: false, keyframe: 205, attempts: 206, residual_after: {measured: false, a_px: 0, b: 0, c: 0, max_abs_dy_px: 0, matches: 30}}
+stereo_exposure_match: true
+keyframe_refined: {ate_rmse_m: 1.31678, ate_rotation_rmse_rad: 0.457418, rpe_1s_translation_rmse_m: 0.235714}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 3, observations: 284425, invalid_at_entry: 0, chi2_failed: 565, chi2_failed_fraction: 0.00198646, keyframe_observations_rejected: 338, culled: 419, exit_edges: 525, keyframes_held: 2006, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 3931, landmarks_ill_conditioned_at_solution: 14, marginal_degenerate: 0, inlier_sigma_px: 0.222987}
+lost: {motion: bridge, reanchor: every_frame, segments: 1, bridged_frames: 223, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 223}, keyframes_while_lost: 223, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}

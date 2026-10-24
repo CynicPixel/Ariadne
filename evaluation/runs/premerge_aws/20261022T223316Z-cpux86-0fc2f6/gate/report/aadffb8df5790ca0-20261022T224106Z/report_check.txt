@@ -1,0 +1,4 @@
+registry: 27 metrics; report: 27 entries
+missing (absent or non-finite): 0
+unknown ids: 0
+VERDICT PASS (every §30.2 metric emits a number)

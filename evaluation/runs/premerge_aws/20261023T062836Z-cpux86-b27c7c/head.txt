@@ -1,0 +1,1 @@
+c720e77ab72399e1c7b7e1fb9e9b7e02766382fd collab(3.4, D171): selection graph spans keyframe ids min..max seen per agent (a VO startup prefix is never released; cslam's 0..max assumes every keyframe is sent); D170's 20 kB/s / 200 kB budget defaults labelled [PLACEHOLDER] until D171's derived level; test GraphStartsAtTheFirstReleasedKeyframe; protocol 61/61

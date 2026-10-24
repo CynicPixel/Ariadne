@@ -80,3 +80,34 @@ def test_sdf_distortion_is_refused(tmp_path):
         raise AssertionError("expected MissionError")
     except ValueError as e:
         assert "pinhole" in str(e)
+
+
+def test_baseline_sweep_cameras(tmp_path):
+    """5.5 (D138): sweep cameras sit at the stated baselines, are bridged and recorded, and v1 gets none."""
+    s = generate(load_preset(f"{ROOT}/configs/worldgen/ci_tiny.yaml"), 0)
+    write_scene(s, str(tmp_path), textures=False)
+    write_mission(s, str(tmp_path), f"{ROOT}/configs/sim/rig_stereo_sweep_v1.yaml")
+    world = ET.parse(tmp_path / "mission_default.sdf").getroot()
+    model = next(md for md in world.iter("model") if md.get("name") == "agent_0")
+    poses = {x.get("name"): [float(v) for v in x.find("pose").text.split()[:3]] for x in model.iter("sensor")}
+    assert set(poses) == {"left", "right", "depth", "right_b04", "right_b08", "right_b12", "right_b20"}
+    for name, b in (("right_b04", 0.04), ("right_b08", 0.08), ("right_b12", 0.12), ("right_b20", 0.20)):
+        assert abs((poses["left"][1] - poses[name][1]) - b) < 1e-12        # +y is left: right cameras sit at -b
+        assert poses[name][0] == poses["left"][0] and poses[name][2] == poses["left"][2]
+    ros = {e["ros_topic_name"] for e in yaml.safe_load(open(tmp_path / "bridge_default.yaml"))}
+    js = json.load(open(tmp_path / "mission_default.json"))
+    t0 = js["agents"][0]["topics"]
+    assert t0["right_b08_image"] == "/ariadne/agent_0/right_b08/image_raw" and t0["right_b08_image"] in ros
+    assert js["t_B_camera_m"]["right_b20"][1] == js["t_B_camera_m"]["left"][1] - 0.20
+    assert "right_b04" not in topics(0, load_rig(RIG))
+
+
+def test_sweep_baselines_must_be_distinct(tmp_path):
+    import pytest
+    from dataset_tools.worldgen.mission import MissionError
+    rig = yaml.safe_load(open(RIG))
+    rig["stereo"]["sweep_baselines_m"] = [0.04, 0.041]
+    p = tmp_path / "rig.yaml"
+    p.write_text(yaml.safe_dump(rig))
+    with pytest.raises(MissionError):
+        load_rig(str(p))

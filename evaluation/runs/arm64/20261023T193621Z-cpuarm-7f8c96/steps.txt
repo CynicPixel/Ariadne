@@ -1,0 +1,12 @@
+=== 2026-10-23T19:37:05Z +0s 0 host
+=== 2026-10-23T19:37:05Z +0s 1 docker + buildx + zstd + swap
+=== 2026-10-23T19:37:30Z +25s 2 opencv-base (OPENCV_TAG=5.0.0, BUILD_JOBS=16)
+=== 2026-10-23T19:41:29Z +264s 3 smoke test + build information
+=== 2026-10-23T19:41:38Z +273s 4 core dev image + full ctest (JUnit)
+=== 2026-10-23T19:45:28Z +503s FAILED: ctest in the dev image (rc 8; ctest_summary.txt)
+=== 2026-10-23T19:45:28Z +503s 5 core ci image
+skipped: dev-image ctest did not pass
+=== 2026-10-23T19:45:28Z +503s 6 gate 4 + manifest
+skipped: no core image
+=== 2026-10-23T19:45:28Z +503s 7 save images
+=== 2026-10-23T19:45:35Z +510s done (exit 1)

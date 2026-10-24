@@ -11,7 +11,9 @@
 #include <opencv2/imgproc.hpp>
 
 #include <climits>
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <map>
 #include <set>
 #include <string>
@@ -307,6 +309,74 @@ TEST(TrackerCadence, EveryFrameIsThePhaseOneBehaviourAndReplenishIsANoOp) {
     EXPECT_THROW(kf.Replenish(f0), std::logic_error);           // before any Process()
     kf.Process(f0, 0, 1);
     EXPECT_THROW(kf.Replenish(f0(cv::Rect(0, 0, 320, 240)).clone()), std::logic_error);   // not that image
+}
+
+// 5.2 (D146): Replenish can detect on another image of the same pixels (the albedo proxy) inside its mask, while LK
+// keeps the tracked image.
+TEST(TrackerCadence, ReplenishDetectsOnTheDetectionImageInsideItsMask) {
+    const OrbEngine orb(Euroc().features);
+    const auto [f0, f1] = HalfThenFull();
+    KltTracker blank(CadenceParams("keyframe", 0), orb);
+    blank.Process(f0, 0, 1);
+    blank.Process(f1, 1, 1);
+    // A flat detection image: nothing to detect, although the tracked image has new texture on the right.
+    EXPECT_EQ(blank.Replenish(f1, cv::Mat(f1.size(), CV_8U, cv::Scalar(128)), cv::Mat()), 0);
+
+    KltTracker tracker(CadenceParams("keyframe", 0), orb);
+    const TrackedFrame t0 = tracker.Process(f0, 0, 1);
+    tracker.Process(f1, 1, 1);
+    cv::Mat top(f1.size(), CV_8U, cv::Scalar(0));
+    top.rowRange(0, f1.rows / 2).setTo(255);
+    const int added = tracker.Replenish(f1, f1, top);
+    EXPECT_GT(added, 5);
+    const TrackedFrame t2 = tracker.Process(f1, 2, 1);
+    int outside = 0;
+    for (size_t i = 0; i < t2.ids.size(); ++i) outside += t2.ids[i] > t0.ids.back() && t2.points[i].y >= f1.rows / 2 + 1;
+    EXPECT_EQ(outside, 0);   // every new track was started inside the mask (and LK held it on the static pair)
+
+    EXPECT_THROW(tracker.Replenish(f1, f1(cv::Rect(0, 0, 320, 240)).clone(), cv::Mat()), std::invalid_argument);
+    EXPECT_THROW(tracker.Replenish(f1, f1, top(cv::Rect(0, 0, 320, 240)).clone()), std::invalid_argument);
+}
+
+// 5.3 (D147): known-gain LK. The next frame is the scene shifted by a sub-pixel motion AND sqrt(2) brighter (half a
+// stop: the controller's largest step). With the previous pyramid rescaled by the known ratio, LK tracks the motion as
+// if nothing had changed; ratio 1 is a no-op.
+TEST(TrackerCadence, RescalePreviousAppliesTheKnownGain) {
+    const OrbEngine orb(Euroc().features);
+    cv::Mat f0 = Texture(41) * 0.5;   // headroom: x sqrt(2) stays below 255
+    cv::Mat f1;
+    const double dx = 2.3, dy = 1.6, r = std::sqrt(2.0);
+    cv::warpAffine(f0, f1, cv::Matx23d(1, 0, dx, 0, 1, dy), f0.size(), cv::INTER_LINEAR, cv::BORDER_REFLECT);
+    f1 = f1 * r;
+    const auto run = [&](bool rescale, double* median_err) {
+        KltTracker tracker(CadenceParams("every_frame", 0), orb);
+        const TrackedFrame t0 = tracker.Process(f0, 0, 1);
+        tracker.RescalePrevious(1.0);   // no-op
+        if (rescale) tracker.RescalePrevious(r);
+        const TrackedFrame t1 = tracker.Process(f1, 1, 1);
+        std::map<uint64_t, cv::Point2f> p0;
+        for (size_t i = 0; i < t0.ids.size(); ++i) p0[t0.ids[i]] = t0.points[i];
+        std::vector<double> err;
+        for (size_t i = 0; i < t1.ids.size(); ++i) {
+            const auto it = p0.find(t1.ids[i]);
+            if (it == p0.end()) continue;
+            err.push_back(std::hypot(t1.points[i].x - it->second.x - dx, t1.points[i].y - it->second.y - dy));
+        }
+        std::sort(err.begin(), err.end());
+        *median_err = err.empty() ? 1e9 : err[err.size() / 2];
+        return err.size();
+    };
+    double e_known = 0, e_plain = 0;
+    const size_t n_known = run(true, &e_known), n_plain = run(false, &e_plain);
+    std::printf("known-gain LK: %zu tracks, median error %.4f px; plain LK: %zu tracks, %.4f px\n", n_known, e_known,
+                n_plain, e_plain);
+    EXPECT_GT(n_known, 50u);
+    EXPECT_LT(e_known, 0.05);
+    EXPECT_GE(n_known, n_plain);
+    EXPECT_LE(e_known, e_plain);
+    KltTracker fresh(CadenceParams("every_frame", 0), orb);
+    EXPECT_NO_THROW(fresh.RescalePrevious(2.0));   // no previous frame yet: nothing to rescale
+    EXPECT_THROW(fresh.RescalePrevious(0.0), std::invalid_argument);
 }
 
 TEST(TrackerCadence, QualityGateKeepsNewTracksOffWeakGradients) {

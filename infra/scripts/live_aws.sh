@@ -29,8 +29,13 @@ log() { printf '[live_aws %s] %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
 account() { "$AWS" aws sts get-caller-identity --query Account --output text | tr -d '\r'; }
 bucket() { "$AWS" tf main output -json runner | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifact_bucket"])'; }
 
+# Profile/cap knobs (D219): LIVE_AWS_PROFILE=cpux86 runs the same flow on the c7i CPU profile (llvmpipe render,
+# proven deterministic across machines at D168 M1); LIVE_AWS_MAX_MIN raises cmd_run's instance cap for long runs.
+PROFILE="${LIVE_AWS_PROFILE:-gpu}"
+RUN_MAX_MIN="${LIVE_AWS_MAX_MIN:-60}"
+
 # local image -> ECR repo
-declare -A REPO=([ariadne/sim:dev]=ariadne/ariadne-sim [ariadne/core-dev:dev]=ariadne/ariadne-core [ariadne-console:1]=ariadne/ariadne-console)
+declare -A REPO=([ariadne/sim:dev]=ariadne/ariadne-sim [ariadne/core-dev:dev]=ariadne/ariadne-core [ariadne-console:1]=ariadne/ariadne-console [ariadne-orchestrator:1]=ariadne/ariadne-orchestrator)
 
 ref_of() {   # ECR reference of a local image, tagged by its own image id (content-addressed, not "latest")
   local img="$1" reg="$2" id
@@ -56,8 +61,13 @@ cmd_payload() {   # SCENE... (one or more scene directories)
   id="$(date -u +%Y%m%dT%H%M%SZ)"
   stage="$REPO_ROOT/build/live_payload/$id"
   mkdir -p "$stage/p"
+  local extra=()
+  # D221: the collab worker binary + the ONNX models ride the payload when present (.cache is gitignored, so the
+  # tree sync never ships them; the collab run needs them at the configured relative paths).
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_collab_worker" ] && extra+=(build/docker/cpp/runtime/ariadne_collab_worker)
+  [ -d "$REPO_ROOT/.cache/models" ] && extra+=(.cache/models)
   (cd "$REPO_ROOT" && tar cf - build/docker/cpp/runtime/ariadne_live build/sim-plugins/libariadne_kinematic_mover.so \
-     build/ros2/install "$@") | tar xf - -C "$stage/p"
+     build/ros2/install "${extra[@]}" "$@") | tar xf - -C "$stage/p"
   (cd "$stage/p" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
   tar czf "$stage/payload.tar.gz" -C "$stage" p
   local uri="s3://$(bucket)/runs/live-payload-$id/payload.tar.gz"
@@ -98,7 +108,7 @@ ARIADNE_SMOKE_OUT_HOST=$R/sim-smoke ARIADNE_SMOKE_TIMEOUT=120 infra/scripts/sim.
 docker run --rm --gpus all ariadne/sim:dev bash -c 'ls -la /usr/share/glvnd/egl_vendor.d/; ldconfig -p | grep -iE "libEGL_nvidia|libnvidia-egl" | head' > $R/egl_vendor.txt 2>&1 || true
 EOF
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes 25 -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes 25 -- "$(cat "$script")"
 }
 
 cmd_run() {
@@ -111,13 +121,14 @@ aws s3 cp $uri - | tar xz -C /tmp
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
 cp -a /tmp/p/. . && cp /tmp/p/SHA256SUMS \$R/
 mkdir -p build/live/runs
-infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
+ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} \
+  infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
 run=\$(ls -d build/live/runs/live-* | tail -1)
 infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
 tar czf \$R/run.tar.gz --exclude='*.sock' \$run
 EOF
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes 60 -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
 cmd_batch() {
@@ -171,7 +182,7 @@ while read -r preset seed end_s cfg; do
 done < $R/jobs.txt
 BATCH
   } > "$script"
-  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile gpu --max-minutes "$max_min" -- "$(cat "$script")"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$max_min" -- "$(cat "$script")"
 }
 
 case "${1:-}" in

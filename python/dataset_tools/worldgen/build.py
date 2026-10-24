@@ -184,7 +184,7 @@ def world_xml(scene, model_xml: str, extra: str = "") -> str:
             '    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">'
             '<render_engine>ogre2</render_engine></plugin>\n'
             f'    <scene><ambient>{amb} {amb} {amb} 1</ambient><background>0 0 0 1</background>'
-            '<grid>false</grid><shadows>false</shadows></scene>\n'
+            f'<grid>false</grid><shadows>{"true" if scene.preset.lighting.shadows else "false"}</shadows></scene>\n'
             + model_xml + extra + "  </world>\n</sdf>\n")
 
 

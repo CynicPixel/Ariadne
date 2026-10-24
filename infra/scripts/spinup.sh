@@ -5,11 +5,13 @@
 #
 #   infra/scripts/spinup.sh run --profile cpu -- 'uname -m; lscpu'
 #   infra/scripts/spinup.sh run --profile gpu --max-minutes 45 -- 'nvidia-smi'
+#   infra/scripts/spinup.sh run --profile gpu --az eu-north-1c -- '...'   # pin the AZ (spot capacity ran out in 1a)
 #   infra/scripts/spinup.sh sweep            # terminate strays, list orphan volumes
 #
 # PROFILES (cheapest config that runs each workload; Stockholm prices in D28):
 #   cpu  c8g.large   Graviton4, 2 vCPU/4 GiB. Smallest size COOL is priced for.
 #   cpux86 c7i.4xlarge Ubuntu 24.04 amd64, 16 vCPU/32 GiB: x86 CPU runs in the amd64 images.
+#   cpuarm c8g.4xlarge Ubuntu 24.04 arm64, 16 vCPU/32 GiB: native arm64 image builds (plan 0.2, infra/eval/arm64_aws.sh).
 #   cool c8g.4xlarge the COOL Marketplace AMI (Ubuntu 24.04); needs the subscription (infra/cool/day1.sh).
 #   gpu  g4dn.xlarge NVIDIA T4 16 GB, 4 vCPU. Smallest full-GPU NVIDIA type;
 #                    needs the G/VT quota raised from 0.
@@ -67,20 +69,32 @@ profile_defaults() {
       TYPE="${TYPE:-c7i.4xlarge}"
       AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
       ROOT_GB=80 ;;
+    cpuarm)
+      # Native arm64 Docker builds (plan 0.2: OpenCV 5 + ariadne-core for linux/arm64): Ubuntu 24.04 arm64, like
+      # cpux86 but Graviton4. c8g.4xlarge = 16 vCPU (16 cores, no SMT), 32 GiB. Root sized for the OpenCV build.
+      TYPE="${TYPE:-c8g.4xlarge}"
+      AMI_PARAM="/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+      ROOT_GB=60 ;;
     cool)
       # The COOL Marketplace AMI (Ubuntu 24.04, Graviton4; D28: product aajkmdd4qo3r7yhqg61a7aah9). Needs an active
       # Marketplace subscription, else launch fails with an opt-in error. Root sized for a native OpenCV build.
       TYPE="${TYPE:-c8g.4xlarge}"
       AMI_ID="ami-0a302ff85af8d8764"
       ROOT_GB=40 ;;
-    *) die "unknown profile '$1' (cpu | cpux86 | gpu | cool)" ;;
+    *) die "unknown profile '$1' (cpu | cpux86 | cpuarm | gpu | cool)" ;;
   esac
 }
 
 runner_outputs() {
   local json
-  json="$("$AWS" tf main output -json runner 2>/dev/null)" \
-    || die "cannot read Terraform outputs; is the main stack applied?"
+  # ARIADNE_RUNNER_JSON: the `tf main output -json runner` of the checkout that holds the Terraform state, saved to a
+  # file, for a git worktree that has none (the state is never copied).
+  if [ -n "${ARIADNE_RUNNER_JSON:-}" ]; then
+    json="$(cat "$ARIADNE_RUNNER_JSON")" || die "cannot read $ARIADNE_RUNNER_JSON"
+  else
+    json="$("$AWS" tf main output -json runner 2>/dev/null)" \
+      || die "cannot read Terraform outputs; is the main stack applied?"
+  fi
   eval "$(printf '%s' "$json" | python3 -c '
 import json, sys, shlex
 d = json.load(sys.stdin)
@@ -95,8 +109,16 @@ print("SUBNETS_BY_AZ=" + shlex.quote(" ".join(f"{az}={sn}" for az, sn in sorted(
 # first AZ, since on-demand prices are uniform across a region. Sets SUBNET_ID,
 # AZ and PRICE.
 choose_placement() {
-  local market="$1"
-  if [ "$market" = spot ]; then
+  local market="$1" want_az="${2:-}"
+  if [ "$market" = spot ] && [ -n "$want_az" ]; then
+    # --az: the cheapest AZ can be out of capacity (InsufficientInstanceCapacity, 2026-10-22), so the caller pins
+    # one. Its current spot price is still recorded for the ledger.
+    case " $SUBNETS_BY_AZ " in *" $want_az="*) ;; *) die "--az $want_az has no default subnet ($SUBNETS_BY_AZ)" ;; esac
+    AZ="$want_az"
+    PRICE="$(awsq ec2 describe-spot-price-history --instance-types "$TYPE" --availability-zone "$AZ" \
+      --product-descriptions 'Linux/UNIX' --start-time "$(date -u +%FT%TZ)" \
+      --query 'SpotPriceHistory[0].SpotPrice' --output text)"
+  elif [ "$market" = spot ]; then
     # Captured first, then scanned: an early `break` inside `sort | while`
     # would SIGPIPE the sort, and under pipefail that kills the script.
     local prices best="" az p
@@ -104,6 +126,8 @@ choose_placement() {
       --product-descriptions 'Linux/UNIX' --start-time "$(date -u +%FT%TZ)" \
       --query 'SpotPriceHistory[].[AvailabilityZone,SpotPrice]' --output text)"
     while read -r az p; do
+      # SPINUP_AVOID_AZ: space-separated AZs to skip, e.g. one that just answered InsufficientInstanceCapacity
+      case " ${SPINUP_AVOID_AZ:-} " in *" $az "*) continue ;; esac
       case " $SUBNETS_BY_AZ " in *" $az="*) best="$az $p"; break ;; esac
     done < <(sort -k2 -g <<< "$prices")
     [ -n "$best" ] || die "no current spot price for $TYPE in any default-subnet AZ"
@@ -120,7 +144,7 @@ choose_placement() {
 }
 
 cmd_run() {
-  local profile="" market="spot" max_minutes=30
+  local profile="" market="spot" max_minutes=30 az=""
   TYPE=""
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -128,6 +152,7 @@ cmd_run() {
       --type)        TYPE="$2"; shift 2 ;;
       --market)      market="$2"; shift 2 ;;
       --max-minutes) max_minutes="$2"; shift 2 ;;
+      --az)          az="$2"; shift 2 ;;
       --) shift; break ;;
       *) die "unknown option $1" ;;
     esac
@@ -139,7 +164,7 @@ cmd_run() {
   local test_cmd="$*"
   profile_defaults "$profile"
   runner_outputs
-  choose_placement "$market"
+  choose_placement "$market" "$az"
 
   local run_id; run_id="$(date -u +%Y%m%dT%H%M%SZ)-$profile-$(head -c3 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   local run_dir="$REPO_ROOT/build/runs/$run_id" s3_run="s3://$BUCKET/runs/$run_id"
@@ -224,9 +249,25 @@ EOF
 
   # 4. Wait for the instance to terminate itself. Deadline: its own brake plus
   #    a margin, so this loop cannot outlive brake 1 by much.
-  local deadline=$(( start_epoch + (max_minutes + 8) * 60 )) state=""
+  #    A failed poll is NOT a reason to kill a healthy run (a transient AuthFailure terminated
+  #    20261023T234259Z-cpux86-4fc41e 48 min in): retry; give up only after ~10 min of consecutive failures.
+  #    The instance's own brake 1 still bounds it.
+  local deadline=$(( start_epoch + (max_minutes + 8) * 60 )) state="" poll_fail=0
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    state="$(awsq ec2 describe-instances --instance-ids "$iid" --query 'Reservations[0].Instances[0].State.Name' --output text)"
+    if state="$(awsq ec2 describe-instances --instance-ids "$iid" --query 'Reservations[0].Instances[0].State.Name' --output text)"; then
+      poll_fail=0
+    else
+      poll_fail=$((poll_fail + 1))
+      log "state poll failed ($poll_fail consecutive); retrying"
+      if [ "$poll_fail" -ge 30 ]; then
+        # The host cannot see AWS (expired credentials, 2026-10-24 09:22 IST): it must NOT kill a run it cannot see.
+        # The instance's own brake still ends it and its exit trap uploads the results under its instance role.
+        RUN_FINISHED=1
+        log "state poll failing for ~10 min: leaving $iid to its own brake (max ${max_minutes} min);" \
+            "fetch later: aws s3 cp --recursive $s3_run/output build/runs/$run_id/output"
+        return 75
+      fi
+    fi
     [ "$state" = terminated ] && break
     sleep 20
   done

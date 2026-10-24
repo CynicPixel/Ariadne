@@ -104,22 +104,12 @@ inline cv::Mat DescriptorMat(const std::vector<uint8_t>& d) {
     return cv::Mat(int(d.size() / 32), 32, CV_8U, const_cast<uint8_t*>(d.data()));
 }
 
-inline VerifyResult VerifyEdge(const KeyframeFeatures& a, const core::FeatureResponseValue& b, const VerifyParams& p,
-                               uint64_t seed) {
+/// Stages 2-3 on matches made by any matcher (ORB below; ALIKED + LightGlue in the runtime's hard-pair verifier,
+/// D171): pa[i] in A matches pb[i] in B, whose feature index ib[i] selects B's 3D point.
+inline VerifyResult VerifyMatched(const std::vector<cv::Point2f>& pa, const std::vector<cv::Point2f>& pb,
+                                  const std::vector<int>& ib, const core::FeatureResponseValue& b, const VerifyParams& p,
+                                  uint64_t seed) {
     VerifyResult r;
-    const size_t na = a.keypoints.size() / 2, nb = b.keypoints.size() / 2;
-    if (na < 8 || nb < 8) return r.reason = "too_few_features", r;
-    std::vector<std::vector<cv::DMatch>> knn;
-    cv::BFMatcher(cv::NORM_HAMMING).knnMatch(DescriptorMat(a.descriptors), DescriptorMat(b.descriptors), knn, 2);
-    std::vector<cv::Point2f> pa, pb;
-    std::vector<int> ib;
-    for (const auto& m : knn) {
-        if (m.size() == 2 && m[0].distance < p.ratio * m[1].distance) {
-            pa.emplace_back(a.keypoints[2 * m[0].queryIdx], a.keypoints[2 * m[0].queryIdx + 1]);
-            pb.emplace_back(b.keypoints[2 * m[0].trainIdx], b.keypoints[2 * m[0].trainIdx + 1]);
-            ib.push_back(m[0].trainIdx);
-        }
-    }
     r.matches = int(pa.size());
     if (r.matches < p.min_matches) return r.reason = "few_matches", r;
 
@@ -172,6 +162,27 @@ inline VerifyResult VerifyEdge(const KeyframeFeatures& a, const core::FeatureRes
     r.ok = true;
     r.reason = "verified";
     return r;
+}
+
+inline VerifyResult VerifyEdge(const KeyframeFeatures& a, const core::FeatureResponseValue& b, const VerifyParams& p,
+                               uint64_t seed) {
+    const size_t na = a.keypoints.size() / 2, nb = b.keypoints.size() / 2;
+    if (na < 8 || nb < 8) {
+        VerifyResult r;
+        return r.reason = "too_few_features", r;
+    }
+    std::vector<std::vector<cv::DMatch>> knn;
+    cv::BFMatcher(cv::NORM_HAMMING).knnMatch(DescriptorMat(a.descriptors), DescriptorMat(b.descriptors), knn, 2);
+    std::vector<cv::Point2f> pa, pb;
+    std::vector<int> ib;
+    for (const auto& m : knn) {
+        if (m.size() == 2 && m[0].distance < p.ratio * m[1].distance) {
+            pa.emplace_back(a.keypoints[2 * m[0].queryIdx], a.keypoints[2 * m[0].queryIdx + 1]);
+            pb.emplace_back(b.keypoints[2 * m[0].trainIdx], b.keypoints[2 * m[0].trainIdx + 1]);
+            ib.push_back(m[0].trainIdx);
+        }
+    }
+    return VerifyMatched(pa, pb, ib, b, p, seed);
 }
 
 /// The [PROXY] information matrix, upper triangle (21 floats), translation first.

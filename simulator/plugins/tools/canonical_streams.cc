@@ -190,9 +190,19 @@ Mission LoadMission(const std::string& world_path) {
             if (c.frame_id.size() < base.size() || c.frame_id.compare(c.frame_id.size() - base.size(), base.size(), base)) {
                 throw std::runtime_error("frame_id '" + c.frame_id + "' does not end in base_link");
             }
-            for (const std::string cam : {"left", "right"}) {
+            // Every RGB camera on the link: the stereo pair, plus a sweep rig's right_bNN (5.5, D138). The depth camera
+            // (type depth_camera) is GT only and has no optical frame here. The first version listed {left, right}
+            // only, so every sweep recording failed sim_record's /tf_static check (run 20261023T105356Z, D148).
+            std::vector<std::string> cams;
+            for (uint64_t s = 0; s < link->SensorCount(); ++s) {
+                const sdf::Sensor* sn = link->SensorByIndex(s);
+                if (sn->Type() == sdf::SensorType::CAMERA) cams.push_back(sn->Name());
+            }
+            for (const char* need : {"left", "right"}) {
+                if (link->SensorByName(need) == nullptr) throw std::runtime_error(model->Name() + ": no '" + need + "' sensor");
+            }
+            for (const std::string& cam : cams) {
                 const sdf::Sensor* sensor = link->SensorByName(cam);
-                if (sensor == nullptr) throw std::runtime_error(model->Name() + ": no '" + cam + "' sensor");
                 if (!sensor->PoseRelativeTo().empty()) throw std::runtime_error(cam + ": pose not relative to its link");
                 const auto pose = sensor->RawPose();
                 const auto& r = pose.Rot();

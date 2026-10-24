@@ -529,7 +529,8 @@ def verify(rec, mission, scene_dir, sim_s):
     cam_period = int(round(1e9 / cam_rate))
     for a in mission["agents"]:
         T = a["topics"]
-        for key in ("left_image", "right_image", "depth_image", "left_info", "right_info", "depth_info"):
+        sweep = sorted(k for k in T if k.startswith("right_b"))   # 5.5 baseline-sweep cameras (D138)
+        for key in ("left_image", "right_image", "depth_image", "left_info", "right_info", "depth_info", *sweep):
             topic = T[key]
             if topic not in live:
                 if key.startswith("depth") and not mission["rig"]["depth"]["enabled"]:
@@ -551,6 +552,10 @@ def verify(rec, mission, scene_dir, sim_s):
         per_topic.setdefault(T["left_image"], {})["stereo_pairing"] = pairing
         if pairing < 1.0:
             failures.append(f"agent {a['agent']}: stereo pairing {pairing:.4f} < 1")
+        for key in (k for k in sweep if k.endswith("_image")):
+            S = set(live.get(T[key], {"stamps": []})["stamps"])
+            if L and len(L & S) / len(L) < 1.0:
+                failures.append(f"agent {a['agent']}: {key} pairing {len(L & S) / len(L):.4f} < 1")
     clock = live.get("/clock", {}).get("stamps", [])
     if not clock:
         failures.append("/clock not recorded")

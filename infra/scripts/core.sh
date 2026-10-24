@@ -88,8 +88,14 @@ cmd_gate() {
 }
 
 cmd_dev() {
-  DOCKER_BUILDKIT=1 docker build -q -f "$REPO_ROOT/infra/docker/core.Dockerfile" \
-    --target dev -t "$DEV_IMAGE" "$REPO_ROOT" >/dev/null
+  # ARIADNE_SKIP_DEV_BUILD=1 uses $DEV_IMAGE as it is (a remote host that pulled the exact image by digest; a
+  # rebuild there would start from an empty cache and produce a different image).
+  if [ "${ARIADNE_SKIP_DEV_BUILD:-0}" = 1 ]; then
+    docker image inspect "$DEV_IMAGE" >/dev/null || { echo "core.sh: $DEV_IMAGE not present" >&2; exit 1; }
+  else
+    DOCKER_BUILDKIT=1 docker build -q -f "$REPO_ROOT/infra/docker/core.Dockerfile" \
+      --target dev -t "$DEV_IMAGE" "$REPO_ROOT" >/dev/null
+  fi
   local tty=()
   [ -t 0 ] && tty=(-it)
   if [ $# -eq 0 ]; then

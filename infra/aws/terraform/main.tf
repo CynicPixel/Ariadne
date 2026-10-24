@@ -62,6 +62,13 @@ module "registry" {
   tags    = var.tags
 }
 
+# ariadne/ariadne-orchestrator was created by CLI on 2026-10-23 for the M2 live demo, before it was in this list; the
+# next apply adopts it instead of failing on "already exists". Safe to delete this block after that apply.
+import {
+  to = module.registry.aws_ecr_repository.images["ariadne-orchestrator"]
+  id = "ariadne/ariadne-orchestrator"
+}
+
 module "github_oidc" {
   source              = "./modules/github_oidc"
   project             = var.project

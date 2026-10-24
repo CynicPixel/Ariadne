@@ -76,6 +76,17 @@ def main(argv=None) -> int:
             p.add_argument("--rig", default=None, help="also compose mission_default.* for this rig")
             p.add_argument("--live-rtf", type=float, default=None,
                            help="with --rig: also compose mission_live.* (D151) at this real-time factor")
+    # P8 demo knobs (D216): recompose ONLY mission_live.* of an existing scene dir for the user's chosen
+    # entrances and target. The world files are untouched; the scene is regenerated in memory from the same
+    # preset + seed and checked against the directory's scene_id.
+    p = sub.add_parser("demo-mission")
+    p.add_argument("--preset", required=True)
+    p.add_argument("--seed", type=int, required=True)
+    p.add_argument("--out", required=True, help="an existing scene directory (from generate)")
+    p.add_argument("--rig", required=True)
+    p.add_argument("--live-rtf", type=float, required=True)
+    p.add_argument("--agents", default=None, help="comma-separated entrance indices, ascending (default: all)")
+    p.add_argument("--target-xy", default=None, help="x,y metres in the world frame (default: the generated target)")
     args = ap.parse_args(argv)
 
     preset = load_preset(args.preset)
@@ -96,6 +107,17 @@ def main(argv=None) -> int:
         return 0
     from .scene import generate
     s = generate(preset, args.seed)
+    if args.cmd == "demo-mission":
+        from .mission import write_mission
+        agents = [int(v) for v in args.agents.split(",")] if args.agents else None
+        target = tuple(float(v) for v in args.target_xy.split(",")) if args.target_xy else None
+        if target is not None and len(target) != 2:
+            raise SystemExit("--target-xy takes x,y")
+        m = write_mission(s, args.out, args.rig, name="live", live=True, rtf=args.live_rtf,
+                          agents=agents, target_xy=target)
+        print(json.dumps(m["live"].get("demo", {"entrances": list(range(len(m["agents"]))),
+                                                "target_xy_m": None}), indent=1))
+        return 0
     if args.cmd == "generate":
         from .build import write_scene
         os.makedirs(args.out, exist_ok=True)

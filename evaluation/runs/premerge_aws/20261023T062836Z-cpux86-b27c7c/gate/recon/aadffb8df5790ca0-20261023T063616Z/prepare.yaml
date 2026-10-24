@@ -1,0 +1,50 @@
+# ariadne_recon prepare (design RECON_1.7). Generated.
+stage: prepare
+run_id: aadffb8df5790ca0-20261023T063616Z
+scene_id: aadffb8df5790ca0
+config: recon_v1
+seed: 1
+spool_sha256: f3c4704ceeac427eda59474a4d2f76b1d83f4c0c98139e0a07fcbaf74fbc6cf8
+merge:
+  ok: true
+  edge: agent0 kf 2800 <- agent1 kf 424 (best-ranked verified, 1.6)
+bundles:
+  keyframes: 571
+  heldout: 37
+fusion:
+  keyframes: 571
+  pixels: 131558400
+  pixels_with_depth: 95596090
+  pixels_after_gates: 74113294
+  voxels: 1108307
+  points: 300000
+gaussians: 300000
+package:
+  package_version: 1
+  run_id: aadffb8df5790ca0-20261023T063616Z
+  scene_id: aadffb8df5790ca0
+  gaussians: 300000
+  views: 37
+  width: 640
+  height: 360
+  sh_degree: 3
+  frame: agent 0 odometry (viewmats are world-to-camera, OpenCV camera axes)
+  rasterization:
+    packed: false
+    rasterize_mode: classic
+    near_plane: 0.01
+    far_plane: 10000000000.0
+    background: black (gsplat default)
+  sha256: f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a
+geometry:
+  accuracy_m: 0.021696807836723273
+  accuracy_median_m: 0.01883976013215476
+  gt_to_cloud_m: 0.2316034864801225
+  chamfer_m: 0.12665014715842288
+  completeness: 0.6579985546759518
+  gt_samples: 608860
+  cloud_points: 300000
+command: /work/python/reconstruction/ariadne_recon/cli.py prepare --spool /work/build/phase1_gate/aadffb8df5790ca0-20261023T063159Z/spool/aadffb8df5790ca0-20261023T063616Z
+  --scene /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+  --eval-record /work/build/premerge/aadffb8df5790ca0-20261023T063159Z/sim_collab/aadffb8df5790ca0-20261023T063616Z/recon_eval.yaml
+  --config /work/configs/recon/recon_v1.yaml --out /work/build/phase1_gate/aadffb8df5790ca0-20261023T063159Z/recon

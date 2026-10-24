@@ -1,0 +1,17 @@
+# §4 / §18.2 data contracts exercised by this run (design PHASE1_GATE). Generated; do not hand-edit.
+agent0:
+  frame_4_1: {delivered: 3981}
+  keyframe_4_2: {records: 320, complete: 320, gauge_zero_cov: 1, missing: {depth: 0, descriptors: 0, global_descriptor: 0, keypoints: 0, landmark_ids: 0, pose_cov: 0}}
+  keyframe_bundle_18_2: {built: 320, spooled: 320}
+agent1:
+  frame_4_1: {delivered: 3981}
+  keyframe_4_2: {records: 251, complete: 251, gauge_zero_cov: 1, missing: {depth: 0, descriptors: 0, global_descriptor: 0, keypoints: 0, landmark_ids: 0, pose_cov: 0}}
+  keyframe_bundle_18_2: {built: 251, spooled: 251}
+loop_edge_4_3: {encoded: 19, decoded_identical: 19, merge_edge_received: true}
+byte_record_4_4: {ledger_rows: 310, classes_used: 4, total_wire_bytes: 1272765}
+unset_by_design:
+  frame_4_1: [imu_window, photo, illumination, gt]
+  keyframe_4_2: [velocity_world, bias_gyro, bias_accel, gravity_dir, preint_from_prev, local_cloud, motion_cost, energy_cost, timestamp_age, uncertainty]
+  keyframe_bundle_18_2: [exposure_state, lamp_state]
+  loop_edge_4_3: [pcm_score, gnc_weight, degeneracy_flag]   # carried at defaults until Phase 3
+  message_class_4_4: [HEARTBEAT, LOCAL_DESCRIPTOR, POSE_GRAPH, SUBMAP_SUMMARY, SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS, HUMAN_REQUEST, ACK]   # no Phase 1 producer

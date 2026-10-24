@@ -1,0 +1,2 @@
+commit 6ecfafc25eb5ecc68581594be0bfb59135e2800f
+dockerfile infra/docker/recon-gpu.Dockerfile sha256 cb28b25ada44caf68f8a5afd0d977ecca79ee8b6cb887d92093bb253a8e598b4

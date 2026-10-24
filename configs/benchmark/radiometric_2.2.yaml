@@ -9,7 +9,7 @@ sim:
   agent: 0
   frames: 1000            # ~50 s of the recording
   seed: 1
-  slam_config: configs/slam/sim_v2.yaml
+  slam_config: configs/slam/sim_v2_vo.yaml   # = sim_v2 before L2 (D101) switched it to imu full
   reference: {degradation: none, perception: sim_v1}   # the clean recording
   degradations: [dark2_dust0_ag8, dark3_dust0_ag16]    # D65: noise the VST can stabilise. dark2_dust0_ag8: NOT RUN (gate decision only)
   control: {degradation: dark2_dust0, perception: [sim_v1, sim_v1_rad_auto]}   # posterised: the gate must refuse

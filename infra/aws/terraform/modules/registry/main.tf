@@ -5,11 +5,12 @@
 
 locals {
   images = [
-    "ariadne-core",    # dev, CI, Graviton stock baseline
-    "ariadne-cool",    # arm64, linked against /opt/cool
-    "ariadne-sim",     # Gazebo, amd64 + GPU
-    "ariadne-gpu",     # PyTorch + gsplat reconstruction
-    "ariadne-console", # operator console
+    "ariadne-core",         # dev, CI, Graviton stock baseline
+    "ariadne-cool",         # arm64, linked against /opt/cool
+    "ariadne-sim",          # Gazebo, amd64 + GPU
+    "ariadne-gpu",          # PyTorch + gsplat reconstruction
+    "ariadne-console",      # operator console
+    "ariadne-orchestrator", # 7.x agentic orchestrator (Bedrock client) for live runs
   ]
 }
 

@@ -1,0 +1,58 @@
+# Oracles (design HARNESS_1.9). Generated.
+internal:
+  agent0:
+    ate_rmse_m:
+    - 0.008412822650659575
+    - 0.00841282
+    ate_rotation_rmse_rad:
+    - 0.004879957345816031
+    - 0.00487996
+    rpe_translation_rmse_m:
+    - 0.001051047017172472
+    - 0.00105105
+    rpe_rotation_rmse_rad:
+    - 0.00039170447010736584
+    - 0.000391704
+  agent1:
+    ate_rmse_m:
+    - 0.004327212379150771
+    - 0.00432721
+    ate_rotation_rmse_rad:
+    - 0.004602226144279734
+    - 0.00460223
+    rpe_translation_rmse_m:
+    - 0.0006304987540384271
+    - 0.000630499
+    rpe_rotation_rmse_rad:
+    - 0.0002979176365497037
+    - 0.000297918
+  merged_ate_vs_1.6:
+    ate_rmse_m:
+    - 0.014420441480787539
+    - 0.0144204
+    samples:
+    - 7962
+    - 7962
+evo:
+  tool: v1.31.1
+  pairs:
+    ape_translation_rmse_m:
+      harness: 0.014420441480787539
+      evo: 0.014420441480787624
+      rel_diff: 5.894510957664584e-15
+    ape_rotation_rmse_rad:
+      harness: 0.006109929400507523
+      evo: 0.006109929400568888
+      rel_diff: 1.0043483578587331e-11
+    rpe_translation_rmse_m:
+      harness: 0.0008666684807788847
+      evo: 0.0008666684807788681
+      rel_diff: 1.9140298288130254e-14
+    rpe_rotation_rmse_rad:
+      harness: 0.000347985136226717
+      evo: 0.0003479851362267169
+      rel_diff: 3.115656560052417e-16
+verdict:
+  internal: true
+  evo: true
+  rel_tol: 1.0e-06

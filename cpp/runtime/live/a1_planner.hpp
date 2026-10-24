@@ -95,14 +95,15 @@ inline planning::Phase4Briefing Phase4BriefFrom(const mis::MissionConfig& mc, co
 class A1Planner : public MissionPlanner {
 public:
     A1Planner(const mis::MissionConfig& mc, const mis::Briefing& b, const planning::Phase4Params& p, std::string policy,
-              double autonomous_threshold)
-        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold), planner_(Phase4BriefFrom(mc, b), p) {}
+              double autonomous_threshold, int n_agents = 2)
+        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold),
+          planner_(Phase4BriefFrom(mc, b), p, n_agents) {}
 
     size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
 
     PlanOutput Plan(const PlanContext& ctx) override {
-        std::vector<planning::Phase4AgentInput> in(2);   // PlanContext is 2-agent; the planner takes N
-        for (int a = 0; a < 2; ++a) {
+        std::vector<planning::Phase4AgentInput> in(size_t(ctx.n()));   // P8 D213: N agents end to end
+        for (int a = 0; a < ctx.n(); ++a) {
             in[a].active = ctx.active[a];
             in[a].linked = true;
             in[a].position = ctx.position[a];
@@ -118,7 +119,7 @@ public:
         }
         plan_ = planner_.Plan(ctx.T * 1e-9, in, dirs);
 
-        PlanOutput out;
+        PlanOutput out(ctx.n());
         out.maps.slab = plan_.maps.slab;
         out.maps.trav_r = plan_.maps.trav_r;
         out.maps.trav_a = plan_.maps.trav_a;
@@ -136,8 +137,8 @@ public:
            << al.tasks << ",\"rounds\":" << al.rounds << ",\"messages\":" << al.messages << ",\"bytes\":" << al.bytes
            << ",\"total\":" << al.total << ",\"optimum\":" << al.optimum << "},\"egress\":{\"confidence\":"
            << plan_.egress.confidence << ",\"reroute\":\"" << plan_.egress.reroute << "\"},\"agents\":[";
-        for (int a = 0; a < 2; ++a) {
-            const auto& ap = plan_.agents[a];
+        for (int a = 0; a < ctx.n(); ++a) {
+            const auto& ap = plan_.agents[size_t(a)];
             AgentOptions& ao = out.agents[a];
             for (const auto& t : ap.nbv.options) {
                 TaskOption o;
@@ -173,7 +174,66 @@ public:
         return planner_.Route(plan_, agent, i, from);
     }
 
+    /// D175 item 4: this instance as agent `self`'s OWN planner (fed only its keyframes via Integrate). PlanOwn
+    /// with the peers it RECEIVED and the peers' known-mask; only agents[self] is filled, joint[self] = -1 (the
+    /// component broker assigns; ApplyConsensus's pick replaces it). Maps/egress are this agent's own map.
+    PlanOutput PlanOwnFor(const PlanContext& ctx, int self, const std::vector<planning::PeerKeyframe>& peers,
+                          const cv::Mat* peer_known, bool linked = true) {
+        planning::Phase4AgentInput in;
+        in.active = ctx.active[size_t(self)];
+        in.linked = linked;   // D174: the fleet's comms state; true before collab runs (coordination-only rows)
+        in.position = ctx.position[size_t(self)];
+        in.flown_m = ctx.flown_m[size_t(self)];
+        for (const auto& [k, g] : ctx.refused_goals) if (k == self) in.refused_goals.push_back(g);
+        std::vector<planning::RegionDirective> dirs;
+        for (const auto& d : ctx.directives) {
+            if (d.kind != "priority_region" && d.kind != "keep_out" && d.kind != "assign" && d.kind != "explore") continue;
+            planning::RegionDirective r;
+            r.id = d.id, r.kind = d.kind, r.agent = d.agent, r.polygon = d.polygon, r.weight = d.weight;
+            dirs.push_back(std::move(r));
+        }
+        plan_ = planner_.PlanOwn(ctx.T * 1e-9, self, in, peers, peer_known, dirs);
+        PlanOutput out(ctx.n());
+        out.maps.slab = plan_.maps.slab;
+        out.maps.trav_r = plan_.maps.trav_r;
+        out.maps.trav_a = plan_.maps.trav_a;
+        out.maps.support = plan_.support;
+        out.maps.egress.found = plan_.egress.found;
+        out.maps.egress.cells = plan_.egress.cells;
+        out.maps.egress.goal_index = plan_.egress.exit;
+        out.maps.egress.length_cells = plan_.egress.length_m / b_.gs.cell;
+        const auto& ap = plan_.agents[size_t(self)];
+        AgentOptions& ao = out.agents[size_t(self)];
+        for (const auto& t : ap.nbv.options) {
+            TaskOption o;
+            o.task_id = t.task_id, o.goal_xy = t.goal_xy, o.goal_yaw = t.goal_yaw, o.path_m = t.path_m;
+            o.standoff_m = t.standoff_m, o.centroid_xy = t.centroid_xy, o.cells = t.cells;
+            o.risk = t.risk, o.risk_reason = t.risk_reason;
+            o.supervisor_return = ap.nbv.reserve_rule && t.source == planning::TaskSource::kReturn;
+            o.utility = t.utility;
+            o.c.cluster = int(t.task_id & 0x7fffffff);
+            o.c.goal = b_.ToCell(t.goal_xy.first, t.goal_xy.second);
+            o.c.cells = t.cells;
+            ao.options.push_back(std::move(o));
+        }
+        ao.excluded_refused = ap.excluded_refused, ao.excluded_directive = ap.excluded_directive;
+        ao.applied = ap.applied;
+        ao.plan = ap.plan;
+        ao.classical = OwnBest(ao);
+        out.joint[size_t(self)] = -1;
+        return out;
+    }
+    /// The raw plan of the last Plan/PlanOwnFor on THIS instance (BuildBid reads its NbvPlan; the exporter its maps).
+    const planning::Phase4Plan& LastPlan() const { return plan_; }
+
 private:
+    /// The agent's own best takeable option under the risk gate (the uncoordinated fallback's "classical").
+    int OwnBest(const AgentOptions& ao) const {
+        for (int i = 0; i < int(ao.options.size()); ++i)
+            if (ao.options[size_t(i)].risk <= threshold_ || ao.options[size_t(i)].supervisor_return) return i;
+        return -1;
+    }
+
     mis::Briefing b_;
     std::string policy_;
     double threshold_;

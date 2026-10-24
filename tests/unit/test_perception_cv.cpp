@@ -443,6 +443,84 @@ TEST(PerceptionCv, RectificationPutsCorrespondencesOnOneRowWithMetricDisparity) 
     EXPECT_LT(worst_depth_rel, 1e-4);
 }
 
+// Equidistant (KB4, cv::fisheye) pairs, D143: the same geometric chain with the fisheye functions, on a rig shaped like
+// Hilti 2023's robot front OAK-D Pro W (1280x800, fx 567, Kalibr's KB4 coefficients, B = 7.5 cm, ~127 deg HFOV).
+// Points go out to ~55 deg off-axis, where pinhole and equidistant radii differ by tens of percent. Negative control: the
+// same rig read as radtan (the bug the model field prevents) must fail the row check.
+TEST(PerceptionCv, FisheyeRectificationPutsCorrespondencesOnOneRowWithMetricDisparity) {
+    RawStereoCalibration raw;
+    raw.left = {1280, 800, 567.76, 567.13, 651.56, 402.91, {-0.00326, 0.00433, 0.00356, -0.00202},
+                DistortionModel::kEquidistant};
+    raw.right = {1280, 800, 565.77, 565.31, 652.28, 395.69, {-0.00834, 0.04033, -0.04129, 0.01522},
+                 DistortionModel::kEquidistant};
+    raw.T_right_left.R = core::SO3Exp(core::Vec3(-0.00087, 0.00297, -0.00214));
+    raw.T_right_left.t = core::Vec3(-0.07514, -0.00028, 0.00027);
+    const StereoRectifier rect(raw);
+    const RectifiedStereoRig& rig = rect.Rig();
+    EXPECT_NEAR(rig.baseline_m, raw.T_right_left.t.norm(), 1e-9);
+
+    auto K = [](const PinholeRadtan& c) {
+        return cv::Matx33d(c.fu, 0, c.cu, 0, c.fv, c.cv, 0, 0, 1);
+    };
+    auto D = [](const PinholeRadtan& c) { return cv::Vec4d(c.dist[0], c.dist[1], c.dist[2], c.dist[3]); };
+    std::vector<cv::Point3d> pts;
+    core::PhiloxStream s(22, 0, 0);
+    auto u = [&s] { return (s.NextBits32() >> 8) * (1.0 / 16777216.0); };
+    double widest_deg = 0.0;
+    while (pts.size() < 300) {
+        const double z = 1.0 + 7.0 * u();
+        const cv::Point3d p((u() - 0.5) * 2.6 * z, (u() - 0.5) * 1.4 * z, z);
+        const double off_deg = std::atan(std::hypot(p.x, p.y) / p.z) * 180.0 / M_PI;
+        if (off_deg > 55.0) continue;
+        widest_deg = std::max(widest_deg, off_deg);
+        pts.push_back(p);
+    }
+    EXPECT_GT(widest_deg, 50.0);
+    cv::Mat rvec;
+    cv::Rodrigues(CvMat3(raw.T_right_left.R), rvec);
+    const cv::Mat tvec = (cv::Mat_<double>(3, 1) << raw.T_right_left.t.x(), raw.T_right_left.t.y(),
+                          raw.T_right_left.t.z());
+    const cv::Mat zero3 = cv::Mat::zeros(3, 1, CV_64F);
+    std::vector<cv::Point2d> raw_l, raw_r;
+    cv::fisheye::projectPoints(pts, raw_l, zero3, zero3, K(raw.left), D(raw.left));
+    cv::fisheye::projectPoints(pts, raw_r, rvec, tvec, K(raw.right), D(raw.right));
+
+    const auto worst_dy = [&](bool as_fisheye) {
+        std::vector<cv::Point2d> rl, rr;
+        if (as_fisheye) {
+            cv::fisheye::undistortPoints(raw_l, rl, K(raw.left), D(raw.left), rect.R1(), rect.P1());
+            cv::fisheye::undistortPoints(raw_r, rr, K(raw.right), D(raw.right), rect.R2(), rect.P2());
+        } else {
+            cv::undistortPoints(raw_l, rl, K(raw.left), D(raw.left), rect.R1(), rect.P1());
+            cv::undistortPoints(raw_r, rr, K(raw.right), D(raw.right), rect.R2(), rect.P2());
+        }
+        double dy = 0.0, depth_rel = 0.0;
+        for (size_t i = 0; i < pts.size(); ++i) {
+            dy = std::max(dy, std::abs(rl[i].y - rr[i].y));
+            const cv::Mat p = rect.R1() * (cv::Mat_<double>(3, 1) << pts[i].x, pts[i].y, pts[i].z);
+            const double z_rect = p.at<double>(2);
+            depth_rel = std::max(depth_rel, std::abs(rig.fx * rig.baseline_m / (rl[i].x - rr[i].x) - z_rect) / z_rect);
+        }
+        return std::make_pair(dy, depth_rel);
+    };
+    const auto [dy, depth_rel] = worst_dy(true);
+    EXPECT_LT(dy, 1e-3);
+    EXPECT_LT(depth_rel, 1e-4);
+
+    // The crop ALGORITHMS warns about, measured: rectified focal and the share of the rectified image fed by the lens.
+    cv::Mat white(800, 1280, CV_8UC1, cv::Scalar(255)), out_l;
+    rect.RectifyLeft(white, out_l);
+    const double valid = cv::countNonZero(out_l) / static_cast<double>(out_l.total());
+    std::printf("fisheye rectified: fx %.1f px, hfov %.1f deg, valid %.3f\n", rig.fx,
+                2.0 * std::atan(rig.width / 2.0 / rig.fx) * 180.0 / M_PI, valid);
+    EXPECT_GT(valid, 0.5);
+
+    // Negative control: the same coefficients read as radtan (what a missing model field would do) must break the rows
+    // or the metric depth by far more than the tolerances above.
+    const auto [dy_radtan, depth_radtan] = worst_dy(false);
+    EXPECT_TRUE(dy_radtan > 0.1 || depth_radtan > 0.01) << dy_radtan << " " << depth_radtan;
+}
+
 // Negative control for the check above: the same measurement against a rig
 // whose rotation is wrong by 1 deg of pitch must fail it. Otherwise the check
 // could not have caught anything.

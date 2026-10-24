@@ -4,6 +4,19 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-24 (03:30 IST) — B's live multi-agent POC MERGED to main (`584415e`, fast-forward)
+
+- **What landed (session B, `feat/l1-a1p-llm`):** the D175 multi-agent coordination POC (deterministic replay,
+  oracle A/B digest), D218–D222 (splat tee D220, comms panel D222), and the D174 lockstep collab wiring.
+- **AWS pre-merge** `20261023T212435Z-cpux86-083c02` (c7i.4xlarge spot, 1591 s, ~$0.055): **54/54**, ctest
+  **695/695**, VERDICT PASS (render reused, working tree; not exit-gate evidence). Evidence:
+  `evaluation/runs/premerge_aws/20261023T212435Z-cpux86-083c02/`.
+- **Not yet on main:** D178 (entry gate), D179 (async CollabLive) + snapshot extension, D180 (re-send accounting),
+  all on `feat/live-collab-live`. The D178 sweep is running on AWS; B's D179 acceptance run (live 60 s + 3 replays)
+  `5x-B-collab60b` started 03:27 IST.
+
+---
+
 ## 2026-10-23 — 7.1–7.2 redirected to option B (maintainer): seams around Phase 4; proposal to A1
 
 - **Maintainer, 2026-10-23: "go with B".** A1 keeps 4.3–4.6 (NBV, CBBA consensus, route graph). Session B builds the
@@ -64,6 +77,133 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
     ρ_responder for 8 and 10 cm voxels, not for 5 cm (`VOLUMETRIC_4.1.md` §1).
   - **`scene_gt.npz` has no risk-zone labels** (both scenes), which 4.2's calibration needs; **maze_medium_0 has no
     recording**, which the gate's second scene needs.
+## 2026-10-24 (02:20 IST) — A2 splat service (D230/D231) + D174 steps 1-2 MERGED
+
+- **MERGED to main** (2cb160f, fast-forward of the combined pre-merge branch):
+  - A2's feat/ph5-dve up to e2765ec: the splat service's briefing/merge placement (D230), live #kf ingest from B's tee
+    (D231), paced replay, the recon-gpu image (Dockerfile + build evidence), recon tests 38/38.
+  - feat/live-collab: D174 steps 1-2 (`CollabFrontend` / `CollabFleet` extracted, pass A/B byte-identical; deferred
+    feature answers), the 3.2 sweep fixes (config writer, pooled calibration), the ALIKED thread-count finding.
+- **AWS pre-merge** `20261023T202525Z-cpux86-48e0a5`: **54/54**, ctest 606/606. Evidence:
+  `evaluation/runs/premerge_aws/20261023T202525Z-cpux86-48e0a5/`.
+- **3.2 sweep, fixed (`eee456`):** outcomes PASS; geometry FAILS on scene 0 under the byte budget (perceptual aliasing
+  beats PCM, merged ATE 3.8 m vs 0.03 m unbudgeted; D176). The defence is being redesigned through the preflight
+  (literature + advisor), together with the maintainer's collaboration requirements: asynchronous, no barrier sync,
+  bytes at the information-theoretic limit.
+
+---
+
+## 2026-10-24 — Phase 5/6 round 3 (A2) + D173 injection MERGED; shared AWS slot queue
+
+- **MERGED to main** (f772dad, fast-forward of the combined pre-merge branch):
+  - A2's 6b05fa5: Phase 5/6 work, including the canonical tool fix 698eb6b and the RECON_6 pieces.
+  - feat/3.2-inject 15426f8 (D173): `CollabNode::InjectVerifiedEdge`, pass-B evidence (`estimates`,
+    `kept_inter_edges`, injected fate), and the schema-3 mission spool composer `compose_mission_spool.py`.
+- **AWS pre-merge** `20261023T160829Z-cpux86-512e55`: **54/54**, ctest 596/596, every determinism check
+  byte-identical. Evidence: `evaluation/runs/premerge_aws/20261023T160829Z-cpux86-512e55/`, $0.044.
+- **AWS slots are never left idle** (maintainer, 2026-10-23). One dispatcher, `infra/scripts/slotq.sh`, launches
+  queued jobs (`build/slotq/queue/NN-owner-name.job`) in name order as soon as the 32-vCPU CPU spot quota has room;
+  sessions run no retry loops of their own.
+- **Maintainer, 2026-10-24:** dark / lighting / dust / noise work is PAUSED in every session until the multi-agent
+  POC (D175 in the live loop) runs. Afterwards, the demo's world setup gets a toggle for it, off by default.
+
+---
+
+## 2026-10-23 — Phase 2 CLOSED: full gate on AWS (D172); 3.x in flight
+
+- **The Phase 2 full gate:**
+  - `phase1.sh` in full mode, clean commit b59a77d, AWS cpux86 spot, 32 min, about $0.07.
+  - Fresh Kaggle render, relayed through S3 so the token stays on the workstation (`infra/eval/render_relay.sh`).
+  - **53/54.** ctest 539/539; fault identity, `bytes.json`, fused cloud, render package and the `renders.npz` sha256
+    all match the reference.
+  - The 54th check is `report.yaml`'s `inputs_clean`: the D55 reference itself was dirty. Re-pinned; see D172.
+- **The six Phase 2 exit-gate bullets** are mapped to evidence in D172. One stated deviation: SE-Sync rim, "not
+  certified, unknown not wrong" (D74).
+- **3.4 MERGED** (c720e77, fast-forward). AWS pre-merge `20261023T062836Z-cpux86-b27c7c`: **54/54**, ctest 549/549 +
+  protocol 18/18. `report.yaml` now matches the D172 reference, which confirms the re-pin. Evidence:
+  `evaluation/runs/premerge_aws/20261023T062836Z-cpux86-b27c7c/`, about $0.04. The graph spans ids min..max, and the
+  budget defaults are labelled placeholders until D171's derived levels.
+- **3.2 sim integration MERGED** (3c5b8ae, fast-forward; D171): two-pass causal replay (`ariadne_collab_passa` per
+  agent, `ariadne_collab_sim` over CommsNode with comms scenarios, partitions and disconnects), ALIKED+LightGlue
+  verification, the D76 robust broker solve, int8 local descriptors, per-message byte predictions. AWS pre-merge
+  `20261023T114451Z-cpux86-bc1d75`: **54/54**, ctest 592/592 + protocol 19/19. The gate sweep (byte table, ATE vs
+  bytes, campaign) is still to run; the first attempt failed on a calibration bug, fixed (D171 note).
+- **Phase 5 round 2 (A2) MERGED** (eb976de, fast-forward: 5.2 features-on-proxy D146, 5.3 replay wiring D147). AWS
+  pre-merge `20261023T085348Z-cpux86-3d2b9a`: **54/54**, ctest 587/587 + protocol 18/18, every determinism check
+  byte-identical (defaults unchanged, as claimed). Evidence: `evaluation/runs/premerge_aws/20261023T085348Z-cpux86-3d2b9a/`,
+  about $0.04.
+- **Phase 5 (A2) MERGED** (64059fa via merge 2594ac6: 5.1-5.6 work, D130-D146). AWS pre-merge
+  `20261023T071522Z-cpux86-42ce81`: **54/54**, ctest 580/580 + protocol 18/18, render reused (A2's pipeline changes
+  keep the defaults; the render package sha256 matches). Evidence: `evaluation/runs/premerge_aws/20261023T071522Z-cpux86-42ce81/`,
+  about $0.04. An earlier attempt (`20261023T070241Z`) died with the workstation and its instance was terminated by
+  the host trap, without results.
+- **3.2 sim integration** (`feat/3.2-sim`, D171, design SIMCOLLAB_3.2): built, not yet run.
+  - Two-pass causal replay over CommsNode.
+  - Inter-agent exchange with ALIKED+LightGlue.
+  - The robust broker solve (D76), wired at last.
+  - Datagram size on the link seam.
+  - fp16 global descriptors.
+  - Per-message byte predictions plus a resync overhead row.
+  - The AWS sweep and `collab_gate.py`.
+- **A2:** 5.6 on Hilti (D141, which replaces M's D89) is measured and **negative**, 0/100 (D144, FC-5.6-1).
+  `feat/ph5-dve` 3da96eb has main merged in and is queued for an AWS pre-merge.
+
+## 2026-10-23 — Phase 5 (A2): lighting rows measured; Hilti 5.6 measured: 0/100, diagnosed
+
+- **Lighting rows (D142, AWS session 5, `380c900`):** dark + lamp is ×6 worse in ATE than dark + fixed light on
+  the same path (15.2 vs 2.5 mm; lit 3 mm), ×2.8 keyframes. Brightness and coverage were not matched, so the gap is
+  not yet attributable to the lamp's motion (D145). Sensor noise adds 2–3 mm. Dust rows and the Stage 3 row
+  are next.
+- **AWS:** five CPU sessions, ≈ $0.07 total (two failed launches, then dangling `.cache` symlink, then missing
+  ListBucket -- each fixed in `ph5_aws.sh`). GPU renders $0.1241.
+- **Hilti 5.6 (D141/D143):** export + side files (exposure, LiDAR-measured GCPs). Equidistant cameras through
+  `cv::fisheye`, trigger pairing, a scorer that places each GCP through T_W_I T_I_L p_L, and a runner path without
+  dense GT. Matrix fixed before measurement (`configs/benchmark/hilti_5.6.yaml`); the 3 rows ran locally (D144).
+- **Real auto-exposure:** OAK-D exposure pinned at 30 ms, gain alone tracks the dark: 5.3's actuator order.
+- **5.6 result (D144): 0/100 on all three rows** (sim-tuned, EuRoC-tuned, EuRoC + radiometric). The estimate is
+  wrong (rigid-invariant GCP distances checked), not the scoring. Keyframes 200–300 per 300 frames whenever the
+  robot moves; 14–22 % lost, all in windows where it turns with a dark far field. Static ring edges were measured and rejected as
+  the mechanism. Stereo forward-backward rejections dominate, but MH_04 is lower still: cause open (timeboxed). No re-tuning after the failure; fix candidates go through preflight first.
+
+## 2026-10-23 — Phase 5 (A2): GPU dark-render session running; 5.5 worlds + sweep rig; TUM fr1 target sourced
+
+- **GPU session (D137), maintainer-approved:** g4dn.xlarge spot at $0.0858/h, instance `i-09d36054dbc53dab8`, cap
+  150 min. It renders `ci_tiny_dark` (lamp) and `ci_tiny_dark_fixed` (fixed lights). The NVIDIA EGL smoke runs first.
+- **5.5 (D138):** `confined_v1` (20/20 accepted) and one-pass baseline-sweep cameras; v1 output byte-identical.
+- **TUM (D86's condition):** the fr1/xyz target is sourced from Kerl et al. IROS 2013 Table III: 0.014, was 0.017
+  [UNVERIFIED]. On `feat/2.6-tum` at `90d5fc8`; verdict unchanged.
+- **TUM fr1 (D136):** the scoring-side diagnosis rules out a GT clock offset, a depth scale bias and rotation drift. The
+  RGB/depth-offset rerun follows the 2.6 merge.
+
+## 2026-10-22 — Phase 5 (A2): render probe, lamp calibration, Stage 3, controller, dust options (D130–D135)
+
+- **Probe (SMOKE §4u):**
+  - the sim RGB is sRGB-encoded (D130: D gets an opt-in decode);
+  - the lamp falls off as 1/(c′ + r²), and the shipped rig was nearly flat;
+  - SDF spot angles are full-cone;
+  - the lobe is flat-topped;
+  - shadows work on llvmpipe (D131).
+- **Built:**
+  - `ci_tiny_dark` + `rig_stereo_v2` (v1 worldgen byte-identical);
+  - lamp calibration executed (D133);
+  - Stage 3 albedo proxy (D134);
+  - exposure + lamp co-controller, Stage 4, replay `lamp_power` (D132);
+  - L9 dust options (D135).
+- **Tests:** test_numerical Degradation 25/25 (golden digest unchanged), test_unit Config/Degrad 20/20, test_opencv
+  ExposureControl/Falloff/DegradationSrgb 11/11.
+- **Not done:**
+  - runner wiring: waits on the 2.6/L2 merge, which touches the same seams;
+  - dark renders, which need GPU approval;
+  - 5.5;
+  - 5.6, which is blocked: OIVIO is offline.
+- **Caveat (D130):** the 2.2 radiometric rows ran D on sRGB-encoded sim values. EuRoC's encoding (the 3.1 rows) is
+  `[UNVERIFIED]`.
+
+## 2026-10-22 — Phase 5 (DVE) opens on `feat/ph5-dve`: session A2 claims D130–D149
+
+- **Decision IDs D130–D149 are claimed by session A2** for Phase 5 (5.1–5.6 and the exit gate), the 3.1 sim dark
+  retrieval row and the TUM fr1 time-offset follow-up. D100–D109 stay A2's for 2.6/L2/3.3 (D100–D102 used).
+- Branch `feat/ph5-dve` from `main` (f8c7030). Design preflight first (literature, OpenCV-native check, review).
 
 ## 2026-10-22 — 2.5 close-out (session B): certificate (D74), aliasing ramp breakpoint (D75), joint-graph entry (D76)
 
@@ -139,6 +279,25 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 - **Tests:** `test_opencv` targeted (2.1 reference, wrapper and contract suites), all pass, with
   `ARIADNE_REQUIRE_MODELS=1`. No premerge was run: phase 1 runs ORB, and none of these wrappers is on its path.
 
+## 2026-10-22 — L2: seeded sim IMU noise operator; sim_v2 runs the full inertial layer (D101)
+
+- `ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml`: ADIS16448 densities, Philox keyed per (seed, sample),
+  bit-identical on prefix replay. Without the flag the sim exposes no IMU, so default runs and the gate are unchanged.
+- `sim_v2` is now `imu.mode full`; the old `sim_v2` is `sim_v2_vo`. ci_tiny agent 0, 1000 frames: initialised at
+  5.35 s; ATE 3.06 mm vs 2.76 mm visual-only; 0 lost.
+- Decision IDs D100–D109 are claimed by this session (the claim is on `feat/2.6-tum`).
+
+## 2026-10-22 — 3.3 comms broker node: RFComms link model + wall ray-cast + partitions; L8 conditional (D102)
+
+- `CommsNode` owns the link stack, the `Network` and the one ledger (Endpoints-only rule tested). `RfLinkModel`
+  transcribes RFComms (gz-sim8) and adds per-wall attenuation from the GT wall faces.
+- ci_tiny probe: gz-default radio loss-free (null); `collapsed_v1` 1.6 / 17 / 49 % loss at 0 / 1 / 2 walls; the
+  partition scenario is down for exactly the scripted 25 s.
+- **L8:** 1500 B holds under RFComms as modelled. Under bit-wise PER and slow fading it loses 3–10× goodput at the
+  edge; that is a recommendation to the 3.2 owner.
+- **Partial:** no protocol traffic over it until 3.2's sim integration. Decision IDs D100–D109 are claimed by this
+  session (the claim is on `feat/2.6-tum`).
+
 ## 2026-10-21 — Combined EuRoC run done (D85); completion register created
 
 - **2.4 full VIO + 2.1 re-association:** average 0.120 (0.121 for 2.4 alone), 9/11 in class. V1_03 and V2_02 are
@@ -152,6 +311,20 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
   - L2, the sim IMU noise operator;
   - L3, the sim-rig retrieval and hard-pair exports;
   - TUM.
+
+## 2026-10-22 — 2.6 TUM RGB-D: loader, depth path into StereoVo, regression pinned (D100)
+
+- `ariadne_tum_vo` runs the stereo pipeline on TUM, with sensor depth fed through a virtual rig (σ_Z = 1.425e-3·Z²,
+  Khoshelham & Elberink eq. 7). EuRoC output is byte-identical (MH_01, 300 frames).
+- **Pinned ATE (m):** fr1/xyz 0.0496, fr1/desk 0.0581, fr2/xyz 0.0139. evo agrees to 1e-6 m. **fr1 is not in the
+  published RGB-D class**; fr2/xyz is. Causes are unattributed (D100 lists the candidates).
+- Tests: `test_opencv` Tum* 7/7, `test_unit` *Config* 20/20.
+
+## 2026-10-21 — Session claims D100–D109 for 2.6 TUM, L2 (sim IMU noise operator) and 3.3 (comms broker node)
+
+- Decision IDs **D100–D109** are claimed by this session: D100 2.6 TUM, D101 L2, D102 3.3. Renumbered 2026-10-22
+  from D90–D99, which collided with A1's D90–D93. D74 stays 2.5's; D80–D89 stay the 3.2 session's.
+- Branches from `main` (aa7dce2): `feat/2.6-tum`, then one branch each for L2 and 3.3.
 
 ## 2026-10-21 — 2.5 closed for bookkeeping: implemented through D73 part 2c; two exit-gate items open
 
@@ -1249,3 +1422,22 @@ restoration ablations easier than reality. Neither blocks Phase 0.
 
 Arch §3's tree names `docs/ARCHITECTURE.md`; the real file is
 `docs/ARIADNE_IMPLEMENTATION_ARCHITECTURE.md`. Source of truth not renamed.
+
+## 2026-10-23 — main integrated (2.1, 2.5, 2.6, L2, 3.3 + B's SE-Sync evidence); pre-merge PASS on AWS (M)
+
+- **Merges:** feat/2.1-perception, feat/2.5-robust-backend, feat/2.6-tum, feat/l2-sim-imu-noise, feat/3.3-comms, plus
+  B's SE-Sync large-graph evidence (cherry-picked: sphere/torus/cubicle/grid3D certified, rim not).
+- **Pre-merge (D49) on AWS:** `infra/eval/premerge_aws_launch.sh stage|run|teardown`, run `20261022T223316Z-cpux86-0fc2f6`, commit a26bb6b.
+  - **VERDICT PASS:** 54/54 gate checks, ctest 539/539; every determinism check matched, including Phase 1's
+    `bytes.json`.
+  - Evidence: `evaluation/runs/premerge_aws/20261022T223316Z-cpux86-0fc2f6/` (summaries; renders and raw traces not committed).
+- **Found by the AWS runs and fixed:**
+  - phase1.sh never passed the D90 sim-rig exports, so A1's L3 tests failed under `ARIADNE_REQUIRE_MODELS=1`
+    (a26bb6b);
+  - the runner role reads `runs/*` only, so staging and the persistent recording moved under `runs/` (maintainer
+    kept the role's datasets/ exclusion);
+  - git safe.directory (no HOME in user-data);
+  - the gate now runs as uid 1000.
+- **Cost of the five launches:** about $0.08, compute only.
+- **Persistent:** the Phase 1 recording at `runs/_datasets/phase1_sim_record/…` (12.6 GB). Uploaded once.
+- **Not done:** the Phase 2 full exit-gate run (fresh GPU render).

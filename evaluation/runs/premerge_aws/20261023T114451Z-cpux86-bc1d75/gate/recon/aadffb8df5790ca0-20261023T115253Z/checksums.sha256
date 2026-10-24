@@ -1,0 +1,6 @@
+# sha256 of the large outputs kept in build/phase1_gate/aadffb8df5790ca0-20261023T114817Z (not committed)
+ffa75fd58a96e932686ce06e25f7a47195ecd43e3751afbf798e1be7a3bb6637  build/phase1_gate/aadffb8df5790ca0-20261023T114817Z/spool/aadffb8df5790ca0-20261023T115253Z/spool.yaml
+44f1ce2930fc1e67018901bf01057e8f224cda32017cc9fa8d5bc2ef84834e2b  build/phase1_gate/aadffb8df5790ca0-20261023T114817Z/recon/fused_cloud_O0.ply
+f3d3161eaced142a139ffd686a5b8a5e40ba450864f6bbcdd0b6b645ed940d0a  build/phase1_gate/aadffb8df5790ca0-20261023T114817Z/recon/package/render_package.npz
+2cffa031b1ac1b5c260475356397645c7a6fc8cf4e9ca120f3722a8e535d25e5  build/phase1_gate/aadffb8df5790ca0-20261023T114817Z/render/renders.npz
+a86d8efebb58b23638c13a150a31803c3a02341bfaeb5a1e9ecf7d1231db5b35  spool_files_except_yaml (sha256 of the sorted per-file sha256 list)

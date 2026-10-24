@@ -1,0 +1,25 @@
+# ariadne_sim_vo results. Generated; do not hand-edit.
+sequence: 7e515aabfa82486d-agent0
+frames: 1000
+dense_gt: true
+associated_poses: 1000  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 7.35476
+ate_se3: {rmse_m: 0.0190554, mean_m: 0.016197, max_m: 0.0376202, rotation_rmse_rad: 0.0145836}
+ate_rmse_percent_of_path: 0.25909
+sim3_scale: 1.00481  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00740712, rotation_rmse_rad: 0.00449436}
+vo: {lost_frames: 0, keyframes: 249, ba_runs: 248, ba_mean_cost_ratio: 0.878705, landmarks_alive_at_end: 528, graph_edges: 239, graph_version: 2684}
+stereo_match_valid_fraction: 0.755454
+stereo_match_by_third: {top: {valid: 13064, lk_lost: 1321, fb: 1934, off_row: 568, nonpositive: 28, disparity_mean_px: 48.5452, disparity_max_px: 131.917}, middle: {valid: 15909, lk_lost: 1410, fb: 3170, off_row: 1594, nonpositive: 470, disparity_mean_px: 48.6451, disparity_max_px: 131.318}, bottom: {valid: 14137, lk_lost: 1331, fb: 1534, off_row: 588, nonpositive: 7, disparity_mean_px: 52.3244, disparity_max_px: 127.548}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 15286, created: 8062, no_stereo: 7196, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 28, uncertain: 0}
+timing_ms: {track_mean: 18.1954, vo_track_mean: 5.72241, keyframe_mean: 135.513, opencv_threads: 4}
+stereo_row_refinement: {enabled: true, applied: true, a_px: 0.0642517, b: -0.000158131, c: 8.55081e-05, matches: 147, mad_px: 0.29354, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.0337672, b: -1.16278e-05, c: -1.91051e-05, max_abs_dy_px: 0.0337672, matches: 171}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 2, epipolar_check_skipped_frames: 0}
+keyframe_refined: {ate_rmse_m: 0.0189473, ate_rotation_rmse_rad: 0.0148022, rpe_1s_translation_rmse_m: 0.00626404}  # ORB-SLAM protocol: frames re-composed on final keyframe poses
+ba_window: {not_found: 82, observations: 781156, invalid_at_entry: 0, chi2_failed: 5507, chi2_failed_fraction: 0.00704981, keyframe_observations_rejected: 3447, culled: 7456, exit_edges: 239, keyframes_held: 0, keyframes_held_at_solution: 0, landmarks_ill_conditioned: 2980, landmarks_ill_conditioned_at_solution: 51, marginal_degenerate: 0, inlier_sigma_px: 0.469339}
+lost: {motion: bridge, reanchor: every_frame, segments: 0, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 0, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}
+radiometric: {mode: flat_only, decision: flat_only, reason: "", denoiser: gaussian, inverse: exact, ms_per_image: 0.713982, images: 2000,
+  exposure_norm: "inert: no source carries photometric state (t, g); the §6.5 controller is Phase 5",
+  left: {flat_field: "calibrated: 16 D frames of flat 200, seed 2261050810793054239", k_min: 0.703078, fit_valid: false, why: "", a: 0, b: 0, bins: 0, sigma_z: 0, median_level: 0, snr_at_median: 0, passes_gate: false},
+  right: {flat_field: "calibrated: 16 D frames of flat 200, seed 11677331908753660168", k_min: 0.708409, fit_valid: false, why: "", a: 0, b: 0, bins: 0, sigma_z: 0, median_level: 0, snr_at_median: 0, passes_gate: false}}

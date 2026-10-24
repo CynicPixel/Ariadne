@@ -54,8 +54,13 @@ inline RelPoseEstimate EstimateRelPose(const std::vector<cv::Point2f>& pa_raw, c
     const cv::Matx33d K = CameraMatrix(cam);
     const std::vector<double> D(cam.dist.begin(), cam.dist.end());
     std::vector<cv::Point2f> pa, pb;
-    cv::undistortPoints(pa_raw, pa, K, D, cv::noArray(), K);
-    cv::undistortPoints(pb_raw, pb, K, D, cv::noArray(), K);
+    if (cam.model == perception::DistortionModel::kEquidistant) {
+        cv::fisheye::undistortPoints(pa_raw, pa, K, D, cv::noArray(), K);
+        cv::fisheye::undistortPoints(pb_raw, pb, K, D, cv::noArray(), K);
+    } else {
+        cv::undistortPoints(pa_raw, pa, K, D, cv::noArray(), K);
+        cv::undistortPoints(pb_raw, pb, K, D, cv::noArray(), K);
+    }
     cv::Mat mask;
     cv::Mat E = cv::findEssentialMat(pa, pb, cv::Mat(K), cv::RANSAC, 0.999, 1.0, 1000, mask);
     if (E.empty() || E.rows < 3) return r;
