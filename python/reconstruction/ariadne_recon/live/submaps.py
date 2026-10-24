@@ -87,3 +87,35 @@ class SubmapManager:
                 sm.pose_version = pose_version
                 moved.append(sm.sid)
         return moved
+
+
+class FrameStore:
+    """The trainer's per-keyframe training data for the ACTIVE submaps, keyed by (submap id, keyframe id).
+
+    Every agent numbers its own keyframes, so a bare keyframe id collides across agents. A submap belongs to one
+    agent, so (sid, kf) is unique. Keying by kf alone crashed the 626abe g4dn run (KeyError 999): one agent's submap
+    closing deleted another agent's frame. Before that, colliding ids silently overwrote training images across
+    agents. Pure Python: the values are whatever the trainer stores (GPU tensors there, anything in tests).
+    """
+
+    def __init__(self) -> None:
+        self._d: dict[tuple[int, int], object] = {}
+
+    def put(self, sid: int, kf: int, data) -> None:
+        self._d[(sid, kf)] = data
+
+    def get(self, sid: int, kf: int):
+        return self._d[(sid, kf)]
+
+    def drop_submap(self, sid: int) -> int:
+        """A closed submap's frames are released (bounded memory); returns how many."""
+        keys = [k for k in self._d if k[0] == sid]
+        for k in keys:
+            del self._d[k]
+        return len(keys)
+
+    def __len__(self) -> int:
+        return len(self._d)
+
+    def __contains__(self, key: tuple[int, int]) -> bool:
+        return key in self._d
