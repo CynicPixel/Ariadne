@@ -10,7 +10,8 @@
 #   t2     OPENCV_FOR_THREADS_NUM=2
 # with infra/eval/perf_sampler.sh beside each (mpstat, pidstat -t, PSI, docker stats, cgroup cpu.stat, perf record -g)
 # and a per-symbol perf report. Runs as root on the instance (spinup.sh, cpux86), from this repo's snapshot:
-#   RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=<s3 payload.tar.gz> BUCKET=<s3://bucket> bash infra/eval/perf_replay_aws.sh
+#   RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=<s3 payload.tar.gz> BUCKET=<s3://bucket> [VARIANTS="asis t5 t2"] \
+#     bash infra/eval/perf_replay_aws.sh
 # Results ($ARIADNE_RESULTS): steps.txt, run_manifest.yaml, replay_<v>/{wall_s.txt, results.yaml, timing.jsonl,
 #   agent<k>/{results.yaml, estimate_body.tum}, sampler/...}, b_replay1/ (B's own replay outputs, for comparison)
 # ---------------------------------------------------------------------------
@@ -78,7 +79,17 @@ grep -q '^chooser: *llm' "$REP/$CFG" && EXTRA+=(--decisions "$RUNDIR/$LIVE_DIR/t
 [ -f "$REP/$RUNDIR/shadow_map_config.yaml" ] && EXTRA+=(--shadow-map-config "$RUNDIR/shadow_map_config.yaml")
 printf '%s\n' "${EXTRA[@]}" > "$R/replay_extra_args.txt"
 
-for v in asis t5 t2; do
+# Symbols for the host-side perf report: the replay's binaries live in the container (/work = B's snapshot, OpenCV
+# under /opt/opencv5 in the core image), gone when it exits. /work -> $REP and the image's /opt/opencv5 copied out
+# make the same paths resolve on the host (job 44b's first report came back empty: the call-graph report over 346k
+# samples with unresolvable paths ran into its timeout).
+[ -e /work ] || ln -s "$REP" /work
+if [ ! -d /opt/opencv5 ]; then
+  cid=$(docker create "$CORE_REF") && docker cp "$cid:/opt/opencv5" /opt/opencv5 > /dev/null; docker rm "$cid" > /dev/null
+fi
+export SAMPLER_PERF_ARGS="${SAMPLER_PERF_ARGS:--a -F 199}" SAMPLER_NO_REPORT=1
+kv sampler_perf_args "\"$SAMPLER_PERF_ARGS\""
+for v in ${VARIANTS:-asis t5 t2}; do
   step "R replay $v"
   env=()
   [ "$v" = t5 ] && env=(-e OPENCV_FOR_THREADS_NUM=5)
@@ -95,9 +106,13 @@ for v in asis t5 t2; do
   awk -v a="$t" -v b="$(date +%s.%N)" -v rc="$rc" 'BEGIN { printf "%.1f rc=%s\n", b - a, rc }' > "$O/wall_s.txt"
   kill -TERM "$SP"; wait "$SP" 2>/dev/null
   if [ -s "$O/sampler/perf.data" ]; then
-    timeout 600 perf report -i "$O/sampler/perf.data" --stdio --no-children --sort comm,dso,sym --percent-limit 0.3 \
-      2>/dev/null | head -400 > "$O/sampler/perf_report_sym.txt"
-    rm -f "$O/sampler/perf.data"          # hundreds of MB; the reports are the evidence
+    for sort in dso,sym pid,dso,sym; do   # whole box; per thread (perf's `pid` key is the thread: tid:comm)
+      timeout 900 perf report -i "$O/sampler/perf.data" --stdio --no-children -g none --sort "$sort" \
+        --percent-limit 0.2 2> "$O/sampler/perf_report_${sort//,/_}.err" | head -600 > "$O/sampler/perf_report_${sort//,/_}.txt"
+    done
+    timeout 300 perf report -i "$O/sampler/perf.data" --stdio --no-children -g none --sort comm,dso \
+      2>/dev/null | head -200 > "$O/sampler/perf_report.txt"
+    ls -la "$O/sampler/perf.data" > "$O/sampler/perf_data_size.txt"   # kept: uploaded with the results
   fi
   d=$(ls -d "$REP/$RUNDIR/perf_$v"/*/ | head -1)
   cp "$d/results.yaml" "$d/timing.jsonl" "$d/manifest.yaml" "$O/" 2>/dev/null

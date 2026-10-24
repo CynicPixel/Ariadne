@@ -1,0 +1,4 @@
+2026-10-24T02:54:32Z start on ip-172-31-2-251, 16 vCPU, kernel 7.0.0-1014-aws
+2026-10-24T02:54:33Z perf record -a -g -F 99 running
+2026-10-24T03:00:59Z stop
+2026-10-24T03:01:03Z done

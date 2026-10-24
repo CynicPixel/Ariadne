@@ -51,7 +51,8 @@ run() {   # $1 = cpux86 | cpuarm, $2 = stages
 }
 replay() {   # needs no staging: every input is B's run's own S3 objects (snapshot, payload, run.tar.gz) + its ECR image
   exec infra/scripts/spinup.sh run --profile cpux86 --max-minutes "${MAXMIN:-70}" -- \
-    "RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=$BUCKET/runs/live-payload-20261023T200347Z/payload.tar.gz BUCKET=$BUCKET bash infra/eval/perf_replay_aws.sh"
+    "RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=$BUCKET/runs/live-payload-20261023T200347Z/payload.tar.gz BUCKET=$BUCKET \
+     VARIANTS='${VARIANTS:-asis t5 t2}' bash infra/eval/perf_replay_aws.sh"
 }
 teardown() { "$AWS" aws s3 rm --recursive "$STAGE/" --only-show-errors; log "teardown done"; }
 "${1:?stage | run PROFILE [STAGES] | replay | teardown}" "${@:2}"
