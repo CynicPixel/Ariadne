@@ -54,6 +54,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -1176,8 +1177,17 @@ int main(int argc, char** argv) {
                     "/tmp/ariadne-collab-" + std::to_string(::getpid()) + "-" + std::to_string(k2) + ".sock";
                 ma->collab_socks.push_back(sock);
                 const std::string ka2 = std::to_string(k2);
+                // collab60d lesson: a worker's death reason must land on disk (live AND replay), not in a lost
+                // pipe - its stderr goes to the run dir. Opened in the parent; only the dup2 sits between fork
+                // and exec (async-signal-safe).
+                const int werr = ::open((run_dir / ("collab_worker_" + ka2 + ".err")).c_str(),
+                                        O_CREAT | O_WRONLY | O_APPEND, 0644);
                 const pid_t pid = ::fork();
-                if (pid == 0) {   // child: nothing between fork and exec
+                if (pid == 0) {   // child: only the stderr dup between fork and exec
+                    if (werr >= 0) {
+                        ::dup2(werr, 2);
+                        ::close(werr);
+                    }
                     const char* cas[] = {cbin.c_str(),           "--socket",         sock.c_str(),
                                          "--agent",              ka2.c_str(),        "--place-onnx",
                                          lc.collab.place_onnx.c_str(),               "--place-size",
@@ -1189,6 +1199,7 @@ int main(int argc, char** argv) {
                     ::execv(cas[0], const_cast<char**>(cas));
                     std::_Exit(127);
                 }
+                if (werr >= 0) ::close(werr);
                 ma->collab_pids.push_back(pid);
             }
             for (int k2 = 0; k2 < NA; ++k2)
@@ -1378,6 +1389,12 @@ int main(int argc, char** argv) {
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
         std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
+        // A mission-loop failure must be LOUD and must not unwind past the joinable lane threads (collab60d:
+        // a replay arrival-wait runtime_error reached main, the std::thread members' dtors called terminate
+        // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
+        // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
+        std::exception_ptr mission_err;
+        try {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
@@ -2282,8 +2299,16 @@ int main(int argc, char** argv) {
                 paced_to = T + substep_ns;
             }
         }
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "ariadne_live: mission loop failed: %s\n", e.what());
+            mission_err = std::current_exception();
+        } catch (...) {
+            std::fprintf(stderr, "ariadne_live: mission loop failed: unknown exception\n");
+            mission_err = std::current_exception();
+        }
+        if (mission_err && is_live) ::shutdown(fd, SHUT_RDWR);   // stop the reader: the lanes drain, the joins return
         // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
-        if (is_live && !lc.lockstep) {
+        if (is_live && !lc.lockstep && !mission_err) {
             for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
                 hold.header.stamp.sec = int32_t(end_ns / 1000000000);
@@ -2319,6 +2344,7 @@ int main(int argc, char** argv) {
         if (is_live) ::close(fd);
 
         std::ofstream res(run_dir / "results.yaml");
+        if (mission_err) res << "mission_error: true   # the loop failed; see stderr - artifacts above the failure are valid\n";
         res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
             << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
@@ -2390,6 +2416,7 @@ int main(int argc, char** argv) {
         std::printf("ariadne_live[%s]: %d replans, %d decisions, consumed %llu messages (digest %016llx) -> %s\n",
                     is_live ? "live" : "replay", replans, commands_sent, (unsigned long long)rec.count(),
                     (unsigned long long)rec.digest(), run_dir.c_str());
+        if (mission_err) return 4;   // the teardown above ran and the artifacts are closed; the run still FAILED
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_live: %s\n", e.what());
