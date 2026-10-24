@@ -10,7 +10,8 @@ processed/:
                         consumed digest, PSI cpu "some" mean of avg10 (% of wall time runnable tasks waited for a core)
   replay_agents.csv     run, variant, agent: frames, keyframes, lane track_mean_ms (results.yaml: the per-agent lane, ingest
                         + the worker round trip), the worker's timing_ms (track_mean, keyframe_mean, opencv_threads), ATE
-                        rmse, and whether estimate_body.tum is byte-identical to the same run's asis variant
+                        rmse, whether estimate_body.tum is byte-identical to the same run's asis variant, and its sha256
+                        prefix (identity ACROSS runs, e.g. a code change against a reference replay)
   replay_perf_threads.csv  (runs with perf_report_pid_dso_sym.txt) per thread: its listed symbols' share of all samples, and
                         per symbol ms per frame = share x samples / 199 Hz / frames per agent
 """
@@ -82,7 +83,7 @@ def main() -> int:
                     agents.append([run.name, var, k, f.get("frames"), f.get("keyframes"), f.get("track_mean_ms"),
                                    tm.get("track_mean"), tm.get("keyframe_mean"), tm.get("opencv_threads"),
                                    flow(yget(ar, "ate_se3")).get("rmse_m", "") if yget(ar, "ate_se3") else "",
-                                   "" if var == "asis" or k not in asis else int(h == asis[k])])
+                                   "" if var == "asis" or k not in asis else int(h == asis[k]), h[:16]])
             rep = v / "sampler" / "perf_report_pid_dso_sym.txt"
             log = v / "sampler" / "perf_record.log"
             if rep.exists() and log.exists():
@@ -99,7 +100,7 @@ def main() -> int:
                                     "psi_cpu_some_avg10_mean_pct"], runs)
     put(a.out / "replay_agents.csv", ["run", "variant", "agent", "frames", "keyframes", "lane_track_mean_ms",
                                       "worker_track_mean_ms", "worker_keyframe_mean_ms", "opencv_threads", "ate_rmse_m",
-                                      "trajectory_identical_to_asis"], agents)
+                                      "trajectory_identical_to_asis", "estimate_sha256_16"], agents)
     put(a.out / "replay_perf_threads.csv", ["run", "variant", "tid", "comm", "dso", "symbol", "share_pct",
                                             "ms_per_frame"], perf)
     print(f"replay: {len(runs)} run-variants, {len(agents)} agent rows, {len(perf)} perf rows")

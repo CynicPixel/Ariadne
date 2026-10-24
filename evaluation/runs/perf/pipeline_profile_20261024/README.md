@@ -15,9 +15,10 @@ ingest and live runtime are B's, collab is M's.
 | 44b | `20261024T024346Z-cpux86-29bfe2` | c7i.4xlarge | replay of B's ma200 `70a514` at OpenCV pools 16 / 5 / 2 | $0.0517 |
 | 45 | `20261024T034527Z-cpux86-833096` | c7i.4xlarge | the same replay with `perf -a -F 199` (per-thread attribution) | $0.0225 |
 | 46 | `20261024T051058Z-cpux86-f94953` | c7i.4xlarge | the same inputs with B's lens-off build (D227; payload `live-payload-20261024T043040Z`, snapshot of run `64cb9c`), pools 16 / 5 | $0.0274 |
+| 15 (D229) | `20261024T072608Z-cpux86-4d412c` | c7i.4xlarge | B's D229 lane pipelining acceptance (payload `live-payload-20261024T065850Z`, snapshot `afbd645`): pipelined `t5` vs kill-switch `t5_nopipe` (`ARIADNE_LANE_PIPELINE=0`) on ONE instance, same inputs. A first attempt `…748233` was spot-reclaimed at 5 min ($0.0115) | $0.0270 |
 | 70 | `20261024T051236Z-cpux86-d80b45` | c7i.4xlarge | singles at 1/8 threads incl. the l2conv graph, c3 × 4/5, ORT 1.24.4, knobs on the 120 pairs, upstream adaptive LightGlue | $0.1168 |
 
-**Total: $0.5885.** Raw per-run output is in `aws/<run>/` (DNN jobs) and `aws_replay/<run>/` (replays), with each run's
+**Total: $0.6270** (the profile itself $0.5885, plus the D229 acceptance $0.0385). Raw per-run output is in `aws/<run>/` (DNN jobs) and `aws_replay/<run>/` (replays), with each run's
 `run_manifest.yaml`, `steps.txt` and `ledger_row.csv`. 45's 40 MB `perf.data` stays in S3 under the run's output
 prefix.
 
@@ -44,6 +45,17 @@ prefix.
    - Lens off (46, B's D227): lane 48–52 ms; RTF 0.514 → **0.795 (16 threads) / 0.836 (5 threads)** on the same
      200 s inputs. Runtime wall 389.0 → 251.4 / 239.2 s.
    - Source: `processed/replay_{runs,agents,perf_threads}.csv`.
+1b. **Lane pipelining (B's D229) does not change RTF with the lens off** (job 15, one instance):
+   - Pipelined RTF 0.833 vs 0.839 with the kill switch, i.e. −0.7 %; both ≈ job 46's 0.836.
+   - Lane track_mean 45–50 vs 44–48 ms/frame.
+   - Trajectories of both arms are byte-identical to job 46's lens-off reference: D229's determinism claim holds
+     on cloud hardware.
+   - Why: D229 overlaps the worker's ingest (decode, lens, D, gray). With the lens off, the ~50 ms that job 45
+     attributed to `Feed` is gone, and the lane is now tracking plus keyframe work.
+   - Per agent, track + barrier wait ≈ 52 ms/frame: the slowest lane is busy ~209 s of the 240 s wall.
+   - In 30 % of 3-agent steps one agent exceeds 80 ms (keyframes, ~126 ms each).
+   - RTF ≥ 1 needs less per-frame tracking/keyframe compute on the lane, not more ingest overlap. [INFERENCE from
+     these measurements; the barrier coupling is not modelled.]
 2. **The estimator is thread-count-invariant.** Trajectories are bit-identical at pools of 16 / 5 / 2 (44b) and
    16 / 5 (46) (D232).
 3. **Pool size barely moves wall time** (D232 correction): 5 vs 16 threads is −1.6 % lens-on and −4.9 % lens-off.

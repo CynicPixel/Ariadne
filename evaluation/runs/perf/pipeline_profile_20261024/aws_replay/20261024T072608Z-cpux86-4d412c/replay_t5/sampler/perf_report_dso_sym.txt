@@ -1,0 +1,74 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 463K of event 'cpu/cycles/P'
+# Event count (approx.): 8113921913564
+#
+# Overhead  Shared Object                 Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+# ........  ............................  .......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+     9.74%  libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     7.45%  ariadne_live                  [.] ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const
+     6.21%  libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     6.12%  libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     5.71%  libopencv_features.so.5.0.0   [.] cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigned char*, int*, int&)
+     4.77%  libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     4.63%  libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     3.29%  ariadne_live                  [.] ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage const&)
+     3.24%  ariadne_live                  [.] ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)
+     3.08%  libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     2.84%  ariadne_live                  [.] ZSTD_decompressSequences_bmi2.constprop.0
+     2.77%  libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+     2.33%  libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const
+     1.71%  libc.so.6                     [.] 0x00000000001a1d7a
+     1.18%  ariadne_live                  [.] ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const
+     1.17%  libopencv_features.so.5.0.0   [.] void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, int, bool)
+     1.05%  [kernel.kallsyms]             [k] entry_SYSCALL_64
+     1.02%  libopencv_imgproc.so.5.0.0    [.] cv::RemapInvoker::operator()(cv::Range const&) const
+     0.98%  libopencv_imgproc.so.5.0.0    [.] (anonymous namespace)::resize_bitExactInvoker<unsigned char, (anonymous namespace)::ufixedpoint16, 2>::operator()(cv::Range const&) const
+     0.88%  [kernel.kallsyms]             [k] pvclock_clocksource_read_nowd
+     0.79%  ariadne_live                  [.] ariadne::planning::ComputeTraversability(ariadne::planning::TsdfMap const&, ariadne::planning::Esdf const&, ariadne::planning::GridFrame const&, ariadne::planning::TravParams const&)
+     0.74%  libopencv_core.so.5.0.0       [.] cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)
+     0.71%  [kernel.kallsyms]             [k] _raw_spin_lock
+     0.67%  libopencv_core.so.5.0.0       [.] cv::WorkerThread::thread_body()
+     0.66%  libc.so.6                     [.] 0x00000000001a1852
+     0.65%  [kernel.kallsyms]             [k] arch_exit_to_user_mode_prepare.isra.0
+     0.65%  libopencv_core.so.5.0.0       [.] void cv::DFT<double>(cv::OcvDftOptions const&, cv::Complex<double> const*, cv::Complex<double>*)
+     0.63%  [kernel.kallsyms]             [k] __schedule
+     0.59%  [kernel.kallsyms]             [k] rep_movs_alternative
+     0.49%  libc.so.6                     [.] 0x000000000010e90b
+     0.43%  libopencv_core.so.5.0.0       [.] cv::Mat::addref()
+     0.43%  [kernel.kallsyms]             [k] pick_task_fair
+     0.42%  libopencv_imgproc.so.5.0.0    [.] cv::hal::opt_AVX2::(anonymous namespace)::CvtColorLoop_Invoker<cv::hal::opt_AVX2::(anonymous namespace)::RGB2Gray<unsigned char> >::operator()(cv::Range const&) const
+     0.39%  ariadne_live                  [.] ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, int, int)#1}::operator()(int, int, int) const
+     0.39%  [kernel.kallsyms]             [k] update_se
+     0.38%  libopencv_video.so.5.0.0      [.] cv::detail::opt_AVX512_SKX::ScharrDerivInvoker_SIMD(cv::Mat const&, cv::Mat&, cv::Range const&)
+     0.36%  [kernel.kallsyms]             [k] __calc_delta.constprop.0
+     0.33%  [kernel.kallsyms]             [k] update_curr
+     0.33%  [kernel.kallsyms]             [k] do_syscall_64
+     0.32%  libopencv_core.so.5.0.0       [.] cv::copyMakeBorder(cv::_InputArray const&, cv::_OutputArray const&, int, int, int, int, int, cv::Scalar_<double> const&)
+     0.31%  [kernel.kallsyms]             [k] intel_idle_xstate
+     0.28%  ariadne_live                  [.] ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<ariadne::planning::Idx3, std::allocator<ariadne::planning::Idx3> >)
+     0.28%  libopencv_geometry.so.5.0.0   [.] dlahqr_
+     0.28%  [kernel.kallsyms]             [k] seccomp_run_filters
+     0.27%  [kernel.kallsyms]             [k] __seccomp_filter
+     0.27%  libopencv_imgproc.so.5.0.0    [.] cv::ThresholdRunner::operator()(cv::Range const&) const
+     0.27%  libopencv_stereo.so.5.0.0     [.] void cv::filterSpecklesImpl<short>(cv::Mat&, int, int, int, cv::Mat&)
+     0.27%  ariadne_live                  [.] ariadne::planning::TsdfMap::Centre(ariadne::planning::Idx3 const&) const
+     0.25%  [kernel.kallsyms]             [k] kernel_init_pages
+     0.25%  [kernel.kallsyms]             [k] pick_eevdf
+     0.24%  ariadne_live                  [.] ariadne::planning::RaycastIg(ariadne::planning::TsdfMap const&, Eigen::Matrix<double, 3, 1, 0, 3, 1> const&, double, ariadne::planning::RigFrustum const&, std::unordered_set<long, std::hash<long>, std::equal_to<long>, std::allocator<long> > const*, ariadne::planning::Box3 const&, int, ariadne::planning::PeerKnown const*, ariadne::planning::GridFrame const*)
+     0.23%  [kernel.kallsyms]             [k] populate_seccomp_data
+     0.22%  libopencv_core.so.5.0.0       [.] cv::OcvDftImpl::colDft(unsigned char const*, unsigned long, unsigned char*, unsigned long, int, int, bool)
+     0.22%  libopencv_imgproc.so.5.0.0    [.] cv::PyrDownInvoker<cv::FixPtCast<unsigned char, 8> >::operator()(cv::Range const&) const
+     0.22%  [kernel.kallsyms]             [k] update_rq_clock
+     0.22%  libc.so.6                     [.] 0x00000000001a17ff
+     0.21%  libopencv_core.so.5.0.0       [.] cv::Mat::release()
+     0.21%  ariadne_live                  [.] std::pair<std::__detail::_Node_iterator<long, true, false>, bool> std::_Hashtable<long, long, std::allocator<long>, std::__detail::_Identity, std::equal_to<long>, std::hash<long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, true, true> >::_M_insert_unique<long, long, std::__detail::_AllocNode<std::allocator<std::__detail::_Hash_node<long, false> > > >(long&&, long&&, std::__detail::_AllocNode<std::allocator<std::__detail::_Hash_node<long, false> > > const&) [clone .isra.0]
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#
