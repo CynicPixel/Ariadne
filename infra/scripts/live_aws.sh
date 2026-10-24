@@ -168,7 +168,9 @@ aws s3 cp $uri - | tar xz -C /tmp
 cp -a /tmp/p/. .
 mkdir -p /tmp/runsrc
 aws s3 cp $tarball - | tar xz -C /tmp/runsrc
-inner=\$(find /tmp/runsrc -maxdepth 4 -name inputs.mcap | head -1 | xargs dirname)
+inner=\$(find /tmp/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap in the recording tarball" > \$R/spool_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
 mkdir -p build/rec626 build/spools build/vo_out
 ARIADNE_CORE_IMAGE=ariadne/core-dev:dev infra/scripts/live_to_rec.sh "\$inner" $scene build/rec626 > \$R/live_to_rec.log 2>&1
 for k in 0 1 2; do
