@@ -26,6 +26,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
+#include <chrono>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -163,7 +164,9 @@ public:
         }
         const auto v = snaps_read_.find(T);
         const auto h = history_.find(v == snaps_read_.end() ? 0 : v->second);
-        if (h == history_.end()) throw std::runtime_error("collab replay: snapshot version never published");
+        if (h == history_.end())
+            throw std::runtime_error("collab replay: snapshot version " + std::to_string(v->second) + " read at T " +
+                                     std::to_string(T) + " was never published (latest " + std::to_string(version_) + ")");
         return h->second;
     }
 
@@ -212,6 +215,8 @@ private:
         std::deque<std::pair<CollabStoreRecord, uint32_t>> records;        // arrived, not yet committed
         std::map<uint64_t, std::optional<CollabLocalFeatures>> replies;   // arrived, not yet committed
         bool closed = false;
+        std::string error;                                                // why the reader stopped, if it threw
+        std::chrono::steady_clock::time_point last_frame{};               // replay: the worker's last sign of life
     };
     using Commit = std::tuple<ac::AgentId, std::string, uint64_t>;   // agent, ckf|fresp, keyframe
 
@@ -281,8 +286,28 @@ private:
                     return std::any_of(peer.records.begin(), peer.records.end(), [&](const auto& x) { return x.first.id == kf; });
                 return peer.replies.count(kf) > 0;
             };
-            if (!in_cv_.wait_for(lk, std::chrono::duration<double>(p_.wait_timeout_s), has))
-                throw std::runtime_error("collab replay: a logged arrival never came");
+            // The timeout is worker SILENCE, not total wait: a replay worker may be busy far longer than live (its
+            // estimator is not paced by the sim, so keyframes queue ahead of #freq), and that is not an error.
+            const auto t0 = std::chrono::steady_clock::now();
+            const auto silent_for = [&] {
+                const auto last = std::max(t0, peers_[k].last_frame);
+                return std::chrono::duration<double>(std::chrono::steady_clock::now() - last).count();
+            };
+            while (!has()) {
+                Peer& peer = peers_[k];
+                const auto why = [&](const std::string& what) {
+                    std::ostringstream o;
+                    o << "collab replay: logged arrival agent " << k << " " << kind << " kf " << kf << " at t_ns "
+                      << t_ns << " " << what << " after "
+                      << std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count()
+                      << " s (worker holds " << peer.records.size() << " records, " << peer.replies.size()
+                      << " replies" << (peer.error.empty() ? "" : "; reader error: " + peer.error) << ")";
+                    return o.str();
+                };
+                if (peer.closed) throw std::runtime_error(why("never came: the worker closed its socket"));
+                if (silent_for() > p_.wait_timeout_s) throw std::runtime_error(why("never came: the worker went silent"));
+                in_cv_.wait_for(lk, std::chrono::seconds(1));
+            }
             Peer& peer = peers_[k];
             if (kind == "ckf") {
                 auto rit = std::find_if(peer.records.begin(), peer.records.end(), [&](const auto& x) { return x.first.id == kf; });
@@ -399,6 +424,7 @@ private:
             while (ReadFrame(fd, f)) {
                 std::lock_guard<std::mutex> lk(in_mu_);
                 Peer& peer = peers_.at(k);
+                peer.last_frame = std::chrono::steady_clock::now();   // #cwm included: a busy worker is alive
                 if (f.topic == "#ckf") {
                     uint32_t n = 0;
                     CollabStoreRecord r = DecodeRecord(f.payload, &n);
@@ -409,7 +435,9 @@ private:
                 }   // #cwm: D174's lockstep watermark, unused asynchronously
                 in_cv_.notify_all();
             }
-        } catch (const std::exception&) {
+        } catch (const std::exception& e) {
+            std::lock_guard<std::mutex> lk(in_mu_);
+            peers_.at(k).error = e.what();   // a decode or socket error must reach the replay's error message
         }
         std::lock_guard<std::mutex> lk(in_mu_);
         peers_.at(k).closed = true;
