@@ -1,11 +1,13 @@
 # The DEMO RECORDING config (P8, maintainer picks 2026-10-24): maze_demo_0 defaults, 90 s, lockstep evidence
-# mode (replay x2 must match; the video plays the recording at real speed, labelled recorded). live_collab_v1
+# mode (replay x2 must match; the video is cut from the recording, sped up as needed, labelled recorded). live_collab_v1
 # (multiagent + collab + D178 gate) with the LLM chooser on top. Lens off (D227), 5-thread workers (D228),
 # pipelining off (D229 negative) are the binary's defaults.
 # The live closed-loop runtime (design LIVE_RUNTIME_L1 D152-D154). The mapping / frontier / routing values are
 # configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
 name: live_demo_rec_v1
-end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
+end_s: 250.0                 # the mission's natural end (maintainer, 2026-10-24): longest mover script is agent 1's 245.6 s;
+                             # 250 = the next 5 s replan multiple. The video speeds it up in the edit; a real inter-agent
+                             # closure happens if the routes meet.
 lens: false                  # D227 (D41 amendment, maintainer-directed 2026-10-24): the read-time synthetic lens
                              # is OFF in the live runtime; frames stay the clean render, calibration reports D = 0.
 chooser: llm                 # the demo's supervisory chooser (AGENTIC_7); decisions recorded, replay never calls the model
