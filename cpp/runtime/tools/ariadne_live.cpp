@@ -2129,7 +2129,7 @@ int main(int argc, char** argv) {
             // Operator authority (§23): hold / goto override whatever was chosen; recorded like every directive.
             std::vector<const mis::Directive*> direct(static_cast<size_t>(NA), nullptr);
             for (const auto& d : active) {
-                if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < 2) direct[d.agent] = &d;
+                if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < NA) direct[d.agent] = &d;
             }
             for (int k = 0; k < NA; ++k) {
                 if (!P[k].active || !direct[k]) continue;
