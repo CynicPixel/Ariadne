@@ -38,6 +38,7 @@
 #include "runtime/replay/ros_cdr_writer.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
 
+#include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -45,6 +46,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <map>
@@ -415,6 +417,13 @@ core::SE3 GetSe3(const uint8_t*& q) {
 int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
                        const std::string& collab_socket, bool lens_on, tools::StereoVoArgs va, const std::string& out,
                        int argc, char** argv) {
+    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (A2: 16/5/2 bit-identical) and a
+    // 3-worker fleet at the default pool thrashes the box (cpu PSI 26 % -> 1.2 % at 5 on c7i.4xlarge, job 46).
+    {
+        int n = 5;
+        if (const char* e = std::getenv("ARIADNE_WORKER_CV_THREADS")) n = std::max(1, std::atoi(e));
+        cv::setNumThreads(n);
+    }
     const int fd = live::Connect(socket_path, std::chrono::seconds(60));
     // D174: the collab tee - serialization only, NO DNN in this process (cv::ALIKED output depends on the thread
     // count; here it would break the D168 digests). A dead collab worker quiets the tee, never the estimator.
