@@ -216,6 +216,10 @@ find "\$outer/replay1" -name trace.jsonl -exec sh -c 'tail -5 "\$1" > "\$2/repla
 cp "\$outer"/results.yaml \$R/live_results.yaml 2>/dev/null || true
 # 2. The live gate/alias verdict (D178 on: beat-6 numbers).
 python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
+# 2b. The film data pack (same schema as collab60d's), built where the data already is.
+python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_build.log 2>&1 || true
+tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz \$RUN/output/pack.tar.gz || true
+du -sh /tmp/pack >> \$R/pack_build.log 2>/dev/null || true
 # 3. Fresh staging and the gdb re-run of replay1 (root container: core-dev has no gdb, apt it in).
 src="\$outer"
 rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
