@@ -132,23 +132,22 @@ class WorldGen(CaptionedScene, ThreeDScene):
             radios.add(VGroup(poly, rr))
         chip = tag("illustrative").next_to(seed, DOWN, 0.15).align_to(seed, RIGHT)
         self.add_fixed_in_frame_mobjects(chip)
-        self.say("None of them has a map. GPS can't reach them in here, "
-                 "and their radios barely make it through the walls.",
-                 run_with=[AnimationGroup(*[FadeIn(r) for r in radios], lag_ratio=0.25, run_time=2.0), FadeIn(chip)])
-        self.say("Each one will only ever see a small piece of the building.",
-                 run_with=[VGroup(*[r[1] for r in radios]).animate(run_time=1.0).set_stroke(opacity=0)])
+        self.say("They have no map, no GPS, and their radios barely reach through the walls.",
+                 run_with=[AnimationGroup(*[FadeIn(r) for r in radios], lag_ratio=0.2, run_time=1.2), FadeIn(chip),
+                           VGroup(*[r[1] for r in radios]).animate(run_time=1.0, rate_func=lambda t: max(0, t * 2 - 1))
+                           .set_stroke(opacity=0)])
 
         # 3. they set off (scripted: the first metres of each robot's person-width route)
         moves, trails = [], VGroup()
         for e, b in zip(sc.starts, bots):
             route = sc.gt_routes_responder[e["agent"]]
             path = polyline(g, head_m(route, MOVE_M), AGENT[e["agent"]])
-            moves.append(MoveAlongPath(b, path, rate_func=linear, run_time=6.5))
+            moves.append(MoveAlongPath(b, path, rate_func=linear, run_time=4.5))
             trails.add(TracedPath(b.get_center, stroke_color=AGENT[e["agent"]], stroke_width=3, stroke_opacity=0.8))
         self.add(trails)
         hint = DashedVMobject(polyline(g, sc.gt_routes_responder[0], THREAD, width=4, opacity=0.8), num_dashes=70)
-        self.say("So the question is: can they put those pieces together, and find a safe way in, and out?",
-                 run_with=[*moves, Create(hint, run_time=3.0), VGroup(*[r[0] for r in radios]).animate(run_time=6.5).set_opacity(0.05)])
+        self.say("Can they put what each one sees together, and find a safe way in and out?",
+                 run_with=[*moves, Create(hint, run_time=2.5), VGroup(*[r[0] for r in radios]).animate(run_time=4.5).set_opacity(0.05)])
         self.clear_caption()
 
         # beat 2: the title over the dimmed maze

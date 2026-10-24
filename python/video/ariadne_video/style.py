@@ -24,7 +24,8 @@ TEXT = "#e5e9f0"
 AGENT = ["#58a6ff", "#f0883e", "#56d364"]  # agent 0, 1, 2: held for the whole film
 TARGET = "#ff5c5c"
 THREAD = "#e3b341"  # the Ariadne thread (egress route)
-TAG_COLOR = {"measured": "#56d364", "published": "#58a6ff", "design": "#d2a8ff", "illustrative": "#8b949e"}
+TAG_COLOR = {"measured": "#56d364", "published": "#58a6ff", "design": "#d2a8ff", "illustrative": "#8b949e",
+             "derived": "#e3b341"}  # derived: computed here from measured run data
 FONT = "Noto Sans"  # present in the pinned image and on the host
 
 config.background_color = BG
@@ -133,6 +134,29 @@ class CaptionedScene(Scene):
             if rest > 0.01:
                 self.wait(rest)
             self.cues.append({"start_s": round(t0, 3), "dur_s": round(self.renderer.time - t0, 3), "text": p})
+
+    def say_steps(self, text: str, steps: list):
+        """Narrate `text` as ONE cue while a sequence of plays runs under it: each step is a list of animations played
+        together (or a function returning them, built when the step runs: `.animate` targets are snapshots), or a number
+        of seconds to wait. (A Succession inside `say` would add every later mobject to the
+        scene at full opacity before its FadeIn starts.) The cue lasts its word count at WPM, or the steps if longer."""
+        cap = self._subtitle(text)
+        anims = [FadeIn(cap, run_time=0.3)]
+        if self._caption:
+            anims.append(FadeOut(self._caption, run_time=0.25))
+        t0 = self.renderer.time
+        first = steps[0] if steps and not isinstance(steps[0], (int, float)) else []
+        self.play(*anims, *(first() if callable(first) else first))
+        self._caption = cap
+        for st in steps[1 if first else 0:]:
+            if isinstance(st, (int, float)):
+                self.wait(st)
+            else:  # a callable step builds its animations now, from the state the earlier steps left
+                self.play(*(st() if callable(st) else st))
+        rest = len(text.split()) * 60 / WPM - (self.renderer.time - t0)
+        if rest > 0.01:
+            self.wait(rest)
+        self.cues.append({"start_s": round(t0, 3), "dur_s": round(self.renderer.time - t0, 3), "text": text})
 
     def clear_caption(self):
         if self._caption:
