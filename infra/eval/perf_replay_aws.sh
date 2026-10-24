@@ -21,7 +21,9 @@ R="${ARIADNE_RESULTS:?}"
 SRC="$(pwd)" REP=/opt/rep RUNDIR=build/live/runs/live-20261023T200640Z-62e0 SCENE=build/live/scenes/maze_demo_0
 # The CODE under test defaults to the replayed run's own (snapshot, payload, image); CODE_SNAPSHOT / PAYLOAD / CORE_REF /
 # CORE_ID swap in another build (e.g. B's lens-off toggle) on the SAME recorded inputs, so a before/after differs only
-# in the code. REPLAY_ARGS / REPLAY_ENV: extra ariadne_live flags / docker -e settings for every variant.
+# in the code. REPLAY_ARGS / REPLAY_ENV: extra ariadne_live flags / docker -e settings for every variant. VARIANT_ENV:
+# "variant=KEY=VAL ..." docker -e settings for one variant only (an A/B on one instance, e.g. VARIANTS="t5 t5_nopipe"
+# VARIANT_ENV="t5_nopipe=ARIADNE_LANE_PIPELINE=0"); a variant named t5* / t2* keeps that thread count.
 CORE_REF=${CORE_REF:-836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:live-8668bd7ece68}
 CORE_ID=${CORE_ID:-sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb}
 CODE_SNAPSHOT=${CODE_SNAPSHOT:-$BUCKET/runs/$RUN_ID/input/repo.tar.gz}
@@ -94,12 +96,13 @@ if [ ! -d /opt/opencv5 ]; then
 fi
 export SAMPLER_PERF_ARGS="${SAMPLER_PERF_ARGS:--a -F 199}" SAMPLER_NO_REPORT=1
 kv sampler_perf_args "\"$SAMPLER_PERF_ARGS\""
+kv variant_env "\"${VARIANT_ENV:-}\""
 for v in ${VARIANTS:-asis t5 t2}; do
   step "R replay $v"
   env=()
   for e in ${REPLAY_ENV:-}; do env+=(-e "$e"); done
-  [ "$v" = t5 ] && env+=(-e OPENCV_FOR_THREADS_NUM=5)
-  [ "$v" = t2 ] && env+=(-e OPENCV_FOR_THREADS_NUM=2)
+  case "$v" in t5*) env+=(-e OPENCV_FOR_THREADS_NUM=5) ;; t2*) env+=(-e OPENCV_FOR_THREADS_NUM=2) ;; esac
+  for ve in ${VARIANT_ENV:-}; do [ "${ve%%=*}" = "$v" ] && env+=(-e "${ve#*=}"); done   # one variant's own -e
   O="$R/replay_$v"; mkdir -p "$O"
   bash "$SRC/infra/eval/perf_sampler.sh" "$O/sampler" & SP=$!
   sleep 3

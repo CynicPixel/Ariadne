@@ -53,7 +53,7 @@ replay() {   # needs no staging: every input is B's run's own S3 objects (snapsh
   exec infra/scripts/spinup.sh run --profile cpux86 --max-minutes "${MAXMIN:-70}" -- \
     "RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=$BUCKET/runs/live-payload-20261023T200347Z/payload.tar.gz BUCKET=$BUCKET \
      VARIANTS='${VARIANTS:-asis t5 t2}' ${CODE_SNAPSHOT:+CODE_SNAPSHOT=$CODE_SNAPSHOT} ${CODE_PAYLOAD:+PAYLOAD=$CODE_PAYLOAD} \
-     ${CORE_REF:+CORE_REF=$CORE_REF} ${CORE_ID:+CORE_ID=$CORE_ID} REPLAY_ARGS='${REPLAY_ARGS:-}' REPLAY_ENV='${REPLAY_ENV:-}' \
+     ${CORE_REF:+CORE_REF=$CORE_REF} ${CORE_ID:+CORE_ID=$CORE_ID} REPLAY_ARGS='${REPLAY_ARGS:-}' REPLAY_ENV='${REPLAY_ENV:-}' VARIANT_ENV='${VARIANT_ENV:-}' \
      bash infra/eval/perf_replay_aws.sh"
 }
 teardown() { "$AWS" aws s3 rm --recursive "$STAGE/" --only-show-errors; log "teardown done"; }
