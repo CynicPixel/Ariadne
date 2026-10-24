@@ -215,7 +215,7 @@ TEST(LiveLink, AssemblerLenientDropsWhereStrictThrows) {
     const std::string L = "/l", R = "/r";
     auto img = [](int64_t t) { return EncodeRgbImage(t, 8, 6, 100); };
     for (const bool strict : {true, false}) {
-        SimFrameAssembler a(map, 0, L, R, strict);
+        SimFrameAssembler a(&map, 0, L, R, strict);
         std::vector<int64_t> emitted;
         auto on = [&](const StereoFrame& f) { emitted.push_back(f.t_ns); };
         const auto l1 = img(50), r2 = img(100), l2 = img(100);

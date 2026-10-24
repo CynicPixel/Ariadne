@@ -300,9 +300,12 @@ class LiveSimSource : public StereoSource {
 public:
     /// `turn`: held while one frame runs through the estimator (D152a). Every agent's source shares it, so frames are
     /// processed one at a time, in whatever order, and each OpenCV call sees an idle thread pool.
+    /// `lens_on`: apply the read-time D41 lens to every frame. Off (the live runtime's default since the D41
+    /// amendment, D227), frames stay the clean pinhole render and Calibration() reports the RENDER intrinsics
+    /// with D = 0 - the camera the estimator then actually sees.
     LiveSimSource(const std::string& scene, int agent, MessageQueue& images, const GtStore& gt, std::mutex& turn,
-                  const std::string& mission = "live")
-        : agent_(agent), images_(images), gt_(gt), turn_(turn) {
+                  const std::string& mission = "live", bool lens_on = true)
+        : agent_(agent), images_(images), gt_(gt), turn_(turn), lens_on_(lens_on) {
         const YAML::Node sc = YAML::LoadFile(scene + "/scene.json");
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
@@ -332,7 +335,7 @@ public:
         lens_.render_cx = R["cx"].as<double>();
         lens_.render_cy = R["cy"].as<double>();
         if (lens_.k3 != 0.0) throw std::runtime_error("live: PinholeRadtan carries k1 k2 p1 p2 only; rig.lens.k3 != 0");
-        map_ = perception::BuildLensMap(lens_);
+        if (lens_on_) map_ = perception::BuildLensMap(lens_);   // off: no map, the per-frame resampling never runs
         // T_B_optical from the mission manifest: the same numbers the canonical /tf_static is built from and
         // checked against (D40), which a live run does not have.
         for (const char* side : {"left", "right"}) {
@@ -347,17 +350,25 @@ public:
 
     std::string RunName() const override { return scene_id_ + "-agent" + std::to_string(agent_); }
     std::string SceneName() const override { return "sim-live/" + scene_id_ + "/agent" + std::to_string(agent_); }
-    std::string CameraConfig() const override { return rig_ + "+lens(D41)"; }
+    std::string CameraConfig() const override { return rig_ + (lens_on_ ? "+lens(D41)" : "+lens(off)"); }
     std::string BagChecksum() const override { return kUnknownField; }   // the run records its consumed digest
     perception::RawStereoCalibration Calibration() const override {
         perception::PinholeRadtan c;
         c.width = lens_.width;
         c.height = lens_.height;
-        c.fu = lens_.fx;
-        c.fv = lens_.fy;
-        c.cu = lens_.cx;
-        c.cv = lens_.cy;
-        c.dist = {lens_.k1, lens_.k2, lens_.p1, lens_.p2};
+        if (lens_on_) {
+            c.fu = lens_.fx;
+            c.fv = lens_.fy;
+            c.cu = lens_.cx;
+            c.cv = lens_.cy;
+            c.dist = {lens_.k1, lens_.k2, lens_.p1, lens_.p2};
+        } else {   // the frames ARE the clean render: its pinhole, zero distortion (D227)
+            c.fu = lens_.render_fx;
+            c.fv = lens_.render_fy;
+            c.cu = lens_.render_cx;
+            c.cv = lens_.render_cy;
+            c.dist = {0, 0, 0, 0};
+        }
         perception::RawStereoCalibration s;
         s.left = s.right = c;
         s.T_right_left = T_B_right_.inverse() * T_B_left_;
@@ -374,7 +385,7 @@ public:
     std::function<void(int64_t t_ns, double wait_s, double lock_s, double track_s)> on_timing;
 
     size_t ForEachFrame(size_t max_frames, const std::function<void(const StereoFrame&)>& on_frame) override {
-        SimFrameAssembler assembler(map_, uint32_t(agent_), t_left_, t_right_, /*strict=*/false);
+        SimFrameAssembler assembler(lens_on_ ? &map_ : nullptr, uint32_t(agent_), t_left_, t_right_, /*strict=*/false);
         using clk = std::chrono::steady_clock;
         auto sec = [](clk::time_point a, clk::time_point b) { return std::chrono::duration<double>(b - a).count(); };
         double wait_s = 0, lock_s = 0, track_s = 0;
@@ -415,7 +426,8 @@ private:
     std::mutex& turn_;
     std::string scene_id_, rig_, t_left_, t_right_;
     perception::LensModel lens_;
-    perception::LensMap map_;
+    perception::LensMap map_;   // empty when lens_on_ is false
+    bool lens_on_ = true;
     core::SE3 T_B_left_, T_B_right_;
     size_t unpaired_ = 0;
 };

@@ -4,6 +4,8 @@
 # configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
 name: live_llm_v1
 end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
+lens: false                  # D227 (D41 amendment, maintainer-directed 2026-10-24): the read-time synthetic lens
+                             # is OFF in the live runtime; frames stay the clean render, calibration reports D = 0.
 chooser: llm                 # the Bedrock orchestrator chooses among the planner's candidates (AGENTIC_7 D156)
 command:
   max_length_m: 3.0          # a follow() is cut here: at <= 0.6 m/s that is ~5 s of motion, one replan period, so

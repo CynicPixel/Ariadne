@@ -79,6 +79,10 @@ struct LiveConfig {
     bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
                                            // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
                                            // agents). false until the acceptance (live + 3 equal replays) passes.
+    bool lens = false;                     // D227 (the D41 amendment, maintainer-directed): the read-time synthetic
+                                           // lens. OFF by default for every live/demo/POC run - A2 measured it at
+                                           // ~58 ms/frame, about half the lane - and the calibration then reports
+                                           // the render pinhole with D = 0. `lens: true` restores the D41 operator.
     bool demo = false;                     // D169 (AGENTIC_7 §4): judges-live mode. No lockstep, keyframes integrate
                                            // on a background thread, no per-replan PNGs, and the LLM is supervisory
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
@@ -127,6 +131,7 @@ LiveConfig LoadLive(const std::string& path) {
     if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
     if (n["lockstep_substep_ms"]) c.lockstep_substep_ms = n["lockstep_substep_ms"].as<int>();
     if (n["estimator_processes"]) c.estimator_processes = n["estimator_processes"].as<bool>();
+    if (n["lens"]) c.lens = n["lens"].as<bool>();   // absent = off (D227)
     if (n["mode"]) c.demo = n["mode"].as<std::string>() == "demo";
     if (c.demo) c.lockstep = false;   // demo never pauses the world, whatever the lockstep key says
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
@@ -408,8 +413,8 @@ core::SE3 GetSe3(const uint8_t*& q) {
 }
 
 int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
-                       const std::string& collab_socket, tools::StereoVoArgs va, const std::string& out, int argc,
-                       char** argv) {
+                       const std::string& collab_socket, bool lens_on, tools::StereoVoArgs va, const std::string& out,
+                       int argc, char** argv) {
     const int fd = live::Connect(socket_path, std::chrono::seconds(60));
     // D174: the collab tee - serialization only, NO DNN in this process (cv::ALIKED output depends on the thread
     // count; here it would break the D168 digests). A dead collab worker quiets the tee, never the estimator.
@@ -418,7 +423,7 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     live::MessageQueue images{64};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    live::LiveSimSource src(scene, agent, images, gt, turn, "live");
+    live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on);
     std::mutex send_mu;
     auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
         std::lock_guard<std::mutex> lk(send_mu);
@@ -601,6 +606,7 @@ int main(int argc, char** argv) {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
             directives_path, planner_cfg_path, shadow_cfg_path, worker_socket, collab_socket;
         int worker_agent = -1;
+        std::string lens_arg = "off";   // D227: the D41 lens is off unless the parent (LiveConfig.lens) says on
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -623,12 +629,15 @@ int main(int argc, char** argv) {
             else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
             else if (k == "--worker-socket") worker_socket = v;
             else if (k == "--collab-socket") collab_socket = v;   // D174: this agent's ariadne_collab_worker
+            else if (k == "--lens") lens_arg = v;                 // worker mode (D227): on|off, from LiveConfig.lens
             else throw std::invalid_argument("unknown argument " + k);
         }
+        if (lens_arg != "on" && lens_arg != "off") throw std::invalid_argument("--lens on|off");
         if (worker_agent >= 0) {
             if (scene.empty() || va.perception_config.empty() || va.slam_config.empty() || out.empty() || worker_socket.empty())
                 throw std::invalid_argument("worker mode: --scene --perception-config --slam-config --out --worker-socket");
-            return RunEstimatorWorker(scene, worker_agent, worker_socket, collab_socket, va, out, argc, argv);
+            return RunEstimatorWorker(scene, worker_agent, worker_socket, collab_socket, lens_arg == "on", va, out,
+                                      argc, argv);
         }
         if (scene.empty() || mission_cfg_path.empty() || live_cfg_path.empty() || out.empty() ||
             va.perception_config.empty() || va.slam_config.empty() || link_path.empty() == replay_path.empty()) {
@@ -1184,6 +1193,7 @@ int main(int argc, char** argv) {
                 const std::string wsock = "/tmp/ariadne-worker-" + std::to_string(::getpid()) + "-" + std::to_string(k) + ".sock";
                 const std::string raw_out = (run_dir / "raw").string();
                 const std::string ka = std::to_string(k), sa = std::to_string(va.seed);
+                const std::string lensa = lc.lens ? "on" : "off";   // D227: the toggle reaches the worker's source
                 const std::string csock = ma && ma->collab ? ma->collab_socks[size_t(k)] : "";   // D174: the tee's target
                 const pid_t pid = ::fork();
                 if (pid == 0) {   // child: exec ourselves in worker mode, nothing else between fork and exec
@@ -1194,7 +1204,8 @@ int main(int argc, char** argv) {
                                                     "--out", raw_out.c_str(),
                                                     "--seed", sa.c_str(),
                                                     "--estimator-worker", ka.c_str(),
-                                                    "--worker-socket", wsock.c_str()};
+                                                    "--worker-socket", wsock.c_str(),
+                                                    "--lens", lensa.c_str()};
                     if (!csock.empty()) cas.insert(cas.end(), {"--collab-socket", csock.c_str()});
                     cas.push_back(nullptr);
                     ::execv(cas[0], const_cast<char**>(cas.data()));
@@ -1249,7 +1260,8 @@ int main(int argc, char** argv) {
                 });
                 continue;
             }
-            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
+            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn,
+                                                               "live", lc.lens);
             sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) { deliver_timing(k, t_ns, w, l, tr); };
             vo[k] = std::thread([&, k] {
                 tools::StereoVoArgs a = va;

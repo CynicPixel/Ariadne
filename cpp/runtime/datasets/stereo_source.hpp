@@ -265,7 +265,9 @@ inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t
 // --- Simulator recording ---------------------------------------------------------
 
 /// Raw stereo frame assembly from the sim's CDR images, shared by the bag replay (SimSource) and the live runtime
-/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41) -> D (2.2, when set) -> gray, then pair
+/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41; map null = lens off, the frame stays
+/// the clean pinhole render - the live runtime's default since the D41 amendment, D227) -> D (2.2, when set) ->
+/// gray, then pair
 /// left/right by header stamp. Feed() one image message at a time, in delivery order.
 ///   strict (bags): a pair completing before an older pending stamp means a frame is missing -> throws.
 ///   lenient (live): the older, unpaired frames are dropped and counted (unpaired()); the run goes on.
@@ -280,7 +282,7 @@ class SimFrameAssembler {
 public:
     using Degrade = SimDegrade;
 
-    SimFrameAssembler(const perception::LensMap& map, uint32_t agent, std::string t_left, std::string t_right,
+    SimFrameAssembler(const perception::LensMap* map, uint32_t agent, std::string t_left, std::string t_right,
                       bool strict, Degrade d = {})
         : map_(map), agent_(agent), t_left_(std::move(t_left)), t_right_(std::move(t_right)), strict_(strict), d_(d) {}
 
@@ -296,7 +298,7 @@ public:
         for (uint32_t r = 0; r < im.height; ++r) {
             std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
         }
-        core::ImageU8 seen = perception::ApplyLens(clean, map_);
+        core::ImageU8 seen = map_ ? perception::ApplyLens(clean, *map_) : std::move(clean);
         if (d_.params) {
             const int c = left ? 0 : 1;
             seen = perception::DegradeParallel(seen, *d_.params, d_.seed[c], arrived_[c]++, d_.threads);
@@ -339,7 +341,7 @@ public:
     size_t unpaired() const { return unpaired_; }
 
 private:
-    const perception::LensMap& map_;
+    const perception::LensMap* map_;
     uint32_t agent_;
     std::string t_left_, t_right_;
     bool strict_;

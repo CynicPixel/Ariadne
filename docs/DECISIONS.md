@@ -5316,3 +5316,32 @@ dropped.
 If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If (i) or (ii) misses, it is not adopted.
 On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
 input and output ONNX hashes are committed together.
+
+## 2026-10-24 — D227 (D41 amendment, maintainer-directed): the synthetic lens is OFF in the live runtime
+
+**Order (maintainer, via M, ~09:20 IST):** turn the D41 read-time lens distortion off for live/demo/POC runs. A2's
+per-function profile (job 44b/45 line) measured it as most of the ~58 ms/frame ingest cost, about 50 % of the lane,
+and it is optional sim realism, not a claim-bearing operator. No baseline reruns: every run from the next one on is
+the new baseline.
+
+**Mechanism (this commit):**
+- `LiveConfig.lens` (bool, **default false**), yaml key `lens:` in the live config. All seven
+  `configs/mission/live_*.yaml` now carry an explicit `lens: false`. `lens: true` restores the D41 operator exactly.
+- The toggle reaches both estimator arrangements: in-process `LiveSimSource` directly, worker processes via a new
+  internal `--lens on|off` flag (parent passes it from `LiveConfig.lens`; absent = off).
+- Off: `SimFrameAssembler` gets a null lens map and skips `ApplyLens` (the resampling never runs — the frame stays
+  the clean pinhole render); `LiveSimSource::Calibration()` reports the RENDER intrinsics with **D = 0** (the camera
+  the estimator then actually sees); `CameraConfig()` says `+lens(off)` so every manifest and digest names the state.
+- Replay honours it: replay consumes `inputs.mcap` (clean pixels) through the same `LiveSimSource`/worker path with
+  the same live config, so a lens-off replay of a lens-on recording is valid for perf (A2's RTF measurement) but its
+  trace is a new baseline, not comparable to the live trace.
+- Untouched: `SimSource` (dataset/eval bag path, D37/D41 regression rows), `ariadne_sim_vo`/spool tools, and
+  `ariadne_sim_calib` (which already had `--lens auto|on|off`; its lens-off truth is the raw render). The D41
+  operator, its tests and its digest stay — this is a default flip scoped to the live runtime, not a removal.
+
+**Evidence (local, ma_smoke3 replay of the 20 s 3-agent lit maze_demo_0 recording):**
+- `lens: true` replay trace byte-identical to the pre-change reference (sha256 f732c08056b1f937…) — the toggle-on
+  path is the old pipeline, bit for bit.
+- default (off) replay ×2: identical to each other (deterministic), trace sha256 21a51e0d5d3660ba… — the new baseline.
+- Manifests: `camera_config: rig_stereo_v2+lens(D41)` (restored) vs `rig_stereo_v2+lens(off)` (default).
+- (artifacts: `build/live/ma_smoke3/.../replay_lenson`, `replay_lensoff{1,2}`.)
