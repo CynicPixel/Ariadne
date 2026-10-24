@@ -1,0 +1,94 @@
+{
+  "tool": "ariadne_recon.live.service",
+  "spool": [
+    "/in/spools/agent0",
+    "/in/spools/agent1",
+    "/in/spools/agent2"
+  ],
+  "listen": null,
+  "link": {
+    "frames": {},
+    "dropped": {}
+  },
+  "spool_run_id": [
+    "8410a254a94cc16b-agent0",
+    "8410a254a94cc16b-agent1",
+    "8410a254a94cc16b-agent2"
+  ],
+  "spool_schema": [
+    1,
+    1,
+    1
+  ],
+  "backend": "gpu",
+  "splat_backend": "gsplat_cuda",
+  "training_image": "rgb",
+  "iters": 100,
+  "budget_ms": 0.0,
+  "diagnostics": true,
+  "pace": 0.0,
+  "keyframes": 1476,
+  "wall_s": 1478.9,
+  "placement": {
+    "mode": "briefing",
+    "scene": "/in/scene",
+    "world": "mission W",
+    "T_W_O": {
+      "0": [
+        1.2246467991473532e-16,
+        0.0,
+        -1.0,
+        19.87,
+        1.0,
+        0.0,
+        1.2246467991473532e-16,
+        2.95,
+        0.0,
+        -1.0,
+        0.0,
+        1.02,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "1": [
+        0.0,
+        0.0,
+        1.0,
+        -1.87,
+        -1.0,
+        0.0,
+        0.0,
+        9.05,
+        0.0,
+        -1.0,
+        0.0,
+        1.02,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "2": [
+        -1.0,
+        0.0,
+        -1.8369701987210297e-16,
+        15.05,
+        1.8369701987210297e-16,
+        0.0,
+        -1.0,
+        19.87,
+        0.0,
+        -1.0,
+        0.0,
+        1.02,
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    "unplaced": {}
+  }
+}
