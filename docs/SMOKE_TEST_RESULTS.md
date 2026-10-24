@@ -890,6 +890,11 @@ fallback) on the GPU instance class the arch names for rendering (§5.10)?
   `runs/*`, then output dirs owned by root while the containers run as uid 1000. Neither was the render path.
 - **Unblocks:** B's live runs on g4dn (L1 `live_aws.sh`). The 4.3 / 4.6 lockstep gate on g4dn needs B's EGL
   lockstep check first: lockstep is verified on llvmpipe only.
+- 2026-10-24: the same gate re-confirmed through `live_aws.sh`'s own smoke (`cmd_smoke`, run
+  `20261024T141057Z-gpu-6ced25`, g4dn.xlarge spot, image `ariadne-sim:live-8b780f52cb9a`): exit 0,
+  `sim_smoke_exit=0`, `smoke_pass.png` 320×240 RGB written. The first attempt (d986bf) had already rendered but
+  died writing `/out` under a root-owned results dir — the runner bug fixed in 65caaf4 (chmod before render), not
+  the render path. Evidence: `build/runs/20261024T141057Z-gpu-6ced25/output/` (Ariadne-llm) + the run's S3 output.
 ## 4u. Lamp photometry of the gz-sim8 / ogre2 camera (Phase 5 preflight) `[SMOKE-TEST]` 2026-10-22
 
 `simulator/smoke/lamp_probe/run_lamp_probe.py` (ariadne/sim:dev, llvmpipe; 17 launches plus a 2-launch rerun, every
