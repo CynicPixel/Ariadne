@@ -639,6 +639,15 @@ int main(int argc, char** argv) {
         if (lc.chooser == "llm" && is_live && chooser_socket.empty()) throw std::invalid_argument("chooser llm needs --chooser-socket");
         if (lc.chooser == "llm" && !is_live && decisions_path.empty() == chooser_socket.empty())
             throw std::invalid_argument("chooser llm replay needs --decisions (the live trace) or --chooser-socket (a test)");
+        // TEST ONLY (D225 guard): ARIADNE_TEST_LANE_DELAY="k:ms" wall-delays lane k's parent-side delivery by ms
+        // per frame. It changes NO data, only timing, so a correct barrier yields identical traces with and
+        // without it; the pre-D225 hardcoded wait trips it. Never set outside infra/scripts/test_barrier_n3.sh.
+        int test_delay_lane = -1, test_delay_ms = 0;
+        if (const char* td = std::getenv("ARIADNE_TEST_LANE_DELAY")) {
+            if (std::sscanf(td, "%d:%d", &test_delay_lane, &test_delay_ms) != 2 || test_delay_ms < 0)
+                throw std::invalid_argument("ARIADNE_TEST_LANE_DELAY: k:ms");
+            std::fprintf(stderr, "ariadne_live: TEST lane delay %d ms on lane %d\n", test_delay_ms, test_delay_lane);
+        }
         const auto recorded = lc.chooser == "llm" && !decisions_path.empty() ? LoadRecordedChoices(decisions_path)
                                                               : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
@@ -1206,6 +1215,8 @@ int main(int argc, char** argv) {
                     while (live::ReadFrame(worker_fd[k], f)) {
                         const uint8_t* q = f.payload.data();
                         if (f.topic == "#frame") {
+                            if (k == test_delay_lane && test_delay_ms > 0)   // D225 guard: timing only, never data
+                                std::this_thread::sleep_for(std::chrono::milliseconds(test_delay_ms));
                             const int64_t t = GetPod<int64_t>(q);
                             deliver_frame(k, t, GetSe3(q));
                         } else if (f.topic == "#kf") {
