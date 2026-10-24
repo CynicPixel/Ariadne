@@ -1,0 +1,48 @@
+[0;93m2026-10-24 05:35:44.909404286 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+ort aliked_extract         1280x720  threads  1 p50   2321.8 ms  kp_match 1.0000 desc_max 7.18e-06
+ort aliked_extract         960x540   threads  1 p50   1193.2 ms  kp_match 1.0000 desc_max 6.57e-06
+ort aliked_extract         640x360   threads  1 p50    640.8 ms  kp_match 1.0000 desc_max 4.11e-06
+ort lightglue_match        K1024     threads  1 p50   2012.4 ms  matches 946 ref 946
+ort lightglue_match        K512      threads  1 p50    632.8 ms  matches 437
+ort lightglue_match        K256      threads  1 p50    226.8 ms  matches 176
+ort eigenplaces_describe   640x360   threads  1 p50    290.9 ms  cosine 1.0000001
+[0;93m2026-10-24 05:37:31.893223450 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+ort aliked_extract         1280x720  threads  4 p50    825.2 ms  kp_match 1.0000 desc_max 7.18e-06
+ort aliked_extract         960x540   threads  4 p50    487.1 ms  kp_match 1.0000 desc_max 6.57e-06
+ort aliked_extract         640x360   threads  4 p50    245.1 ms  kp_match 1.0000 desc_max 4.18e-06
+ort lightglue_match        K1024     threads  4 p50    815.7 ms  matches 946 ref 946
+ort lightglue_match        K512      threads  4 p50    259.0 ms  matches 437
+ort lightglue_match        K256      threads  4 p50     99.6 ms  matches 176
+ort eigenplaces_describe   640x360   threads  4 p50     79.8 ms  cosine 1.0000001
+[0;93m2026-10-24 05:38:13.846013616 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+ort aliked_extract         1280x720  threads 16 p50    684.5 ms  kp_match 1.0000 desc_max 7.26e-06
+ort aliked_extract         960x540   threads 16 p50    397.0 ms  kp_match 1.0000 desc_max 6.68e-06
+ort aliked_extract         640x360   threads 16 p50    200.8 ms  kp_match 1.0000 desc_max 4.10e-06
+ort lightglue_match        K1024     threads 16 p50    353.4 ms  matches 946 ref 946
+ort lightglue_match        K512      threads 16 p50    129.3 ms  matches 437
+ort lightglue_match        K256      threads 16 p50     66.5 ms  matches 176
+ort eigenplaces_describe   640x360   threads 16 p50     41.2 ms  cosine 1.0000001
+[0;93m2026-10-24 05:38:43.631688895 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+[0;93m2026-10-24 05:38:43.631688809 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+[0;93m2026-10-24 05:38:43.634648705 [W:onnxruntime:Default, device_discovery.cc:325 DiscoverDevicesForPlatform] GPU device discovery failed: device_discovery.cc:92 ReadFileContents Failed to open file: "/sys/class/drm/card0/device/vendor"[m
+ort aliked_extract         1280x720  threads  5 p50   1059.5 ms  kp_match 1.0000 desc_max 7.18e-06
+ort aliked_extract         960x540   threads  5 p50    671.9 ms  kp_match 1.0000 desc_max 6.57e-06
+ort aliked_extract         640x360   threads  5 p50    316.4 ms  kp_match 1.0000 desc_max 4.18e-06
+ort lightglue_match        K1024     threads  5 p50    861.9 ms  matches 946 ref 946
+ort lightglue_match        K512      threads  5 p50    289.2 ms  matches 437
+ort lightglue_match        K256      threads  5 p50    122.0 ms  matches 176
+ort eigenplaces_describe   640x360   threads  5 p50    125.1 ms  cosine 1.0000001
+ort aliked_extract         1280x720  threads  5 p50   1175.7 ms  kp_match 1.0000 desc_max 7.18e-06
+ort aliked_extract         960x540   threads  5 p50    644.4 ms  kp_match 1.0000 desc_max 6.57e-06
+ort aliked_extract         640x360   threads  5 p50    338.4 ms  kp_match 1.0000 desc_max 4.18e-06
+ort lightglue_match        K1024     threads  5 p50    808.6 ms  matches 946 ref 946
+ort lightglue_match        K512      threads  5 p50    264.1 ms  matches 437
+ort lightglue_match        K256      threads  5 p50    108.7 ms  matches 176
+ort eigenplaces_describe   640x360   threads  5 p50    119.5 ms  cosine 1.0000001
+ort aliked_extract         1280x720  threads  5 p50   1179.7 ms  kp_match 1.0000 desc_max 7.18e-06
+ort aliked_extract         960x540   threads  5 p50    700.9 ms  kp_match 1.0000 desc_max 6.57e-06
+ort aliked_extract         640x360   threads  5 p50    351.6 ms  kp_match 1.0000 desc_max 4.18e-06
+ort lightglue_match        K1024     threads  5 p50    838.1 ms  matches 946 ref 946
+ort lightglue_match        K512      threads  5 p50    280.5 ms  matches 437
+ort lightglue_match        K256      threads  5 p50    134.8 ms  matches 176
+ort eigenplaces_describe   640x360   threads  5 p50     61.9 ms  cosine 1.0000001

@@ -1,0 +1,13 @@
+model,engine,ok,detail
+aliked_1280x720l2,cv_dnn_classic,1,"load ok"
+aliked_1280x720l2,cv_dnn_new,1,"load ok"
+aliked_1280x720,cv_dnn_classic,1,"load ok"
+aliked_1280x720,cv_dnn_new,1,"load ok"
+aliked_960x540,cv_dnn_classic,1,"load ok"
+aliked_960x540,cv_dnn_new,1,"load ok"
+aliked_640x360,cv_dnn_classic,1,"load ok"
+aliked_640x360,cv_dnn_new,1,"load ok"
+lightglue,cv_dnn_classic,0,"OpenCV(5.0.0) /src/opencv/modules/dnn/src/onnx/onnx_importer.cpp:1114: error: (-2:Unspecified error) in function 'handleNode' > Node [Shape@ai.onnx]:(onnx_node!/posenc/Shape) parse error: OpenCV(5.0.0) /src/opencv/modules/dnn/src/onnx/onnx_importer.cpp:2591: error: (-215:Assertion failed) !isDynamic"
+lightglue,cv_dnn_new,1,"load ok"
+eigenplaces_640x360,cv_dnn_classic,1,"load ok"
+eigenplaces_640x360,cv_dnn_new,1,"load ok"

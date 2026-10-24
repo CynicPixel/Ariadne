@@ -1,0 +1,12 @@
+label,stage,variant,engine,threads,p50_ms,p95_ms,mean_ms,cpu_mean_ms,n,out,digest1,digest2
+single_t4,aliked_extract,1280x720,cv_dnn_new,4,704.402,711.014,705.188,1497.17,20,1024,96ffc0a8552475a6,96ffc0a8552475a6
+single_t4,aliked_forward,1280x720,cv_dnn_new,4,697.217,704.644,698.299,1486.31,20,0,01cada79253d7137,01cada79253d7137
+single_t4,aliked_extract,960x540,cv_dnn_new,4,393.079,398.49,393.768,870.506,20,1024,5c0ee2485a5d48c6,5c0ee2485a5d48c6
+single_t4,aliked_forward,960x540,cv_dnn_new,4,390.057,393.434,389.938,860.086,20,0,40d1333827d02f5b,40d1333827d02f5b
+single_t4,aliked_extract,640x360,cv_dnn_new,4,194.761,198.099,196.316,457.451,20,1024,0206aa1022e61cab,0206aa1022e61cab
+single_t4,aliked_forward,640x360,cv_dnn_new,4,195.271,200.052,195.328,456.452,20,0,008f8c04b5d39187,008f8c04b5d39187
+single_t4,lightglue_match,K1024,cv_dnn_new,4,530.752,533.752,530.8,2033.9,20,946,da02722a403f4a07,da02722a403f4a07
+single_t4,lightglue_match,K512,cv_dnn_new,4,203.108,204.998,203.299,790.378,20,437,5e9c6c6806db8f2a,5e9c6c6806db8f2a
+single_t4,lightglue_match,K256,cv_dnn_new,4,91.0723,91.4728,91.0147,360.982,20,176,40cbcbe52e735db1,40cbcbe52e735db1
+single_t4,eigenplaces_describe,640x360,cv_dnn_classic,4,160.611,161.967,160.675,631.619,20,256,b96a1dffe3b31c4c,b96a1dffe3b31c4c
+single_t4,eigenplaces_describe,640x360,cv_dnn_new,4,229.666,232.271,229.944,916.6,20,256,d92f3c8909297a04,d92f3c8909297a04

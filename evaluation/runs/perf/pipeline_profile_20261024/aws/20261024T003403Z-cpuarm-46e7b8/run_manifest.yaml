@@ -1,0 +1,15 @@
+run_kind: pipeline_profile_replay
+created_utc: 2026-10-24T00:34:33Z
+git_commit: f4a3e9668766eaafb2cf7d8d42b9186c49dccfb8
+stages: "timing"
+arch: aarch64
+instance_type: c8g.4xlarge
+availability_zone: eu-north-1b
+nproc: 16
+cpu_model: "Neoverse-V2"
+threads_per_core: 1
+opencv_tag: 5.0.0
+ort_version: 1.24.4
+base_image_id: sha256:2ed3f2f39fc7482c5df2a3c529aaca4305460729a33b80860598ca4a96e9cd46
+dev_image_id: sha256:731a88fb6405d1ba92b922009ed06a4fbc299bfc509c39898c2cec53d9291339
+ubuntu_base_repo_digest: 

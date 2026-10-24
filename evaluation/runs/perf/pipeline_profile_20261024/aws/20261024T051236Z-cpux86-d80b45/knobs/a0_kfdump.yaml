@@ -1,0 +1,8 @@
+tool: ariadne_perf_kfdump
+agent: 0
+seed: 1
+keyframes: 361
+requested: 52
+written: 52
+vo_exit: 0
+opencv_threads: 4

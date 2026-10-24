@@ -1,0 +1,18 @@
+# ariadne_live/agent2 results. Generated; do not hand-edit.
+sequence: 8410a254a94cc16b-agent2
+frames: 4001
+dense_gt: true
+associated_poses: 4001  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 12.664
+ate_se3: {rmse_m: 0.0198824, mean_m: 0.0181257, max_m: 0.0496424, rotation_rmse_rad: 0.0188229}
+ate_rmse_percent_of_path: 0.156999
+sim3_scale: 0.998748  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00252773, rotation_rmse_rad: 0.00267956}
+vo: {lost_frames: 0, keyframes: 426, ba_runs: 425, ba_mean_cost_ratio: 0.351019, landmarks_alive_at_end: 492, graph_edges: 425, graph_version: 851}
+stereo_match_valid_fraction: 0.743886
+stereo_match_by_third: {top: {valid: 44809, lk_lost: 5576, fb: 7111, off_row: 2485, nonpositive: 4, disparity_mean_px: 34.061, disparity_max_px: 189.853}, middle: {valid: 50149, lk_lost: 4170, fb: 9543, off_row: 2997, nonpositive: 163, disparity_mean_px: 33.2401, disparity_max_px: 191.771}, bottom: {valid: 40006, lk_lost: 5433, fb: 6250, off_row: 2731, nonpositive: 4, disparity_mean_px: 38.7931, disparity_max_px: 186.112}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 55925, created: 24266, no_stereo: 30705, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 304, uncertain: 650}
+timing_ms: {track_mean: 21.6805, vo_track_mean: 3.17255, keyframe_mean: 117.878, opencv_threads: 5}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.0227946, b: -3.53973e-05, c: 0.000213125, matches: 100, mad_px: 0.0785312, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.11484, b: -8.00535e-05, c: -0.000219311, max_abs_dy_px: 0.145233, matches: 230}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 1, epipolar_check_skipped_frames: 0}

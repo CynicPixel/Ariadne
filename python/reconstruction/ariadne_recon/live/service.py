@@ -253,6 +253,8 @@ def main(argv=None) -> int:
     ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="rgb")   # D199: lit demo
     ap.add_argument("--iters", type=int, default=0)
     ap.add_argument("--budget-ms", type=float, default=0.0)
+    ap.add_argument("--diagnostics", action="store_true",
+                    help="gpu: log training-view PSNR before/after each keyframe's iterations (+ the freeze check)")
     ap.add_argument("--export-period-s", type=float, default=2.0)
     ap.add_argument("--max-keyframes", type=int, default=0)
     ap.add_argument("--pace", type=float, default=0.0, help="0 = as fast as possible; 1 = mission speed")
@@ -264,7 +266,7 @@ def main(argv=None) -> int:
     channels = 1 if a.training_image == "albedo_proxy" else 3
     if a.backend == "gpu":
         from .trainer import LiveTrainer, TrainParams
-        trainer = LiveTrainer(channels, TrainParams(iters=a.iters, budget_ms=a.budget_ms))
+        trainer = LiveTrainer(channels, TrainParams(iters=a.iters, budget_ms=a.budget_ms, diagnostics=a.diagnostics))
     else:
         trainer = _CpuInit(channels, 30, SeedParams(), 0)
     out = Path(a.out)
@@ -289,7 +291,7 @@ def main(argv=None) -> int:
         "tool": "ariadne_recon.live.service", "spool": a.spool, "listen": a.listen, "link": stats, "spool_run_id": [sp.run_id for sp in spools],
         "spool_schema": [sp.schema_version for sp in spools], "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
-        "iters": a.iters, "budget_ms": a.budget_ms, "pace": a.pace, "keyframes": n, "wall_s": round(time.time() - t0, 2),
+        "iters": a.iters, "budget_ms": a.budget_ms, "diagnostics": a.diagnostics, "pace": a.pace, "keyframes": n, "wall_s": round(time.time() - t0, 2),
         "placement": {"mode": mode, "scene": a.scene, "world": "mission W" if a.scene else "agent 0 odometry frame",
                       "T_W_O": {str(k): [float(x) for x in T.ravel()] for k, T in svc.T_W_O.items()},
                       "unplaced": {str(k): why for k, why in unplaced.items()}}}, indent=2))

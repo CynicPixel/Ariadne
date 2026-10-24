@@ -1,0 +1,7 @@
+CPU_FEATURES_LINE=SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX
+threads=4
+  Version control:               5.0.0
+    Version control (extra):     5.0.0
+  Parallel framework:            pthreads
+    Custom HAL:                  NO
+  ONNX Runtime:                  NO

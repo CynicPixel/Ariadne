@@ -1,0 +1,6 @@
+fit_scene: 1
+fit_keyframes: 623
+fit_rows: 637952
+explained_32: 0.703344
+explained_64: 0.933452
+basis: pca_basis.bin  # float32: mean[128], W[64][128], s[64]

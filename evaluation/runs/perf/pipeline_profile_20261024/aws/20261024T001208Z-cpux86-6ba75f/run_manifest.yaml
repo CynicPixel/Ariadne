@@ -1,0 +1,15 @@
+run_kind: pipeline_profile_replay
+created_utc: 2026-10-24T00:12:42Z
+git_commit: f4a3e9668766eaafb2cf7d8d42b9186c49dccfb8
+stages: "timing knobs adaptive"
+arch: x86_64
+instance_type: c7i.4xlarge
+availability_zone: eu-north-1c
+nproc: 16
+cpu_model: "Intel(R) Xeon(R) Platinum 8488C"
+threads_per_core: 2
+opencv_tag: 5.0.0
+ort_version: 1.24.4
+base_image_id: sha256:e96c24880a7cd17aea94c5fcba520b1ba22c88af8f65b8cae84db76c2db1b537
+dev_image_id: sha256:e23452b100eb94e05d4af39830b64de7040f6a62b83baa5c98d29dc39d68c40f
+ubuntu_base_repo_digest: 

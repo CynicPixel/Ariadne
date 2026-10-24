@@ -1,0 +1,96 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from core.Dockerfile
+#1 transferring dockerfile: 4.71kB done
+#1 DONE 0.0s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.7
+#2 DONE 0.8s
+
+#3 docker-image://docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+#3 resolve docker.io/docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/ariadne/opencv-base:5.0.0
+#4 DONE 1.0s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 494B done
+#5 DONE 0.0s
+
+#6 [dev 1/5] FROM docker.io/ariadne/opencv-base:5.0.0@sha256:1b9298f676a05c4e165c7a8178ed3232966afb9fea5f248d25059a005986f09e
+#6 resolve docker.io/ariadne/opencv-base:5.0.0@sha256:1b9298f676a05c4e165c7a8178ed3232966afb9fea5f248d25059a005986f09e 0.0s done
+#6 DONE 0.1s
+
+#7 [dev 2/5] RUN apt-get update && apt-get install -y --no-install-recommends ccache binutils  && rm -rf /var/lib/apt/lists/*
+#7 0.353 Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+#7 0.356 Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+#7 0.819 Get:3 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2122 kB]
+#7 0.864 Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+#7 0.991 Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+#7 1.118 Get:6 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+#7 1.155 Get:7 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+#7 1.241 Get:8 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+#7 1.439 Get:9 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+#7 1.482 Get:10 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1411 kB]
+#7 1.525 Get:11 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [55.6 kB]
+#7 1.526 Get:12 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1549 kB]
+#7 1.748 Get:13 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2171 kB]
+#7 1.757 Get:14 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [61.7 kB]
+#7 1.757 Get:15 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2231 kB]
+#7 1.778 Get:16 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1733 kB]
+#7 1.793 Get:17 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [669 B]
+#7 1.793 Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [36.0 kB]
+#7 1.793 Get:19 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.0 kB]
+#7 2.604 Fetched 33.6 MB in 2s (13.8 MB/s)
+#7 2.604 Reading package lists...
+#7 3.550 Reading package lists...
+#7 4.487 Building dependency tree...
+#7 4.760 Reading state information...
+#7 5.108 binutils is already the newest version (2.42-4ubuntu2.10).
+#7 5.108 binutils set to manually installed.
+#7 5.108 Suggested packages:
+#7 5.108   distcc | icecc
+#7 5.146 The following NEW packages will be installed:
+#7 5.148   ccache libhiredis1.1.0
+#7 5.373 0 upgraded, 2 newly installed, 0 to remove and 2 not upgraded.
+#7 5.373 Need to get 633 kB of archives.
+#7 5.373 After this operation, 1756 kB of additional disk space will be used.
+#7 5.373 Get:1 http://archive.ubuntu.com/ubuntu noble/universe amd64 libhiredis1.1.0 amd64 1.2.0-6ubuntu3 [41.4 kB]
+#7 5.631 Get:2 http://archive.ubuntu.com/ubuntu noble/universe amd64 ccache amd64 4.9.1-1 [592 kB]
+#7 6.196 debconf: delaying package configuration, since apt-utils is not installed
+#7 6.240 Fetched 633 kB in 1s (706 kB/s)
+#7 6.268 Selecting previously unselected package libhiredis1.1.0:amd64.
+#7 6.268 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 17503 files and directories currently installed.)
+#7 6.276 Preparing to unpack .../libhiredis1.1.0_1.2.0-6ubuntu3_amd64.deb ...
+#7 6.287 Unpacking libhiredis1.1.0:amd64 (1.2.0-6ubuntu3) ...
+#7 6.337 Selecting previously unselected package ccache.
+#7 6.339 Preparing to unpack .../ccache_4.9.1-1_amd64.deb ...
+#7 6.346 Unpacking ccache (4.9.1-1) ...
+#7 6.421 Setting up libhiredis1.1.0:amd64 (1.2.0-6ubuntu3) ...
+#7 6.443 Setting up ccache (4.9.1-1) ...
+#7 6.459 Updating symlinks in /usr/lib/ccache ...
+#7 6.471 Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+#7 DONE 6.5s
+
+#8 [dev 3/5] RUN echo /opt/opencv5/lib > /etc/ld.so.conf.d/opencv5.conf && ldconfig
+#8 DONE 0.2s
+
+#9 [dev 4/5] RUN (id -u ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true)  && useradd -m -u 1000 -s /bin/bash ariadne  && mkdir -p /opt/ariadne && chown ariadne:ariadne /opt/ariadne
+#9 0.214 userdel: ubuntu mail spool (/var/mail/ubuntu) not found
+#9 DONE 0.4s
+
+#10 [dev 5/5] WORKDIR /work
+#10 DONE 0.1s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 0.3s done
+#11 exporting manifest sha256:da135e6a01b89e1619f4372024bda459d01d94728024160dadad05459416c1c1 0.0s done
+#11 exporting config sha256:da3bf6d74af6431193e193ba74e7323929c52d1fafe89cc28f14898dc0a88b09 0.0s done
+#11 exporting attestation manifest sha256:1412447cfcc23457b08c6962208f566b643bdb57a88c41c69512b8570ca6a086 0.0s done
+#11 exporting manifest list sha256:6e5445a84039d809dfe37e22674c48f1449f34828148e97d4c3f5801756d8d6e
+#11 exporting manifest list sha256:6e5445a84039d809dfe37e22674c48f1449f34828148e97d4c3f5801756d8d6e 0.0s done
+#11 naming to docker.io/ariadne/core-dev:perf done
+#11 unpacking to docker.io/ariadne/core-dev:perf 0.1s done
+#11 DONE 0.6s

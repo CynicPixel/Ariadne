@@ -1,0 +1,9 @@
+=== 2026-10-24T05:11:39Z +0s 0 host
+=== 2026-10-24T05:11:39Z +0s 1 docker + sysstat + perf
+=== 2026-10-24T05:11:59Z +20s 2 B's core image by id
+=== 2026-10-24T05:12:13Z +34s 3 B's snapshot + payload + the recorded run (inputs.mcap)
+=== 2026-10-24T05:15:16Z +217s R replay asis
+=== 2026-10-24T05:19:38Z +479s R asis done: 251.9 rc=0
+=== 2026-10-24T05:19:38Z +479s R replay t5
+=== 2026-10-24T05:23:47Z +728s R t5 done: 239.6 rc=0
+=== 2026-10-24T05:23:47Z +728s done

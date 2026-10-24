@@ -5058,3 +5058,163 @@ confirmed with amendments by B (2026-10-24).
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
+
+## 2026-10-24 — D232: the estimator is thread-count-invariant; the pipeline's critical path is the per-agent lane (measured)
+
+**Context.** M's pipeline profile (measurement only). Job 44b (`20261024T024346Z-cpux86-29bfe2`, c7i.4xlarge) replayed
+B's ma200 run (`70a514`: 200 s, 3 agents, pre-D179 lockstep) from its recorded `inputs.mcap`. It used that run's own
+snapshot, payload binaries and core image (by id), with the flags of `live.sh cmd_replay`. The only variable was the
+OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/perf/pipeline_profile_20261024/aws_replay/`.
+
+**Facts.**
+- **Thread-count invariance.** `estimate_body.tum` is bit-identical at pools of 16 (default), 5 and 2: all 3 agents,
+  4001 poses each, max position difference 0. It is also identical to B's own replay1. So, unlike `cv::ALIKED`
+  (LIVE_COLLAB §7: output depends on the thread count), the estimator's pool size is not part of the determinism
+  contract.
+- **Pool sizing barely helps.** Wall time 402.8 s (16), 383.4 s (5, −4.8 %), 417.9 s (2: keyframes 117 → 155 ms). PSI CPU
+  pressure is 9.4 % at 16 and 0.1 % at 5. Recommendation to B: default the worker pool to 5 threads (3 × 5 = 15 of 16
+  vCPU). Sizing does not close the RTF 0.52 → 1 gap.
+- **Critical path.** The 3 per-agent lane threads run at 93-97 % of one core each, while the box is 51 % busy and the
+  pool threads sit near 20 %. Per frame the lane spends ~94 ms (mean): ~36 ms in the worker's own track and keyframe
+  timers, and ~58 ms of ingest on the same thread. The ingest (`SimFrameAssembler::Feed`, per image) is a memcpy,
+  then the scalar single-threaded double-precision `ApplyLens`, then cvtColor, then a clone. Per-function attribution
+  comes from job 45 (perf).
+
+**Decision (M, 2026-10-24): the fix order sent to B.**
+- (a) Parallelise `ApplyLens` rows with `cv::parallel_for_`. Bit-identical, so no decision is needed.
+- (a2) Pipeline the lane: ingest of frame n+1 on a second thread while frame n tracks. A 2-stage in-order SPSC
+  hand-off on the same data, also bit-identical.
+- (a3) Remove the redundant copies where ownership allows.
+- (b) `cv::remap` with `CV_16SC2` maps is NOT taken. It changes pixels by ≤ 1 LSB, and every banked result consumed
+  the current operator (the record/replay invariant). Revisit only if (a) + (a2) miss RTF 1, as a pre-registered D41
+  amendment.
+
+## 2026-10-24 — D233: Phase 3.6 local-feature wire codings — pre-registered adoption rule (before any run)
+
+**Context.** M delegated 3.6 to A2 (2026-10-24). The MATCH_RESPONSE dominates the collaboration bytes: today's
+int8 / K1024 / float XYZ is ~136 kB per keyframe (3.2 sweep). M's survey (`collab_fast_survey.md` §1-2) finds no
+published test of the stock LightGlue-ALIKED weights on quantised or PCA'd inputs [UNVERIFIED], so this is measured
+on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/design/BYTES_3.6.md` (advisor-reviewed).
+
+**Method (fixed here).**
+- Inputs: the 120 real verify pairs of run `0345a5` (`pairs.py`: per scene 30 verified + 6 per rejection reason),
+  from the pass-A stores, which are production's exact features. ALIKED never runs.
+- Settings: 6 descriptor codings (fp32, int8 today, int4 uniform step 0.3352σ [Max 1960 via SECONDARY], bin1 sign,
+  PCA-64/32 with cv::PCA fitted on scene 1's stores only and an int8 per-component scale) × 4 geometry codings (xyz
+  today, z32, disparity u16 at 1/16 px, + u16 keypoints at 1/32 px), at K 1024.
+- K 512 cannot come from the stores: no scores are stored, and cv::ALIKED emits unsorted (order check: 515
+  inversions). It is judged by the same bars on job 70's knobs rows.
+- Bytes: `WireCodec(kFragmented).EncodeFeatureResponse` records (payload, zstd, +34 B per 1,466 B fragment).
+  Codings without a schema field are packed into the descriptors vector ([PROXY], ±16 B/KF).
+- Tool: `ariadne_perf_bench bytes`. Verdicts: `evaluation/runs/ph3/bytes_3.6_20261024/scripts/analyze.py`, which
+  is mechanical.
+
+**Rule.** Reference R = int8 / K1024 / xyz, run in the same process.
+- Controls:
+  - R re-verified at 4 other RANSAC seeds;
+  - fp32.
+- Precondition: R reproduces the production verdict on all 120 pairs. If it doesn't, the platform difference is
+  reported and flips stay measured against the in-run R.
+- A codec flip is an accept↔reject change vs R on a pair whose verdict is stable across R's 5 seeds.
+- Per coding (its own row, the other factor at today's value), on each scene (scene 0 is the held-out claim for PCA):
+  1. 0 codec flips in either direction;
+  2. median pnp_inliers(S)/pnp_inliers(R) over R-accepted pairs ≥ 0.90 (ProxyInformation σ ∝ √(30/n): ≤ 5.4 %
+     wider);
+  3. wire bytes/KF ≥ 15 kB below R (≥ 1 s of airtime at 15 kB/s).
+- **Adopted** only if bars 1, 2 and 3 all hold. **M decides** if bars 2 and 3 hold with 0 reject→accept and
+  ≤ 1 accept→reject codec flip per scene. Otherwise **not adopted**.
+- Pose error (D63 pose_err, GT t/r) is reported. It is flagged to M if S's median exceeds the largest median of R's
+  5 seeds.
+- If fp32 itself fails bar 1 or bar 2, nothing is adopted without M.
+- The combination row must itself clear bars 1-3. It reports the absolute bytes/KF next to the reduction, and
+  predicted vs measured wire bytes: the zstd ratio is calibrated on scene 1 and predicts scene 0, and today's
+  layout-blind predictor is shown alongside (I6, ≤ 15 %).
+- Reach: 0 flips bounds the stratified flip rate at ≤ 10 % per scene and direction, ≤ 5 % over both (95 %, rule of
+  three). It is a screen.
+
+**Approved:** M, 2026-10-24, as written, plus the two reporting additions (absolute bytes; predicted vs measured).
+Runs on test-compute's Kaggle CPU harness (4 vCPU AVX2; the platform difference is covered by the in-run R).
+
+## 2026-10-24 — D232 correction: the pool-sizing gain is −1.6 %, not −4.8 % (cold start in the first variant's wall)
+
+D232 quoted job 44b's walls from `wall_s.txt`, the container wall: 402.8 s (16), 383.4 s (5), 417.9 s (2). The 16-thread
+variant ran first and carries ~14 s of cold start. The runtime's own `results.yaml` wall_s is 389.1 s (16), 383.0 s
+(5) and 417.5 s (2). Job 45's 16-thread rerun of the same inputs gives 389.0 s. So 5 threads gain **−1.6 %**, not
+−4.8 %, over 16 threads.
+
+The conclusion is unchanged and stronger: pool sizing does not close the RTF gap. RTF is 0.514 (16) vs 0.522 (5).
+The 5-thread recommendation stands on PSI (9.4 % → 0.1 %), not on wall time. Both walls are tabulated by
+`evaluation/runs/perf/pipeline_profile_20261024/scripts/replay.py` → `processed/replay_runs.csv` (container_wall_s,
+runtime_wall_s).
+
+## 2026-10-24 — D235: D182 verdict — the l2conv ALIKED graph is NOT adopted (criteria i and ii missed); K 512 not adopted (D233)
+
+Job 70 (`20261024T051236Z-cpux86-d80b45`, c7i.4xlarge spot, $0.1168) measured D182's pre-registered criteria for the
+l2conv rewrite (ALIKED's dense ReduceL2 as a 1×1 ones-Conv). The 120 real verify pairs were re-extracted with
+ariadne_perf_kfdump. That re-extraction reproduces the pass-A stores: every keypoint is within 6.1e-5 px on all 178
+pair keyframes, and the store replay reproduces production on 120/120 pairs. Evidence:
+`evaluation/runs/perf/pipeline_profile_20261024/processed/{variants,fidelity,knobs}_summary.csv`.
+
+| Criterion | Bar | Measured | |
+|---|---|---|---|
+| (i) accept/reject flips vs 1280x720 K1024 | 0 | **1** (scene 0, pair (0,13)-(1,6): ref verified 68/30/25 → l2 67/29/0 essential_gate; production had rejected it, pnp_gate) | **miss** |
+| (ii) keypoints + scores bitwise; descriptor max \|diff\| | all; ≤ 4.9e-6 | 178/178 bitwise; **7.08e-6** (s0), 6.05e-6 (s1) | **miss** |
+| (iii) p50 at 8 threads | ≥ 1.5× | 1112.7 → 469.9 ms = **2.37×** (1 thread: 2303.6 → 1848.6 ms) | pass |
+
+**Decision: not adopted.** That is D182's rule as pre-registered: if (i) or (ii) misses, it is not adopted. It is not
+relaxed after the fact, although the flip is a borderline pair, one match from the essential gate, which production
+itself rejected. The local 2-keyframe check (≤ 2.07e-6) did not predict the 178-keyframe maximum.
+- The ready adoption commit (`fb05b8b`, branch `a2/d182-l2conv-adopt`) stays unmerged. Production keeps
+  `aliked_n16_k1024_1280x720.onnx`.
+- Revisiting it would need a new pre-registration with a RANSAC-seed envelope for the flip criterion (D233's
+  control). That is a new open, so it is outside the 2026-10-24 feature freeze.
+
+**K 512 (D233's job-70 row): not adopted.** `1280x720:512` against `1280x720:1024` loses 4 accepted pairs (bar: 0)
+at a median PnP-inlier ratio of 0.526 (bar ≥ 0.90).
+
+## 2026-10-24 — D234: Phase 3.6 result (D233's rule) — no wire coding adopted; the fp32 control fails, so the decision is M's; post-hoc: int4 and 1-bit reproduce fp32's verdicts
+
+Run `20261024T053045Z-kaggle-a2-bytes36`: Kaggle CPU (4 vCPU AMD EPYC 7B12, AVX2), commit `13cad72`, test-compute's
+off-AWS harness, $0. The run was 120 pairs × 24 settings plus 4 reseeds of R; the PCA was fitted on scene 1
+(623 KF, 637,952 rows, explained variance 0.703 at 32 components and 0.933 at 64). Evidence:
+`evaluation/runs/ph3/bytes_3.6_20261024/` (`raw_kaggle/`, `processed/`, `scripts/analyze.py`, `figures/`).
+
+**Pre-registered checks.**
+- **Precondition: pass.** R (int8/1024/xyz) reproduces the production verdict on 120/120 pairs, even on AVX2.
+- **Seed envelope: zero.** All 120 pairs are seed-stable and R's poses are identical across the 5 RANSAC seeds.
+  Every flip below is therefore a codec flip.
+- **Control: fp32 fails bar 1.** It has 1 reject→accept per scene against int8: scene 0 pair 0:299-1:53 is GT-true,
+  scene 1 pair 0:21-1:63 is GT-false. Today's int8 is already one verdict per scene from the uncompressed features.
+  By D233, nothing is adopted without M.
+
+**Per coding (D233 bars; R wire = 135.70 kB/KF; each row at the other factor's today value):**
+
+| Coding | wire kB/KF (vs R) | Codec flips s0 / s1 (r→a, a→r) | Median inlier ratio | D233 |
+|---|---|---|---|---|
+| fp32 (control) | 515.0 (+379) | 1,0 / 1,0 | 1.00 / 1.00 | not adopted (control) |
+| int4 | 79.4 (−56.3) | 1,0 / 1,0 | 0.996 / 1.00 | not adopted |
+| bin1 | 33.6 (−102.2) | 1,0 / 1,0 | 0.995 / 0.996 | not adopted |
+| pca64 | 77.6 (−58.1) | 1,0 / 0,0 | 1.00 / 1.00 | not adopted |
+| pca32 | 47.9 (−87.8) | 2,0 / 0,0 | 1.00 / 0.997 | not adopted |
+| z32 | 127.2 (−8.5) | 0,0 / 0,1 | 1.00 / 1.00 | not adopted (bars 1 and 3) |
+| disp16 | 126.2 (−9.5) | 0,0 / 0,0 | 1.00 / 1.00 | not adopted (bar 3) |
+| kp16 + disp16 | 122.8 (−12.9) | 0,0 / 1,0 | 1.00 / 1.00 | not adopted (bars 1 and 3) |
+
+- There is no combination row, since no coding was adopted. Pose error is reported in `coding_verdicts.csv`. Scene
+  0's medians are ~88-90°: most of its accepted edges are D176's aliased false edges (R: 14 GT-true of 30 accepted).
+- K 512 is not adopted (D235: job 70's knobs row).
+
+**Post-hoc, report-only** (`processed/posthoc_vs_fp32.csv`; written after the control failed and NOT part of the
+rule):
+- **int4 and bin1 give exactly fp32's verdict on all 120 pairs.** Their only differences from int8 are the two pairs
+  where int8 itself differs from fp32. On this sample, 1-bit descriptors (33.6 kB/KF, −75 %) are as faithful to the
+  uncompressed features as int8 (135.7 kB) is, or more faithful.
+- PCA-64 differs from fp32 on one pair: it rejects scene 1's GT-false edge. PCA-32 also accepts a GT-false edge
+  (0:13-1:6, the dangerous direction).
+- The lossless z32 flips a scene 1 pair, though its points differ from xyz only in the last float bit. A 0-flip bar
+  on this sample sits below its numeric resolution: borderline pairs flip at 1e-7 perturbations, independently of
+  RANSAC's seed.
+
+**Decision (M's, per the rule).** No coding is adopted under D233. Anything else needs a new pre-registration with
+fp32 as the reference and a flip tolerance justified by the 1-ulp floor above. That is a new open, so it waits
+until after the 2026-10-24 feature freeze.
