@@ -19,12 +19,15 @@ from manim import (DEGREES, DOWN, RIGHT, UP, AnimationGroup, Circle, DashedVMobj
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ariadne_video.data import load_scene  # noqa: E402
-from ariadne_video.mobjects import agent_marker, maze_frame, polyline  # noqa: E402
+from ariadne_video.mobjects import agent_marker, maze_frame, maze_walls, polyline  # noqa: E402
 from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, WALL, CaptionedScene, tag  # noqa: E402
 
 RADIO_RANGE_M = 9.0  # illustrative LOS radius for the shading only
 WALL_H = 2.95  # scene.json wall_height_m
 LIFT = UP * 0.55  # the top view sits above the subtitle band
+FRONT = dict(phi=64 * DEGREES, theta=-90 * DEGREES, zoom=1.75)  # angled perspective from the front (south)
+SIDE = dict(phi=64 * DEGREES, theta=-180 * DEGREES, zoom=1.75)  # the same perspective after a 90° anticlockwise turn
+MOVE_M = 1.6  # how far each robot advances down its starting hall on the closing question
 
 
 def los_polygon(sc, x0: float, y0: float, n: int = 240, rmax: float = RADIO_RANGE_M) -> np.ndarray:
@@ -73,13 +76,20 @@ class WorldGen(CaptionedScene, ThreeDScene):
         seed.to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
         self.add_fixed_in_frame_mobjects(seed)
 
-        # 1. perspective: the maze rises
-        self.set_camera_orientation(phi=64 * DEGREES, theta=-118 * DEGREES, zoom=1.75)  # close, low perspective
+        # 1. the floor plan from the front in angled perspective; it turns 90° anticlockwise to the side as the walls rise
+        cam = self.camera
+
+        def camera_to(run_time, phi, theta, zoom):
+            return [tr.animate(run_time=run_time, rate_func=smooth).set_value(v)
+                    for tr, v in ((cam.phi_tracker, phi), (cam.theta_tracker, theta), (cam.zoom_tracker, zoom))]
+
+        self.set_camera_orientation(**FRONT)
         self.add(dots, walls)
-        self.begin_ambient_camera_rotation(rate=0.06)
+        self.wait(0.6)
         self.say("Imagine a building after an earthquake.",
-                 run_with=[FadeIn(seed), LaggedStart(*[Transform(a, b) for a, b in zip(flat, full)], lag_ratio=0.035,
-                                                     run_time=3.6)])
+                 run_with=[FadeIn(seed), *camera_to(4.2, **SIDE),
+                           LaggedStart(*[Transform(a, b) for a, b in zip(flat, full)], lag_ratio=0.035, run_time=4.2)])
+        self.begin_ambient_camera_rotation(rate=-0.04)  # keep drifting anticlockwise
 
         tx, ty = sc.target_xy_m
         ring = Circle(radius=0.13, color=TARGET, stroke_width=3).move_to(f.p(tx, ty))
@@ -97,8 +107,12 @@ class WorldGen(CaptionedScene, ThreeDScene):
         g = maze_frame(sc, center=tuple(LIFT))  # same scale, lifted: everything placed from here on uses g
         bots = VGroup(*[agent_marker(e["agent"], g, *e["start_xy_m"], np.deg2rad(e["start_yaw_deg"]))
                         for e in sc.starts])
+        # top down, the 3D wall boxes read as doubled lines: cross-fade to the flat 2D map in the glide's last 30 %
+        flat_map = maze_walls(sc, g, width=3)
+        late = lambda t: smooth(min(1.0, max(0.0, (t - 0.7) / 0.3)))  # noqa: E731
         self.move_camera(phi=0, theta=-90 * DEGREES, zoom=1.0, run_time=2.6, rate_func=smooth,
-                         added_anims=[world.animate.shift(LIFT), halo.animate.set_stroke(opacity=0)])
+                         added_anims=[world.animate(rate_func=smooth).shift(LIFT), halo.animate.set_stroke(opacity=0),
+                                      FadeOut(walls, rate_func=late), FadeIn(flat_map, rate_func=late)])
         self.say("Before we send people in, we send three small robots.",
                  run_with=[LaggedStart(*[GrowFromCenter(b) for b in bots], lag_ratio=0.35, run_time=1.6)])
 
@@ -123,7 +137,7 @@ class WorldGen(CaptionedScene, ThreeDScene):
         moves, trails = [], VGroup()
         for e, b in zip(sc.starts, bots):
             route = sc.gt_routes_responder[e["agent"]]
-            path = polyline(g, head_m(route, 3.2), AGENT[e["agent"]])
+            path = polyline(g, head_m(route, MOVE_M), AGENT[e["agent"]])
             moves.append(MoveAlongPath(b, path, rate_func=linear, run_time=6.5))
             trails.add(TracedPath(b.get_center, stroke_color=AGENT[e["agent"]], stroke_width=3, stroke_opacity=0.8))
         self.add(trails)
@@ -137,9 +151,9 @@ class WorldGen(CaptionedScene, ThreeDScene):
                    color=DIM).next_to(title, DOWN, buff=0.3)
         self.add_fixed_in_frame_mobjects(title, sub)
         self.remove(title, sub)
-        self.play(walls.animate.set_opacity(0.12), VGroup(dots, ring, beam, bots).animate.set_opacity(0.15),
+        self.play(flat_map.animate.set_stroke(opacity=0.15), VGroup(dots, ring, beam, bots).animate.set_opacity(0.15),
                   trails.animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
         self.say("This is Ariadne, named for the thread that once led a hero out of a labyrinth.",
                  run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.2), FadeIn(sub, run_time=1.6)])
         self.clear_caption()
-        self.play(*[FadeOut(m) for m in (dots, walls, ring, beam, halo, bots, trails, title, sub)], run_time=0.8)
+        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, beam, halo, bots, trails, title, sub)], run_time=0.8)
