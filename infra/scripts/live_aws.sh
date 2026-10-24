@@ -65,6 +65,9 @@ cmd_payload() {   # SCENE... (one or more scene directories)
   # D221: the collab worker binary + the ONNX models ride the payload when present (.cache is gitignored, so the
   # tree sync never ships them; the collab run needs them at the configured relative paths).
   [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_collab_worker" ] && extra+=(build/docker/cpp/runtime/ariadne_collab_worker)
+  # Spool tooling rides along when built (in-region spool builds, D214 + D195: the maintainer's no-download rule)
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_sim_vo" ] && extra+=(build/docker/cpp/runtime/ariadne_sim_vo)
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_live_canonical" ] && extra+=(build/docker/cpp/runtime/ariadne_live_canonical)
   [ -d "$REPO_ROOT/.cache/models" ] && extra+=(.cache/models)
   (cd "$REPO_ROOT" && tar cf - build/docker/cpp/runtime/ariadne_live build/sim-plugins/libariadne_kinematic_mover.so \
      build/ros2/install "${extra[@]}" "$@") | tar xf - -C "$stage/p"
@@ -154,6 +157,35 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
+cmd_spool_s3() {   # S3_RUN_TARBALL SCENE - build per-agent recon spools from an S3 recording, in-region (D214/D195)
+  local tarball="$1" scene="$2"
+  local refs; refs="$(cmd_push)"
+  local uri; uri="$(cmd_payload "$scene")"
+  local script="$REPO_ROOT/build/live_payload/spools3-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $uri - | tar xz -C /tmp
+(cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
+cp -a /tmp/p/. .
+mkdir -p /tmp/runsrc
+aws s3 cp $tarball - | tar xz -C /tmp/runsrc
+inner=\$(find /tmp/runsrc -maxdepth 4 -name inputs.mcap | head -1 | xargs dirname)
+mkdir -p build/rec626 build/spools build/vo_out
+ARIADNE_CORE_IMAGE=ariadne/core-dev:dev infra/scripts/live_to_rec.sh "\$inner" $scene build/rec626 > \$R/live_to_rec.log 2>&1
+for k in 0 1 2; do
+  docker run --rm -u "\$(id -u):\$(id -g)" -v "\$PWD":/work -w /work ariadne/core-dev:dev \\
+    build/docker/cpp/runtime/ariadne_sim_vo --rec build/rec626 --scene $scene --agent \$k \\
+    --out build/vo_out/agent\$k --spool build/spools/agent\$k --recon-config configs/recon/recon_v1.yaml \\
+    > \$R/sim_vo_agent\$k.log 2>&1 || echo "sim_vo agent \$k FAILED" >> \$R/sim_vo_agent\$k.log
+done
+tar czf /tmp/spools.tar.gz -C build spools
+aws s3 cp --only-show-errors /tmp/spools.tar.gz \$RUN/output/spools.tar.gz
+(cd build/spools && find . -type f | sort | head -50) > \$R/spools_listing.txt
+du -sh build/spools >> \$R/spools_listing.txt
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
 cmd_batch() {
   local jobs="$1" max_min="$2"
   [ -f "$REPO_ROOT/$jobs" ] || { log "no job file $jobs"; exit 2; }
@@ -214,6 +246,7 @@ case "${1:-}" in
   smoke) shift; cmd_smoke "$@" ;;
   run) shift; cmd_run "$@" ;;
   replay-s3) shift; cmd_replay_s3 "$@" ;;
+  spool-s3) shift; cmd_spool_s3 "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
