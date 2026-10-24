@@ -25,8 +25,8 @@ from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, WALL, Capt
 RADIO_RANGE_M = 9.0  # illustrative LOS radius for the shading only
 WALL_H = 2.95  # scene.json wall_height_m
 LIFT = UP * 0.55  # the top view sits above the subtitle band
-FRONT = dict(phi=64 * DEGREES, theta=-90 * DEGREES, zoom=1.75)  # angled perspective from the front (south)
-SIDE = dict(phi=64 * DEGREES, theta=-180 * DEGREES, zoom=1.75)  # the same perspective after a 90° anticlockwise turn
+FRONT = dict(phi=64 * DEGREES, theta=-180 * DEGREES, zoom=1.75)  # angled perspective from the front (south)
+SIDE = dict(phi=64 * DEGREES, theta=-90 * DEGREES, zoom=1.75)  # the same perspective after a 90° anticlockwise turn
 MOVE_M = 1.6  # how far each robot advances down its starting hall on the closing question
 
 
