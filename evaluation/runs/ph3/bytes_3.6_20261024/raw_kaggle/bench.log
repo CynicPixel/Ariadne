@@ -1,0 +1,4 @@
+[ WARN:0@0.032] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+[ WARN:0@1.261] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+bytes: 120 pairs x 24 settings (+4 reseeds of int8/1024/xyz), PCA fit on scene 1 (637952 rows), threads 4
+rc=0

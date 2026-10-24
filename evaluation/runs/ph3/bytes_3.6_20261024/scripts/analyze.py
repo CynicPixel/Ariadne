@@ -10,6 +10,8 @@ Reads pairs.csv, bytes_kf.csv and geometry.csv; writes processed/:
   seed_envelope.csv     per scene: seed-stable pairs, R's accept count and median pose_err per seed
   coding_verdicts.csv   per coding row and scene: codec flips by direction, unstable flips, reason changes, median
                         pnp-inlier ratio, median pose_err vs R's envelope, bytes, and the D233 verdict
+  posthoc_vs_fp32.csv   POST-HOC, report-only: verdict differences of every setting vs int8 R and vs the fp32 control,
+                        with the GT class of each differing pair
   combination.csv       the adopted codings' joint row: the bars again, and predicted vs measured wire bytes
 Report-only (not bars): GT-true / GT-false accepts per setting (split at 1 m / 10 deg, see GT_TRUE_T).
 Verdict logic is D233 verbatim: adopted = bars 1 (0 codec flips) + 2 (inlier ratio >= 0.90) + 3 (>= 15 kB below R);
@@ -189,6 +191,22 @@ def main() -> int:
     put(a.out / "combination.csv", ["desc", "k", "geo", "verdict", "wire_kB", "zstd_ratio_cal_s1",
                                     "max_pred_err_pct_s0_new_formula", "mean_pred_err_pct_s0_today_predictor",
                                     "i6_gate_ok"], crow)
+    # POST-HOC, report-only (not part of D233's rule; written after the fp32 control failed): every setting's verdicts
+    # against the fp32 control instead of int8, with the GT class of each differing pair.
+    ph = []
+    for s in [("fp32", "1024", "xyz"), R] + DESC_ROWS[1:] + GEO_ROWS:
+        for sc in scenes:
+            keys = [k for k in res if k[0] == sc]
+            for ref_name, ref in (("int8_R", R), ("fp32", ("fp32", "1024", "xyz"))):
+                if s == ref:
+                    continue
+                diff = [k for k in keys if ok(res[k][(*s, 0)]) != ok(res[k][(*ref, 0)])]
+                ph.append([*s, sc, ref_name, len(diff),
+                           " ".join(f"{k[1][0]}:{k[1][1]}-{k[1][2]}:{k[1][3]}:{'acc' if ok(res[k][(*s, 0)]) else 'rej'}:"
+                                    f"{'GTtrue' if gt_true(res[k][(*s, 0)]) or gt_true(res[k][(*ref, 0)]) else 'GTfalse'}"
+                                    for k in diff)])
+    put(a.out / "posthoc_vs_fp32.csv", ["desc", "k", "geo", "scene", "reference", "verdict_differences",
+                                        "pairs (agent:kf-agent:kf:this setting's verdict:GT class)"], ph)
     print(f"R wire {r_wire / 1000:.2f} kB/KF; control fp32 {'ok' if control_ok else 'FAILS: nothing adopted without M'}")
     for s, v in overall.items():
         print(f"  {'/'.join(s)}: {v}")

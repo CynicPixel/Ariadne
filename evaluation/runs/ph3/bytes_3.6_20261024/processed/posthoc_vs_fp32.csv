@@ -1,0 +1,33 @@
+desc,k,geo,scene,reference,verdict_differences,pairs (agent:kf-agent:kf:this setting's verdict:GT class)
+fp32,1024,xyz,0,int8_R,1,0:299-1:53:acc:GTtrue
+fp32,1024,xyz,1,int8_R,1,0:21-1:63:acc:GTfalse
+int8,1024,xyz,0,fp32,1,0:299-1:53:rej:GTtrue
+int8,1024,xyz,1,fp32,1,0:21-1:63:rej:GTfalse
+int4,1024,xyz,0,int8_R,1,0:299-1:53:acc:GTtrue
+int4,1024,xyz,0,fp32,0,
+int4,1024,xyz,1,int8_R,1,0:21-1:63:acc:GTfalse
+int4,1024,xyz,1,fp32,0,
+bin1,1024,xyz,0,int8_R,1,0:299-1:53:acc:GTtrue
+bin1,1024,xyz,0,fp32,0,
+bin1,1024,xyz,1,int8_R,1,0:21-1:63:acc:GTfalse
+bin1,1024,xyz,1,fp32,0,
+pca64,1024,xyz,0,int8_R,1,0:299-1:53:acc:GTtrue
+pca64,1024,xyz,0,fp32,0,
+pca64,1024,xyz,1,int8_R,0,
+pca64,1024,xyz,1,fp32,1,0:21-1:63:rej:GTfalse
+pca32,1024,xyz,0,int8_R,2,0:13-1:6:acc:GTfalse 0:299-1:53:acc:GTtrue
+pca32,1024,xyz,0,fp32,1,0:13-1:6:acc:GTfalse
+pca32,1024,xyz,1,int8_R,0,
+pca32,1024,xyz,1,fp32,1,0:21-1:63:rej:GTfalse
+int8,1024,z32,0,int8_R,0,
+int8,1024,z32,0,fp32,1,0:299-1:53:rej:GTtrue
+int8,1024,z32,1,int8_R,1,0:131-1:63:rej:GTfalse
+int8,1024,z32,1,fp32,2,0:21-1:63:rej:GTfalse 0:131-1:63:rej:GTfalse
+int8,1024,disp16,0,int8_R,0,
+int8,1024,disp16,0,fp32,1,0:299-1:53:rej:GTtrue
+int8,1024,disp16,1,int8_R,0,
+int8,1024,disp16,1,fp32,1,0:21-1:63:rej:GTfalse
+int8,1024,kp16,0,int8_R,0,
+int8,1024,kp16,0,fp32,1,0:299-1:53:rej:GTtrue
+int8,1024,kp16,1,int8_R,1,0:21-1:63:acc:GTfalse
+int8,1024,kp16,1,fp32,0,

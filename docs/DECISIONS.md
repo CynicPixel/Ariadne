@@ -5171,3 +5171,50 @@ itself rejected. The local 2-keyframe check (≤ 2.07e-6) did not predict the 17
 
 **K 512 (D233's job-70 row): not adopted.** `1280x720:512` against `1280x720:1024` loses 4 accepted pairs (bar: 0)
 at a median PnP-inlier ratio of 0.526 (bar ≥ 0.90).
+
+## 2026-10-24 — D234: Phase 3.6 result (D233's rule) — no wire coding adopted; the fp32 control fails, so the decision is M's; post-hoc: int4 and 1-bit reproduce fp32's verdicts
+
+Run `20261024T053045Z-kaggle-a2-bytes36`: Kaggle CPU (4 vCPU AMD EPYC 7B12, AVX2), commit `13cad72`, test-compute's
+off-AWS harness, $0. The run was 120 pairs × 24 settings plus 4 reseeds of R; the PCA was fitted on scene 1
+(623 KF, 637,952 rows, explained variance 0.703 at 32 components and 0.933 at 64). Evidence:
+`evaluation/runs/ph3/bytes_3.6_20261024/` (`raw_kaggle/`, `processed/`, `scripts/analyze.py`, `figures/`).
+
+**Pre-registered checks.**
+- **Precondition: pass.** R (int8/1024/xyz) reproduces the production verdict on 120/120 pairs, even on AVX2.
+- **Seed envelope: zero.** All 120 pairs are seed-stable and R's poses are identical across the 5 RANSAC seeds.
+  Every flip below is therefore a codec flip.
+- **Control: fp32 fails bar 1.** It has 1 reject→accept per scene against int8: scene 0 pair 0:299-1:53 is GT-true,
+  scene 1 pair 0:21-1:63 is GT-false. Today's int8 is already one verdict per scene from the uncompressed features.
+  By D233, nothing is adopted without M.
+
+**Per coding (D233 bars; R wire = 135.70 kB/KF; each row at the other factor's today value):**
+
+| Coding | wire kB/KF (vs R) | Codec flips s0 / s1 (r→a, a→r) | Median inlier ratio | D233 |
+|---|---|---|---|---|
+| fp32 (control) | 515.0 (+379) | 1,0 / 1,0 | 1.00 / 1.00 | not adopted (control) |
+| int4 | 79.4 (−56.3) | 1,0 / 1,0 | 0.996 / 1.00 | not adopted |
+| bin1 | 33.6 (−102.2) | 1,0 / 1,0 | 0.995 / 0.996 | not adopted |
+| pca64 | 77.6 (−58.1) | 1,0 / 0,0 | 1.00 / 1.00 | not adopted |
+| pca32 | 47.9 (−87.8) | 2,0 / 0,0 | 1.00 / 0.997 | not adopted |
+| z32 | 127.2 (−8.5) | 0,0 / 0,1 | 1.00 / 1.00 | not adopted (bars 1 and 3) |
+| disp16 | 126.2 (−9.5) | 0,0 / 0,0 | 1.00 / 1.00 | not adopted (bar 3) |
+| kp16 + disp16 | 122.8 (−12.9) | 0,0 / 1,0 | 1.00 / 1.00 | not adopted (bars 1 and 3) |
+
+- There is no combination row, since no coding was adopted. Pose error is reported in `coding_verdicts.csv`. Scene
+  0's medians are ~88-90°: most of its accepted edges are D176's aliased false edges (R: 14 GT-true of 30 accepted).
+- K 512 is not adopted (D235: job 70's knobs row).
+
+**Post-hoc, report-only** (`processed/posthoc_vs_fp32.csv`; written after the control failed and NOT part of the
+rule):
+- **int4 and bin1 give exactly fp32's verdict on all 120 pairs.** Their only differences from int8 are the two pairs
+  where int8 itself differs from fp32. On this sample, 1-bit descriptors (33.6 kB/KF, −75 %) are as faithful to the
+  uncompressed features as int8 (135.7 kB) is, or more faithful.
+- PCA-64 differs from fp32 on one pair: it rejects scene 1's GT-false edge. PCA-32 also accepts a GT-false edge
+  (0:13-1:6, the dangerous direction).
+- The lossless z32 flips a scene 1 pair, though its points differ from xyz only in the last float bit. A 0-flip bar
+  on this sample sits below its numeric resolution: borderline pairs flip at 1e-7 perturbations, independently of
+  RANSAC's seed.
+
+**Decision (M's, per the rule).** No coding is adopted under D233. Anything else needs a new pre-registration with
+fp32 as the reference and a flip tolerance justified by the 1-ulp floor above. That is a new open, so it waits
+until after the 2026-10-24 feature freeze.
