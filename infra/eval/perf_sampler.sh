@@ -23,7 +23,7 @@
 # ---------------------------------------------------------------------------
 set -u
 OUT="${1:?usage: perf_sampler.sh OUTDIR}"
-mkdir -p "$OUT"
+mkdir -p "$OUT"; rm -f "$OUT/.stop"
 log() { echo "$(date -u +%FT%TZ) $*" >> "$OUT/sampler.log"; }
 PIDS=()
 log "start on $(hostname), $(nproc) vCPU, kernel $(uname -r)"
@@ -43,8 +43,13 @@ cgroup_snapshot() {   # $1 = label: cpu.stat of every running container's cgroup
 stop() {
   log "stop"
   cgroup_snapshot stop
+  touch "$OUT/.stop"                     # the shell loops poll it (a SIGINT to a looping bash is deferred, not fatal)
   for p in "${PIDS[@]}"; do kill -INT "$p" 2>/dev/null; done
-  wait 2>/dev/null
+  for _ in $(seq 15); do                 # explicit pids, bounded: never a bare wait (job 44's first sampler hung on it)
+    alive=0; for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && alive=1; done
+    [ "$alive" = 0 ] && break; sleep 1
+  done
+  for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && { kill -9 "$p" 2>/dev/null; log "killed $p after 15 s"; }; done
   if [ -s "$OUT/perf.data" ]; then
     timeout 300 perf report -i "$OUT/perf.data" --stdio --sort comm,dso --no-children 2>/dev/null \
       | head -200 > "$OUT/perf_report.txt"
@@ -59,9 +64,9 @@ if command -v mpstat >/dev/null; then
   S_TIME_FORMAT=ISO mpstat -P ALL 1 > "$OUT/mpstat.txt" 2>&1 & PIDS+=($!)
   S_TIME_FORMAT=ISO pidstat -t -u -w -h 1 > "$OUT/pidstat.txt" 2>&1 & PIDS+=($!)
 fi
-( while :; do echo "$(date -u +%FT%TZ) $(tr '\n' ' ' < /proc/pressure/cpu)"; sleep 1; done ) > "$OUT/psi_cpu.txt" 2>&1 &
+( while [ ! -e "$OUT/.stop" ]; do echo "$(date -u +%FT%TZ) $(tr '\n' ' ' < /proc/pressure/cpu)"; sleep 1; done ) > "$OUT/psi_cpu.txt" 2>&1 &
 PIDS+=($!)
-( while :; do echo "== $(date -u +%FT%TZ)"; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'
+( while [ ! -e "$OUT/.stop" ]; do echo "== $(date -u +%FT%TZ)"; docker stats --no-stream --format '{{.Name}} {{.CPUPerc}} {{.MemUsage}}'
   sleep 5; done ) > "$OUT/docker_stats.txt" 2>&1 & PIDS+=($!)
 if ! command -v perf >/dev/null; then
   apt-get -o DPkg::Lock::Timeout=120 install -y -qq "linux-tools-$(uname -r)" >/dev/null 2>&1 \
