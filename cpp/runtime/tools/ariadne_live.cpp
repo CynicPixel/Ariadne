@@ -27,6 +27,7 @@
 #include "collaboration/protocol/collab_node.hpp"
 #include "runtime/live/a1_planner.hpp"
 #include "runtime/live/collab_live.hpp"
+#include "runtime/live/lockstep_gate.hpp"
 #include "runtime/live/collab_tee.hpp"
 #include "runtime/live/multiagent_glue.hpp"
 #include "runtime/live/planner.hpp"
@@ -1356,20 +1357,12 @@ int main(int argc, char** argv) {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
-                // EVERY lane (D225: these two checks were still hardcoded to lanes 0 and 1 after the D213 N-lift;
-                // agent 2's estimator was never waited on, so under load its keyframes slid past barriers - the
-                // ma200 replay-to-replay trace divergence, integrated counts drifting -1 then -4 by t = 75 s).
-                const auto all_reached = [&] {
-                    for (const auto& L : lanes)
-                        if (!(L.done || L.progress >= T)) return false;
-                    return true;
-                };
+                // EVERY lane (D225: these checks were hardcoded to lanes 0 and 1 after the D213 N-lift - the
+                // ma200 replay divergence; the predicates live in lockstep_gate.hpp under a unit test now).
                 for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on every lane's consumption
-                    if (all_reached()) break;
+                    if (live::AllReached(lanes, T)) break;
                     if (is_live && lc.lockstep && paced_to < T && !input_done) {
-                        int64_t cmin = INT64_MAX;
-                        for (const auto& L : lanes) cmin = std::min(cmin, L.done ? INT64_MAX : L.progress);
-                        if (cmin >= paced_to - grace_ns) {
+                        if (live::MinProgress(lanes) >= paced_to - grace_ns) {
                             const int64_t next = std::min(paced_to + substep_ns, T);
                             lk.unlock();
                             RunTo(next);
@@ -1380,13 +1373,8 @@ int main(int argc, char** argv) {
                     }
                     progress_cv.wait_for(lk, std::chrono::milliseconds(200));
                 }
-                {
-                    bool all_done_short = true;
-                    for (const auto& L : lanes)
-                        if (!L.done || L.progress >= T) { all_done_short = false; break; }
-                    if (all_done_short) break;   // every estimator ended before T: the mission is over
-                }
-                // The previous decision's outcome is an input to this one: wait for both answers to the commands sent
+                if (live::AllDoneShort(lanes, T)) break;   // every estimator ended before T: the mission is over
+                // The previous decision's outcome is an input to this one: wait for EVERY agent's answer to the commands sent
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
                 if (T > replan_ns) {
                     const auto have = [&] {

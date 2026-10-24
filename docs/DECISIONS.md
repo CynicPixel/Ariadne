@@ -5237,3 +5237,16 @@ responses should be suppressed while the first response is still in flight is a 
 verification redesign (next bytes item), and is not settled here.
 **Pass/fail for the next byte-table run:** the existing I6 gate (each gated class ≤ 15 % error on first transmission),
 unchanged.
+
+## D225 addendum (2026-10-24, B): the deterministic gate guard + the N-generic audit
+
+- The barrier predicates are factored into runtime/live/lockstep_gate.hpp (AllReached / AllDoneShort /
+  MinProgress, templates over any lane range) and unit-tested (LockstepGate, 4 tests): ANY lagging lane holds
+  the barrier at N = 3 and 4, and PreD225ShapeTripsHere keeps the old lanes[0]&&[1] shape as a documented trip
+  target - it fails deterministically, no timing involved (M's call: the race was not reproducible in replay,
+  whose unbounded all-N answer wait hard-syncs the lanes; the on-instance replay x2 remains the e2e tripwire,
+  test_barrier_n3.sh the forward lane-skew invariant).
+- N-generic audit of the live lane (ariadne_live.cpp, live/*.hpp): the Reorderer's watermark is min over ALL
+  timed topics (built from every mission agent); the answer wait loops all NA; remaining "both"/"= 2" hits are
+  constructor DEFAULTS always overridden with NA, prose that is genuinely two-valued, or stale comments (two
+  LLM-chooser comment lines still say "both agents" over N-generic code; cosmetic).
