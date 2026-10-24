@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from manim import (DEGREES, DOWN, RIGHT, UP, AnimationGroup, Circle, DashedVMobject, Dot, FadeIn, FadeOut,
+from manim import (DEGREES, DOWN, RIGHT, UP, AnimationGroup, Circle, Create, DashedVMobject, Dot, FadeIn, FadeOut,
                    GrowFromCenter, LaggedStart, Line, MoveAlongPath, Polygon, Text, ThreeDScene, TracedPath,
                    Succession, Transform, VGroup, Wait, linear, smooth)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ariadne_video.data import load_scene  # noqa: E402
 from ariadne_video.mobjects import agent_marker, maze_frame, maze_walls, polyline  # noqa: E402
-from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, WALL, CaptionedScene, tag  # noqa: E402
+from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, WALL, CaptionedScene, tag  # noqa: E402
 
 RADIO_RANGE_M = 9.0  # illustrative LOS radius for the shading only
 WALL_H = 2.95  # scene.json wall_height_m
@@ -146,8 +146,9 @@ class WorldGen(CaptionedScene, ThreeDScene):
             moves.append(MoveAlongPath(b, path, rate_func=linear, run_time=6.5))
             trails.add(TracedPath(b.get_center, stroke_color=AGENT[e["agent"]], stroke_width=3, stroke_opacity=0.8))
         self.add(trails)
+        hint = DashedVMobject(polyline(g, sc.gt_routes_responder[0], THREAD, width=4, opacity=0.8), num_dashes=70)
         self.say("So the question is: can they put those pieces together, and find a safe way in, and out?",
-                 run_with=[*moves, VGroup(*[r[0] for r in radios]).animate(run_time=6.5).set_opacity(0.05)])
+                 run_with=[*moves, Create(hint, run_time=3.0), VGroup(*[r[0] for r in radios]).animate(run_time=6.5).set_opacity(0.05)])
         self.clear_caption()
 
         # beat 2: the title over the dimmed maze
@@ -157,8 +158,8 @@ class WorldGen(CaptionedScene, ThreeDScene):
         self.add_fixed_in_frame_mobjects(title, sub)
         self.remove(title, sub)
         self.play(flat_map.animate.set_stroke(opacity=0.15), VGroup(dots, ring, target2d, bots).animate.set_opacity(0.15),
-                  trails.animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
+                  VGroup(trails, hint).animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
         self.say("This is Ariadne, named for the thread that once led a hero out of a labyrinth.",
                  run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.2), FadeIn(sub, run_time=1.6)])
         self.clear_caption()
-        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, target2d, bots, trails, title, sub)], run_time=0.8)
+        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, target2d, bots, trails, hint, title, sub)], run_time=0.8)
