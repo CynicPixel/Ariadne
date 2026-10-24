@@ -1,0 +1,1 @@
+rendered 270 orbit frames, 4 stills, 4 align images, 2590315 Gaussians
