@@ -1,0 +1,12 @@
+label,stage,variant,engine,threads,p50_ms,p95_ms,mean_ms,cpu_mean_ms,n,out,digest1,digest2
+c3_t2_p0,aliked_extract,1280x720,cv_dnn_new,2,965.261,970.243,966.639,1491.34,12,1024,2a04105850881d3b,2a04105850881d3b
+c3_t2_p0,aliked_forward,1280x720,cv_dnn_new,2,955.573,961.49,955.498,1470.14,12,0,9a675db13f8f2a4a,9a675db13f8f2a4a
+c3_t2_p0,aliked_extract,960x540,cv_dnn_new,2,539.811,543.607,540.219,845.64,12,1024,de8dccc4c8183f78,de8dccc4c8183f78
+c3_t2_p0,aliked_forward,960x540,cv_dnn_new,2,538.123,539.959,538.996,841.587,12,0,ad66c023ea631ae0,ad66c023ea631ae0
+c3_t2_p0,aliked_extract,640x360,cv_dnn_new,2,272.763,277.661,273.649,438.013,12,1024,f298666617edae7a,f298666617edae7a
+c3_t2_p0,aliked_forward,640x360,cv_dnn_new,2,272.065,275.356,272.018,436.652,12,0,ef926dea28b06fed,ef926dea28b06fed
+c3_t2_p0,lightglue_match,K1024,cv_dnn_new,2,1029.07,1032.96,1025.59,2018.84,12,946,fd6b73e11a46aac3,fd6b73e11a46aac3
+c3_t2_p0,lightglue_match,K512,cv_dnn_new,2,380.964,383.137,379.084,749.399,12,437,e40a1c3069d082b8,e40a1c3069d082b8
+c3_t2_p0,lightglue_match,K256,cv_dnn_new,2,163.272,163.547,161.91,322.41,12,176,d7908e1b9162bb22,d7908e1b9162bb22
+c3_t2_p0,eigenplaces_describe,640x360,cv_dnn_classic,2,323.153,324.177,323.313,643.74,12,256,b96a1dffe3b31c4c,b96a1dffe3b31c4c
+c3_t2_p0,eigenplaces_describe,640x360,cv_dnn_new,2,499.894,501.126,499.253,997.262,12,256,d92f3c8909297a04,d92f3c8909297a04

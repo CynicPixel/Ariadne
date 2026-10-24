@@ -25,8 +25,8 @@ SE3 RandomPose(std::mt19937& g) {
 GravityPrior RandomPrior(std::mt19937& g) {
     std::normal_distribution<double> n(0.0, 1.0);
     GravityPrior p;
-    p.g_C = Vec3(n(g), n(g), n(g)).normalized();
-    p.g_ref_W = Vec3(n(g), n(g), n(g)).normalized();
+    p.g_C = Vec3{n(g), n(g), n(g)}.normalized();
+    p.g_ref_W = Vec3{n(g), n(g), n(g)}.normalized();
     p.information << 400, 50, 50, 900;
     return p;
 }

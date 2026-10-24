@@ -1,0 +1,31 @@
+[47/302] Building C object /work/.cache/feat-2.1-perception/fetchcontent/zstd-build/lib/CMakeFiles/libzstd_static.dir/__/__/__/lib/common/error_private.c.o
+376/696 Test #377: KltTracker.UsacEmptyModelDefectIsAbsorbedByARedraw ..................................................................***Skipped   0.01 sec
+477/696 Test #478: PgoOracle.AgreesWithGtsamOnEveryCase ................................................................................***Skipped   0.01 sec
+478/696 Test #479: PgoOracle.SeSyncBenchmarkGraphs .....................................................................................***Skipped   0.01 sec
+479/696 Test #480: PgoOracle.DampingAblation ...........................................................................................***Skipped   0.01 sec
+480/696 Test #481: PgoInit.SeSyncDeadReckoningGate .....................................................................................***Skipped   0.01 sec
+481/696 Test #482: PgoInit.ChordalRotationsAgreeWithGtsam ..............................................................................***Skipped   0.01 sec
+538/696 Test #539: Certificate.SeSyncBenchmarkGraphs ...................................................................................***Skipped   0.01 sec
+550/696 Test #551: LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs ....................................................***Skipped   0.01 sec
+576/696 Test #577: XFeatEngine.DescribeAtDetectedKeypointsIsTheDetectorsDescriptorExactly ..............................................***Skipped   0.01 sec
+577/696 Test #578: XFeatEngine.OneForwardPerImageWhateverIsAsked .......................................................................***Skipped   0.01 sec
+578/696 Test #579: XFeatEngine.MaskAppliesBeforeSelectionSoTheBudgetIsSpentWhereAllowed ................................................***Skipped   0.01 sec
+579/696 Test #580: XFeatEngine.PadModeNeverDetectsInThePad .............................................................................***Skipped   0.01 sec
+580/696 Test #581: XFeatEngine.ResizeModeMapsBackToImagePixels .........................................................................***Skipped   0.01 sec
+581/696 Test #582: XFeatEngine.DescribeRefusesOnlyPointsOutsideTheImage ................................................................***Skipped   0.01 sec
+598/696 Test #599: PlaceRecognizer.PreprocessingAndDescriptorMatchUpstream .............................................................***Skipped   0.01 sec
+599/696 Test #600: PlaceRecognizer.SimRgbPathMatchesUpstreamAndSeesAChannelSwap ........................................................***Skipped   0.01 sec
+601/696 Test #602: AlikedLightGlueReference.AlikedMatchesUpstream ......................................................................***Skipped   0.01 sec
+602/696 Test #603: AlikedLightGlueReference.LightGlueMatchesUpstream ...................................................................***Skipped   0.01 sec
+603/696 Test #604: AlikedLightGlueSimReference.AlikedMatchesUpstream ...................................................................***Skipped   0.01 sec
+604/696 Test #605: AlikedLightGlueSimReference.LightGlueMatchesUpstream ................................................................***Skipped   0.01 sec
+606/696 Test #607: HardPair.RejectsBadParamsAndTheWrongImageSize .......................................................................***Skipped   0.01 sec
+607/696 Test #608: HardPair.UpstreamModeReproducesUpstreamMatches ......................................................................***Skipped   0.01 sec
+608/696 Test #609: HardPair.SimRgbPathIsTheReferenceInputAndSeesAChannelSwap ...........................................................***Skipped   0.01 sec
+612/696 Test #613: DnnContract.XFeatSharedAcrossTwoThreadsIsByteIdentical ..............................................................***Skipped   0.01 sec
+613/696 Test #614: DnnContract.PlaceRecognizerSharedAcrossTwoThreadsIsByteIdentical ....................................................***Skipped   0.01 sec
+614/696 Test #615: DnnContract.HardPairMatcherSharedAcrossTwoThreadsIsByteIdentical ....................................................***Skipped   0.01 sec
+681/696 Test #682: VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice .................................................***Failed    0.02 sec
+689/696 Test #690: Engines/XFeatReference.ForwardAndDetectMatchUpstream/opencv_dnn_graph  # GetParam() = 4-byte object <00-00 00-00> ...***Skipped   0.01 sec
+690/696 Test #691: Engines/XFeatReference.ForwardAndDetectMatchUpstream/gemm_reference  # GetParam() = 4-byte object <01-00 00-00> .....***Skipped   0.01 sec
+691/696 Test #692: Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2 ...........................***Skipped   0.01 sec

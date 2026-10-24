@@ -22,6 +22,7 @@
 #include <set>
 #include <string>
 #include <utility>
+#include <limits>
 #include <vector>
 
 namespace ariadne::runtime::live {
@@ -42,12 +43,14 @@ struct KeyframeInput {
 struct PlanContext {   // sized by the scene's agent count (P8 D213: N agents; 2 everywhere before that)
     explicit PlanContext(int n_agents = 2)
         : active(size_t(n_agents), false), at(size_t(n_agents)),
-          position(size_t(n_agents), core::Vec3::Zero()), flown_m(size_t(n_agents), 0) {}
+          position(size_t(n_agents), core::Vec3::Zero()), yaw(size_t(n_agents), std::numeric_limits<double>::quiet_NaN()),
+          flown_m(size_t(n_agents), 0) {}
     int n() const { return int(active.size()); }
     int64_t T = 0;
     std::vector<char> active;                 // agent has an estimated pose before T (char: vector<bool> has no refs)
     std::vector<Cell> at;                     // its cell
     std::vector<core::Vec3> position;         // its estimated position in W
+    std::vector<double> yaw;                  // its estimated heading in W (camera optical axis, rad), NaN unknown (D117)
     std::vector<double> flown_m;   // metres flown to T: the ground-truth path length (the rig's executed motion)
     std::vector<std::pair<int, std::pair<double, double>>> refused_goals;  // the mover's refusals (agent, goal xy)
     std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
@@ -106,6 +109,7 @@ public:
     virtual size_t Integrate(const KeyframeInput& k) = 0;
     virtual PlanOutput Plan(const PlanContext& ctx) = 0;
     /// Waypoints (x, y) for agent's option i, and the final yaw (facing the task), from the planner's own space.
+    /// Empty = hold. One (NaN, NaN) waypoint = turn here to the yaw (D125). A NaN yaw = no final turn (D119).
     virtual std::pair<std::vector<std::pair<double, double>>, double> Route(const PlanOutput& p, int agent, int i,
                                                                            const Cell& from) const = 0;
 };

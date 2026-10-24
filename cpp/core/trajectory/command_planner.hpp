@@ -5,7 +5,9 @@
 // The live kinematic mover turns goto(pose) / follow(path) into the SAME segment
 // family the worldgen scripts use (python/dataset_tools/worldgen/{motion,routes}.py):
 // per waypoint, a turn in place to face it, then a straight move; after the last
-// waypoint, an optional turn to the commanded final yaw. Profiles are motion.py's
+// waypoint, an optional turn to the commanded final yaw. A waypoint whose x or y is NaN
+// means "here" (D125): only its final turn, if any, so an in-place turn never first faces
+// the centimetre offset between the planner's estimate and the rig's pose. Profiles are motion.py's
 // plan_profile; the cruise speed is routes.py's move_to rule,
 //   v = min(v_cap, v_lk * clearance_along(move), v_limit),
 // so a commanded path keeps the per-frame image motion inside the tracker's budget
@@ -50,7 +52,7 @@ struct MotionLimits {
 };
 
 struct Waypoint {
-    double x = 0, y = 0, z = 0;
+    double x = 0, y = 0, z = 0;   // x or y NaN = the rig's current position: no face-turn, no move (D125)
     bool has_yaw = false;   // the final waypoint's yaw is honoured; intermediate yaws are not (face the next one)
     double yaw = 0;
 };
@@ -89,6 +91,10 @@ inline std::vector<Segment> PlanCommand(const Vec5& from, double t0, const std::
     };
     for (size_t i = 0; i < path.size(); ++i) {
         const Waypoint& w = path[i];
+        if (std::isnan(w.x) || std::isnan(w.y)) {   // D125: "turn here", no position to drive to (D151 amendment)
+            if (i + 1 == path.size() && w.has_yaw) turn_to(w.yaw);
+            continue;
+        }
         const double d2 = std::hypot(w.x - x, w.y - y);
         if (d2 >= 1e-9 || std::abs(w.z - z) >= 1e-9) {
             if (d2 >= 1e-9) turn_to(std::atan2(w.y - y, w.x - x));

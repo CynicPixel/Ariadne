@@ -1,0 +1,17 @@
+desc,k,geo,scene,codec_flips_reject_to_accept,codec_flips_accept_to_reject,flips_on_seed_unstable_pairs,reject_reason_changes,median_pnp_inlier_ratio_vs_R,median_pose_err_deg,r_seed_envelope_max_median_pose_err_deg,pose_flag_to_M,r_gt_true_accepts,s_gt_true_accepts,s_gt_false_accepts,flips_of_r_gt_true_edges,wire_kB,reduction_vs_R_kB,verdict_scene,verdict
+fp32,1024,xyz,0,1,0,0,3,1.0,90.2819,89.7964,1,14,15,16,0,514.98,-379.28,not adopted,not adopted
+fp32,1024,xyz,1,1,0,0,2,1.0,0.3671,0.3657,1,27,27,4,0,514.98,-379.28,not adopted,not adopted
+int4,1024,xyz,0,1,0,0,4,0.9962,88.7047,89.7964,0,14,15,16,0,79.39,56.31,not adopted,not adopted
+int4,1024,xyz,1,1,0,0,4,1.0,0.2967,0.3657,0,27,27,4,0,79.39,56.31,not adopted,not adopted
+bin1,1024,xyz,0,1,0,0,12,0.995,88.6437,89.7964,0,14,15,16,0,33.55,102.15,not adopted,not adopted
+bin1,1024,xyz,1,1,0,0,9,0.996,0.3308,0.3657,0,27,27,4,0,33.55,102.15,not adopted,not adopted
+pca64,1024,xyz,0,1,0,0,9,1.0,87.4532,89.7964,0,14,15,16,0,77.57,58.13,not adopted,not adopted
+pca64,1024,xyz,1,0,0,0,6,1.0,0.383,0.3657,1,27,27,3,0,77.57,58.13,adopted,not adopted
+pca32,1024,xyz,0,2,0,0,11,1.0,87.1439,89.7964,0,14,15,17,0,47.94,87.76,not adopted,not adopted
+pca32,1024,xyz,1,0,0,0,9,0.9968,0.3232,0.3657,0,27,27,3,0,47.94,87.76,adopted,not adopted
+int8,1024,z32,0,0,0,0,0,1.0,89.7964,89.7964,1,14,14,16,0,127.17,8.53,not adopted,not adopted
+int8,1024,z32,1,0,1,0,1,1.0,0.3458,0.3657,0,27,27,2,0,127.17,8.53,not adopted,not adopted
+int8,1024,disp16,0,0,0,0,0,1.0,89.8774,89.7964,1,14,14,16,0,126.23,9.47,not adopted,not adopted
+int8,1024,disp16,1,0,0,0,2,1.0,0.343,0.3657,0,27,27,3,0,126.23,9.47,not adopted,not adopted
+int8,1024,kp16,0,0,0,0,2,1.0,87.5365,89.7964,0,14,14,16,0,122.8,12.9,not adopted,not adopted
+int8,1024,kp16,1,1,0,0,2,1.0007,0.3814,0.3657,1,27,27,4,0,122.8,12.9,not adopted,not adopted

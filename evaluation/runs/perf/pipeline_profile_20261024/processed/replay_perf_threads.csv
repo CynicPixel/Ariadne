@@ -1,0 +1,482 @@
+run,variant,tid,comm,dso,symbol,share_pct,ms_per_frame
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,ariadne_live,"ariadne::runtime::SimFrameAssembler::Feed(std::basic_string_view<char, std::char_traits<ch",5.78,50.38
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,ariadne_live,"ariadne::runtime::SimFrameAssembler::Feed(std::basic_string_view<char, std::char_traits<ch",5.75,50.11
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,ariadne_live,"ariadne::runtime::SimFrameAssembler::Feed(std::basic_string_view<char, std::char_traits<ch",5.75,50.11
+20261024T034527Z-cpux86-833096,asis,2970,ariadne_live,ariadne_live,ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage cons,2.18,19.0
+20261024T034527Z-cpux86-833096,asis,2910,ariadne_live,ariadne_live,"ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)",2.17,18.91
+20261024T034527Z-cpux86-833096,asis,2970,ariadne_live,ariadne_live,ZSTD_decompressSequences_bmi2.constprop.0,1.74,15.17
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.13,9.85
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.09,9.5
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.08,9.41
+20261024T034527Z-cpux86-833096,asis,2910,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const,0.6,5.23
+20261024T034527Z-cpux86-833096,asis,0,swapper,[kernel.kallsyms],intel_idle_xstate,0.33,2.88
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.33,2.88
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.33,2.88
+20261024T034527Z-cpux86-833096,asis,2981,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.31,2.7
+20261024T034527Z-cpux86-833096,asis,2981,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.31,2.7
+20261024T034527Z-cpux86-833096,asis,2983,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.3,2.61
+20261024T034527Z-cpux86-833096,asis,2982,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.3,2.61
+20261024T034527Z-cpux86-833096,asis,2982,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.29,2.53
+20261024T034527Z-cpux86-833096,asis,2983,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.29,2.53
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.29,2.53
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.28,2.44
+20261024T034527Z-cpux86-833096,asis,2984,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.28,2.44
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.27,2.35
+20261024T034527Z-cpux86-833096,asis,2910,ariadne_live,ariadne_live,"ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, ",0.27,2.35
+20261024T034527Z-cpux86-833096,asis,2998,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.27,2.35
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.27,2.35
+20261024T034527Z-cpux86-833096,asis,2999,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.26,2.27
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.26,2.27
+20261024T034527Z-cpux86-833096,asis,2998,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.26,2.27
+20261024T034527Z-cpux86-833096,asis,3013,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.25,2.18
+20261024T034527Z-cpux86-833096,asis,2984,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.25,2.18
+20261024T034527Z-cpux86-833096,asis,3013,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.25,2.18
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,2.18
+20261024T034527Z-cpux86-833096,asis,2999,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.24,2.09
+20261024T034527Z-cpux86-833096,asis,2997,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.24,2.09
+20261024T034527Z-cpux86-833096,asis,2997,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.24,2.09
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.24,2.09
+20261024T034527Z-cpux86-833096,asis,3000,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.24,2.09
+20261024T034527Z-cpux86-833096,asis,2981,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.23,2.0
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.23,2.0
+20261024T034527Z-cpux86-833096,asis,2974,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.23,2.0
+20261024T034527Z-cpux86-833096,asis,3000,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.23,2.0
+20261024T034527Z-cpux86-833096,asis,3014,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.23,2.0
+20261024T034527Z-cpux86-833096,asis,2983,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2982,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.22,1.92
+20261024T034527Z-cpux86-833096,asis,3015,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2983,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.22,1.92
+20261024T034527Z-cpux86-833096,asis,3014,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2971,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2982,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.22,1.92
+20261024T034527Z-cpux86-833096,asis,2981,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2984,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2984,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2998,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2997,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,3015,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2997,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.21,1.83
+20261024T034527Z-cpux86-833096,asis,3016,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2985,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2987,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,2986,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.83
+20261024T034527Z-cpux86-833096,asis,3016,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.2,1.74
+20261024T034527Z-cpux86-833096,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.2,1.74
+20261024T034527Z-cpux86-833096,asis,2998,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.2,1.74
+20261024T034527Z-cpux86-833096,asis,2999,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.2,1.74
+20261024T051058Z-cpux86-f94953,asis,2876,ariadne_live,ariadne_live,"ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)",2.86,19.53
+20261024T051058Z-cpux86-f94953,asis,2934,ariadne_live,ariadne_live,ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage cons,2.74,18.71
+20261024T051058Z-cpux86-f94953,asis,2934,ariadne_live,ariadne_live,ZSTD_decompressSequences_bmi2.constprop.0,2.45,16.73
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.72,11.74
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.68,11.47
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.66,11.33
+20261024T051058Z-cpux86-f94953,asis,2876,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const,0.78,5.33
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.49,3.35
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.47,3.21
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.42,2.87
+20261024T051058Z-cpux86-f94953,asis,2944,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.41,2.8
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.4,2.73
+20261024T051058Z-cpux86-f94953,asis,2945,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.73
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.39,2.66
+20261024T051058Z-cpux86-f94953,asis,2943,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.39,2.66
+20261024T051058Z-cpux86-f94953,asis,2944,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.39,2.66
+20261024T051058Z-cpux86-f94953,asis,2943,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.39,2.66
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.38,2.59
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.38,2.59
+20261024T051058Z-cpux86-f94953,asis,2961,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.37,2.53
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.37,2.53
+20261024T051058Z-cpux86-f94953,asis,2945,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.46
+20261024T051058Z-cpux86-f94953,asis,2946,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.36,2.46
+20261024T051058Z-cpux86-f94953,asis,2961,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.46
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.36,2.46
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.46
+20261024T051058Z-cpux86-f94953,asis,2946,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.35,2.39
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.35,2.39
+20261024T051058Z-cpux86-f94953,asis,2962,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.34,2.32
+20261024T051058Z-cpux86-f94953,asis,2962,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.34,2.32
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.33,2.25
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.33,2.25
+20261024T051058Z-cpux86-f94953,asis,2964,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.33,2.25
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.33,2.25
+20261024T051058Z-cpux86-f94953,asis,2964,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.33,2.25
+20261024T051058Z-cpux86-f94953,asis,2963,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.32,2.18
+20261024T051058Z-cpux86-f94953,asis,2876,ariadne_live,ariadne_live,"ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, ",0.32,2.18
+20261024T051058Z-cpux86-f94953,asis,2978,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.32,2.18
+20261024T051058Z-cpux86-f94953,asis,2963,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.32,2.18
+20261024T051058Z-cpux86-f94953,asis,2944,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.32,2.18
+20261024T051058Z-cpux86-f94953,asis,2979,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.31,2.12
+20261024T051058Z-cpux86-f94953,asis,2979,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.31,2.12
+20261024T051058Z-cpux86-f94953,asis,2978,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.3,2.05
+20261024T051058Z-cpux86-f94953,asis,2945,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.3,2.05
+20261024T051058Z-cpux86-f94953,asis,2943,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.3,2.05
+20261024T051058Z-cpux86-f94953,asis,2980,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.29,1.98
+20261024T051058Z-cpux86-f94953,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.29,1.98
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.29,1.98
+20261024T051058Z-cpux86-f94953,asis,2946,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.29,1.98
+20261024T051058Z-cpux86-f94953,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.29,1.98
+20261024T051058Z-cpux86-f94953,asis,2980,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.28,1.91
+20261024T051058Z-cpux86-f94953,asis,2943,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.27,1.84
+20261024T051058Z-cpux86-f94953,asis,2944,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.27,1.84
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2945,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2979,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2963,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2962,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.26,1.78
+20261024T051058Z-cpux86-f94953,asis,2961,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2978,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2946,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2961,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2947,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2962,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2964,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2978,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.25,1.71
+20261024T051058Z-cpux86-f94953,asis,2964,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2963,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2977,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2979,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2935,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2980,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2876,ariadne_live,ariadne_live,"ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<aria",0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2965,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.24,1.64
+20261024T051058Z-cpux86-f94953,asis,2948,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.23,1.57
+20261024T051058Z-cpux86-f94953,asis,2977,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.23,1.57
+20261024T051058Z-cpux86-f94953,asis,2966,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.23,1.57
+20261024T051058Z-cpux86-f94953,asis,2876,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const,0.22,1.5
+20261024T051058Z-cpux86-f94953,asis,2938,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.22,1.5
+20261024T051058Z-cpux86-f94953,asis,2949,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.22,1.5
+20261024T051058Z-cpux86-f94953,asis,2981,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.22,1.5
+20261024T051058Z-cpux86-f94953,asis,0,swapper,[kernel.kallsyms],intel_idle_xstate,0.22,1.5
+20261024T051058Z-cpux86-f94953,asis,2980,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.21,1.43
+20261024T051058Z-cpux86-f94953,asis,2951,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.43
+20261024T051058Z-cpux86-f94953,asis,2941,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.21,1.43
+20261024T051058Z-cpux86-f94953,asis,2982,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.21,1.43
+20261024T051058Z-cpux86-f94953,asis,2967,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.2,1.37
+20261024T051058Z-cpux86-f94953,t5,5181,ariadne_live,ariadne_live,ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage cons,3.33,19.36
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,"ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)",3.2,18.6
+20261024T051058Z-cpux86-f94953,t5,5181,ariadne_live,ariadne_live,ZSTD_decompressSequences_bmi2.constprop.0,2.84,16.51
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.89,10.99
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.86,10.81
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.83,10.64
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const,0.89,5.17
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.73,4.24
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.69,4.01
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.68,3.95
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.67,3.89
+20261024T051058Z-cpux86-f94953,t5,5193,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.66,3.84
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.66,3.84
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.66,3.84
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.64,3.72
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.64,3.72
+20261024T051058Z-cpux86-f94953,t5,5199,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.64,3.72
+20261024T051058Z-cpux86-f94953,t5,5200,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.63,3.66
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.62,3.6
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.62,3.6
+20261024T051058Z-cpux86-f94953,t5,5204,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.6,3.49
+20261024T051058Z-cpux86-f94953,t5,5205,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.6,3.49
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.56,3.26
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.56,3.26
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.53,3.08
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.53,3.08
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.52,3.02
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.51,2.96
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.5,2.91
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.47,2.73
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.47,2.73
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.46,2.67
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.45,2.62
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.43,2.5
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.41,2.38
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.41,2.38
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.4,2.33
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.33
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.4,2.33
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,"ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, ",0.39,2.27
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.39,2.27
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.39,2.27
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.39,2.27
+20261024T051058Z-cpux86-f94953,t5,5199,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.38,2.21
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.37,2.15
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.09
+20261024T051058Z-cpux86-f94953,t5,5199,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.09
+20261024T051058Z-cpux86-f94953,t5,5204,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.35,2.03
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.35,2.03
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.35,2.03
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.34,1.98
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.33,1.92
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.33,1.92
+20261024T051058Z-cpux86-f94953,t5,5204,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.33,1.92
+20261024T051058Z-cpux86-f94953,t5,5200,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.32,1.86
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.32,1.86
+20261024T051058Z-cpux86-f94953,t5,0,swapper,[kernel.kallsyms],intel_idle_xstate,0.31,1.8
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.31,1.8
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.31,1.8
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.31,1.8
+20261024T051058Z-cpux86-f94953,t5,5193,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.31,1.8
+20261024T051058Z-cpux86-f94953,t5,5193,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5200,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.74
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,"ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<aria",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5193,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5199,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5205,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T051058Z-cpux86-f94953,t5,5204,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T051058Z-cpux86-f94953,t5,5200,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T051058Z-cpux86-f94953,t5,5204,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.28,1.63
+20261024T051058Z-cpux86-f94953,t5,5199,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.27,1.57
+20261024T051058Z-cpux86-f94953,t5,5200,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5205,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const,0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.25,1.45
+20261024T051058Z-cpux86-f94953,t5,5205,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.24,1.4
+20261024T051058Z-cpux86-f94953,t5,5193,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.24,1.4
+20261024T051058Z-cpux86-f94953,t5,5122,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Centre(ariadne::planning::Idx3 const&) const,0.24,1.4
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.24,1.4
+20261024T051058Z-cpux86-f94953,t5,5197,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.23,1.34
+20261024T051058Z-cpux86-f94953,t5,5202,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.23,1.34
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.23,1.34
+20261024T051058Z-cpux86-f94953,t5,5188,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.23,1.34
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.22,1.28
+20261024T051058Z-cpux86-f94953,t5,5182,ariadne_live,libopencv_stereo.so.5.0.0,void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const,0.21,1.22
+20261024T051058Z-cpux86-f94953,t5,5198,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.22
+20261024T051058Z-cpux86-f94953,t5,5181,ariadne_live,libc.so.6,0x00000000001a1852,0.21,1.22
+20261024T051058Z-cpux86-f94953,t5,5190,ariadne_live,libopencv_stereo.so.5.0.0,void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const,0.2,1.16
+20261024T051058Z-cpux86-f94953,t5,5185,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.2,1.16
+20261024T051058Z-cpux86-f94953,t5,5203,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.2,1.16
+20261024T051058Z-cpux86-f94953,t5,5205,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.2,1.16
+20261024T051058Z-cpux86-f94953,t5,5191,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.2,1.16
+20261024T051058Z-cpux86-f94953,t5,5192,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.2,1.16
+20261024T072608Z-cpux86-4d412c,t5,2937,ariadne_live,ariadne_live,ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage cons,3.29,19.14
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,"ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)",3.24,18.85
+20261024T072608Z-cpux86-4d412c,t5,2937,ariadne_live,ariadne_live,ZSTD_decompressSequences_bmi2.constprop.0,2.84,16.52
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.93,11.23
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.91,11.11
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.87,10.88
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const,0.88,5.12
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.73,4.25
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.69,4.01
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.68,3.96
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.68,3.96
+20261024T072608Z-cpux86-4d412c,t5,2949,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.67,3.9
+20261024T072608Z-cpux86-4d412c,t5,2948,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.67,3.9
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.65,3.78
+20261024T072608Z-cpux86-4d412c,t5,2955,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.65,3.78
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.65,3.78
+20261024T072608Z-cpux86-4d412c,t5,2956,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.64,3.72
+20261024T072608Z-cpux86-4d412c,t5,2957,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.63,3.67
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.62,3.61
+20261024T072608Z-cpux86-4d412c,t5,2962,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.61,3.55
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.61,3.55
+20261024T072608Z-cpux86-4d412c,t5,2963,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.59,3.43
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.55,3.2
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.54,3.14
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.5,2.91
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.49,2.85
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.49,2.85
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.48,2.79
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.47,2.73
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.46,2.68
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.46,2.68
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.45,2.62
+20261024T072608Z-cpux86-4d412c,t5,2948,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.44,2.56
+20261024T072608Z-cpux86-4d412c,t5,2948,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.5
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.43,2.5
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.5
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.42,2.44
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.4,2.33
+20261024T072608Z-cpux86-4d412c,t5,2956,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.33
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.33
+20261024T072608Z-cpux86-4d412c,t5,2955,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.33
+20261024T072608Z-cpux86-4d412c,t5,2956,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.4,2.33
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,"ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, ",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2949,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2955,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.39,2.27
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.37,2.15
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.37,2.15
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.37,2.15
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.09
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.09
+20261024T072608Z-cpux86-4d412c,t5,2949,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.09
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.35,2.04
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.35,2.04
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.34,1.98
+20261024T072608Z-cpux86-4d412c,t5,2962,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.34,1.98
+20261024T072608Z-cpux86-4d412c,t5,2962,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.34,1.98
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.34,1.98
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.33,1.92
+20261024T072608Z-cpux86-4d412c,t5,2948,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.33,1.92
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.32,1.86
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.32,1.86
+20261024T072608Z-cpux86-4d412c,t5,2955,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,0,swapper,[kernel.kallsyms],intel_idle_xstate,0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2957,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2956,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2955,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.31,1.8
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2963,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2962,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2948,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2963,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.3,1.75
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.29,1.69
+20261024T072608Z-cpux86-4d412c,t5,2956,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.29,1.69
+20261024T072608Z-cpux86-4d412c,t5,2949,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.69
+20261024T072608Z-cpux86-4d412c,t5,2957,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.29,1.69
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.28,1.63
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,"ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<aria",0.28,1.63
+20261024T072608Z-cpux86-4d412c,t5,2957,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T072608Z-cpux86-4d412c,t5,2963,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.63
+20261024T072608Z-cpux86-4d412c,t5,2949,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.28,1.63
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.27,1.57
+20261024T072608Z-cpux86-4d412c,t5,2962,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.26,1.51
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const,0.26,1.51
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.25,1.45
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.24,1.4
+20261024T072608Z-cpux86-4d412c,t5,2963,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.23,1.34
+20261024T072608Z-cpux86-4d412c,t5,2957,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.23,1.34
+20261024T072608Z-cpux86-4d412c,t5,2954,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.23,1.34
+20261024T072608Z-cpux86-4d412c,t5,2879,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Centre(ariadne::planning::Idx3 const&) const,0.23,1.34
+20261024T072608Z-cpux86-4d412c,t5,2944,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.23,1.34
+20261024T072608Z-cpux86-4d412c,t5,2941,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.22,1.28
+20261024T072608Z-cpux86-4d412c,t5,2960,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.22,1.28
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2961,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2938,ariadne_live,libopencv_stereo.so.5.0.0,void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const,0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2947,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2937,ariadne_live,libc.so.6,0x00000000001a1852,0.21,1.22
+20261024T072608Z-cpux86-4d412c,t5,2946,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.2,1.16
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5077,ariadne_live,ariadne_live,ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage cons,3.3,19.02
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,"ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)",3.24,18.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5077,ariadne_live,ariadne_live,ZSTD_decompressSequences_bmi2.constprop.0,2.87,16.54
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.92,11.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.87,10.78
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_features.so.5.0.0,"cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigne",1.87,10.78
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const,0.88,5.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.7,4.03
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.68,3.92
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.67,3.86
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.66,3.8
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5089,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.66,3.8
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.65,3.75
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.64,3.69
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.63,3.63
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.63,3.63
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5095,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.62,3.57
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5096,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.62,3.57
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.61,3.52
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.6,3.46
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5100,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.6,3.46
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5101,ariadne_live,libopencv_video.so.5.0.0,cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const,0.59,3.4
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.55,3.17
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.53,3.05
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.49,2.82
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.49,2.82
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.49,2.82
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.48,2.77
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.48,2.77
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.48,2.77
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.47,2.71
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.46,2.65
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.45,2.59
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.44,2.54
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.44,2.54
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.43,2.48
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.43,2.48
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.42,2.42
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.41,2.36
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.4,2.31
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.39,2.25
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,"ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, ",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5089,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5095,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.38,2.19
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5089,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.37,2.13
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_features.so.5.0.0,"void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::K",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5100,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5100,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5095,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.36,2.07
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5096,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.34,1.96
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5096,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.34,1.96
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.32,1.84
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.32,1.84
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.32,1.84
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.32,1.84
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.31,1.79
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.31,1.79
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.31,1.79
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5101,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, shor",0.31,1.79
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,0,swapper,[kernel.kallsyms],intel_idle_xstate,0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5101,ariadne_live,libopencv_stereo.so.5.0.0,"void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5095,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5096,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.3,1.73
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5089,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5089,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5101,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5100,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,"ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<aria",0.29,1.67
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5100,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.28,1.61
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5095,ariadne_live,libopencv_imgproc.so.5.0.0,"void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, sh",0.28,1.61
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.27,1.56
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const,0.27,1.56
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.25,1.44
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5096,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.25,1.44
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5084,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.24,1.38
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5020,ariadne_live,ariadne_live,ariadne::planning::TsdfMap::Centre(ariadne::planning::Idx3 const&) const,0.24,1.38
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5093,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.23,1.33
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.23,1.33
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_core.so.5.0.0,"cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)",0.23,1.33
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5101,ariadne_live,libopencv_stereo.so.5.0.0,"cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*,",0.23,1.33
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5098,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.22,1.27
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5088,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.22,1.27
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5087,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.21,1.21
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5081,ariadne_live,libopencv_stereo.so.5.0.0,"cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const",0.21,1.21
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5086,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.21
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5099,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.21,1.21
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5094,ariadne_live,libopencv_imgproc.so.5.0.0,"void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoin",0.2,1.15
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5077,ariadne_live,libc.so.6,0x00000000001a1852,0.2,1.15
+20261024T072608Z-cpux86-4d412c,t5_nopipe,5078,ariadne_live,libopencv_stereo.so.5.0.0,void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const,0.2,1.15

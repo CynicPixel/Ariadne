@@ -1,0 +1,25 @@
+# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.
+mode: live
+scene_id: cf0a7408605aa84f
+live_config: live_v1
+mission_config: mission_v1
+end_s: 200
+consumed: {messages: 192129, digest_fnv1a64: '56b857a9d5032b33'}
+replans: 40
+commands_sent: 80
+commands_decided: 80
+lockstep: true
+estimator_processes: true
+planner: a1_phase4:ariadne
+shadow_map: p4slab (Phase 4 TSDF)
+reorder_released_on_timeout: 0
+reorder_released_out_of_order: 0
+unrouted_messages: 0
+answer_timeouts: 0
+refused_goals: 0
+wall_s: 649.538
+end_to_end_rtf: 0.307911   # sim seconds per wall second, whole run incl. startup; gz's own view is gz_stats.jsonl
+agents:
+  - {agent: 0, frames: 4001, keyframes: 329, unpaired_frames_dropped: 0, keyframes_integrated: 329, image_queue_max_depth: 1, track_mean_ms: 97.3374, track_max_ms: 259.295, lock_mean_ms: 0.000228865, lock_max_ms: 0.000751, queue_wait_mean_ms: 63.35}
+  - {agent: 1, frames: 4001, keyframes: 325, unpaired_frames_dropped: 0, keyframes_integrated: 325, image_queue_max_depth: 1, track_mean_ms: 96.2816, track_max_ms: 261.668, lock_mean_ms: 0.000291244, lock_max_ms: 0.014866, queue_wait_mean_ms: 64.4089}
+rays: 98659

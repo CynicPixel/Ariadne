@@ -1,0 +1,13 @@
+=== 2026-10-24T00:12:42Z +0s 0 host
+=== 2026-10-24T00:12:42Z +0s 1 docker + buildx + sysstat
+=== 2026-10-24T00:13:02Z +20s 2 opencv-base + core dev (x86_64, from source)
+=== 2026-10-24T00:17:47Z +305s 3 inputs
+=== 2026-10-24T00:17:49Z +307s 4 build
+=== 2026-10-24T00:19:10Z +388s T single process, 1 threads
+=== 2026-10-24T00:21:47Z +545s T single process, 2 threads
+=== 2026-10-24T00:24:34Z +712s T single process, 4 threads
+=== 2026-10-24T00:26:38Z +836s T single process, 8 threads
+=== 2026-10-24T00:28:23Z +941s T single process, 16 threads
+=== 2026-10-24T00:30:07Z +1045s T three concurrent processes x 2 threads
+=== 2026-10-24T01:57:04Z SALVAGED: bare wait also waited on mpstat (hang at the c3 step); timing copied, script stopped by A2 via SSM
+=== 2026-10-24T01:57:04Z +6262s T three concurrent processes x 4 threads

@@ -1,0 +1,57 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: cf0a7408605aa84f-live-20261024T055913Z
+created_utc: "2026-10-24T06:10:03Z"
+git_commit: ""
+git_dirty: false
+image_digest: "sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim-live/cf0a7408605aa84f
+seed: 1
+agent_count: 2
+execution_mode: live
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: mission_v1
+degradation_config: UNRECORDED
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: UNRECORDED
+place_recognition: UNRECORDED
+loop_backend: UNRECORDED
+reconstruction_backend: UNRECORDED
+imu_mode: attitude_only
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: not_applicable
+lost_handling: not_applicable
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+collab: false
+command: build/docker/cpp/runtime/ariadne_live --scene build/live/scenes/ci_tiny_2 --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml --mission-config configs/mission/mission_v1.yaml --live-config build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966/live_config.yaml --out build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966 --link build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966/link.sock --planner-config build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966/planner_config.yaml --shadow-map-config build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966/shadow_map_config.yaml
+live_config: build/live/batch/job01_ci_tiny_2_mission_v2_ariadne_v0/live-20261024T055913Z-a966/live_config.yaml
+perception_config: configs/perception/sim_v1.yaml
+planner: frontier candidates (1.8) + chooser classical
+slam_config: configs/slam/sim_v1.yaml

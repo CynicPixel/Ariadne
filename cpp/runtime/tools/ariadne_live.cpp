@@ -1543,6 +1543,7 @@ int main(int argc, char** argv) {
                         ctx.active[k] = true;
                         ctx.at[k] = brief.ToCell(Tw.t.x(), Tw.t.y());
                         ctx.position[k] = Tw.t;
+                        ctx.yaw[size_t(k)] = YawOfCamera(Tw);   // D117: C_time starts from the current heading
                         break;
                     }
                 }
@@ -2210,6 +2211,8 @@ int main(int argc, char** argv) {
                 o.precision(10);
                 o << pd.head;
                 runtime::ros_cdr::PoseArray cmd;
+                bool turn_here = false;   // D125: the command is one in-place turn (trace kind "turn")
+                double turn_yaw = 0;
                 cmd.header.stamp.sec = int32_t(T / 1000000000);
                 cmd.header.stamp.nanosec = uint32_t(T % 1000000000);
                 cmd.header.frame_id = "world";
@@ -2253,23 +2256,40 @@ int main(int argc, char** argv) {
                             path.erase(path.begin(), path.begin() + long(std::min(nearest, path.size() - 1)));
                         }
                     }
-                    if (!path.empty()) last_goal[k] = path.back();
-                    for (const auto& [x, y] : path) {
-                        runtime::ros_cdr::Pose p;
-                        p.position = {x, y, brief.entry_z[size_t(k)]};
-                        p.orientation = {0, 0, 0, 0};   // no yaw: face the next waypoint (D151)
-                        cmd.poses.push_back(p);
-                    }
-                    if (!cmd.poses.empty() && lc.face_frontier) {
-                        cmd.poses.back().orientation = {0, 0, std::sin(0.5 * face_yaw), std::cos(0.5 * face_yaw)};
+                    if (path.size() == 1 && std::isnan(path[0].first)) {   // D125: an at-cell view, a turn here
+                        if (lc.face_frontier && std::isfinite(face_yaw)) {     // without face_frontier: nothing to do, hold
+                            runtime::ros_cdr::Pose p;   // NaN x, y = the rig's own position (D151 amendment)
+                            p.position = {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(),
+                                          brief.entry_z[size_t(k)]};
+                            p.orientation = {0, 0, std::sin(0.5 * face_yaw), std::cos(0.5 * face_yaw)};
+                            cmd.poses.push_back(p);
+                            turn_here = true, turn_yaw = face_yaw;
+                            last_goal[k] = g;   // the view's eye: a refusal excludes it, as for any goal
+                        }
+                    } else {
+                        if (!path.empty()) last_goal[k] = path.back();
+                        for (const auto& [x, y] : path) {
+                            runtime::ros_cdr::Pose p;
+                            p.position = {x, y, brief.entry_z[size_t(k)]};
+                            p.orientation = {0, 0, 0, 0};   // no yaw: face the next waypoint (D151)
+                            cmd.poses.push_back(p);
+                        }
+                        // D119: a NaN yaw = a cut command, which ends short of the view: no final turn.
+                        if (!cmd.poses.empty() && lc.face_frontier && std::isfinite(face_yaw)) {
+                            cmd.poses.back().orientation = {0, 0, std::sin(0.5 * face_yaw), std::cos(0.5 * face_yaw)};
+                        }
                     }
                 }
                 const std::string result = cmd.poses.empty() ? "hold" : "go";
                 o << "\"chosen\":" << pick << ",\"min_goal_m\":" << lc.min_goal_m << ",\"result\":\"" << result
                   << "\",\"command\":{\"stamp_ns\":" << T << ",\"topic\":\"" << cmd_topic.at(k) << "\",\"kind\":\""
-                  << (cmd.poses.empty() ? "hold" : cmd.poses.size() == 1 ? "goto" : "follow") << "\",\"waypoints_xy_m\":[";
-                for (size_t i = 0; i < cmd.poses.size(); ++i) o << (i ? "," : "") << Xy(cmd.poses[i].position.x, cmd.poses[i].position.y);
-                o << "]}" << choice[k] << "}";
+                  << (turn_here ? "turn" : cmd.poses.empty() ? "hold" : cmd.poses.size() == 1 ? "goto" : "follow")
+                  << "\",\"waypoints_xy_m\":[";
+                if (!turn_here)   // the turn's NaN position stays in the PoseArray only: the trace is JSON (B's rule)
+                    for (size_t i = 0; i < cmd.poses.size(); ++i) o << (i ? "," : "") << Xy(cmd.poses[i].position.x, cmd.poses[i].position.y);
+                o << "]";
+                if (turn_here) o << ",\"turn_yaw\":" << turn_yaw;
+                o << "}" << choice[k] << "}";
                 trace.Put(o.str());
                 telemetry.Put("{\"type\":\"decision\",\"record\":" + o.str() + "}");
                 commands.Put("{\"agent\":" + std::to_string(k) + ",\"stamp_ns\":" + std::to_string(T) + ",\"poses\":" +

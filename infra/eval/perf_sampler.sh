@@ -50,9 +50,9 @@ stop() {
     [ "$alive" = 0 ] && break; sleep 1
   done
   for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && { kill -9 "$p" 2>/dev/null; log "killed $p after 15 s"; }; done
-  if [ -s "$OUT/perf.data" ]; then
-    timeout 300 perf report -i "$OUT/perf.data" --stdio --sort comm,dso --no-children 2>/dev/null \
-      | head -200 > "$OUT/perf_report.txt"
+  if [ -s "$OUT/perf.data" ] && [ -z "${SAMPLER_NO_REPORT:-}" ]; then
+    timeout 300 perf report -i "$OUT/perf.data" --stdio --sort comm,dso --no-children -g none \
+      2> "$OUT/perf_report.err" | head -200 > "$OUT/perf_report.txt"
   fi
   log "done"
   exit 0
@@ -72,9 +72,11 @@ if ! command -v perf >/dev/null; then
   apt-get -o DPkg::Lock::Timeout=120 install -y -qq "linux-tools-$(uname -r)" >/dev/null 2>&1 \
     && log "installed linux-tools-$(uname -r)" || log "perf unavailable for $(uname -r): skipped"
 fi
-if command -v perf >/dev/null && perf record -a -g -F 99 -o "$OUT/perf.data" -- sleep 0.1 >/dev/null 2>&1; then
-  perf record -a -g -F 99 -o "$OUT/perf.data" > "$OUT/perf_record.log" 2>&1 & PIDS+=($!)
-  log "perf record -a -g -F 99 running"
+PERF_ARGS="${SAMPLER_PERF_ARGS:--a -g -F 99}"   # e.g. "-a -F 199": self time only (no call graphs: fast to report)
+if command -v perf >/dev/null && perf record $PERF_ARGS -o "$OUT/perf.probe" -- sleep 0.1 >/dev/null 2>&1; then
+  rm -f "$OUT/perf.probe"
+  perf record $PERF_ARGS -o "$OUT/perf.data" > "$OUT/perf_record.log" 2>&1 & PIDS+=($!)
+  log "perf record $PERF_ARGS running"
 else
   log "perf record not started"
 fi

@@ -1,0 +1,47 @@
+[ WARN:0@0.066] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+[ WARN:0@0.757] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+aliked_extract         1280x720l2     cv_dnn_new threads  8  p50    469.9 ms  cpu   2236.2 ms  out 1024  stable yes
+aliked_forward         1280x720l2     cv_dnn_new threads  8  p50    467.8 ms  cpu   2231.0 ms  out 0  stable yes
+aliked_forward 1280x720l2 cv_dnn_classic: OpenCV(5.0.0) /src/opencv/modules/dnn/src/layers/gather_layer.cpp:102: error: (-2:Unspecified error) in function 'void cv::dnn::GatherLayerImpl::forward_impl(const cv::Mat&, const cv::Mat&, cv::Mat&) [with T_INDEX = long int]'
+>  (expected: 'out.total() == outer_dims * indices_total * inner_size'), where
+>     'out.total()' is 1024
+> must be equal to
+>     'outer_dims * indices_total * inner_size' is 2826240
+
+[ WARN:0@28.454] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+[ WARN:0@29.154] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+aliked_extract         1280x720       cv_dnn_new threads  8  p50   1112.7 ms  cpu   2664.8 ms  out 1024  stable yes
+aliked_forward         1280x720       cv_dnn_new threads  8  p50   1112.5 ms  cpu   2664.6 ms  out 0  stable yes
+aliked_forward 1280x720 cv_dnn_classic: OpenCV(5.0.0) /src/opencv/modules/dnn/src/layers/gather_layer.cpp:102: error: (-2:Unspecified error) in function 'void cv::dnn::GatherLayerImpl::forward_impl(const cv::Mat&, const cv::Mat&, cv::Mat&) [with T_INDEX = long int]'
+>  (expected: 'out.total() == outer_dims * indices_total * inner_size'), where
+>     'out.total()' is 1024
+> must be equal to
+>     'outer_dims * indices_total * inner_size' is 2826240
+
+[ WARN:0@90.924] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+[ WARN:0@91.554] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+aliked_extract         960x540        cv_dnn_new threads  8  p50    628.1 ms  cpu   1584.8 ms  out 1024  stable yes
+aliked_forward         960x540        cv_dnn_new threads  8  p50    623.0 ms  cpu   1613.7 ms  out 0  stable yes
+[ WARN:0@125.648] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+aliked_forward 960x540 cv_dnn_classic: OpenCV(5.0.0) /src/opencv/modules/dnn/src/layers/gather_layer.cpp:102: error: (-2:Unspecified error) in function 'void cv::dnn::GatherLayerImpl::forward_impl(const cv::Mat&, const cv::Mat&, cv::Mat&) [with T_INDEX = long int]'
+>  (expected: 'out.total() == outer_dims * indices_total * inner_size'), where
+>     'out.total()' is 1024
+> must be equal to
+>     'outer_dims * indices_total * inner_size' is 1566720
+
+[ WARN:0@126.307] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+aliked_extract         640x360        cv_dnn_new threads  8  p50    312.4 ms  cpu    877.7 ms  out 1024  stable yes
+aliked_forward         640x360        cv_dnn_new threads  8  p50    314.6 ms  cpu    873.6 ms  out 0  stable yes
+aliked_forward 640x360 cv_dnn_classic: OpenCV(5.0.0) /src/opencv/modules/dnn/src/layers/gather_layer.cpp:102: error: (-2:Unspecified error) in function 'void cv::dnn::GatherLayerImpl::forward_impl(const cv::Mat&, const cv::Mat&, cv::Mat&) [with T_INDEX = long int]'
+>  (expected: 'out.total() == outer_dims * indices_total * inner_size'), where
+>     'out.total()' is 1024
+> must be equal to
+>     'outer_dims * indices_total * inner_size' is 737280
+
+lightglue_match        K1024          cv_dnn_new threads  8  p50    355.4 ms  cpu   1998.7 ms  out 946  stable yes
+lightglue_match        K512           cv_dnn_new threads  8  p50    157.6 ms  cpu   1007.4 ms  out 437  stable yes
+lightglue_match        K256           cv_dnn_new threads  8  p50     73.3 ms  cpu    522.7 ms  out 176  stable yes
+eigenplaces_describe   640x360        cv_dnn_classic threads  8  p50    103.9 ms  cpu    675.2 ms  out 256  stable yes
+eigenplaces_describe   640x360        cv_dnn_new threads  8  p50     93.6 ms  cpu    713.9 ms  out 256  stable yes
+[ERROR:0@167.511] global onnx_importer.cpp:2590 parseShape DNN/ONNX(Shape): dynamic 'zero' shapes are not supported, input /posenc/Unsqueeze_2_output_0 [<empty>]
+[ERROR:0@167.511] global onnx_importer.cpp:1092 handleNode DNN/ONNX: ERROR during processing node with 1 inputs and 1 outputs: [Shape]:(onnx_node!/posenc/Shape) from domain='ai.onnx'

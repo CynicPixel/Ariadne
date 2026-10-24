@@ -1,0 +1,4 @@
+ci_tiny 0 200 configs/mission/alloc_4.4/mission_v2_ariadne_sga.yaml
+ci_tiny 0 200 configs/mission/alloc_4.4/mission_v2_ariadne_greedy.yaml
+ci_tiny 1 200 configs/mission/alloc_4.4/mission_v2_ariadne_sga.yaml
+ci_tiny 1 200 configs/mission/alloc_4.4/mission_v2_ariadne_greedy.yaml

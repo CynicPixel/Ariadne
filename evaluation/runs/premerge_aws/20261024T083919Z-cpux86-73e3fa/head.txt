@@ -1,0 +1,1 @@
+ad99edf3fd0563936c475ccdb8a9f8ffd21a0762 docs(register): restore main's refreshed register - the union with feat/ph4-nagent's stale pre-refresh copy duplicated rows (202 lines); its only change (18761ea TARE/1.8 rows) is already in the refreshed 4.6 row

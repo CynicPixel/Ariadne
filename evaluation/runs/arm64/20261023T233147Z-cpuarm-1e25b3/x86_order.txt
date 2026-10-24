@@ -1,0 +1,13 @@
+ORDER=
+input digest e91cd13887255427 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+default  found 1 iters   10 E 35.1122176589 -> 18.0394929688 gerr 0.6238 tilt 2.0068
+tight    found 1 iters   17 E 35.1122176589 -> 18.0394928272 gerr 0.6236 tilt 2.0067
+ORDER=0
+input digest 537b49006e8d059b truth digest 609d163f14bb72af tilt0 3.7807683586303984
+default  found 1 iters   10 E 26.396980608 -> 12.1583701112 gerr 2.7104 tilt 3.1702
+tight    found 1 iters   15 E 26.396980608 -> 12.1583700029 gerr 2.7104 tilt 3.1702
+ORDER=1
+input digest e91cd13887255427 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+default  found 1 iters   10 E 35.1122176589 -> 18.0394929688 gerr 0.6238 tilt 2.0068
+tight    found 1 iters   17 E 35.1122176589 -> 18.0394928272 gerr 0.6236 tilt 2.0067
+pass default 14/100 tight 14/100

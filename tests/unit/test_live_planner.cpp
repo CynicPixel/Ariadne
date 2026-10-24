@@ -22,7 +22,9 @@ TEST(LivePlanner, CommandPathChordsFreeAndShort) {
         cv::Mat trav(80, 80, CV_8U, cv::Scalar(1));
         std::uniform_int_distribution<int> pos(8, 71), rad(3, 9);
         for (int k = 0; k < 8; ++k) {   // filled discs: staircase boundaries A* hugs, where a 1-cell chord tolerance cuts corners
-            cv::circle(trav, {pos(rng), pos(rng)}, rad(rng), cv::Scalar(0), cv::FILLED);
+            const cv::Point c{pos(rng), pos(rng)};   // centre, then radius: sequenced (D123)
+            const int r = rad(rng);
+            cv::circle(trav, c, r, cv::Scalar(0), cv::FILLED);
         }
         const Cell from{2, 2}, goal{77, 77};
         const auto p = ariadne::planning::AStar(trav, from, {goal});

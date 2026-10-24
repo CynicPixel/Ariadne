@@ -1,0 +1,10 @@
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 20, "coverage": 0.3514729512587038, "flown_m": 4.005092270350204}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 40, "coverage": 0.561756829137654, "flown_m": 6.212628090623552}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 60, "coverage": 0.877718264595608, "flown_m": 9.917006789428955}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 80, "coverage": 0.8991430101767541, "flown_m": 13.222557521309895}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 100, "coverage": 0.931494376004285, "flown_m": 16.486858402709515}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 120, "coverage": 0.9596143545795394, "flown_m": 19.905146154612062}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 140, "coverage": 0.9608998393144081, "flown_m": 21.72311205097106}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 160, "coverage": 0.9606855918585967, "flown_m": 23.885385915273844}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 180, "coverage": 0.9603642206748795, "flown_m": 24.735950504565064}
+{"policy": "ariadne", "scene": "ci_tiny", "seed": 2, "run_seed": 1, "run": "cf0a7408605aa84f-live-20261024T055913Z", "t_s": 200, "coverage": 0.960524906266738, "flown_m": 25.28627010937544}

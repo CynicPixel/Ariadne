@@ -3354,6 +3354,15 @@ the domain owed since the start (rate-limited twice) and since D45.
 | **Delmerico et al.**, *A Comparison of Volumetric Information Gain Metrics for Active 3D Object Reconstruction* | Auton. Robots 42(2), 2018, DOI 10.1007/s10514-017-9634-0 (*secondary*: abstract and summaries; no open PDF) | the first comparative study. Counting unobserved voxels, and weighting unobserved voxels near observed surfaces, did best | supports §21.3's choice of an unknown-count term over a pure-entropy term; Ariadne self-normalises per term (p90), so the terms are never compared in raw units |
 | **SEE** (Border & Gammell) | IJRR 2023, [arXiv:2207.13684](https://arxiv.org/abs/2207.13684) | measurement-direct NBV on a density representation; frontier points with shared visibility; also the field's own survey: raycast visibility evaluation is the cost bottleneck | the ray budget per candidate (200–500) is §21.3's answer to that cost |
 
+#### 22.1.1 The motion cost is time, with yaw (4.3, D117/D118; read 2026-10-24, quotes in `docs/design/lit/early_coverage.md`)
+
+| Method | Source | Content (as read) | Ariadne |
+|---|---|---|---|
+| **FUEL** | RA-L 2021, Eq. 1; code `662dd23` `ViewNode::computeCost` | cost between views `t_lb = max(L/v_max, Δyaw/ψ̇_max)`; a consistency term on the first leg against back-and-forth (w_c = 1.5 s/rad); up to 15 views per cluster at ≥ 0.8× the best coverage, the time term picks | `max()` holds for a quadrotor that yaws while it flies. Our in-place turner **adds** the times (D117). The multi-view set is the cited alternative to D118's arrival twin |
+| **Schmid et al.** | RA-L 2020, Eq. 6, Table V | "the expected execution time" from a constant-acceleration model for position and yaw; linear `g − αc` worst in Table V (76.4 %), accumulated gain / time best (99.8 %) | D117 is Eq. 6, exact, because the mover's profile is known (`PlanCommand`). The efficiency form is reserved as D121 |
+| **TARE** | RSS 2021, Eq. 4; code `44500592` | written for a vehicle that "can turn in one place": a per-stop penalty; goal commitment while the goal is ahead and > L/2; waypoint extension | our TARE row omits both, so it is "TARE-inspired". The commitment rule is reserved as D126 |
+| **Arrival-heading twin** | — | no surveyed planner lets a view keep its arrival heading | D118 [DESIGN]: each view also offered at the heading of its last move, own 256-ray IG, no final turn; U chooses, no threshold |
+
 ### 22.2 Exploration planning (4.3 candidates, 4.6 scheduling)
 
 | Method | Source | Content (as read) | Ariadne |

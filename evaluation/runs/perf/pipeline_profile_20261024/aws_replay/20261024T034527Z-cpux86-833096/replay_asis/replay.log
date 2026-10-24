@@ -1,0 +1,94 @@
+sim-live/8410a254a94cc16b/agent2: 0 frames; rig fx=671.54 B=0.1000; gt samples 0
+  stereo row refinement at keyframe 0: dy = -0.023 -0.00004 x +0.00021 y px (100 matches, MAD 0.079 px)
+  frame 0: tracks 194, status 0, keyframes 1
+  frame 500: tracks 451, status 1, keyframes 25
+  frame 1000: tracks 500, status 1, keyframes 52
+  frame 1500: tracks 411, status 1, keyframes 155
+  frame 2000: tracks 500, status 1, keyframes 192
+  frame 2500: tracks 500, status 1, keyframes 254
+  frame 3000: tracks 500, status 1, keyframes 313
+  frame 3500: tracks 474, status 1, keyframes 380
+  frame 4000: tracks 500, status 1, keyframes 426
+run written to build/live/runs/live-20261023T200640Z-62e0/perf_asis/8410a254a94cc16b-replay-20261024T034941Z/raw/8410a254a94cc16b-agent2-20261024T035604Z
+manifest missing required fields: 1 [git_commit]
+# ariadne_live/agent2 results. Generated; do not hand-edit.
+sequence: 8410a254a94cc16b-agent2
+frames: 4001
+dense_gt: true
+associated_poses: 4001  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 12.664
+ate_se3: {rmse_m: 0.0198824, mean_m: 0.0181257, max_m: 0.0496424, rotation_rmse_rad: 0.0188229}
+ate_rmse_percent_of_path: 0.156999
+sim3_scale: 0.998748  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00252773, rotation_rmse_rad: 0.00267956}
+vo: {lost_frames: 0, keyframes: 426, ba_runs: 425, ba_mean_cost_ratio: 0.351019, landmarks_alive_at_end: 492, graph_edges: 425, graph_version: 851}
+stereo_match_valid_fraction: 0.743886
+stereo_match_by_third: {top: {valid: 44809, lk_lost: 5576, fb: 7111, off_row: 2485, nonpositive: 4, disparity_mean_px: 34.061, disparity_max_px: 189.853}, middle: {valid: 50149, lk_lost: 4170, fb: 9543, off_row: 2997, nonpositive: 163, disparity_mean_px: 33.2401, disparity_max_px: 191.771}, bottom: {valid: 40006, lk_lost: 5433, fb: 6250, off_row: 2731, nonpositive: 4, disparity_mean_px: 38.7931, disparity_max_px: 186.112}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 55925, created: 24266, no_stereo: 30705, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 304, uncertain: 650}
+timing_ms: {track_mean: 21.4141, vo_track_mean: 3.29207, keyframe_mean: 122.411, opencv_threads: 16}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.0227946, b: -3.53973e-05, c: 0.000213125, matches: 100, mad_px: 0.0785312, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.11484, b: -8.00535e-05, c: -0.000219311, max_abs_dy_px: 0.145233, matches: 230}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 1, epipolar_check_skipped_frames: 0}
+sim-live/8410a254a94cc16b/agent0: 0 frames; rig fx=671.54 B=0.1000; gt samples 0
+  stereo row refinement at keyframe 0: dy = -0.113 -0.00004 x +0.00042 y px (115 matches, MAD 0.112 px)
+  frame 0: tracks 227, status 0, keyframes 1
+  frame 500: tracks 395, status 1, keyframes 50
+  frame 1000: tracks 500, status 1, keyframes 122
+  frame 1500: tracks 500, status 1, keyframes 175
+  frame 2000: tracks 486, status 1, keyframes 269
+  frame 2500: tracks 433, status 1, keyframes 329
+  frame 3000: tracks 491, status 1, keyframes 386
+  frame 3500: tracks 448, status 1, keyframes 501
+  frame 4000: tracks 500, status 1, keyframes 568
+run written to build/live/runs/live-20261023T200640Z-62e0/perf_asis/8410a254a94cc16b-replay-20261024T034941Z/raw/8410a254a94cc16b-agent0-20261024T035604Z
+manifest missing required fields: 1 [git_commit]
+# ariadne_live/agent0 results. Generated; do not hand-edit.
+sequence: 8410a254a94cc16b-agent0
+frames: 4001
+dense_gt: true
+associated_poses: 4001  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 11.6167
+ate_se3: {rmse_m: 0.0662947, mean_m: 0.0562892, max_m: 0.132071, rotation_rmse_rad: 0.0624041}
+ate_rmse_percent_of_path: 0.570686
+sim3_scale: 1.00614  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00346335, rotation_rmse_rad: 0.00632474}
+vo: {lost_frames: 4, keyframes: 568, ba_runs: 563, ba_mean_cost_ratio: 0.288585, landmarks_alive_at_end: 401, graph_edges: 567, graph_version: 1135}
+stereo_match_valid_fraction: 0.749068
+stereo_match_by_third: {top: {valid: 59662, lk_lost: 7934, fb: 9535, off_row: 2997, nonpositive: 8, disparity_mean_px: 37.3254, disparity_max_px: 218.906}, middle: {valid: 68119, lk_lost: 6458, fb: 12412, off_row: 3195, nonpositive: 160, disparity_mean_px: 37.8046, disparity_max_px: 233.303}, bottom: {valid: 54955, lk_lost: 7341, fb: 8354, off_row: 2817, nonpositive: 4, disparity_mean_px: 40.6178, disparity_max_px: 217.663}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 75743, created: 35920, no_stereo: 39286, nonpositive_disparity: 0, depth_range: 1, reprojection: 0, sgbm_inconsistent: 155, uncertain: 381}
+timing_ms: {track_mean: 21.3259, vo_track_mean: 3.77399, keyframe_mean: 117.942, opencv_threads: 16}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.112674, b: -4.32486e-05, c: 0.000421656, matches: 115, mad_px: 0.112172, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: -0.0224647, b: 2.18504e-05, c: 4.44412e-06, max_abs_dy_px: 0.0224647, matches: 216}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 2, epipolar_check_skipped_frames: 0}
+sim-live/8410a254a94cc16b/agent1: 0 frames; rig fx=671.54 B=0.1000; gt samples 0
+  stereo row refinement at keyframe 0: dy = -0.097 +0.00010 x +0.00007 y px (158 matches, MAD 0.112 px)
+  frame 0: tracks 228, status 0, keyframes 1
+  frame 500: tracks 470, status 1, keyframes 25
+  frame 1000: tracks 218, status 1, keyframes 87
+  frame 1500: tracks 500, status 1, keyframes 155
+  frame 2000: tracks 500, status 1, keyframes 219
+  frame 2500: tracks 500, status 1, keyframes 290
+  frame 3000: tracks 500, status 1, keyframes 343
+  frame 3500: tracks 500, status 1, keyframes 411
+  frame 4000: tracks 500, status 1, keyframes 482
+run written to build/live/runs/live-20261023T200640Z-62e0/perf_asis/8410a254a94cc16b-replay-20261024T034941Z/raw/8410a254a94cc16b-agent1-20261024T035606Z
+manifest missing required fields: 1 [git_commit]
+# ariadne_live/agent1 results. Generated; do not hand-edit.
+sequence: 8410a254a94cc16b-agent1
+frames: 4001
+dense_gt: true
+associated_poses: 4001  # nearest GT within 0.01 s (evo default)
+gt_path_length_m: 10.7489
+ate_se3: {rmse_m: 0.0345751, mean_m: 0.0315118, max_m: 0.0599373, rotation_rmse_rad: 0.0255139}
+ate_rmse_percent_of_path: 0.321661
+sim3_scale: 0.998151  # 1.0 = no scale drift; stereo is metric
+rpe_1s: {translation_rmse_m: 0.00265269, rotation_rmse_rad: 0.00192726}
+vo: {lost_frames: 0, keyframes: 482, ba_runs: 481, ba_mean_cost_ratio: 0.325056, landmarks_alive_at_end: 494, graph_edges: 481, graph_version: 963}
+stereo_match_valid_fraction: 0.832958
+stereo_match_by_third: {top: {valid: 59874, lk_lost: 4475, fb: 5528, off_row: 2010, nonpositive: 4, disparity_mean_px: 34.0647, disparity_max_px: 149.617}, middle: {valid: 66444, lk_lost: 3534, fb: 7427, off_row: 1974, nonpositive: 92, disparity_mean_px: 32.549, disparity_max_px: 155.878}, bottom: {valid: 52857, lk_lost: 4024, fb: 4723, off_row: 2139, nonpositive: 2, disparity_mean_px: 36.3661, disparity_max_px: 143.253}}  # keyframe left->right LK outcomes per image third (diagnostic)
+triangulation: {candidates: 55213, created: 33311, no_stereo: 21509, nonpositive_disparity: 0, depth_range: 0, reprojection: 0, sgbm_inconsistent: 147, uncertain: 246}
+timing_ms: {track_mean: 22.0653, vo_track_mean: 3.53096, keyframe_mean: 121.31, opencv_threads: 16}
+stereo_row_refinement: {enabled: true, applied: true, a_px: -0.0967943, b: 9.61611e-05, c: 6.9106e-05, matches: 158, mad_px: 0.112499, slopes_fitted: true, keyframe: 0, attempts: 1, residual_after: {measured: true, a_px: 0.0746351, b: -0.000130839, c: 6.53459e-05, max_abs_dy_px: 0.121619, matches: 305}}
+stereo_exposure_match: true
+tracker_opencv_usac_defect: {redraws: 1, epipolar_check_skipped_frames: 0}
+ariadne_live[replay]: 40 replans, 120 decisions, consumed 288192 messages (digest 55e7d157b855ebc8) -> build/live/runs/live-20261023T200640Z-62e0/perf_asis/8410a254a94cc16b-replay-20261024T034941Z

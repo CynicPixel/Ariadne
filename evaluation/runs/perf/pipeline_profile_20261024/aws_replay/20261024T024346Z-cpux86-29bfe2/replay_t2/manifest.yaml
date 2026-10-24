@@ -1,0 +1,57 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: 8410a254a94cc16b-replay-20261024T030107Z
+created_utc: "2026-10-24T03:08:04Z"
+git_commit: UNRECORDED
+git_dirty: false
+image_digest: UNRECORDED
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim-live/8410a254a94cc16b
+seed: 1
+agent_count: 2
+execution_mode: replay
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: mission_v1
+degradation_config: UNRECORDED
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: UNRECORDED
+place_recognition: UNRECORDED
+loop_backend: UNRECORDED
+reconstruction_backend: UNRECORDED
+imu_mode: attitude_only
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: not_applicable
+lost_handling: not_applicable
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+command: build/docker/cpp/runtime/ariadne_live --scene build/live/scenes/maze_demo_0 --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml --mission-config configs/mission/mission_v1.yaml --live-config build/live/runs/live-20261023T200640Z-62e0/live_config.yaml --out build/live/runs/live-20261023T200640Z-62e0/perf_t2 --replay build/live/runs/live-20261023T200640Z-62e0/8410a254a94cc16b-live-20261023T200701Z/inputs.mcap --directives build/live/runs/live-20261023T200640Z-62e0/8410a254a94cc16b-live-20261023T200701Z/directives.jsonl --planner-config build/live/runs/live-20261023T200640Z-62e0/planner_config.yaml
+live_config: build/live/runs/live-20261023T200640Z-62e0/live_config.yaml
+perception_config: configs/perception/sim_v1.yaml
+planner: frontier candidates (1.8) + chooser classical
+replay_of: build/live/runs/live-20261023T200640Z-62e0/8410a254a94cc16b-live-20261023T200701Z/inputs.mcap
+slam_config: configs/slam/sim_v1.yaml

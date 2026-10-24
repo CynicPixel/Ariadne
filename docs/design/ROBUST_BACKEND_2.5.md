@@ -598,7 +598,10 @@ accept becomes a regression case that must now be rejected.
 - **Tests** (`tests/unit/test_gravity_pgo.cpp`, 4/4):
   - the analytic gradient matches finite differences of the energy, Huber regime included;
   - disabled, the solve is bit-identical to a graph without priors;
-  - a 1.50° reference-gravity error is estimated to 0.62°, and tilt RMS drops from 3.78° to 2.01°;
+  - a 1.50° reference-gravity error is estimated to 0.62°, and tilt RMS drops from 3.78° to 2.01°.
+    **Corrected 2026-10-24 (D123–D124):** that is one seed under x86's argument-evaluation order; arm64 gets 2.71°.
+    The fixture's own ĝ σ is ≈ 2.0° per axis, so < 1° is not a property it can show. The test becomes a 50-seed NEES
+    consistency check (mean 1.7–2.5, inside the χ² 99 % band);
   - a 30° outlier prior moves its keyframe by 1.85°.
   `PgoLevMarq` and the numerical `PgoProblem`/`PoseGraph` tests are unchanged and pass.
 - **SOTA comparison, recorded, not built.** The common inertial loop-closure design keeps roll and pitch from the

@@ -1,0 +1,52 @@
+files:
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/manifest.yaml: 2897e22b0396b3d4b4881959a3179db9046b0e851264b471b843028d3fd6abc3
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/manifest_prepare.yaml: 52b0a695aa2432412d2d0ce4fb425c495de43ac64ab39bf7bdf6cc3cc9389a9a
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/manifest_score.yaml: fb7e60e94770fb4a038edde7981349c42eef2a446c38b9920201ac15e7eb0f79
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/manifest.yaml: e34a58d0ab0de1dc48d0eb280d5f4a89fb223e4cca212b251c80e9d3e0682c8b
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent0only-20261024T085543Z/manifest.yaml: bb07bcece6422a0237b06e4fc3c838474752e5d1ed8a9685f5b32639f74ff0af
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent1only-20261024T085546Z/manifest.yaml: 8ab38562fd5f336a25be6f1fdd41ade549de83a0f1cb906b8e8b1232e56b1723
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/results.yaml: b4b035d9ddc689bddf0b6ede32a1bc27f8541c1a0d64e2423604f9b740cfc310
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/spool.yaml: 843b78c3aaf71174a3abb40ee5711406908fbf8a132a9052a307af349c8c079b
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent0-20261024T085202Z/estimate_body.tum
+  : 4bc5e4c16f2bcef9d636ed04e172431379e30a9dc162c6613e690074fd1e71c0
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent0-20261024T085202Z/raw/groundtruth_body.tum
+  : fa3017a9fcd277f3e93eb42c6d691a620d602c5d976c201ab90216a58631ed8a
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent0-20261024T085202Z/results.yaml
+  : 9047c23878b0a4f6890b1b7c4d4a706a7a678f1453f69d70e093ecf2a99e381a
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent1-20261024T085437Z/estimate_body.tum
+  : 42575a81c5aa60c670d27065c30e027dcf93c0c77659874373b25a049fb8d3b2
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent1-20261024T085437Z/raw/groundtruth_body.tum
+  : 448f083fdb4f1ad487b85043435f0567b122e55c943e4f2fd570860d1377d60b
+  ? build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/raw/aadffb8df5790ca0-agent1-20261024T085437Z/results.yaml
+  : ed1338324c445e976a647033a301f903b43a7e476c1186e9d9e0054d5a6fe40f
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/results.yaml: 20b33283c7487cbf0d1a7722505dc8d1940ae7fc72c29d6d5f5c85aca0fca823
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/candidates.csv: b51217d690aaca215946640c3680d561fb3cf66e03395404e8428f3d4d38e350
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/negative_probe.csv: c384c9090a369fe1a8a5e607701f26fd10fc358263c49f29b587758b51e925d7
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/prepare.yaml: 4bb361523e8bcb2805a76eb78333d724bb12e8631a11170c4b38ea822919c139
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/score.yaml: b89da1c110f12b1d6bc0d7c608279ffb304495f0b851f4c3823db0a80a3bbb95
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/eval.yaml: fb8b395db862a17f00baddaa34005e90cc9f7d67a5f13f3351312e2736d66729
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/slab.png: bcb2956058faee90e564223bd1f63d025c5bf5c6cd8364c70c198ff75806919c
+  evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene/scene.json: 1adde514a1e35e158c25080cfb449e906879fc6fcd32c0fb3e5066d83d1565a7
+  evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene/scene_gt.npz: e8fe384ada9f3c756f2e2a3c65f4675db3ad32a87c13ab4d2418e136660806aa
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/routes.jsonl: 71b35f5348077e5d34199ed2647f898f9f66d313509b05d83c378e3a676a3420
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/report/aadffb8df5790ca0-20261024T084841Z/registry.in.yaml: 0bdc47a0cc23e73dd3634b1148ecece9a5a5fd02ac922a822be55377272ae6d3
+input_manifests_git_dirty:
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z/manifest.yaml: 'false'
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/manifest_prepare.yaml: 'false'
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z/manifest_score.yaml: 'false'
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z/manifest.yaml: 'false'
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent0only-20261024T085543Z/manifest.yaml: 'false'
+  build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent1only-20261024T085546Z/manifest.yaml: 'false'
+harness:
+  git_commit: ad99edf3fd0563936c475ccdb8a9f8ffd21a0762
+  git_dirty: 'false'
+  image_id: sha256:f18905a9686ea36028a07e2b04e5e760af422c1d664a07eb7d2fccf9909f289e
+  command: /work/python/analysis/report.py compute --collab-run build/premerge/aadffb8df5790ca0-20261024T084259Z/sim_collab/aadffb8df5790ca0-20261024T084841Z
+    --recon-run build/premerge/aadffb8df5790ca0-20261024T084259Z/recon/aadffb8df5790ca0-20261024T084841Z
+    --mission-run build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-20261024T085539Z
+    --scene evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+    --registry build/premerge/aadffb8df5790ca0-20261024T084259Z/report/aadffb8df5790ca0-20261024T084841Z/registry.in.yaml
+    --out build/premerge/aadffb8df5790ca0-20261024T084259Z/report/aadffb8df5790ca0-20261024T084841Z
+    --mission-compare build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent0only-20261024T085543Z
+    build/premerge/aadffb8df5790ca0-20261024T084259Z/mission/aadffb8df5790ca0-agent1only-20261024T085546Z
+    --allow-dirty

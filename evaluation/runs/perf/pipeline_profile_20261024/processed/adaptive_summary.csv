@@ -1,0 +1,5 @@
+run,scene,mode,pairs,verified,lost_vs_all9,gained_vs_all9,mean_exit_layer,exit_layer_hist,median_match_ratio_vs_all9,median_torch_ms
+20261024T051236Z-cpux86-d80b45,0,all9,60,32,0,0,9,9:60,,536.8
+20261024T051236Z-cpux86-d80b45,0,adaptive,60,31,1,0,5.17,2:9 3:3 4:7 5:11 6:13 7:14 8:3,1.009,186.4
+20261024T051236Z-cpux86-d80b45,1,all9,60,31,0,0,9,9:60,,574.1
+20261024T051236Z-cpux86-d80b45,1,adaptive,60,31,0,0,4.32,2:24 3:4 4:2 5:6 6:10 7:12 8:1 9:1,1.004,227.4

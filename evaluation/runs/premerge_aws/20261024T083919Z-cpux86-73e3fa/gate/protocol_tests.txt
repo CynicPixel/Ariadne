@@ -1,0 +1,48 @@
+Internal ctest changing into directory: /work/build/docker
+Test project /work/build/docker
+      Start 171: Serialization.PoseGraphRoundTripsExactly
+ 1/21 Test #171: Serialization.PoseGraphRoundTripsExactly ...........................   Passed    0.00 sec
+      Start 172: Serialization.LoopEdgeRoundTripsExactly
+ 2/21 Test #172: Serialization.LoopEdgeRoundTripsExactly ............................   Passed    0.00 sec
+      Start 173: Serialization.EncodingIsDeterministic
+ 3/21 Test #173: Serialization.EncodingIsDeterministic ..............................   Passed    0.00 sec
+      Start 174: Serialization.UntaggedPoseIsRejected
+ 4/21 Test #174: Serialization.UntaggedPoseIsRejected ...............................   Passed    0.00 sec
+      Start 175: Serialization.MalformedInputIsRejectedNotCrashed
+ 5/21 Test #175: Serialization.MalformedInputIsRejectedNotCrashed ...................   Passed    0.00 sec
+      Start 176: Serialization.WireBytesIncludeDatagramFraming
+ 6/21 Test #176: Serialization.WireBytesIncludeDatagramFraming ......................   Passed    0.00 sec
+      Start 177: Serialization.LargeMessagesAreChargedFramingPerDatagram
+ 7/21 Test #177: Serialization.LargeMessagesAreChargedFramingPerDatagram ............   Passed    0.00 sec
+      Start 178: Serialization.DatagramCountRoundsUpAndNeverReturnsZero
+ 8/21 Test #178: Serialization.DatagramCountRoundsUpAndNeverReturnsZero .............   Passed    0.00 sec
+      Start 179: Serialization.CompressionPolicyCoversTheIntendedClasses
+ 9/21 Test #179: Serialization.CompressionPolicyCoversTheIntendedClasses ............   Passed    0.00 sec
+      Start 180: Serialization.LedgerAccumulatesTotalAndPerClass
+10/21 Test #180: Serialization.LedgerAccumulatesTotalAndPerClass ....................   Passed    0.00 sec
+      Start 181: Serialization.MeasuredSizesAreReportedAgainstTheSection157Table
+11/21 Test #181: Serialization.MeasuredSizesAreReportedAgainstTheSection157Table ....   Passed    0.00 sec
+      Start 182: Serialization.ClassIsReadableWithoutDecompressing
+12/21 Test #182: Serialization.ClassIsReadableWithoutDecompressing ..................   Passed    0.00 sec
+      Start 183: Serialization.TruncatedOrInvalidHeaderIsRejected
+13/21 Test #183: Serialization.TruncatedOrInvalidHeaderIsRejected ...................   Passed    0.00 sec
+      Start 184: Serialization.PoseGraphsRemainHighlyCompressible
+14/21 Test #184: Serialization.PoseGraphsRemainHighlyCompressible ...................   Passed    0.00 sec
+      Start 185: Serialization.PreTaskConsensusBytesUnchanged
+15/21 Test #185: Serialization.PreTaskConsensusBytesUnchanged .......................   Passed    0.00 sec
+      Start 186: Serialization.CbbaConsensusRoundTripsAndIsCounted
+16/21 Test #186: Serialization.CbbaConsensusRoundTripsAndIsCounted ..................   Passed    0.00 sec
+      Start 187: Serialization.LargeFeatureResponseRoundTripsThroughFragmentation
+17/21 Test #187: Serialization.LargeFeatureResponseRoundTripsThroughFragmentation ...   Passed    0.00 sec
+      Start 188: CollabProtocol.PayloadsRoundTrip
+18/21 Test #188: CollabProtocol.PayloadsRoundTrip ...................................   Passed    0.00 sec
+      Start 189: CollabProtocol.MalformedFeatureResponseIsRejected
+19/21 Test #189: CollabProtocol.MalformedFeatureResponseIsRejected ..................   Passed    0.00 sec
+      Start 190: CollabProtocol.InboxIsIdempotentAndRestoresOrder
+20/21 Test #190: CollabProtocol.InboxIsIdempotentAndRestoresOrder ...................   Passed    0.00 sec
+      Start 191: CollabProtocol.MeanBitDescriptorIsUnitAndSelfSimilar
+21/21 Test #191: CollabProtocol.MeanBitDescriptorIsUnitAndSelfSimilar ...............   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 21
+
+Total Test time (real) =   0.05 sec
