@@ -42,5 +42,6 @@ Each result is recorded with its run id, cost, and outcome: PASS, FAIL or NEGATI
 | 6.3 overlap pruning, affine exposure; live re-anchoring (`pose_version`) | A2 | D192: the affine exposure likely never switches on live | |
 | 5.4 dust freeze, 5.5 sweep render redesign, 5.6 Hilti fix | A2 | Hilti 0/100 (D144); the 5.5 one-pass writer is not recordable on g4dn | |
 | D181 vertex cover, 3-agent re-measure (build if saving ≥ 20 %) | M | 0.0 % saving on 24/24 two-agent rows; pass A is 2 agents per scene (`collab_aws.sh`) | a 3-agent pass-A set: D212 worldgen scenes or the ma200 live recordings via D214 |
+| 3.6 local-feature wire coding, re-test (D233 → D234) | A2 | D234 (62eeae3, Kaggle 20261024T053045Z-kaggle-a2-bytes36): nothing adopted; the fp32 control fails bar 1 (1 flip per scene vs int8), and lossless z32 flips 1 pair, so a 0-flip bar is below the 1-ulp floor. Post hoc only: int4 (79.4 kB/KF) and bin1 (33.6 kB/KF, −75 %) match fp32 verdicts 120/120, while production int8 differs from fp32 on 2 | new pre-registration: fp32 as the reference, tolerance tied to the 1-ulp floor, int4/bin1 candidates; `evaluation/runs/ph3/bytes_3.6_20261024/` |
 | 7.4 SQS/ASG sweeps | M | slotq is a host-side dispatcher | |
 | 8.3 sweeps | B | after 8.2 | |
