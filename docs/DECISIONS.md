@@ -5520,3 +5520,21 @@ executes ApplyLens from OpenCV-free targets, so moving the definition there woul
 **Evidence:** test_unit builds and its observability/determinism/lens tests pass on e0a55b1; ma_smoke3 lens-ON
 replay trace sha f732c08056b1f937… = the pre-D226 reference on the restructured binary — D226's bit-identity
 claim survives; the row partition is provably value-neutral (pure per-pixel function).
+
+## 2026-10-24 — D229 outcome: acceptance met, RTF gain ZERO (negative result, recorded not buried)
+All five pre-registered criteria ran:
+1. barrier semantics unchanged (construction + the lockstep runs below);
+2. live + replay×2 PASS (ma_smoke4, 3 agents, replay_check 17/17);
+3. digest-neutral (pipelined AND kill-switch replays = lens-off reference 21a51e0d…);
+4. **RTF on c7i (A2 job 15, run 4d412c, one instance, both arms, $0.027): pipelined 0.833 vs kill-switch 0.839 vs
+   job-46 reference 0.836 — a −0.7 % change, within noise of zero.** Both arms' trajectories byte-identical to the
+   reference on all 3 agents.
+5. unit guard in (PipelinedIngestMatchesFeedExactly).
+**Why no gain:** D229 overlaps the ingest half of Feed. Post-D227 (lens off) that half is a few ms of decode+gray;
+job 45's ~50 ms Feed share WAS the lens. The lens-off lane is tracking + keyframe compute (FAST ~11 ms, SGBM, LK;
+keyframe ~126 ms on 30 % of steps one agent runs >80 ms).
+**Decision:** the code STAYS (default on): it is unit-guarded, digest-proven, and costs nothing measurable; its
+payoff case is any live path whose ingest grows again — the lens-on rows and the paused dark/degradation demo
+(DegradeParallel runs inside Ingest and would overlap tracking). ARIADNE_LANE_PIPELINE=0 remains the kill switch.
+**RTF ≥ 1 (A2's inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
+lockstep path - a new decision for the maintainer, NOT started (feature freeze).
