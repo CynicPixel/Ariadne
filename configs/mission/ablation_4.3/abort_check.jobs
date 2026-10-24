@@ -1,0 +1,2 @@
+# NBV_4.3 §15.5 (f) abort check, before the other 47 runs (maintainer approved this job only, 2026-10-24): runs_48.jobs line 1.
+ci_tiny 2 200 configs/mission/ablation_4.3/mission_v2_ariadne_v0.yaml
