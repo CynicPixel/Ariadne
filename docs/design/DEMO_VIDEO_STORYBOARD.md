@@ -57,7 +57,7 @@ best-known systems.
 - Pseudo-code run-through of **windowed bundle adjustment**: IMU preintegration (Forster) → normal equations →
   **Schur complement** eliminates the points → solve the poses → **Levenberg–Marquardt** step.
 - **EuRoC chart:** 11 flights; the 7 wins light up; no mean line.
-- **Chip:** solver checked against **GTSAM: 100/100** graphs agree.
+- **Chip:** "solver matches GTSAM on 100 of 100 synthetic graphs".
 
 **Ledger.** RI §3 row 1 (D87; published ORB-SLAM3 Table II). "7 of 11" stays visible, with no parity wording. GTSAM
 100/100 from RI §3 (D52, synthetic).
@@ -141,11 +141,16 @@ human, or fall back to the safe choice.
 - One real decision record unfolds: vision summary → options → **Amazon Bedrock (Nova 2 Lite)** choice and its
   explanation → C++ validation → command. Tools via **MCP**.
 - **Chip:** 36 of 36 live decisions answered, 0 fallbacks.
-- The safety envelope (red half): **pending M**. If B's lowered-threshold runs count as evidence, it's labelled
-  "test configuration". Otherwise it's an *illustrative* mechanism, with nothing implying it fired.
+- The safety envelope (red half): rendered from the real trace lines **only if B confirms them**, labelled "test
+  configuration: threshold lowered to force the safety path". Otherwise it's an *illustrative* mechanism, with nothing
+  implying it fired.
 
-**Ledger.** RI §11 (run 5). RI do-not-claim 16 says approval/fallback never fired, but the brief cites B runs f964fe /
-45609e. M to rule.
+**Ledger.**
+- RI §11 (run 5).
+- M ruling: f964fe's approval hold fired genuinely; its fallback fired because of an IAM deny, not a timeout.
+  45609e's timeout fallback awaits B's trace records.
+- The narration's "built to wait / fall back" is OK as a capability statement, but never implies it fired in the demo
+  mission.
 
 ### 9 · The Ariadne Thread (≈ 32 s)
 **Narration.** Now for the reason we're here: a way out. A robot can squeeze through gaps a person can't, so Ariadne
@@ -184,8 +189,8 @@ pieces slot into one model, which we can view from angles no robot ever stood at
 
 ### 11 · Under the hood (≈ 20 s)
 **Narration.** Under the hood, the vision is built on OpenCV 5, and the heavy lifting runs on AWS: simulation,
-experiments and the AI assistant. A full three-robot experiment costs about nine cents. And every run can be replayed,
-byte for byte.
+experiments and the AI assistant. A complete collaboration experiment, across two buildings and three trials, costs
+about nine cents. And every run can be replayed, byte for byte.
 
 **On screen.**
 - **Architecture diagram** (also exported standalone, SVG/PNG):

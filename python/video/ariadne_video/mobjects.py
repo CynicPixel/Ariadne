@@ -8,7 +8,8 @@ from .data import Scene
 from .style import AGENT, WALL, MapFrame
 
 
-def maze_frame(sc: Scene, height: float = 6.6, center=(0, 0.3, 0), margin_m: float = 1.0) -> MapFrame:
+def maze_frame(sc: Scene, height: float = 5.9, center=(0, 0.55, 0), margin_m: float = 1.0) -> MapFrame:
+    # height/center leave the bottom ~1.1 units free for two-line subtitles
     """MapFrame fitted to the wall bounding box (+ margin), so the maze fills the frame the same way in every beat."""
     w = np.array(sc.walls)
     return MapFrame(w[:, [0, 2]].min() - margin_m, w[:, [0, 2]].max() + margin_m,

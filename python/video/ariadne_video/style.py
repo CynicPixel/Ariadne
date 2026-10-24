@@ -54,29 +54,82 @@ def tag(kind: str, source: str = "") -> VGroup:
     return VGroup(box, label.move_to(box))
 
 
-class CaptionedScene(Scene):
-    """Scene with `say()`: show a caption for `dur` seconds and log it to the cue sheet."""
+WPM = 150  # narration pace the cue timing assumes (the TTS / voice pass reads the same cue sheet)
+LINE_CHARS = 52  # subtitle line length; at most two lines per cue
 
-    caption_pos = DOWN * 3.45
+
+def wrap(text: str, width: int = LINE_CHARS) -> list[str]:
+    """Greedy wrap; a two-line result is re-split at the word break nearest the middle (no dangling last word)."""
+    lines, cur = [], ""
+    for w in text.split():
+        if cur and len(cur) + 1 + len(w) > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    lines += [cur] if cur else []
+    if len(lines) == 2:
+        words = text.split()
+        best = min(range(1, len(words)), key=lambda k: abs(len(" ".join(words[:k])) - len(" ".join(words[k:]))))
+        lines = [" ".join(words[:best]), " ".join(words[best:])]
+    return lines
+
+
+def cues_of(text: str) -> list[str]:
+    """Split narration into subtitle cues of at most two lines, breaking at sentence ends, then at commas."""
+    import re
+    out = []
+    for sent in re.split(r"(?<=[.!?])\s+", text.strip()):
+        lines = wrap(sent)
+        if len(lines) <= 2:
+            out.append(sent)
+            continue
+        parts, cur = re.split(r"(?<=[,:;])\s+", sent), ""
+        for p in parts:
+            if cur and len(wrap(f"{cur} {p}")) > 2:
+                out.append(cur)
+                cur = p
+            else:
+                cur = f"{cur} {p}".strip()
+        out.append(cur)
+    return out
+
+
+class CaptionedScene(Scene):
+    """Scene with `say()`: narration shown as subtitles, timed by word count, logged to the cue sheet."""
+
+    caption_pos = DOWN * 3.35
 
     def setup(self):
         self.cues: list[dict] = []
         self._caption = None
 
-    def say(self, text: str, dur: float = 2.5, run_with=None):
-        """Caption on screen for `dur` s from now. `run_with` animations play alongside at their own run_time
-        (a longer one stretches the cue, which the cue sheet records as the actual duration)."""
-        cap = Text(text, font=FONT, font_size=26, color=TEXT).move_to(self.caption_pos)
-        anims = [FadeIn(cap, shift=UP * 0.1, run_time=0.5)]
-        if self._caption:
-            anims.append(FadeOut(self._caption, run_time=0.4))
-        t0 = self.renderer.time
-        self.play(*anims, *(run_with or []))
-        self._caption = cap
-        rest = dur - (self.renderer.time - t0)
-        if rest > 0.01:
-            self.wait(rest)
-        self.cues.append({"start_s": round(t0, 3), "dur_s": round(self.renderer.time - t0, 3), "text": text})
+    def _subtitle(self, text: str) -> VGroup:
+        t = Text("\n".join(wrap(text)), font=FONT, font_size=24, color=TEXT, line_spacing=0.8)
+        box = RoundedRectangle(corner_radius=0.1, width=t.width + 0.4, height=t.height + 0.22, stroke_width=0,
+                               fill_color=BG, fill_opacity=0.72)
+        return VGroup(box, t.move_to(box)).move_to(self.caption_pos)
+
+    def say(self, text: str, dur: float | None = None, run_with=None):
+        """Narrate `text`: one subtitle cue per sentence (or comma clause when a sentence exceeds two lines), each held
+        for its word count at WPM (or `dur` split by words). `run_with` plays alongside the first cue at its own
+        run_time; a longer animation stretches that cue, and the cue sheet records actual times."""
+        parts = cues_of(text)
+        words = [len(p.split()) for p in parts]
+        total = dur if dur is not None else sum(words) * 60 / WPM
+        for i, (p, w) in enumerate(zip(parts, words)):
+            want = total * w / sum(words)
+            cap = self._subtitle(p)
+            anims = [FadeIn(cap, run_time=0.3)]
+            if self._caption:
+                anims.append(FadeOut(self._caption, run_time=0.25))
+            t0 = self.renderer.time
+            self.play(*anims, *((run_with or []) if i == 0 else []))
+            self._caption = cap
+            rest = want - (self.renderer.time - t0)
+            if rest > 0.01:
+                self.wait(rest)
+            self.cues.append({"start_s": round(t0, 3), "dur_s": round(self.renderer.time - t0, 3), "text": p})
 
     def clear_caption(self):
         if self._caption:

@@ -116,7 +116,10 @@ class FalseLoop(CaptionedScene):
         self.play(FadeIn(title), FadeIn(chip), Create(axis), FadeIn(ticks), FadeIn(rows), run_time=1.0)
         self.say(f"Without the gate, aliased loops pulled the merged map {worst_base:.2f} m off.", dur=3.0,
                  run_with=[FadeIn(bad, lag_ratio=0.1), FadeIn(lab_bad)])
-        self.say(f"With it: {worst_gated * 100:.1f} cm or better in every budgeted run.", dur=3.0,
-                 run_with=[*[Create(a) for a in arrows], Transform(bad.copy(), good), FadeIn(lab_good)])
+        self.say(f"With it: {worst_gated * 100:.1f} cm or better in every budgeted configuration (3-seed mean).",
+                 dur=3.2, run_with=[*[Create(a) for a in arrows], Transform(bad.copy(), good), FadeIn(lab_good)])
         self.say(f"And of {tested} genuine loop closures tested, {rejected} were thrown away.", dur=3.2)
+        clean = [c for c in g["cells"] if c["scene"] == 1]
+        worse = sum(c["gated_m"] > c["base_m"] for c in clean)
+        self.say(f"Where there was no aliasing, nothing got worse: {worse} of {len(clean)} configurations.", dur=3.0)
         self.clear_caption()

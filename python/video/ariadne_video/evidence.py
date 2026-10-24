@@ -51,7 +51,19 @@ def d178() -> dict:
     return {"cells": cells, "true_edges": edges}
 
 
+EGRESS = REPO / "evaluation/runs/egress_4.5/egress_vs_gt.yaml"
+
+
+def egress() -> dict:
+    """4.5 D* Lite on the replay evidence spool (D113): routes found / GT-valid, first route time."""
+    t = EGRESS.read_text().split("phase4_dstar:", 1)[1]
+    get = lambda k: float(re.search(rf"^\s+{k}: ([0-9.]+)", t, re.M).group(1))  # noqa: E731
+    return {"found": int(get("routes_found")), "valid": int(get("routes_valid")),
+            "first_route_s": get("time_to_first_route_s")}
+
+
 def main() -> int:
+    print("egress:", egress(), "source", EGRESS.relative_to(REPO))
     g = d178()
     for c in g["cells"]:
         print(f"D178 scene {c['scene']} {c['cell']:15s} budgeted={c['budgeted']!s:5s} gated {c['gated_m']:.4f} m  "
