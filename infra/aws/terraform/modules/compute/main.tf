@@ -45,7 +45,22 @@ data "aws_iam_policy_document" "runner" {
     ]
     resources = var.ecr_repository_arns
   }
+  # The 7.x orchestrator on live-run instances (python/orchestration/orchestrator.py): Converse on the primary
+  # model through its EU cross-region inference profile (the profile ARN here, the foundation model in whichever EU
+  # region the profile routes to), and on the in-region fallback model (D163). InvokeModel covers Converse.
+  statement {
+    sid     = "BedrockOrchestrator"
+    actions = ["bedrock:InvokeModel"]
+    resources = [
+      "arn:aws:bedrock:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:inference-profile/eu.amazon.nova-2-lite-v1:0",
+      "arn:aws:bedrock:eu-*::foundation-model/amazon.nova-2-lite-v1:0",
+      "arn:aws:bedrock:${data.aws_region.current.name}::foundation-model/deepseek.v3.2",
+    ]
+  }
 }
+
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
 resource "aws_iam_role_policy" "runner" {
   name   = "run-artifacts-and-ecr-pull"
