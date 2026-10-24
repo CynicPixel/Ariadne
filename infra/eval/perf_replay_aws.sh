@@ -55,9 +55,15 @@ aws s3 cp "$PAYLOAD" - | tar xz -C /tmp || fail "payload"
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) || fail "payload sha256"
 cp -a /tmp/p/. "$REP/"
 kv payload "$PAYLOAD"; kv payload_sha256sums_sha256 "$(sha256sum /tmp/p/SHA256SUMS | cut -d' ' -f1)"
+# GNU tar exits 2 when an optional member pattern is absent (shadow_map_config.yaml is not in every run: job 44's
+# first attempt, 20261024T021800Z-cpux86-716179, failed exactly so), so only the S3 stream's status is fatal; the
+# files that are required are checked right below.
 aws s3 cp "$BUCKET/runs/$RUN_ID/output/results/run.tar.gz" - | pigz -dc | tar x -C "$REP" --wildcards --no-anchored \
   'inputs.mcap' 'directives.jsonl' 'trace.jsonl' 'live_config.yaml' 'planner_config.yaml' 'shadow_map_config.yaml' \
-  "replay1/*results.yaml" "replay1/*estimate_body.tum" "replay1/*timing.jsonl" || fail "run.tar.gz"
+  "replay1/*results.yaml" "replay1/*estimate_body.tum" "replay1/*timing.jsonl" 2> "$R/run_tar.err"
+st=("${PIPESTATUS[@]}"); echo "aws ${st[0]} pigz ${st[1]} tar ${st[2]}" >> "$R/run_tar.err"
+[ "${st[0]}" = 0 ] && [ "${st[1]}" = 0 ] || fail "run.tar.gz stream (run_tar.err)"
+[ -f "$REP/$RUNDIR/live_config.yaml" ] || fail "run.tar.gz: no live_config.yaml"
 LIVE_DIR=$(cd "$REP/$RUNDIR" && ls -d */inputs.mcap | head -1 | xargs dirname)
 [ -n "$LIVE_DIR" ] || fail "no inputs.mcap"
 kv inputs_mcap_sha256 "$(sha256sum "$REP/$RUNDIR/$LIVE_DIR/inputs.mcap" | cut -d' ' -f1)"
