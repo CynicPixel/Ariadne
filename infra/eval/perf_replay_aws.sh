@@ -19,8 +19,12 @@ set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${RUN_ID:?}" "${PAYLOAD:?}" "${BUCKET:?}"
 SRC="$(pwd)" REP=/opt/rep RUNDIR=build/live/runs/live-20261023T200640Z-62e0 SCENE=build/live/scenes/maze_demo_0
-CORE_REF=836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:live-8668bd7ece68
-CORE_ID=sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb
+# The CODE under test defaults to the replayed run's own (snapshot, payload, image); CODE_SNAPSHOT / PAYLOAD / CORE_REF /
+# CORE_ID swap in another build (e.g. B's lens-off toggle) on the SAME recorded inputs, so a before/after differs only
+# in the code. REPLAY_ARGS / REPLAY_ENV: extra ariadne_live flags / docker -e settings for every variant.
+CORE_REF=${CORE_REF:-836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:live-8668bd7ece68}
+CORE_ID=${CORE_ID:-sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb}
+CODE_SNAPSHOT=${CODE_SNAPSHOT:-$BUCKET/runs/$RUN_ID/input/repo.tar.gz}
 T0=$(date +%s)
 step() { echo "=== $(date -u +%FT%TZ) +$(( $(date +%s) - T0 ))s $*" | tee -a "$R/steps.txt"; }
 fail() { step "FAILED: $*"; exit 1; }
@@ -51,7 +55,8 @@ kv core_image_id "$CORE_ID"
 
 step "3 B's snapshot + payload + the recorded run (inputs.mcap)"
 mkdir -p "$REP" /tmp/p
-aws s3 cp "$BUCKET/runs/$RUN_ID/input/repo.tar.gz" - | tar xz -C "$REP" || fail "snapshot"
+aws s3 cp "$CODE_SNAPSHOT" - | tar xz -C "$REP" || fail "snapshot"
+kv code_snapshot "$CODE_SNAPSHOT"; kv replay_args "\"${REPLAY_ARGS:-}\""; kv replay_env "\"${REPLAY_ENV:-}\""
 aws s3 cp "$PAYLOAD" - | tar xz -C /tmp || fail "payload"
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) || fail "payload sha256"
 cp -a /tmp/p/. "$REP/"
@@ -92,8 +97,9 @@ kv sampler_perf_args "\"$SAMPLER_PERF_ARGS\""
 for v in ${VARIANTS:-asis t5 t2}; do
   step "R replay $v"
   env=()
-  [ "$v" = t5 ] && env=(-e OPENCV_FOR_THREADS_NUM=5)
-  [ "$v" = t2 ] && env=(-e OPENCV_FOR_THREADS_NUM=2)
+  for e in ${REPLAY_ENV:-}; do env+=(-e "$e"); done
+  [ "$v" = t5 ] && env+=(-e OPENCV_FOR_THREADS_NUM=5)
+  [ "$v" = t2 ] && env+=(-e OPENCV_FOR_THREADS_NUM=2)
   O="$R/replay_$v"; mkdir -p "$O"
   bash "$SRC/infra/eval/perf_sampler.sh" "$O/sampler" & SP=$!
   sleep 3
@@ -101,7 +107,7 @@ for v in ${VARIANTS:-asis t5 t2}; do
   docker run --rm --memory=4g --memory-swap=4g -u 1000:1000 "${env[@]}" -v "$REP":/work -w /work "$CORE_REF" \
     build/docker/cpp/runtime/ariadne_live --scene "$SCENE" --perception-config configs/perception/sim_v1.yaml \
     --slam-config configs/slam/sim_v1.yaml --mission-config configs/mission/mission_v1.yaml --live-config "$CFG" \
-    --out "$RUNDIR/perf_$v" --replay "$RUNDIR/$LIVE_DIR/inputs.mcap" "${EXTRA[@]}" > "$O/replay.log" 2>&1
+    --out "$RUNDIR/perf_$v" --replay "$RUNDIR/$LIVE_DIR/inputs.mcap" "${EXTRA[@]}" ${REPLAY_ARGS:-} > "$O/replay.log" 2>&1
   rc=$?
   awk -v a="$t" -v b="$(date +%s.%N)" -v rc="$rc" 'BEGIN { printf "%.1f rc=%s\n", b - a, rc }' > "$O/wall_s.txt"
   kill -TERM "$SP"; wait "$SP" 2>/dev/null
