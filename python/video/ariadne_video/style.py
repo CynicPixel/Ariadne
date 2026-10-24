@@ -25,7 +25,7 @@ AGENT = ["#58a6ff", "#f0883e", "#56d364"]  # agent 0, 1, 2: held for the whole f
 TARGET = "#ff5c5c"
 THREAD = "#e3b341"  # the Ariadne thread (egress route)
 TAG_COLOR = {"measured": "#56d364", "published": "#58a6ff", "design": "#d2a8ff", "illustrative": "#8b949e"}
-FONT = "DejaVu Sans"
+FONT = "Noto Sans"  # present in the pinned image and on the host
 
 config.background_color = BG
 

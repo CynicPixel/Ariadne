@@ -7,7 +7,8 @@ IMAGE="manimcommunity/manim:v0.22.0@sha256:3c3ce944c09d6fa73de59fe1e7a95e334e193
 HERE="$(cd "$(dirname "$0")" && pwd)"
 file="$1"; scene="$2"; shift 2
 q=("$@"); [ ${#q[@]} -eq 0 ] && q=(-ql)
-# --user: write media as the host user, not root. ARIADNE_VIDEO_DATA: the copied run data, read-only.
+# --user: write media as the host user, not root. The repo is mounted whole so evidence.py reads evaluation/runs.
+REPO="$(cd "$HERE/../.." && pwd)"
 exec docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$HERE":/manim -w /manim -e ARIADNE_VIDEO_DATA=/manim/data \
+  -v "$REPO":/repo -w /repo/python/video -e ARIADNE_VIDEO_DATA=/repo/python/video/data \
   "$IMAGE" manim "${q[@]}" "$file" "$scene"
