@@ -166,11 +166,13 @@ cmd_spool_s3() {   # S3_RUN_TARBALL SCENE - build per-agent recon spools from an
 aws s3 cp $uri - | tar xz -C /tmp
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
 cp -a /tmp/p/. .
-mkdir -p /tmp/runsrc
-aws s3 cp $tarball - | tar xz -C /tmp/runsrc
-inner=\$(find /tmp/runsrc -name inputs.mcap | head -1)
+mkdir -p build/runsrc
+aws s3 cp $tarball - | tar xz -C build/runsrc
+inner=\$(find build/runsrc -name inputs.mcap | head -1)
 [ -n "\$inner" ] || { echo "no inputs.mcap in the recording tarball" > \$R/spool_error.txt; exit 5; }
 inner=\$(dirname "\$inner")
+# RELATIVE to the repo root on purpose: live_to_rec/sim_vo run in containers that mount only the repo at
+# /work - a /tmp path on the instance host does not exist inside them (spool626b's failure, run b577dd).
 mkdir -p build/rec626 build/spools build/vo_out
 ARIADNE_CORE_IMAGE=ariadne/core-dev:dev infra/scripts/live_to_rec.sh "\$inner" $scene build/rec626 > \$R/live_to_rec.log 2>&1
 for k in 0 1 2; do
