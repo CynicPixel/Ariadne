@@ -18,7 +18,9 @@
 //                               N agents (Phase 8 §42): everything is sized by the ctor's n_agents; at N = 2 every
 //                               rule is the 2-agent one (peers = the other agent, JointPick, CBBA graph, optimum).
 //   Route(plan, agent, i, from)A* on the agent's plan space, line-of-sight string-pulled (4-connected chords, so
-//                               no corner is cut), cut at max_command_m; never a raw-cell fallback.
+//                               no corner is cut), cut at max_command_m; never a raw-cell fallback. A goal in
+//                               the start cell is one (NaN, NaN) "turn here" waypoint (D125); a cut command or an
+//                               arrival twin carries a NaN yaw, i.e. no final turn (D119, D118).
 // Deterministic given its inputs: sim time only, no wall clock in any decision.
 // ---------------------------------------------------------------------------
 #include "planning/mission/allocation.hpp"
@@ -33,6 +35,7 @@
 
 #include "core/serialization/serializer.hpp"
 
+#include <limits>
 #include <set>
 #include <string>
 #include <utility>
@@ -78,6 +81,7 @@ struct Phase4AgentInput {
     core::Vec3 position = core::Vec3::Zero();
     double flown_m = 0;
     std::vector<std::pair<double, double>> refused_goals;
+    double yaw = std::numeric_limits<double>::quiet_NaN();   // D117: heading at plan time (camera optical axis), NaN unknown
 };
 
 struct Phase4AgentPlan {
@@ -164,6 +168,8 @@ private:
                               const cv::Mat* peer_known, bool footprints, const std::vector<RegionDirective>& dirs, const Phase4Plan& shared,
                               const CoarseLayer& coarse) const;
     Cell CellOf(const core::Vec3& p) const;
+    /// Route's command on a given plan space (shared by Route and D117's router, so C_time prices what is sent).
+    ViewCommand Command(const cv::Mat& plan, const std::pair<double, double>& goal_xy, const Cell& from) const;
 
     Phase4Briefing b_;
     Phase4Params p_;

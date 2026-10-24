@@ -1,0 +1,9 @@
+input digest ced7640a20cf76d6 truth digest 6c0bbdb4becd09b8 tilt0 3.7807683586294782
+halcheck a*lambda (MatExpr)     worst rel err 0.000e+00
+halcheck lmDiag+diag            worst rel err 0.000e+00
+halcheck x.mul(y)               worst rel err 0.000e+00
+halcheck jtb - lmDiag.mul(x)    worst rel err 0.000e+00
+halcheck cv::sum rel err 5.748e-16 (got -3240268.3817131864 ref -3240268.3817131845)
+halcheck norm L2SQR rel err 6.577e-16  norm INF rel err 0.000e+00
+halcheck cv::sqrt               worst rel err 0.000e+00
+halcheck useOptimized 1

@@ -65,6 +65,9 @@ struct MultiAgentInput {
     uint32_t gauge_agent = 0;
     SE3 gauge_T_G_W;                        // identity when the gauge agent is the anchor
     PgoInit init = PgoInit::kChordal;
+    /// D178: per-agent starting T_G_W from a known-start prior (G = the gauge's frame); an agent listed here starts at
+    /// it instead of the spanning-tree value. Placement (which agents are tied to the gauge) is unchanged. Empty = off.
+    std::map<uint32_t, SE3> prior_T_G_W;
     PgoSettings settings = PgoV2();
     /// Optional replacement for init + SolvePoseGraph on the joint graph: the broker's robust stage
     /// (slam/robust/joint_robust.hpp, D76; wired by collaboration/broker/broker_solve.hpp, D171). It solves `g` in

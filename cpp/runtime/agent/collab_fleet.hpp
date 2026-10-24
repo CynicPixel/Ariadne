@@ -42,6 +42,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <tuple>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -72,6 +73,7 @@ struct CollabConfig {
     int refine_passes = 2;
     std::string local_encoding = "int8";      // arch §15.7 default; fp16 = the ablation row (D171)
     std::string verify_calibration;           // where verify_min_pnp_inliers came from (manifest)
+    ac::EntryGate entry_gate;                 // D178 entry_gate: {enabled, chi2, entry_sigma_m, entry_sigma_deg, kappa}
     // Arch §42 item 7 (EVALUATION ONLY; default none): false closures planted at the broker as if verified, so only
     // the robust stage can reject them. Z = (the true T_Ca_Cb) * [R_z(yaw_deg) | offset_m]; the information is copied
     // from the last edge verified on the same agent pair, and a planting waits until that pair HAS a verified edge
@@ -138,6 +140,15 @@ inline CollabConfig LoadCollabConfig(const std::string& path) {
         get(g, "sigma_disparity_px", c.gate.sigma_disparity_px);
     }
     get(n, "robust", c.robust);
+    if (const YAML::Node eg = n["entry_gate"]) {
+        get(eg, "enabled", c.entry_gate.enabled);
+        get(eg, "chi2", c.entry_gate.chi2);
+        get(eg, "entry_sigma_m", c.entry_gate.entry_sigma_m);
+        double deg = c.entry_gate.entry_sigma_rad * 180.0 / M_PI;
+        get(eg, "entry_sigma_deg", deg);
+        c.entry_gate.entry_sigma_rad = deg * M_PI / 180.0;
+        get(eg, "kappa", c.entry_gate.kappa);
+    }
     get(n, "selection_interval_s", c.selection_interval_s);
     get(n, "candidate_ttl_s", c.candidate_ttl_s);
     get(n, "refine_passes", c.refine_passes);
@@ -225,7 +236,14 @@ public:
                 robust_inter_ += r.inter_agent.size();
                 robust_inliers_ += uint64_t(r.inter_inliers);
             },
-            [this](const slam::PoseGraph& joint) { ObserveSolve(joint); });
+            [this](const slam::PoseGraph& joint) { ObserveSolve(joint); }, EntryGateWithPoses(),
+            [this](const ac::EntryGateStats& s) {
+                gate_.tested += s.tested, gate_.rejected += s.rejected, gate_.ungated += s.ungated;
+                for (const auto& d : s.decisions) {
+                    GateEdge& g = gate_edges_[{d.agent_a, d.keyframe_a, d.agent_b, d.keyframe_b}];
+                    ++g.tested, g.rejected += !d.accepted, g.last_d2 = d.d2, g.last_accepted = d.accepted;
+                }
+            });
 
         for (ac::AgentId self : fleet) {
             ac::NodeHooks h = Hooks(self);
@@ -308,6 +326,16 @@ public:
         return inject_.size() - 1;
     }
 
+    /// D178: the known-start placements T_World_Wk (the briefing's entry poses; never ground truth). Only used with
+    /// entry_gate.enabled; may be set after construction (the solve reads it at each call).
+    void SetEntryPoses(const std::map<ac::AgentId, core::SE3>& T_World_W) { *entry_poses_ = T_World_W; }
+    /// D178 gate counters summed over every solve (an edge is re-tested at each solve it enters).
+    const ac::EntryGateStats& entry_gate_stats() const { return gate_; }
+    /// Per inter-agent edge across all solves: times tested/rejected and its LAST decision (D178 criterion).
+    struct GateEdge { uint64_t tested = 0, rejected = 0; double last_d2 = 0.0; bool last_accepted = false; };
+    using GateEdgeKey = std::tuple<ac::AgentId, uint64_t, ac::AgentId, uint64_t>;
+    const std::map<GateEdgeKey, GateEdge>& entry_gate_edges() const { return gate_edges_; }
+
     // --- state and evidence ---
     const std::vector<std::unique_ptr<ac::CollabNode>>& nodes() const { return nodes_; }
     ac::CollabNode& node(ac::AgentId a) const { return *node_of_.at(a); }
@@ -324,6 +352,12 @@ public:
     uint16_t feature_bytes() const { return feature_bytes_; }
 
 private:
+    ac::EntryGate EntryGateWithPoses() const {
+        ac::EntryGate g = cfg_.entry_gate;
+        g.T_World_W = entry_poses_;
+        return g;
+    }
+
     /// Plants injection i at `now` if its pair has a verified edge and both keyframes are released (else false).
     bool Plant(size_t i, core::Timestamp now) {
         const auto& q = inject_[i];
@@ -555,6 +589,9 @@ private:
     double sim_t_s_ = 0;
     std::map<EdgeKey, KeptEdge> kept_edges_;
     std::map<ac::AgentId, std::set<uint64_t>> released_;
+    std::shared_ptr<std::map<ac::AgentId, core::SE3>> entry_poses_ = std::make_shared<std::map<ac::AgentId, core::SE3>>();
+    ac::EntryGateStats gate_;   // totals only (decisions are folded into gate_edges_)
+    std::map<GateEdgeKey, GateEdge> gate_edges_;
     uint64_t undeliverable_ = 0;
     std::function<ac::SolveOutput(const ac::SolveInput&)> solve_robust_;
     std::vector<std::unique_ptr<ac::CollabNode>> nodes_;

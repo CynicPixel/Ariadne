@@ -1,0 +1,4 @@
+maze_short 0 200 configs/mission/ablation_4.3/mission_v2_ariadne_t.yaml
+maze_short 0 200 configs/mission/ablation_4.3/mission_v2_ariadne_ta.yaml
+maze_short 0 200 -
+maze_short 1 200 configs/mission/ablation_4.3/mission_v2_random.yaml

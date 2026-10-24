@@ -1,0 +1,13 @@
+# python3 turn_episodes.py r0_extract
+ci_tiny    ariadne               turns  156  >180deg   0  max  179.8  median  61.7  reversals<=1s   35 (22%)
+ci_tiny    coverage_greedy       turns  153  >180deg   0  max  179.8  median  36.6  reversals<=1s   34 (22%)
+ci_tiny    nearest_frontier_1.8  turns  106  >180deg   0  max  179.7  median  41.1  reversals<=1s   26 (25%)
+ci_tiny    random                turns  177  >180deg   0  max  179.6  median  46.3  reversals<=1s   65 (37%)
+ci_tiny    tare                  turns  165  >180deg   0  max  179.8  median  54.2  reversals<=1s   44 (27%)
+ci_tiny    uncertainty_only      turns  159  >180deg   0  max  179.7  median  26.8  reversals<=1s   35 (22%)
+maze_short ariadne               turns  176  >180deg   0  max  179.8  median  34.7  reversals<=1s   48 (27%)
+maze_short coverage_greedy       turns  135  >180deg   0  max  179.8  median  26.4  reversals<=1s   31 (23%)
+maze_short nearest_frontier_1.8  turns  136  >180deg   0  max  179.8  median  42.8  reversals<=1s   44 (32%)
+maze_short random                turns  164  >180deg   0  max  179.7  median  58.3  reversals<=1s   59 (36%)
+maze_short tare                  turns  161  >180deg   0  max  179.8  median  37.1  reversals<=1s   44 (27%)
+maze_short uncertainty_only      turns  144  >180deg   0  max  178.8  median  43.4  reversals<=1s   28 (19%)

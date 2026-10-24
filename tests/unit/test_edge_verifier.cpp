@@ -19,7 +19,10 @@ std::vector<cv::Point3f> Cloud(bool planar, int n) {
     std::mt19937 rng(7);
     std::uniform_real_distribution<float> u(-1.f, 1.f);
     std::vector<cv::Point3f> pts;
-    for (int i = 0; i < n; ++i) pts.emplace_back(u(rng), 0.6f * u(rng), planar ? 3.f : 3.f + 1.5f * u(rng));
+    for (int i = 0; i < n; ++i) {   // x, y, then z: one draw per full-expression (D123)
+        const float x = u(rng), y = 0.6f * u(rng);
+        pts.emplace_back(x, y, planar ? 3.f : 3.f + 1.5f * u(rng));
+    }
     return pts;
 }
 }  // namespace

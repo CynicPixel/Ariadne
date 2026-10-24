@@ -42,7 +42,7 @@ struct World {
 void AddChain(World& w, std::mt19937& g, uint64_t first, int n, const Mat6& odo, bool store_backward = false) {
     std::normal_distribution<double> nz(0.0, 1.0);
     SE3 T;
-    T.t = core::Vec3(nz(g), nz(g), 0.0) * 5.0;
+    T.t = core::Vec3{nz(g), nz(g), 0.0} * 5.0;
     for (int i = 0; i < n; ++i) {
         if (i > 0) {
             Vec6 step;
@@ -74,11 +74,11 @@ size_t AddLoop(World& w, std::mt19937& g, uint64_t a, uint64_t b, const Mat6& co
 SE3 RandomPose(std::mt19937& g) {   // uniform rotation, translation within +-5 m (the outlier protocol)
     std::normal_distribution<double> n(0.0, 1.0);
     std::uniform_real_distribution<double> u(-5.0, 5.0);
-    Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+    Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
     q.normalize();
     SE3 T;
     T.R = q.toRotationMatrix();
-    T.t = core::Vec3(u(g), u(g), u(g));
+    T.t = core::Vec3{u(g), u(g), u(g)};
     return T;
 }
 
@@ -306,7 +306,7 @@ TEST(Pcm, NearMissOutliersPrecisionReported) {
                 std::normal_distribution<double> n(0.0, 1.0);
                 for (int k = 0; k < 10; ++k) {
                     const int a = int(g() % 250), b = a + 20 + int(g() % 30);
-                    const core::Vec3 dt(n(g), n(g), n(g)), dr(n(g), n(g), n(g));
+                    const core::Vec3 dt{n(g), n(g), n(g)}, dr{n(g), n(g), n(g)};
                     Vec6 xi;
                     xi << err_t * dt.normalized(), err_r * dr.normalized();
                     const SE3 bad = core::SE3Exp(xi) * (w.truth[uint64_t(a)].inverse() * w.truth[uint64_t(b)]);

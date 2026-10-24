@@ -81,11 +81,11 @@ public:
         send_("#cwm", EncodeWatermark(t_ns));
     }
 
-    void OnFeatureRequest(uint64_t kf) {
+    void OnFeatureRequest(const CollabFeatureRequest& q) {
         ++stats_.requests;
         CollabFeatureReply f;
-        f.kf = kf;
-        f.features = x_.Features(kf);
+        f.kf = q.kf;
+        f.features = q.t_req_ns >= 0 ? x_.Features(q.kf, q.t_req_ns) : x_.Features(q.kf);
         if (!f.features) ++stats_.replies_gone;
         send_("#fresp", EncodeFeatureReply(f));
     }

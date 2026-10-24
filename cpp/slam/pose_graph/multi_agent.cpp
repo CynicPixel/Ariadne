@@ -59,6 +59,8 @@ MultiAgentResult SolveMultiAgent(const MultiAgentInput& in) {
     }
     for (const auto& [a, sub] : by_agent)
         if (!T_G_W0.count(a)) out.unplaced.push_back(a);
+    for (auto& [a, T] : T_G_W0)   // D178: a known-start prior replaces the spanning-tree start (not the gauge's)
+        if (a != in.gauge_agent && in.prior_T_G_W.count(a)) T = in.prior_T_G_W.at(a);
 
     // 3. The joint graph over placed agents.
     PoseGraph g;

@@ -49,9 +49,9 @@ LoopGeometry Scene(std::mt19937& g, int n, PixelFn pixel, DepthFn depth, double 
         if (uvB.x() < 0 || uvB.x() > 1280 || uvB.y() < 0 || uvB.y() > 720) continue;
         const double d = lg.rig.cam.fx * lg.rig.baseline / XB.z() + sigma_d * nz(g);
         if (d <= 0.05) continue;
-        const Vec2 uvBn = uvB + sigma_px * Vec2(nz(g), nz(g));
+        const Vec2 uvBn = uvB + sigma_px * Vec2{nz(g), nz(g)};
         lg.X_B.push_back(core::Unproject(lg.rig.cam, uvBn, lg.rig.cam.fx * lg.rig.baseline / d));
-        lg.uv_A.push_back(uvA + sigma_px * Vec2(nz(g), nz(g)));
+        lg.uv_A.push_back(uvA + sigma_px * Vec2{nz(g), nz(g)});
     }
     return lg;
 }
@@ -66,7 +66,7 @@ SE3 Jitter(std::mt19937& g, double t, double r) {
 auto FullImage() {
     return [](std::mt19937& g) {
         std::uniform_real_distribution<double> u(20, 1260), v(20, 700);
-        return Vec2(u(g), v(g));
+        return Vec2{u(g), v(g)};
     };
 }
 auto Depth(double lo, double hi) {
@@ -189,8 +189,8 @@ TEST(Degeneracy, ThreeDLineIsRefused) {
         if (XB.z() < 0.5 || uvB.x() < 0 || uvB.x() > 1280 || uvB.y() < 0 || uvB.y() > 720) continue;
         const double d = lg.rig.cam.fx * lg.rig.baseline / XB.z() + 0.65 * nz(g);
         if (d <= 0.05) continue;
-        lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + 0.46 * Vec2(nz(g), nz(g)), lg.rig.cam.fx * lg.rig.baseline / d));
-        lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + 0.46 * Vec2(nz(g), nz(g)));
+        lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + 0.46 * Vec2{nz(g), nz(g)}, lg.rig.cam.fx * lg.rig.baseline / d));
+        lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + 0.46 * Vec2{nz(g), nz(g)});
     }
     lg.T_A_B = Jitter(g, 0.02, 0.01) * T;
     const DegeneracyReport r = AssessLoop(lg);

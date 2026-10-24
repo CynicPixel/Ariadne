@@ -1,0 +1,18 @@
+outcome: explicitly_incomplete
+corrupt:
+incomplete:
+  - "agent 0: reliable class 5 key 7 to 1 unacked (queued)"
+  - "agent 0: reliable class 5 key 8 to 1 unacked (queued)"
+  - "agent 0: reliable class 5 key 9 to 1 unacked (queued)"
+  - "agent 0: reliable class 5 key 10 to 1 unacked (queued)"
+  - "agent 0: reliable class 5 key 11 to 1 unacked (queued)"
+  - "agent 0: reliable class 6 key 4 to 1 unacked (last sent 78.500000 s ago)"
+  - "agent 0: reliable class 5 key 1 to 1 unacked (last sent 78.500000 s ago)"
+  - "agent 0: reliable class 6 key 5 to 1 unacked (last sent 78.500000 s ago)"
+  - "agent 0: reliable class 6 key 6 to 1 unacked (last sent 78.500000 s ago)"
+  - "agent 0: reliable class 5 key 2 to 1 unacked (last sent 79.500000 s ago)"
+  - "agent 0: reliable class 5 key 3 to 1 unacked (last sent 79.500000 s ago)"
+  - "agent 0: reliable class 5 key 4 to 1 unacked (last sent 79.500000 s ago)"
+  - "agent 0: reliable class 5 key 5 to 1 unacked (last sent 79.500000 s ago)"
+  - "agent 0: reliable class 5 key 6 to 1 unacked (last sent 79.500000 s ago)"
+  - "agent 0: reliable class 6 key 7 to 1 unacked (last sent 78.580000 s ago)"

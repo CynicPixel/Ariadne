@@ -64,7 +64,7 @@ run() {
   local commit; commit=$(cat "$W/commit")
   local stages="${1:-A B1 B2 C}"
   infra/scripts/spinup.sh run --profile cpux86 --max-minutes 240 -- \
-    "STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 COMMIT=$commit REG=$REG STAGES='$stages' STORES_FROM='${STORES_FROM:-}' bash infra/eval/collab_aws.sh"
+    "STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 COMMIT=$commit REG=$REG STAGES='$stages' STORES_FROM='${STORES_FROM:-}' CFG_EXTRA='${CFG_EXTRA:-}' bash infra/eval/collab_aws.sh"
 }
 
 teardown() {

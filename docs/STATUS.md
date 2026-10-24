@@ -4,6 +4,38 @@ Dated entries. Newest first. Phase tracking checkboxes live in `ARIADNE_PHASED_P
 
 ---
 
+## 2026-10-24 (14:35 IST) — Consolidation MERGED to main (feature freeze; M)
+
+- **What landed** (`consolidate/2026-10-24` ad99edf, merged as 59fe978):
+  - A2 `feat/ph5-dve` 2f6be5e: perf profile close-out, D232 + its correction, D233/D234 (3.6: no coding adopted),
+    D235 (ALIKED l2conv not adopted), D229 scoring.
+  - A1 `feat/a1-gpgo-arm64` 68f7d7d: D123/D124 (RNG sequencing ctest, GravityPgo NEES test). One test disabled
+    (`VisibilityGraph.ConvexGraph…`): the claim "FAR ≤ lattice" is FALSE, recorded as OPEN in the register. Also
+    the #185 wire-dump root cause.
+  - A1 `feat/ph4-nagent` 471b176: D117–D125 behind mission_v2 keys, the 4.3 abort check (GO), 4.3/4.4 ablation
+    configs, the phase-4 report draft.
+  - B `feat/l1-a1p-llm` 87ce56c, including M's `feat/live-collab-live` 6a16717:
+    - D178 entry gate enabled (PASS), D179/D223 async collab;
+    - collab replay fixes: silence timeout, identity guard, config snapshot;
+    - D225–D228 (lens off, 5 threads); D229 lane pipelining NEGATIVE (0.833 vs 0.839), so OFF by default;
+    - D226 lens.hpp OpenCV-free;
+    - #185 serializer order fix (x86 bytes unchanged).
+- **Conflicts:**
+  - DECISIONS: union of the appended sections (no duplicate lines).
+  - COMPLETION_REGISTER: kept main's refreshed copy (ph4-nagent carried a stale one).
+  - `perf_sampler.sh`: A2's superset.
+- **AWS pre-merge** `20261024T083919Z-cpux86-73e3fa` (c7i spot, 999 s, ~$0.035): **54/54**, ctest **708/708**,
+  VERDICT PASS (render reused; not exit-gate evidence). Evidence:
+  `evaluation/runs/premerge_aws/20261024T083919Z-cpux86-73e3fa/`.
+- **Kaggle full ctest** (dev evidence) of every merged tip, all green: 7d7008e 695, 584fab3 695 (+1 disabled),
+  e73b8ba 701, 87ce56c 702.
+- **Open at merge:**
+  - collab60e (D179 acceptance: live + replay×2, running);
+  - the #185 arm64 check (running);
+  - splat GPU training on AWS (A2, waits on B's spools);
+  - COOL blocked by the AISPL card restriction; the maintainer requested Pay By Invoice, cutoff Oct 25 18:00 IST.
+- Post-demo work is listed in `docs/POST_DEMO_BACKLOG.md`.
+
 ## 2026-10-24 (03:30 IST) — B's live multi-agent POC MERGED to main (`584415e`, fast-forward)
 
 - **What landed (session B, `feat/l1-a1p-llm`):** the D175 multi-agent coordination POC (deterministic replay,
@@ -435,6 +467,11 @@ Reference-export regeneration: PERCEPTION_2.1 §13.
   scaled 0.6 (measured lag-1 correlation). The mirror syncs the priors and re-solves when they land.
 - **Synthetic:** a 1.5° reference-gravity error is estimated to 0.62° and tilt RMS drops 3.78° → 2.01°; a 30° outlier
   prior is contained. Tests 4/4; existing PGO tests unchanged.
+  - **Corrected 2026-10-24 (D123–D124):** the 0.62° is one lucky seed, under x86's argument-evaluation order (arm64
+    draws the noise in the other order and gets 2.71°).
+  - The fixture's ĝ σ is ≈ 2.0° per axis, and 14–17 % of seeds reach < 1°.
+  - What holds: the estimate is consistent with its own covariance (mean NEES 1.7–2.5 over 50 seeds, inside the χ²
+    99 % band) and tilt drops on 46–49 of 50 seeds.
 - **Not yet on EuRoC:** the sim calibration and part 3 come first (maintainer).
 
 ## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63 draft)

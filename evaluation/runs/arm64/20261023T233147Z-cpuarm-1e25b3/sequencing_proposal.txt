@@ -1,0 +1,133 @@
+tests/numerical/inertial_window_fixture.hpp:83
+  - const Vec3 X = mid * Vec3(ux(g) * z / 3.0, 0.6 * ux(g) * z / 3.0, z);
+  + const Vec3 X = mid * Vec3{ux(g) * z / 3.0, 0.6 * ux(g) * z / 3.0, z};
+tests/numerical/inertial_window_fixture.hpp:95
+  - o.z = Vec2(w.cam.fx * Xc.x() / Xc.z() + w.cam.cx + pn(g), w.cam.fy * Xc.y() / Xc.z() + w.cam.cy + pn(g));
+  + o.z = Vec2{w.cam.fx * Xc.x() / Xc.z() + w.cam.cx + pn(g), w.cam.fy * Xc.y() / Xc.z() + w.cam.cy + pn(g)};
+tests/numerical/test_gravity_prior.cpp:28
+  - p.g_C = Vec3(n(g), n(g), n(g)).normalized();
+  + p.g_C = Vec3{n(g), n(g), n(g)}.normalized();
+tests/numerical/test_gravity_prior.cpp:29
+  - p.g_ref_W = Vec3(n(g), n(g), n(g)).normalized();
+  + p.g_ref_W = Vec3{n(g), n(g), n(g)}.normalized();
+tests/numerical/test_lie.cpp:19
+  - Vec3 v(n(g), n(g), n(g));
+  + Vec3 v{n(g), n(g), n(g)};
+tests/numerical/test_lie.cpp:31
+  - Vec3 a(u(g), u(g), u(g)), b(u(g), u(g), u(g));
+  + Vec3 a{u(g), u(g), u(g)}, b{u(g), u(g), u(g)};
+tests/numerical/test_lie.cpp:40
+  - Vec3 a(u(g), u(g), u(g));
+  + Vec3 a{u(g), u(g), u(g)};
+tests/numerical/test_lie.cpp:108
+  - xi.head<3>() = Vec3(pos(g), pos(g), pos(g));
+  + xi.head<3>() = Vec3{pos(g), pos(g), pos(g)};
+tests/numerical/test_lie.cpp:130
+  - a.head<3>() = Vec3(pos(g), pos(g), pos(g));  a.tail<3>() = RandomAxis(g) * ang(g);
+  + a.head<3>() = Vec3{pos(g), pos(g), pos(g)};  a.tail<3>() = RandomAxis(g) * ang(g);
+tests/numerical/test_lie.cpp:131
+  - b.head<3>() = Vec3(pos(g), pos(g), pos(g));  b.tail<3>() = RandomAxis(g) * ang(g);
+  + b.head<3>() = Vec3{pos(g), pos(g), pos(g)};  b.tail<3>() = RandomAxis(g) * ang(g);
+tests/numerical/test_lie.cpp:138
+  - const Vec3 p(pos(g), pos(g), pos(g));
+  + const Vec3 p{pos(g), pos(g), pos(g)};
+tests/numerical/test_lie.cpp:152
+  - tv.head<3>() = Vec3(pos(g), pos(g), pos(g));
+  + tv.head<3>() = Vec3{pos(g), pos(g), pos(g)};
+tests/numerical/test_lie.cpp:173
+  - a.head<3>() = Vec3(pos(g), pos(g), pos(g));  a.tail<3>() = RandomAxis(g) * ang(g);
+  + a.head<3>() = Vec3{pos(g), pos(g), pos(g)};  a.tail<3>() = RandomAxis(g) * ang(g);
+tests/numerical/test_lie.cpp:174
+  - b.head<3>() = Vec3(pos(g), pos(g), pos(g));  b.tail<3>() = RandomAxis(g) * ang(g);
+  + b.head<3>() = Vec3{pos(g), pos(g), pos(g)};  b.tail<3>() = RandomAxis(g) * ang(g);
+tests/numerical/test_lie.cpp:221
+  - xi.head<3>() = Vec3(n(g), n(g), n(g)) *
+  + xi.head<3>() = Vec3{n(g), n(g), n(g)} *
+tests/numerical/test_window_ba.cpp:40
+  - const Vec3 X(ux(g), 0.6 * ux(g), uz(g));
+  + const Vec3 X{ux(g), 0.6 * ux(g), uz(g)};
+tests/numerical/test_window_ba.cpp:51
+  - o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g));
+  + o.z = Vec2{kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g)};
+tests/numerical/test_window_ba.cpp:225
+  - w.X[id] = Vec3(ux(g), ux(g), uz(g));
+  + w.X[id] = Vec3{ux(g), ux(g), uz(g)};
+tests/numerical/test_window_ba_inertial.cpp:31
+  - const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+  + const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
+tests/unit/test_certificate.cpp:46
+  - Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+  + Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
+tests/unit/test_certificate.cpp:50
+  - T.t = Vec3(u(g), u(g), u(g));
+  + T.t = Vec3{u(g), u(g), u(g)};
+tests/unit/test_degeneracy.cpp:52
+  - const Vec2 uvBn = uvB + sigma_px * Vec2(nz(g), nz(g));
+  + const Vec2 uvBn = uvB + sigma_px * Vec2{nz(g), nz(g)};
+tests/unit/test_degeneracy.cpp:54
+  - lg.uv_A.push_back(uvA + sigma_px * Vec2(nz(g), nz(g)));
+  + lg.uv_A.push_back(uvA + sigma_px * Vec2{nz(g), nz(g)});
+tests/unit/test_degeneracy.cpp:69
+  - return Vec2(u(g), v(g));
+  + return Vec2{u(g), v(g)};
+tests/unit/test_degeneracy.cpp:192
+  - lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + 0.46 * Vec2(nz(g), nz(g)), lg.rig.cam.fx * lg.rig.baseline / d));
+  + lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + 0.46 * Vec2{nz(g), nz(g)}, lg.rig.cam.fx * lg.rig.baseline / d));
+tests/unit/test_degeneracy.cpp:193
+  - lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + 0.46 * Vec2(nz(g), nz(g)));
+  + lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + 0.46 * Vec2{nz(g), nz(g)});
+tests/unit/test_gnc.cpp:54
+  - Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+  + Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
+tests/unit/test_gnc.cpp:58
+  - T.t = Vec3(u(g), u(g), u(g));
+  + T.t = Vec3{u(g), u(g), u(g)};
+tests/unit/test_gnc.cpp:252
+  - xi << err_t * Vec3(n(g), n(g), n(g)).normalized(), err_r * Vec3(n(g), n(g), n(g)).normalized();
+  + xi << err_t * Vec3{n(g), n(g), n(g)}.normalized(), err_r * Vec3{n(g), n(g), n(g)}.normalized();
+tests/unit/test_gnc.cpp:344
+  - xi << 0.5 * Vec3(n(g), n(g), n(g)).normalized(), 0.087 * Vec3(n(g), n(g), n(g)).normalized();
+  + xi << 0.5 * Vec3{n(g), n(g), n(g)}.normalized(), 0.087 * Vec3{n(g), n(g), n(g)}.normalized();
+tests/unit/test_gnc.cpp:494
+  - xi << 0.5 * Vec3(n(g), n(g), n(g)).normalized(), 0.087 * Vec3(n(g), n(g), n(g)).normalized();
+  + xi << 0.5 * Vec3{n(g), n(g), n(g)}.normalized(), 0.087 * Vec3{n(g), n(g), n(g)}.normalized();
+tests/unit/test_gravity_pgo.cpp:68
+  - p.g_C = (Rot(s * Vec3(nz(gen), nz(gen), 0)) * gC).normalized();
+  + p.g_C = (Rot(s * Vec3{nz(gen), nz(gen), 0}) * gC).normalized();
+tests/unit/test_joint_robust.cpp:183
+  - p.g_C = (core::SO3Exp(s * Vec3(nz(gen), nz(gen), 0)) * (j.truth[chain[k]].R.transpose() * kDown))
+  + p.g_C = (core::SO3Exp(s * Vec3{nz(gen), nz(gen), 0}) * (j.truth[chain[k]].R.transpose() * kDown))
+tests/unit/test_loop_backend.cpp:70
+  - lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + noise * 0.46 * Vec2(nz(g), nz(g)), lg.rig.cam.fx * lg.rig.baseline / d));
+  + lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + noise * 0.46 * Vec2{nz(g), nz(g)}, lg.rig.cam.fx * lg.rig.baseline / d));
+tests/unit/test_loop_backend.cpp:71
+  - lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + noise * 0.46 * Vec2(nz(g), nz(g)));
+  + lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + noise * 0.46 * Vec2{nz(g), nz(g)});
+tests/unit/test_pcm.cpp:45
+  - T.t = core::Vec3(nz(g), nz(g), 0.0) * 5.0;
+  + T.t = core::Vec3{nz(g), nz(g), 0.0} * 5.0;
+tests/unit/test_pcm.cpp:77
+  - Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+  + Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
+tests/unit/test_pcm.cpp:81
+  - T.t = core::Vec3(u(g), u(g), u(g));
+  + T.t = core::Vec3{u(g), u(g), u(g)};
+tests/unit/test_pcm.cpp:309
+  - const core::Vec3 dt(n(g), n(g), n(g)), dr(n(g), n(g), n(g));
+  + const core::Vec3 dt{n(g), n(g), n(g)}, dr{n(g), n(g), n(g)};
+tests/unit/test_window_ba_levmarq.cpp:36
+  - const Vec3 X(ux(g), 0.6 * ux(g), uz(g));
+  + const Vec3 X{ux(g), 0.6 * ux(g), uz(g)};
+tests/unit/test_window_ba_levmarq.cpp:48
+  - o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g));
+  + o.z = Vec2{kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g)};
+tests/unit/test_window_ba_levmarq.cpp:79
+  - for (auto& [id, X] : w.X) X += Vec3(n(g), n(g), n(g));
+  + for (auto& [id, X] : w.X) X += Vec3{n(g), n(g), n(g)};
+tests/unit/test_window_ba_levmarq.cpp:180
+  - const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+  + const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
+tests/unit/test_window_ba_levmarq.cpp:247
+  - const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+  + const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
+# 44 lines in 13 files (a66dac6)

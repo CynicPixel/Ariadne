@@ -1,0 +1,11 @@
+tool: ariadne_collab_sim
+git_commit: 4459d5730d047a67859cf507022ebb84d21d186a
+git_dirty: false
+image_digest: UNRECORDED
+opencv_build_hash: UNRECORDED
+config: /w/cfg/spectral_s0_p50.yaml
+stores: /w/passa/s0/seed3
+rec: /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/rec
+scene: /work/evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw/scene
+seed: 3
+aliked: aliked_n16_k1024_1280x720+lightglue_aliked/cv_dnn_new/norm_upstream

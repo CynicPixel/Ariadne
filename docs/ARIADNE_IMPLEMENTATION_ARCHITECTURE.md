@@ -3640,6 +3640,19 @@ U(a) =
 
 This preserves the original research hypothesis in the proposal.
 
+**C_time as built (D117, 2026-10-24; NBV_4.3 §15).**
+- C_time is the duration of the mover's own command profile (`core/trajectory/command_planner.hpp` `PlanCommand`)
+  over the exact command the loop will send for the view, from the agent's current heading. It covers every turn in
+  place, every clearance-limited move, and the final turn.
+- D114 collapsed motion, energy and time into one path term ("all ∝ path"). That holds only for a rig that yaws while
+  it translates. The kinematic rig turns in place: the 4.3 gate measured 45 % of Ariadne's mission time spent turning.
+- With `nbv.cost_time: exact_command`, λ_t's third of the path weight therefore prices C_time instead:
+  `U = G − [(λ_d⁰ + λ_e(t))/3]·C_path/p90 − [λ_t(t)/3]·C_time/p90 − C_b/p90 − C_r/p90`. The weights still sum to 1 at
+  t = 0.
+- C_time is a [PROXY]: it uses the planner's clearance, not GT.
+- Views may also be offered at their arrival heading (D118, `nbv.view_yaw: target+arrival`).
+- Ablation rows: NBV_4.3 §15.5.
+
 ### λ scheduling — "the weights are not fixed", made real
 
 ```text

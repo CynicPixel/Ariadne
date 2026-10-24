@@ -1,0 +1,25 @@
+# python3 turn_back.py r0_extract 60; then 200
+ci_tiny    ariadne               T<=60s  turn-move-backturn pairs   2  = 20% of turning time  median rotation spent 495.4 deg for net 153.4 deg  mean move between 1.54 m
+ci_tiny    coverage_greedy       T<=60s  turn-move-backturn pairs   5  = 42% of turning time  median rotation spent 263.7 deg for net  49.1 deg  mean move between 2.04 m
+ci_tiny    nearest_frontier_1.8  T<=60s  turn-move-backturn pairs   2  = 12% of turning time  median rotation spent 380.9 deg for net 280.0 deg  mean move between 0.45 m
+ci_tiny    random                T<=60s  turn-move-backturn pairs   1  = 4% of turning time  median rotation spent 111.9 deg for net  57.5 deg  mean move between 1.15 m
+ci_tiny    tare                  T<=60s  turn-move-backturn pairs   5  = 37% of turning time  median rotation spent 285.4 deg for net  67.0 deg  mean move between 1.17 m
+ci_tiny    uncertainty_only      T<=60s  turn-move-backturn pairs   6  = 59% of turning time  median rotation spent 302.0 deg for net  89.7 deg  mean move between 1.91 m
+maze_short ariadne               T<=60s  turn-move-backturn pairs   5  = 67% of turning time  median rotation spent 435.5 deg for net 230.9 deg  mean move between 1.03 m
+maze_short coverage_greedy       T<=60s  turn-move-backturn pairs   4  = 29% of turning time  median rotation spent 102.8 deg for net  25.3 deg  mean move between 2.24 m
+maze_short nearest_frontier_1.8  T<=60s  turn-move-backturn pairs   5  = 35% of turning time  median rotation spent 202.3 deg for net  49.0 deg  mean move between 0.77 m
+maze_short random                T<=60s  turn-move-backturn pairs   2  = 17% of turning time  median rotation spent 207.8 deg for net 153.2 deg  mean move between 0.94 m
+maze_short tare                  T<=60s  turn-move-backturn pairs   2  = 20% of turning time  median rotation spent 435.5 deg for net 275.3 deg  mean move between 1.01 m
+maze_short uncertainty_only      T<=60s  turn-move-backturn pairs   6  = 78% of turning time  median rotation spent 267.1 deg for net  78.1 deg  mean move between 1.97 m
+ci_tiny    ariadne               T<=200s  turn-move-backturn pairs  22  = 50% of turning time  median rotation spent 214.8 deg for net  66.7 deg  mean move between 1.38 m
+ci_tiny    coverage_greedy       T<=200s  turn-move-backturn pairs  16  = 37% of turning time  median rotation spent 207.9 deg for net 128.3 deg  mean move between 2.06 m
+ci_tiny    nearest_frontier_1.8  T<=200s  turn-move-backturn pairs  11  = 34% of turning time  median rotation spent 207.0 deg for net  55.7 deg  mean move between 0.51 m
+ci_tiny    random                T<=200s  turn-move-backturn pairs   4  = 8% of turning time  median rotation spent 280.1 deg for net 144.3 deg  mean move between 2.01 m
+ci_tiny    tare                  T<=200s  turn-move-backturn pairs  27  = 52% of turning time  median rotation spent 196.2 deg for net  75.1 deg  mean move between 1.45 m
+ci_tiny    uncertainty_only      T<=200s  turn-move-backturn pairs  17  = 43% of turning time  median rotation spent 214.1 deg for net  52.2 deg  mean move between 1.92 m
+maze_short ariadne               T<=200s  turn-move-backturn pairs  22  = 47% of turning time  median rotation spent 178.8 deg for net  57.3 deg  mean move between 1.10 m
+maze_short coverage_greedy       T<=200s  turn-move-backturn pairs  15  = 34% of turning time  median rotation spent 167.6 deg for net  48.4 deg  mean move between 2.12 m
+maze_short nearest_frontier_1.8  T<=200s  turn-move-backturn pairs  23  = 54% of turning time  median rotation spent 210.1 deg for net  27.4 deg  mean move between 0.62 m
+maze_short random                T<=200s  turn-move-backturn pairs  17  = 34% of turning time  median rotation spent 220.9 deg for net  77.1 deg  mean move between 1.85 m
+maze_short tare                  T<=200s  turn-move-backturn pairs  14  = 38% of turning time  median rotation spent 271.7 deg for net  75.7 deg  mean move between 1.20 m
+maze_short uncertainty_only      T<=200s  turn-move-backturn pairs  21  = 53% of turning time  median rotation spent 236.0 deg for net  68.7 deg  mean move between 2.10 m

@@ -45,11 +45,14 @@ def sha(p: Path) -> str:
 
 def summary(d: Path) -> dict:
     s = results(d)
-    for k in (0, 1):
+    # Every agent the run produced, not a hardcoded pair (the D225 lesson: agent 2 must not be invisible
+    # to the tripwire). The agents are whatever results() parsed from the per-agent blocks.
+    for key in [k for k in s if k.startswith("agent")]:
+        k = key[len("agent"):]
         tums = sorted((d / "raw").glob(f"*-agent{k}-*/estimate_body.tum"))
         if len(tums) != 1:
             raise SystemExit(f"{d}: expected one estimate_body.tum for agent {k}, found {len(tums)}")
-        s[f"agent{k}"]["estimate_body_sha256"] = sha(tums[0])
+        s[key]["estimate_body_sha256"] = sha(tums[0])
     trace = []
     for line in (d / "trace.jsonl").read_text().splitlines():
         r = json.loads(line)

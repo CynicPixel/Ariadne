@@ -231,16 +231,22 @@ inline CollabStoreRecord DecodeRecord(const std::vector<uint8_t>& b, uint32_t* n
     return s;
 }
 
-inline std::vector<uint8_t> EncodeFeatureRequest(uint64_t kf) {
+/// #freq: the keyframe and the sim time of the asking tick (-1 = untimed: the legacy presence rule).
+struct CollabFeatureRequest {
+    uint64_t kf = 0;
+    int64_t t_req_ns = -1;
+};
+inline std::vector<uint8_t> EncodeFeatureRequest(uint64_t kf, int64_t t_req_ns = -1) {
     collab_wire::Writer w;
-    w.Pod(kf);
+    w.Pod(kf), w.Pod(t_req_ns);
     return w.b;
 }
-inline uint64_t DecodeFeatureRequest(const std::vector<uint8_t>& b) {
+inline CollabFeatureRequest DecodeFeatureRequest(const std::vector<uint8_t>& b) {
     collab_wire::Reader r(b);
-    const uint64_t kf = r.Pod<uint64_t>();
+    CollabFeatureRequest q;
+    q.kf = r.Pod<uint64_t>(), q.t_req_ns = r.Pod<int64_t>();
     r.End();
-    return kf;
+    return q;
 }
 
 inline std::vector<uint8_t> EncodeFeatureReply(const CollabFeatureReply& f) {

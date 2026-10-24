@@ -45,8 +45,11 @@ std::vector<core::ImuMeasurement> IdealImu(double t0, double t1, double rate, co
 Preintegrated RandomPreintegration(std::mt19937& rng, const Vec3& bg_lin, const Vec3& ba_lin) {
     std::normal_distribution<double> N(0, 1);
     Preintegrated p(bg_lin, ba_lin, {1e-3, 1e-2});
-    for (int k = 0; k < 200; ++k)
-        p.Integrate(Vec3(1.5 * N(rng), 1.5 * N(rng), 1.5 * N(rng)), Vec3(3 * N(rng), 3 * N(rng), 9.81 + 3 * N(rng)), 0.005);
+    for (int k = 0; k < 200; ++k) {   // gyro, then accel: two draws in one call are unsequenced (D123)
+        const Vec3 w{1.5 * N(rng), 1.5 * N(rng), 1.5 * N(rng)};
+        const Vec3 a{3 * N(rng), 3 * N(rng), 9.81 + 3 * N(rng)};
+        p.Integrate(w, a, 0.005);
+    }
     return p;
 }
 
@@ -58,7 +61,7 @@ TEST(Preintegration, BiasJacobiansMatchReintegration) {
     std::normal_distribution<double> N(0, 1);
     std::vector<std::pair<Vec3, Vec3>> samples;
     for (int k = 0; k < 200; ++k)
-        samples.push_back({Vec3(1.5 * N(rng), 1.5 * N(rng), 1.5 * N(rng)), Vec3(3 * N(rng), 3 * N(rng), 9.81 + 3 * N(rng))});
+        samples.push_back({Vec3{1.5 * N(rng), 1.5 * N(rng), 1.5 * N(rng)}, Vec3{3 * N(rng), 3 * N(rng), 9.81 + 3 * N(rng)}});
     const Vec3 bg(0.01, -0.02, 0.015), ba(0.05, 0.1, -0.08);
     auto integrate = [&](const Vec3& g, const Vec3& a) {
         Preintegrated p(g, a, {1e-3, 1e-2});
@@ -84,7 +87,7 @@ TEST(Preintegration, BiasJacobiansMatchReintegration) {
 TEST(Preintegration, ResidualJacobiansMatchFiniteDifferences) {
     std::mt19937 rng(11);
     std::normal_distribution<double> N(0, 1);
-    auto rv = [&](double s) { return Vec3(s * N(rng), s * N(rng), s * N(rng)); };
+    auto rv = [&](double s) { return Vec3{s * N(rng), s * N(rng), s * N(rng)}; };
     for (int trial = 0; trial < 20; ++trial) {
         const Preintegrated pre = RandomPreintegration(rng, rv(0.02), rv(0.1));
         SE3 Ti, Tj;
@@ -139,7 +142,7 @@ TEST(Preintegration, CovarianceMatchesMonteCarlo) {
     const double dt = 0.005;
     const PreintegrationNoise noise{2e-3, 3e-2};
     std::vector<std::pair<Vec3, Vec3>> truth;
-    for (int k = 0; k < 100; ++k) truth.push_back({Vec3(0.5 * N(rng), 0.5 * N(rng), 0.5 * N(rng)), Vec3(N(rng), N(rng), 9.81 + N(rng))});
+    for (int k = 0; k < 100; ++k) truth.push_back({Vec3{0.5 * N(rng), 0.5 * N(rng), 0.5 * N(rng)}, Vec3{N(rng), N(rng), 9.81 + N(rng)}});
     Preintegrated clean(Vec3::Zero(), Vec3::Zero(), noise);
     for (const auto& [w, a] : truth) clean.Integrate(w, a, dt);
     const int runs = 4000;
@@ -148,7 +151,11 @@ TEST(Preintegration, CovarianceMatchesMonteCarlo) {
     for (int r = 0; r < runs; ++r) {
         Preintegrated p(Vec3::Zero(), Vec3::Zero(), noise);
         for (const auto& [w, a] : truth)
-            p.Integrate(w + Vec3(sg * N(rng), sg * N(rng), sg * N(rng)), a + Vec3(sa * N(rng), sa * N(rng), sa * N(rng)), dt);
+            {   // gyro noise first, then accel: two draws in one call are unsequenced (D123)
+                const Vec3 nw{sg * N(rng), sg * N(rng), sg * N(rng)};
+                const Vec3 na{sa * N(rng), sa * N(rng), sa * N(rng)};
+                p.Integrate(w + nw, a + na, dt);
+            }
         // ΔR̃ = ΔR Exp(-δφ), Δṽ = Δv - δv, Δp̃ = Δp - δp (eqs. 35-37): signs do not matter for the covariance.
         Vec9 e;
         e << core::SO3Log(clean.DeltaR(Vec3::Zero()).transpose() * p.DeltaR(Vec3::Zero())),

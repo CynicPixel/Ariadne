@@ -21,6 +21,9 @@ R="${ARIADNE_RESULTS:?}"
 : "${STAGE:?}" "${DATA0:?}" "${DATA1:?}" "${COMMIT:?}" "${REG:?}"
 JOBS="${JOBS:-8}" P_A="${P_A:-4}" P_B="${P_B:-8}" SEEDS="${SEEDS:-1 2 3}" STAGES="${STAGES:-A B1 B2 C}"
 LEVELS="${LEVELS:-25 50}" C_SEEDS="${C_SEEDS:-1}" STORES_FROM="${STORES_FROM:-}"
+# CFG_EXTRA: one extra top-level "key: value" line for every B2 config (and so the campaign, which derives from B2's
+# spectral configs), e.g. D178's entry_gate. B1 (similarity calibration) never gets it.
+CFG_EXTRA="${CFG_EXTRA:-}"
 REPO=/opt/ariadne/repo W=/opt/ariadne/work
 step() { echo "=== $(date -u +%FT%TZ) $*" | tee -a "$R/steps.txt"; }
 COLLECTING=0
@@ -33,7 +36,7 @@ collect() {   # the small outputs of every run, and the pass-A stores for reruns
   for d in "$W"/runs/*/; do
     [ -d "$d" ] || continue
     n=$(basename "$d"); mkdir -p "$R/runs/$n"
-    cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv} "$R/runs/$n/" 2>/dev/null
+    cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv,entry_gate.csv} "$R/runs/$n/" 2>/dev/null
     gzip -c "$d/ledger.csv" > "$R/runs/$n/ledger.csv.gz" 2>/dev/null
     tail -2 "$W/runs/$n.log" > "$R/runs/$n/tool.log" 2>/dev/null
   done
@@ -218,7 +221,7 @@ if [[ " $STAGES " == *" B2 "* ]]; then
           "budget_source: \"$pct % of the similarity arm's fetch rate $rate B/s on scene $other ($runs)\"" \
           "response_ratio: $ratio" "edge_ratio: $eratio" "graph_ratio: $gratio" "verify_min_pnp_inliers: $vfloor" \
           "verify_calibration: \"scene $other ideal-link similarity arm: floor $vfloor keeps $vkept of $vgood good, $vbad bad seen\"" \
-          "calibration_run: \"scene $other similarity arm ($runs)\""
+          "calibration_run: \"scene $other similarity arm ($runs)\"" ${CFG_EXTRA:+"$CFG_EXTRA"}
         for s in $SEEDS; do run_b "${arm}_s${sc}_p${pct}_seed$s" $sc $s "${arm}_s${sc}_p$pct.yaml" >> "$W/b2.jobs"; done
       done
     done
