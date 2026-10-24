@@ -1993,7 +1993,7 @@ int main(int argc, char** argv) {
                     pd.agent_json = q.str();
                 }
             }
-            // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
+            // Phase 2: choose, jointly for every agent (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
             std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
             std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
@@ -2012,7 +2012,7 @@ int main(int argc, char** argv) {
                     choice[k] = it->second.second;
                 }
             } else {
-                // The joint request: both agents' facts and candidates, plus the images the model may look at, all
+                // The joint request: every agent's facts and candidates, plus the images the model may look at, all
                 // rendered here with OpenCV (the orchestrator image has no OpenCV).
                 const std::string did = "t" + std::to_string(T / 1000000) + "ms";
                 const fs::path ddir = run_dir / "decisions";
