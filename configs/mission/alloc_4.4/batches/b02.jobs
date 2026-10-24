@@ -1,0 +1,4 @@
+maze_short 1 200 configs/mission/alloc_4.4/mission_v2_ariadne_sga.yaml
+maze_short 1 200 configs/mission/alloc_4.4/mission_v2_ariadne_greedy.yaml
+maze_short 2 200 configs/mission/alloc_4.4/mission_v2_ariadne_sga.yaml
+maze_short 2 200 configs/mission/alloc_4.4/mission_v2_ariadne_greedy.yaml

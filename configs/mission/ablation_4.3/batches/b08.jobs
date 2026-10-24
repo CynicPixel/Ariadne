@@ -1,0 +1,4 @@
+maze_short 1 200 configs/mission/ablation_4.3/mission_v2_coverage_greedy.yaml
+maze_short 1 200 configs/mission/ablation_4.3/mission_v2_uncertainty_only.yaml
+maze_short 1 200 configs/mission/ablation_4.3/mission_v2_tare.yaml
+maze_short 1 200 configs/mission/ablation_4.3/mission_v2_ariadne_v0.yaml
