@@ -17,7 +17,10 @@ OUT="$REPO_ROOT/build/live/barrier_n3"
 rm -rf "$OUT"; mkdir -p "$OUT"
 LC="$(dirname "$RUNREL")/live_config.yaml"; [ -f "$REPO_ROOT/$LC" ] || LC="$RUNREL/../live_config.yaml"
 for v in plain delayed; do
-  env_delay=(); [ "$v" = delayed ] && env_delay=(-e ARIADNE_TEST_LANE_DELAY=2:40)
+  # 5 ms, not more: a large delay trips the bounded input queue's backpressure (64 frames), which stalls EVERY
+  # lane and masks the bug (found when the pre-D225 binary passed the 40 ms version). The lag must stay inside
+  # the buffering bound and still straddle barrier cuts.
+  env_delay=(); [ "$v" = delayed ] && env_delay=(-e ARIADNE_TEST_LANE_DELAY="2:${ARIADNE_TEST_DELAY_MS:-5}")
   docker run --rm --memory=4g --memory-swap=4g -u "$(id -u):$(id -g)" "${env_delay[@]}" \
     -v "$REPO_ROOT":/work -w /work ariadne/core-dev:dev build/docker/cpp/runtime/ariadne_live \
     --scene "$SCENE" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
