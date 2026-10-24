@@ -1345,12 +1345,20 @@ int main(int argc, char** argv) {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
-                for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on both lanes' consumption
-                    if ((lanes[0].done || lanes[0].progress >= T) && (lanes[1].done || lanes[1].progress >= T)) break;
+                // EVERY lane (D225: these two checks were still hardcoded to lanes 0 and 1 after the D213 N-lift;
+                // agent 2's estimator was never waited on, so under load its keyframes slid past barriers - the
+                // ma200 replay-to-replay trace divergence, integrated counts drifting -1 then -4 by t = 75 s).
+                const auto all_reached = [&] {
+                    for (const auto& L : lanes)
+                        if (!(L.done || L.progress >= T)) return false;
+                    return true;
+                };
+                for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on every lane's consumption
+                    if (all_reached()) break;
                     if (is_live && lc.lockstep && paced_to < T && !input_done) {
-                        const int64_t c0 = lanes[0].done ? INT64_MAX : lanes[0].progress;
-                        const int64_t c1 = lanes[1].done ? INT64_MAX : lanes[1].progress;
-                        if (std::min(c0, c1) >= paced_to - grace_ns) {
+                        int64_t cmin = INT64_MAX;
+                        for (const auto& L : lanes) cmin = std::min(cmin, L.done ? INT64_MAX : L.progress);
+                        if (cmin >= paced_to - grace_ns) {
                             const int64_t next = std::min(paced_to + substep_ns, T);
                             lk.unlock();
                             RunTo(next);
@@ -1361,7 +1369,12 @@ int main(int argc, char** argv) {
                     }
                     progress_cv.wait_for(lk, std::chrono::milliseconds(200));
                 }
-                if (lanes[0].done && lanes[1].done && lanes[0].progress < T && lanes[1].progress < T) break;
+                {
+                    bool all_done_short = true;
+                    for (const auto& L : lanes)
+                        if (!L.done || L.progress >= T) { all_done_short = false; break; }
+                    if (all_done_short) break;   // every estimator ended before T: the mission is over
+                }
                 // The previous decision's outcome is an input to this one: wait for both answers to the commands sent
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
                 if (T > replan_ns) {

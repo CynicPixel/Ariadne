@@ -132,7 +132,12 @@ public:
         tj.precision(10);
         const auto& al = plan_.allocation;
         tj << "{\"name\":\"a1_phase4\",\"policy\":\"" << policy_ << "\",\"linked\":true,\"linked_source\":\"constant: no comms "
-           << "link state in L1\",\"flown_m\":[" << ctx.flown_m[0] << "," << ctx.flown_m[1] << "],\"flown_source\":\"gt path "
+           << "link state in L1\",\"flown_m\":[" << [&] {   // D225: N agents (this trace line was still 2-agent after D213)
+               std::ostringstream fm;
+               fm.precision(10);
+               for (size_t q = 0; q < ctx.flown_m.size(); ++q) fm << (q ? "," : "") << ctx.flown_m[q];
+               return fm.str();
+           }() << "],\"flown_source\":\"gt path "
            << "length to T\",\"allocation\":{\"method\":\"" << al.method << "\",\"trigger\":\"" << al.trigger << "\",\"tasks\":"
            << al.tasks << ",\"rounds\":" << al.rounds << ",\"messages\":" << al.messages << ",\"bytes\":" << al.bytes
            << ",\"total\":" << al.total << ",\"optimum\":" << al.optimum << "},\"egress\":{\"confidence\":"
