@@ -5284,3 +5284,23 @@ with integral optima, solvable by `cv::solveLP` (OpenCV-native check). Keyframes
 - The speed side (LightGlue serialized on the fleet thread) is decided by A2's AWS profile. If it is the bottleneck,
   the remedy is a verify pool with D179-logged commits, which needs no protocol change.
 - Bytes work moves to the 3.6 compression rows and to diagnosing the match_response prediction miss.
+
+## 2026-10-24 — D182: ALIKED dense-L2 graph rewrite (A2's l2conv): adoption rule, pre-registered before the measuring run
+
+**Finding (A2, c7i run `20261024T001208Z-cpux86-6ba75f`):**
+- ALIKED-1280 stops scaling at about 8 OpenCV threads: 843 ms at 8, 829 ms at 16, cpu/wall 3.8.
+- Its "Normalize" (F.normalize on the dense 128×736×1280 map: ReduceL2 → Clip → Expand → Div) runs as one serial
+  cv::dnn layer, about 535 ms at 8–16 threads (64 % of the forward).
+**Change:** an exact ONNX graph rewrite, not an exporter change (A2 `scripts/l2conv_rewrite.py`, 282e1da). The sum of
+squares becomes Mul plus a 1×1 conv with a ones kernel, then Sqrt, then Div by broadcasting; the 470 MB Expand copy is
+dropped.
+- Local fidelity: keypoints and scores bit-identical, descriptors within 1.3e-6.
+- Speed at 8 threads, about 300–350 ms: [PROJECTION].
+**Adopt only if all hold on A2's rerun (`70-A2-perf-x86b`):**
+- (i) 0 accept/reject flips on the 120 real verify pairs, against the 1280×720 K1024 reference;
+- (ii) keypoints bit-identical and descriptor max abs diff ≤ 4.9e-6 (the measured thread-count effect), on every
+  keyframe of those pairs;
+- (iii) measured p50 at 8 threads improves ≥ 1.5×.
+If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If (i) or (ii) misses, it is not adopted.
+On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
+input and output ONNX hashes are committed together.
