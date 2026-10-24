@@ -1,0 +1,20 @@
+outcome: explicitly_incomplete
+corrupt:
+incomplete:
+  - "agent 1 (member of (31,a803617659589552,b0) adopted by agent 0) adopted a different epoch"
+  - "agent 0: reliable class 6 key 12 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 13 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 1 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 2 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 3 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 4 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 5 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 6 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 7 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 5 key 8 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 14 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 15 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 16 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 17 to 1 unacked (last sent 4.640000 s ago)"
+  - "agent 0: reliable class 6 key 18 to 1 unacked (last sent 1.640000 s ago)"
+  - "agent 0: reliable class 6 key 19 to 1 unacked (last sent 1.040000 s ago)"

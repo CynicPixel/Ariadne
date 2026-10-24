@@ -1,0 +1,6 @@
+# D178 verdict (pre-registered; DECISIONS D178 + scoring amendment)
+# gated sweep (ATE/corruption criteria): AWS run 20261023T213707Z-cpux86-e31421, staged 4459d57
+# logged rerun (true-edge criterion):   AWS run 20261024T042708Z-cpux86-4ec3f6, staged c0e498b (identity vs gated: all 30 gated cells exact)
+# baseline (no gate): 20261023T191248Z-cpux86-eee456
+# job: STORES_FROM=s3://.../runs/20261023T163202Z-cpux86-0345a5/output/results CFG_EXTRA="entry_gate: {enabled: true, chi2: 22.4577, entry_sigma_m: 0.10, entry_sigma_deg: 2.0, kappa: 2.9447}" infra/eval/collab_aws_launch.sh run "B1 B2 C"
+python3 -I python/analysis/d178_verdict.py --gated <e31421>/results/runs --base <eee456>/results/runs --logged <4ec3f6>/results/runs --out evaluation/runs/collab_d178/verdict

@@ -5304,3 +5304,30 @@ dropped.
 If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If (i) or (ii) misses, it is not adopted.
 On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
 input and output ONNX hashes are committed together.
+
+## 2026-10-24 — D178 RESULT: PASS on all four pre-registered criteria
+
+Evidence: `evaluation/runs/collab_d178/` (verdict.yaml, cells.csv, true_edges.csv, per-run results/edges/entry_gate,
+command.txt). Gated sweep `20261023T213707Z-cpux86-e31421` (staged 4459d57). Logged rerun
+`20261024T042708Z-cpux86-4ec3f6` (staged c0e498b); it reproduced every one of the 30 gated cells exactly (merged ATE,
+and first-transmission bytes with D180's re-sends folded back in). Baseline without the gate: `eee456`.
+
+| Criterion (pre-registered) | Result |
+|---|---|
+| Scene 0 budgeted cells, merged ATE < 0.10 m | 4/4 cells (greedy/spectral × p25/p50), worst 0.0147 m. Without the gate: 3.78–3.79 m. Campaign rows 0.013–0.017 m, down from 3.78 m |
+| Scene 1 not worse by > 10 % (or 2 mm) | 0/7 cells worse; the largest change is +0.17 % |
+| No corrupt run | 0 |
+| True edges (verified, pose_err ≤ 10°) rejected at their last test, ≤ 1 % per scene | Scene 0: 0 of 269 tested. Scene 1: 0 of 291 tested. Also 0 ever rejected |
+
+**Stated with it:**
+- The pre-registration said "≥ 5 of 6 cells", but the sweep has 4 budgeted cells. It was scored as at most one
+  failing cell, and passes under either reading.
+- 10 scene-0 true edges were never tested by the gate (ungated: verified after the last solve). They are reported,
+  not counted.
+- The similarity arm is unbudgeted and ungated by design. Its `sim_s1_seed2` aliases at 3.09 m, unchanged from the
+  baseline sweep. The gate is NOT applied there, and that arm keeps the failure.
+- The gate is decisive only with known starts. Unknown-start aliasing remains 3.5.
+**Cost:** the gated sweep $0.0875 and the logged rerun $0.0882. Two rerun attempts were lost: 4fc41e was killed by the
+host on a transient AuthFailure (spinup since fixed), and 080b8f didn't collect entry_gate.csv (fixed in c0e498b).
+**Next:** the entry gate is ENABLED in the live config `collab_live_v1` (B). D178 merges to main with D179/D180 after
+B's D179 acceptance.
