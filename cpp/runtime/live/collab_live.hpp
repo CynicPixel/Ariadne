@@ -118,6 +118,12 @@ public:
     void RestoreComms(core::Timestamp t) {
         Push({Item::kFleet, t, 0, [this](ac::CollabNode&, core::Timestamp tt) { comms_.Restore(tt); }});
     }
+    /// D178 known entry poses, applied on the fleet thread in call order (before the first Step). Never call
+    /// fleet().SetEntryPoses from the runtime thread while the fleet thread runs: that is a data race.
+    void SetEntryPoses(std::map<ac::AgentId, core::SE3> entry) {
+        Push({Item::kFleet, core::Timestamp{}, 0,
+              [this, e = std::move(entry)](ac::CollabNode&, core::Timestamp) { fleet_.SetEntryPoses(e); }});
+    }
     void InjectFalse(core::Timestamp t) {
         Push({Item::kFleet, t, 0,
               [this](ac::CollabNode&, core::Timestamp tt) { fleet_.InjectNow(tt, core::Vec3(4.0, 0.0, 0.0), 45.0); }});
