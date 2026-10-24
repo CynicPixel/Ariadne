@@ -31,6 +31,8 @@
 // ---------------------------------------------------------------------------
 #include "core/image/image.hpp"
 
+#include <opencv2/core.hpp>
+
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -130,7 +132,13 @@ inline core::ImageU8 ApplyLens(const core::ImageU8& clean, const LensMap& map) {
     }
     core::ImageU8 out(map.width, map.height, clean.channels);
     const int C = clean.channels;
-    for (int v = 0; v < map.height; ++v) {
+    // Rows under cv::parallel_for_ (D226, A2's ma200 profile: this scalar loop was ~58 ms/frame single-threaded
+    // on the lane's critical path). Every output pixel is an independent pure function of the inputs - no
+    // reduction, no shared write - so the output is BIT-IDENTICAL at any thread count (verified: replay trace
+    // sha unchanged). The scalar arithmetic below is untouched on purpose; a cv::remap would move pixels by
+    // <= 1 LSB and needs a D41 decision first.
+    cv::parallel_for_(cv::Range(0, map.height), [&](const cv::Range& rows) {
+    for (int v = rows.start; v < rows.end; ++v) {
         for (int u = 0; u < map.width; ++u) {
             const size_t i = size_t(v) * size_t(map.width) + size_t(u);
             const double su = map.src_u[i], sv = map.src_v[i];
@@ -157,6 +165,7 @@ inline core::ImageU8 ApplyLens(const core::ImageU8& clean, const LensMap& map) {
             }
         }
     }
+    });
     return out;
 }
 
