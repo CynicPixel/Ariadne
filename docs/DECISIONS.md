@@ -5533,8 +5533,10 @@ All five pre-registered criteria ran:
 **Why no gain:** D229 overlaps the ingest half of Feed. Post-D227 (lens off) that half is a few ms of decode+gray;
 job 45's ~50 ms Feed share WAS the lens. The lens-off lane is tracking + keyframe compute (FAST ~11 ms, SGBM, LK;
 keyframe ~126 ms on 30 % of steps one agent runs >80 ms).
-**Decision:** the code STAYS (default on): it is unit-guarded, digest-proven, and costs nothing measurable; its
-payoff case is any live path whose ingest grows again — the lens-on rows and the paused dark/degradation demo
-(DegradeParallel runs inside Ingest and would overlap tracking). ARIADNE_LANE_PIPELINE=0 remains the kill switch.
+**Decision (M, on the measurement):** D229 is recorded NEGATIVE and the default is OFF — the single-threaded
+shape is the production path (an extra thread with no measured gain does not belong on the demo path; the
+pipeline-hyperoptimized rule). The code stays behind ARIADNE_LANE_PIPELINE=1, unit-guarded and digest-proven;
+its payoff case is a live path whose ingest is heavy again (lens-on rows, the paused dark/degradation demo —
+DegradeParallel runs inside Ingest and would overlap tracking).
 **RTF ≥ 1 (A2's inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
 lockstep path - a new decision for the maintainer, NOT started (feature freeze).

@@ -433,9 +433,12 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     live::MessageQueue images{64};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    // D229: the lane ingest pipeline, on unless ARIADNE_LANE_PIPELINE=0 (the acceptance A/B's kill switch).
+    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (A2 job 15: 0.833 vs 0.839; the lane is
+    // track/keyframe compute, not ingest), so the default is OFF (M: an unmeasured extra thread does not belong
+    // on the demo path). ARIADNE_LANE_PIPELINE=1 enables it; its payoff case is a live path with heavy ingest
+    // (lens-on or degradation rows).
     const char* lp = std::getenv("ARIADNE_LANE_PIPELINE");
-    const bool pipelined = !(lp && std::string(lp) == "0");
+    const bool pipelined = lp && std::string(lp) == "1";
     live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on, pipelined);
     std::mutex send_mu;
     auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
