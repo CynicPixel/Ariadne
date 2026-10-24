@@ -26,7 +26,8 @@
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${COMMIT:?}" "${STAGE:?}"
-STAGES="${STAGES:-timing knobs}" OPENCV_TAG="${OPENCV_TAG:-5.0.0}" ORT_VERSION=1.24.4
+STAGES="${STAGES:-timing knobs}" SINGLE_THREADS="${SINGLE_THREADS-1 2 4 8 16}" C3_THREADS="${C3_THREADS-2 4 5}"
+ORT_RUNS="${ORT_RUNS-yes}" OPENCV_TAG="${OPENCV_TAG:-5.0.0}" ORT_VERSION=1.24.4
 SRC="$(pwd)" W=/opt/ariadne/work
 T0=$(date +%s)
 step() { echo "=== $(date -u +%FT%TZ) +$(( $(date +%s) - T0 ))s $*" | tee -a "$R/steps.txt"; }
@@ -43,7 +44,7 @@ lscpu > "$R/lscpu.txt"; nproc > "$R/nproc.txt"; free -m > "$R/free.txt"
 {
   echo "# pipeline profile replay (infra/eval/perf_aws.sh). Times UTC."
   kv run_kind pipeline_profile_replay; kv created_utc "$(date -u +%FT%TZ)"; kv git_commit "$COMMIT"
-  kv stages "\"$STAGES\""; kv arch "$ARCH"; kv instance_type "$(imds instance-type)"
+  kv stages "\"$STAGES\""; kv single_threads "\"$SINGLE_THREADS\""; kv c3_threads "\"$C3_THREADS\""; kv arch "$ARCH"; kv instance_type "$(imds instance-type)"
   kv availability_zone "$(imds placement/availability-zone)"; kv nproc "$(nproc)"
   kv cpu_model "\"$(lscpu | sed -n 's/^Model name: *//p' | head -1)\""
   kv threads_per_core "$(lscpu | sed -n 's/^Thread(s) per core: *//p')"
@@ -58,6 +59,9 @@ systemctl start docker 2>/dev/null || true
 docker buildx version > /dev/null 2>&1 || fail "docker buildx"
 mpstat_on() { S_TIME_FORMAT=ISO mpstat -P ALL 1 > "$R/mpstat/$1.txt" 2>&1 & MP=$!; }
 mpstat_off() { kill -INT "$MP" 2>/dev/null; wait "$MP" 2>/dev/null; }
+# Every fan-out waits on ITS OWN pids: a bare `wait` also waits on the mpstat sampler, which never exits (runs 42/43,
+# 20261024T001208Z-cpux86-6ba75f / 20261024T003403Z-cpuarm-46e7b8, hung at the first concurrent step).
+PIDS=(); spawn() { "$@" & PIDS+=($!); }; join() { wait "${PIDS[@]}"; PIDS=(); }
 
 step "2 opencv-base + core dev ($ARCH, from source)"
 BASE=ariadne/opencv-base:$OPENCV_TAG DEV=ariadne/core-dev:perf
@@ -95,16 +99,17 @@ if [[ " $STAGES " == *" timing "* ]]; then
     dev -e OPENCV_FOR_THREADS_NUM="$2" "$DEV" $BIN/ariadne_perf_bench timing $IMGS $AL $LG $PL --reps "$3" \
       --warmup 3 --label "$1" --out "/w/timing/$1" > "$W/timing_$1.log" 2>&1
   }
-  for t in 1 2 4 8 16; do
+  for t in $SINGLE_THREADS; do
     step "T single process, $t threads"
     mpstat_on "single_t$t"; bench "single_t$t" "$t" $([ "$t" = 1 ] && echo 10 || echo 20); mpstat_off
   done
-  for t in 2 4 5; do
+  for t in $C3_THREADS; do
     step "T three concurrent processes x $t threads"
     mpstat_on "c3_t$t"
-    for p in 0 1 2; do bench "c3_t${t}_p$p" "$t" 12 & done; wait
+    for p in 0 1 2; do spawn bench "c3_t${t}_p$p" "$t" 12; done; join
     mpstat_off
   done
+  [ "$ORT_RUNS" = yes ] && {
   step "T ORT $ORT_VERSION"
   python3 -m venv /opt/ortvenv && /opt/ortvenv/bin/pip install -q "onnxruntime==$ORT_VERSION" > "$R/ort/pip.log" 2>&1 \
     && /opt/ortvenv/bin/pip freeze > "$R/ort/freeze.txt"
@@ -112,10 +117,11 @@ if [[ " $STAGES " == *" timing "* ]]; then
            --models-dir "$SRC/.cache/models" --threads "$1" --reps "$2" --label "$3" --out "$R/ort/$3.csv" >> "$R/ort/ort.log" 2>&1; }
   if [ -x /opt/ortvenv/bin/python ]; then
     for t in 1 4 16; do mpstat_on "ort_t$t"; ORTB "$t" 10 "ort_single_t$t"; mpstat_off; done
-    mpstat_on ort_c3_t5; for p in 0 1 2; do ORTB 5 10 "ort_c3_t5_p$p" & done; wait; mpstat_off
+    mpstat_on ort_c3_t5; for p in 0 1 2; do spawn ORTB 5 10 "ort_c3_t5_p$p"; done; join; mpstat_off
   else
     echo "ORT venv/pip failed (ort/pip.log)" | tee -a "$R/steps.txt"
   fi
+  }
   cp -r "$W/timing/." "$R/timing/"; cp "$W"/timing_*.log "$R/timing/" 2>/dev/null
 fi
 
@@ -140,11 +146,11 @@ if [[ " $STAGES " == *" knobs "* ]]; then
   mpstat_on kfdump
   for sc in 0 1; do for ag in 0 1; do
     rec=$([ $sc = 0 ] && echo "$REC0" || echo "$REC1")
-    dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_kfdump --rec "/work/$rec/rec" --scene "/work/$rec/scene" \
+    spawn dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_kfdump --rec "/work/$rec/rec" --scene "/work/$rec/scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v2.yaml \
       --imu-noise configs/sim/imu_noise_v1.yaml --agent $ag --seed 1 --ids "$(cat "$SRC/$PI/ids_s${sc}_a${ag}.txt")" \
-      --out "/w/kf/s$sc" > "$W/kfdump_s${sc}_a$ag.log" 2>&1 &
-  done; done; wait
+      --out "/w/kf/s$sc" > "$W/kfdump_s${sc}_a$ag.log" 2>&1
+  done; done; join
   mpstat_off
   for f in "$W"/kfdump_*.log; do tail -2 "$f" > "$R/knobs/$(basename "$f")"; done
   cp "$W"/kf/s*/a*_kfdump.yaml "$W"/kf/s*/a*_keyframes.csv "$R/knobs/" 2>/dev/null
@@ -152,18 +158,18 @@ if [[ " $STAGES " == *" knobs "* ]]; then
   step "K knobs (2 scenes x 4 threads) + store replay (2 threads)"
   mpstat_on knobs
   for sc in 0 1; do
-    dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
+    spawn dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
       --pairs "/work/$PI/pairs_s$sc.csv" --collab-config configs/collab/collab_v2.yaml --seed 1 $AL $LG \
       --settings 1280x720:1024,1280x720:512,1280x720:256,960x540:1024,960x540:512,640x360:1024,640x360:512 \
       --stores "/work/$PI/stores/s$sc/seed1" --dump-features "/w/feat/s$sc" --out "/w/knobs/s$sc" \
-      > "$W/knobs_s$sc.log" 2>&1 &
-  done; wait
+      > "$W/knobs_s$sc.log" 2>&1
+  done; join
   for sc in 0 1; do
-    dev -e OPENCV_FOR_THREADS_NUM=2 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
+    spawn dev -e OPENCV_FOR_THREADS_NUM=2 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
       --pairs "/work/$PI/pairs_s$sc.csv" --collab-config configs/collab/collab_v2.yaml --seed 1 \
       --aliked "1280x720=$M/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx" $LG --settings 1280x720:1024 \
-      --stores "/work/$PI/stores/s$sc/seed1" --out "/w/knobs_t2/s$sc" > "$W/knobs_t2_s$sc.log" 2>&1 &
-  done; wait
+      --stores "/work/$PI/stores/s$sc/seed1" --out "/w/knobs_t2/s$sc" > "$W/knobs_t2_s$sc.log" 2>&1
+  done; join
   mpstat_off
   for sc in 0 1; do
     mkdir -p "$R/knobs/s$sc" "$R/knobs/t2_s$sc"

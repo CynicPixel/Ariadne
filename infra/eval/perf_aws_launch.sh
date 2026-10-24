@@ -41,11 +41,15 @@ run() {   # $1 = cpux86 | cpuarm, $2 = stages
   [ "$(git rev-parse HEAD)" = "$commit" ] || { log "HEAD moved since stage"; exit 1; }
   local stages="${2:-timing knobs adaptive}"
   [ "$1" = cpuarm ] && stages="${2:-timing}"
-  exec infra/scripts/spinup.sh run --profile "$1" --max-minutes 120 -- \
-    "COMMIT=$commit STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 STORES_FROM=$STORES_FROM STAGES='$stages' bash infra/eval/perf_aws.sh"
+  # MAXMIN: set from the measured step times (M, 2026-10-24: the instance's own brake must bound a hang).
+  # SINGLE_THREADS / C3_THREADS / ORT_RUNS: a rerun skips what an earlier run already measured.
+  exec infra/scripts/spinup.sh run --profile "$1" --max-minutes "${MAXMIN:-120}" -- \
+    "COMMIT=$commit STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 STORES_FROM=$STORES_FROM STAGES='$stages' \
+     SINGLE_THREADS='${SINGLE_THREADS-1 2 4 8 16}' C3_THREADS='${C3_THREADS-2 4 5}' ORT_RUNS=${ORT_RUNS-yes} \
+     bash infra/eval/perf_aws.sh"
 }
 replay() {   # needs no staging: every input is B's run's own S3 objects (snapshot, payload, run.tar.gz) + its ECR image
-  exec infra/scripts/spinup.sh run --profile cpux86 --max-minutes 100 -- \
+  exec infra/scripts/spinup.sh run --profile cpux86 --max-minutes "${MAXMIN:-70}" -- \
     "RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=$BUCKET/runs/live-payload-20261023T200347Z/payload.tar.gz BUCKET=$BUCKET bash infra/eval/perf_replay_aws.sh"
 }
 teardown() { "$AWS" aws s3 rm --recursive "$STAGE/" --only-show-errors; log "teardown done"; }
