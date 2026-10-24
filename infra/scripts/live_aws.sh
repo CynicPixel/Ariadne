@@ -183,7 +183,7 @@ for k in 0 1 2; do
     > \$R/sim_vo_agent\$k.log 2>&1 || echo "sim_vo agent \$k FAILED" >> \$R/sim_vo_agent\$k.log
 done
 tar czf /tmp/spools.tar.gz build/spools $scene
-aws s3 cp --only-show-errors /tmp/spools.tar.gz \$RUN/output/spools.tar.gz
+aws s3 cp --only-show-errors /tmp/spools.tar.gz "\${ARIADNE_RESULTS_URI%/results}/spools.tar.gz"
 {
   echo "spools.tar.gz bytes: \$(stat -c%s /tmp/spools.tar.gz)"
   du -sh build/spools
@@ -221,7 +221,7 @@ cp "\$outer"/results.yaml \$R/live_results.yaml 2>/dev/null || true
 python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
 # 2b. The film data pack (same schema as collab60d's), built where the data already is.
 python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_build.log 2>&1 || true
-tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz \$RUN/output/pack.tar.gz || true
+tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz "\${ARIADNE_RESULTS_URI%/results}/pack.tar.gz" || true
 du -sh /tmp/pack >> \$R/pack_build.log 2>/dev/null || true
 # 3. Fresh staging and the gdb re-run of replay1 (root container: core-dev has no gdb, apt it in).
 src="\$outer"
@@ -267,7 +267,7 @@ cd /tmp/x
 aws s3 cp $tarball - | tar xz $globs || true
 find /tmp/x -type f | head -40 > \$R/extracted_listing.txt
 cd /tmp/x && find . -type f -size -32M -print0 | tar czf /tmp/extracted.tar.gz --null -T -
-aws s3 cp --only-show-errors /tmp/extracted.tar.gz \$RUN/output/extracted.tar.gz
+aws s3 cp --only-show-errors /tmp/extracted.tar.gz "\${ARIADNE_RESULTS_URI%/results}/extracted.tar.gz"
 du -sh /tmp/x >> \$R/extracted_listing.txt
 EOF
   } > "$script"
