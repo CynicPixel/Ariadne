@@ -269,9 +269,15 @@ Phase4AgentPlan Phase4Planner::PlanAgent(double t_s, int a, const Phase4AgentInp
     ni.trav = &masked;
     AgentState st;
     st.position = in.position, st.e_used_m = in.flown_m, st.own_keyframes = track_[size_t(a)];
-    ap.nbv = PlanNbv(ni, a, st, p_.nbv);
     ap.plan = PlanSpace(shared.maps, CellOf(in.position));
     ap.plan.setTo(0, ap.keep_out);   // the escape disc never re-opens a keep_out
+    // D117: C_time is priced on the command Route will send from here: the same plan space, the same cut.
+    const ViewRouter router = [this, &ap, from = CellOf(in.position)](const std::pair<double, double>& goal) {
+        return Command(ap.plan, goal, from);
+    };
+    ni.router = &router;
+    ni.heading = in.yaw;
+    ap.nbv = PlanNbv(ni, a, st, p_.nbv);
     ApplyDirectives(a, dirs, in.refused_goals, p_.refused_radius_m, p_.nbv.frustum.max_range_m, &ap);
     return ap;
 }
@@ -416,36 +422,48 @@ void Phase4Planner::Allocate(const std::vector<Phase4AgentInput>& agents, const 
 }
 
 
+ViewCommand Phase4Planner::Command(const cv::Mat& plan, const std::pair<double, double>& goal_xy, const Cell& from) const {
+    const GridFrame& g = b_.grid;
+    const Cell goal{int(std::floor((goal_xy.second - g.oy) / g.cell)), int(std::floor((goal_xy.first - g.ox) / g.cell))};
+    ViewCommand out;
+    const GridPath gp = AStar(plan, from, {goal});
+    if (!gp.found) return out;   // unreachable: the loop holds
+    out.ok = true;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    if (gp.cells.size() < 2) {   // D125: an at-cell view is a turn here, not a hold
+        out.wp = {{nan, nan}};
+        return out;
+    }
+    const std::vector<Cell> keep = StringPull(plan, gp.cells);
+    double px = g.ox + (keep[0].c + 0.5) * g.cell, py = g.oy + (keep[0].r + 0.5) * g.cell, left = p_.max_command_m;
+    for (size_t k = 1; k < keep.size(); ++k) {
+        if (left <= 1e-9) {   // vertices remain past the command length
+            out.cut = true;
+            break;
+        }
+        double x = g.ox + (keep[k].c + 0.5) * g.cell, y = g.oy + (keep[k].r + 0.5) * g.cell;
+        const double d = std::hypot(x - px, y - py);
+        if (d > left) x = px + (x - px) * left / d, y = py + (y - py) * left / d, out.cut = true;   // on a clear chord
+        out.wp.emplace_back(x, y);
+        left -= std::min(d, left);
+        px = x, py = y;
+    }
+    return out;
+}
+
 std::pair<std::vector<std::pair<double, double>>, double> Phase4Planner::Route(const Phase4Plan& p, int agent, int i,
                                                                               const Cell& from) const {
     const auto& opts = p.agents[agent].nbv.options;
     if (i < 0 || size_t(i) >= opts.size()) return {{}, 0.0};
     const TaskCandidate& o = opts[size_t(i)];
-    const GridFrame& g = b_.grid;
-    const Cell goal{int(std::floor((o.goal_xy.second - g.oy) / g.cell)), int(std::floor((o.goal_xy.first - g.ox) / g.cell))};
+    if (o.source == TaskSource::kHold) return {{}, o.goal_yaw};   // the reserve rule's hold: no command (not D125)
     cv::Mat plan = PlanSpace(p.maps, from);   // trav_a + the escape disc at `from` (D158)
     if (!p.agents[agent].keep_out.empty()) plan.setTo(0, p.agents[agent].keep_out);
-    const GridPath gp = AStar(plan, from, {goal});
-    if (!gp.found) return {{}, o.goal_yaw};   // unreachable: the loop holds
-    const double nan = std::numeric_limits<double>::quiet_NaN();
-    if (gp.cells.size() < 2) return {{{nan, nan}}, o.goal_yaw};   // D125: an at-cell view is a turn here, not a hold
-    const std::vector<Cell> keep = StringPull(plan, gp.cells);
-    std::vector<std::pair<double, double>> wp;
-    double px = g.ox + (keep[0].c + 0.5) * g.cell, py = g.oy + (keep[0].r + 0.5) * g.cell, left = p_.max_command_m;
-    bool cut = false;
-    for (size_t k = 1; k < keep.size(); ++k) {
-        if (left <= 1e-9) {   // vertices remain past the command length
-            cut = true;
-            break;
-        }
-        double x = g.ox + (keep[k].c + 0.5) * g.cell, y = g.oy + (keep[k].r + 0.5) * g.cell;
-        const double d = std::hypot(x - px, y - py);
-        if (d > left) x = px + (x - px) * left / d, y = py + (y - py) * left / d, cut = true;   // on a clear chord: still clear
-        wp.emplace_back(x, y);
-        left -= std::min(d, left);
-        px = x, py = y;
-    }
-    return {wp, cut ? nan : o.goal_yaw};   // D119: the view's yaw only where the command ends at the view
+    const ViewCommand c = Command(plan, o.goal_xy, from);
+    if (!c.ok) return {{}, o.goal_yaw};
+    // D119: the view's yaw only where the command ends at the view; D118: an arrival twin keeps its heading.
+    const bool no_yaw = c.cut || o.keep_heading;
+    return {c.wp, no_yaw ? std::numeric_limits<double>::quiet_NaN() : o.goal_yaw};
 }
 
 }  // namespace ariadne::planning

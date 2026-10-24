@@ -4,7 +4,9 @@
 //     PlanCommand turns it into exactly one turn from any nearby pose, and executing that turn collects the view's
 //     gain (closed loop in miniature: integrate the frame the turn sees, the view's coverage collapses);
 //   - D119: a command cut at max_command_m carries no final yaw (NaN); an uncut one keeps the view's yaw;
-//   - an unreachable goal still routes empty (hold).
+//   - an unreachable goal still routes empty (hold); the reserve rule's hold stays a hold;
+//   - D117: C_time is the mover's PlanCommand duration (monotone in turn and path; no final turn when cut);
+//   - D118: arrival twins carry no final yaw and never cost more; with a baseline policy the keys change nothing.
 #include "core/trajectory/command_planner.hpp"
 #include "planning/mission/phase4_planner.hpp"
 
@@ -12,6 +14,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <vector>
 
 using namespace ariadne;
@@ -68,6 +71,10 @@ TEST(NbvTime, AtCellViewRoutesAsOneTurnHereWaypoint) {
     ASSERT_EQ(wp.size(), 1u) << "an at-cell view is executed, not held";
     EXPECT_TRUE(std::isnan(wp[0].first) && std::isnan(wp[0].second)) << "turn here: no position to drive to";
     EXPECT_DOUBLE_EQ(yaw, M_PI);
+    TaskCandidate hold = ViewOpt(eye.x(), eye.y(), 0.0);   // the reserve rule's hold sits at the agent: still a hold
+    hold.source = TaskSource::kHold;
+    pa.agents[0].nbv.options = {hold};
+    EXPECT_TRUE(P.Route(pa, 0, 0, CellAt(eye.x(), eye.y())).first.empty());
 }
 
 TEST(NbvTime, TurnHereIsOnePureTurnFromAnyNearbyPose) {
@@ -137,4 +144,82 @@ TEST(NbvTime, CutCommandCarriesNoFinalYawAndUnreachableHolds) {
     EXPECT_DOUBLE_EQ(near_yaw, 0.7);
     const auto [none, none_yaw] = P.Route(pa, 0, 2, from);   // behind the wall, never seen: no path, hold
     EXPECT_TRUE(none.empty());
+}
+
+TEST(NbvTime, CommandTimeIsTheMoversProfileMonotoneInTurnAndPath) {
+    // D117: C_time is PlanCommand's duration, so it grows with the turn from the current heading and with the path,
+    // and a cut command (D119) or an arrival twin (D118) prices no final turn.
+    using core::scripted::MotionLimits;
+    using core::scripted::PlanProfile;
+    GridFrame g;
+    g.ox = 0, g.oy = 0, g.cell = kCell, g.cols = 120, g.rows = 80;
+    const cv::Mat wide(80, 120, CV_32F, cv::Scalar(2.0f));   // 2 m of clearance everywhere: v = v_cap
+    const MotionLimits L;
+    ViewCommand one;
+    one.ok = true, one.wp = {{4.0, 2.0}};
+    auto T = [&](const ViewCommand& c, double heading, bool yaw, double final_yaw, double* turn = nullptr) {
+        return CommandTime(c, 3.0, 2.0, 1.0, heading, yaw, final_yaw, L, wide, g, 0.2, 3.0, turn);
+    };
+    const double t0 = T(one, 0.0, false, 0.0), t90 = T(one, M_PI / 2, false, 0.0), t180 = T(one, M_PI - 1e-6, false, 0.0);
+    EXPECT_LT(t0, t90);
+    EXPECT_LT(t90, t180);
+    EXPECT_DOUBLE_EQ(t0, PlanProfile(1.0, L.v_cap, L.a_max).T()) << "facing the waypoint: the move alone";
+    ViewCommand two = one;
+    two.wp = {{5.0, 2.0}};
+    EXPECT_LT(t0, T(two, 0.0, false, 0.0));
+    double turn = 0;
+    const double with_yaw = T(one, 0.0, true, M_PI / 2, &turn);
+    EXPECT_DOUBLE_EQ(turn, PlanProfile(M_PI / 2, L.omega_max, L.alpha_max).T());
+    EXPECT_DOUBLE_EQ(with_yaw, t0 + turn);
+    ViewCommand cut = one;
+    cut.cut = true;
+    EXPECT_DOUBLE_EQ(T(cut, 0.0, true, M_PI / 2), t0) << "a cut command carries no final turn";
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_DOUBLE_EQ(T(one, nan, false, 0.0), t0) << "unknown heading: no initial turn priced";
+    ViewCommand here;
+    here.ok = true, here.wp = {{nan, nan}};
+    EXPECT_DOUBLE_EQ(T(here, 0.3, true, M_PI), PlanProfile(M_PI - 0.3, L.omega_max, L.alpha_max).T()) << "a pure turn";
+    // Unknown clearance (0) is floored at rho_a: the mover refuses anything closer, so no executed move has less.
+    const cv::Mat none(80, 120, CV_32F, cv::Scalar(0.0f));
+    EXPECT_DOUBLE_EQ(CommandTime(one, 3.0, 2.0, 1.0, 0.0, false, 0.0, L, none, g, 0.2, 3.0),
+                     PlanProfile(1.0, L.v_lk_per_m * 0.2, L.a_max).T());
+}
+
+TEST(NbvTime, ArrivalTwinsAndTheKeysOffIdentity) {
+    const core::Vec3 eye(3.0, 2.0, 1.0);
+    const Frame seen(eye, false, 2.0f);
+    std::vector<Phase4AgentInput> ag(2);
+    ag[0].active = true, ag[0].position = eye, ag[0].yaw = 0.0;
+    auto Run = [&](bool cost_time, bool twins, NbvPolicy pol) {
+        Phase4Params prm;
+        prm.nbv.policy = pol, prm.nbv.cost_time = cost_time, prm.nbv.arrival_twins = twins;
+        prm.allocator = Phase4Params::Allocator::kGreedy;
+        auto P = std::make_unique<Phase4Planner>(Briefing(), prm);
+        P->Integrate(0, 0, seen.f);
+        Phase4Plan pl = P->Plan(5.0, ag, {});
+        return std::make_pair(std::move(P), std::move(pl));
+    };
+    // Keys on for a baseline policy = keys off: D117/D118 touch the Ariadne row only.
+    const auto off = Run(false, false, NbvPolicy::kCoverageGreedy), on = Run(true, true, NbvPolicy::kCoverageGreedy);
+    const auto& a = off.second.agents[0].nbv.options;
+    const auto& b = on.second.agents[0].nbv.options;
+    ASSERT_EQ(a.size(), b.size());
+    for (size_t i = 0; i < a.size(); ++i) EXPECT_EQ(a[i].utility, b[i].utility) << i;
+    // Ariadne with both keys: every option is priced by its command; the twins carry no final yaw and their time is
+    // the original's minus its final turn.
+    const auto ta = Run(true, true, NbvPolicy::kAriadne);
+    const auto& o = ta.second.agents[0].nbv.options;
+    ASSERT_FALSE(o.empty());
+    int twins = 0;
+    for (size_t i = 0; i < o.size(); ++i) {
+        EXPECT_GT(o[i].cost[3], 0.0) << i;
+        if (!o[i].keep_heading) continue;
+        ++twins;
+        const auto [wp, yaw] = ta.first->Route(ta.second, 0, int(i), CellAt(eye.x(), eye.y()));
+        EXPECT_FALSE(wp.empty());
+        EXPECT_TRUE(std::isnan(yaw)) << "an arrival twin keeps its heading";
+        for (const auto& c : o)
+            if (!c.keep_heading && c.task_id == o[i].task_id && c.goal_xy == o[i].goal_xy) EXPECT_LE(o[i].cost[3], c.cost[3]);
+    }
+    EXPECT_GT(twins, 0);
 }

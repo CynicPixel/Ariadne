@@ -11,6 +11,9 @@
 //             route's body envelope); connectivity and alias from their producers (0 + a note when absent);
 //   utility   each term / its candidate-set p90 (max if the p90 is 0), G = sum; U = G - lambda_path(t) C_path -
 //             C_bandwidth - C_risk, costs p90-normalised, lambda_path = (1 + lambda_e + lambda_t) / 3 (D114);
+//             D117 (key cost_time): lambda_t's third prices C_time, the executed command's duration, instead of
+//             the path: U = G - (1 + lambda_e)/3 C_path - lambda_t/3 C_time - C_b - C_r; D118 (key view_yaw):
+//             each routed view also offered at its arrival heading (own IG, no final turn);
 //   hard rule E_total - E_used < 1.3 E(return) => only {return, hold}, whatever the gains.
 // Deterministic: no RNG except the random baseline's Philox stream keyed by (seed, agent, replan time).
 // ---------------------------------------------------------------------------
@@ -21,9 +24,13 @@
 #include "planning/volumetric/traversability.hpp"
 #include "planning/volumetric/tsdf_map.hpp"
 
+#include "core/trajectory/command_planner.hpp"
+
 #include <opencv2/core.hpp>
 
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -119,6 +126,24 @@ public:
 
 enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // NBV_4.3 §5; kTare: 4.6
 
+/// D117: the command the live loop would send for a view, from the planner's own Route (Phase4Planner): its
+/// waypoints (one (NaN, NaN) = turn here, D125) and whether it was cut short of the view (D119: no final yaw).
+struct ViewCommand {
+    bool ok = false;   // false: no route (the loop would hold)
+    std::vector<std::pair<double, double>> wp;
+    bool cut = false;
+};
+using ViewRouter = std::function<ViewCommand(const std::pair<double, double>& goal_xy)>;
+
+/// D117: the duration (s) of core::scripted::PlanCommand over `c` from rest at (x, y, z) with `heading` (NaN =
+/// unknown: the first segment's own heading, so no initial turn is priced), ending in `yaw` when `final_yaw` and the
+/// command is not cut. Speed is the mover's rule on the planner's clearance `clear_a` (CV_32F, m; floored at rho_a:
+/// the mover refuses any move closer, so an executed move never has less) and the height to floor and ceiling.
+/// `turn_s` (optional) receives the turning part. Throws what PlanCommand throws.
+double CommandTime(const ViewCommand& c, double x, double y, double z, double heading, bool final_yaw, double yaw,
+                   const core::scripted::MotionLimits& L, const cv::Mat& clear_a, const GridFrame& g, double rho_a,
+                   double z_max, double* turn_s = nullptr);
+
 struct NbvParams {
     SamplerParams sampler;
     RigFrustum frustum;
@@ -133,6 +158,10 @@ struct NbvParams {
     double reserve = 1.3;
     double mission_T_s = 1e9;
     double exchange_bytes = 0;                 // §15.7 byte-table cost of a C view's exchange
+    bool cost_time = false;                    // D117 (mission_v2 nbv.cost_time: exact_command); Ariadne policy only
+    bool arrival_twins = false;                // D118 (nbv.view_yaw: target+arrival); needs cost_time
+    core::scripted::MotionLimits motion;       // the mover's limits (worldgen Motion preset): D117's profile
+    bool term_log = false;                     // D120 (nbv.term_log): the runtime traces every candidate's terms
 };
 
 struct AgentState {
@@ -159,6 +188,8 @@ struct NbvInputs {
     Box3 bounds;                               // the briefing's extent (rays leaving the building are not gain)
     const cv::Mat* peer_known = nullptr;       // D175 per-agent planning: the received layer's known mask (grid), or null
     bool footprints = false;                   // D175 R1: each option's block footprint (per-agent planning only)
+    const ViewRouter* router = nullptr;        // D117: the loop's own Route for a goal (null: cost_time cannot run)
+    double heading = std::numeric_limits<double>::quiet_NaN();   // D117: the agent's yaw at plan time (NaN unknown)
 };
 
 struct NbvPlan {
@@ -166,6 +197,9 @@ struct NbvPlan {
     bool reserve_rule = false;                 // the hard rule fired (supervisor event)
     std::string supervisor_event;
     double lambda_path = 1;
+    double lambda_t = 1;                       // the time schedule's own factor (D117 splits it off the path term)
+    double path_scale = 0, time_scale = 0;     // the p90 scales of C_path and C_time (D120's term log)
+    int unroutable = 0;                        // D117: options dropped because Route has no command for them
     std::vector<std::string> notes;            // missing producers etc., for the trace
     int targets[5] = {0, 0, 0, 0, 0};          // per generator A..E
     std::string tare;                          // kTare: "local k" | "global m" | "" (what scheduled the first option)
