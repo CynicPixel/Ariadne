@@ -732,7 +732,7 @@ This was read in the primary texts and pinned code, 2026-10-24. Quotes and line 
 
 **Amendments (2026-10-24, before any run; DECISIONS "D125/D119 implemented").**
 - (a) The replay identity check is: identical with every key off, except the enumerated cut and at-cell records,
-  where the fixes fire. The base is feat/ph4-nagent `9efbdba` (main merged, including D227 lens-off), not d59ee3d.
+  where the fixes fire. The base is feat/ph4-nagent `9efbdba` (main 4a12b50 merged; D227 lens-off is on B's branch only, NOT in it), not d59ee3d.
 - (b) The 1.8 row is re-run, not reused: **48 runs** (`configs/mission/ablation_4.3/runs_48.jobs`). These are
   development runs.
   - A run is valid only with every barrier answered and no reorder timeouts.
@@ -740,8 +740,21 @@ This was read in the primary texts and pinned code, 2026-10-24. Quotes and line 
     the gate's own rig (AWS c7i, llvmpipe, slotq band 30+) once the maintainer approves the spend.
   - Measured gate wall time: median 13.1 min per 200 s run (2.8–26.8, 34 logged jobs), not the ≈ 22 min estimated
     above. That puts 48 runs at ≈ 11–12 c7i.4xlarge spot-hours.
-- (c) The gated `ariadne` row is context only against ariadne_v0: the rig, the lens default and the fixes all
+- (c) The gated `ariadne` row is context only against ariadne_v0: the base commit and the fixes
   differ.
+- (d) **Predicted vs realised C_time** is measured on ariadne_t and ariadne_ta only: the rows whose trace says
+  `terms.time_model: exact_command`. Every other row logs path / speed under `time_s`, and is not mixed in.
+- (e) **Plan cost.** The trace records no plan time. The proxy is `lockstep.jsonl` `wall_paused_s` per barrier, which
+  also includes the command round-trip to the mover. It is reported per row as such.
+- (f) **First run = the abort check.** `ci_tiny 2 200 ariadne_v0` (the livelock seed) runs first. The other jobs go
+  only if all of these hold:
+  - every `kind:"turn"` trace record has its `mover_state` answer `accepted: true` with `segments: 1`;
+  - `answer_timeouts` = 0;
+  - the agent's GT shows no hold at a won at-cell view.
+  The live-loop turn-here branch has never executed (no recording had an at-cell view).
+- (g) **D119 evidence** is in the mover logs, not the trace (the trace carries no final yaw): no final-turn segment
+  on a command whose polyline is 3.0 m.
+- (h) **One commit for all 48 runs.** No merge between batches.
 
 ### 15.6 The §49 ritual, at implementation
 

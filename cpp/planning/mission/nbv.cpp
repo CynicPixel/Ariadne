@@ -577,6 +577,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
 
     // --- D117 executed-command time, D118 arrival twins (Ariadne policy, behind their keys) -----------------------
     const bool timed = p.cost_time && p.policy == NbvPolicy::kAriadne && in.router;
+    out.timed = timed;
     if (timed) {
         const double z = st.position.z();
         std::vector<TaskCandidate> kept, twins;

@@ -5140,10 +5140,10 @@ pose has a yaw.
   - with every new key off, decisions and commands are identical to the base, except the enumerated records where a
     cut command or an at-cell view occurs;
   - the fixes fire exactly there.
-  The base is now feat/ph4-nagent after the main merge (`9efbdba`, which includes B's D227 lens-off default), not
+  The base is now feat/ph4-nagent after the main merge (`9efbdba`: main 4a12b50; B's D227 lens-off is NOT in it), not
   d59ee3d.
 - (b) **Rig.** 8 rows × 6 = **48 development runs** (`configs/mission/ablation_4.3/runs_48.jobs`).
-  - The 1.8 row is re-run rather than reused, because the base commit and the lens default changed.
+  - The 1.8 row is re-run rather than reused, because the base commit changed (main merged into the tree; one commit is pinned for all 48 runs).
   - A run counts only if every lockstep barrier is answered (`answer_timeouts` = 0) and the D152 reorder has no
     timeouts.
   - M first routed the runs off AWS (test-compute-session). It declined: no docker or gz on its kernels today, and
@@ -5158,5 +5158,12 @@ pose has a yaw.
     tests do.
   - **Keys on (ariadne_ta):** the run completes and every trace record parses. Arrival twins win 7/8 decisions;
     0 unroutable.
-- (c) The gated `ariadne` row (36-run gate) is compared to ariadne_v0 only as context: rig, lens default and the
+- (c) The gated `ariadne` row (36-run gate) is compared to ariadne_v0 only as context: the base commit and the
   fixes all differ.
+- (d)–(h), also before any run (NBV_4.3 §15.5):
+  - predicted-vs-realised C_time only on rows with `time_model: exact_command`;
+  - plan cost via `lockstep.jsonl` `wall_paused_s`, which includes the command round-trip;
+  - the first job, ci_tiny seed 2 ariadne_v0, is an abort check: turn commands accepted with one segment, no answer
+    timeouts, no hold at a won at-cell view;
+  - D119 evidence comes from the mover logs;
+  - one pinned commit for all 48 runs.

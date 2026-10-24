@@ -243,7 +243,10 @@ private:
     /// D120: every candidate's normalised IG terms, C_path and C_time (raw, with their p90 scales), turn time and U,
     /// in the options' final order, so a term's share of each decision is read from the trace, not inferred.
     static void TermLog(const planning::NbvPlan& nb, std::ostringstream& tj) {
-        tj << ",\"terms\":{\"lambda_path\":" << nb.lambda_path << ",\"lambda_t\":" << nb.lambda_t << ",\"path_scale\":"
+        // time_model: what time_s means in this row (D117's command time, or the gated path / speed), so the
+        // predicted-vs-realised analysis never mixes the two.
+        tj << ",\"terms\":{\"time_model\":\"" << (nb.timed ? "exact_command" : "path_over_speed")
+           << "\",\"lambda_path\":" << nb.lambda_path << ",\"lambda_t\":" << nb.lambda_t << ",\"path_scale\":"
            << nb.path_scale << ",\"time_scale\":" << nb.time_scale << ",\"unroutable\":" << nb.unroutable
            << ",\"candidates\":[";
         for (size_t i = 0; i < nb.options.size(); ++i) {

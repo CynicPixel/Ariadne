@@ -43,3 +43,14 @@ elsewhere. It does not exercise the fixes themselves; `tests/unit/test_nbv_time.
 - the arrival twin was chosen in 7 of 8 decisions.
 
 These are development observations, not a result. The ablation (48 runs) is the result.
+
+**Twin sanity check (keys_ta, from the D120 term log).** Each chosen view was compared with its sibling: same task,
+same eye, the other yaw.
+- The chosen twins face 27–179° away from the target-facing view.
+- Their coverage term is 0.92–1.04 (p90-normalised), against the sibling's 0.16–0.96.
+- Same eye height (`SamplerParams.z`) and position as the sibling.
+- So the higher gain is the forward-facing bundle seeing still-unknown space early in a 20 s mission, not a geometry
+  mismatch. The one target-facing pick (t = 10 s, agent 0) had the higher gain (1.32 vs 0.85) despite 10 s of
+  turning.
+
+This is an observation on 8 decisions, not a result.

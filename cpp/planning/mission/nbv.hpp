@@ -200,6 +200,7 @@ struct NbvPlan {
     double lambda_t = 1;                       // the time schedule's own factor (D117 splits it off the path term)
     double path_scale = 0, time_scale = 0;     // the p90 scales of C_path and C_time (D120's term log)
     int unroutable = 0;                        // D117: options dropped because Route has no command for them
+    bool timed = false;                        // D117 ran: cost[3] is the executed command's time, else path / speed
     std::vector<std::string> notes;            // missing producers etc., for the trace
     int targets[5] = {0, 0, 0, 0, 0};          // per generator A..E
     std::string tare;                          // kTare: "local k" | "global m" | "" (what scheduled the first option)
