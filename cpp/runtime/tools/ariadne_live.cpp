@@ -2441,6 +2441,10 @@ int main(int argc, char** argv) {
             for (const pid_t cp : ma->collab_pids) {
                 int st = 0;
                 ::waitpid(cp, &st, 0);
+                if (WIFSIGNALED(st))   // 788896: a SIGKILLed worker (cgroup OOM) left no stats and no stderr
+                    std::fprintf(stderr, "ariadne_live: collab worker pid %d KILLED by signal %d\n", cp, WTERMSIG(st));
+                else if (WIFEXITED(st) && WEXITSTATUS(st) != 0)
+                    std::fprintf(stderr, "ariadne_live: collab worker pid %d exited rc %d\n", cp, WEXITSTATUS(st));
             }
             for (const auto& sp : ma->collab_socks) ::unlink(sp.c_str());
         }
