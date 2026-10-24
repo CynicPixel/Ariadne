@@ -511,7 +511,13 @@ public:
             frames_off = fbb.CreateVector(frames);
         }
         const wire::Epoch epoch(graph.epoch.counter, graph.epoch.members_hash, graph.epoch.broker);
-        const auto pg = wire::CreatePoseGraph(fbb, fbb.CreateVector(nodes), fbb.CreateVector(edges), &anchor,
+        // Children are built in named statements: two builder calls in one argument list are laid out in the
+        // compiler's argument-evaluation order (x86-64 GCC right to left, aarch64 left to right), so the bytes
+        // differed across architectures (#185, A1's wire dump). The order kept is x86's, so every recorded byte
+        // count and golden stays valid.
+        const auto edges_off = fbb.CreateVector(edges);
+        const auto nodes_off = fbb.CreateVector(nodes);
+        const auto pg = wire::CreatePoseGraph(fbb, nodes_off, edges_off, &anchor,
                                               graph.has_epoch ? &epoch : nullptr, frames_off);
 
         wire::EnvelopeBuilder eb(fbb);
@@ -916,7 +922,9 @@ private:
         std::vector<flatbuffers::Offset<wire::PartialAck>> partial;
         for (const auto& p : a.partial)
             partial.push_back(wire::CreatePartialAck(fbb, p.msg_id, fbb.CreateVector(p.received)));
-        return wire::CreateAck(fbb, fbb.CreateVector(a.done), fbb.CreateVector(partial));
+        const auto partial_off = fbb.CreateVector(partial);   // x86's order, named: see EncodePoseGraph (#185)
+        const auto done_off = fbb.CreateVector(a.done);
+        return wire::CreateAck(fbb, done_off, partial_off);
     }
 
     /// A missing ack table is an empty ack; a malformed partial entry is not.
