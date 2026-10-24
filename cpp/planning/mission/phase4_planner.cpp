@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -425,19 +426,26 @@ std::pair<std::vector<std::pair<double, double>>, double> Phase4Planner::Route(c
     cv::Mat plan = PlanSpace(p.maps, from);   // trav_a + the escape disc at `from` (D158)
     if (!p.agents[agent].keep_out.empty()) plan.setTo(0, p.agents[agent].keep_out);
     const GridPath gp = AStar(plan, from, {goal});
-    if (!gp.found || gp.cells.size() < 2) return {{}, o.goal_yaw};
+    if (!gp.found) return {{}, o.goal_yaw};   // unreachable: the loop holds
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    if (gp.cells.size() < 2) return {{{nan, nan}}, o.goal_yaw};   // D125: an at-cell view is a turn here, not a hold
     const std::vector<Cell> keep = StringPull(plan, gp.cells);
     std::vector<std::pair<double, double>> wp;
     double px = g.ox + (keep[0].c + 0.5) * g.cell, py = g.oy + (keep[0].r + 0.5) * g.cell, left = p_.max_command_m;
-    for (size_t k = 1; k < keep.size() && left > 1e-9; ++k) {
+    bool cut = false;
+    for (size_t k = 1; k < keep.size(); ++k) {
+        if (left <= 1e-9) {   // vertices remain past the command length
+            cut = true;
+            break;
+        }
         double x = g.ox + (keep[k].c + 0.5) * g.cell, y = g.oy + (keep[k].r + 0.5) * g.cell;
         const double d = std::hypot(x - px, y - py);
-        if (d > left) x = px + (x - px) * left / d, y = py + (y - py) * left / d;   // on a clear chord: still clear
+        if (d > left) x = px + (x - px) * left / d, y = py + (y - py) * left / d, cut = true;   // on a clear chord: still clear
         wp.emplace_back(x, y);
         left -= std::min(d, left);
         px = x, py = y;
     }
-    return {wp, o.goal_yaw};
+    return {wp, cut ? nan : o.goal_yaw};   // D119: the view's yaw only where the command ends at the view
 }
 
 }  // namespace ariadne::planning
