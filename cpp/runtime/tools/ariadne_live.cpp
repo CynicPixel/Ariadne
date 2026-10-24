@@ -1189,6 +1189,12 @@ int main(int argc, char** argv) {
             live::CollabLiveParams cp;   // D179: async; the event log is the reproducibility substrate
             if (is_live) cp.log_path = (run_dir / "collab_events.jsonl").string();
             else cp.replay_log = (fs::path(replay_path).parent_path() / "collab_events.jsonl").string();
+            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ
+                char hx[17];
+                std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
+                const char* gc = std::getenv("ARIADNE_GIT_COMMIT");
+                cp.identity = std::string(hx) + ":" + (gc && *gc ? gc : "unknown");
+            }
             const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
             ma->collab = std::make_unique<live::CollabLive>(
                 ccfg, fleet_ids, *ma->comms, *ma->lightglue, cseed, /*t_first_ns=*/0, cp, &ma->edges_csv,
