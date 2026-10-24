@@ -1,0 +1,50 @@
+tool: ariadne_collab_sim
+protocol: v2
+arm: spectral
+seed: 2
+comms_scenario: collapsed_v1
+budget: {bytes_per_s: 8094.2, burst_bytes: 139199, source: "25 % of the similarity arm's fetch rate 32376.8 B/s on scene 0 (sim_s0_seed1,sim_s0_seed2,sim_s0_seed3)"}
+response_ratio: {value: 0.87464, calibration_run: "scene 0 similarity arm (sim_s0_seed1,sim_s0_seed2,sim_s0_seed3)"}
+robust: true
+entry_gate: {enabled: true, chi2: 22.4577, entry_sigma_m: 0.1, entry_sigma_rad: 0.0349066, kappa: 2.9447, tested: 68, rejected: 0, ungated: 0}
+local_encoding: int8
+verify: {min_pnp_inliers: 169, calibration: "scene 0 ideal-link similarity arm: floor 169 keeps 732 of 844 good, 826 bad seen"}
+agents: 2
+duration_s: 234.8
+bytes:
+  - {class: 0, messages: 940, wire_first: 252984, transmitted_first: 215384, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+  - {class: 1, messages: 255, wire_first: 171360, transmitted_first: 161160, predicted_first: 171360, wire_retransmit: 227136, wire_resync: 2664}
+  - {class: 3, messages: 11, wire_first: 1488, transmitted_first: 1048, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+  - {class: 4, messages: 9, wire_first: 1219980, transmitted_first: 1192148, predicted_first: -1, wire_retransmit: 1543699, wire_resync: 0}
+  - {class: 5, messages: 10, wire_first: 2074, transmitted_first: 1674, predicted_first: 2080, wire_retransmit: 4148, wire_resync: 0}
+  - {class: 6, messages: 52, wire_first: 537547, transmitted_first: 523839, predicted_first: 540864, wire_retransmit: 849349, wire_resync: 705}
+  - {class: 12, messages: 529, wire_first: 84640, transmitted_first: 63480, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+total_wire_bytes: {first: 2273442, all: 4897774}
+predicted: {match_request: 1496, match_response: 1.49381e+06, uncalibrated_prices: 0, uncalibrated_class_prices: 0, unadvertised_prices: 0}
+protocol: {candidates: 1257, selected: 205, expired: 550, edges_verified: 10, solves: 32, broker_changes: 2}
+verify: {calls: 171, geometric: 10, gated: 10, ms_total: 145904, reasons: {essential_gate: 11, few_3d: 70, few_matches: 80, verified: 10}}
+solve: {calls: 32, ms_total: 290.798, robust_inter_agent: 68, robust_inliers: 68}
+estimates:
+  - {agent: 0, anchor: 0, T_G_W: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}
+  - {agent: 1, anchor: 0, T_G_W: [-0.99999571198788639, 9.7203772889187056e-05, -0.0029268681670867398, -5.8996305465698242, 0.00011367822694139927, 0.99998415027261522, -0.0056290568318620119, 0.034048061817884445, 0.0029262746114623356, -0.0056293654155818527, -0.99997987337841798, 9.7610559463500977]}
+kept_inter_edges:   # kept by the last solve that contained them; never injected (merge evidence)
+  - {agent_a: 0, kf_a: 219, agent_b: 1, kf_b: 52, t_s: 145, weight: 1}
+  - {agent_a: 0, kf_a: 220, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 221, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 222, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 229, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 230, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 231, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 232, agent_b: 1, kf_b: 52, t_s: 150, weight: 1}
+  - {agent_a: 0, kf_a: 233, agent_b: 1, kf_b: 52, t_s: 155, weight: 1}
+  - {agent_a: 0, kf_a: 235, agent_b: 1, kf_b: 64, t_s: 155, weight: 1}
+injected:
+ate_merged: {rmse_m: 0.00856302, frame_anchor: 0, merged_agents: 2, kf_merged: 621, kf_released: 621}
+ate_solo:
+  - {agent: 0, rmse_m: 0.00717398, keyframes: 361, prefix_unreleased: 0}
+  - {agent: 1, rmse_m: 0.00906359, keyframes: 260, prefix_unreleased: 0}
+endpoints:
+  - {agent: 0, first_tx: 48, retx_fragments: 41, acked: 37, delivered: 641, duplicates: 1465, decode_rejected: 0, expired: 2, superseded: 0, abandoned_reliable: 0}
+  - {agent: 1, first_tx: 294, retx_fragments: 1958, acked: 286, delivered: 375, duplicates: 34, decode_rejected: 0, expired: 0, superseded: 0, abandoned_reliable: 1}
+network: {sent: 4960, lost_link_down: 0, lost_random: 841, reordered: 0}
+outcome: consistent

@@ -1,0 +1,58 @@
+tool: ariadne_collab_sim
+protocol: v2
+arm: greedy
+seed: 1
+comms_scenario: collapsed_v1
+budget: {bytes_per_s: 15540, burst_bytes: 138239, source: "25 % of the similarity arm's fetch rate 62159.8 B/s on scene 1 (sim_s1_seed1,sim_s1_seed2,sim_s1_seed3)"}
+response_ratio: {value: 0.87543, calibration_run: "scene 1 similarity arm (sim_s1_seed1,sim_s1_seed2,sim_s1_seed3)"}
+robust: true
+entry_gate: {enabled: true, chi2: 22.4577, entry_sigma_m: 0.1, entry_sigma_rad: 0.0349066, kappa: 2.9447, tested: 1441, rejected: 1378, ungated: 0}
+local_encoding: int8
+verify: {min_pnp_inliers: 72, calibration: "scene 1 ideal-link similarity arm: floor 72 keeps 710 of 712 good, 307 bad seen"}
+agents: 2
+duration_s: 228.95
+bytes:
+  - {class: 0, messages: 916, wire_first: 275280, transmitted_first: 238640, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+  - {class: 1, messages: 255, wire_first: 171336, transmitted_first: 161136, predicted_first: 171344, wire_retransmit: 1386312, wire_resync: 7392}
+  - {class: 3, messages: 138, wire_first: 18760, transmitted_first: 13240, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+  - {class: 4, messages: 20, wire_first: 2727084, transmitted_first: 2664880, predicted_first: -1, wire_retransmit: 23284722, wire_resync: 0}
+  - {class: 5, messages: 119, wire_first: 24665, transmitted_first: 19905, predicted_first: 24752, wire_retransmit: 442835, wire_resync: 42802}
+  - {class: 6, messages: 50, wire_first: 494635, transmitted_first: 481891, predicted_first: 490277, wire_retransmit: 3666923, wire_resync: 79850}
+  - {class: 12, messages: 774, wire_first: 157608, transmitted_first: 126648, predicted_first: -1, wire_retransmit: 0, wire_resync: 0}
+total_wire_bytes: {first: 3999412, all: 32780204}
+predicted: {match_request: 2992, match_response: 2.99026e+06, uncalibrated_prices: 0, uncalibrated_class_prices: 0, unadvertised_prices: 0}
+protocol: {candidates: 1418, selected: 482, expired: 478, edges_verified: 119, solves: 42, broker_changes: 5}
+verify: {calls: 151, geometric: 119, gated: 119, ms_total: 144661, reasons: {essential_gate: 10, few_3d: 11, pnp_gate: 11, verified: 119}}
+solve: {calls: 42, ms_total: 277.678, robust_inter_agent: 63, robust_inliers: 63}
+estimates:
+  - {agent: 0, anchor: 0, T_G_W: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}
+  - {agent: 1, anchor: 0, T_G_W: [-0.0042499175552588309, 0.0013575976376971064, 0.99999004751518794, -4.8054366111755371, -0.00087828539731233041, 0.99999868768043709, -0.0013613420453597637, 0.010947958566248417, -0.99999058336343083, -0.00088406224764753911, -0.0042487196198282007, 10.92527961730957]}
+kept_inter_edges:   # kept by the last solve that contained them; never injected (merge evidence)
+  - {agent_a: 0, kf_a: 211, agent_b: 1, kf_b: 12, t_s: 141.78, weight: 1}
+  - {agent_a: 0, kf_a: 212, agent_b: 1, kf_b: 12, t_s: 145, weight: 1}
+  - {agent_a: 0, kf_a: 212, agent_b: 1, kf_b: 13, t_s: 145, weight: 1}
+  - {agent_a: 0, kf_a: 213, agent_b: 1, kf_b: 13, t_s: 145, weight: 1}
+  - {agent_a: 0, kf_a: 271, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 272, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 272, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 273, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 273, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 274, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 274, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 275, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 275, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 276, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 276, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 277, agent_b: 1, kf_b: 23, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 277, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+  - {agent_a: 0, kf_a: 278, agent_b: 1, kf_b: 24, t_s: 177, weight: 1}
+injected:
+ate_merged: {rmse_m: 0.0143207, frame_anchor: 0, merged_agents: 2, kf_merged: 614, kf_released: 614}
+ate_solo:
+  - {agent: 0, rmse_m: 0.00786424, keyframes: 352, prefix_unreleased: 0}
+  - {agent: 1, rmse_m: 0.0136301, keyframes: 262, prefix_unreleased: 0}
+endpoints:
+  - {agent: 0, first_tx: 283, retx_fragments: 1546, acked: 74, delivered: 318, duplicates: 2478, decode_rejected: 0, expired: 12, superseded: 0, abandoned_reliable: 0}
+  - {agent: 1, first_tx: 518, retx_fragments: 20978, acked: 166, delivered: 505, duplicates: 1249, decode_rejected: 0, expired: 0, superseded: 0, abandoned_reliable: 109}
+network: {sent: 27189, lost_link_down: 0, lost_random: 7148, reordered: 0}
+outcome: explicitly_incomplete

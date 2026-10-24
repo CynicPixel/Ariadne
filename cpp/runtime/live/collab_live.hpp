@@ -241,6 +241,7 @@ private:
     void Process(Item& it) {
         if (it.kind == Item::kNode) return it.fn(fleet_.node(it.k), it.t);
         if (it.kind == Item::kFleet) return it.fn(fleet_.node(fleet_ids_.front()), it.t);
+        tick_ns_ = it.t.ns;   // the sim time a #freq asked at this tick carries (worker's gone rule)
         for (const Commit& c : TakeArrivals(it.t.ns)) Apply(c, it.t);
         fleet_.Deliver(it.t);
         fleet_.Tick(it.t);
@@ -318,7 +319,7 @@ private:
         if (it == ready_.end()) {
             if (asked_.insert(key).second) {
                 std::lock_guard<std::mutex> lk(in_mu_);
-                if (peers_.count(k)) SendFrame(k, "#freq", EncodeFeatureRequest(kf));
+                if (peers_.count(k)) SendFrame(k, "#freq", EncodeFeatureRequest(kf, tick_ns_));
             }
             return std::nullopt;
         }
@@ -469,6 +470,7 @@ private:
     std::map<std::pair<ac::AgentId, uint64_t>, std::optional<core::SE3>> gt_;
     std::map<std::pair<ac::AgentId, uint64_t>, std::array<float, 5>> camera_;
     uint64_t version_ = 0;
+    int64_t tick_ns_ = 0;
     // fleet thread -> runtime
     std::mutex out_mu_;
     std::map<ac::AgentId, std::deque<std::pair<int64_t, core::DecodedMessage>>> outbox_;

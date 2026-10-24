@@ -1,0 +1,38 @@
+scene0_budgeted_cells:
+  cells: 4
+  below_0.10m: 4
+  worst_m: 0.014675
+  verdict: PASS
+  note: pre-registered as >= 5 of 6 cells; the sweep has the cells listed in cells.csv,
+    scored as at most one failing cell
+scene1_not_worse:
+  cells: 7
+  worse: []
+  verdict: PASS
+no_corrupt:
+  corrupt_runs: []
+  verdict: PASS
+true_edges_rejected:
+  per_scene:
+    scene0:
+      'true': 279
+      tested: 269
+      rejected_last: 0
+      rejected_ever: 0
+      ungated: 10
+      rejected_fraction: 0.0
+      verdict: PASS
+    scene1:
+      'true': 291
+      tested: 291
+      rejected_last: 0
+      rejected_ever: 0
+      ungated: 0
+      rejected_fraction: 0.0
+      verdict: PASS
+  verdict: PASS
+inputs:
+  gated: build/runs/20261023T213707Z-cpux86-e31421/output/results/runs
+  base: /data/code/Ariadne-3x/build/runs/20261023T191248Z-cpux86-eee456/output/results/runs
+  logged: build/runs/20261024T042708Z-cpux86-4ec3f6/output/results/runs
+D178: PASS

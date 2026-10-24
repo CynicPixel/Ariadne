@@ -36,7 +36,7 @@ collect() {   # the small outputs of every run, and the pass-A stores for reruns
   for d in "$W"/runs/*/; do
     [ -d "$d" ] || continue
     n=$(basename "$d"); mkdir -p "$R/runs/$n"
-    cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv} "$R/runs/$n/" 2>/dev/null
+    cp "$d"/{results.yaml,outcome.yaml,manifest.yaml,ate_vs_bytes.csv,edges.csv,entry_gate.csv} "$R/runs/$n/" 2>/dev/null
     gzip -c "$d/ledger.csv" > "$R/runs/$n/ledger.csv.gz" 2>/dev/null
     tail -2 "$W/runs/$n.log" > "$R/runs/$n/tool.log" 2>/dev/null
   done

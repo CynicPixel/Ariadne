@@ -1,0 +1,15 @@
+scene,cell,budgeted,seeds,ate_gated_m,ate_base_m
+0,camp_faults,False,1,0.013715,3.7806
+0,camp_ideal,False,1,0.012751,3.78066
+0,camp_partition,False,1,0.016719,3.78253
+0,greedy_p25,True,3,0.014675,3.78573
+0,greedy_p50,True,3,0.014469,3.787203
+0,spectral_p25,True,3,0.013494,3.783607
+0,spectral_p50,True,3,0.014423,3.784523
+1,camp_faults,False,1,0.006757,0.006771
+1,camp_ideal,False,1,0.00674,0.006752
+1,camp_partition,False,1,0.006756,0.006771
+1,greedy_p25,True,3,0.007598,0.007602
+1,greedy_p50,True,3,0.008177,0.008228
+1,spectral_p25,True,3,0.007682,0.007682
+1,spectral_p50,True,3,0.008177,0.008228

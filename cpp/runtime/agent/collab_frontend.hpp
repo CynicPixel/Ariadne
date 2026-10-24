@@ -110,14 +110,15 @@ private:
 
 struct CollabExtractorStats {
     uint64_t described = 0, features_computed = 0, features_gone = 0;
+    uint64_t evicted_early = 0;   // a timed request found its keyframe already evicted: a determinism hazard (> 0 = bug)
     double ms_aliked = 0, ms_place = 0;
 };
 
 class CollabFeatureExtractor {
 public:
     CollabFeatureExtractor(const perception::PlaceRecognizer& place, const perception::HardPairMatcher& aliked,
-                           double keep_s = 120.0)
-        : place_(place), aliked_(aliked), keep_s_(keep_s) {}
+                           double keep_s = 120.0, double evict_slack_s = 0.0)
+        : place_(place), aliked_(aliked), keep_s_(keep_s), evict_slack_s_(evict_slack_s) {}
 
     std::vector<float> Describe(const cv::Mat& rgb) {
         const auto t0 = std::chrono::steady_clock::now();
@@ -161,15 +162,37 @@ public:
         if (it != kept_.end()) it->second.t_final_ns = t_final_ns;
         Expire(t_final_ns);
     }
+    /// Frees memory: drops keyframes older than keep_s + evict_slack_s at `now_ns`. With timed requests (live) the
+    /// "gone" ANSWER never depends on this (see Features(id, t_req)); the slack covers the parent's lag behind `now`.
     void Expire(int64_t now_ns) {
-        for (auto it = kept_.begin(); it != kept_.end();)
-            it = it->second.t_final_ns && (now_ns - *it->second.t_final_ns) * 1e-9 > keep_s_ ? kept_.erase(it)
-                                                                                          : std::next(it);
+        for (auto it = kept_.begin(); it != kept_.end();) {
+            if (it->second.t_final_ns && (now_ns - *it->second.t_final_ns) * 1e-9 > keep_s_ + evict_slack_s_) {
+                evicted_.insert(it->first);
+                it = kept_.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
     /// Lazy: the local features of a released, kept keyframe, computed now; nullopt if never released or expired.
     std::optional<CollabLocalFeatures> Features(uint64_t id) {
         const auto it = kept_.find(id);
         if (it == kept_.end() || !it->second.t_final_ns) {
+            ++stats_.features_gone;
+            return std::nullopt;
+        }
+        return ExtractLocal(it->second.rgb, it->second.depth32, it->second.pinhole);
+    }
+    /// Live (D179): the answer is a function of SIM time only - gone iff never released or released more than keep_s
+    /// before the request's tick - so it does not depend on how the estimator and parent streams interleave here.
+    std::optional<CollabLocalFeatures> Features(uint64_t id, int64_t t_req_ns) {
+        const auto it = kept_.find(id);
+        if (it == kept_.end()) {
+            stats_.evicted_early += evicted_.count(id);
+            ++stats_.features_gone;
+            return std::nullopt;
+        }
+        if (!it->second.t_final_ns || (t_req_ns - *it->second.t_final_ns) * 1e-9 > keep_s_) {
             ++stats_.features_gone;
             return std::nullopt;
         }
@@ -188,8 +211,9 @@ private:
     };
     const perception::PlaceRecognizer& place_;
     const perception::HardPairMatcher& aliked_;
-    double keep_s_;
+    double keep_s_, evict_slack_s_;
     std::map<uint64_t, Kept> kept_;
+    std::set<uint64_t> evicted_;
     CollabExtractorStats stats_;
 };
 

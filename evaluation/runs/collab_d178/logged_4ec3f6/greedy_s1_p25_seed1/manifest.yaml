@@ -1,0 +1,11 @@
+tool: ariadne_collab_sim
+git_commit: c0e498b7d2ef0c04b960e84a92b7bb0ab7849048
+git_dirty: false
+image_digest: UNRECORDED
+opencv_build_hash: UNRECORDED
+config: /w/cfg/greedy_s1_p25.yaml
+stores: /w/passa/s1/seed1
+rec: /work/evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw/rec
+scene: /work/evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw/scene
+seed: 1
+aliked: aliked_n16_k1024_1280x720+lightglue_aliked/cv_dnn_new/norm_upstream
