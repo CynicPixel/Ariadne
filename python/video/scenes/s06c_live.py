@@ -109,7 +109,7 @@ class LiveGate(CaptionedScene):
 
         # the certificate: on public benchmarks, the solver proves its answer is the best possible for SE-Sync's cost
         head = Text("Certified optimal pose graphs", font=FONT, font_size=30, color=TEXT)
-        sub = Text("global optimum proved for SE-Sync's cost · objectives match the published values",
+        sub = Text("certified globally optimal for SE-Sync's cost · objectives match the published values",
                    font=FONT, font_size=19, color=DIM)
         names = VGroup(*[VGroup(Text("✓", font=FONT, font_size=26, color=GOOD), Text(n, font=FONT, font_size=24, color=TEXT)
                                 ).arrange(RIGHT, buff=0.2) for n in CERTIFIED]).arrange_in_grid(rows=2, buff=(0.6, 0.3))
