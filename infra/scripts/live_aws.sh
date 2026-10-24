@@ -107,6 +107,7 @@ cmd_smoke() {
   mkdir -p "$(dirname "$script")"
   { prologue "$refs"; cat <<'EOF'
 # [SMOKE-TEST] the sim image's headless EGL under the NVIDIA runtime (never run before: llvmpipe only, SMOKE §4).
+mkdir -p $R/sim-smoke && chmod 777 $R/sim-smoke   # the sim container runs as the image user; $R is root's
 ARIADNE_SMOKE_OUT_HOST=$R/sim-smoke ARIADNE_SMOKE_TIMEOUT=120 infra/scripts/sim.sh > $R/sim_smoke.log 2>&1; echo "sim_smoke_exit=$?" >> $R/sim_smoke.log
 docker run --rm --gpus all ariadne/sim:dev bash -c 'ls -la /usr/share/glvnd/egl_vendor.d/; ldconfig -p | grep -iE "libEGL_nvidia|libnvidia-egl" | head' > $R/egl_vendor.txt 2>&1 || true
 EOF
