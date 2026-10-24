@@ -5331,3 +5331,21 @@ and first-transmission bytes with D180's re-sends folded back in). Baseline with
 host on a transient AuthFailure (spinup since fixed), and 080b8f didn't collect entry_gate.csv (fixed in c0e498b).
 **Next:** the entry gate is ENABLED in the live config `collab_live_v1` (B). D178 merges to main with D179/D180 after
 B's D179 acceptance.
+
+## 2026-10-24 — D180 RESULT: request accounting fixed; byte table still FAILS on match_response (diagnosed)
+
+Run: the D178 logged rerun `20261024T042708Z-cpux86-4ec3f6`, a D180 build. This was the pre-registered next
+byte-table run. Scored with `collab_gate.py`; evidence in `evaluation/runs/collab_d180_bytes/`.
+- **match_request:** all 24 budgeted rows ≤ 15 %, worst 10.65 %, median 0.77 %. Before D180 it was about 6× under.
+  The re-sends moved to wire_resend, 401,792 B over the sweep.
+- **The duplicate-response hypothesis is REFUTED.** match_response has wire_resend = 0 in every row. D180's "likely
+  cause" sentence was wrong.
+- **match_response FAILS:** 8/24 rows over 15 %, worst 27.6 %, median 12.8 %. Measured is ALWAYS below predicted.
+  - Diagnosis: per message, the response price is accurate. Where the policy priced at the observed 135.8–135.9 kB,
+    the per-message error is −0.4 % to +0.4 %.
+  - The class total misses because some selected requests are never answered: 0–5 of 10–44 per run, so the policy
+    priced a response that was never sent. Which of those were "gone", given up, or still outstanding at run end is
+    the open question.
+  - A few rows also carry a higher planned price (142–150 kB). That's the D171 shared-keyframe pricing.
+- **Verdict:** I6 byte table FAIL, reported as such. The fix (an expected answer rate in the predictor, calibrated
+  cross-scene; or fewer unanswered requests) needs its own preflight and pre-registration before the next byte run.

@@ -1,0 +1,39 @@
+byte_table:
+  worst_error: 0.2757
+  limit: 0.15
+  classes_without_predictor: []
+  verdict: FAIL
+outcomes:
+  counts:
+    explicitly_incomplete: 31
+    consistent: 5
+  verdict: PASS
+dominance:
+  rows:
+  - scene: 0
+    pct: 25
+    greedy: 0.014675483333333334
+    spectral: 0.013494416666666667
+    spectral_le_greedy: true
+  - scene: 0
+    pct: 50
+    greedy: 0.014469423333333334
+    spectral: 0.014423126666666666
+    spectral_le_greedy: true
+  - scene: 1
+    pct: 25
+    greedy: 0.007597873333333333
+    spectral: 0.00768207
+    spectral_le_greedy: false
+  - scene: 1
+    pct: 50
+    greedy: 0.008177460000000001
+    spectral: 0.008177460000000001
+    spectral_le_greedy: true
+  spectral_le_greedy: 3
+  of: 4
+edges:
+  accepted: 1816
+  good_pose_err_le_10deg: 594
+  precision: 0.3271
+runs: 36
