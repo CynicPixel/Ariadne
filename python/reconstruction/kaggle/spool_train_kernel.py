@@ -111,7 +111,8 @@ def main():
         if rc != 0:   # a failed budget (e.g. the smoke) stops the run: later budgets would fail the same way
             break
     json.dump(out, open(WORK / "remote.json", "w"), indent=2)
+    return 1 if any(r["rc"] != 0 for r in out["budgets"].values()) else 0   # a failed budget fails the run
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

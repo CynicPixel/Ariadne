@@ -1,0 +1,57 @@
+{
+  "gsplat": "1.5.3",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "gpu": "Tesla T4",
+  "install": "preinstalled 1.5.3 (compiled csrc: /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so)",
+  "dataset": null,
+  "spools": [
+    "agent0",
+    "agent1",
+    "agent2"
+  ],
+  "budgets": {
+    "smoke": {
+      "iters_per_kf": 15,
+      "max_keyframes": 30,
+      "rc": 0,
+      "wall_s": 12.6,
+      "log_tail": "service: 30 keyframes -> /out/splat_smoke (3 submaps)\n",
+      "keyframes": 30,
+      "submaps": 3,
+      "gaussians_last_per_submap_max": 19500,
+      "ms_per_kf_median": 154.51755999998795,
+      "ms_per_kf_p95": 226.0161709999693,
+      "ms_iter_median": 7.839122999996562,
+      "psnr_train_init_median": 30.92,
+      "psnr_train_after_median": 29.47,
+      "frozen_bitwise_all": true,
+      "per_agent_keyframes": {
+        "0": 12,
+        "1": 9,
+        "2": 9
+      }
+    },
+    "live": {
+      "iters_per_kf": 15,
+      "max_keyframes": 0,
+      "rc": 1,
+      "wall_s": 61.7,
+      "log_tail": "Traceback (most recent call last):\n  File \"<frozen runpy>\", line 198, in _run_module_as_main\n  File \"<frozen runpy>\", line 88, in _run_code\n  File \"/src/python/reconstruction/ariadne_recon/live/service.py\", line 303, in <module>\n    raise SystemExit(main())\n                     ^^^^^^\n  File \"/src/python/reconstruction/ariadne_recon/live/service.py\", line 288, in main\n    else replay(spools, svc, a.training_image, a.max_keyframes, a.pace))\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/src/python/reconstruction/ariadne_recon/live/service.py\", line 185, in replay\n    svc.ingest(b.agent, b.kf_id, b.T_O_C, b.frame_id_of_pose, b.K, image, Z, S)\n  File \"/src/python/reconstruction/ariadne_recon/live/service.py\", line 111, in ingest\n    rec = self.trainer.add_keyframe(agent, kf, T_O_C, pose_version, K, image, Z, sigma)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/src/python/reconstruction/ariadne_recon/live/trainer.py\", line 222, in add_keyframe\n    loss, terms = self._step(st, kf if i < n_new else int(self.rng.choice(sm.keyframes)))\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/src/python/reconstruction/ariadne_recon/live/trainer.py\", line 276, in _step\n    fr = self.frames[kf]\n         ~~~~~~~~~~~^^^^\nKeyError: 999\n",
+      "keyframes": 269,
+      "submaps": 11,
+      "gaussians_last_per_submap_max": 110228,
+      "ms_per_kf_median": 183.3274819999815,
+      "ms_per_kf_p95": 239.3139559999895,
+      "ms_iter_median": 7.994945500001904,
+      "psnr_train_init_median": 24.16,
+      "psnr_train_after_median": 26.18,
+      "frozen_bitwise_all": true,
+      "per_agent_keyframes": {
+        "0": 123,
+        "1": 93,
+        "2": 53
+      }
+    }
+  }
+}

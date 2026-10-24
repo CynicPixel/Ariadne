@@ -171,14 +171,16 @@ class LiveTrainer:
         self.p, self.sp, self.channels = p, seed_params, channels
         self.manager = SubmapManager(p.max_keyframes)
         self.state: dict[int, _SubmapState] = {}
-        self.frames: dict[int, dict] = {}      # kf -> tensors of its training data (active submaps only)
+        # (sid, kf) -> tensors of its training data (active submaps only). Keyed by the SUBMAP: every agent numbers its own
+        # keyframes, so a bare kf id collides across agents (626abe g4dn run: KeyError + cross-agent overwrites).
+        self.frames: dict[tuple[int, int], dict] = {}
         self.rng = np.random.default_rng(p.seed)
         self.log: list[dict] = []
 
     # --- rendering -------------------------------------------------------------------------------------------------
     def _render(self, st: _SubmapState, kf: int, grad: bool):
         torch = self.torch
-        fr = self.frames[kf]
+        fr = self.frames[(st.sid, kf)]
         P = st.params
         ctx = torch.enable_grad() if grad else torch.no_grad()
         with ctx:
@@ -196,6 +198,7 @@ class LiveTrainer:
         sm, opened = self.manager.add_keyframe(agent, kf, T_O_C, pose_version)
         if opened:
             self.state[sm.sid] = _SubmapState(torch, self.dev, self.channels, self.p)
+            self.state[sm.sid].sid = sm.sid
             for other in [s for s in self.manager.submaps if s.agent == agent and s.closed and s.sid in self.state]:
                 self._close(other.sid)
         st = self.state[sm.sid]
@@ -204,7 +207,7 @@ class LiveTrainer:
         img = np.asarray(image, np.float32).reshape(h, w, -1)
         f = lambda a: torch.as_tensor(np.ascontiguousarray(a), dtype=torch.float32, device=self.dev)
         valid = np.isfinite(img).all(axis=2) & np.isfinite(Z) & np.isfinite(sigma) & (sigma <= self.sp.max_sigma_m)
-        self.frames[kf] = {"viewmat": f(np.linalg.inv(T_A_C)), "K": f(K), "w": w, "h": h, "sid": sm.sid,
+        self.frames[(sm.sid, kf)] = {"viewmat": f(np.linalg.inv(T_A_C)), "K": f(K), "w": w, "h": h, "sid": sm.sid,
                            "img": f(np.nan_to_num(img)), "Z": f(np.nan_to_num(Z)), "S": f(np.nan_to_num(sigma, nan=1.0)),
                            "mask": torch.as_tensor(valid, device=self.dev)}
         alpha = None
@@ -242,7 +245,7 @@ class LiveTrainer:
         torch = self.torch
         if not len(st):
             return None
-        fr = self.frames[kf]
+        fr = self.frames[(st.sid, kf)]
         img, _, _ = self._render(st, kf, grad=False)
         m = fr["mask"][..., None].float()
         mse = float((((img[..., : self.channels].clamp(0, 1) - fr["img"]) ** 2) * m).sum() / (m.sum() * self.channels))
@@ -273,7 +276,7 @@ class LiveTrainer:
     def _step(self, st: _SubmapState, kf: int) -> tuple[float, dict]:
         torch = self.torch
         t0 = time.perf_counter()
-        fr = self.frames[kf]
+        fr = self.frames[(st.sid, kf)]
         img, _, _ = self._render(st, kf, grad=True)
         rgb, depth = img[..., : self.channels], img[..., self.channels:]
         use_exp = st.steps >= self.p.exposure_after_steps
@@ -315,7 +318,7 @@ class LiveTrainer:
         torch = self.torch
         if not len(st):
             return 0
-        fr = self.frames[kf]
+        fr = self.frames[(st.sid, kf)]
         with torch.no_grad():
             V = fr["viewmat"]
             X = st.params["means"] @ V[:3, :3].T + V[:3, 3]

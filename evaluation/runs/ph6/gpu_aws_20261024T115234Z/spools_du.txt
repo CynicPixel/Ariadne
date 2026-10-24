@@ -1,0 +1,3 @@
+268M	/opt/in/data/spools/agent0
+232M	/opt/in/data/spools/agent1
+203M	/opt/in/data/spools/agent2
