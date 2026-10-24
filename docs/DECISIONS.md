@@ -5088,3 +5088,49 @@ OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/perf/pip
 - (b) `cv::remap` with `CV_16SC2` maps is NOT taken. It changes pixels by ≤ 1 LSB, and every banked result consumed
   the current operator (the record/replay invariant). Revisit only if (a) + (a2) miss RTF 1, as a pre-registered D41
   amendment.
+
+## 2026-10-24 — D233: Phase 3.6 local-feature wire codings — pre-registered adoption rule (before any run)
+
+**Context.** M delegated 3.6 to A2 (2026-10-24). The MATCH_RESPONSE dominates the collaboration bytes: today's
+int8 / K1024 / float XYZ is ~136 kB per keyframe (3.2 sweep). M's survey (`collab_fast_survey.md` §1-2) finds no
+published test of the stock LightGlue-ALIKED weights on quantised or PCA'd inputs [UNVERIFIED], so this is measured
+on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/design/BYTES_3.6.md` (advisor-reviewed).
+
+**Method (fixed here).**
+- Inputs: the 120 real verify pairs of run `0345a5` (`pairs.py`: per scene 30 verified + 6 per rejection reason),
+  from the pass-A stores, which are production's exact features. ALIKED never runs.
+- Settings: 6 descriptor codings (fp32, int8 today, int4 uniform step 0.3352σ [Max 1960 via SECONDARY], bin1 sign,
+  PCA-64/32 with cv::PCA fitted on scene 1's stores only and an int8 per-component scale) × 4 geometry codings (xyz
+  today, z32, disparity u16 at 1/16 px, + u16 keypoints at 1/32 px), at K 1024.
+- K 512 cannot come from the stores: no scores are stored, and cv::ALIKED emits unsorted (order check: 515
+  inversions). It is judged by the same bars on job 70's knobs rows.
+- Bytes: `WireCodec(kFragmented).EncodeFeatureResponse` records (payload, zstd, +34 B per 1,466 B fragment).
+  Codings without a schema field are packed into the descriptors vector ([PROXY], ±16 B/KF).
+- Tool: `ariadne_perf_bench bytes`. Verdicts: `evaluation/runs/ph3/bytes_3.6_20261024/scripts/analyze.py`, which
+  is mechanical.
+
+**Rule.** Reference R = int8 / K1024 / xyz, run in the same process.
+- Controls:
+  - R re-verified at 4 other RANSAC seeds;
+  - fp32.
+- Precondition: R reproduces the production verdict on all 120 pairs. If it doesn't, the platform difference is
+  reported and flips stay measured against the in-run R.
+- A codec flip is an accept↔reject change vs R on a pair whose verdict is stable across R's 5 seeds.
+- Per coding (its own row, the other factor at today's value), on each scene (scene 0 is the held-out claim for PCA):
+  1. 0 codec flips in either direction;
+  2. median pnp_inliers(S)/pnp_inliers(R) over R-accepted pairs ≥ 0.90 (ProxyInformation σ ∝ √(30/n): ≤ 5.4 %
+     wider);
+  3. wire bytes/KF ≥ 15 kB below R (≥ 1 s of airtime at 15 kB/s).
+- **Adopted** only if bars 1, 2 and 3 all hold. **M decides** if bars 2 and 3 hold with 0 reject→accept and
+  ≤ 1 accept→reject codec flip per scene. Otherwise **not adopted**.
+- Pose error (D63 pose_err, GT t/r) is reported. It is flagged to M if S's median exceeds the largest median of R's
+  5 seeds.
+- If fp32 itself fails bar 1 or bar 2, nothing is adopted without M.
+- The combination row must itself clear bars 1-3. It reports the absolute bytes/KF next to the reduction, and
+  predicted vs measured wire bytes: the zstd ratio is calibrated on scene 1 and predicts scene 0, and today's
+  layout-blind predictor is shown alongside (I6, ≤ 15 %).
+- Reach: 0 flips bounds the stratified flip rate at ≤ 10 % per scene and direction, ≤ 5 % over both (95 %, rule of
+  three). It is a screen.
+
+**Approved:** M, 2026-10-24, as written, plus the two reporting additions (absolute bytes; predicted vs measured).
+Runs on test-compute's Kaggle CPU harness (4 vCPU AVX2; the platform difference is covered by the in-run R).

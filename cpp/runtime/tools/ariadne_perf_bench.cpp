@@ -34,8 +34,25 @@
 //   reason, ms_match_verify. DIR/variants.csv: a graph variant at the reference size (e.g. 1280x720l2) vs the
 //   reference per keyframe (keypoints/scores bitwise, descriptor max diff). DIR/fidelity.csv (with --stores): per keyframe, the 1280x720 K=1024 features recomputed
 //   here vs the store's: count, matched within 1e-3 px, max px distance.
+//
+// BYTES (Phase 3.6, docs/design/BYTES_3.6.md, pre-registered rule D233): local-feature wire codings on the real verify
+// pairs, from the pass-A stores (production's exact features; ALIKED never runs):
+//   ariadne_perf_bench bytes --stores-root DIR --pairs-dir DIR --collab-config YAML --seed S --aliked 1280x720=ONNX
+//       --lightglue ONNX [--pca-fit-scene 1] [--reseeds 4] --out DIR
+//   --stores-root: s<scene>/seed1/store_agent<a>.bin (scenes 0, 1). --pairs-dir: pairs_s<scene>.csv (pairs.py).
+//   Settings = descriptor coding {fp32, int8 (today), int4, bin1, pca64, pca32} at K 1024 (the store has no scores and
+//   ORDER fails: K 512 is KNOBS' row) x geometry {xyz (today), z32, disp16, kp16}. Both endpoints take the round trip (as
+//   the fleet: the verifier decodes its own response too), then LightGlue -> VerifyMatched (per-pair seed) -> D71 gate,
+//   as KNOBS. int8/1024/xyz is also re-verified at seed + 1..reseeds (the RANSAC envelope, D233's control). PCA:
+//   cv::PCA on every descriptor of --pca-fit-scene's stores. DIR/bytes_kf.csv: per keyframe and setting, the
+//   WireCodec(kFragmented) record (payload, transmitted after zstd, wire). DIR/pairs.csv: per pair, setting and seed
+//   offset, matches / inliers / reason and the GT errors (CollabFleet::LogEdge's, D63 pose_err_deg). DIR/geometry.csv:
+//   the geometry codings' decode error. DIR/pca.yaml + pca_basis.bin: the fit.
+// ORDER: ariadne_perf_bench order --aliked WxH=ONNX --lightglue ONNX --img PNG: is cv::ALIKED's emitted order
+//   score-descending (exit 0) or not (exit 5)?
 // ---------------------------------------------------------------------------
 #include "collaboration/broker/edge_verifier.hpp"
+#include "collaboration/candidate_selection/response_cost.hpp"
 #include "collaboration/retrieval/local_descriptor_codec.hpp"
 #include "perception/association/hard_pair_matcher.hpp"
 #include "perception/place/place_recognizer.hpp"
@@ -61,6 +78,8 @@
 #include <map>
 #include <memory>
 #include <numeric>
+#include <set>
+#include <tuple>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -665,16 +684,367 @@ int Knobs(std::map<std::string, std::vector<std::string>>& a) {
     return 0;
 }
 
+// ---------------------------------------------------------------- bytes (3.6, docs/design/BYTES_3.6.md, D233)
+
+// The candidate wire codings. The codecs live here, in the measurement tool: one moves into
+// collaboration/retrieval/local_descriptor_codec.hpp only if D233 adopts it.
+enum class Desc { kFp32, kInt8, kInt4, kBin1, kPca64, kPca32 };
+enum class Geo { kXyz, kZ32, kDisp16, kKp16 };
+const char* Name(Desc d) {
+    static const char* n[] = {"fp32", "int8", "int4", "bin1", "pca64", "pca32"};
+    return n[int(d)];
+}
+const char* Name(Geo g) {
+    static const char* n[] = {"xyz", "z32", "disp16", "kp16"};
+    return n[int(g)];
+}
+constexpr float kInt4Step = 0.3352f / 11.313708498984761f;   // Max 1960 N=16 step for a unit Gaussian x sigma 1/sqrt(128)
+
+/// PCA of 128-D ALIKED descriptors, fitted on one scene's stores (cv::PCA, rows = samples). Components are rows of W
+/// in descending variance, so PCA-32 is the first 32 rows of the same fit; s[j] = max |y_j| over the fit set: the
+/// per-component int8 scale, model state stored with the basis (never on the wire).
+struct Pca {
+    cv::Mat mean, W;           // 1x128, 64x128 (CV_32F)
+    std::vector<float> s;      // 64
+    std::vector<double> eig;   // all 128 eigenvalues (explained variance)
+    size_t rows = 0;
+};
+
+Pca FitPca(const std::vector<const runtime::CollabStoreRecord*>& recs) {
+    size_t n = 0;
+    for (const auto* r : recs) n += r->descriptors.size() / 128;
+    cv::Mat X(int(n), 128, CV_32F);
+    size_t i = 0;
+    for (const auto* r : recs)
+        for (size_t k = 0; k + 128 <= r->descriptors.size(); k += 128, ++i)
+            std::memcpy(X.ptr<float>(int(i)), &r->descriptors[k], 128 * 4);
+    const cv::PCA pca(X, cv::noArray(), cv::PCA::DATA_AS_ROW, 128);
+    Pca p;
+    p.rows = n;
+    p.mean = pca.mean.clone();
+    p.W = pca.eigenvectors.rowRange(0, 64).clone();
+    for (int j = 0; j < pca.eigenvalues.rows; ++j) p.eig.push_back(double(pca.eigenvalues.at<float>(j)));
+    cv::Mat Y = (X - cv::repeat(p.mean, X.rows, 1)) * p.W.t();
+    p.s.assign(64, 0.0f);
+    for (int r = 0; r < Y.rows; ++r)
+        for (int j = 0; j < 64; ++j) p.s[size_t(j)] = std::max(p.s[size_t(j)], std::abs(Y.at<float>(r, j)));
+    return p;
+}
+
+/// K x 128 row-major floats -> the coding's bytes (with its per-keyframe header, if any).
+std::vector<uint8_t> EncodeDesc(const std::vector<float>& d, Desc c, const Pca& pca) {
+    const size_t K = d.size() / 128;
+    switch (c) {
+        case Desc::kFp32: return ac::EncodeLocal(d, ac::LocalEncoding::kFp32);
+        case Desc::kInt8: return ac::EncodeLocal(d, ac::LocalEncoding::kInt8);
+        case Desc::kInt4: {
+            std::vector<uint8_t> o(K * 64, 0);
+            for (size_t i = 0; i < d.size(); ++i) {
+                const int q = std::clamp(int(std::floor(d[i] / kInt4Step)), -8, 7) + 8;
+                o[i / 2] |= uint8_t(i % 2 ? q << 4 : q);
+            }
+            return o;
+        }
+        case Desc::kBin1: {
+            std::vector<uint8_t> o(K * 16, 0);
+            for (size_t i = 0; i < d.size(); ++i)
+                if (d[i] >= 0.0f) o[i / 8] |= uint8_t(1u << (i % 8));
+            return o;
+        }
+        case Desc::kPca64:
+        case Desc::kPca32: {
+            const int m = c == Desc::kPca64 ? 64 : 32;
+            std::vector<uint8_t> o(K * size_t(m));
+            for (size_t k = 0; k < K; ++k) {
+                const cv::Mat x(1, 128, CV_32F, const_cast<float*>(&d[k * 128]));
+                const cv::Mat y = (x - pca.mean) * pca.W.rowRange(0, m).t();
+                for (int j = 0; j < m; ++j)
+                    o[k * size_t(m) + size_t(j)] = uint8_t(int8_t(
+                        std::clamp(std::lround(127.0f * y.at<float>(0, j) / pca.s[size_t(j)]), -127L, 127L)));
+            }
+            return o;
+        }
+    }
+    throw std::logic_error("EncodeDesc");
+}
+
+std::vector<float> DecodeDesc(const std::vector<uint8_t>& b, size_t K, Desc c, const Pca& pca) {
+    switch (c) {
+        case Desc::kFp32: return ac::DecodeLocal(b, ac::LocalEncoding::kFp32);
+        case Desc::kInt8: return ac::DecodeLocal(b, ac::LocalEncoding::kInt8);
+        case Desc::kInt4: {
+            std::vector<float> d(K * 128);
+            for (size_t i = 0; i < d.size(); ++i) d[i] = (float(((b[i / 2] >> (i % 2 ? 4 : 0)) & 15) - 8) + 0.5f) * kInt4Step;
+            return d;
+        }
+        case Desc::kBin1: {
+            std::vector<float> d(K * 128);
+            for (size_t i = 0; i < d.size(); ++i) d[i] = (b[i / 8] >> (i % 8) & 1 ? 1.0f : -1.0f) / 11.313708498984761f;
+            return d;
+        }
+        case Desc::kPca64:
+        case Desc::kPca32: {
+            const int m = c == Desc::kPca64 ? 64 : 32;
+            std::vector<float> d(K * 128);
+            cv::Mat y(1, m, CV_32F);
+            for (size_t k = 0; k < K; ++k) {
+                for (int j = 0; j < m; ++j)
+                    y.at<float>(0, j) = pca.s[size_t(j)] * float(int8_t(b[k * size_t(m) + size_t(j)])) / 127.0f;
+                cv::Mat x = pca.mean + y * pca.W.rowRange(0, m);
+                const double nx = cv::norm(x);
+                if (nx > 0) x /= nx;   // back onto the unit sphere ALIKED's rows live on
+                std::memcpy(&d[k * 128], x.ptr<float>(), 128 * 4);
+            }
+            return d;
+        }
+    }
+    throw std::logic_error("DecodeDesc");
+}
+
+/// A keyframe's features as the verifier sees them after a setting's round trip, plus that setting's wire message.
+struct Coded {
+    perception::HardPairFeatures hard;   // decoded keypoints + descriptors (LightGlue's input)
+    core::FeatureResponseValue resp;     // decoded keypoints / points3d / camera (VerifyMatched's B side)
+    core::ByteRecord rec;                // the encoded message's accounting (WireCodec, fragmented)
+    double max_dz = 0, max_dx = 0, max_du = 0;   // decode error of the geometry against the store
+    uint16_t feature_bytes = 0;
+};
+
+Coded Code(const runtime::CollabStoreRecord& r, int K, Desc dc, Geo g, const Pca& pca, const core::WireCodec& codec) {
+    const size_t n = std::min(size_t(K), r.keypoints.size() / 2);
+    const float fx = r.camera[0], fy = r.camera[1], cx = r.camera[2], cy = r.camera[3], b = r.camera[4];
+    const std::vector<float> d(r.descriptors.begin(), r.descriptors.begin() + long(n * 128));
+    const std::vector<uint8_t> db = EncodeDesc(d, dc, pca);
+    std::vector<uint8_t> disp, kp16;
+    Coded o;
+    o.resp.camera.assign(r.camera.begin(), r.camera.end());
+    for (size_t i = 0; i < n; ++i) {
+        float u = r.keypoints[2 * i], v = r.keypoints[2 * i + 1];
+        if (g == Geo::kKp16) {
+            const uint16_t qu = uint16_t(std::clamp(std::lround(32.0f * (u + 0.5f)), 0L, 65535L));
+            const uint16_t qv = uint16_t(std::clamp(std::lround(32.0f * (v + 0.5f)), 0L, 65535L));
+            kp16.insert(kp16.end(), {uint8_t(qu), uint8_t(qu >> 8), uint8_t(qv), uint8_t(qv >> 8)});
+            const float du = float(qu) / 32.0f - 0.5f, dv = float(qv) / 32.0f - 0.5f;
+            o.max_du = std::max({o.max_du, double(std::abs(du - u)), double(std::abs(dv - v))});
+            u = du, v = dv;
+        }
+        o.resp.keypoints.push_back(u), o.resp.keypoints.push_back(v);
+        const float* p = &r.points3d[3 * i];
+        float z = p[2];
+        const bool ok = std::isfinite(p[0]) && std::isfinite(z) && z > 0.0f;
+        if (g == Geo::kDisp16 || g == Geo::kKp16) {
+            const uint16_t q = ok ? uint16_t(std::clamp(std::lround(16.0 * double(fx) * double(b) / double(z)), 1L, 65535L)) : 0;
+            disp.push_back(uint8_t(q)), disp.push_back(uint8_t(q >> 8));
+            z = q ? float(16.0 * double(fx) * double(b) / double(q)) : NAN;
+        }
+        if (g == Geo::kXyz) {
+            o.resp.points3d.insert(o.resp.points3d.end(), p, p + 3);
+        } else if (!ok) {
+            o.resp.points3d.insert(o.resp.points3d.end(), {NAN, NAN, NAN});
+        } else {   // CollabFeatureExtractor::ExtractLocal's formula on the decoded pixel and depth
+            const float x = float((double(u) - double(cx)) / double(fx) * z), y = float((double(v) - double(cy)) / double(fy) * z);
+            o.resp.points3d.insert(o.resp.points3d.end(), {x, y, z});
+            o.max_dz = std::max(o.max_dz, double(std::abs(z - p[2])));
+            o.max_dx = std::max({o.max_dx, double(std::abs(x - p[0])), double(std::abs(y - p[1]))});
+        }
+    }
+    o.hard.size = cv::Size(1280, 720);
+    for (size_t i = 0; i < n; ++i) o.hard.keypoints.emplace_back(o.resp.keypoints[2 * i], o.resp.keypoints[2 * i + 1], 1.0f);
+    const std::vector<float> dd = DecodeDesc(db, n, dc, pca);
+    cv::Mat(int(n), 128, CV_32F, const_cast<float*>(dd.data())).copyTo(o.hard.descriptors);
+
+    // The wire message. Codings the current wire.fbs has no field for ride in the descriptors byte vector ([PROXY],
+    // design §4): z32 in points3d (one float per feature), disparity and u16 keypoints appended after the descriptors.
+    core::FeatureResponseValue w;
+    w.request_id = ~0ull, w.keyframe_id = ~0ull;   // as FetchCostPredictor::Predict: no zero-omitted fields
+    w.camera = o.resp.camera;
+    w.descriptors = db;
+    w.header_bytes = dc == Desc::kInt8 ? 4 : 0;
+    const size_t per = n ? (db.size() - w.header_bytes) / n : 0;
+    w.feature_bytes = uint16_t(per + (g == Geo::kDisp16 ? 2 : g == Geo::kKp16 ? 6 : 0));
+    if (g != Geo::kKp16) w.keypoints.assign(r.keypoints.begin(), r.keypoints.begin() + long(2 * n));
+    if (g == Geo::kXyz) w.points3d.assign(r.points3d.begin(), r.points3d.begin() + long(3 * n));
+    if (g == Geo::kZ32)
+        for (size_t i = 0; i < n; ++i) w.points3d.push_back(r.points3d[3 * i + 2]);
+    w.descriptors.insert(w.descriptors.end(), disp.begin(), disp.end());
+    w.descriptors.insert(w.descriptors.end(), kp16.begin(), kp16.end());
+    o.feature_bytes = w.feature_bytes;
+    o.rec = codec.EncodeFeatureResponse(w, 1, 1, core::Timestamp{1'000'000'000}, (1ull << 40) | 1ull).record;
+    return o;
+}
+
+/// VerifyMatched (per-pair seed + offset) + the D71 gate on already-decoded features; GT error when it verifies.
+struct Verdict {
+    ac::VerifyResult v;
+    double et = NAN, er = NAN, pe = NAN;
+};
+Verdict VerifyCoded(const runtime::CollabConfig& cfg, uint64_t vseed, const Coded& A, const Coded& B,
+                    const std::vector<cv::DMatch>& m, const runtime::CollabStoreRecord& ra,
+                    const runtime::CollabStoreRecord& rb) {
+    Verdict o;
+    std::vector<cv::Point2f> pa, pb;
+    std::vector<int> ib;
+    for (const auto& d : m) {
+        pa.push_back(A.hard.keypoints[size_t(d.queryIdx)].pt);
+        pb.push_back(B.hard.keypoints[size_t(d.trainIdx)].pt);
+        ib.push_back(d.trainIdx);
+    }
+    o.v = ac::VerifyMatched(pa, pb, ib, B.resp, cfg.verify, vseed);
+    if (o.v.ok) {
+        slam::LoopGeometry geo;
+        geo.rig.cam = {B.resp.camera[0], B.resp.camera[1], B.resp.camera[2], B.resp.camera[3]};
+        geo.rig.baseline = B.resp.camera[4];
+        for (const auto& q : o.v.inlier_points_B) geo.X_B.push_back(core::Vec3(q.x, q.y, q.z));
+        for (const auto& q : o.v.inlier_pixels_A) geo.uv_A.push_back(core::Vec2(q.x, q.y));
+        geo.T_A_B = o.v.T_A_B;
+        if (!slam::GatedInterAgentEdge(0, 1, geo, cfg.gate)) o.v.ok = false, o.v.reason = "degenerate";
+    }
+    if (o.v.ok && ra.has_gt && rb.has_gt) {   // CollabFleet::LogEdge's errors (D63 pose_err_deg)
+        const core::SE3 g = (ra.gt_T_W_B * ra.T_B_C).inverse() * (rb.gt_T_W_B * rb.T_B_C), dl = g.inverse() * o.v.T_A_B;
+        o.et = dl.t.norm();
+        o.er = std::acos(std::clamp((dl.R.trace() - 1.0) / 2.0, -1.0, 1.0)) * 180.0 / M_PI;
+        o.pe = o.er;
+        if (g.t.norm() >= 0.1 && o.v.T_A_B.t.norm() > 1e-9)
+            o.pe = std::max(o.pe, std::acos(std::clamp(g.t.normalized().dot(o.v.T_A_B.t.normalized()), -1.0, 1.0)) *
+                                      180.0 / M_PI);
+    }
+    return o;
+}
+
+/// BYTES: every (descriptor coding x K x geometry coding) on the real verify pairs, from the pass-A stores.
+int Bytes(std::map<std::string, std::vector<std::string>>& a) {
+    const fs::path root = a["--stores-root"].back(), pdir = a["--pairs-dir"].back(), out = a["--out"].back();
+    fs::create_directories(out);
+    const runtime::CollabConfig cfg = runtime::LoadCollabConfig(a["--collab-config"].back());
+    const uint64_t seed = std::stoull(a["--seed"].back());
+    const int fit_scene = std::stoi(a["--pca-fit-scene"].back()), reseeds = std::stoi(a["--reseeds"].back());
+    perception::HardPairParams hp;   // LightGlue only; the matcher also loads the 1280x720 ALIKED (never run here)
+    hp.aliked_onnx = Spec(a["--aliked"].back()).second, hp.lightglue_onnx = a["--lightglue"].back();
+    hp.width = 1280, hp.height = 720;
+    const perception::HardPairMatcher lg(hp);
+    const core::WireCodec codec(core::Framing::kFragmented);
+    const ac::FetchCostPredictor predictor(codec, {});   // today's predictor, uncalibrated (ratio 1: an upper bound)
+
+    std::map<int, std::map<int, runtime::CollabStore>> stores;   // scene -> agent -> store
+    std::map<std::tuple<int, int, uint64_t>, const runtime::CollabStoreRecord*> rec;
+    for (int sc : {0, 1})
+        for (int ag : {0, 1}) {
+            auto& st = stores[sc][ag] = runtime::ReadCollabStore(
+                (root / ("s" + std::to_string(sc)) / "seed1" / ("store_agent" + std::to_string(ag) + ".bin")).string());
+            for (const auto& r : st.records) rec[{sc, ag, r.id}] = &r;
+        }
+    std::vector<const runtime::CollabStoreRecord*> fit;
+    for (const auto& [ag, st] : stores[fit_scene])
+        for (const auto& r : st.records) fit.push_back(&r);
+    const Pca pca = FitPca(fit);
+    {
+        double tot = 0, c32 = 0, c64 = 0;
+        for (size_t j = 0; j < pca.eig.size(); ++j) tot += pca.eig[j], c32 += j < 32 ? pca.eig[j] : 0, c64 += j < 64 ? pca.eig[j] : 0;
+        std::ofstream y(out / "pca.yaml");
+        y << "fit_scene: " << fit_scene << "\nfit_keyframes: " << fit.size() << "\nfit_rows: " << pca.rows
+          << "\nexplained_32: " << c32 / tot << "\nexplained_64: " << c64 / tot << "\nbasis: pca_basis.bin  # float32: mean[128], W[64][128], s[64]\n";
+        std::ofstream f(out / "pca_basis.bin", std::ios::binary);
+        f.write(reinterpret_cast<const char*>(pca.mean.ptr<float>()), 128 * 4);
+        for (int r = 0; r < 64; ++r) f.write(reinterpret_cast<const char*>(pca.W.ptr<float>(r)), 128 * 4);
+        f.write(reinterpret_cast<const char*>(pca.s.data()), 64 * 4);
+    }
+
+    const std::vector<Desc> descs = {Desc::kFp32, Desc::kInt8, Desc::kInt4, Desc::kBin1, Desc::kPca64, Desc::kPca32};
+    const std::vector<Geo> geos = {Geo::kXyz, Geo::kZ32, Geo::kDisp16, Geo::kKp16};
+    // K = 1024 only: the store keeps no scores and cv::ALIKED emits its 1024 keypoints unsorted (ORDER, 2026-10-24:
+    // 515 inversions), so the first 512 are not the top 512. K 512 is KNOBS' 1280x720:512 row (re-extracted, scored).
+    const std::vector<int> ks = {1024};
+    std::ofstream bk(out / "bytes_kf.csv"), pc(out / "pairs.csv"), gc(out / "geometry.csv");
+    bk << "scene,agent,kf,desc,k,geo,n,feature_bytes,payload_bytes,transmitted_bytes,wire_bytes,compressed,"
+          "predicted_today_wire\n";
+    gc << "scene,agent,kf,k,geo,max_dz_m,max_dxy_m,max_duv_px\n";
+    pc << "scene,agent_a,kf_a,agent_b,kf_b,prod_matches,prod_pnp_inliers,prod_reason,desc,k,geo,seed_offset,matches,"
+          "essential_inliers,pnp_inliers,reason,gt_err_t_m,gt_err_r_deg,pose_err_deg\n";
+    std::set<std::tuple<int, int, uint64_t, int, int, int>> logged;   // (scene, agent, kf, desc, k, geo) bytes rows
+    int npairs = 0;
+    for (int sc : {0, 1}) {
+        std::ifstream f(pdir / ("pairs_s" + std::to_string(sc) + ".csv"));
+        std::string line;
+        std::getline(f, line);
+        while (std::getline(f, line)) {
+            const auto c = Split(line, ',');   // agent_a,kf_a,agent_b,kf_b,prod_matches,prod_ess,prod_pnp,prod_reason,...
+            const int aa = std::stoi(c[0]), ab = std::stoi(c[2]);
+            const uint64_t ka = std::stoull(c[1]), kb = std::stoull(c[3]);
+            const auto ia = rec.find({sc, aa, ka}), ib = rec.find({sc, ab, kb});
+            if (ia == rec.end() || ib == rec.end()) throw std::runtime_error("bytes: pair keyframe not in the store");
+            const auto& ra = *ia->second;
+            const auto& rb = *ib->second;
+            const uint64_t vseed = seed * 1000003ull + uint64_t(aa) * 104729ull + ka * 7919ull + uint64_t(ab) * 31ull + kb;
+            for (Desc dc : descs)
+                for (int K : ks) {
+                    std::map<bool, std::vector<cv::DMatch>> mt;   // kp16 or not: the keypoints LightGlue sees
+                    for (Geo g : geos) {
+                        const Coded A = Code(ra, K, dc, g, pca, codec), B = Code(rb, K, dc, g, pca, codec);
+                        for (const auto& [ag, kf, X] : {std::tuple{aa, ka, &A}, std::tuple{ab, kb, &B}}) {
+                            if (!logged.insert({sc, ag, kf, int(dc), K, int(g)}).second) continue;
+                            bk << sc << ',' << ag << ',' << kf << ',' << Name(dc) << ',' << K << ',' << Name(g) << ','
+                               << X->hard.keypoints.size() << ',' << X->feature_bytes << ',' << X->rec.payload_bytes << ','
+                               << X->rec.transmitted_bytes << ',' << X->rec.wire_bytes << ',' << int(X->rec.compressed) << ','
+                               << predictor.Predict(uint32_t(X->hard.keypoints.size()), X->feature_bytes).response << '\n';
+                            if (dc == Desc::kInt8)
+                                gc << sc << ',' << ag << ',' << kf << ',' << K << ',' << Name(g) << ',' << X->max_dz << ','
+                                   << X->max_dx << ',' << X->max_du << '\n';
+                        }
+                        const bool q = g == Geo::kKp16;
+                        if (!mt.count(q)) {
+                            mt[q] = A.hard.keypoints.size() < 8 || B.hard.keypoints.size() < 8
+                                        ? std::vector<cv::DMatch>{} : lg.Match(A.hard, B.hard);
+                        }
+                        const int nseed = dc == Desc::kInt8 && K == 1024 && g == Geo::kXyz ? 1 + reseeds : 1;
+                        for (int s = 0; s < nseed; ++s) {
+                            Verdict v;
+                            if (A.hard.keypoints.size() < 8 || B.hard.keypoints.size() < 8) v.v.reason = "too_few_features";
+                            else v = VerifyCoded(cfg, vseed + uint64_t(s), A, B, mt[q], ra, rb);
+                            pc << sc << ',' << aa << ',' << ka << ',' << ab << ',' << kb << ',' << c[4] << ',' << c[6] << ','
+                               << c[7] << ',' << Name(dc) << ',' << K << ',' << Name(g) << ',' << s << ',' << v.v.matches
+                               << ',' << v.v.essential_inliers << ',' << v.v.pnp_inliers << ',' << v.v.reason << ','
+                               << v.et << ',' << v.er << ',' << v.pe << '\n';
+                        }
+                    }
+                }
+            pc.flush(), bk.flush();
+            ++npairs;
+        }
+    }
+    std::printf("bytes: %d pairs x %zu settings (+%d reseeds of int8/1024/xyz), PCA fit on scene %d (%zu rows), threads %d\n",
+                npairs, descs.size() * ks.size() * geos.size(), reseeds, fit_scene, pca.rows, cv::getNumThreads());
+    return 0;
+}
+
+/// ORDER: is cv::ALIKED's emitted keypoint order score-descending? (The store keeps no scores, so K = 512 = the
+/// first 512 emitted is the top 512 by score only if so; a property of the implementation, checked on one image.)
+int Order(std::map<std::string, std::vector<std::string>>& a) {
+    const auto [size, onnx] = Spec(a["--aliked"].back());
+    const auto [w, h] = ParseSize(size);
+    perception::HardPairParams p;
+    p.aliked_onnx = onnx, p.lightglue_onnx = a["--lightglue"].back(), p.width = w, p.height = h;
+    const perception::HardPairMatcher m(p);
+    const perception::HardPairFeatures f = m.ExtractRgb(ReadRgb(a["--img"].back()));
+    size_t inversions = 0;
+    for (size_t i = 1; i < f.keypoints.size(); ++i) inversions += f.keypoints[i].response > f.keypoints[i - 1].response;
+    std::printf("order: %zu keypoints, %zu inversions (score increases), first %.6f last %.6f -> %s\n", f.keypoints.size(),
+                inversions, f.keypoints.empty() ? 0.0 : double(f.keypoints.front().response),
+                f.keypoints.empty() ? 0.0 : double(f.keypoints.back().response),
+                inversions == 0 ? "score-descending" : "NOT score-descending");
+    return inversions == 0 ? 0 : 5;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "usage: %s timing|knobs ... (see the header of ariadne_perf_bench.cpp)\n", argv[0]);
+        std::fprintf(stderr, "usage: %s timing|knobs|gate|bytes|order ... (see the header of ariadne_perf_bench.cpp)\n", argv[0]);
         return 2;
     }
     const std::string mode = argv[1];
     std::map<std::string, std::vector<std::string>> a{
-        {"--reps", {"20"}}, {"--warmup", {"3"}}, {"--ks", {"1024,512,256"}}, {"--label", {"run"}}};
+        {"--reps", {"20"}}, {"--warmup", {"3"}}, {"--ks", {"1024,512,256"}}, {"--label", {"run"}},
+        {"--pca-fit-scene", {"1"}}, {"--reseeds", {"4"}}};
     for (int i = 2; i + 1 < argc; i += 2) {
         auto& v = a[argv[i]];
         if (std::string(argv[i]) == "--aliked" || std::string(argv[i]) == "--place") v.push_back(argv[i + 1]);
@@ -697,7 +1067,18 @@ int main(int argc, char** argv) {
                 if (!a.count(k)) throw std::invalid_argument(std::string("knobs needs ") + k);
             return Knobs(a);
         }
-        throw std::invalid_argument("mode timing|knobs|gate");
+        if (mode == "bytes") {
+            for (const char* k : {"--stores-root", "--pairs-dir", "--collab-config", "--seed", "--aliked", "--lightglue",
+                                  "--out"})
+                if (!a.count(k)) throw std::invalid_argument(std::string("bytes needs ") + k);
+            return Bytes(a);
+        }
+        if (mode == "order") {
+            for (const char* k : {"--aliked", "--lightglue", "--img"})
+                if (!a.count(k)) throw std::invalid_argument(std::string("order needs ") + k);
+            return Order(a);
+        }
+        throw std::invalid_argument("mode timing|knobs|gate|bytes|order");
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_perf_bench: %s\n", e.what());
         return 1;

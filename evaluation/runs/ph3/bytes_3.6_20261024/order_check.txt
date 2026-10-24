@@ -1,0 +1,6 @@
+# ariadne_perf_bench order (2026-10-24, local workstation, ariadne/core-dev:dev, OPENCV_FOR_THREADS_NUM=2, commit of
+# this directory's first commit): is cv::ALIKED's emitted keypoint order score-descending?
+# cmd: ariadne_perf_bench order --aliked 1280x720=.cache/models/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx
+#        --lightglue .cache/models/aliked_lg_sim_ref/lightglue_aliked.onnx --img .cache/models/aliked_lg_sim_ref/input_sim_a0_f200.png
+order: 1024 keypoints, 515 inversions (score increases), first 0.962985 last 0.676344 -> NOT score-descending
+# => the stores' first 512 are not the top 512 by score; K 512 is not measurable from the stores (D233).
