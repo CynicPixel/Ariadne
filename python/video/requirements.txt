@@ -1,0 +1,2 @@
+# Demo video (Manim Community Edition). System deps: libcairo2-dev libpango1.0-dev ffmpeg (pycairo builds from source on Linux).
+manim==0.22.0
