@@ -1,0 +1,115 @@
+# Ariadne evaluation report (design HARNESS_1.9). Generated.
+chain:
+  collab_run: aadffb8df5790ca0-20261023T213945Z
+  recon_run: aadffb8df5790ca0-20261023T213945Z
+  mission_run: aadffb8df5790ca0-20261023T215358Z
+  scene: aadffb8df5790ca0
+metrics:
+  ate_rmse_m: 0.014420441480787539
+  ate_rotation_rmse_rad: 0.006109929400507523
+  rpe_translation_rmse_m: 0.0008666684807788847
+  rpe_rotation_rmse_rad: 0.000347985136226717
+  inter_agent_rpe_m: 0.01636338646590533
+  closure_precision: 1.0
+  false_closure_rate: 0.0
+  chamfer_m: 0.12665014715842288
+  completeness: 0.6579985546759518
+  coverage: 0.9330198589365214
+  heldout_psnr_db: 18.305148661756185
+  heldout_ssim: 0.7348870616347045
+  heldout_lpips: 0.6669893989691863
+  bytes_total: 1272765.0
+  bytes_per_keyframe: 2229.0105078809106
+  bytes_per_verified_loop: 66987.63157894737
+  bytes_per_map_area_m2: 26222.302343548803
+  descriptor_bytes: 293630.0
+  local_feature_bytes: 975200.0
+  pose_graph_bytes: 3935.0
+  time_to_first_usable_map_s: 145.0
+  time_to_first_valid_egress_s: 145.0
+  route_validity: 1.0
+  route_confidence: 1.0
+  route_confidence_calibration: 0.0
+  distance_travelled_m: 42.55711876152701
+  energy_proxy: 52.187141754833306
+definitions:
+  ate_rmse_m: merged two-agent trajectory, one SE(3) Umeyama alignment, position RMSE
+    (evo APE)
+  ate_rotation_rmse_rad: same alignment; RMSE of angle(R_gt^T R_align R_est)
+  rpe_translation_rmse_m: pose pairs 1 s apart (20 frames, all pairs), per agent,
+    pooled; RMSE of |t_E|
+  rpe_rotation_rmse_rad: same pairs; RMSE of angle(R_E)
+  inter_agent_rpe_m: RMSE of the translation error of the exchanged verified inter-agent
+    edges vs GT
+  closure_precision: correct / accepted over every pair the verifier accepted (exchange
+    + negative probe)
+  false_closure_rate: 'incorrect / exchanged edges: wrong closures that reached the
+    map'
+  chamfer_m: 'fused cloud vs GT mesh samples: mean of accuracy and GT-to-cloud distance'
+  completeness: fraction of GT mesh samples within 5 cm of the fused cloud
+  coverage: GT-free cells the merged mission map observed free
+  heldout_psnr_db: 39 held-out views rendered from the UNTRAINED Gaussian initialization
+  heldout_ssim: same views; SSIM (Wang et al. 2004)
+  heldout_lpips: same views; LPIPS AlexNet (Zhang et al. 2018), computed on the remote
+    GPU
+  bytes_total: every inter-agent message, wire bytes at the serializer (ByteLedger)
+  bytes_per_keyframe: total / keyframes of both agents
+  bytes_per_verified_loop: total / verified exchanged edges
+  bytes_per_map_area_m2: total / observed-free area of the merged mission map
+  descriptor_bytes: GLOBAL_DESCRIPTOR class
+  local_feature_bytes: MATCH_REQUEST + MATCH_RESPONSE classes
+  pose_graph_bytes: POSE_EDGE + POSE_GRAPH classes
+  time_to_first_usable_map_s: '[ASSUMPTION] first replan with any target-to-exit route
+    at rho_agent'
+  time_to_first_valid_egress_s: first replan with an all-observed-free route at rho_responder
+    (0.40 m)
+  route_validity: 'final egress route: fraction of cells in GT traversability at rho_responder'
+  route_confidence: 'final egress route: 5th percentile of per-cell support [PROXY]'
+  route_confidence_calibration: '[PROXY] Brier score of support vs GT validity over
+    this run''s replans; not a calibration estimate'
+  distance_travelled_m: GT path length of both agents
+  energy_proxy: '[PROXY] GT path length + 0.25 m/rad x GT yaw travel'
+notes:
+  registration:
+    exchanged_edges: 19
+    probe_pairs: 20
+    probe_accepted: 3
+    accepted_total: 22
+    correct_total: 22
+    false_accepts_in_probe: 0
+  route_confidence_calibration:
+    routes: 12
+    distinct_routes: 2
+    status: '[PROXY] Brier score of support_p5 vs GT validity within ONE run: not
+      a calibration estimate'
+  distance_travelled_m:
+    gt_m: 42.55711876152701
+    estimated_m: 43.0048170580787
+    definition: GT path length of both agents (the estimate beside it)
+  energy_proxy: '[PROXY] GT path length + 0.25 m/rad x GT yaw travel, until 4.3 defines
+    it'
+  ate: 'end-of-run merged estimate: agent 1''s poses placed through T_O0_O1 retroactively'
+  map_area_m2: 48.5375
+  keyframes: 571
+  mission_comparison:
+    note: 'first-valid times are replan instants: the route appeared in (t - period,
+      t]'
+    rows:
+    - agents: merged
+      first_valid_route_s: 145
+      final_exit: 1
+      final_length_m: 4.441421356
+      coverage: 0.9330198589365214
+    - agents: '0'
+      first_valid_route_s: 195
+      final_exit: 0
+      final_length_m: 11.25710678
+      coverage: 0.8947526386874093
+    - agents: '1'
+      first_valid_route_s: 55
+      final_exit: 1
+      final_length_m: 4.441421356
+      coverage: 0.4300935420939423
+gates:
+  inputs_clean: true
+  merge_transform_consistent: true

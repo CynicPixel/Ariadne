@@ -249,9 +249,18 @@ EOF
 
   # 4. Wait for the instance to terminate itself. Deadline: its own brake plus
   #    a margin, so this loop cannot outlive brake 1 by much.
-  local deadline=$(( start_epoch + (max_minutes + 8) * 60 )) state=""
+  #    A failed poll is NOT a reason to kill a healthy run (a transient AuthFailure terminated
+  #    20261023T234259Z-cpux86-4fc41e 48 min in): retry; give up only after ~10 min of consecutive failures.
+  #    The instance's own brake 1 still bounds it.
+  local deadline=$(( start_epoch + (max_minutes + 8) * 60 )) state="" poll_fail=0
   while [ "$(date +%s)" -lt "$deadline" ]; do
-    state="$(awsq ec2 describe-instances --instance-ids "$iid" --query 'Reservations[0].Instances[0].State.Name' --output text)"
+    if state="$(awsq ec2 describe-instances --instance-ids "$iid" --query 'Reservations[0].Instances[0].State.Name' --output text)"; then
+      poll_fail=0
+    else
+      poll_fail=$((poll_fail + 1))
+      log "state poll failed ($poll_fail consecutive); retrying"
+      [ "$poll_fail" -ge 30 ] && { log "state poll failing for ~10 min"; break; }
+    fi
     [ "$state" = terminated ] && break
     sleep 20
   done
