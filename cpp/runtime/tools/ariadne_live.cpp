@@ -1144,10 +1144,35 @@ int main(int argc, char** argv) {
         // the parent runs CollabLive: the fleet owns the radio nodes (customize installs the D175 mailboxes),
         // LightGlue verification runs inside Step. The estimator workers tee (#ckin/#crel/#cprog) and never touch
         // a DNN. collab: false = none of this exists (D168 digests unchanged).
+        uint64_t collab_config_digest = 0;              // the consumed collab config BYTES (collab60d lesson)
+        std::string collab_config_path_used;
         if (ma && lc.collab.enabled) {
             if (!lc.estimator_processes)
                 throw std::invalid_argument("collab: true requires estimator_processes: true (the tee lives in the worker)");
-            const auto ccfg = runtime::LoadCollabConfig(lc.collab.config);
+            // The collab config is consumed AS BYTES from the run dir, never from the repo at replay time
+            // (collab60d's 2b81c1 lesson: the repo file had drifted - the D178 gate was enabled after the
+            // recording - so the replay could never match its live run). Live: snapshot the file beside the
+            // recording. Replay: the recording's snapshot is authoritative when present (older recordings
+            // predate it and still read the configured path, recorded as such in the manifest).
+            std::string ccfg_path = lc.collab.config;
+            if (is_live) {
+                const fs::path snap = run_dir / "collab_config.yaml";
+                std::ofstream(snap, std::ios::binary) << std::ifstream(lc.collab.config, std::ios::binary).rdbuf();
+                ccfg_path = snap.string();
+            } else {
+                const fs::path snap = fs::path(replay_path).parent_path() / "collab_config.yaml";
+                if (fs::exists(snap)) ccfg_path = snap.string();
+            }
+            {
+                std::ifstream cf(ccfg_path, std::ios::binary);
+                std::ostringstream cb;
+                cb << cf.rdbuf();
+                core::Fnv1a64 ch;
+                for (const char c : cb.str()) ch.AbsorbByte(uint8_t(c));
+                collab_config_digest = ch.value();
+                collab_config_path_used = ccfg_path;
+            }
+            const auto ccfg = runtime::LoadCollabConfig(ccfg_path);
             if (ccfg.comms_scenario != lc.multiagent.scenario)
                 throw std::invalid_argument("collab config comms_scenario (" + ccfg.comms_scenario +
                                             ") != multiagent.scenario (" + lc.multiagent.scenario + "): ONE radio");
@@ -2395,7 +2420,12 @@ int main(int argc, char** argv) {
         }
         man.extra["collab"] = lc.collab.enabled ? "true" : "false";
         if (lc.collab.enabled) {
-            man.extra["collab_config"] = lc.collab.config;
+            man.extra["collab_config"] = collab_config_path_used;
+            {
+                char hx[17];
+                std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
+                man.extra["collab_config_fnv1a64"] = hx;
+            }
             man.extra["collab_feature_latency_s"] = std::to_string(lc.collab.feature_latency_s);
             man.extra["collab_worker_threads"] = std::to_string(lc.collab.worker_threads);
             man.extra["collab_parent_threads"] = std::to_string(cv::getNumThreads());
