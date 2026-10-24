@@ -5134,3 +5134,15 @@ on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/des
 
 **Approved:** M, 2026-10-24, as written, plus the two reporting additions (absolute bytes; predicted vs measured).
 Runs on test-compute's Kaggle CPU harness (4 vCPU AVX2; the platform difference is covered by the in-run R).
+
+## 2026-10-24 — D232 correction: the pool-sizing gain is −1.6 %, not −4.8 % (cold start in the first variant's wall)
+
+D232 quoted job 44b's walls from `wall_s.txt`, the container wall: 402.8 s (16), 383.4 s (5), 417.9 s (2). The 16-thread
+variant ran first and carries ~14 s of cold start. The runtime's own `results.yaml` wall_s is 389.1 s (16), 383.0 s
+(5) and 417.5 s (2). Job 45's 16-thread rerun of the same inputs gives 389.0 s. So 5 threads gain **−1.6 %**, not
+−4.8 %, over 16 threads.
+
+The conclusion is unchanged and stronger: pool sizing does not close the RTF gap. RTF is 0.514 (16) vs 0.522 (5).
+The 5-thread recommendation stands on PSI (9.4 % → 0.1 %), not on wall time. Both walls are tabulated by
+`evaluation/runs/perf/pipeline_profile_20261024/scripts/replay.py` → `processed/replay_runs.csv` (container_wall_s,
+runtime_wall_s).
