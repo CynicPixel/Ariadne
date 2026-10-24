@@ -1,0 +1,8 @@
+15 go agent [-0.16, 2.97] goal [1.15, 3.32] dist 1.36 path_m 1.49497 utility 1.4823 cluster 5526501445076449761
+20 hold agent [-0.12, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.38058 cluster 5148789966969510659
+25 hold agent [-0.11, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.36908 cluster 5148789966969510659
+30 hold agent [-0.11, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.38121 cluster 5148789966969510659
+35 hold agent [-0.11, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.36908 cluster 5148789966969510659
+40 hold agent [-0.11, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.38235 cluster 5148789966969510659
+45 hold agent [-0.11, 2.98] goal [-0.14, 2.97] dist 0.02 path_m 0 utility 1.38517 cluster 5148789966969510659
+50 go agent [-0.11, 2.98] goal [0.9, 2.92] dist 1.01 path_m 1.02071 utility 1.47412 cluster 5587083253456998578

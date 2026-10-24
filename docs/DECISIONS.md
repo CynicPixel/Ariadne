@@ -3453,7 +3453,8 @@ Full record: `docs/design/NBV_4.3.md` §15; literature `docs/design/lit/early_co
 
 **Decisions (proposed).**
 - **D117:** C_time = the duration of `PlanCommand` over the polyline `Route` will send, from the current heading.
-  This is the mover's own profile, so cost and execution cannot drift apart.
+  This is the mover's own profile, on the planner's clearance [PROXY]. Predicted against realised time is measured
+  per row.
   - §4's "time ∝ path" collapse is dropped for this rig, and the arch's separate C_motion/C_time terms return, with
     weights summing to 1 at t = 0.
   - [PAPER] Schmid 2020 Eq. 6 (execution time), FUEL Eq. 1 (time with yaw; max() there because a quadrotor yaws
@@ -3465,11 +3466,17 @@ Full record: `docs/design/NBV_4.3.md` §15; literature `docs/design/lit/early_co
 - **D120:** the trace logs each candidate's normalised IG terms, C_path, C_time and turn time.
 - **D121 (reserved):** efficiency over the local tour, Schmid's v_GN. Our linear `g − αc` was the worst form in their
   Table V. Not part of this change.
-- **D122 (reserved):** one per-voxel gain scale (Schmid Eq. 5) instead of per-term p90, which is the likeliest cause of
-  the residual ci_tiny gap against TARE. Decided on D120's log.
+- **D122 (reserved):** one per-voxel gain scale (Schmid Eq. 5) instead of per-term p90. Decided on D120's log.
+- **D125 (defect, every Phase 4 row; a prerequisite of D117):** a view at the agent's own cell runs as an in-place
+  turn, not a hold.
+  - In ci_tiny seed 2 the same at-cell view was chosen for six barriers. `Route` returned an empty path, so the
+    agent held for 30 s.
+  - That one livelock carries most of ci_tiny's 40–60 s loss: on seeds 0 and 1 Ariadne is best at 60 s
+    (0.909 / 0.900).
+- **D126 (reserved):** TARE's commitment rule plus waypoint extension. Its L has to be re-derived for this rig first.
 
 **Pre-registered ablation (§15.5).** 7 rows × 2 scenes × 3 seeds = 42 lockstep runs:
-- the four Phase 4 baselines re-run with D119;
+- the four Phase 4 baselines re-run with D119 and D125;
 - ariadne_v0, ariadne_t (D117) and ariadne_ta (D117 + D118);
 - the 1.8 row reused under a replay identity check.
 

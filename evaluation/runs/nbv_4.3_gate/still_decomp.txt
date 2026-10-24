@@ -1,0 +1,25 @@
+# python3 still_decomp.py r0_extract 60; then 200
+ci_tiny    ariadne               T<=60s  still per interval: lead 0.05s tail 0.12s mid 0.49s whole 0.76s (idle intervals 11/72) | no-go decisions 6/72 | turn-back pairs in-command 2 at-barrier 0
+ci_tiny    coverage_greedy       T<=60s  still per interval: lead 0.05s tail 0.04s mid 0.58s whole 0.41s (idle intervals 6/72) | no-go decisions 0/72 | turn-back pairs in-command 5 at-barrier 0
+ci_tiny    nearest_frontier_1.8  T<=60s  still per interval: lead 0.02s tail 0.01s mid 0.60s whole 0.41s (idle intervals 6/72) | no-go decisions 3/72 | turn-back pairs in-command 2 at-barrier 0
+ci_tiny    random                T<=60s  still per interval: lead 0.04s tail 0.02s mid 0.61s whole 0.41s (idle intervals 6/72) | no-go decisions 0/72 | turn-back pairs in-command 1 at-barrier 0
+ci_tiny    tare                  T<=60s  still per interval: lead 0.04s tail 0.03s mid 0.58s whole 0.41s (idle intervals 6/72) | no-go decisions 0/72 | turn-back pairs in-command 5 at-barrier 0
+ci_tiny    uncertainty_only      T<=60s  still per interval: lead 0.04s tail 0.01s mid 0.59s whole 0.41s (idle intervals 6/72) | no-go decisions 0/72 | turn-back pairs in-command 6 at-barrier 0
+maze_short ariadne               T<=60s  still per interval: lead 0.15s tail 0.07s mid 0.41s whole 1.52s (idle intervals 22/72) | no-go decisions 0/72 | turn-back pairs in-command 5 at-barrier 0
+maze_short coverage_greedy       T<=60s  still per interval: lead 0.12s tail 0.04s mid 0.43s whole 1.52s (idle intervals 22/72) | no-go decisions 0/72 | turn-back pairs in-command 3 at-barrier 1
+maze_short nearest_frontier_1.8  T<=60s  still per interval: lead 0.11s tail 0.09s mid 0.36s whole 1.59s (idle intervals 23/72) | no-go decisions 3/72 | turn-back pairs in-command 3 at-barrier 2
+maze_short random                T<=60s  still per interval: lead 0.10s tail 0.02s mid 0.41s whole 1.52s (idle intervals 22/72) | no-go decisions 0/72 | turn-back pairs in-command 2 at-barrier 0
+maze_short tare                  T<=60s  still per interval: lead 0.13s tail 0.04s mid 0.45s whole 1.52s (idle intervals 22/72) | no-go decisions 0/72 | turn-back pairs in-command 2 at-barrier 0
+maze_short uncertainty_only      T<=60s  still per interval: lead 0.13s tail 0.05s mid 0.42s whole 1.52s (idle intervals 22/72) | no-go decisions 0/72 | turn-back pairs in-command 4 at-barrier 2
+ci_tiny    ariadne               T<=200s  still per interval: lead 0.05s tail 0.13s mid 0.51s whole 0.46s (idle intervals 22/240) | no-go decisions 6/240 | turn-back pairs in-command 17 at-barrier 5
+ci_tiny    coverage_greedy       T<=200s  still per interval: lead 0.03s tail 0.04s mid 0.53s whole 0.12s (idle intervals 6/240) | no-go decisions 1/240 | turn-back pairs in-command 14 at-barrier 2
+ci_tiny    nearest_frontier_1.8  T<=200s  still per interval: lead 0.01s tail 0.04s mid 0.35s whole 2.41s (idle intervals 116/240) | no-go decisions 118/240 | turn-back pairs in-command 10 at-barrier 1
+ci_tiny    random                T<=200s  still per interval: lead 0.04s tail 0.05s mid 0.54s whole 0.12s (idle intervals 6/240) | no-go decisions 0/240 | turn-back pairs in-command 4 at-barrier 0
+ci_tiny    tare                  T<=200s  still per interval: lead 0.05s tail 0.14s mid 0.52s whole 0.33s (idle intervals 16/240) | no-go decisions 4/240 | turn-back pairs in-command 22 at-barrier 5
+ci_tiny    uncertainty_only      T<=200s  still per interval: lead 0.04s tail 0.07s mid 0.54s whole 0.12s (idle intervals 6/240) | no-go decisions 0/240 | turn-back pairs in-command 14 at-barrier 3
+maze_short ariadne               T<=200s  still per interval: lead 0.08s tail 0.06s mid 0.56s whole 0.46s (idle intervals 22/240) | no-go decisions 0/240 | turn-back pairs in-command 22 at-barrier 0
+maze_short coverage_greedy       T<=200s  still per interval: lead 0.07s tail 0.07s mid 0.46s whole 0.48s (idle intervals 23/240) | no-go decisions 0/240 | turn-back pairs in-command 12 at-barrier 3
+maze_short nearest_frontier_1.8  T<=200s  still per interval: lead 0.06s tail 0.08s mid 0.40s whole 1.60s (idle intervals 77/240) | no-go decisions 62/240 | turn-back pairs in-command 20 at-barrier 3
+maze_short random                T<=200s  still per interval: lead 0.06s tail 0.08s mid 0.46s whole 0.48s (idle intervals 23/240) | no-go decisions 0/240 | turn-back pairs in-command 14 at-barrier 3
+maze_short tare                  T<=200s  still per interval: lead 0.06s tail 0.11s mid 0.53s whole 0.54s (idle intervals 26/240) | no-go decisions 0/240 | turn-back pairs in-command 12 at-barrier 2
+maze_short uncertainty_only      T<=200s  still per interval: lead 0.07s tail 0.08s mid 0.47s whole 0.46s (idle intervals 22/240) | no-go decisions 0/240 | turn-back pairs in-command 18 at-barrier 3
