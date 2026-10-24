@@ -5103,3 +5103,60 @@ Full record: `docs/design/NBV_4.3.md` §15; literature `docs/design/lit/early_co
 
 The claim is unchanged ("≥ every baseline at every T"), with a non-regression bound at 200 s and no tuning after
 the runs. Spend needs the maintainer's OK.
+
+## 2026-10-24 — D125/D119 implemented; D151 amended (NaN = turn here); §15.5 pre-registration amended before any run (A1)
+
+**D151 amendment (approved by M on design and by B, owner of the mover and the live loop).** A waypoint whose x or y
+is NaN means "the rig's current position": `PlanCommand` adds no face-turn and no move, only the final turn when the
+pose has a yaw.
+- Why a sentinel and not a finite goto: the mover plans from its GT pose, and the planner's estimate is centimetres
+  away. A finite waypoint there makes the rig first turn to face that offset, in any direction up to 180°, then
+  creep, then turn to the yaw. A tolerance on short moves would be a new constant. The sentinel needs none.
+- Every finite command is unchanged. A waypoint 1e-12 m away still takes the coincident rule (the final turn only),
+  and one 1 cm away still faces, moves and turns (`test_nbv_time`).
+- NaN survives the wire: `ros_cdr::PoseArray` doubles end to end, through the link, the bridge and gz (B).
+  `ClearanceAlong` is never reached, since there is no move.
+- The trace never prints the NaN (B's condition): a turn-here command is `"kind":"turn"`, `"waypoints_xy_m":[]`,
+  `"turn_yaw":<rad>`.
+
+**D125 as built.**
+- `Phase4Planner::Route` returns one (NaN, NaN) waypoint with the view's yaw when A* reaches the goal at the start
+  cell.
+- An unreachable goal still routes empty, and the loop holds.
+- With `face_frontier: false`, an at-cell view has nothing to execute and holds, stated in the trace.
+- Tests (`tests/unit/test_nbv_time.cpp`):
+  - the livelock geometry (eye 2 cm from the agent, inside its cell) routes as one turn-here waypoint;
+  - from 8 poses 3 cm around, it is exactly one `kTurn` of `PlanProfile(|Δyaw|)`;
+  - closed loop in miniature: integrating the frame the turn sees collapses the view's coverage (> 5×), so the view
+    stops winning.
+
+**D119 as built.**
+- `Route` returns a NaN yaw when it cuts the polyline at `max_command_m`, and the loop then sends no final yaw.
+- An uncut command keeps the view's yaw (test).
+
+**§15.5 amendments, written before any run:**
+- (a) **Replay identity check.** The "byte-identical to d59ee3d with every key off" wording contradicts the
+  always-on D119 and D125, so it was false by construction. The check is now:
+  - with every new key off, decisions and commands are identical to the base, except the enumerated records where a
+    cut command or an at-cell view occurs;
+  - the fixes fire exactly there.
+  The base is now feat/ph4-nagent after the main merge (`9efbdba`, which includes B's D227 lens-off default), not
+  d59ee3d.
+- (b) **Rig.** 8 rows × 6 = **48 development runs** (`configs/mission/ablation_4.3/runs_48.jobs`).
+  - The 1.8 row is re-run rather than reused, because the base commit and the lens default changed.
+  - A run counts only if every lockstep barrier is answered (`answer_timeouts` = 0) and the D152 reorder has no
+    timeouts.
+  - M first routed the runs off AWS (test-compute-session). It declined: no docker or gz on its kernels today, and
+    llvmpipe on 4 vCPU risks answer timeouts. So the runs go on the gate's own rig (AWS c7i, llvmpipe, slotq band
+    30+), with the maintainer's spend approval.
+  - Measured gate wall time: median 13.1 min per 200 s run (34 logged jobs), so ≈ 11–12 c7i.4xlarge spot-hours.
+- **Replay identity check, done before any run** (`evaluation/runs/nbv_4.3_ablation/replay_identity/`). The local
+  20 s ci_tiny recording (a1p `build/gate/local/repro_a`) was replayed with the new binary.
+  - **Keys off:** all 8 decisions have identical choices and commands. The only differences are new trace fields
+    from main and CBBA wire bytes 920 vs 904 (main's appended D175/D171 wire fields, not this change).
+  - That recording has no cut or at-cell command, so it does not exercise the D119/D125 fixes themselves; the unit
+    tests do.
+  - **Keys on (ariadne_ta):** the run completes and every trace record parses. Arrival twins win 7/8 decisions;
+    0 unroutable.
+- (c) The gated `ariadne` row (36-run gate) is compared to ariadne_v0 only as context: rig, lens default and the
+  fixes all differ.

@@ -730,6 +730,19 @@ This was read in the primary texts and pinned code, 2026-10-24. Quotes and line 
 - **TARE with the new utility** (tare_ta) is a separate row, not a replacement for the baseline TARE. It is added
   only if the maintainer wants the §31.6 "same utility, different scheduling" comparison redone (+6 runs).
 
+**Amendments (2026-10-24, before any run; DECISIONS "D125/D119 implemented").**
+- (a) The replay identity check is: identical with every key off, except the enumerated cut and at-cell records,
+  where the fixes fire. The base is feat/ph4-nagent `9efbdba` (main merged, including D227 lens-off), not d59ee3d.
+- (b) The 1.8 row is re-run, not reused: **48 runs** (`configs/mission/ablation_4.3/runs_48.jobs`). These are
+  development runs.
+  - A run is valid only with every barrier answered and no reorder timeouts.
+  - Off-AWS was tried first and declined (test-compute-session: no docker or gz on its kernels today). So they run on
+    the gate's own rig (AWS c7i, llvmpipe, slotq band 30+) once the maintainer approves the spend.
+  - Measured gate wall time: median 13.1 min per 200 s run (2.8–26.8, 34 logged jobs), not the ≈ 22 min estimated
+    above. That puts 48 runs at ≈ 11–12 c7i.4xlarge spot-hours.
+- (c) The gated `ariadne` row is context only against ariadne_v0: the rig, the lens default and the fixes all
+  differ.
+
 ### 15.6 The §49 ritual, at implementation
 
 1. ALGORITHMS.md, the NBV entry: the time-cost form (FUEL-style yaw-aware time, exact profile here) and the yaw
