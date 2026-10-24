@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         hp.lightglue_onnx = lightglue_onnx;
         hp.width = 1280, hp.height = 720;   // the D90 sim export
         const perception::HardPairMatcher aliked(hp);
-        runtime::CollabFeatureExtractor x(place, aliked, keep_s);
+        runtime::CollabFeatureExtractor x(place, aliked, keep_s, /*evict_slack_s=*/60.0);   // D179: memory only, never the answer
 
         // Accept both peers on one listening socket.
         const int s = ::socket(AF_UNIX, SOCK_STREAM, 0);
@@ -141,9 +141,9 @@ int main(int argc, char** argv) {
         for (auto& t : readers.threads) t.join();
         const auto& st = core.stats();
         std::printf("collab_worker agent %d: threads %d, keyframes %llu, releases %llu, requests %llu, gone %llu, "
-                    "unknown %llu, ms_place %.0f, ms_aliked %.0f\n",
+                    "unknown %llu, evicted_early %llu, ms_place %.0f, ms_aliked %.0f\n",
                     agent, cv::getNumThreads(), (unsigned long long)st.keyframes_in, (unsigned long long)st.releases,
-                    (unsigned long long)st.requests, (unsigned long long)st.replies_gone, (unsigned long long)unknown,
+                    (unsigned long long)st.requests, (unsigned long long)st.replies_gone, (unsigned long long)unknown, (unsigned long long)x.stats().evicted_early,
                     x.stats().ms_place, x.stats().ms_aliked);
         return 0;
     } catch (const std::exception& e) {
