@@ -1,10 +1,9 @@
-"""Beats 1-2 (≈ 36 s): the seeded WorldGen maze draws itself; the casualty; three robots at three doors; radio
-shading; the question; then the title over the dimmed maze.
+"""Beats 1-2 (≈ 40 s): the seeded maze rises in perspective, a red beacon marks the casualty, the camera glides to a top
+view as three robots appear at three doors, radio shading, the robots set off; then the title over the dimmed maze.
 
-Data: maze_demo_0 scene.json + scene_gt.npz (walls = the free/occupied boundary of the scene grid, starts, target,
-the GT responder route from entrance 0 used as the faint "is there a way?" hint). The radio shading is the
-line-of-sight region from each start, ray-cast on that grid: illustrative (the live RF model, D102, attenuates
-through walls rather than stopping at them, which the faint full-range ring stands for). No numbers.
+Data: maze_demo_0 scene.json + scene_gt.npz (walls = the free/occupied boundary of the scene grid, starts, target).
+Illustrative: the radio shading (line of sight ray-cast on that grid; the live RF model, D102, attenuates through
+walls) and the robots' opening moves (scripted along the scene's ground-truth person-width routes). No numbers.
 
   python/video/render.sh scenes/s01_worldgen.py WorldGen
 """
@@ -14,16 +13,18 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from manim import (AnimationGroup, Circle, Create, DashedVMobject, Dot, FadeIn, FadeOut, GrowFromCenter,
-                   LaggedStart, Polygon, Text, VGroup)
+from manim import (DEGREES, DOWN, RIGHT, UP, AnimationGroup, Circle, DashedVMobject, Dot, FadeIn, FadeOut,
+                   GrowFromCenter, LaggedStart, Line, MoveAlongPath, Polygon, Text, ThreeDScene, TracedPath,
+                   Transform, VGroup, linear, smooth)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ariadne_video.data import load_scene  # noqa: E402
-from ariadne_video.mobjects import agent_marker, maze_frame, maze_walls, polyline  # noqa: E402
-from ariadne_video.style import (AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, CaptionedScene, tag,  # noqa: E402
-                                 UP, DOWN, RIGHT)
+from ariadne_video.mobjects import agent_marker, maze_frame, polyline  # noqa: E402
+from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, WALL, CaptionedScene, tag  # noqa: E402
 
 RADIO_RANGE_M = 9.0  # illustrative LOS radius for the shading only
+WALL_H = 2.95  # scene.json wall_height_m
+LIFT = UP * 0.55  # the top view sits above the subtitle band
 
 
 def los_polygon(sc, x0: float, y0: float, n: int = 240, rmax: float = RADIO_RANGE_M) -> np.ndarray:
@@ -43,69 +44,102 @@ def los_polygon(sc, x0: float, y0: float, n: int = 240, rmax: float = RADIO_RANG
     return np.array(pts)
 
 
-class WorldGen(CaptionedScene):
+def head_m(xy: np.ndarray, metres: float) -> np.ndarray:
+    """The first `metres` of a polyline."""
+    d = np.r_[0, np.cumsum(np.hypot(*np.diff(xy, axis=0).T))]
+    return xy[d <= metres]
+
+
+class WorldGen(CaptionedScene, ThreeDScene):
     def construct(self):
         sc = load_scene(DATA / "maze_demo_0")
-        f = maze_frame(sc)
+        f = maze_frame(sc, center=(0, 0, 0))  # world built about the origin; the camera orbits it
         w = np.array(sc.walls)
         x0, x1 = w[:, [0, 2]].min() - 1.0, w[:, [0, 2]].max() + 1.0
         y0, y1 = w[:, [1, 3]].min() - 1.0, w[:, [1, 3]].max() + 1.0
 
-        seed = Text(f"procedurally generated · seed {sc.seed}", font=FONT, font_size=18, color=DIM)
-        seed.to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
+        def quad(s, h):
+            a, b, c, d = s
+            return Polygon(f.p(a, b, 0), f.p(c, d, 0), f.p(c, d, h), f.p(a, b, h), stroke_color=WALL,
+                           stroke_width=1.6, fill_color=WALL, fill_opacity=0.10)
+
+        order = sorted(range(len(sc.walls)), key=lambda i: w[i, [0, 2]].mean() + w[i, [1, 3]].mean())
+        flat = [quad(sc.walls[i], 0.02) for i in order]
+        full = [quad(sc.walls[i], WALL_H) for i in order]
+        walls = VGroup(*flat)
         dots = VGroup(*[Dot(f.p(x, y), radius=0.012, color=DIM)
                         for x in np.arange(np.ceil(x0), x1, 1.0) for y in np.arange(np.ceil(y0), y1, 1.0)])
-        # walls appear in a diagonal sweep: the generator "laying" the maze from the SW corner
-        order = sorted(range(len(sc.walls)), key=lambda i: w[i, [0, 2]].mean() + w[i, [1, 3]].mean())
-        walls = maze_walls(sc, f)
-        swept = [walls[i] for i in order]
+        seed = Text(f"maze generated procedurally (seed {sc.seed})", font=FONT, font_size=18, color=DIM)
+        seed.to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
+        self.add_fixed_in_frame_mobjects(seed)
 
-        self.play(FadeIn(dots, run_time=0.8), FadeIn(seed))
+        # 1. perspective: the maze rises
+        self.set_camera_orientation(phi=64 * DEGREES, theta=-118 * DEGREES, zoom=1.75)  # close, low perspective
+        self.add(dots, walls)
+        self.begin_ambient_camera_rotation(rate=0.06)
         self.say("Imagine a building after an earthquake.",
-                 run_with=[LaggedStart(*[Create(m) for m in swept], lag_ratio=0.04, run_time=3.4)])
+                 run_with=[FadeIn(seed), LaggedStart(*[Transform(a, b) for a, b in zip(flat, full)], lag_ratio=0.035,
+                                                     run_time=3.6)])
 
         tx, ty = sc.target_xy_m
-        target = VGroup(Circle(radius=0.13, color=TARGET, stroke_width=3).move_to(f.p(tx, ty)),
-                        Dot(f.p(tx, ty), radius=0.04, color=TARGET))
+        ring = Circle(radius=0.13, color=TARGET, stroke_width=3).move_to(f.p(tx, ty))
+        beam = Line(f.p(tx, ty, 0), f.p(tx, ty, WALL_H * 1.6), color=TARGET, stroke_width=4)
+        halo = Line(f.p(tx, ty, 0), f.p(tx, ty, WALL_H * 1.6), color=TARGET, stroke_width=16, stroke_opacity=0.18)
         pulse = Circle(radius=0.13, color=TARGET, stroke_width=2).move_to(f.p(tx, ty))
         self.say("The lights are out, and somewhere inside, someone may need help.",
-                 run_with=[FadeIn(target, scale=1.6, run_time=1.0),
-                           pulse.animate(run_time=2.0, rate_func=lambda t: t).scale(4).set_stroke(opacity=0)])
+                 run_with=[FadeIn(ring, scale=1.6), GrowFromCenter(halo, run_time=1.2), GrowFromCenter(beam, run_time=1.2),
+                           pulse.animate(run_time=2.2, rate_func=linear).scale(5).set_stroke(opacity=0)])
+        self.remove(pulse)
 
-        agents = VGroup(*[agent_marker(e["agent"], f, *e["start_xy_m"], np.deg2rad(e["start_yaw_deg"]))
-                          for e in sc.starts])
+        # 2. glide to the top view as the robots arrive
+        self.stop_ambient_camera_rotation()
+        world = VGroup(dots, walls, ring, beam, halo)
+        g = maze_frame(sc, center=tuple(LIFT))  # same scale, lifted: everything placed from here on uses g
+        bots = VGroup(*[agent_marker(e["agent"], g, *e["start_xy_m"], np.deg2rad(e["start_yaw_deg"]))
+                        for e in sc.starts])
+        self.move_camera(phi=0, theta=-90 * DEGREES, zoom=1.0, run_time=2.6, rate_func=smooth,
+                         added_anims=[world.animate.shift(LIFT), halo.animate.set_stroke(opacity=0)])
         self.say("Before we send people in, we send three small robots.",
-                 run_with=[LaggedStart(*[GrowFromCenter(a) for a in agents], lag_ratio=0.35, run_time=1.6)])
+                 run_with=[LaggedStart(*[GrowFromCenter(b) for b in bots], lag_ratio=0.35, run_time=1.6)])
 
         radios = VGroup()
         for e in sc.starts:
             x, y = e["start_xy_m"]
             col = AGENT[e["agent"]]
-            poly = Polygon(*[f.p(px, py) for px, py in los_polygon(sc, x, y)], stroke_width=0,
+            poly = Polygon(*[g.p(px, py) for px, py in los_polygon(sc, x, y)], stroke_width=0,
                            fill_color=col, fill_opacity=0.16)
-            ring = DashedVMobject(Circle(radius=f.length(RADIO_RANGE_M), color=col, stroke_width=1,
-                                         stroke_opacity=0.35).move_to(f.p(x, y)), num_dashes=60)
-            radios.add(VGroup(poly, ring))
-        chip = tag("illustrative").to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
+            rr = DashedVMobject(Circle(radius=g.length(RADIO_RANGE_M), color=col, stroke_width=1,
+                                       stroke_opacity=0.35).move_to(g.p(x, y)), num_dashes=60)
+            radios.add(VGroup(poly, rr))
+        chip = tag("illustrative").next_to(seed, DOWN, 0.15).align_to(seed, RIGHT)
+        self.add_fixed_in_frame_mobjects(chip)
         self.say("None of them has a map. GPS can't reach them in here, "
                  "and their radios barely make it through the walls.",
-                 run_with=[AnimationGroup(*[FadeIn(r) for r in radios], lag_ratio=0.25, run_time=2.0),
-                           FadeOut(seed), FadeIn(chip)])
+                 run_with=[AnimationGroup(*[FadeIn(r) for r in radios], lag_ratio=0.25, run_time=2.0), FadeIn(chip)])
         self.say("Each one will only ever see a small piece of the building.",
-                 run_with=[VGroup(*[r[1] for r in radios]).animate(run_time=1.0).set_opacity(0)])
+                 run_with=[VGroup(*[r[1] for r in radios]).animate(run_time=1.0).set_stroke(opacity=0)])
 
-        hint = DashedVMobject(polyline(f, sc.gt_routes_responder[0], THREAD, width=4, opacity=0.8), num_dashes=70)
+        # 3. they set off (scripted: the first metres of each robot's person-width route)
+        moves, trails = [], VGroup()
+        for e, b in zip(sc.starts, bots):
+            route = sc.gt_routes_responder[e["agent"]]
+            path = polyline(g, head_m(route, 3.2), AGENT[e["agent"]])
+            moves.append(MoveAlongPath(b, path, rate_func=linear, run_time=6.5))
+            trails.add(TracedPath(b.get_center, stroke_color=AGENT[e["agent"]], stroke_width=3, stroke_opacity=0.8))
+        self.add(trails)
         self.say("So the question is: can they put those pieces together, and find a safe way in, and out?",
-                 run_with=[Create(hint, run_time=3.0)])
+                 run_with=[*moves, VGroup(*[r[0] for r in radios]).animate(run_time=6.5).set_opacity(0.05)])
         self.clear_caption()
 
         # beat 2: the title over the dimmed maze
-        scene = VGroup(dots, walls, target, agents, hint)
         title = Text("Ariadne", font=FONT, font_size=84, color=TEXT, weight="BOLD").shift(UP * 0.5)
         sub = Text("collaborative mapping and egress for a team of robots", font=FONT, font_size=26,
                    color=DIM).next_to(title, DOWN, buff=0.3)
-        self.play(scene.animate.set_opacity(0.15), FadeOut(radios), FadeOut(chip), run_time=0.8)
+        self.add_fixed_in_frame_mobjects(title, sub)
+        self.remove(title, sub)
+        self.play(walls.animate.set_opacity(0.12), VGroup(dots, ring, beam, bots).animate.set_opacity(0.15),
+                  trails.animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
         self.say("This is Ariadne, named for the thread that once led a hero out of a labyrinth.",
                  run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.2), FadeIn(sub, run_time=1.6)])
         self.clear_caption()
-        self.play(FadeOut(VGroup(scene, title, sub)), run_time=0.8)
+        self.play(*[FadeOut(m) for m in (dots, walls, ring, beam, halo, bots, trails, title, sub)], run_time=0.8)

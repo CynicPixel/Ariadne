@@ -30,6 +30,7 @@ from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, Ca
 
 PACK = DATA / "pack_collab60d"
 PH5 = REPO / "evaluation/runs/ph5/d145_rows_20261023T113916Z/replays"
+MARK = "#ff2d2d"  # tracked-point markers: bright red (maintainer)
 
 
 def ate_all_frames(row: str) -> float:
@@ -59,6 +60,7 @@ class Seeing(CaptionedScene):
                        body.get_top() + UP * 2.4 + RIGHT * 1.1, stroke_width=0, fill_color=THREAD, fill_opacity=0.18)
         rig_lbl = Text("stereo cameras + lamp", font=FONT, font_size=18, color=DIM).next_to(body, DOWN, 0.2)
         rig = VGroup(lamp, body, eyes, rig_lbl)
+        rig.move_to([-4.6, 0.45, 0])  # vertically centred on the frame image (centre y = 0.45)
         im = Image.open(PACK / "frames" / "final_agent0.jpg").convert("RGB")
         frame = ImageMobject(np.asarray(im)).set_height(4.3).move_to(RIGHT * 1.9 + UP * 0.45)
         ill = tag("illustrative").next_to(rig, UP, 0.15)
@@ -69,9 +71,9 @@ class Seeing(CaptionedScene):
         ov = json.loads((PACK / "frames" / "overlay_final_agent0.json").read_text())
         sx, sy = frame.width / ov["w"], frame.height / ov["h"]
         tl = frame.get_corner(UP + LEFT)
-        dots = VGroup(*[Circle(0.035, color=THREAD, stroke_width=1.6).move_to(tl + RIGHT * x * sx + DOWN * y * sy)
+        dots = VGroup(*[Circle(0.035, color=MARK, stroke_width=1.8).move_to(tl + RIGHT * x * sx + DOWN * y * sy)
                         for x, y in ov["pts"]])
-        flbl = VGroup(Text(f"{len(ov['pts'])} tracked points", font=FONT, font_size=20, color=THREAD),
+        flbl = VGroup(Text(f"{len(ov['pts'])} tracked points", font=FONT, font_size=20, color=MARK),
                       Text("FAST corners + ORB · pyramidal Lucas–Kanade", font=FONT, font_size=16, color=DIM)
                       ).arrange(DOWN, buff=0.08).next_to(frame, DOWN, 0.15)
         real = tag("measured", "recorded run").next_to(frame, UP, 0.12).align_to(frame, RIGHT)
