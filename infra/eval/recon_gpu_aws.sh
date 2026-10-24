@@ -21,7 +21,10 @@
 # ---------------------------------------------------------------------------
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
-: "${IMAGE_TAR:?}" "${IMAGE_ID:?}" "${SPOOLS:?}" "${SCENE_ID:?}"
+: "${IMAGE_TAR:?}" "${IMAGE_ID:?}"
+# RENDER mode (SPLAT_TAR=s3://.../splat_<budget>.tar.gz): the demo-video renders of a trained splat instead of training
+# (python/reconstruction/render/render_gsplat.py; RENDER_ARGS e.g. "--seconds 9 --fps 30"). Output: $R/render/.
+[ -n "${SPLAT_TAR:-}" ] || : "${SPOOLS:?}" "${SCENE_ID:?}"
 BUDGETS="${BUDGETS:-}"; [ -n "$BUDGETS" ] || BUDGETS='{"smoke": [15, 30], "live": 15, "batch": 100}'   # smoke first
 SRC="$(pwd)" IN=/opt/in/data
 T0=$(date +%s)
@@ -45,6 +48,22 @@ aws s3 cp "$IMAGE_TAR" - | zstd -dc | docker load > "$R/docker_load.txt" 2>&1 ||
 tag=$(sed -n 's/^Loaded image: //p' "$R/docker_load.txt" | head -1)
 [ "$(docker image inspect "$tag" --format '{{.Id}}')" = "$IMAGE_ID" ] || fail "image id differs from $IMAGE_ID"
 kv image "$tag"; kv image_id "$IMAGE_ID"; kv image_tar "$IMAGE_TAR"
+
+if [ -n "${SPLAT_TAR:-}" ]; then
+  step "2 render ${SPLAT_TAR##*/}"
+  mkdir -p /opt/splat "$R/render"
+  aws s3 cp "$SPLAT_TAR" - | tar xz -C /opt/splat || fail "splat"
+  d=$(dirname "$(find /opt/splat -name table.json | head -1)")
+  kv splat_tar "$SPLAT_TAR"; kv splat_table_sha256 "$(sha256sum "$d/table.json" | cut -d' ' -f1)"
+  nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used --format=csv -l 5 > "$R/gpu_util.csv" 2>&1 & GU=$!
+  docker run --rm --gpus all -v "$SRC":/src:ro -v "$d":/splat:ro -v "$R/render":/out "$tag" \
+    python3 -I /src/python/reconstruction/render/render_gsplat.py --splat /splat --out /out ${RENDER_ARGS:-} \
+    > "$R/render/log.txt" 2>&1
+  rc=$?
+  kill "$GU" 2>/dev/null
+  step "done rc=$rc"
+  exit "$rc"
+fi
 
 step "2 spools"
 mkdir -p /opt/spools "$IN"
