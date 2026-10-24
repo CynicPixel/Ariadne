@@ -28,6 +28,7 @@
 #include "core/random/seed.hpp"
 #include "perception/degradation/degradation_config.hpp"
 #include "perception/degradation/lens.hpp"
+#include "perception/degradation/lens_parallel.hpp"
 #include "perception/radiometric/flat_field.hpp"
 #include "perception/rgbd/depth_stereo.hpp"
 #include "perception/stereo/camera_model.hpp"
@@ -306,7 +307,7 @@ public:
         for (uint32_t r = 0; r < im.height; ++r) {
             std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
         }
-        core::ImageU8 seen = map_ ? perception::ApplyLens(clean, *map_) : std::move(clean);
+        core::ImageU8 seen = map_ ? perception::ApplyLensParallel(clean, *map_) : std::move(clean);
         if (d_.params) {
             const int c = left ? 0 : 1;
             seen = perception::DegradeParallel(seen, *d_.params, d_.seed[c], arrived_[c]++, d_.threads);
@@ -655,7 +656,7 @@ public:
                     scene_params->radiance_scale *= event;
                 }
                 for (int c = 0; c < 2; ++c) {
-                    core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
+                    core::ImageU8 seen = perception::ApplyLensParallel(r.img[c], map_);
                     if (degradation_) {
                         seen = perception::DegradeParallel(seen, depth_seen[c], scene_params ? *scene_params : *degradation_,
                                                            seed_[c], n, threads_);
