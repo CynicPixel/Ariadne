@@ -25,8 +25,9 @@ from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, WALL, Capt
 RADIO_RANGE_M = 9.0  # illustrative LOS radius for the shading only
 WALL_H = 2.95  # scene.json wall_height_m
 LIFT = UP * 0.55  # the top view sits above the subtitle band
-FRONT = dict(phi=64 * DEGREES, theta=-180 * DEGREES, zoom=1.75)  # angled perspective from the front (south)
-SIDE = dict(phi=64 * DEGREES, theta=-90 * DEGREES, zoom=1.75)  # the same perspective after a 90° anticlockwise turn
+FRONT = dict(phi=64 * DEGREES, theta=-190 * DEGREES, zoom=1.75)  # angled perspective from the front
+SIDE = dict(phi=64 * DEGREES, theta=-100 * DEGREES, zoom=1.75)  # the same perspective after a 90° clockwise turn
+# the glide to the top view then drifts the last 10° on clockwise (old drift speed), landing upright at -90°
 MOVE_M = 1.6  # how far each robot advances down its starting hall on the closing question
 
 
@@ -89,30 +90,34 @@ class WorldGen(CaptionedScene, ThreeDScene):
         self.say("Imagine a building after an earthquake.",
                  run_with=[FadeIn(seed), *camera_to(4.2, **SIDE),
                            LaggedStart(*[Transform(a, b) for a, b in zip(flat, full)], lag_ratio=0.035, run_time=4.2)])
-        self.begin_ambient_camera_rotation(rate=-0.04)  # keep drifting anticlockwise
 
+        # 2. straight from the turn into a smooth glide to the top view; the beacon rises on the way down, the 3D walls
+        # cross-fade to the flat 2D map in the glide's last 30 %, and the beacon becomes a flat 2D target on landing.
+        # The lift above the subtitle band is a camera frame-centre move, so nothing in the world has to move.
         tx, ty = sc.target_xy_m
         ring = Circle(radius=0.13, color=TARGET, stroke_width=3).move_to(f.p(tx, ty))
         beam = Line(f.p(tx, ty, 0), f.p(tx, ty, WALL_H * 1.6), color=TARGET, stroke_width=4)
         halo = Line(f.p(tx, ty, 0), f.p(tx, ty, WALL_H * 1.6), color=TARGET, stroke_width=16, stroke_opacity=0.18)
         pulse = Circle(radius=0.13, color=TARGET, stroke_width=2).move_to(f.p(tx, ty))
+        target2d = Dot(f.p(tx, ty), radius=0.04, color=TARGET)
+        flat_map = maze_walls(sc, f, width=3)
+        late = lambda t: smooth(min(1.0, max(0.0, (t - 0.7) / 0.3)))  # noqa: E731
+        glide = 3.8
         self.say("The lights are out, and somewhere inside, someone may need help.",
-                 run_with=[FadeIn(ring, scale=1.6), GrowFromCenter(halo, run_time=1.2), GrowFromCenter(beam, run_time=1.2),
-                           pulse.animate(run_time=2.2, rate_func=linear).scale(5).set_stroke(opacity=0)])
+                 run_with=[FadeIn(ring, scale=1.6, run_time=0.8), GrowFromCenter(halo, run_time=1.2),
+                           GrowFromCenter(beam, run_time=1.2),
+                           pulse.animate(run_time=2.2, rate_func=linear).scale(5).set_stroke(opacity=0),
+                           *camera_to(glide, phi=0, theta=-90 * DEGREES, zoom=1.0),
+                           cam._frame_center.animate(run_time=glide, rate_func=smooth).move_to(-LIFT),
+                           FadeOut(walls, run_time=glide, rate_func=late), FadeIn(flat_map, run_time=glide, rate_func=late)])
         self.remove(pulse)
+        self.play(FadeOut(beam), FadeOut(halo), FadeIn(target2d), run_time=0.4)
+        beam.set_opacity(0)
+        halo.set_opacity(0)
 
-        # 2. glide to the top view as the robots arrive
-        self.stop_ambient_camera_rotation()
-        world = VGroup(dots, walls, ring, beam, halo)
-        g = maze_frame(sc, center=tuple(LIFT))  # same scale, lifted: everything placed from here on uses g
+        g = f  # top view: same frame (the camera carries the lift)
         bots = VGroup(*[agent_marker(e["agent"], g, *e["start_xy_m"], np.deg2rad(e["start_yaw_deg"]))
                         for e in sc.starts])
-        # top down, the 3D wall boxes read as doubled lines: cross-fade to the flat 2D map in the glide's last 30 %
-        flat_map = maze_walls(sc, g, width=3)
-        late = lambda t: smooth(min(1.0, max(0.0, (t - 0.7) / 0.3)))  # noqa: E731
-        self.move_camera(phi=0, theta=-90 * DEGREES, zoom=1.0, run_time=2.6, rate_func=smooth,
-                         added_anims=[world.animate(rate_func=smooth).shift(LIFT), halo.animate.set_stroke(opacity=0),
-                                      FadeOut(walls, rate_func=late), FadeIn(flat_map, rate_func=late)])
         self.say("Before we send people in, we send three small robots.",
                  run_with=[LaggedStart(*[GrowFromCenter(b) for b in bots], lag_ratio=0.35, run_time=1.6)])
 
@@ -151,9 +156,9 @@ class WorldGen(CaptionedScene, ThreeDScene):
                    color=DIM).next_to(title, DOWN, buff=0.3)
         self.add_fixed_in_frame_mobjects(title, sub)
         self.remove(title, sub)
-        self.play(flat_map.animate.set_stroke(opacity=0.15), VGroup(dots, ring, beam, bots).animate.set_opacity(0.15),
+        self.play(flat_map.animate.set_stroke(opacity=0.15), VGroup(dots, ring, target2d, bots).animate.set_opacity(0.15),
                   trails.animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
         self.say("This is Ariadne, named for the thread that once led a hero out of a labyrinth.",
                  run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.2), FadeIn(sub, run_time=1.6)])
         self.clear_caption()
-        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, beam, halo, bots, trails, title, sub)], run_time=0.8)
+        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, target2d, bots, trails, title, sub)], run_time=0.8)
