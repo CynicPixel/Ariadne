@@ -4,7 +4,7 @@
   docker run --rm -u $(id -u):$(id -g) -v $PWD:/w -w /w ariadne-analysis:1 python -I scripts/plot.py --in processed --out figures
 
   fig_threads.png    single-process p50 vs OpenCV threads, per stage, x86 vs Arm
-  fig_box_n3.png     the N=3 shape: box throughput (3 concurrent processes) vs the best single process, per stage
+  fig_box_n3.png     the N=3 shape: box throughput (3 concurrent processes) vs the same run's best single process
   fig_knobs.png      per (ALIKED size, K): median match+verify ms vs verified pairs lost / gained vs 1280x720:1024
   fig_lg_layers.png  LightGlue forward split by transformer layer (K 1024 / 512)
 """
@@ -59,7 +59,7 @@ def main() -> int:
         if (r["stage"], r["variant"], r["engine"]) in STAGES:
             labels.append(f"{r['arch'][:3]} {r['stage'].split('_')[0]} {r['variant']}\n3x{r['threads_per_proc']}t")
             box.append(float(r["box_calls_per_s"]))
-            best.append(float(r["best_single_calls_per_s"] or 0))
+            best.append(float(r["best_single_calls_per_s_same_run"] or 0))   # same run only (instance spread)
     x = range(len(labels))
     ax.bar([i - 0.2 for i in x], box, 0.4, label="3 concurrent processes (box)")
     ax.bar([i + 0.2 for i in x], best, 0.4, label="best single process")

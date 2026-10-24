@@ -10,9 +10,9 @@ knobs/adaptive_s<k>/gate.csv, mpstat/*.txt).
 processed/:
   dnn_matrix.csv      every timing row: run, arch, instance, shape (single | c3), procs, threads (per process), stage,
                       variant, engine, p50/p95 ms, cpu/wall (the pool's effective parallelism), stable (run-to-run digest)
-  dnn_c3.csv          the N=3 shape: per (arch, threads, stage, variant, engine) the median p50 over the 3 concurrent
-                      processes, the same row's single-process p50 at the same threads, the slowdown, and the box
-                      throughput (3 / p50, calls per second) next to the best single-process throughput
+  dnn_c3.csv          the N=3 shape: per (run, arch, threads, stage, variant, engine) the median p50 over the 3 concurrent
+                      processes, the SAME RUN's single-process p50 at the same threads (blank if that run had none), the
+                      slowdown, and the box throughput (3 / p50, calls per second) next to the same run's best single
   profile_ops.csv     per-op-type share of one forward (SUMMARY rows)
   lightglue_layers.csv  per transformer layer (0-8) + "other" (input proj, posenc, final assignment): ms and share,
                       per (arch, threads, K) - the adaptive-depth payoff's cost side
@@ -120,18 +120,21 @@ def main() -> int:
 
     put(a.out / "dnn_matrix.csv", ["run", "arch", "instance", "shape", "procs", "threads", "label", "stage", "variant",
                                    "engine", "p50_ms", "p95_ms", "cpu_over_wall", "stable", "out"], matrix)
-    single = {(r[1], r[5], r[7], r[8], r[9]): r[10] for r in matrix if r[3] == "single"}
+    # Baselines are paired WITHIN a run only: two c7i instances of the same type differed by ~30 % single-process
+    # (jobs 42 vs 70, same CPU model, OpenCV commit and no steal), so a cross-run ratio would mix instance spread in.
+    single = {(r[0], r[1], r[5], r[7], r[8], r[9]): r[10] for r in matrix if r[3] == "single"}
     best = defaultdict(float)
-    for (arch, thr, stage, var, eng), p50 in single.items():
-        best[(arch, stage, var, eng)] = max(best[(arch, stage, var, eng)], 1000.0 / p50 if p50 else 0)
+    for (run, arch, thr, stage, var, eng), p50 in single.items():
+        best[(run, arch, stage, var, eng)] = max(best[(run, arch, stage, var, eng)], 1000.0 / p50 if p50 else 0)
     c3 = defaultdict(list)
     for r in matrix:
         if r[3] == "c3":
-            c3[(r[1], r[5], r[7], r[8], r[9])].append(r[10])
-    put(a.out / "dnn_c3.csv", ["arch", "threads_per_proc", "stage", "variant", "engine", "p50_median_ms",
-                               "single_p50_same_threads_ms", "slowdown", "box_calls_per_s", "best_single_calls_per_s"],
+            c3[(r[0], r[1], r[5], r[7], r[8], r[9])].append(r[10])
+    put(a.out / "dnn_c3.csv", ["run", "arch", "threads_per_proc", "stage", "variant", "engine", "p50_median_ms",
+                               "single_p50_same_threads_same_run_ms", "slowdown", "box_calls_per_s",
+                               "best_single_calls_per_s_same_run"],
         [[*k, f(st.median(v)), single.get(k, ""), f(st.median(v) / single[k], 2) if single.get(k) else "",
-          f(3000.0 / st.median(v), 2), f(best[(k[0], k[2], k[3], k[4])], 2)] for k, v in sorted(c3.items())])
+          f(3000.0 / st.median(v), 2), f(best[(k[0], k[1], k[3], k[4], k[5])], 2) or ""] for k, v in sorted(c3.items())])
     put(a.out / "profile_ops.csv", ["run", "arch", "label", "model", "engine", "threads", "op", "time_ms", "count"], ops)
     put(a.out / "lightglue_layers.csv", ["run", "arch", "label", "threads", "K", "part", "ms", "share"], layers)
     put(a.out / "ort.csv", ["run", "arch", "label", "stage", "variant", "threads", "p50_ms", "p95_ms", "check"], ort)

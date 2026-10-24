@@ -1,0 +1,2 @@
+lost: {motion: bridge, reanchor: every_frame, segments: 0, bridged_frames: 0, coasted_frames: 0, bridge_rotation: {H: 0, E: 0, none: 0}, keyframes_while_lost: 0, reanchor_probes: 0, reanchor_refused: 0, bridge_usac_redraws: 0}
+kfdump agent 1: 269 keyframes, 37 of 37 written

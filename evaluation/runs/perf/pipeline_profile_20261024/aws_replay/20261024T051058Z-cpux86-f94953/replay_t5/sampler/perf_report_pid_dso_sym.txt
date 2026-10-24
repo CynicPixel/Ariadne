@@ -1,0 +1,126 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 462K of event 'cpu/cycles/P'
+# Event count (approx.): 8023717924429
+#
+# Overhead      Pid:Command          Shared Object                 Symbol                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+# ........  .......................  ............................  .......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+#
+     3.33%     5181:ariadne_live     ariadne_live                  [.] ariadne::runtime::live::ConsumedRecorder::Write(ariadne::runtime::live::StreamMessage const&)
+     3.20%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::EdgeMinConvolution1D(int const*, int, unsigned long, int, int*)
+     2.84%     5181:ariadne_live     ariadne_live                  [.] ZSTD_decompressSequences_bmi2.constprop.0
+     1.89%     5185:ariadne_live     libopencv_features.so.5.0.0   [.] cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigned char*, int*, int&)
+     1.86%     5188:ariadne_live     libopencv_features.so.5.0.0   [.] cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigned char*, int*, int&)
+     1.83%     5182:ariadne_live     libopencv_features.so.5.0.0   [.] cv::opt_AVX2::FAST_t_patternSize16_AVX2_Impl::process(int&, unsigned char const*&, unsigned char*, int*, int&)
+     0.89%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::TsdfMap::Find(ariadne::planning::Idx3 const&) const
+     0.73%     5182:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.69%     5190:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.68%     5192:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.67%     5191:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.66%     5193:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.66%     5185:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.66%     5188:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.64%     5197:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.64%     5198:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.64%     5199:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.63%     5200:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.62%     5202:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.62%     5203:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.60%     5204:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.60%     5205:ariadne_live     libopencv_video.so.5.0.0      [.] cv::detail::LKTrackerInvoker::operator()(cv::Range const&) const
+     0.56%     5182:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.56%     5182:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.53%     5190:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.53%     5190:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.52%     5191:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.51%     5191:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.50%     5185:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.47%     5185:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.47%     5197:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.46%     5197:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.45%     5192:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.43%     5198:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.43%     5182:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.43%     5192:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.43%     5188:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.43%     5198:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.43%     5188:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.41%     5202:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.41%     5202:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.40%     5203:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.40%     5203:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.40%     5185:ariadne_live     libopencv_features.so.5.0.0   [.] void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, int, bool)
+     0.39%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::TsdfMap::Integrate(ariadne::planning::DepthFrame const&)::{lambda(int, int, int)#1}::operator()(int, int, int) const
+     0.39%     5190:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.39%     5191:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.39%     5188:ariadne_live     libopencv_features.so.5.0.0   [.] void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, int, bool)
+     0.38%     5199:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.37%     5182:ariadne_live     libopencv_features.so.5.0.0   [.] void cv::FAST_t<16>(cv::_InputArray const&, std::vector<cv::KeyPoint, std::allocator<cv::KeyPoint> >&, int, bool)
+     0.36%     5197:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.36%     5199:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.35%     5204:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.35%     5192:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.35%     5185:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.34%     5188:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.33%     5198:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.33%     5202:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.33%     5204:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.32%     5200:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.32%     5188:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.31%        0:swapper          [kernel.kallsyms]             [k] intel_idle_xstate
+     0.31%     5185:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.31%     5203:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.31%     5188:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.31%     5193:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.30%     5193:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.30%     5197:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.30%     5185:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.30%     5198:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.30%     5200:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.30%     5182:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5182:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.29%     5192:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::FrontierSet3D::Grow(ariadne::planning::TsdfMap const&, std::vector<ariadne::planning::Idx3, std::allocator<ariadne::planning::Idx3> >)
+     0.29%     5193:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5203:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5202:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5199:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.29%     5205:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.28%     5191:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.28%     5190:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.28%     5204:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.28%     5200:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void cv::remapBilinear<cv::FixedPtCast<int, unsigned char, 15>, cv::RemapVec_8u<false>, short, false>(cv::Mat const&, cv::Mat&, cv::Mat const&, cv::Mat const&, void const*, int, cv::Scalar_<double> const&, cv::Point_<int> const&)
+     0.28%     5204:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.27%     5199:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.25%     5200:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.25%     5182:ariadne_live     libopencv_core.so.5.0.0       [.] cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)
+     0.25%     5182:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+     0.25%     5205:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsLeftTop<true>(cv::BufferSGBM3Way const&, int, short&) const
+     0.25%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::TsdfMap::State(ariadne::planning::Idx3 const&) const
+     0.25%     5185:ariadne_live     libopencv_core.so.5.0.0       [.] cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)
+     0.24%     5205:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::accumulateCostsRight<true>(cv::BufferSGBM3Way const&, int, short&, short&, short&) const
+     0.24%     5193:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.24%     5122:ariadne_live     ariadne_live                  [.] ariadne::planning::TsdfMap::Centre(ariadne::planning::Idx3 const&) const
+     0.24%     5190:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+     0.23%     5197:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.23%     5202:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.23%     5190:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.23%     5188:ariadne_live     libopencv_core.so.5.0.0       [.] cv::hal::LU64f(double*, unsigned long, int, double*, unsigned long, int)
+     0.22%     5191:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+     0.21%     5182:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const
+     0.21%     5198:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.21%     5181:ariadne_live     libc.so.6                     [.] 0x00000000001a1852
+     0.20%     5190:ariadne_live     libopencv_stereo.so.5.0.0     [.] void cv::SGBM3WayMainLoop::impl<true>(cv::Range const&) const
+     0.20%     5185:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+     0.20%     5203:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.20%     5205:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::calcPixelCostBT(cv::Mat const&, cv::Mat const&, int, int, int, short*, unsigned char*, unsigned char const*, int, int)
+     0.20%     5191:ariadne_live     libopencv_imgproc.so.5.0.0    [.] void (anonymous namespace)::hlineResizeCn<unsigned char, (anonymous namespace)::ufixedpoint16, 2, true, 1>(unsigned char*, int, int*, (anonymous namespace)::ufixedpoint16*, (anonymous namespace)::ufixedpoint16*, int, int, int)
+     0.20%     5192:ariadne_live     libopencv_stereo.so.5.0.0     [.] cv::SGBM3WayMainLoop::getRawMatchingCost(cv::BufferSGBM3Way const&, int, int) const
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

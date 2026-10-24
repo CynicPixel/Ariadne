@@ -1,0 +1,16 @@
+=== 2026-10-24T05:13:20Z +0s 0 host
+=== 2026-10-24T05:13:20Z +0s 1 docker + buildx + sysstat
+=== 2026-10-24T05:13:45Z +25s 2 opencv-base + core dev (x86_64, from source)
+=== 2026-10-24T05:19:52Z +392s 3 inputs
+=== 2026-10-24T05:19:54Z +394s 4 build
+=== 2026-10-24T05:22:02Z +522s T single process, 1 threads
+=== 2026-10-24T05:26:41Z +801s T single process, 8 threads
+=== 2026-10-24T05:29:30Z +970s T three concurrent processes x 4 threads
+=== 2026-10-24T05:32:33Z +1153s T three concurrent processes x 5 threads
+=== 2026-10-24T05:35:30Z +1330s T ORT 1.24.4
+=== 2026-10-24T05:39:36Z +1576s K recordings
+=== 2026-10-24T05:43:00Z +1780s K kfdump (4 jobs x 4 threads, seed 1)
+=== 2026-10-24T05:51:52Z +2312s K knobs (2 scenes x 4 threads) + store replay (2 threads)
+=== 2026-10-24T06:04:42Z +3082s A model-ref image + upstream LightGlue
+=== 2026-10-24T06:06:19Z +3179s A upstream LightGlue all9 + adaptive (torch, 16 threads), then the D71 gate
+=== 2026-10-24T06:08:08Z +3288s done

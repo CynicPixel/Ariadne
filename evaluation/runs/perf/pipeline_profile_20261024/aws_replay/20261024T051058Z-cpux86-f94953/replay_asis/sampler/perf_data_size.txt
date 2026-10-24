@@ -1,0 +1,1 @@
+-rw------- 1 root root 31702000 Oct 24 05:19 /opt/ariadne/results/replay_asis/sampler/perf.data

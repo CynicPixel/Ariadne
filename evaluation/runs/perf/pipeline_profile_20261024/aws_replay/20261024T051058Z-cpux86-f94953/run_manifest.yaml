@@ -1,0 +1,16 @@
+run_kind: pipeline_profile_live_replay
+created_utc: 2026-10-24T05:11:39Z
+replayed_run: 20261023T200447Z-cpux86-70a514
+instance_type: c7i.4xlarge
+nproc: 16
+cpu_model: "Intel(R) Xeon(R) Platinum 8488C"
+perf_available: yes
+core_image_id: sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb
+code_snapshot: s3://ariadne-836505524290-eun1/runs/20261024T043156Z-cpux86-64cb9c/input/repo.tar.gz
+replay_args: ""
+replay_env: ""
+payload: s3://ariadne-836505524290-eun1/runs/live-payload-20261024T043040Z/payload.tar.gz
+payload_sha256sums_sha256: 99c7d26e7b6fdb5a525f43af29610436c27db9455c03b8866a6c83009f78bf65
+inputs_mcap_sha256: 4f4eabdc85b28b9f594fe07ed624b4841406e8bf600824885e6efc124c76aa4f
+sampler_perf_args: "-a -F 199"
+total_seconds: 728
