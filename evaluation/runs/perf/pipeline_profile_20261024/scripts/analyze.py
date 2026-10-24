@@ -24,6 +24,8 @@ processed/:
   fidelity_summary.csv   recomputed 1280x720 ALIKED vs the pass-A store, per scene
   adaptive_summary.csv   upstream LightGlue all9 vs adaptive: exit layer distribution, verdict flips, matches, active
                       keypoints per layer
+  variants_summary.csv  a graph variant at the reference size (1280x720l2) vs the reference, over every pair keyframe:
+                      keypoints / scores bitwise counts, the worst descriptor |diff| (D182 criterion ii)
   mpstat_summary.csv  per phase: mean and p95 busy % of all cores, mean %steal
 """
 from __future__ import annotations
@@ -137,7 +139,7 @@ def main() -> int:
                                        "steal_mean_pct"], mp)
 
     # ---- knobs (x86 run only has them)
-    ks, trans, exact, fid, ad = [], [], [], [], []
+    ks, trans, exact, fid, ad, var = [], [], [], [], [], []
     for d in runs:
         allk = []
         for sc in (0, 1):
@@ -149,6 +151,11 @@ def main() -> int:
                     exact.append([d.name, sc, r["agent_a"], r["kf_a"], r["agent_b"], r["kf_b"], r["prod_reason"],
                                   r["reason_here"], r["prod_matches"], r["matches_here"],
                                   int(r["prod_reason"] == r["reason_here"]), int(r["prod_matches"] == r["matches_here"])])
+            vr = rows(d / "knobs" / f"s{sc}" / "variants.csv")
+            for v in sorted({r["variant"] for r in vr}):
+                sel = [r for r in vr if r["variant"] == v]
+                var.append([d.name, sc, v, len(sel), sum(r["keypoints_bitwise"] == "1" for r in sel),
+                            sum(r["scores_bitwise"] == "1" for r in sel), max(float(r["max_desc_abs_diff"]) for r in sel)])
             fr = rows(d / "knobs" / f"s{sc}" / "fidelity.csv")
             if fr:
                 full = [r for r in fr if r["n_store"] not in ("missing", "") and r["matched_1e-3px"] == r["n_store"]]
@@ -204,6 +211,8 @@ def main() -> int:
                                          "matches_equal"], exact)
     put(a.out / "fidelity_summary.csv", ["run", "scene", "keyframes", "all_keypoints_within_1e-3px", "missing_in_store",
                                          "max_px"], fid)
+    put(a.out / "variants_summary.csv", ["run", "scene", "variant", "keyframes", "keypoints_bitwise", "scores_bitwise",
+                                         "max_desc_abs_diff"], var)
     put(a.out / "adaptive_summary.csv", ["run", "scene", "mode", "pairs", "verified", "lost_vs_all9", "gained_vs_all9",
                                          "mean_exit_layer", "exit_layer_hist", "median_match_ratio_vs_all9",
                                          "median_torch_ms"], ad)

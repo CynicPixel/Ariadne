@@ -31,7 +31,8 @@
 //   --stores: also the setting "store" - the pass-A store's own features (the production inputs) through the same
 //   path, so knobs.csv shows how exactly this replay reproduces the production verdicts.
 //   DIR/knobs.csv: the pair, its production columns, setting, n_a, n_b, matches, essential_inliers, pnp_inliers,
-//   reason, ms_match_verify. DIR/fidelity.csv (with --stores): per keyframe, the 1280x720 K=1024 features recomputed
+//   reason, ms_match_verify. DIR/variants.csv: a graph variant at the reference size (e.g. 1280x720l2) vs the
+//   reference per keyframe (keypoints/scores bitwise, descriptor max diff). DIR/fidelity.csv (with --stores): per keyframe, the 1280x720 K=1024 features recomputed
 //   here vs the store's: count, matched within 1e-3 px, max px distance.
 // ---------------------------------------------------------------------------
 #include "collaboration/broker/edge_verifier.hpp"
@@ -52,6 +53,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -576,6 +578,27 @@ int Knobs(std::map<std::string, std::vector<std::string>>& a) {
                     << feats[{ag, id, size}].keypoints.size() << '\n';
             }
         }
+    {   // A graph variant at the reference's size (e.g. 1280x720l2, scripts/l2conv_rewrite.py) vs the reference, per
+        // keyframe (D182's fidelity criterion): keypoints + scores bitwise in the same order, descriptor max |diff|.
+        std::ofstream var(out / "variants.csv");
+        var << "agent,kf,variant,n_ref,n_var,keypoints_bitwise,scores_bitwise,max_desc_abs_diff\n";
+        for (const auto& [size, m] : nets) {
+            if (size == "1280x720" || dims[size] != dims["1280x720"]) continue;
+            for (const auto& [key, kf] : kfs) {
+                const auto& r = feats[{key.first, key.second, "1280x720"}];
+                const auto& v = feats[{key.first, key.second, size}];
+                bool kp = r.keypoints.size() == v.keypoints.size(), sc = kp;
+                for (size_t i = 0; kp && i < r.keypoints.size(); ++i) {
+                    kp = std::memcmp(&r.keypoints[i].pt, &v.keypoints[i].pt, sizeof(cv::Point2f)) == 0;
+                    sc = sc && std::memcmp(&r.keypoints[i].response, &v.keypoints[i].response, sizeof(float)) == 0;
+                }
+                const double dd = r.descriptors.size() == v.descriptors.size()
+                                      ? cv::norm(r.descriptors, v.descriptors, cv::NORM_INF) : 1e30;
+                var << key.first << ',' << key.second << ',' << size << ',' << r.keypoints.size() << ','
+                    << v.keypoints.size() << ',' << int(kp) << ',' << int(sc && kp) << ',' << dd << '\n';
+            }
+        }
+    }
     std::map<int, runtime::CollabStore> stores;
     if (a.count("--stores")) {
         std::ofstream fid(out / "fidelity.csv");
