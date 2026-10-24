@@ -154,8 +154,8 @@ human, or fall back to the safe choice.
 
 ### 9 · The Ariadne Thread (≈ 32 s)
 **Narration.** Now for the reason we're here: a way out. A robot can squeeze through gaps a person can't, so Ariadne
-only plans routes wide enough for a person. It searches outward from the casualty until it reaches an exit, and lays
-down the thread. If something collapses across that path, it doesn't start over. It repairs just the part of the plan
+only plans routes wide enough for a person. It spreads out from every exit at once until it reaches the casualty,
+and lays down the thread. If something collapses across that path, it doesn't start over. It repairs just the part of the plan
 that changed.
 
 **On screen.**

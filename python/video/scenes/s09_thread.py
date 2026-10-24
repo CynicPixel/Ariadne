@@ -1,9 +1,11 @@
-"""Beat 9: the Ariadne Thread. Clearance -> responder-width lattice -> search -> route -> obstruction -> repair.
+"""Beat 9: the Ariadne Thread. Clearance -> person-width lattice -> D* Lite from every exit -> thread -> obstruction ->
+repair of only the changed cells -> measured results.
 
-Mechanism (tagged): maze_demo_0's simulator ground truth (scene_gt.npz: esdf_m, trav_agent, trav_responder,
-GT routes). The search wavefront and the obstruction repair are computed here on that GT lattice (8-connected,
-corner rule; reproduces scene.json lengths_m exactly) and are illustrative: they show what the D* Lite planner
-does, not a run of it. Measured card: evidence.egress() (egress_4.5 replay) and D113's unit-test equivalence.
+Mechanism (tagged illustrative): maze_demo_0's simulator ground truth (scene_gt.npz: esdf_m, trav_agent,
+trav_responder, GT routes). The search is computed here on that GT lattice (8-connected, corner rule; it reproduces
+scene.json lengths_m exactly) and run backwards from every exit to the casualty, as D113's D* Lite does. It shows what
+the planner does; it is not a run of it. Results card: RESULTS_INDEX §8 via evidence.egress() / evidence.mapping()
+(replay spool ci_tiny) and D113's unit test.
 
   python/video/render.sh scenes/s09_thread.py Thread
 """
@@ -14,27 +16,41 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from manim import (DOWN, RIGHT, UP, Create, FadeIn, FadeOut, ImageMobject, Square, Text, ValueTracker, VGroup,
+from manim import (DOWN, LEFT, RIGHT, UP, Create, FadeIn, FadeOut, ImageMobject, Square, Text, ValueTracker, VGroup,
                    always_redraw)
-from manim.constants import RESAMPLING_ALGORITHMS  # nearest-neighbour cells
+from manim.constants import RESAMPLING_ALGORITHMS
+from scipy.ndimage import binary_dilation
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ariadne_video.data import load_scene  # noqa: E402
-from ariadne_video.evidence import egress  # noqa: E402
-from ariadne_video.mobjects import maze_frame, maze_walls, polyline  # noqa: E402
-from ariadne_video.style import (AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, CaptionedScene,  # noqa: E402
-                                 tag)
+from ariadne_video.evidence import egress, mapping  # noqa: E402
+from ariadne_video.mobjects import CodePanel, maze_frame, maze_walls, polyline  # noqa: E402
+from ariadne_video.style import DATA, DIM, FONT, TARGET, TEXT, THREAD, CaptionedScene, tag  # noqa: E402
 
 NB = [(-1, 0, 1.0), (1, 0, 1.0), (0, -1, 1.0), (0, 1, 1.0),
       (-1, -1, 2 ** .5), (-1, 1, 2 ** .5), (1, -1, 2 ** .5), (1, 1, 2 ** .5)]
 
+DSTAR = [
+    "for each exit e:  rhs(e) = 0",
+    "ComputeShortestPath()",
+    "loop:",
+    "  thread = walk g downhill from casualty",
+    "  wait for map changes",
+    "  for each changed cell u:",
+    "    UpdateVertex(u)",
+    "  ComputeShortestPath()",
+]
 
-def dijkstra(trav: np.ndarray, src: tuple[int, int]) -> np.ndarray:
-    """Cell-unit distances from src over trav, 8-connected; a diagonal needs both side cells free (corner rule)."""
+
+def dijkstra(trav: np.ndarray, srcs) -> np.ndarray:
+    """Cell-unit distances from the sources over trav, 8-connected; a diagonal needs both side cells free."""
     R, C = trav.shape
     d = np.full((R, C), np.inf)
-    d[src] = 0.0
-    h = [(0.0, *src)]
+    h = []
+    for s in srcs:
+        d[s] = 0.0
+        h.append((0.0, *s))
+    heapq.heapify(h)
     while h:
         dd, r, c = heapq.heappop(h)
         if dd > d[r, c]:
@@ -49,7 +65,7 @@ def dijkstra(trav: np.ndarray, src: tuple[int, int]) -> np.ndarray:
 
 
 def descend(d: np.ndarray, start: tuple[int, int]) -> list[tuple[int, int]]:
-    """Follow the distance field downhill from start to its source: the route."""
+    """Follow the distance field downhill from start to its nearest source: the route."""
     path, (r, c) = [start], start
     while d[r, c] > 0:
         r, c = min(((r + dr, c + dc) for dr, dc, _ in NB), key=lambda q: d[q])
@@ -61,9 +77,10 @@ class Thread(CaptionedScene):
     def construct(self):
         sc = load_scene(DATA / "maze_demo_0")
         z = np.load(DATA / "maze_demo_0" / "scene_gt.npz")
-        f = maze_frame(sc, height=6.4, center=UP * 0.4)
+        f = maze_frame(sc, height=5.7, center=LEFT * 2.9 + UP * 0.55)
         rows, cols = sc.free.shape
         ox, oy = sc.origin_xy_m
+        cell_xy = lambda rc: np.array(sc.cell_to_xy(np.asarray(rc)))  # noqa: E731
 
         def grid_image(rgba: np.ndarray) -> ImageMobject:
             im = ImageMobject(np.flipud(rgba))  # grid row 0 is SOUTH; image row 0 is the top
@@ -78,76 +95,89 @@ class Thread(CaptionedScene):
             return rgba
 
         walls = maze_walls(sc, f)
-        chip = tag("illustrative", "on simulator ground truth").to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
+        chip = tag("illustrative", "on simulator ground truth").to_edge(UP, buff=0.25).to_edge(LEFT, buff=0.4)
         self.add(walls)
         self.play(FadeIn(chip), run_time=0.5)
 
-        # 1. clearance: distance to the nearest wall (the ESDF)
-        esdf = z["esdf_m"]
-        clear = grid_image(paint(esdf > 0, "#39c5bb", np.clip(esdf / 1.5, 0, 1) * 0.75))
-        self.say("From the shared map: how far is every point from the nearest wall?", dur=2.8,
-                 run_with=[FadeIn(clear, run_time=1.2)])
+        # 1. person width vs robot width: the one gap a robot fits through and a person does not
+        ta, tr, esdf = z["trav_agent"], z["trav_responder"], z["esdf_m"]
+        yy, xx = np.ogrid[-6:7, -6:7]
+        gap = ta & ~tr & ~binary_dilation(tr, structure=yy ** 2 + xx ** 2 <= 36)  # agent-only, > 0.3 m from person space
+        resp = grid_image(paint(tr, "#58a6ff", 0.30))
+        gap_im = grid_image(paint(gap, TARGET, 0.9))
+        robot_route = polyline(f, cell_xy(z["route_agent_start1"]), TARGET, width=3)
+        person_route = polyline(f, cell_xy(z["route_responder_start1"]), THREAD, width=4)
+        legend = VGroup(Text("robot fits", font=FONT, font_size=18, color=TARGET),
+                        Text("a person fits", font=FONT, font_size=18, color="#58a6ff")).arrange(DOWN, aligned_edge=LEFT)
+        legend.next_to(walls, RIGHT, buff=0.3).align_to(walls, UP)
+        self.say("Now for the reason we're here: a way out.", run_with=[FadeIn(resp, run_time=1.2), FadeIn(legend)])
+        self.say("A robot can squeeze through gaps a person can't, so Ariadne only plans routes wide enough for a person.",
+                 run_with=[FadeIn(gap_im, run_time=0.8), Create(robot_route, run_time=1.6),
+                           Create(person_route, run_time=2.6)])
+        self.play(FadeOut(robot_route), FadeOut(person_route), FadeOut(gap_im), FadeOut(legend), run_time=0.5)
 
-        # 2. agent width vs responder width
-        ta, tr = z["trav_agent"], z["trav_responder"]
-        resp = grid_image(paint(tr, "#58a6ff", 0.35))
-        only = grid_image(paint(ta & ~tr, TARGET, 0.75))
-        self.say("A robot fits through gaps a responder cannot.", dur=2.6,
-                 run_with=[FadeOut(clear), FadeIn(resp), FadeIn(only)])
-        cell_xy = lambda rc: np.array(sc.cell_to_xy(np.asarray(rc)))  # noqa: E731
-        agent_route = polyline(f, cell_xy(z["route_agent_start1"]), TARGET, width=3)
-        resp_route = polyline(f, cell_xy(z["route_responder_start1"]), THREAD, width=4)
-        self.say(f"So Ariadne plans for a person: {sc.rho_responder_m:.2f} m clearance, never the robot's.", dur=3.2,
-                 run_with=[Create(agent_route, run_time=1.4), Create(resp_route, run_time=2.0)])
-        self.play(FadeOut(agent_route), FadeOut(resp_route), FadeOut(only), run_time=0.5)
-
-        # 3. search from the target, outward to every exit; the cheapest exit wins
+        # 2. D* Lite, backwards from every exit, until it reaches the casualty
+        code = CodePanel("D* Lite  (Koenig & Likhachev)", DSTAR, font_size=17).to_edge(RIGHT, buff=0.35).shift(UP * 0.55)
         target = tuple(int(v) for v in z["target_cell"])
         exits = [tuple(int(v) for v in s) for s in z["start_cells"]]
-        d = dijkstra(tr, target)
-        best = min(exits, key=lambda e: d[e])
+        d = dijkstra(tr, exits)
         tau = ValueTracker(0.0)
-        wave = always_redraw(lambda: grid_image(paint(d <= tau.get_value(), THREAD, 0.28)))
+        wave = always_redraw(lambda: grid_image(paint(d <= tau.get_value(), THREAD, 0.30)))
         exit_marks = VGroup(*[Square(0.2, color=TEXT, stroke_width=2).move_to(f.p(*cell_xy([e])[0])) for e in exits])
+        tx, ty = sc.target_xy_m
+        casualty = Square(0.22, color=TARGET, stroke_width=3).move_to(f.p(tx, ty))
+        self.play(FadeIn(code), FadeOut(resp), FadeIn(exit_marks), FadeIn(casualty), code.focus(0), run_time=0.8)
         self.add(wave)
-        self.say("Search from the casualty outward, until the first exit is reached.", dur=3.0,
-                 run_with=[FadeIn(exit_marks), tau.animate(run_time=2.8).set_value(d[best])])
-        route = descend(d, best)
+        self.say("It spreads out from every exit at once until it reaches the casualty, and lays down the thread.",
+                 run_with=[code.focus(1), tau.animate(run_time=3.4).set_value(d[target])])
+        route = descend(d, target)
         thread = polyline(f, cell_xy(route), THREAD, width=7)
-        self.say("The Ariadne Thread: a route a person can walk.", dur=2.4,
-                 run_with=[Create(thread, run_time=1.6), FadeOut(resp)])
+        self.play(Create(thread, run_time=1.4), code.focus(3))
         self.remove(wave)
 
-        # 4. an obstruction lands on the thread: only the affected part of the search is repaired
-        mid = route[len(route) // 2]
+        # 3. an obstruction closes the narrowest stretch of the thread; only the changed cells are searched again
+        n = len(route)
+        k = min(route[n // 5: 4 * n // 5], key=lambda rc: esdf[rc])  # the tightest corridor cell on the route
         rr, cc = np.ogrid[:rows, :cols]
-        block = (rr - mid[0]) ** 2 + (cc - mid[1]) ** 2 <= (0.6 / sc.cell_m) ** 2
-        d2 = dijkstra(tr & ~block, target)
+        block = (rr - k[0]) ** 2 + (cc - k[1]) ** 2 <= ((float(esdf[k]) + 0.15) / sc.cell_m) ** 2
+        d2 = dijkstra(tr & ~block, exits)
         changed = ~np.isclose(d, d2) & (np.isfinite(d) | np.isfinite(d2))
         rubble = grid_image(paint(block & sc.free, TARGET, 0.95))
         tau2 = ValueTracker(0.0)
-        repair = always_redraw(lambda: grid_image(paint(changed & (d2 <= tau2.get_value()), TARGET, 0.35)))
-        best2 = min(exits, key=lambda e: d2[e])
-        self.say("Something collapses across the route.", dur=1.8,
-                 run_with=[FadeIn(rubble, scale=1.4), thread.animate.set_stroke(opacity=0.25)])
+        repair = always_redraw(lambda: grid_image(paint(changed & (d2 <= tau2.get_value()), TARGET, 0.4)))
+        self.say("If something collapses across that path, it doesn't start over.",
+                 run_with=[FadeIn(rubble, scale=1.5), thread.animate.set_stroke(opacity=0.25), code.focus(4)])
         self.add(repair)
-        self.say("Only the cells it changed are searched again.", dur=2.8,
-                 run_with=[tau2.animate(run_time=2.4).set_value(np.nanmax(np.where(np.isfinite(d2) & changed, d2, 0)))])
-        thread2 = polyline(f, cell_xy(descend(d2, best2)), THREAD, width=7)
-        self.say("A new thread, before anyone walks into the old one.", dur=2.4,
-                 run_with=[Create(thread2, run_time=1.6), FadeOut(thread)])
+        hi = float(np.max(np.where(np.isfinite(d2) & changed, d2, 0)))
+        self.say("It repairs just the part of the plan that changed.",
+                 run_with=[code.focus(6), tau2.animate(run_time=2.2).set_value(hi)])
+        thread2 = polyline(f, cell_xy(descend(d2, target)), THREAD, width=7)
+        self.play(Create(thread2, run_time=1.4), FadeOut(thread), code.focus(7))
         self.remove(repair)
         self.clear_caption()
-        self.play(*[FadeOut(m) for m in (walls, rubble, thread2, exit_marks, chip)], run_time=0.6)
+        self.wait(0.6)
+        self.play(*[FadeOut(m) for m in (walls, rubble, thread2, exit_marks, casualty, chip, code)], run_time=0.6)
 
-        # 5. measured
-        e = egress()
-        card = VGroup(
-            Text(f"{e['valid']} of {e['found']} routes valid against ground truth", font=FONT, font_size=30, color=TEXT),
-            Text("incremental repair = full replanning on 180 random map changes,", font=FONT, font_size=24, color=TEXT),
-            Text("with 7.6× fewer cells searched", font=FONT, font_size=24, color=TEXT),
-        ).arrange(DOWN, buff=0.25)
-        chips = VGroup(tag("measured", "Ariadne replay, D113"), tag("measured", "unit test, D113")).arrange(RIGHT, buff=0.2)
-        chips.next_to(card, DOWN, buff=0.4)
-        self.say("Checked against ground truth, every time.", dur=3.2, run_with=[FadeIn(card), FadeIn(chips)])
-        self.clear_caption()
+        # 4. measured: replay spool (ci_tiny) and the unit test
+        e, m = egress(), mapping()
+        rows_t = [
+            (f"{e['valid']} of {e['found']}", "egress routes valid for a 0.40 m responder"),
+            (f"{e['length_ratio'] * 100:.1f} %", "final route length vs the true shortest path"),
+            (f"{m['trav_precision']:.3f}", "person-width traversability precision"),
+            (f"{m['occupied_precision']:.3f}", f"wall-map precision (simple baseline {m['occupied_precision_placeholder']:.3f})"),
+            ("7.6×", "less search than replanning from scratch (unit test)"),
+        ]
+        vals = VGroup(*[Text(a, font=FONT, font_size=30, color=THREAD, weight="BOLD") for a, _ in rows_t])
+        vals.arrange(DOWN, aligned_edge=RIGHT, buff=0.32)
+        labels = VGroup(*[Text(b, font=FONT, font_size=21, color=TEXT).next_to(v, RIGHT, buff=0.4)
+                          for v, (_, b) in zip(vals, rows_t)])
+        for l in labels:
+            l.align_to(labels[0], LEFT)
+        table = VGroup(vals, labels)
+        title = Text("The thread, checked against ground truth", font=FONT, font_size=30, color=TEXT)
+        VGroup(title, table).arrange(DOWN, buff=0.5).shift(UP * 0.4)
+        chips = VGroup(tag("measured", "replay, D110–D113"), tag("measured", "unit test, D113")).arrange(RIGHT, buff=0.2)
+        chips.next_to(table, DOWN, buff=0.35)
+        self.play(FadeIn(title), FadeIn(table, lag_ratio=0.15, run_time=2.0), FadeIn(chips))
+        self.wait(3.0)
+        self.play(FadeOut(VGroup(title, table, chips)), run_time=0.5)

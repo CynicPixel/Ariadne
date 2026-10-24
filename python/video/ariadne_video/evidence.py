@@ -59,11 +59,29 @@ def egress() -> dict:
     t = EGRESS.read_text().split("phase4_dstar:", 1)[1]
     get = lambda k: float(re.search(rf"^\s+{k}: ([0-9.]+)", t, re.M).group(1))  # noqa: E731
     return {"found": int(get("routes_found")), "valid": int(get("routes_valid")),
-            "first_route_s": get("time_to_first_route_s")}
+            "first_route_s": get("time_to_first_route_s"), "length_ratio": get("length_ratio")}
+
+
+MAP_VS_GT = REPO / "evaluation/runs/traversability_4.2/map_vs_gt.yaml"
+
+
+def mapping() -> dict:
+    """Volumetric map and responder traversability vs GT on the 4.1/4.2 spool (D110, D111): ours vs the 1.8 placeholder."""
+    import ast
+    rows = {}
+    for line in MAP_VS_GT.read_text().splitlines():
+        m = re.match(r"\s+([^:]+(?: \([^)]*\))?): (\{.*\})\s*$", line)
+        if m:
+            rows.setdefault(m.group(1), []).append(ast.literal_eval(m.group(2)))
+    occ = rows["phase4_tsdf"][0]["occupied_precision"], rows["placeholder_1.8"][0]["occupied_precision"]
+    trav = rows["phase4_hybrid (the product)"][0]
+    return {"occupied_precision": occ[0], "occupied_precision_placeholder": occ[1],
+            "trav_precision": trav["precision"], "trav_recall": trav["recall"], "trav_false_claims": trav["false_claims"]}
 
 
 def main() -> int:
     print("egress:", egress(), "source", EGRESS.relative_to(REPO))
+    print("mapping:", mapping(), "source", MAP_VS_GT.relative_to(REPO))
     g = d178()
     for c in g["cells"]:
         print(f"D178 scene {c['scene']} {c['cell']:15s} budgeted={c['budgeted']!s:5s} gated {c['gated_m']:.4f} m  "
