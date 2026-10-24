@@ -224,8 +224,13 @@ run=build/live/runs/\$(basename "\$src")
 live_dir=\$(basename "\$inner")
 cat > gdbrun.sh <<'GEOF'
 set -x
-apt-get update -qq && apt-get install -y -qq gdb
-gdb -batch -ex run -ex bt -ex 'thread apply all bt 8' --args \\
+RUNNER="bare"
+if apt-get update -qq && apt-get install -y -qq gdb; then RUNNER="gdb"; fi
+run_cmd() { "\$@"; }
+[ "\$RUNNER" = gdb ] && run_cmd() { gdb -batch -ex run -ex bt -ex 'thread apply all bt 8' --args "\$@"; }
+# The binary also self-reports on terminate/SIGSEGV (backtrace_symbols_fd to stderr), so a bare run still
+# yields resolvable addresses when gdb cannot be installed.
+run_cmd \\
   build/docker/cpp/runtime/ariadne_live \\
   --scene "\$GDB_SCENE" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \\
   --mission-config configs/mission/mission_v1.yaml --live-config "\$GDB_RUN/live_config.yaml" \\
@@ -234,7 +239,7 @@ gdb -batch -ex run -ex bt -ex 'thread apply all bt 8' --args \\
 GEOF
 docker run --rm --memory=20g --memory-swap=20g -v "\$PWD":/work -w /work \\
   -e GDB_SCENE=$scene -e GDB_RUN="\$run" -e GDB_LIVEDIR="\$live_dir" \\
-  ariadne/core-dev:dev bash gdbrun.sh > /tmp/gdb_full.log 2>&1
+  ariadne/core-dev:dev bash gdbrun.sh > /tmp/gdb_full.log 2>&1 || true
 echo "gdb container rc=\$?" >> /tmp/gdb_full.log
 tail -300 /tmp/gdb_full.log > \$R/gdb_bt.txt
 grep -n "Program received\|#0 \|#1 \|#2 \|SIGSEGV" /tmp/gdb_full.log | head -40 >> \$R/gdb_bt.txt || true

@@ -617,7 +617,38 @@ std::string JsonEscape(const std::string& s) {
 
 }  // namespace
 
+// The crash teller (collab60d/e: two replays died as 'terminate called without an active exception' and exit
+// 139 with NOTHING in the log - no e.what(), no location; gdb is not in the core image and apt failed on the
+// instance). On terminate or a fatal signal, print raw return addresses (async-signal-unsafe formatting is
+// acceptable: the process is dying anyway); the binary is not stripped, so addr2line/llvm-symbolizer resolves
+// them offline against the payload's own ariadne_live.
+#include <execinfo.h>
+#include <csignal>
+namespace {
+void DumpBacktrace(const char* why) {
+    void* fr[64];
+    const int n = ::backtrace(fr, 64);
+    std::fprintf(stderr, "ariadne_live: FATAL (%s), %d frames:\n", why, n);
+    ::backtrace_symbols_fd(fr, n, 2);
+}
+void OnFatalSignal(int sig) {
+    DumpBacktrace(sig == SIGSEGV ? "SIGSEGV" : sig == SIGABRT ? "SIGABRT" : "signal");
+    ::signal(sig, SIG_DFL);
+    ::raise(sig);
+}
+}  // namespace
+
 int main(int argc, char** argv) {
+    std::set_terminate([] {
+        DumpBacktrace("std::terminate");
+        if (auto e = std::current_exception()) {
+            try { std::rethrow_exception(e); }
+            catch (const std::exception& ex) { std::fprintf(stderr, "ariadne_live: active exception: %s\n", ex.what()); }
+            catch (...) { std::fprintf(stderr, "ariadne_live: active exception: non-std\n"); }
+        }
+        std::abort();
+    });
+    ::signal(SIGSEGV, OnFatalSignal);
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
             directives_path, planner_cfg_path, shadow_cfg_path, worker_socket, collab_socket;
