@@ -178,6 +178,7 @@ ARIADNE_CORE_IMAGE=ariadne/core-dev:dev infra/scripts/live_to_rec.sh "\$inner" $
 for k in 0 1 2; do
   docker run --rm -u "\$(id -u):\$(id -g)" -v "\$PWD":/work -w /work ariadne/core-dev:dev \\
     build/docker/cpp/runtime/ariadne_sim_vo --rec build/rec626 --scene $scene --agent \$k \\
+    --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \\
     --out build/vo_out/agent\$k --spool build/spools/agent\$k --recon-config configs/recon/recon_v1.yaml \\
     > \$R/sim_vo_agent\$k.log 2>&1 || echo "sim_vo agent \$k FAILED" >> \$R/sim_vo_agent\$k.log
 done
