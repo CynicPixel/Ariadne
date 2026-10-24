@@ -5146,3 +5146,28 @@ The conclusion is unchanged and stronger: pool sizing does not close the RTF gap
 The 5-thread recommendation stands on PSI (9.4 % → 0.1 %), not on wall time. Both walls are tabulated by
 `evaluation/runs/perf/pipeline_profile_20261024/scripts/replay.py` → `processed/replay_runs.csv` (container_wall_s,
 runtime_wall_s).
+
+## 2026-10-24 — D235: D182 verdict — the l2conv ALIKED graph is NOT adopted (criteria i and ii missed); K 512 not adopted (D233)
+
+Job 70 (`20261024T051236Z-cpux86-d80b45`, c7i.4xlarge spot, $0.1168) measured D182's pre-registered criteria for the
+l2conv rewrite (ALIKED's dense ReduceL2 as a 1×1 ones-Conv). The 120 real verify pairs were re-extracted with
+ariadne_perf_kfdump. That re-extraction reproduces the pass-A stores: every keypoint is within 6.1e-5 px on all 178
+pair keyframes, and the store replay reproduces production on 120/120 pairs. Evidence:
+`evaluation/runs/perf/pipeline_profile_20261024/processed/{variants,fidelity,knobs}_summary.csv`.
+
+| Criterion | Bar | Measured | |
+|---|---|---|---|
+| (i) accept/reject flips vs 1280x720 K1024 | 0 | **1** (scene 0, pair (0,13)-(1,6): ref verified 68/30/25 → l2 67/29/0 essential_gate; production had rejected it, pnp_gate) | **miss** |
+| (ii) keypoints + scores bitwise; descriptor max \|diff\| | all; ≤ 4.9e-6 | 178/178 bitwise; **7.08e-6** (s0), 6.05e-6 (s1) | **miss** |
+| (iii) p50 at 8 threads | ≥ 1.5× | 1112.7 → 469.9 ms = **2.37×** (1 thread: 2303.6 → 1848.6 ms) | pass |
+
+**Decision: not adopted.** That is D182's rule as pre-registered: if (i) or (ii) misses, it is not adopted. It is not
+relaxed after the fact, although the flip is a borderline pair, one match from the essential gate, which production
+itself rejected. The local 2-keyframe check (≤ 2.07e-6) did not predict the 178-keyframe maximum.
+- The ready adoption commit (`fb05b8b`, branch `a2/d182-l2conv-adopt`) stays unmerged. Production keeps
+  `aliked_n16_k1024_1280x720.onnx`.
+- Revisiting it would need a new pre-registration with a RANSAC-seed envelope for the flip criterion (D233's
+  control). That is a new open, so it is outside the 2026-10-24 feature freeze.
+
+**K 512 (D233's job-70 row): not adopted.** `1280x720:512` against `1280x720:1024` loses 4 accepted pairs (bar: 0)
+at a median PnP-inlier ratio of 0.526 (bar ≥ 0.90).
