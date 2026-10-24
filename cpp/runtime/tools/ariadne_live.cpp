@@ -432,7 +432,10 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     live::MessageQueue images{64};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on);
+    // D229: the lane ingest pipeline, on unless ARIADNE_LANE_PIPELINE=0 (the acceptance A/B's kill switch).
+    const char* lp = std::getenv("ARIADNE_LANE_PIPELINE");
+    const bool pipelined = !(lp && std::string(lp) == "0");
+    live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on, pipelined);
     std::mutex send_mu;
     auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
         std::lock_guard<std::mutex> lk(send_mu);

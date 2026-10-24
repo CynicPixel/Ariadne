@@ -37,6 +37,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <thread>
 #include <set>
 #include <string>
 #include <tuple>
@@ -303,9 +304,13 @@ public:
     /// `lens_on`: apply the read-time D41 lens to every frame. Off (the live runtime's default since the D41
     /// amendment, D227), frames stay the clean pinhole render and Calibration() reports the RENDER intrinsics
     /// with D = 0 - the camera the estimator then actually sees.
+    /// `pipelined` (D229, worker mode only): frame n+1's ingest (decode -> lens -> D -> gray) runs on one
+    /// dedicated thread, handed to the VO thread through a depth-1 in-order slot. Content is bit-identical to the
+    /// single-threaded shape (the unit guard holds the line); only timing overlaps. Depth 1 keeps the D166 pacing
+    /// backpressure: at most one frame is pre-ingested ahead of the estimator.
     LiveSimSource(const std::string& scene, int agent, MessageQueue& images, const GtStore& gt, std::mutex& turn,
-                  const std::string& mission = "live", bool lens_on = true)
-        : agent_(agent), images_(images), gt_(gt), turn_(turn), lens_on_(lens_on) {
+                  const std::string& mission = "live", bool lens_on = true, bool pipelined = false)
+        : agent_(agent), images_(images), gt_(gt), turn_(turn), lens_on_(lens_on), pipelined_(pipelined) {
         const YAML::Node sc = YAML::LoadFile(scene + "/scene.json");
         const YAML::Node m = YAML::LoadFile(scene + "/mission_" + mission + ".json");
         scene_id_ = sc["scene_id"].as<std::string>();
@@ -394,22 +399,82 @@ public:
             t_ns = f.t_ns;
             on_frame(f);
         };
-        for (;;) {
-            const auto t0 = clk::now();
-            auto m = images_.Pop();
-            if (!m) break;
+        // Pair + track one ingested image under the turn lock; true = max_frames reached.
+        auto apply = [&](SimFrameAssembler::Ingested&& in) {
             const auto t1 = clk::now();
             std::unique_lock<std::mutex> lk(turn_);
             const auto t2 = clk::now();
-            const bool emitted = assembler.Feed(m->topic, m->data->data(), m->data->size(), wrapped);
+            const bool emitted = assembler.Apply(std::move(in), wrapped);
             const auto t3 = clk::now();
             lk.unlock();
-            wait_s += sec(t0, t1), lock_s += sec(t1, t2), track_s += sec(t2, t3);
+            lock_s += sec(t1, t2), track_s += sec(t2, t3);
             if (emitted) {
                 if (on_timing) on_timing(t_ns, wait_s, lock_s, track_s);
                 wait_s = lock_s = track_s = 0;
-                if (assembler.emitted() == max_frames) break;
+                if (assembler.emitted() == max_frames) return true;
             }
+            return false;
+        };
+        if (!pipelined_) {
+            for (;;) {
+                const auto t0 = clk::now();
+                auto m = images_.Pop();
+                if (!m) break;
+                wait_s += sec(t0, clk::now());
+                if (apply(assembler.Ingest(m->topic, m->data->data(), m->data->size()))) break;
+            }
+        } else {
+            // D229: the ingest thread runs Ingest for message n+1 while the VO thread tracks frame n. The slot is
+            // depth 1 and in order; Ingest's only cross-message state (D's arrival counters) stays on this one
+            // thread in delivery order, so the emitted bytes equal the single-threaded shape exactly.
+            std::mutex mu;
+            std::condition_variable cv;
+            std::optional<SimFrameAssembler::Ingested> slot;
+            bool eof = false, stop = false;
+            std::exception_ptr err;
+            std::thread ingest([&] {
+                try {
+                    while (auto m = images_.Pop()) {
+                        auto in = assembler.Ingest(m->topic, m->data->data(), m->data->size());
+                        std::unique_lock<std::mutex> lk(mu);
+                        cv.wait(lk, [&] { return !slot.has_value() || stop; });
+                        if (stop) break;
+                        slot.emplace(std::move(in));
+                        cv.notify_all();
+                    }
+                } catch (...) {
+                    std::lock_guard<std::mutex> lk(mu);
+                    err = std::current_exception();
+                }
+                {
+                    std::lock_guard<std::mutex> lk(mu);
+                    eof = true;
+                }
+                cv.notify_all();
+            });
+            for (;;) {
+                const auto t0 = clk::now();
+                std::optional<SimFrameAssembler::Ingested> in;
+                {
+                    std::unique_lock<std::mutex> lk(mu);
+                    cv.wait(lk, [&] { return slot.has_value() || eof; });
+                    if (!slot.has_value()) break;   // eof with nothing pending
+                    in.emplace(std::move(*slot));
+                    slot.reset();
+                }
+                cv.notify_all();
+                wait_s += sec(t0, clk::now());   // D167: the lane's idle time is now the slot wait
+                if (apply(std::move(*in))) {
+                    {
+                        std::lock_guard<std::mutex> lk(mu);
+                        stop = true;
+                    }
+                    cv.notify_all();
+                    break;
+                }
+            }
+            ingest.join();
+            if (err) std::rethrow_exception(err);
         }
         unpaired_ = assembler.unpaired() + assembler.pending();
         return assembler.emitted();
@@ -428,6 +493,7 @@ private:
     perception::LensModel lens_;
     perception::LensMap map_;   // empty when lens_on_ is false
     bool lens_on_ = true;
+    bool pipelined_ = false;    // D229
     core::SE3 T_B_left_, T_B_right_;
     size_t unpaired_ = 0;
 };

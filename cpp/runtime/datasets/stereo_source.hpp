@@ -286,9 +286,17 @@ public:
                       bool strict, Degrade d = {})
         : map_(map), agent_(agent), t_left_(std::move(t_left)), t_right_(std::move(t_right)), strict_(strict), d_(d) {}
 
-    /// Returns true if a frame was emitted through on_frame.
-    bool Feed(std::string_view topic, const uint8_t* data, size_t size,
-              const std::function<void(const StereoFrame&)>& on_frame) {
+    /// One decoded, lens/degrade/gray-processed image: the per-message half of Feed (D229), safe to build on a
+    /// dedicated ingest thread while Apply pairs and emits on the VO thread. The only cross-message state Ingest
+    /// touches is D's per-side arrival counter, so Ingest calls must stay in delivery order (one ingest thread).
+    struct Ingested {
+        bool left = false;
+        int64_t t_ns = 0;
+        cv::Mat gray;
+        cv::Mat rgb;   // left only: the post-lens/degrade RGB (console + splat tee)
+    };
+
+    Ingested Ingest(std::string_view topic, const uint8_t* data, size_t size) {
         const bool left = topic == t_left_;
         if (!left && topic != t_right_) throw std::logic_error("sim: assembler fed a foreign topic");
         const auto im = ros_cdr::DecodeImage(data, size);
@@ -303,9 +311,17 @@ public:
             const int c = left ? 0 : 1;
             seen = perception::DegradeParallel(seen, *d_.params, d_.seed[c], arrived_[c]++, d_.threads);
         }
-        cv::Mat gray;
-        cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), gray, cv::COLOR_RGB2GRAY);
-        const int64_t t = im.header.stamp.ns();
+        Ingested out;
+        out.left = left;
+        out.t_ns = im.header.stamp.ns();
+        cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), out.gray, cv::COLOR_RGB2GRAY);
+        if (left) out.rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
+        return out;
+    }
+
+    /// Pairing + emission (VO thread). Returns true if a frame was emitted through on_frame.
+    bool Apply(Ingested&& in, const std::function<void(const StereoFrame&)>& on_frame) {
+        const int64_t t = in.t_ns;
         if (t <= last_emitted_) {   // a side arriving after its stamp was emitted or dropped
             if (strict_) throw std::runtime_error("sim: image at " + std::to_string(t) + " after its stamp was emitted");
             ++unpaired_;
@@ -313,8 +329,8 @@ public:
         }
         StereoFrame& f = pending_[t];
         f.t_ns = t;
-        (left ? f.left : f.right) = gray;
-        if (left) f.left_rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
+        (in.left ? f.left : f.right) = in.gray;
+        if (in.left) f.left_rgb = in.rgb;
         if (f.left.empty() || f.right.empty()) return false;
         // Complete pair: it must be the oldest pending stamp, or a frame went missing.
         if (pending_.begin()->first != t) {
@@ -334,6 +350,12 @@ public:
         done.id = n_++;
         on_frame(done);
         return true;
+    }
+
+    /// Returns true if a frame was emitted through on_frame (= Apply(Ingest(...)), the single-threaded shape).
+    bool Feed(std::string_view topic, const uint8_t* data, size_t size,
+              const std::function<void(const StereoFrame&)>& on_frame) {
+        return Apply(Ingest(topic, data, size), on_frame);
     }
 
     size_t emitted() const { return n_; }
