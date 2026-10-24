@@ -2,7 +2,7 @@
 depth from two views, and active exposure recovering from a flash.
 
 Real data: the final camera frame of robot 1 (agent 0) and its 475 tracked feature points from the recorded run
-(B's pack: frames/final_agent0.jpg + overlay_final_agent0.json; stored BGR, swapped on read). Active exposure:
+(B's pack: frames/final_agent0.jpg + overlay_final_agent0.json; true-colour files, read as-is). Active exposure:
 evaluation/runs/ph5/d145_rows_20261023T113916Z/replays/r06_failE_expo/exposure_trace.csv (controller on, +2-stop
 event at 20 s) and the all-frames ATE of r06 vs r07 (fixed exposure) from their results.yaml: RESULTS_INDEX §2 (D147,
 replay, sim ci_tiny_dark, one run per row). The rig, the flash and the triangulation figure are illustrative.
@@ -60,7 +60,6 @@ class Seeing(CaptionedScene):
         rig_lbl = Text("stereo cameras + lamp", font=FONT, font_size=18, color=DIM).next_to(body, DOWN, 0.2)
         rig = VGroup(lamp, body, eyes, rig_lbl)
         im = Image.open(PACK / "frames" / "final_agent0.jpg").convert("RGB")
-        im = Image.merge("RGB", im.split()[::-1])  # BGR on disk (see B, frame_dump convention)
         frame = ImageMobject(np.asarray(im)).set_height(4.3).move_to(RIGHT * 1.9 + UP * 0.45)
         ill = tag("illustrative").next_to(rig, UP, 0.15)
         self.say("Each robot looks through two cameras, like a pair of eyes, and carries its own lamp.",

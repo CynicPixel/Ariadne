@@ -2,7 +2,7 @@
 (λ₂ / Fiedler) prioritisation of candidate links.
 
 Data and tags:
-- the three camera frames are real (collab60d pack, frames/agent*_f600.png; BGR on disk, swapped on read);
+- the three camera frames are real (collab60d pack, frames/agent*_f600.png; true-colour PNGs, read as-is);
 - fingerprint bars, packet flights and the byte meter are illustrative (no number on them);
 - λ₂ values are computed live from the toy graph drawn here (illustrative);
 - measured numbers (RESULTS_INDEX): EuRoC R@1 EigenPlaces 0.626 / mean-bit 0.444 / random 0.167 (§4, D62);
@@ -33,7 +33,7 @@ SPECTRAL, GREEDY = 0.970, 0.936
 
 
 def frame(agent: int, height: float = 1.8) -> ImageMobject:
-    im = np.array(Image.open(DATA / "frames" / f"agent{agent}_f600.png").resize((640, 360)))[..., ::-1]  # BGR -> RGB
+    im = np.array(Image.open(DATA / "frames" / f"agent{agent}_f600.png").convert("RGB").resize((640, 360)))  # true colour on disk (B, 18e5a46)
     return ImageMobject(im).set_height(height)
 
 
@@ -149,7 +149,7 @@ class Sharing(CaptionedScene):
                 UP * 0.075)
 
         # a whole picture is too expensive
-        pic = ImageMobject(np.array(Image.open(DATA / "frames" / "agent0_f600.png").resize((320, 180)))[..., ::-1])
+        pic = ImageMobject(np.array(Image.open(DATA / "frames" / "agent0_f600.png").convert("RGB").resize((320, 180))))
         pic.set_height(0.9).move_to([*nodes[0], 0])
         x = Cross(scale_factor=0.45, stroke_color=TARGET, stroke_width=6).move_to([-2.3, 0.85, 0])
         self.say("Sending pictures over a weak radio is far too expensive,",
