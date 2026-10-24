@@ -117,7 +117,11 @@ EOF
 cmd_run() {
   local scene="$1" end_s="$2"
   local refs; refs="$(cmd_push)"
-  local uri; uri="$(cmd_payload "$scene")"
+  # LIVE_AWS_PAYLOAD_URI pins an existing payload (demorec250: the replay legs must run the live leg's exact
+  # binary - the identity guard hashes /proc/self/exe); LIVE_AWS_SKIP_REPLAY=1 runs the live leg only (spinup
+  # brakes at 240 min, so the 250 s mission splits live + two parallel replay-s3 jobs).
+  local uri
+  if [ -n "${LIVE_AWS_PAYLOAD_URI:-}" ]; then uri="$LIVE_AWS_PAYLOAD_URI"; else uri="$(cmd_payload "$scene")"; fi
   local script="$REPO_ROOT/build/live_payload/run-$(date -u +%Y%m%dT%H%M%SZ).sh"
   { prologue "$refs"; cat <<EOF
 aws s3 cp $uri - | tar xz -C /tmp
@@ -127,17 +131,24 @@ mkdir -p build/live/runs
 ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} ARIADNE_PROFILE=${ARIADNE_PROFILE:-} ARIADNE_SAMPLER=${ARIADNE_SAMPLER:-} \
   infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
 run=\$(ls -d build/live/runs/live-* | tail -1)
-infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+EOF
+    if [ -z "${LIVE_AWS_SKIP_REPLAY:-}" ]; then cat <<'EOF'
+infra/scripts/live.sh replay $run $scene_placeholder > $R/replay.log 2>&1 || echo "replay_check_failed" >> $R/replay.log
+EOF
+    fi; cat <<EOF
 tar czf \$R/run.tar.gz --exclude='*.sock' \$run
 EOF
   } > "$script"
+  # the quoted heredoc above cannot expand $scene: substitute it now
+  sed -i "s|\$scene_placeholder|$scene|" "$script"
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
-cmd_replay_s3() {   # S3_RUN_TARBALL SCENE - replay an EXISTING recording in-region (no local download; collab60d)
-  local tarball="$1" scene="$2"
+cmd_replay_s3() {   # S3_RUN_TARBALL SCENE [PAYLOAD_URI] - replay an EXISTING recording in-region
+  local tarball="$1" scene="$2" pay="${3:-}"
   local refs; refs="$(cmd_push)"
-  local uri; uri="$(cmd_payload "$scene")"
+  local uri
+  if [ -n "$pay" ]; then uri="$pay"; else uri="$(cmd_payload "$scene")"; fi
   local script="$REPO_ROOT/build/live_payload/replays3-$(date -u +%Y%m%dT%H%M%SZ).sh"
   { prologue "$refs"; cat <<EOF
 aws s3 cp $uri - | tar xz -C /tmp
@@ -149,7 +160,7 @@ src=\$(ls -d /tmp/runsrc/build/live/runs/live-* | tail -1)
 rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
 cp -a "\$src" build/live/runs/
 run=build/live/runs/\$(basename "\$src")
-ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+ARIADNE_REPLAY_ONLY=${ARIADNE_REPLAY_ONLY:-} ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
 cp "\$run/replay_check.json" \$R/ 2>/dev/null || true
 tar czf \$R/replays.tar.gz "\$run"/replay1 "\$run"/replay2 "\$run"/replay*.log 2>/dev/null || true
 EOF
