@@ -50,16 +50,16 @@ class FalseLoop(CaptionedScene):
         p1 = polyline(f, r1, AGENT[1], width=4)
         chip = tag("illustrative").to_edge(UP, buff=0.25).to_edge(RIGHT, buff=0.4)
         self.play(FadeIn(walls), FadeIn(chip), run_time=0.8)
-        self.say("Two agents, two local maps.", dur=2.0, run_with=[Create(p0, run_time=1.6), Create(p1, run_time=1.6)])
+        self.play(Create(p0, run_time=1.4), Create(p1, run_time=1.4))
 
         a = point_along(r0, 0.7)  # where agent 0 really is
         b = point_along(r1, 0.7)  # where agent 1 really is: a corridor that looks the same
         look = VGroup(*[Square(0.32, color=c, stroke_width=3).move_to(f.p(*q)) for q, c in ((a, AGENT[0]), (b, AGENT[1]))])
         alias = DashedLine(f.p(*b), f.p(*a), color=TARGET, stroke_width=4)
-        self.say("Repeated structure: two different places look identical.", dur=2.6, run_with=[GrowFromCenter(look)])
-        self.say("One false loop closure, and a whole map is dragged away.", dur=3.0,
-                 run_with=[Create(alias, run_time=0.8),
-                           VGroup(p1, look[1]).animate(run_time=2.2).shift(f.p(*a) - f.p(*b))])
+        self.play(GrowFromCenter(look), run_time=0.6)
+        self.play(Create(alias, run_time=0.6))
+        self.play(VGroup(p1, look[1]).animate(run_time=1.8).shift(f.p(*a) - f.p(*b)))
+        self.wait(0.4)
 
         # the gate: agent 1's pose is known at its entrance; odometry uncertainty grows along the way
         self.play(VGroup(p1, look[1]).animate.shift(f.p(*b) - f.p(*a)), FadeOut(alias), run_time=0.9)
@@ -68,13 +68,13 @@ class FalseLoop(CaptionedScene):
         start = r1[0]
         entry = Dot(f.p(*start), color=AGENT[1], radius=0.07)
         alias2 = DashedLine(f.p(*b), f.p(*a), color=TARGET, stroke_width=4)
-        self.say("But Ariadne knows where each agent came in, and how uncertain it is since then.", dur=3.2,
-                 run_with=[FadeIn(entry, scale=2), GrowFromCenter(ell)])
+        self.say("And one last guard: Ariadne remembers where each robot came in.",
+                 run_with=[FadeIn(entry, scale=2), GrowFromCenter(ell, run_time=1.6)])
         x = Cross(scale_factor=0.18, stroke_color=TARGET).move_to(alias2.get_center())
-        self.say("A loop that lands outside that uncertainty is rejected.", dur=2.6,
-                 run_with=[Create(alias2, run_time=0.6)])
+        self.say("A match that would teleport a robot somewhere its own sense of motion says it can't be just isn't believed.",
+                 run_with=[Create(alias2, run_time=0.8)])
         self.play(GrowFromCenter(x), alias2.animate.set_opacity(0.25), run_time=0.6)
-        self.wait(0.4)
+        self.wait(0.3)
         self.clear_caption()
         self.play(FadeOut(VGroup(walls, p0, p1, look, ell, entry, alias2, x, chip)), run_time=0.7)
 
@@ -113,13 +113,17 @@ class FalseLoop(CaptionedScene):
         lab_bad = Text("no gate", font=FONT, font_size=18, color=TARGET).next_to(bad, UP, 0.15)
         lab_good = Text("entry gate", font=FONT, font_size=18, color=GOOD).next_to(good, UP, 0.15)
 
-        self.play(FadeIn(title), FadeIn(chip), Create(axis), FadeIn(ticks), FadeIn(rows), run_time=1.0)
-        self.say(f"Without the gate, aliased loops pulled the merged map {worst_base:.2f} m off.", dur=3.0,
-                 run_with=[FadeIn(bad, lag_ratio=0.1), FadeIn(lab_bad)])
-        self.say(f"With it: {worst_gated * 100:.1f} cm or better in every budgeted configuration (3-seed mean).",
-                 dur=3.2, run_with=[*[Create(a) for a in arrows], Transform(bad.copy(), good), FadeIn(lab_good)])
-        self.say(f"And of {tested} genuine loop closures tested, {rejected} were thrown away.", dur=3.2)
         clean = [c for c in g["cells"] if c["scene"] == 1]
         worse = sum(c["gated_m"] > c["base_m"] for c in clean)
-        self.say(f"Where there was no aliasing, nothing got worse: {worse} of {len(clean)} configurations.", dur=3.0)
-        self.clear_caption()
+        foot = VGroup(
+            Text(f"without the gate: {worst_base:.2f} m off  →  with it: {worst_gated * 100:.1f} cm or better "
+                 "(every budgeted configuration, 3-seed mean)", font=FONT, font_size=19, color=TEXT),
+            Text(f"{rejected} of {tested} genuine loop closures discarded  ·  no aliasing: {worse} of {len(clean)} "
+                 "configurations got worse", font=FONT, font_size=19, color=TEXT),
+        ).arrange(DOWN, buff=0.15).to_edge(DOWN, buff=0.3)
+        self.play(FadeIn(title), FadeIn(chip), Create(axis), FadeIn(ticks), FadeIn(rows), run_time=1.0)
+        self.play(FadeIn(bad, lag_ratio=0.1), FadeIn(lab_bad), run_time=1.0)
+        self.play(*[Create(a) for a in arrows], Transform(bad.copy(), good), FadeIn(lab_good), run_time=1.6)
+        self.play(FadeIn(foot, lag_ratio=0.3), run_time=1.0)
+        self.wait(4.0)
+        self.play(FadeOut(VGroup(title, chip, axis, ticks, rows, bad, good, arrows, lab_bad, lab_good, foot)), run_time=0.6)
