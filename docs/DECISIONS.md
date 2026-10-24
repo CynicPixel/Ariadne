@@ -5058,3 +5058,33 @@ confirmed with amendments by B (2026-10-24).
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
+
+## 2026-10-24 — D232: the estimator is thread-count-invariant; the pipeline's critical path is the per-agent lane (measured)
+
+**Context.** M's pipeline profile (measurement only). Job 44b (`20261024T024346Z-cpux86-29bfe2`, c7i.4xlarge) replayed
+B's ma200 run (`70a514`: 200 s, 3 agents, pre-D179 lockstep) from its recorded `inputs.mcap`. It used that run's own
+snapshot, payload binaries and core image (by id), with the flags of `live.sh cmd_replay`. The only variable was the
+OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/perf/pipeline_profile_20261024/aws_replay/`.
+
+**Facts.**
+- **Thread-count invariance.** `estimate_body.tum` is bit-identical at pools of 16 (default), 5 and 2: all 3 agents,
+  4001 poses each, max position difference 0. It is also identical to B's own replay1. So, unlike `cv::ALIKED`
+  (LIVE_COLLAB §7: output depends on the thread count), the estimator's pool size is not part of the determinism
+  contract.
+- **Pool sizing barely helps.** Wall time 402.8 s (16), 383.4 s (5, −4.8 %), 417.9 s (2: keyframes 117 → 155 ms). PSI CPU
+  pressure is 9.4 % at 16 and 0.1 % at 5. Recommendation to B: default the worker pool to 5 threads (3 × 5 = 15 of 16
+  vCPU). Sizing does not close the RTF 0.52 → 1 gap.
+- **Critical path.** The 3 per-agent lane threads run at 93-97 % of one core each, while the box is 51 % busy and the
+  pool threads sit near 20 %. Per frame the lane spends ~94 ms (mean): ~36 ms in the worker's own track and keyframe
+  timers, and ~58 ms of ingest on the same thread. The ingest (`SimFrameAssembler::Feed`, per image) is a memcpy,
+  then the scalar single-threaded double-precision `ApplyLens`, then cvtColor, then a clone. Per-function attribution
+  comes from job 45 (perf).
+
+**Decision (M, 2026-10-24): the fix order sent to B.**
+- (a) Parallelise `ApplyLens` rows with `cv::parallel_for_`. Bit-identical, so no decision is needed.
+- (a2) Pipeline the lane: ingest of frame n+1 on a second thread while frame n tracks. A 2-stage in-order SPSC
+  hand-off on the same data, also bit-identical.
+- (a3) Remove the redundant copies where ownership allows.
+- (b) `cv::remap` with `CV_16SC2` maps is NOT taken. It changes pixels by ≤ 1 LSB, and every banked result consumed
+  the current operator (the record/replay invariant). Revisit only if (a) + (a2) miss RTF 1, as a pre-registered D41
+  amendment.
