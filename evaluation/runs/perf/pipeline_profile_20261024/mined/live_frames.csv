@@ -1,0 +1,10 @@
+run,label,agent,frames,track_p50_ms,track_p95_ms,track_max_ms,wait_p50_ms,wait_mean_ms
+70a514-live,ma200-pre-D179-lockstep-live,0,4001,87.2,229.1,268.5,736.1,853.9
+70a514-live,ma200-pre-D179-lockstep-live,1,4001,89.0,229.2,275.0,733.5,855.2
+70a514-live,ma200-pre-D179-lockstep-live,2,4001,88.3,222.6,274.3,735.3,858.2
+70a514-replay1,ma200-pre-D179-replay-from-mcap,0,4001,77.8,209.7,284.4,0.0,0.0
+70a514-replay1,ma200-pre-D179-replay-from-mcap,1,4001,77.2,213.0,266.9,0.0,2.5
+70a514-replay1,ma200-pre-D179-replay-from-mcap,2,4001,76.4,209.7,267.1,0.0,4.5
+70a514-replay2,ma200-pre-D179-replay-from-mcap,0,4001,77.4,210.4,290.1,0.0,0.0
+70a514-replay2,ma200-pre-D179-replay-from-mcap,1,4001,76.8,212.0,275.3,0.0,2.4
+70a514-replay2,ma200-pre-D179-replay-from-mcap,2,4001,76.5,207.9,274.1,0.0,4.1

@@ -2,6 +2,8 @@
 # Host side of the pipeline profile's AWS replay (infra/eval/perf_aws.sh; A2, 2026-10-24). From the repo root, clean HEAD:
 #   infra/eval/perf_aws_launch.sh stage            inputs.tar (models incl. the 960x540/640x360 exports) -> S3 staging
 #   infra/eval/perf_aws_launch.sh run PROFILE [STAGES]   ONE foreground spinup.sh attempt (cpux86 | cpuarm), for slotq
+#   infra/eval/perf_aws_launch.sh replay           ONE spinup.sh attempt (cpux86): perf_replay_aws.sh, B's ma200 run replayed
+#                                                  from its inputs.mcap with its own code/images, 3 OpenCV pool sizes
 #   infra/eval/perf_aws_launch.sh teardown         delete the staged inputs
 # The recordings are the persistent datasets collab_aws_launch.sh keeps (never re-uploaded, never deleted here); the
 # pass-A stores are read from run 0345a5's results (STORES_FROM). Nothing is pushed to ECR: the instance builds the
@@ -42,5 +44,9 @@ run() {   # $1 = cpux86 | cpuarm, $2 = stages
   exec infra/scripts/spinup.sh run --profile "$1" --max-minutes 120 -- \
     "COMMIT=$commit STAGE=$STAGE DATA0=$DATA0 DATA1=$DATA1 STORES_FROM=$STORES_FROM STAGES='$stages' bash infra/eval/perf_aws.sh"
 }
+replay() {   # needs no staging: every input is B's run's own S3 objects (snapshot, payload, run.tar.gz) + its ECR image
+  exec infra/scripts/spinup.sh run --profile cpux86 --max-minutes 100 -- \
+    "RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=$BUCKET/runs/live-payload-20261023T200347Z/payload.tar.gz BUCKET=$BUCKET bash infra/eval/perf_replay_aws.sh"
+}
 teardown() { "$AWS" aws s3 rm --recursive "$STAGE/" --only-show-errors; log "teardown done"; }
-"${1:?stage | run PROFILE [STAGES] | teardown}" "${@:2}"
+"${1:?stage | run PROFILE [STAGES] | replay | teardown}" "${@:2}"
