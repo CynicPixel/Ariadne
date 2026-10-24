@@ -286,6 +286,27 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
+cmd_pack_s3() {   # S3_RUN_TARBALL SCENE PAYLOAD_URI - build the film pack + gate report from a recording, no replay
+  local tarball="$1" scene="$2" pay="$3"
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/packs3-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $pay - | tar xz -C /tmp
+cp -a /tmp/p/. .
+mkdir -p build/runsrc
+aws s3 cp $tarball - | tar xz -C build/runsrc
+inner=\$(find build/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap" > \$R/pack_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
+python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
+python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_build.log 2>&1 || true
+tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz "\${ARIADNE_RESULTS_URI%/results}/pack.tar.gz" || true
+grep -h "mission loop failed\|KILLED\|exited rc" "\$inner"/../*.log 2>/dev/null | head -5 >> \$R/pack_build.log || true
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
 cmd_batch() {
   local jobs="$1" max_min="$2"
   [ -f "$REPO_ROOT/$jobs" ] || { log "no job file $jobs"; exit 2; }
@@ -349,6 +370,7 @@ case "${1:-}" in
   spool-s3) shift; cmd_spool_s3 "$@" ;;
   replay-gdb) shift; cmd_replay_gdb "$@" ;;
   extract-s3) shift; cmd_extract_s3 "$@" ;;
+  pack-s3) shift; cmd_pack_s3 "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
