@@ -22,7 +22,7 @@
 #   run    TESTS       a ctest -R regex; empty = every test; "none" = no ctest (build + EXTRA only)
 #          EXTRA       optional shell command, run after the build as uid 1000 from /work with the test environment;
 #                      whatever it writes to $CI_OUT comes back as extra_out/
-#          MAX_MINUTES the kernel's own timeout (push -t), default 300
+#          MAX_MINUTES the kernel's own timeout (push -t), default 90 (a full ctest takes ~33 min; 3 of 11 kernels on 2026-10-24 stalled RUNNING with no logs, so the Kaggle-side brake must be short. [UNVERIFIED: that push -t is enforced])
 #          JOBS / CTEST_JOBS  default 4 / 4 (the kernel has 4 vCPU)
 # The repo goes up as `git archive COMMIT` (tracked files only) minus IDEA.md and docs/ARIADNE_PHASED_PLAN.md
 # (maintainer, 2026-10-24); everything on Kaggle is PRIVATE. The token never leaves this host: the Kaggle CLI runs
@@ -150,7 +150,7 @@ json.dump({"id": kid, "title": title, "code_file": "kernel.py", "language": "pyt
            "is_private": True, "enable_gpu": False, "enable_tpu": False, "enable_internet": True,
            "dataset_sources": ds, "competition_sources": [], "kernel_sources": []}, open(out, "w"), indent=2)
 EOF
-  local msg; msg="$(kg kernels push -p "/b/ci_kaggle/$NAME/kernel" -t "$(( ${MAX_MINUTES:-300} * 60 ))" 2>&1 | tail -1)"
+  local msg; msg="$(kg kernels push -p "/b/ci_kaggle/$NAME/kernel" -t "$(( ${MAX_MINUTES:-90} * 60 ))" 2>&1 | tail -1)"
   case "$msg" in
     *"successfully pushed"*) ;;
     *"session count"*) log "all Kaggle CPU sessions busy: $msg"; exit 75 ;;

@@ -75,7 +75,10 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset LD_LIBRARY_PATH PYTHONPATH PYTHONHOME CONDA_PREFIX
 
 step "1 apt (opencv-base's build list + ccache binutils of the dev stage)"
-apt-get update -qq > "$R/apt.txt" 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+# Every network step is bounded (2026-10-24: two kernels sat RUNNING with no logs, the end of their build failure
+# never reached; a hung mirror or clone is unbounded otherwise, and a kernel's output is invisible until it ends).
+# A step that times out returns 124 and takes the ordinary failure path, so the logs come back.
+timeout 900 apt-get update -qq > "$R/apt.txt" 2>&1 && DEBIAN_FRONTEND=noninteractive timeout 1800 apt-get install -y -qq --no-install-recommends \
   build-essential g++ cmake ninja-build git ca-certificates pkg-config \
   libzstd-dev zlib1g-dev libpng-dev libjpeg-turbo8-dev libtiff-dev python3 python3-dev ccache binutils \
   >> "$R/apt.txt" 2>&1 || fail "apt (apt.txt)"
@@ -129,6 +132,8 @@ mkdir -p "$C/out"
     "$COMMIT"
   printf 'export PATH=/opt/pyshim:/usr/sbin:/usr/bin:/sbin:/bin HOME=/home/ariadne CCACHE_DIR=/home/ariadne/.ccache\n'
   printf 'export CMAKE_C_COMPILER_LAUNCHER=ccache CMAKE_CXX_COMPILER_LAUNCHER=ccache\n'
+  # FetchContent's six git clones: abort one that moves < 1 KB/s for 60 s instead of hanging.
+  printf 'export GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=60\n'
   printf 'JOBS=%q CTEST_JOBS=%q\n' "$JOBS" "$CTEST_JOBS"
 } > "$C/env.sh"
 printf '%s' "$TESTS" > "$C/tests.regex"
@@ -147,10 +152,13 @@ ctest --test-dir /work/build/docker --output-on-failure --no-tests=error --paral
 EOF
 chown -R ariadne:ariadne /work
 as_dev() { runuser -u ariadne -- env -i bash -c "cd /work && $1"; }   # env -i: nothing of Kaggle's leaks in
+as_dev_t() {   # $1 = timeout (timeout(1) syntax), $2 = command: as_dev, bounded; 124 = timed out
+  timeout --kill-after=60 "$1" runuser -u ariadne -- env -i bash -c "cd /work && $2"
+}
 
 step "4 build (JOBS=$JOBS)"
 t=$(date +%s)
-as_dev 'bash /work/build/ci/build.sh' > "$C/build.log" 2>&1
+as_dev_t "${BUILD_TIMEOUT:-100m}" 'bash /work/build/ci/build.sh' > "$C/build.log" 2>&1   # ~25 min measured
 BUILD_RC=$?
 echo "build_exit $BUILD_RC seconds $(( $(date +%s) - t ))" >> "$R/steps.txt"
 grep -m3 -E 'Found OpenCV|OpenCV_DIR|OpenCV [0-9]' "$C/build.log" > "$R/opencv_found.txt" 2>/dev/null
@@ -164,7 +172,7 @@ if [ "$TESTS" = none ]; then
 else
   step "5 ctest -R '${TESTS:-<all>}' (CTEST_JOBS=$CTEST_JOBS, require_models=$REQUIRE_MODELS)"
   t=$(date +%s)
-  as_dev 'bash /work/build/ci/ctest.sh' > "$C/ctest.log" 2>&1
+  as_dev_t "${CTEST_TIMEOUT:-90m}" 'bash /work/build/ci/ctest.sh' > "$C/ctest.log" 2>&1   # ~7 min measured
   CTEST_RC=$?
   echo "ctest_exit $CTEST_RC seconds $(( $(date +%s) - t ))" >> "$R/steps.txt"
   tail -15 "$C/ctest.log"
