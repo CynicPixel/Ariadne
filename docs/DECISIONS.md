@@ -5479,3 +5479,31 @@ byte-table run. Scored with `collab_gate.py`; evidence in `evaluation/runs/colla
   - A few rows also carry a higher planned price (142–150 kB). That's the D171 shared-keyframe pricing.
 - **Verdict:** I6 byte table FAIL, reported as such. The fix (an expected answer rate in the predictor, calibrated
   cross-scene; or fewer unanswered requests) needs its own preflight and pre-registration before the next byte run.
+
+## 2026-10-24 — D228: estimator workers pin their OpenCV pool to 5 threads (maintainer-approved, D232 line)
+**Decision:** RunEstimatorWorker (D168 process-per-agent mode) calls cv::setNumThreads on entry: default 5,
+env ARIADNE_WORKER_CV_THREADS overrides (experiments only). The in-process arrangement (D152a turn lock) is
+untouched — its semantics assume an idle pool per call, and it is not the production path.
+**Why:** A2's job 46 on c7i.4xlarge (3 workers, lens off): trajectories bit-identical 16 vs 5 threads (the
+estimator is thread-count-invariant), wall −1.6 %, and cpu PSI 26 % → 1.2 % — the fleet stops thrashing the box.
+**Evidence:** evaluation/runs/perf/pipeline_profile_20261024/processed/replay_perf_threads.csv (A2);
+run 20261024T051058Z-cpux86-f94953.
+
+## 2026-10-24 — D229: the lane ingest pipeline (D232 item a2) — pre-registered before code
+**Decision:** in LiveSimSource (worker mode only), frame n+1's ingest — CDR decode → lens (D41, when on) →
+D (when set) → gray — runs on ONE dedicated ingest thread, handing results to the VO thread through a DEPTH-1
+in-order SPSC. SimFrameAssembler::Feed splits into Ingest (stateless per message except the per-side D arrival
+counter, which stays in delivery order on the single ingest thread) and Apply (pairing state + emission, on the
+VO thread). Depth 1 preserves the D166 pacing backpressure: at most one frame is pre-ingested, so no queue
+between gz and the estimator holds more than one sub-step. The D167 wait timer becomes the SPSC pop wait.
+**Why:** post-D227 the lane sits at 48–52 ms ≈ the 50 ms frame period (A2 job 46); overlapping ingest with
+tracking is the remaining lever to RTF ≥ 1 for the demo. The ingest output is bit-identical regardless of which
+thread computes it, so content is unchanged by construction; only timing moves.
+**Acceptance before merge (maintainer, via M, 2026-10-24):**
+1. lockstep barrier semantics unchanged — a frame must not cross a barrier cut (the gate still reads estimator
+   progress, and ingest-ahead is bounded at 1);
+2. live + replay×2 byte-identical on a 3-agent run;
+3. pre/post trajectory digest on the same recorded inputs digest-neutral (ma_smoke3 lens-off reference
+   21a51e0d5d3660ba…), or the divergence explained;
+4. RTF measured on c7i via slotq, lens off, 5 threads;
+5. a unit guard: Ingest+Apply across threads ≡ the old Feed, byte-identical, including unpaired/drop handling.
