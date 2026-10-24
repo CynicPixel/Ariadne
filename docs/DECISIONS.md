@@ -5345,3 +5345,93 @@ the new baseline.
 - default (off) replay ×2: identical to each other (deterministic), trace sha256 21a51e0d5d3660ba… — the new baseline.
 - Manifests: `camera_config: rig_stereo_v2+lens(D41)` (restored) vs `rig_stereo_v2+lens(off)` (default).
 - (artifacts: `build/live/ma_smoke3/.../replay_lenson`, `replay_lensoff{1,2}`.)
+
+## 2026-10-24 — D210–D229 registry backfill (B): the Phase-8 block, recorded (M's audit: STATUS claimed them, DECISIONS lacked them)
+
+D210, D228, D229 are UNUSED (free numbers in B's block). D230/D231 are A2's (recorded above). Each entry: decision,
+why, evidence.
+
+### D211: maze_dark — the arch §42 demo world (commit 663e4ce)
+Dark variant of the demo maze, lit only by the agents' own spot lamps. Built so the dark demo is a scene swap, not a
+code path. Evidence: `build/live/scenes/maze_dark_0/`. NOTE: all dark/lighting/dust work is PAUSED by the maintainer
+(see D217); the world exists, nothing consumes it yet.
+
+### D212: three agents in worldgen (commit 9659abe)
+Entrances to 3, greedy-maximin start assignment, N-agent scheduling, a third mover board. Why: the multi-agent demo
+needs N=3; worldgen was the first hard-coded-2 to fall. Evidence: mission_live.json of any 3-agent scene;
+`live.sh demo-mission` presets.
+
+### D213: the live loop is N-agent (commit 71df9aa)
+Every lane/choice/command path in ariadne_live sized by the scene's agent count; placeholder planner seam kept.
+Why: D175. Evidence: 2-agent oracle A/B digest 3d10d011018c42d9 byte-identical pre/post (multiagent:false untouched).
+CAVEAT recorded honestly: two "<2" leftovers survived this change and were found later — the barrier gate (fixed,
+D225) and the operator-directive filter (fixed, commit 780f122).
+
+### D214: a live recording is a sim_record recording (commit 0b02fef)
+SimSource tools (sim_vo, spools, frame dump) read live run dirs directly (live_to_rec). Why: one toolchain for
+datasets and live runs; the splat training spools come from exactly what the estimator consumed. Evidence: the
+ma200-family spool builds; `cpp/runtime/datasets/` readers unchanged since.
+
+### D215: the demo console (commits 48146ec + 5fff283)
+GT ghost arrows, per-agent camera panes (/api/cam/{k}.jpg + .json), reroute events, N-agent UI; then the feature
+overlay (StereoVo::KeyframeObservationsLeft -> #kf CV_32FC2 row -> snapshots/cam_<k>.json -> canvas `featovl`).
+Why: the judges see what the estimator sees. Evidence: overlay validated 491/371/298 pts on 3 agents; trace digest
+3d10d011018c42d9 unchanged (display-only).
+
+### D216: demo-mission knobs (commit 55fae85)
+`live.sh demo-mission PRESET SEED [AGENTS] [TARGET] [RTF]` + `python -m dataset_tools.worldgen demo-mission`:
+user-chosen entrance subset and target, world untouched; check_demo_target floods the ESDF at ρ_responder (invariant
+4). The live.demo block in mission_live.json is authoritative. Evidence: default recompose byte-identical; knob runs
+in `build/live/`.
+
+### D217: DEFERRED — the dark/lamp demo toggle
+Maintainer (via M, 2026-10-24): pause ALL dark/lighting/dust work until the multi-agent POC runs. The number is
+reserved for the toggle; no code exists. Revisit after the POC demo is green at real time.
+
+### D219: live_aws.sh knobs (commit 149f01c)
+LIVE_AWS_PROFILE (cpux86 = c7i CPU slots), LIVE_AWS_MAX_MIN, and cmd_run bakes the caller's
+ARIADNE_LOCKSTEP/LIVE_CONFIG/PLANNER_CONFIG/RT_MEM/PROFILE/SAMPLER into the remote script. Why: slotq jobs must be
+one self-contained line. Evidence: every 5x/6x-B job file since.
+
+### D220: the live splat tee (commit 2a123e8)
+SplatTee in ariadne_live: #kf = u32 len | JSON (agent, id, t_ns, pose_version, T_O_C, K full-res, Kz spool) | Z fp16 |
+S fp16 | RGB; #t_w_o xyzquat (qw last); bounded 8/agent, drop-oldest, sender thread per agent; ARIADNE_SPLAT=1 or a
+pre-set ARIADNE_RECON_SOCK. Why: D230/D231 contract with A2's gsplat service. Evidence: no-tee digest
+cd6a07aa6fdd000a reproduced 3x with tee variants (determinism-neutral); e2e with the real service: placement
+<= 2.2e-16, 92.9 % of wall points within 10 cm, 71 kf -> 4 submaps, 259,994 Gaussians.
+
+### D221: the live collaboration wiring (commits 78f1595, d530c42, 030813b)
+`collab: true` (requires multiagent): CollabTee in the estimator worker (serialization only, NO DNN in the lane),
+one ariadne_collab_worker per agent on /tmp sockets, collab_inbox operator actions (cut_comms/restore_comms/
+inject_false), configs collab_live_v1.yaml (collab_v2 over ideal) + live_collab_v1.yaml; the payload carries the
+worker binary and .cache/models. Why: D174. Evidence: collab60c live PASS (e9e975); acceptance pending (see D179
+notes + collab60d diagnosis).
+
+### D222: the comms panel (commit 67a8a4f)
+Console ingests the planner's multiagent block and CollabLive telemetry ("kept_inter_edges"); /api/frame carries
+comms/collab real byte counts; POST /api/collab/{action}?groups= drives cut/restore/inject from the UI. Why: the
+operator story (and invariant 6's bytes visible live). Evidence: D222 commit; panel exercised in the collab60x runs.
+
+### D223: collab rewired onto D179's async CollabLive (commits 948a540, 0b14df6 b, 60ed7b8 c)
+Fleet thread owns compute+radio; Send(k,fn,t) enqueues in call order; Drain(k,T) at barrier step 2 (FIFO-per-sender,
+logged + replayed); ONE Snapshot(T) per barrier, all reads off the snapshot (b). A missing agent view = "nothing
+heard yet" (fresh-node semantics: singleton component, broker=self, acked 0) — never .at() (c; the collab60b exit-139
+lesson, run 056f14). Why: the maintainer's no-barrier-sync order for collab. Evidence: collab60c live PASS at this
+shape; replay logs replayable from collab_events.jsonl.
+
+### D224: pipeline profiling hooks + A2's sampler (commits 805ae69, 7e082c1, 95544d6)
+Default-off instrumentation (digest-neutral) + perf_sampler.sh vendored verbatim (sha c93b1497ce8484a3) so
+ARIADNE_SAMPLER works on instances. Why: D232 perf work needs per-function attribution, not guesses. Evidence: A2's
+job 45 attribution ran on these hooks.
+
+### D225 (root entry; addendum above): the lockstep barrier waits on EVERY lane (commit 0105f5e)
+The barrier wait and end condition were hardcoded lanes[0]&&lanes[1] (D213 leftover): agent 2 was never waited on and
+its keyframes slid past barrier cuts under load. Found as ma200's replay1 != replay2 trace divergence (STOP-THE-LINE,
+run 70a514; first diff t=70, keyframes_integrated agent2 115 vs 114). Fix: lockstep_gate.hpp predicates over N lanes.
+Evidence: replay x2 of ma200's own recording byte-identical post-fix (82166ed26dc6094b); unit guard
+PreD225ShapeTripsHere; ma200 rerun 626abe live+replay PASS. Also: cmd_replay honors ARIADNE_RT_MEM (41fb2d3).
+
+### D226: ApplyLens rows under cv::parallel_for_ (commit 5cb9e71)
+The D41 lens resample parallelized bit-identically (rows are independent; fixed arithmetic per pixel). Evidence:
+ma_smoke3 replay trace sha f732c08056b1f937 unchanged. NOTE: in the live runtime this is moot since D227 (lens off
+by default); it still serves SimSource/dataset consumers with the lens on.
