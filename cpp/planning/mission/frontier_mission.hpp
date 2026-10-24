@@ -80,6 +80,37 @@ struct Briefing {
 
 /// The briefing of `scene_dir` (scene.json, mission_<mission>.json, routes/agent_<k>.json). World anchor of agent k:
 /// its entry pose x the rig extrinsic (body <- rectified-left camera, R1 ~ I on the ideal sim rig).
+/// Each agent's odometry frame (the rectified left camera at entry) in W, from the scene's entrances and the rig's
+/// body->camera extrinsic: the known-start placement (D178 uses it as the entry prior; LoadBriefing's T_W_O).
+inline std::vector<core::SE3> EntryPoses(const std::string& scene_dir, int n_agents, const std::string& mission = "default",
+                                         std::vector<double>* entry_z = nullptr) {
+    const YAML::Node scene = YAML::LoadFile(scene_dir + "/scene.json");
+    const YAML::Node m = YAML::LoadFile(scene_dir + "/mission_" + mission + ".json");
+    core::SE3 T_B_C;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) T_B_C.R(i, j) = m["R_B_optical_rows"][i][j].as<double>();
+        T_B_C.t(i) = m["t_B_camera_m"]["left"][i].as<double>();
+    }
+    std::vector<core::SE3> out;
+    for (int k = 0; k < n_agents; ++k) {
+        const YAML::Node e = scene["entrances"][k];
+        if (e["agent"].as<int>() != k) throw std::runtime_error("briefing: entrance order != agent id");
+        const YAML::Node route = YAML::LoadFile(scene_dir + "/routes/agent_" + std::to_string(k) + ".json");
+        const double yaw = e["start_yaw_deg"].as<double>() * M_PI / 180.0;
+        core::SE3 T_W_B;
+        T_W_B.R = core::Mat3::Identity();
+        T_W_B.R(0, 0) = std::cos(yaw);
+        T_W_B.R(0, 1) = -std::sin(yaw);
+        T_W_B.R(1, 0) = std::sin(yaw);
+        T_W_B.R(1, 1) = std::cos(yaw);
+        T_W_B.t = core::Vec3(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>(),
+                             route["segments"][0]["start"][2].as<double>());
+        out.push_back(T_W_B * T_B_C);
+        if (entry_z) entry_z->push_back(T_W_B.t.z());
+    }
+    return out;
+}
+
 inline Briefing LoadBriefing(const std::string& scene_dir, const MissionConfig& cfg, int n_agents = 2,
                              const std::string& mission = "default") {
     const YAML::Node scene = YAML::LoadFile(scene_dir + "/scene.json");
@@ -97,27 +128,7 @@ inline Briefing LoadBriefing(const std::string& scene_dir, const MissionConfig& 
     b.gs.nx = scene["esdf"]["cols"].as<int>();
     b.gs.ny = scene["esdf"]["rows"].as<int>();
     b.gs.nz = int(std::ceil(cfg.z_max / b.gs.cell));
-    core::SE3 T_B_C;
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) T_B_C.R(i, j) = m["R_B_optical_rows"][i][j].as<double>();
-        T_B_C.t(i) = m["t_B_camera_m"]["left"][i].as<double>();
-    }
-    for (int k = 0; k < n_agents; ++k) {
-        const YAML::Node e = scene["entrances"][k];
-        if (e["agent"].as<int>() != k) throw std::runtime_error("briefing: entrance order != agent id");
-        const YAML::Node route = YAML::LoadFile(scene_dir + "/routes/agent_" + std::to_string(k) + ".json");
-        const double yaw = e["start_yaw_deg"].as<double>() * M_PI / 180.0;
-        core::SE3 T_W_B;
-        T_W_B.R = core::Mat3::Identity();
-        T_W_B.R(0, 0) = std::cos(yaw);
-        T_W_B.R(0, 1) = -std::sin(yaw);
-        T_W_B.R(1, 0) = std::sin(yaw);
-        T_W_B.R(1, 1) = std::cos(yaw);
-        T_W_B.t = core::Vec3(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>(),
-                             route["segments"][0]["start"][2].as<double>());
-        b.T_W_O.push_back(T_W_B * T_B_C);
-        b.entry_z.push_back(T_W_B.t.z());
-    }
+    b.T_W_O = EntryPoses(scene_dir, n_agents, mission, &b.entry_z);
     const auto tg = scene["target_xy_m"];
     b.target = b.ToCell(tg[0].as<double>(), tg[1].as<double>());
     for (const auto& e : scene["entrances"]) b.exits.push_back(b.ToCell(e["start_xy_m"][0].as<double>(), e["start_xy_m"][1].as<double>()));

@@ -5427,3 +5427,485 @@ pose has a yaw.
     timeouts, no hold at a won at-cell view;
   - D119 evidence comes from the mover logs;
   - one pinned commit for all 48 runs.
+## 2026-10-24 — D176: 3.2 sweep (fixed) shows perceptual aliasing wins PCM under the byte budget; place-grouped PCM pre-registered
+
+**Measured** (sweep rerun `20261023T191248Z-cpux86-eee456`, with the D171 config-writer and calibration fixes; gate
+`build/collab_gate_eee456`). Outcomes PASS (31 incomplete, 5 consistent, 0 corrupt), but the geometry fails:
+- **Scene 0, every budgeted row (greedy/spectral x 25/50 %, 3 seeds) and the campaign: merged ATE 3.77-3.81 m.** The
+  unbudgeted similarity arm on the same scene: 0.017-0.037 m. Scene 1: 0.007-0.010 m everywhere.
+- Cause, from edges.csv + the pass-A stores' GT: a perceptual-aliasing group. On agent 1's side it is 1-6 query
+  keyframes within 0.5 m (one place); it verifies against 40-60 of agent 0's keyframes (1.6-1.8 m span), every edge
+  ~5 m / ~100 deg off (the 6 m lattice period: worldgen `cell_m: 6.0`). 40-154 such edges per run, mutually consistent.
+  The true loops (15-25 edges, ~3 m span on both sides) were also verified. **PCM's maximum clique chose the larger
+  false clique and rejected the true one in every scene-0 budgeted run** (D171's smoke called this "no competitor";
+  here the competitor existed and lost on edge count).
+- The budgeted selection admits more of the group (high retrieval score: median 0.905-0.919 bad vs 0.92-0.96 good,
+  overlapping), so the spectral-vs-greedy dominance rows on scene 0 compare two corrupted maps: not evidence either way.
+- The cross-scene PnP floor did not transfer: scene 1's floor (72) applied to scene 0, whose own floor is 169. Reported,
+  not switched (D171 pre-registration stands).
+- Byte table FAIL (worst 0.86): match_request predicted ~6x low (e.g. 2992 vs 18760 B); match_response ~15 % high in
+  some runs. Unexplained yet; the accounting is checked against the ledger before any change (see below).
+
+**Decision (pre-registered before any rerun): place-grouped PCM, "one place pair, one vote".** Edges are not independent
+evidence when many come from one place; ORB-SLAM3's place recognition likewise checks a candidate against several
+keyframes before merging maps [PAPER: Campos et al. 2021, §VI; verify the exact rule when citing], and DBoW2 uses temporal
+consistency. Before PCM, the broker groups inter-agent edges by (agent_a, place_a, agent_b, place_b), where a place is a
+greedy cluster of an agent's keyframes in its OWN odometry frame (the snapshot it sent; id order; a new place when the
+keyframe is farther than `radius_m` from the current place's first keyframe). PCM then runs over one representative per
+group (the most PnP inliers; ties: lowest ids); other members do not enter the solve.
+- `radius_m: 1.0`: one corridor width (worldgen corridors 1.0-1.4 m: consecutive keyframes in one corridor segment see
+  the same structure) and well under half the 6 m lattice period (aliases sit a period apart, so they never share a
+  place). Not tuned on scene 0.
+- Config `pcm_place_grouping: {enabled: false, radius_m: 1.0}` in collab_v2.yaml; default off, so the 3.2 smoke and
+  every earlier run stay byte-identical.
+- **Pass criteria (fixed now):** rerun B2 + C with it on (stores reused). Scene 0 budgeted rows merged ATE < 0.10 m in
+  >= 5 of 6 cells (arm x level, seed-mean); scene 1 rows not worse than now by more than 10 % (or 2 mm); no run
+  corrupt. Failing either is reported as a negative result and the alias group stays a documented limitation.
+- Live (D174): the known entry poses give a second, independent guard: an inter-agent edge whose implied alignment
+  disagrees with the entry-pose alignment by more than the VO drift bound is rejected before PCM. Designed separately
+  (D177) with its bound from measured VO drift, not from this failure.
+
+**Not 3.5 done:** 3.5 still needs repetition-operator worlds (§5.5), the §17.3 diagnostics (ROC/PR of retrieval score
+against GT, false-closure probability) and the degeneracy-gate-before-PCM ordering test.
+
+**D176 result (2026-10-24, NEGATIVE, reported as measured).** Pass B, scene 0, greedy 25 %, seed 1, stores of
+`0345a5`, grouping on vs off: merged ATE 3.7837 m vs 3.7835 m. The rule took effect (inter-agent edges entering the
+robust stage over the run: 89 vs 1441) but the false group still won. Why: agent 0 passed the aliased spot several
+times (its keyframes 32, 50, 69, 144, 148, 155 are > 1 m apart in its own frame, and its VO drift is only 0.02-0.03 m,
+so they really are separate places); each pass pairs with agent 1's one place and counts as its own vote. "One place
+pair, one vote" undercounts nothing on the true side and still overcounts revisits on the false side. Not retuned on
+this data. `pcm_place_grouping` stays in the code, default off, as a measured ablation row.
+
+## 2026-10-24 — D177: known-entry gate on inter-agent edges (pre-registered; known starts, maintainer 2026-10-23)
+
+**Basis.** Agents enter through known openings (maintainer: drones inserted through windows), so each agent's odometry
+frame W_k has a known placement T_World_Wk at entry. An inter-agent loop edge (a, ka) -> (b, kb) with measurement
+Z = T_Ca_Cb implies T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1 (the snapshot poses). Against the prior T_Wa_Wb = T_World_Wa^-1
+T_World_Wb, the only legitimate disagreement is VO drift accumulated since entry by both agents.
+**Measured drift** (pass-A stores of `0345a5`, 2 scenes x 3 seeds x 2 agents, camera pose vs GT aligned at the first
+released keyframe): worst 0.11 m and 1.43 deg; worst drift / path length 1.0 % (11-33 m paths).
+**Rule.** Before PCM the broker drops an inter-agent edge whose deviation D = prior^-1 implied exceeds
+  |D.t| > 0.5 m + 0.05 (L_a(ka) + L_b(kb))   or   angle(D.R) > 10 deg,
+with L_k(kf) the odometry path length of agent k from its first keyframe to kf (its snapshot). 5 % is 5x the worst
+measured drift ratio, the 0.5 m floor covers entry placement error, 10 deg is 7x the worst measured rotation drift. The
+aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-sized true loops are far inside.
+- Config `entry_gate: {enabled: false, floor_m: 0.5, per_m: 0.05, rot_deg: 10}`, default off; the entry poses come from
+  the briefing (live: B's T_W_O[k]; pass B: the scene's agent start poses, i.e. GT of the first released keyframe
+  composed with its odometry pose, the same placement an operator records at insertion).
+- **Pass criteria (fixed now, same as D176):** B2 + C rerun with it on (grouping off): scene 0 budgeted rows merged ATE
+  < 0.10 m in >= 5 of 6 cells; scene 1 not worse by > 10 % (or 2 mm); no run corrupt. Also reported: true edges the
+  gate drops (must be 0 on both scenes, else a negative result).
+- **Scope, honestly:** this guards the known-starts deployment. It does not solve aliasing between agents whose starts
+  are unknown, nor aliases smaller than the drift bound; those remain 3.5 (repetition worlds, §17.3 diagnostics).
+
+**D176/D177 status correction (2026-10-24).** Both were designed without the preflight the maintainer requires (SOTA
+literature pass + advisor before any design; no ad-hoc incremental fixes after a failed run). D177 is WITHDRAWN as a
+pre-registration: not built, not run. The D176 grouping code is parked uncommitted (git stash on feat/live-collab).
+The measurements above stand. The design restarts from a literature survey of perceptual aliasing in multi-robot loop
+closure (PCM's large-false-clique failure and its successors, systems in repetitive/subterranean environments, gating
+against known initial poses, ambiguity-aware back ends), then an advisor review, then a pre-registered decision.
+
+**D176 record correction (2026-10-24).** The negative result covers the IMPLEMENTATION tested, not spatial place
+grouping in general: places were clustered sequentially in keyframe-id order (a new place whenever a keyframe left the
+current place's seed), so a revisit always opened a new place id even when it returned to the same spot. Spatial
+grouping in each agent's own frame (revisits merged), with one-to-one support per place pair (CLIPPER-style) and an
+ambiguity test (Olson 2009), is the literature's direction for the unknown-start case and belongs to 3.5. Surveys:
+scratchpad alias_survey.md / collab_fast_survey.md, summarized in the next decision.
+
+## 2026-10-24 — Preflight for the collaboration redesign (surveys + advisor)
+
+Two literature surveys from primary sources (scratchpad `alias_survey.md`, `collab_fast_survey.md`; summarized here),
+then advisor review. Findings that drive D178/D179:
+- **PCM states its own failure mode** (Mangelson et al., ICRA 2018, Assumption 2: the measurement system must not be
+  "biased toward selecting incorrect measurements over correct ones"); revisits + top-k retrieval are that bias. Its
+  successors (group-k consistency, Forsgren et al. IROS 2022 / IJRR 2024; CLIPPER, Lusk et al. ICRA 2021; ROBIN, Shi et
+  al. ICRA 2021) still pick the set with most support: none fixes "a large false group beats a small true group".
+- **Systems with a known common frame gate candidates by proximity before consistency:** LAMP (Ebadi et al. ICRA 2020:
+  fiducials at the entrance, search radius around the estimate) and LAMP 2.0 (Chang et al. RA-L 2022: d_max = α·n_curr
+  growing with traversal in the gate-calibrated frame, α = 0.2 m/node). Olson (RAS 2009) gives the principled form:
+  Mahalanobis gating with covariance projected along the odometry path ("Dijkstra projection", conservative).
+- **GNC needs an outlier-free initial guess** (Kimera-Multi, Tian et al. T-RO 2022: "In multi-robot PGO, there is no
+  longer an outlier-free initial guess (i.e., odometry), which is crucial for the strong performance of GNC"). Ours is
+  chordal over PCM's output, which seeded the false basin.
+- **Bytes:** one side's features travel to the other side, which verifies (vertex cover: Giamou et al. ICRA 2018; Tian
+  et al. IJRR 2021; DOOR-SLAM; Kimera-Multi) - our broker fetching both endpoints deviates from the locked
+  "vertex-cover sharing". Our 60-130 kB per fetched keyframe is 3-6x D2SLAM's 20.1 kB/keyframe. No survey found an
+  information-theoretic bound: we report measured bytes against the vertex-cover minimum, never "the limit".
+- **Async + reproducible:** asynchronous multi-robot back ends (ASAPP, D2SLAM/ARock) do not address replay
+  determinism; the workable form is asynchronous compute with commits logged on the sim clock (D179).
+
+## 2026-10-24 — D178: known-entry Mahalanobis gate on inter-agent loops + GNC initialised from the entry prior (pre-registered)
+
+**Basis:** LAMP / LAMP 2.0 (known entry frame, traversal-growing proximity gate), Olson 2009 (Mahalanobis gate, covariance
+projected along the odometry path), Kimera-Multi (GNC's initial guess). Known starts: maintainer 2026-10-23.
+**Prior.** T_World_Wk for each agent from the mission briefing's start poses (live: B's T_W_O[k]; pass B: the scene's
+agent spawn poses, NOT ground truth of a keyframe), labelled in manifests as a known-start prior.
+**Residual.** For an inter-agent edge (a, ka) -> (b, kb) with Z = T_Ca_Cb: implied T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1,
+prior P = T_World_Wa^-1 T_World_Wb, r = Log(P^-1 implied) in R^6 (the left-multiplicative convention).
+**Covariance.** Σ = Σ_a(ka) ⊕ Σ_b(kb) ⊕ Σ_Z ⊕ 2Σ_entry, each transported to the residual's frame by the SE(3) adjoint
+(first order). Σ_k(kf): the odometry edges' covariances (their information^-1, in the snapshot) composed along agent k's
+chain from its first keyframe (Olson's projection; the chain IS the minimum path without intra-agent loops). Σ_entry:
+operator placement, σ = 0.10 m and 2 deg per axis [ASSUMPTION, physical: a hand-placed drone at a window]. 
+**Calibration (pre-registered, scene 1 only - never gate data).** NEES of the chain-composed odometry pose against GT
+aligned at entry, over every released keyframe of scene 1's stores (3 seeds x 2 agents): κ = mean(NEES)/6; Σ_k ← κ Σ_k
+if κ > 1 (the odometry information is overconfident), unchanged otherwise. κ and the NEES histogram are recorded.
+**Gate.** Keep the edge iff r^T Σ^-1 r ≤ χ²_6(0.999) = 22.46. Rotation alone of the observed aliases (≈100 deg) gives
+(100/σ_r)^2 ≥ 400 for any σ_r ≤ 5 deg, above every χ² cutoff from 0.95 to 0.9999: the decision does not hinge on the
+threshold.
+**GNC initial guess.** With the gate on, the joint solve initialises every agent's T_G_W from the entry prior instead of
+chordal over PCM's accepted set.
+**Config.** `entry_gate: {enabled: false, chi2_conf: 0.999, entry_sigma_m: 0.10, entry_sigma_deg: 2.0, kappa: <from
+calibration>}`; default off; the 3.2 smoke byte-identical with it off.
+**Pass criteria (fixed now).** B2 + C rerun with the gate on: scene 0 budgeted rows merged ATE < 0.10 m in >= 5 of 6
+cells (arm x level, seed-mean); scene 1 not worse by > 10 % (or 2 mm); no run corrupt; true verified edges (pose error
+<= 10 deg) rejected by the gate <= 1 % on both scenes. Failing any is a reported negative result.
+**Scope.** Known starts only. [INFERENCE] decisive against pure one-period translation aliases only up to ~100 m of
+travel per agent at 1 % drift; the demo's paths are checked against that. Unknown-start aliasing stays 3.5 (spatial
+place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio ambiguity test, repetition worlds,
+§17.3 diagnostics).
+
+## 2026-10-24 — D179: asynchronous collaboration, committed on the sim clock (maintainer: no barrier syncs)
+
+**Requirement** (maintainer 2026-10-24): collaboration "blazingly fast", no barrier syncs, asynchronous. **Semantics:**
+- All collaboration compute is asynchronous and never waited on: DNN in the per-agent collab workers; retrieval,
+  verification and broker solves on the fleet's own thread.
+- The radio stays a single owner on SIM time (D175's coordination and its D218 replay proof depend on it). Every
+  asynchronous result (a #ckf record, a #fresp, a verification, a solve) is committed at the sim tick at which the fleet
+  thread observed it, and the (tick, event) pair is logged. Live never waits for a result; replay applies the logged
+  events at their logged ticks, so replays equal the live run they log (record/replay is the substrate, CLAUDE.md §1).
+- The runtime's `Step(t)` enqueues tick t and returns. With collab on, the fleet thread owns the radio nodes; D175 sends
+  are sim-timestamped entries in a queue into the fleet thread, and coordination deliveries come back through a queue
+  the runtime drains at its barrier step 2. **Invariant 1 (B):** the drain order is per tick, FIFO per sender, ticks in
+  order, and replay reproduces exactly that order from the log. **Invariant 2 (B):** the published snapshot {T_O0_O,
+  Linked, Telemetry} is swapped atomically as one value; the planner reads it lock-free.
+- Replaces D174's lockstep (watermark waits, feature replies at ask + feature_latency_s).
+- **Amendment (2026-10-24, B's request):** the snapshot also carries, per fleet member k, what k's radio node knew at
+  that tick: `Component()` (broker, members, accepted epoch), `LastHeartbeat(j)` for every peer heard, and
+  `AckedPatchVersion(j)` for every other member (`CollabSnapshot::agent[k]`). The D175 fork-join reads these from its
+  one per-barrier snapshot instead of from nodes the fleet thread owns (a data race under D179). The values are frozen
+  at publish, and the published version is logged, so replay serves the same values. Reads within a barrier all see
+  one tick's state. A read never reflects the runtime's own same-barrier enqueues, which apply on the fleet thread
+  after it.
+
+## 2026-10-24 — D180: protocol re-sends are overhead in the byte table (pre-registered before the next byte run)
+
+**Finding** (3.2 rerun `20261023T191248Z-cpux86-eee456`): match_request was measured about 6× above prediction.
+`RetryRequests` re-sends an unanswered request every `request_retry_s` (10 s) under the same request id, and the
+transport logged each re-send as a new first transmission. The owner answers each retry that is not still deferred,
+so a duplicate MATCH_RESPONSE (about 136 KB) is also logged as first transmission; this is the likely cause of
+match_response running about 15 % over. The predictor prices one exchange per request, which is what the spectral
+policy's `gain/predicted_cost` needs.
+**Rule:** a MATCH_REQUEST or MATCH_RESPONSE whose (receiver, class, request id) the sender has already first-transmitted
+is a protocol re-send. Its ledger row is flagged `resend`. It is counted in its own overhead column
+(`wire_resend`), next to the ARQ retransmit and resync columns, and it is excluded from first-transmission bytes and
+from the ≤ 15 % prediction-error gate (I6). It stays in the "all bytes" totals and the hollow points of
+ate_vs_bytes, and the table reports it per class, so the cost is never hidden. Only these two classes are covered:
+their key is a unique request id, and a repeat is the same content by construction.
+**Not changed by this rule:** the predictor, the retry and give-up timers, and how the owner answers. Whether duplicate
+responses should be suppressed while the first response is still in flight is a protocol question for the one-way
+verification redesign (next bytes item), and is not settled here.
+**Pass/fail for the next byte-table run:** the existing I6 gate (each gated class ≤ 15 % error on first transmission),
+unchanged.
+
+## D225 addendum (2026-10-24, B): the deterministic gate guard + the N-generic audit
+
+- The barrier predicates are factored into runtime/live/lockstep_gate.hpp (AllReached / AllDoneShort /
+  MinProgress, templates over any lane range) and unit-tested (LockstepGate, 4 tests): ANY lagging lane holds
+  the barrier at N = 3 and 4, and PreD225ShapeTripsHere keeps the old lanes[0]&&[1] shape as a documented trip
+  target - it fails deterministically, no timing involved (M's call: the race was not reproducible in replay,
+  whose unbounded all-N answer wait hard-syncs the lanes; the on-instance replay x2 remains the e2e tripwire,
+  test_barrier_n3.sh the forward lane-skew invariant).
+- N-generic audit of the live lane (ariadne_live.cpp, live/*.hpp): the Reorderer's watermark is min over ALL
+  timed topics (built from every mission agent); the answer wait loops all NA; remaining "both"/"= 2" hits are
+  constructor DEFAULTS always overridden with NA, prose that is genuinely two-valued, or stale comments (two
+  LLM-chooser comment lines still say "both agents" over N-generic code; cosmetic).
+## 2026-10-24 — D178 amendment: how "true edges rejected ≤ 1 %" is scored (fixed before any gated sweep result is read)
+
+The sweep staged at 4459d57 (`20261023T213707Z-cpux86-e31421`) logs only the gate's totals (tested, rejected), so the
+pre-registered true-edge criterion cannot be scored from it. **Fix:** `ariadne_collab_sim` now writes
+`entry_gate.csv`: one row per inter-agent edge the gate ever tested, with times tested and rejected, and the last
+squared Mahalanobis distance and decision. Logging only; the gate's inputs and outputs are unchanged.
+**Definitions:**
+- A true edge is one in `edges.csv` with `reason == verified` and `pose_err_deg ≤ 10` (D171 §5's label, same as the
+  precision row). Edges are matched as an unordered (agent, keyframe) pair.
+- "Rejected" means rejected at its LAST test (the latest solve that saw the edge, with the longest odometry chain).
+  "Ever rejected" is also reported but is not the criterion.
+- A true edge the gate never tested (ungated) does not count as rejected, and the ungated count is reported.
+- The criterion is pooled per scene over every gated run (arms × budget levels × seeds): rejected true edges / tested
+  true edges ≤ 1 %, on each scene.
+**Procedure:**
+- The ATE criteria are scored on the e31421 sweep as staged.
+- The true-edge criterion is scored on a logged rerun of the same gated cells (same stores, seeds and configs, with the
+  logging build).
+- Every rerun cell must reproduce e31421's merged ATE and first-transmission bytes exactly. Bytes are compared after
+  folding D180's `wire_resend` back in, since the rerun's build includes D180. If any cell differs, the rerun is not
+  the same experiment: the true-edge criterion is then reported UNSCORED, with the reason.
+
+## 2026-10-24 — D181: endpoint (vertex-cover) verification measured before design: no 2-agent payoff on budgeted rows; deferred
+
+**Question:** would moving verification to one endpoint, with the vertex-cover direction choice of Giamou 2018 and Tian
+2021, cut the bytes the gate rows move? It was measured from existing data before any design was written (preflight;
+advisor).
+**Method:** sweep `20261023T213707Z-cpux86-e31421`, every run's attempted inter-agent pairs (`edges.csv`). With N = 2
+and broker 0, today's scheme already moves features one way: it fetches each distinct agent-1 endpoint. Per agent
+pair the exact optimum is a minimum bipartite vertex cover (König: = maximum matching). Its weighted form is an LP
+with integral optima, solvable by `cv::solveLP` (OpenCV-native check). Keyframes were compared at unit weight.
+**Result:**
+- **Budgeted gate rows (greedy and spectral, 24/24):** 0.0 % saving. Today's fetch set already is the minimum cover,
+  because the policy's shared-keyframe pricing selects candidates that share fetched keyframes.
+- **Elsewhere:** the unbudgeted calibration rows save 2.6–4.3 % on scene 1 and 55–56 % on scene 0, campaign
+  `ideal_s0` saves 59.1 %, and the other campaign rows and the similarity arm save 0.
+- **Pooled over all runs:** 1450 keyframes moved against a minimum of 997, a 31.2 % saving, almost all of it in rows
+  that do not count toward I6.
+**Decision:**
+- The protocol change is NOT built now. Its only gate-relevant benefit is the third-party saving at N ≥ 3 (a non-broker
+  pair fetched to the broker on both sides), which no Phase 3 scene exercises.
+- It is re-measured when 3-agent stores exist (B's 3-agent maze runs), with the same script and pre-registered:
+  "build if the selected rows of the 3-agent demo move ≥ 20 % more keyframes than their minimum cover".
+- The speed side (LightGlue serialized on the fleet thread) is decided by A2's AWS profile. If it is the bottleneck,
+  the remedy is a verify pool with D179-logged commits, which needs no protocol change.
+- Bytes work moves to the 3.6 compression rows and to diagnosing the match_response prediction miss.
+
+## 2026-10-24 — D182: ALIKED dense-L2 graph rewrite (A2's l2conv): adoption rule, pre-registered before the measuring run
+
+**Finding (A2, c7i run `20261024T001208Z-cpux86-6ba75f`):**
+- ALIKED-1280 stops scaling at about 8 OpenCV threads: 843 ms at 8, 829 ms at 16, cpu/wall 3.8.
+- Its "Normalize" (F.normalize on the dense 128×736×1280 map: ReduceL2 → Clip → Expand → Div) runs as one serial
+  cv::dnn layer, about 535 ms at 8–16 threads (64 % of the forward).
+**Change:** an exact ONNX graph rewrite, not an exporter change (A2 `scripts/l2conv_rewrite.py`, 282e1da). The sum of
+squares becomes Mul plus a 1×1 conv with a ones kernel, then Sqrt, then Div by broadcasting; the 470 MB Expand copy is
+dropped.
+- Local fidelity: keypoints and scores bit-identical, descriptors within 1.3e-6.
+- Speed at 8 threads, about 300–350 ms: [PROJECTION].
+**Adopt only if all hold on A2's rerun (`70-A2-perf-x86b`):**
+- (i) 0 accept/reject flips on the 120 real verify pairs, against the 1280×720 K1024 reference;
+- (ii) keypoints bit-identical and descriptor max abs diff ≤ 4.9e-6 (the measured thread-count effect), on every
+  keyframe of those pairs;
+- (iii) measured p50 at 8 threads improves ≥ 1.5×.
+If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If (i) or (ii) misses, it is not adopted.
+On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
+input and output ONNX hashes are committed together.
+
+## 2026-10-24 — D227 (D41 amendment, maintainer-directed): the synthetic lens is OFF in the live runtime
+
+**Order (maintainer, via M, ~09:20 IST):** turn the D41 read-time lens distortion off for live/demo/POC runs. A2's
+per-function profile (job 44b/45 line) measured it as most of the ~58 ms/frame ingest cost, about 50 % of the lane,
+and it is optional sim realism, not a claim-bearing operator. No baseline reruns: every run from the next one on is
+the new baseline.
+
+**Mechanism (this commit):**
+- `LiveConfig.lens` (bool, **default false**), yaml key `lens:` in the live config. All seven
+  `configs/mission/live_*.yaml` now carry an explicit `lens: false`. `lens: true` restores the D41 operator exactly.
+- The toggle reaches both estimator arrangements: in-process `LiveSimSource` directly, worker processes via a new
+  internal `--lens on|off` flag (parent passes it from `LiveConfig.lens`; absent = off).
+- Off: `SimFrameAssembler` gets a null lens map and skips `ApplyLens` (the resampling never runs — the frame stays
+  the clean pinhole render); `LiveSimSource::Calibration()` reports the RENDER intrinsics with **D = 0** (the camera
+  the estimator then actually sees); `CameraConfig()` says `+lens(off)` so every manifest and digest names the state.
+- Replay honours it: replay consumes `inputs.mcap` (clean pixels) through the same `LiveSimSource`/worker path with
+  the same live config, so a lens-off replay of a lens-on recording is valid for perf (A2's RTF measurement) but its
+  trace is a new baseline, not comparable to the live trace.
+- Untouched: `SimSource` (dataset/eval bag path, D37/D41 regression rows), `ariadne_sim_vo`/spool tools, and
+  `ariadne_sim_calib` (which already had `--lens auto|on|off`; its lens-off truth is the raw render). The D41
+  operator, its tests and its digest stay — this is a default flip scoped to the live runtime, not a removal.
+
+**Evidence (local, ma_smoke3 replay of the 20 s 3-agent lit maze_demo_0 recording):**
+- `lens: true` replay trace byte-identical to the pre-change reference (sha256 f732c08056b1f937…) — the toggle-on
+  path is the old pipeline, bit for bit.
+- default (off) replay ×2: identical to each other (deterministic), trace sha256 21a51e0d5d3660ba… — the new baseline.
+- Manifests: `camera_config: rig_stereo_v2+lens(D41)` (restored) vs `rig_stereo_v2+lens(off)` (default).
+- (artifacts: `build/live/ma_smoke3/.../replay_lenson`, `replay_lensoff{1,2}`.)
+
+## 2026-10-24 — D210–D229 registry backfill (B): the Phase-8 block, recorded (M's audit: STATUS claimed them, DECISIONS lacked them)
+
+D210, D228, D229 are UNUSED (free numbers in B's block). D230/D231 are A2's (recorded above). Each entry: decision,
+why, evidence.
+
+### D211: maze_dark — the arch §42 demo world (commit 663e4ce)
+Dark variant of the demo maze, lit only by the agents' own spot lamps. Built so the dark demo is a scene swap, not a
+code path. Evidence: `build/live/scenes/maze_dark_0/`. NOTE: all dark/lighting/dust work is PAUSED by the maintainer
+(see D217); the world exists, nothing consumes it yet.
+
+### D212: three agents in worldgen (commit 9659abe)
+Entrances to 3, greedy-maximin start assignment, N-agent scheduling, a third mover board. Why: the multi-agent demo
+needs N=3; worldgen was the first hard-coded-2 to fall. Evidence: mission_live.json of any 3-agent scene;
+`live.sh demo-mission` presets.
+
+### D213: the live loop is N-agent (commit 71df9aa)
+Every lane/choice/command path in ariadne_live sized by the scene's agent count; placeholder planner seam kept.
+Why: D175. Evidence: 2-agent oracle A/B digest 3d10d011018c42d9 byte-identical pre/post (multiagent:false untouched).
+CAVEAT recorded honestly: two "<2" leftovers survived this change and were found later — the barrier gate (fixed,
+D225) and the operator-directive filter (fixed, commit 780f122).
+
+### D214: a live recording is a sim_record recording (commit 0b02fef)
+SimSource tools (sim_vo, spools, frame dump) read live run dirs directly (live_to_rec). Why: one toolchain for
+datasets and live runs; the splat training spools come from exactly what the estimator consumed. Evidence: the
+ma200-family spool builds; `cpp/runtime/datasets/` readers unchanged since.
+
+### D215: the demo console (commits 48146ec + 5fff283)
+GT ghost arrows, per-agent camera panes (/api/cam/{k}.jpg + .json), reroute events, N-agent UI; then the feature
+overlay (StereoVo::KeyframeObservationsLeft -> #kf CV_32FC2 row -> snapshots/cam_<k>.json -> canvas `featovl`).
+Why: the judges see what the estimator sees. Evidence: overlay validated 491/371/298 pts on 3 agents; trace digest
+3d10d011018c42d9 unchanged (display-only).
+
+### D216: demo-mission knobs (commit 55fae85)
+`live.sh demo-mission PRESET SEED [AGENTS] [TARGET] [RTF]` + `python -m dataset_tools.worldgen demo-mission`:
+user-chosen entrance subset and target, world untouched; check_demo_target floods the ESDF at ρ_responder (invariant
+4). The live.demo block in mission_live.json is authoritative. Evidence: default recompose byte-identical; knob runs
+in `build/live/`.
+
+### D217: DEFERRED — the dark/lamp demo toggle
+Maintainer (via M, 2026-10-24): pause ALL dark/lighting/dust work until the multi-agent POC runs. The number is
+reserved for the toggle; no code exists. Revisit after the POC demo is green at real time.
+
+### D219: live_aws.sh knobs (commit 149f01c)
+LIVE_AWS_PROFILE (cpux86 = c7i CPU slots), LIVE_AWS_MAX_MIN, and cmd_run bakes the caller's
+ARIADNE_LOCKSTEP/LIVE_CONFIG/PLANNER_CONFIG/RT_MEM/PROFILE/SAMPLER into the remote script. Why: slotq jobs must be
+one self-contained line. Evidence: every 5x/6x-B job file since.
+
+### D220: the live splat tee (commit 2a123e8)
+SplatTee in ariadne_live: #kf = u32 len | JSON (agent, id, t_ns, pose_version, T_O_C, K full-res, Kz spool) | Z fp16 |
+S fp16 | RGB; #t_w_o xyzquat (qw last); bounded 8/agent, drop-oldest, sender thread per agent; ARIADNE_SPLAT=1 or a
+pre-set ARIADNE_RECON_SOCK. Why: D230/D231 contract with A2's gsplat service. Evidence: no-tee digest
+cd6a07aa6fdd000a reproduced 3x with tee variants (determinism-neutral); e2e with the real service: placement
+<= 2.2e-16, 92.9 % of wall points within 10 cm, 71 kf -> 4 submaps, 259,994 Gaussians.
+
+### D221: the live collaboration wiring (commits 78f1595, d530c42, 030813b)
+`collab: true` (requires multiagent): CollabTee in the estimator worker (serialization only, NO DNN in the lane),
+one ariadne_collab_worker per agent on /tmp sockets, collab_inbox operator actions (cut_comms/restore_comms/
+inject_false), configs collab_live_v1.yaml (collab_v2 over ideal) + live_collab_v1.yaml; the payload carries the
+worker binary and .cache/models. Why: D174. Evidence: collab60c live PASS (e9e975); acceptance pending (see D179
+notes + collab60d diagnosis).
+
+### D222: the comms panel (commit 67a8a4f)
+Console ingests the planner's multiagent block and CollabLive telemetry ("kept_inter_edges"); /api/frame carries
+comms/collab real byte counts; POST /api/collab/{action}?groups= drives cut/restore/inject from the UI. Why: the
+operator story (and invariant 6's bytes visible live). Evidence: D222 commit; panel exercised in the collab60x runs.
+
+### D223: collab rewired onto D179's async CollabLive (commits 948a540, 0b14df6 b, 60ed7b8 c)
+Fleet thread owns compute+radio; Send(k,fn,t) enqueues in call order; Drain(k,T) at barrier step 2 (FIFO-per-sender,
+logged + replayed); ONE Snapshot(T) per barrier, all reads off the snapshot (b). A missing agent view = "nothing
+heard yet" (fresh-node semantics: singleton component, broker=self, acked 0) — never .at() (c; the collab60b exit-139
+lesson, run 056f14). Why: the maintainer's no-barrier-sync order for collab. Evidence: collab60c live PASS at this
+shape; replay logs replayable from collab_events.jsonl.
+
+### D224: pipeline profiling hooks + A2's sampler (commits 805ae69, 7e082c1, 95544d6)
+Default-off instrumentation (digest-neutral) + perf_sampler.sh vendored verbatim (sha c93b1497ce8484a3) so
+ARIADNE_SAMPLER works on instances. Why: D232 perf work needs per-function attribution, not guesses. Evidence: A2's
+job 45 attribution ran on these hooks.
+
+### D225 (root entry; addendum above): the lockstep barrier waits on EVERY lane (commit 0105f5e)
+The barrier wait and end condition were hardcoded lanes[0]&&lanes[1] (D213 leftover): agent 2 was never waited on and
+its keyframes slid past barrier cuts under load. Found as ma200's replay1 != replay2 trace divergence (STOP-THE-LINE,
+run 70a514; first diff t=70, keyframes_integrated agent2 115 vs 114). Fix: lockstep_gate.hpp predicates over N lanes.
+Evidence: replay x2 of ma200's own recording byte-identical post-fix (82166ed26dc6094b); unit guard
+PreD225ShapeTripsHere; ma200 rerun 626abe live+replay PASS. Also: cmd_replay honors ARIADNE_RT_MEM (41fb2d3).
+
+### D226: ApplyLens rows under cv::parallel_for_ (commit 5cb9e71)
+The D41 lens resample parallelized bit-identically (rows are independent; fixed arithmetic per pixel). Evidence:
+ma_smoke3 replay trace sha f732c08056b1f937 unchanged. NOTE: in the live runtime this is moot since D227 (lens off
+by default); it still serves SimSource/dataset consumers with the lens on.
+## 2026-10-24 — D178 RESULT: PASS on all four pre-registered criteria
+
+Evidence: `evaluation/runs/collab_d178/` (verdict.yaml, cells.csv, true_edges.csv, per-run results/edges/entry_gate,
+command.txt). Gated sweep `20261023T213707Z-cpux86-e31421` (staged 4459d57). Logged rerun
+`20261024T042708Z-cpux86-4ec3f6` (staged c0e498b); it reproduced every one of the 30 gated cells exactly (merged ATE,
+and first-transmission bytes with D180's re-sends folded back in). Baseline without the gate: `eee456`.
+
+| Criterion (pre-registered) | Result |
+|---|---|
+| Scene 0 budgeted cells, merged ATE < 0.10 m | 4/4 cells (greedy/spectral × p25/p50), worst 0.0147 m. Without the gate: 3.78–3.79 m. Campaign rows 0.013–0.017 m, down from 3.78 m |
+| Scene 1 not worse by > 10 % (or 2 mm) | 0/7 cells worse; the largest change is +0.17 % |
+| No corrupt run | 0 |
+| True edges (verified, pose_err ≤ 10°) rejected at their last test, ≤ 1 % per scene | Scene 0: 0 of 269 tested. Scene 1: 0 of 291 tested. Also 0 ever rejected |
+
+**Stated with it:**
+- The pre-registration said "≥ 5 of 6 cells", but the sweep has 4 budgeted cells. It was scored as at most one
+  failing cell, and passes under either reading.
+- 10 scene-0 true edges were never tested by the gate (ungated: verified after the last solve). They are reported,
+  not counted.
+- The similarity arm is unbudgeted and ungated by design. Its `sim_s1_seed2` aliases at 3.09 m, unchanged from the
+  baseline sweep. The gate is NOT applied there, and that arm keeps the failure.
+- The gate is decisive only with known starts. Unknown-start aliasing remains 3.5.
+**Cost:** the gated sweep $0.0875 and the logged rerun $0.0882. Two rerun attempts were lost: 4fc41e was killed by the
+host on a transient AuthFailure (spinup since fixed), and 080b8f didn't collect entry_gate.csv (fixed in c0e498b).
+**Next:** the entry gate is ENABLED in the live config `collab_live_v1` (B). D178 merges to main with D179/D180 after
+B's D179 acceptance.
+
+## 2026-10-24 — D180 RESULT: request accounting fixed; byte table still FAILS on match_response (diagnosed)
+
+Run: the D178 logged rerun `20261024T042708Z-cpux86-4ec3f6`, a D180 build. This was the pre-registered next
+byte-table run. Scored with `collab_gate.py`; evidence in `evaluation/runs/collab_d180_bytes/`.
+- **match_request:** all 24 budgeted rows ≤ 15 %, worst 10.65 %, median 0.77 %. Before D180 it was about 6× under.
+  The re-sends moved to wire_resend, 401,792 B over the sweep.
+- **The duplicate-response hypothesis is REFUTED.** match_response has wire_resend = 0 in every row. D180's "likely
+  cause" sentence was wrong.
+- **match_response FAILS:** 8/24 rows over 15 %, worst 27.6 %, median 12.8 %. Measured is ALWAYS below predicted.
+  - Diagnosis: per message, the response price is accurate. Where the policy priced at the observed 135.8–135.9 kB,
+    the per-message error is −0.4 % to +0.4 %.
+  - The class total misses because some selected requests are never answered: 0–5 of 10–44 per run, so the policy
+    priced a response that was never sent. Which of those were "gone", given up, or still outstanding at run end is
+    the open question.
+  - A few rows also carry a higher planned price (142–150 kB). That's the D171 shared-keyframe pricing.
+- **Verdict:** I6 byte table FAIL, reported as such. The fix (an expected answer rate in the predictor, calibrated
+  cross-scene; or fewer unanswered requests) needs its own preflight and pre-registration before the next byte run.
+
+## 2026-10-24 — D228: estimator workers pin their OpenCV pool to 5 threads (maintainer-approved, D232 line)
+**Decision:** RunEstimatorWorker (D168 process-per-agent mode) calls cv::setNumThreads on entry: default 5,
+env ARIADNE_WORKER_CV_THREADS overrides (experiments only). The in-process arrangement (D152a turn lock) is
+untouched — its semantics assume an idle pool per call, and it is not the production path.
+**Why:** A2's job 46 on c7i.4xlarge (3 workers, lens off): trajectories bit-identical 16 vs 5 threads (the
+estimator is thread-count-invariant), wall −1.6 %, and cpu PSI 26 % → 1.2 % — the fleet stops thrashing the box.
+**Evidence:** evaluation/runs/perf/pipeline_profile_20261024/processed/replay_perf_threads.csv (A2);
+run 20261024T051058Z-cpux86-f94953.
+
+## 2026-10-24 — D229: the lane ingest pipeline (D232 item a2) — pre-registered before code
+**Decision:** in LiveSimSource (worker mode only), frame n+1's ingest — CDR decode → lens (D41, when on) →
+D (when set) → gray — runs on ONE dedicated ingest thread, handing results to the VO thread through a DEPTH-1
+in-order SPSC. SimFrameAssembler::Feed splits into Ingest (stateless per message except the per-side D arrival
+counter, which stays in delivery order on the single ingest thread) and Apply (pairing state + emission, on the
+VO thread). Depth 1 preserves the D166 pacing backpressure: at most one frame is pre-ingested, so no queue
+between gz and the estimator holds more than one sub-step. The D167 wait timer becomes the SPSC pop wait.
+**Why:** post-D227 the lane sits at 48–52 ms ≈ the 50 ms frame period (A2 job 46); overlapping ingest with
+tracking is the remaining lever to RTF ≥ 1 for the demo. The ingest output is bit-identical regardless of which
+thread computes it, so content is unchanged by construction; only timing moves.
+**Acceptance before merge (maintainer, via M, 2026-10-24):**
+1. lockstep barrier semantics unchanged — a frame must not cross a barrier cut (the gate still reads estimator
+   progress, and ingest-ahead is bounded at 1);
+2. live + replay×2 byte-identical on a 3-agent run;
+3. pre/post trajectory digest on the same recorded inputs digest-neutral (ma_smoke3 lens-off reference
+   21a51e0d5d3660ba…), or the divergence explained;
+4. RTF measured on c7i via slotq, lens off, 5 threads;
+5. a unit guard: Ingest+Apply across threads ≡ the old Feed, byte-identical, including unpaired/drop handling.
+
+## 2026-10-24 — D226 amendment (B): the parallel lens moved out of the determinism header (stop-the-line fix)
+D226 as first landed (5cb9e71) put `#include <opencv2/core.hpp>` + cv::parallel_for_ into the header-only
+lens.hpp. That header is the determinism substrate and sits on the manifest include path
+(lens_digest.hpp → determinism.hpp), which OpenCV-free targets build by design (arch §3 dependency rule) —
+test_unit stopped compiling (Kaggle ct-llm-788a810: 239/306 at 943 s; same cmake as ci_aws, so docker too).
+**Fix (e0a55b1):** lens.hpp is OpenCV-free again — serial ApplyLens wraps a factored pure ApplyLensRowSpan.
+The cv::parallel_for_ wrapper lives in a new lens_parallel.hpp (ApplyLensParallel), included only by
+OpenCV-linked consumers (stereo_source's Ingest, SimSource). NOT a .cpp in the opencv lib: LensDigest()
+executes ApplyLens from OpenCV-free targets, so moving the definition there would have broken their link.
+**Evidence:** test_unit builds and its observability/determinism/lens tests pass on e0a55b1; ma_smoke3 lens-ON
+replay trace sha f732c08056b1f937… = the pre-D226 reference on the restructured binary — D226's bit-identity
+claim survives; the row partition is provably value-neutral (pure per-pixel function).
+
+## 2026-10-24 — D229 outcome: acceptance met, RTF gain ZERO (negative result, recorded not buried)
+All five pre-registered criteria ran:
+1. barrier semantics unchanged (construction + the lockstep runs below);
+2. live + replay×2 PASS (ma_smoke4, 3 agents, replay_check 17/17);
+3. digest-neutral (pipelined AND kill-switch replays = lens-off reference 21a51e0d…);
+4. **RTF on c7i (A2 job 15, run 4d412c, one instance, both arms, $0.027): pipelined 0.833 vs kill-switch 0.839 vs
+   job-46 reference 0.836 — a −0.7 % change, within noise of zero.** Both arms' trajectories byte-identical to the
+   reference on all 3 agents.
+5. unit guard in (PipelinedIngestMatchesFeedExactly).
+**Why no gain:** D229 overlaps the ingest half of Feed. Post-D227 (lens off) that half is a few ms of decode+gray;
+job 45's ~50 ms Feed share WAS the lens. The lens-off lane is tracking + keyframe compute (FAST ~11 ms, SGBM, LK;
+keyframe ~126 ms on 30 % of steps one agent runs >80 ms).
+**Decision (M, on the measurement):** D229 is recorded NEGATIVE and the default is OFF — the single-threaded
+shape is the production path (an extra thread with no measured gain does not belong on the demo path; the
+pipeline-hyperoptimized rule). The code stays behind ARIADNE_LANE_PIPELINE=1, unit-guarded and digest-proven;
+its payoff case is a live path whose ingest is heavy again (lens-on rows, the paused dark/degradation demo —
+DegradeParallel runs inside Ingest and would overlap tracking).
+**RTF ≥ 1 (A2's inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
+lockstep path - a new decision for the maintainer, NOT started (feature freeze).

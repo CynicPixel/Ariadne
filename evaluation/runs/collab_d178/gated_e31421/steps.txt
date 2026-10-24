@@ -1,0 +1,17 @@
+=== 2026-10-23T21:37:39Z 0 host
+=== 2026-10-23T21:37:39Z 1 docker + image
+=== 2026-10-23T21:38:11Z 2 checkout + inputs + recordings
+=== 2026-10-23T21:41:45Z 3 build (JOBS=8)
+=== 2026-10-23T21:43:24Z A skipped: pass-A stores from s3://ariadne-836505524290-eun1/runs/20261023T163202Z-cpux86-0345a5/output/results
+=== 2026-10-23T21:43:30Z B1 similarity arm
+=== 2026-10-23T22:07:49Z B1 done
+=== 2026-10-23T22:07:49Z B2 greedy + spectral x budget levels
+verify0 169 844 732 826 168 28
+scene0 32376.8 0.87464 0.63435 0.62955 139199 sim_s0_seed1,sim_s0_seed2,sim_s0_seed3
+verify1 72 712 710 307 71 62
+scene1 62159.8 0.87543 0.63420 0.62543 138239 sim_s1_seed1,sim_s1_seed2,sim_s1_seed3
+=== 2026-10-23T22:16:17Z B2 done
+=== 2026-10-23T22:16:17Z C fault campaign (spectral, 25 %)
+=== 2026-10-23T22:18:45Z C done
+=== 2026-10-23T22:18:45Z collect
+=== 2026-10-23T22:18:48Z done

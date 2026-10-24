@@ -96,7 +96,9 @@ TEST(CollabLink, FeatureReplyRequestWatermarkHello) {
     EXPECT_EQ(std::memcmp(g.features->points3d.data(), f.features->points3d.data(), 3 * sizeof(float)), 0);
     f.features.reset();
     EXPECT_FALSE(rl::DecodeFeatureReply(rl::EncodeFeatureReply(f)).features.has_value());   // "gone"
-    EXPECT_EQ(rl::DecodeFeatureRequest(rl::EncodeFeatureRequest(77)), 77u);
+    EXPECT_EQ(rl::DecodeFeatureRequest(rl::EncodeFeatureRequest(77)).kf, 77u);
+    EXPECT_EQ(rl::DecodeFeatureRequest(rl::EncodeFeatureRequest(77)).t_req_ns, -1);
+    EXPECT_EQ(rl::DecodeFeatureRequest(rl::EncodeFeatureRequest(78, 5000000000)).t_req_ns, 5000000000);
     EXPECT_EQ(rl::DecodeWatermark(rl::EncodeWatermark(-5)), -5);
     const rl::CollabHello h = rl::DecodeHello(rl::EncodeHello({"estimator", 2}));
     EXPECT_EQ(h.role, "estimator");

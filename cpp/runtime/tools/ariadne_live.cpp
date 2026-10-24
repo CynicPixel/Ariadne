@@ -27,6 +27,7 @@
 #include "collaboration/protocol/collab_node.hpp"
 #include "runtime/live/a1_planner.hpp"
 #include "runtime/live/collab_live.hpp"
+#include "runtime/live/lockstep_gate.hpp"
 #include "runtime/live/collab_tee.hpp"
 #include "runtime/live/multiagent_glue.hpp"
 #include "runtime/live/planner.hpp"
@@ -37,12 +38,15 @@
 #include "runtime/replay/ros_cdr_writer.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
 
+#include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <fstream>
 #include <map>
@@ -50,6 +54,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -77,6 +82,10 @@ struct LiveConfig {
     bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
                                            // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
                                            // agents). false until the acceptance (live + 3 equal replays) passes.
+    bool lens = false;                     // D227 (the D41 amendment, maintainer-directed): the read-time synthetic
+                                           // lens. OFF by default for every live/demo/POC run - A2 measured it at
+                                           // ~58 ms/frame, about half the lane - and the calibration then reports
+                                           // the render pinhole with D = 0. `lens: true` restores the D41 operator.
     bool demo = false;                     // D169 (AGENTIC_7 §4): judges-live mode. No lockstep, keyframes integrate
                                            // on a background thread, no per-replan PNGs, and the LLM is supervisory
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
@@ -125,6 +134,7 @@ LiveConfig LoadLive(const std::string& path) {
     if (n["lockstep"]) c.lockstep = n["lockstep"].as<bool>();
     if (n["lockstep_substep_ms"]) c.lockstep_substep_ms = n["lockstep_substep_ms"].as<int>();
     if (n["estimator_processes"]) c.estimator_processes = n["estimator_processes"].as<bool>();
+    if (n["lens"]) c.lens = n["lens"].as<bool>();   // absent = off (D227)
     if (n["mode"]) c.demo = n["mode"].as<std::string>() == "demo";
     if (c.demo) c.lockstep = false;   // demo never pauses the world, whatever the lockstep key says
     if (c.chooser != "classical" && c.chooser != "llm") throw std::invalid_argument("live config: chooser classical|llm");
@@ -230,6 +240,9 @@ public:
     }
     bool on() const { return fd_ >= 0 && !dead_.load(std::memory_order_relaxed); }
     uint64_t drops() const { return drops_.load(); }
+    uint64_t sends() const { return sends_; }           // sender-thread counters: read after join (D224 profiling)
+    uint64_t sent_bytes() const { return sent_bytes_; }
+    double busy_ms() const { return busy_ms_; }
     void OnKf(const KfRec& r, const cv::Mat& rgb) {
         if (!on()) return;
         cv::Mat z16, s16;
@@ -292,9 +305,13 @@ private:
             queue_.pop_front();
             if (m.agent >= 0) --pending_[size_t(m.agent)];
             lk.unlock();
-            if (!dead_.load(std::memory_order_relaxed) &&
-                !live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size())) {
-                dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+            if (!dead_.load(std::memory_order_relaxed)) {
+                const auto w0 = std::chrono::steady_clock::now();
+                if (!live::WriteFrame(fd_, m.topic, m.bytes.data(), m.bytes.size()))
+                    dead_.store(true, std::memory_order_relaxed);   // service gone: drain silently, never retry mid-run
+                busy_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w0).count();
+                ++sends_;
+                sent_bytes_ += m.bytes.size();
             }
             lk.lock();
             if (stop_ && queue_.empty()) return;
@@ -303,6 +320,8 @@ private:
     int fd_ = -1;
     std::atomic<bool> dead_{false};
     std::atomic<uint64_t> drops_{0};
+    uint64_t sends_ = 0, sent_bytes_ = 0;   // sender thread only
+    double busy_ms_ = 0;
     bool stop_ = false;
     std::mutex mu_;
     std::condition_variable cv_;
@@ -397,8 +416,15 @@ core::SE3 GetSe3(const uint8_t*& q) {
 }
 
 int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
-                       const std::string& collab_socket, tools::StereoVoArgs va, const std::string& out, int argc,
-                       char** argv) {
+                       const std::string& collab_socket, bool lens_on, tools::StereoVoArgs va, const std::string& out,
+                       int argc, char** argv) {
+    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (A2: 16/5/2 bit-identical) and a
+    // 3-worker fleet at the default pool thrashes the box (cpu PSI 26 % -> 1.2 % at 5 on c7i.4xlarge, job 46).
+    {
+        int n = 5;
+        if (const char* e = std::getenv("ARIADNE_WORKER_CV_THREADS")) n = std::max(1, std::atoi(e));
+        cv::setNumThreads(n);
+    }
     const int fd = live::Connect(socket_path, std::chrono::seconds(60));
     // D174: the collab tee - serialization only, NO DNN in this process (cv::ALIKED output depends on the thread
     // count; here it would break the D168 digests). A dead collab worker quiets the tee, never the estimator.
@@ -407,7 +433,13 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     live::MessageQueue images{64};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    live::LiveSimSource src(scene, agent, images, gt, turn, "live");
+    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (A2 job 15: 0.833 vs 0.839; the lane is
+    // track/keyframe compute, not ingest), so the default is OFF (M: an unmeasured extra thread does not belong
+    // on the demo path). ARIADNE_LANE_PIPELINE=1 enables it; its payoff case is a live path with heavy ingest
+    // (lens-on or degradation rows).
+    const char* lp = std::getenv("ARIADNE_LANE_PIPELINE");
+    const bool pipelined = lp && std::string(lp) == "1";
+    live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on, pipelined);
     std::mutex send_mu;
     auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
         std::lock_guard<std::mutex> lk(send_mu);
@@ -590,6 +622,7 @@ int main(int argc, char** argv) {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
             directives_path, planner_cfg_path, shadow_cfg_path, worker_socket, collab_socket;
         int worker_agent = -1;
+        std::string lens_arg = "off";   // D227: the D41 lens is off unless the parent (LiveConfig.lens) says on
         tools::StereoVoArgs va;
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
@@ -612,12 +645,15 @@ int main(int argc, char** argv) {
             else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
             else if (k == "--worker-socket") worker_socket = v;
             else if (k == "--collab-socket") collab_socket = v;   // D174: this agent's ariadne_collab_worker
+            else if (k == "--lens") lens_arg = v;                 // worker mode (D227): on|off, from LiveConfig.lens
             else throw std::invalid_argument("unknown argument " + k);
         }
+        if (lens_arg != "on" && lens_arg != "off") throw std::invalid_argument("--lens on|off");
         if (worker_agent >= 0) {
             if (scene.empty() || va.perception_config.empty() || va.slam_config.empty() || out.empty() || worker_socket.empty())
                 throw std::invalid_argument("worker mode: --scene --perception-config --slam-config --out --worker-socket");
-            return RunEstimatorWorker(scene, worker_agent, worker_socket, collab_socket, va, out, argc, argv);
+            return RunEstimatorWorker(scene, worker_agent, worker_socket, collab_socket, lens_arg == "on", va, out,
+                                      argc, argv);
         }
         if (scene.empty() || mission_cfg_path.empty() || live_cfg_path.empty() || out.empty() ||
             va.perception_config.empty() || va.slam_config.empty() || link_path.empty() == replay_path.empty()) {
@@ -629,6 +665,15 @@ int main(int argc, char** argv) {
         if (lc.chooser == "llm" && is_live && chooser_socket.empty()) throw std::invalid_argument("chooser llm needs --chooser-socket");
         if (lc.chooser == "llm" && !is_live && decisions_path.empty() == chooser_socket.empty())
             throw std::invalid_argument("chooser llm replay needs --decisions (the live trace) or --chooser-socket (a test)");
+        // TEST ONLY (D225 guard): ARIADNE_TEST_LANE_DELAY="k:ms" wall-delays lane k's parent-side delivery by ms
+        // per frame. It changes NO data, only timing, so a correct barrier yields identical traces with and
+        // without it; the pre-D225 hardcoded wait trips it. Never set outside infra/scripts/test_barrier_n3.sh.
+        int test_delay_lane = -1, test_delay_ms = 0;
+        if (const char* td = std::getenv("ARIADNE_TEST_LANE_DELAY")) {
+            if (std::sscanf(td, "%d:%d", &test_delay_lane, &test_delay_ms) != 2 || test_delay_ms < 0)
+                throw std::invalid_argument("ARIADNE_TEST_LANE_DELAY: k:ms");
+            std::fprintf(stderr, "ariadne_live: TEST lane delay %d ms on lane %d\n", test_delay_ms, test_delay_lane);
+        }
         const auto recorded = lc.chooser == "llm" && !decisions_path.empty() ? LoadRecordedChoices(decisions_path)
                                                               : std::map<std::pair<std::string, int>, std::pair<int, std::string>>{};
         const mis::MissionConfig mc = mis::LoadMissionConfig(mission_cfg_path);
@@ -783,6 +828,19 @@ int main(int argc, char** argv) {
             link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl"),
             timing_log(run_dir / "timing.jsonl");
         const auto wall_start = std::chrono::steady_clock::now();
+        // D224 (A2's profiling ask): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
+        // wall-clock decomposition of the barrier's stages. Default off; it only ADDS a file, never changes timing-
+        // dependent behaviour, so digests are untouched either way.
+        const bool profiling = std::getenv("ARIADNE_PROFILE") && std::string(std::getenv("ARIADNE_PROFILE")) == "1";
+        std::optional<Lines> profile;
+        if (profiling) profile.emplace(run_dir / "profile.jsonl");
+        std::array<std::chrono::steady_clock::time_point, 9> pm{};
+        const auto pmark = [&](size_t i) {
+            if (profile) {
+                pm[i] = std::chrono::steady_clock::now();
+                for (size_t j = i + 1; j < pm.size(); ++j) pm[j] = pm[i];   // unset later stages read as 0 ms
+            }
+        };
 
         // --- topics (mission_live.json) -------------------------------------------------------------------
         const YAML::Node mj = YAML::LoadFile(scene + "/mission_live.json");
@@ -1086,10 +1144,35 @@ int main(int argc, char** argv) {
         // the parent runs CollabLive: the fleet owns the radio nodes (customize installs the D175 mailboxes),
         // LightGlue verification runs inside Step. The estimator workers tee (#ckin/#crel/#cprog) and never touch
         // a DNN. collab: false = none of this exists (D168 digests unchanged).
+        uint64_t collab_config_digest = 0;              // the consumed collab config BYTES (collab60d lesson)
+        std::string collab_config_path_used;
         if (ma && lc.collab.enabled) {
             if (!lc.estimator_processes)
                 throw std::invalid_argument("collab: true requires estimator_processes: true (the tee lives in the worker)");
-            const auto ccfg = runtime::LoadCollabConfig(lc.collab.config);
+            // The collab config is consumed AS BYTES from the run dir, never from the repo at replay time
+            // (collab60d's 2b81c1 lesson: the repo file had drifted - the D178 gate was enabled after the
+            // recording - so the replay could never match its live run). Live: snapshot the file beside the
+            // recording. Replay: the recording's snapshot is authoritative when present (older recordings
+            // predate it and still read the configured path, recorded as such in the manifest).
+            std::string ccfg_path = lc.collab.config;
+            if (is_live) {
+                const fs::path snap = run_dir / "collab_config.yaml";
+                std::ofstream(snap, std::ios::binary) << std::ifstream(lc.collab.config, std::ios::binary).rdbuf();
+                ccfg_path = snap.string();
+            } else {
+                const fs::path snap = fs::path(replay_path).parent_path() / "collab_config.yaml";
+                if (fs::exists(snap)) ccfg_path = snap.string();
+            }
+            {
+                std::ifstream cf(ccfg_path, std::ios::binary);
+                std::ostringstream cb;
+                cb << cf.rdbuf();
+                core::Fnv1a64 ch;
+                for (const char c : cb.str()) ch.AbsorbByte(uint8_t(c));
+                collab_config_digest = ch.value();
+                collab_config_path_used = ccfg_path;
+            }
+            const auto ccfg = runtime::LoadCollabConfig(ccfg_path);
             if (ccfg.comms_scenario != lc.multiagent.scenario)
                 throw std::invalid_argument("collab config comms_scenario (" + ccfg.comms_scenario +
                                             ") != multiagent.scenario (" + lc.multiagent.scenario + "): ONE radio");
@@ -1103,9 +1186,15 @@ int main(int argc, char** argv) {
                              "gt_err_t_m,gt_err_r_deg,gt_baseline_m,pose_err_deg\n";
             std::vector<ac::AgentId> fleet_ids;
             for (int k2 = 0; k2 <= NA; ++k2) fleet_ids.push_back(ac::AgentId(k2));
-            live::CollabLiveParams cp;
-            cp.lockstep = lc.lockstep;
-            cp.feature_latency_s = lc.collab.feature_latency_s;
+            live::CollabLiveParams cp;   // D179: async; the event log is the reproducibility substrate
+            if (is_live) cp.log_path = (run_dir / "collab_events.jsonl").string();
+            else cp.replay_log = (fs::path(replay_path).parent_path() / "collab_events.jsonl").string();
+            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ
+                char hx[17];
+                std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
+                const char* gc = std::getenv("ARIADNE_GIT_COMMIT");
+                cp.identity = std::string(hx) + ":" + (gc && *gc ? gc : "unknown");
+            }
             const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
             ma->collab = std::make_unique<live::CollabLive>(
                 ccfg, fleet_ids, *ma->comms, *ma->lightglue, cseed, /*t_first_ns=*/0, cp, &ma->edges_csv,
@@ -1122,8 +1211,17 @@ int main(int argc, char** argv) {
                     "/tmp/ariadne-collab-" + std::to_string(::getpid()) + "-" + std::to_string(k2) + ".sock";
                 ma->collab_socks.push_back(sock);
                 const std::string ka2 = std::to_string(k2);
+                // collab60d lesson: a worker's death reason must land on disk (live AND replay), not in a lost
+                // pipe - its stderr goes to the run dir. Opened in the parent; only the dup2 sits between fork
+                // and exec (async-signal-safe).
+                const int werr = ::open((run_dir / ("collab_worker_" + ka2 + ".err")).c_str(),
+                                        O_CREAT | O_WRONLY | O_APPEND, 0644);
                 const pid_t pid = ::fork();
-                if (pid == 0) {   // child: nothing between fork and exec
+                if (pid == 0) {   // child: only the stderr dup between fork and exec
+                    if (werr >= 0) {
+                        ::dup2(werr, 2);
+                        ::close(werr);
+                    }
                     const char* cas[] = {cbin.c_str(),           "--socket",         sock.c_str(),
                                          "--agent",              ka2.c_str(),        "--place-onnx",
                                          lc.collab.place_onnx.c_str(),               "--place-size",
@@ -1135,10 +1233,16 @@ int main(int argc, char** argv) {
                     ::execv(cas[0], const_cast<char**>(cas));
                     std::_Exit(127);
                 }
+                if (werr >= 0) ::close(werr);
                 ma->collab_pids.push_back(pid);
             }
             for (int k2 = 0; k2 < NA; ++k2)
                 ma->collab->Attach(ac::AgentId(k2), live::Connect(ma->collab_socks[size_t(k2)], std::chrono::seconds(60)));
+            {   // D178 entry gate: the known entry poses, set before the fleet thread processes anything
+                std::map<ac::AgentId, core::SE3> ep;
+                for (int k2 = 0; k2 < NA; ++k2) ep[ac::AgentId(k2)] = brief.T_W_O[size_t(k2)];
+                ma->collab->SetEntryPoses(ep);   // queued onto the fleet thread (the direct fleet() call raced it)
+            }
         }
         for (int k = 0; k < NA; ++k) {
             if (lc.estimator_processes) {   // D168: spawn the worker, feed its images in consumed order, read back
@@ -1146,6 +1250,7 @@ int main(int argc, char** argv) {
                 const std::string wsock = "/tmp/ariadne-worker-" + std::to_string(::getpid()) + "-" + std::to_string(k) + ".sock";
                 const std::string raw_out = (run_dir / "raw").string();
                 const std::string ka = std::to_string(k), sa = std::to_string(va.seed);
+                const std::string lensa = lc.lens ? "on" : "off";   // D227: the toggle reaches the worker's source
                 const std::string csock = ma && ma->collab ? ma->collab_socks[size_t(k)] : "";   // D174: the tee's target
                 const pid_t pid = ::fork();
                 if (pid == 0) {   // child: exec ourselves in worker mode, nothing else between fork and exec
@@ -1156,7 +1261,8 @@ int main(int argc, char** argv) {
                                                     "--out", raw_out.c_str(),
                                                     "--seed", sa.c_str(),
                                                     "--estimator-worker", ka.c_str(),
-                                                    "--worker-socket", wsock.c_str()};
+                                                    "--worker-socket", wsock.c_str(),
+                                                    "--lens", lensa.c_str()};
                     if (!csock.empty()) cas.insert(cas.end(), {"--collab-socket", csock.c_str()});
                     cas.push_back(nullptr);
                     ::execv(cas[0], const_cast<char**>(cas.data()));
@@ -1178,6 +1284,8 @@ int main(int argc, char** argv) {
                     while (live::ReadFrame(worker_fd[k], f)) {
                         const uint8_t* q = f.payload.data();
                         if (f.topic == "#frame") {
+                            if (k == test_delay_lane && test_delay_ms > 0)   // D225 guard: timing only, never data
+                                std::this_thread::sleep_for(std::chrono::milliseconds(test_delay_ms));
                             const int64_t t = GetPod<int64_t>(q);
                             deliver_frame(k, t, GetSe3(q));
                         } else if (f.topic == "#kf") {
@@ -1209,7 +1317,8 @@ int main(int argc, char** argv) {
                 });
                 continue;
             }
-            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn, "live");
+            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn,
+                                                               "live", lc.lens);
             sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) { deliver_timing(k, t_ns, w, l, tr); };
             vo[k] = std::thread([&, k] {
                 tools::StereoVoArgs a = va;
@@ -1314,15 +1423,21 @@ int main(int argc, char** argv) {
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
         std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
+        // A mission-loop failure must be LOUD and must not unwind past the joinable lane threads (collab60d:
+        // a replay arrival-wait runtime_error reached main, the std::thread members' dtors called terminate
+        // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
+        // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
+        std::exception_ptr mission_err;
+        try {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
-                for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on both lanes' consumption
-                    if ((lanes[0].done || lanes[0].progress >= T) && (lanes[1].done || lanes[1].progress >= T)) break;
+                // EVERY lane (D225: these checks were hardcoded to lanes 0 and 1 after the D213 N-lift - the
+                // ma200 replay divergence; the predicates live in lockstep_gate.hpp under a unit test now).
+                for (;;) {   // D166: pace gz toward T sub-step by sub-step, gated on every lane's consumption
+                    if (live::AllReached(lanes, T)) break;
                     if (is_live && lc.lockstep && paced_to < T && !input_done) {
-                        const int64_t c0 = lanes[0].done ? INT64_MAX : lanes[0].progress;
-                        const int64_t c1 = lanes[1].done ? INT64_MAX : lanes[1].progress;
-                        if (std::min(c0, c1) >= paced_to - grace_ns) {
+                        if (live::MinProgress(lanes) >= paced_to - grace_ns) {
                             const int64_t next = std::min(paced_to + substep_ns, T);
                             lk.unlock();
                             RunTo(next);
@@ -1333,8 +1448,8 @@ int main(int argc, char** argv) {
                     }
                     progress_cv.wait_for(lk, std::chrono::milliseconds(200));
                 }
-                if (lanes[0].done && lanes[1].done && lanes[0].progress < T && lanes[1].progress < T) break;
-                // The previous decision's outcome is an input to this one: wait for both answers to the commands sent
+                if (live::AllDoneShort(lanes, T)) break;   // every estimator ended before T: the mission is over
+                // The previous decision's outcome is an input to this one: wait for EVERY agent's answer to the commands sent
                 // at T - replan (live: bounded wait, a timeout is counted; replay: they are in the recording).
                 if (T > replan_ns) {
                     const auto have = [&] {
@@ -1354,6 +1469,7 @@ int main(int argc, char** argv) {
                 }
             }
             const auto barrier_wall = std::chrono::steady_clock::now();
+            pmark(0);
             if (!lc.demo) {   // gate mode: keyframes stamped before T, merged across agents in (t, agent, id) order
                 std::vector<KfRec> batch;
                 for (auto& L : lanes) {
@@ -1391,6 +1507,7 @@ int main(int argc, char** argv) {
                     ++integrated[r.agent];
                 }
             }
+            pmark(1);   // integrate done
             if (is_live) {
                 std::vector<fs::path> inbox;
                 for (const auto& e : fs::directory_iterator(run_dir / "directives_inbox")) {
@@ -1439,6 +1556,41 @@ int main(int argc, char** argv) {
                 const auto ma_node = [&](int nk) -> ac::CollabNode& {
                     return ma->collab ? ma->collab->fleet().node(ac::AgentId(nk)) : *ma->nodes[size_t(nk)];
                 };
+                // D179b: under collab, ONE snapshot per barrier (taken right after the ladder) serves every
+                // component / heartbeat / acked read, so all five sites see one tick's state - frozen in Publish
+                // after Deliver+Tick, logged by version, replay-identical. Without collab the nodes are ours and
+                // the direct reads stand.
+                std::shared_ptr<const live::CollabSnapshot> csnap;
+                // A missing per-agent view (the initial snapshot, before the fleet thread's first Publish, has an
+                // EMPTY agent map - found the hard way: .at() from a fork-join thread killed collab60b's live run
+                // at barrier 1) means "nothing heard yet": a fresh node's own state. Never .at() into csnap.
+                const auto ma_view = [&](int nk) -> const live::CollabAgentView* {
+                    if (!csnap) return nullptr;
+                    const auto it = csnap->agent.find(ac::AgentId(nk));
+                    return it == csnap->agent.end() ? nullptr : &it->second;
+                };
+                const auto ma_comp = [&](int nk) {
+                    if (!csnap) return ma_node(nk).Component();
+                    if (const auto* v = ma_view(nk)) return v->component;
+                    ac::CollabNode::ComponentView self_only;   // what a fresh node reports: itself, broker itself
+                    self_only.broker = ac::AgentId(nk);
+                    self_only.members = {ac::AgentId(nk)};
+                    return self_only;
+                };
+                const auto ma_hb = [&](int nk, int nj) -> std::optional<core::HeartbeatValue> {
+                    if (!csnap) return ma_node(nk).LastHeartbeat(ac::AgentId(nj));
+                    const auto* v = ma_view(nk);
+                    if (!v) return std::nullopt;
+                    const auto it = v->heartbeat.find(ac::AgentId(nj));
+                    return it == v->heartbeat.end() ? std::nullopt : std::optional<core::HeartbeatValue>(it->second);
+                };
+                const auto ma_acked = [&](int nk, int nj) -> uint64_t {
+                    if (!csnap) return ma_node(nk).AckedPatchVersion(ac::AgentId(nj));
+                    const auto* v = ma_view(nk);
+                    if (!v) return 0;
+                    const auto it = v->acked_patch.find(ac::AgentId(nj));
+                    return it == v->acked_patch.end() ? 0 : it->second;
+                };
                 // --- D175 item 4: the per-agent barrier ---------------------------------------------------------
                 // (1) The comms ticks for (T_prev, T] run BEFORE the planners (D175 SS5), nodes in ascending id
                 // per rung: the one seeded, single-threaded step. The rung spacing is the heartbeat period
@@ -1462,14 +1614,17 @@ int main(int argc, char** argv) {
                             if (int(d.to) <= NA) ma->nodes[size_t(d.to)]->OnDatagram(d, t_now);
                         for (auto& nd : ma->nodes) nd->Tick(t_now, ma->comms->network());
                     }
+                    if (ma->collab) csnap = ma->collab->Snapshot(T);   // D179b: the barrier's one atomic view
                     if (ma->collab) {   // D174 §4 feedback + the panel, at the barrier
+                        // (csnap was taken right after the ladder: the same atomic value serves the whole barrier)
+                        const auto& snap = csnap;
                         {   // adopted frames move the briefing constants (deliver_frame's telemetry reads them)
                             std::lock_guard<std::mutex> g(ma->two_mu);
-                            for (const auto& [ck, Tk] : ma->collab->T_O0_O())
+                            for (const auto& [ck, Tk] : snap->T_O0_O)
                                 if (int(ck) < NA && int(ck) > 0) brief.T_W_O[size_t(ck)] = brief.T_W_O[0] * Tk;
                         }
-                        ma->linked = ma->collab->Linked();
-                        telemetry.Put(ma->collab->Telemetry(core::Timestamp{T}));
+                        ma->linked = snap->linked;
+                        if (!snap->telemetry.empty()) telemetry.Put(snap->telemetry);
                         const fs::path cib = run_dir / "collab_inbox";   // panel buttons, recorded inputs
                         if (fs::exists(cib)) {
                             std::vector<fs::path> files;
@@ -1501,10 +1656,15 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+                pmark(2);   // radio ladder (+ snapshot) done
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
                 // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
-                    for (const auto& d : ma->mailbox[size_t(k)]) {
+                    // D179: with the async fleet, deliveries come from its logged drain (my mailboxes stay empty);
+                    // ticks in order, FIFO per sender, identical in replay (invariant 1).
+                    const std::vector<core::DecodedMessage> drained =
+                        ma->collab ? ma->collab->Drain(ac::AgentId(k), T) : std::vector<core::DecodedMessage>{};
+                    for (const auto& d : ma->collab ? drained : ma->mailbox[size_t(k)]) {
                         if (d.has_submap_patch && d.submap_patch.sender < NA)
                             ma->layers[size_t(k)].Integrate(live::FromWire(d.submap_patch), {});
                         if (d.has_task_bid) {
@@ -1518,10 +1678,11 @@ int main(int argc, char** argv) {
                     }
                     ma->mailbox[size_t(k)].clear();
                 }
+                pmark(3);   // drain done
                 // (3) Component brokers assign from the bids that ARRIVED (the T - replan lag is the pre-registered
                 // coordination cost, D175 SS8.3). Sub-ms, serial. The consensus reaches members at the next tick.
                 for (int k = 0; k < NA; ++k) {
-                    const auto comp = ma_node(k).Component();
+                    const auto comp = ma_comp(k);
                     if (int(comp.broker) != k) continue;
                     multi::ComponentInfo ci;
                     ci.broker = k;
@@ -1531,8 +1692,17 @@ int main(int argc, char** argv) {
                     bids.reserve(ma->bids_rx[size_t(k)].size());
                     for (const auto& [snd, bb] : ma->bids_rx[size_t(k)]) bids.push_back(bb);
                     const auto cons = multi::BrokerAssign(bids, ci, ma->broker, T, ++ma->cons_seq[size_t(k)]);
-                    ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                    if (ma->collab) {
+                        ma->collab->Send(ac::AgentId(k),
+                                         [cw = live::ToWire(cons, ma->g_tag)](ac::CollabNode& n, core::Timestamp t) {
+                                             n.SendConsensus(cw, t);
+                                         },
+                                         core::Timestamp{T});
+                    } else {
+                        ma_node(k).SendConsensus(live::ToWire(cons, ma->g_tag), core::Timestamp{T});
+                    }
                 }
+                pmark(4);   // brokers done
                 // (4) Per-agent plans: share-nothing fork-join (user directive: nothing between barriers holds a
                 // lock). Thread k touches ONLY planner_k / exporter_k / layers_k / node_k reads; sends wait for (5).
                 // (the extra names avoid C++'s most-vexing parse: size_t(NA) as a parameter list - bitten at D213 too)
@@ -1547,12 +1717,12 @@ int main(int argc, char** argv) {
                     std::vector<std::thread> workers;
                     workers.reserve(size_t(NA));
                     for (int k = 0; k < NA; ++k) workers.emplace_back([&, k] {
-                        const auto comp = ma_node(k).Component();
+                        const auto comp = ma_comp(k);
                         const uint32_t epoch = uint32_t(comp.epoch.counter);
                         std::vector<planning::PeerKeyframe> peers;
                         for (int j = 0; j < NA; ++j) {
                             if (j == k) continue;
-                            if (const auto h = ma_node(k).LastHeartbeat(ac::AgentId(j))) {
+                            if (const auto h = ma_hb(k, j)) {
                                 const core::SE3 Twj = brief.T_W_O[size_t(j)] * ac::FromPoseValue(h->pose);
                                 peers.push_back({j, int64_t(h->keyframe_watermark), Twj.t});
                             }
@@ -1568,7 +1738,7 @@ int main(int argc, char** argv) {
                         for (int j = 0; j <= NA; ++j) {
                             if (j == k) continue;
                             auto patch = ma->exporters[size_t(k)].Export(
-                                ma_node(k).AckedPatchVersion(ac::AgentId(j)), epoch, T);
+                                ma_acked(k, j), epoch, T);
                             if (!patch.blocks.empty())
                                 patches_out[size_t(k)].push_back({j, live::ToWire(patch, core::FrameTag{ac::AgentId(k), 0})});
                         }
@@ -1584,13 +1754,32 @@ int main(int argc, char** argv) {
                     });
                     for (auto& w : workers) w.join();
                 }
+                pmark(5);   // plan fork-join done
                 // (5) Sends, serial in ascending id: the seeded link sees one deterministic order, and CommsNode
                 // stays single-writer. Bids self-deliver at the broker immediately (local, no radio hop).
                 for (int k = 0; k < NA; ++k) {
-                    for (auto& [j, pv] : patches_out[size_t(k)])
-                        ma_node(k).SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
-                    ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                    if (ma->collab) {   // D179: enqueued in call order onto the fleet thread
+                        for (auto& jp : patches_out[size_t(k)]) {   // no structured bindings: init-capture needs names
+                            ma->collab->Send(ac::AgentId(k),
+                                             [j2 = jp.first, pv2 = std::move(jp.second)](ac::CollabNode& n,
+                                                                                         core::Timestamp t) {
+                                                 n.SendPatch(ac::AgentId(j2), pv2, t);
+                                             },
+                                             core::Timestamp{T});
+                        }
+                        ma->collab->Send(ac::AgentId(k),
+                                         [bw = live::ToWire(bids_out[size_t(k)], ma->g_tag)](ac::CollabNode& n,
+                                                                                             core::Timestamp t) {
+                                             n.SendBid(bw, t);
+                                         },
+                                         core::Timestamp{T});
+                    } else {
+                        for (auto& [j, pv] : patches_out[size_t(k)])
+                            ma_node(k).SendPatch(ac::AgentId(j), pv, core::Timestamp{T});
+                        ma_node(k).SendBid(live::ToWire(bids_out[size_t(k)], ma->g_tag), core::Timestamp{T});
+                    }
                 }
+                pmark(6);   // sends enqueued
                 // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
                 // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
                 plan_out = live::PlanOutput(NA);
@@ -1601,7 +1790,9 @@ int main(int argc, char** argv) {
                 for (int k = 0; k < NA; ++k) {
                     plan_out.agents[size_t(k)] = plans[size_t(k)].agents[size_t(k)];
                     plan_out.joint[size_t(k)] = ma_picks[size_t(k)].option;
-                    const auto comp = ma_node(k).Component();
+                    // under collab: the component as the agent SAW IT when it picked (the pre-send snapshot);
+                    // the post-consensus view appears in the next barrier's line
+                    const auto comp = ma_comp(k);
                     mt << (k ? "," : "") << "{\"pick\":" << ma_picks[size_t(k)].option << ",\"why\":\""
                        << JsonEscape(ma_picks[size_t(k)].why) << "\",\"broker\":" << int(comp.broker)
                        << ",\"members\":" << comp.members.size() << ",\"epoch\":" << comp.epoch.counter << "}";
@@ -1632,6 +1823,7 @@ int main(int argc, char** argv) {
                 std::lock_guard<std::mutex> plk(planner_mu);   // uncontended outside demo
                 plan_out = planner->Plan(ctx);
             }
+            pmark(7);   // plan/merge done (both planner paths)
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
@@ -2001,7 +2193,7 @@ int main(int argc, char** argv) {
             // Operator authority (§23): hold / goto override whatever was chosen; recorded like every directive.
             std::vector<const mis::Directive*> direct(static_cast<size_t>(NA), nullptr);
             for (const auto& d : active) {
-                if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < 2) direct[d.agent] = &d;
+                if ((d.kind == "hold" || d.kind == "goto") && d.agent >= 0 && d.agent < NA) direct[d.agent] = &d;
             }
             for (int k = 0; k < NA; ++k) {
                 if (!P[k].active || !direct[k]) continue;
@@ -2138,6 +2330,19 @@ int main(int argc, char** argv) {
                 }
                 if (!all) ++answer_timeouts;
                 const double paused_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - barrier_wall).count();
+                if (profile) {   // D224: the barrier's wall decomposition (ms), one line per lockstep barrier
+                    pmark(8);
+                    const auto ms = [&](size_t i, size_t j) {
+                        return std::chrono::duration<double, std::milli>(pm[j] - pm[i]).count();
+                    };
+                    std::ostringstream po;
+                    po.precision(5);
+                    po << "{\"type\":\"barrier\",\"t_s\":" << T * 1e-9 << ",\"ms\":{\"integrate\":" << ms(0, 1)
+                       << ",\"radio\":" << ms(1, 2) << ",\"drain\":" << ms(2, 3) << ",\"broker\":" << ms(3, 4)
+                       << ",\"plan_fork\":" << ms(4, 5) << ",\"sends\":" << ms(5, 6) << ",\"merge\":" << ms(6, 7)
+                       << ",\"decide_command\":" << ms(7, 8) << ",\"total\":" << ms(0, 8) << "}}";
+                    profile->Put(po.str());
+                }
                 std::string at_js;
                 for (int k = 0; k < NA; ++k) at_js += (k ? "," : "") + std::to_string(at[size_t(k)]);
                 lockstep_log.Put("{\"T_ns\":" + std::to_string(T) + ",\"applied_ns\":[" + at_js +
@@ -2148,8 +2353,16 @@ int main(int argc, char** argv) {
                 paced_to = T + substep_ns;
             }
         }
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "ariadne_live: mission loop failed: %s\n", e.what());
+            mission_err = std::current_exception();
+        } catch (...) {
+            std::fprintf(stderr, "ariadne_live: mission loop failed: unknown exception\n");
+            mission_err = std::current_exception();
+        }
+        if (mission_err && is_live) ::shutdown(fd, SHUT_RDWR);   // stop the reader: the lanes drain, the joins return
         // End of the run: every agent holds (lockstep sent them at the last barrier, before resuming).
-        if (is_live && !lc.lockstep) {
+        if (is_live && !lc.lockstep && !mission_err) {
             for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
                 hold.header.stamp.sec = int32_t(end_ns / 1000000000);
@@ -2185,6 +2398,7 @@ int main(int argc, char** argv) {
         if (is_live) ::close(fd);
 
         std::ofstream res(run_dir / "results.yaml");
+        if (mission_err) res << "mission_error: true   # the loop failed; see stderr - artifacts above the failure are valid\n";
         res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
             << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
@@ -2232,7 +2446,12 @@ int main(int argc, char** argv) {
         }
         man.extra["collab"] = lc.collab.enabled ? "true" : "false";
         if (lc.collab.enabled) {
-            man.extra["collab_config"] = lc.collab.config;
+            man.extra["collab_config"] = collab_config_path_used;
+            {
+                char hx[17];
+                std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
+                man.extra["collab_config_fnv1a64"] = hx;
+            }
             man.extra["collab_feature_latency_s"] = std::to_string(lc.collab.feature_latency_s);
             man.extra["collab_worker_threads"] = std::to_string(lc.collab.worker_threads);
             man.extra["collab_parent_threads"] = std::to_string(cv::getNumThreads());
@@ -2249,11 +2468,14 @@ int main(int argc, char** argv) {
         runtime::RecordDeterminismDigests(man);
         std::ofstream(run_dir / "manifest.yaml") << runtime::ToYaml(man);
         if (splat && splat->on())
-            std::printf("ariadne_live: splat tee sent keyframes (%llu dropped under the viewer bound)\n",
+            std::printf("ariadne_live: splat tee %llu sends, %llu bytes, %.1f ms socket-busy (%llu dropped under "
+                        "the viewer bound)\n",
+                        (unsigned long long)splat->sends(), (unsigned long long)splat->sent_bytes(), splat->busy_ms(),
                         (unsigned long long)splat->drops());
         std::printf("ariadne_live[%s]: %d replans, %d decisions, consumed %llu messages (digest %016llx) -> %s\n",
                     is_live ? "live" : "replay", replans, commands_sent, (unsigned long long)rec.count(),
                     (unsigned long long)rec.digest(), run_dir.c_str());
+        if (mission_err) return 4;   // the teardown above ran and the artifacts are closed; the run still FAILED
         return 0;
     } catch (const std::exception& e) {
         std::fprintf(stderr, "ariadne_live: %s\n", e.what());

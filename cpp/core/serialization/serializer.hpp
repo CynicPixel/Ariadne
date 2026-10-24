@@ -137,6 +137,9 @@ struct ByteRecord {
     // transmission (-1 = none), and whether it is a resend after an election (broker state is soft): an overhead row.
     double predicted_wire_bytes = -1.0;
     bool resync = false;
+    // D180: a repeat first transmission of a MATCH_REQUEST/RESPONSE id this sender already sent this receiver (a retry
+    // after request_retry_s, or the answer to one): an overhead row, out of the I6 first-transmission side.
+    bool resend = false;
 
     /// Achieved compression ratio. 1.0 means compression did not help, which
     /// for high-entropy descriptors is the expected outcome and is reported.
@@ -508,7 +511,13 @@ public:
             frames_off = fbb.CreateVector(frames);
         }
         const wire::Epoch epoch(graph.epoch.counter, graph.epoch.members_hash, graph.epoch.broker);
-        const auto pg = wire::CreatePoseGraph(fbb, fbb.CreateVector(nodes), fbb.CreateVector(edges), &anchor,
+        // Children are built in named statements: two builder calls in one argument list are laid out in the
+        // compiler's argument-evaluation order (x86-64 GCC right to left, aarch64 left to right), so the bytes
+        // differed across architectures (#185, A1's wire dump). The order kept is x86's, so every recorded byte
+        // count and golden stays valid.
+        const auto edges_off = fbb.CreateVector(edges);
+        const auto nodes_off = fbb.CreateVector(nodes);
+        const auto pg = wire::CreatePoseGraph(fbb, nodes_off, edges_off, &anchor,
                                               graph.has_epoch ? &epoch : nullptr, frames_off);
 
         wire::EnvelopeBuilder eb(fbb);
@@ -913,7 +922,9 @@ private:
         std::vector<flatbuffers::Offset<wire::PartialAck>> partial;
         for (const auto& p : a.partial)
             partial.push_back(wire::CreatePartialAck(fbb, p.msg_id, fbb.CreateVector(p.received)));
-        return wire::CreateAck(fbb, fbb.CreateVector(a.done), fbb.CreateVector(partial));
+        const auto partial_off = fbb.CreateVector(partial);   // x86's order, named: see EncodePoseGraph (#185)
+        const auto done_off = fbb.CreateVector(a.done);
+        return wire::CreateAck(fbb, done_off, partial_off);
     }
 
     /// A missing ack table is an empty ack; a malformed partial entry is not.

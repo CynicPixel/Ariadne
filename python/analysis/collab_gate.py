@@ -106,6 +106,7 @@ def main():
                          "predicted": "" if p is None else round(p), "error": "" if err is None else round(err, 4),
                          "verdict": "" if err is None else ("PASS" if err <= GATE else "FAIL"),
                          "overhead_wire_retransmit": b["wire_retransmit"], "overhead_wire_resync": b.get("wire_resync", 0),
+                         "overhead_wire_resend": b.get("wire_resend", 0),
                          "uncalibrated_prices": pred.get("uncalibrated_prices", ""),
                          "uncalibrated_class_prices": pred.get("uncalibrated_class_prices", "")})
     with open(a.out / "byte_table.csv", "w", newline="") as f:

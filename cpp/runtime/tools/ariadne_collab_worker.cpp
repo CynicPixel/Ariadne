@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
         hp.lightglue_onnx = lightglue_onnx;
         hp.width = 1280, hp.height = 720;   // the D90 sim export
         const perception::HardPairMatcher aliked(hp);
-        runtime::CollabFeatureExtractor x(place, aliked, keep_s);
+        runtime::CollabFeatureExtractor x(place, aliked, keep_s, /*evict_slack_s=*/60.0);   // D179: memory only, never the answer
 
         // Accept both peers on one listening socket.
         const int s = ::socket(AF_UNIX, SOCK_STREAM, 0);
@@ -82,10 +82,23 @@ int main(int argc, char** argv) {
             std::lock_guard<std::mutex> lk(send_mu);
             if (parent_fd >= 0) live::WriteFrame(parent_fd, topic, b.data(), b.size());
         }, n_features);
-        std::vector<std::thread> readers;
+        // The peers' reader threads, joined on EVERY exit: an exception (an accept/hello failure, or a DNN error in
+        // Dispatch) unwinding past a joinable std::thread is std::terminate "without an active exception", which
+        // hides the real error (collab60c's replay, 2026-10-24). Shutting the fds down unblocks ReadFrame.
+        struct Readers {
+            std::vector<std::thread> threads;
+            std::vector<int> fds;
+            ~Readers() {
+                for (int fd : fds) ::shutdown(fd, SHUT_RDWR);
+                for (auto& t : threads)
+                    if (t.joinable()) t.join();
+                for (int fd : fds) ::close(fd);
+            }
+        } readers;
         for (int i = 0; i < 2; ++i) {
             const int c = ::accept(s, nullptr, nullptr);
             if (c < 0) throw std::runtime_error("accept");
+            readers.fds.push_back(c);
             live::LinkFrame hello;
             if (!live::ReadFrame(c, hello) || hello.topic != "#hello") throw std::runtime_error("peer sent no #hello");
             const live::CollabHello h = live::DecodeHello(hello.payload);
@@ -96,7 +109,7 @@ int main(int argc, char** argv) {
             } else if (h.role != "estimator") {
                 throw std::runtime_error("unknown peer role " + h.role);
             }
-            readers.emplace_back([&, c] {
+            readers.threads.emplace_back([&, c] {
                 live::LinkFrame f;
                 try {
                     while (live::ReadFrame(c, f)) {
@@ -125,12 +138,12 @@ int main(int argc, char** argv) {
             }
             if (!core.Dispatch(f.topic, f.payload)) ++unknown;
         }
-        for (auto& t : readers) t.join();
+        for (auto& t : readers.threads) t.join();
         const auto& st = core.stats();
         std::printf("collab_worker agent %d: threads %d, keyframes %llu, releases %llu, requests %llu, gone %llu, "
-                    "unknown %llu, ms_place %.0f, ms_aliked %.0f\n",
+                    "unknown %llu, evicted_early %llu, ms_place %.0f, ms_aliked %.0f\n",
                     agent, cv::getNumThreads(), (unsigned long long)st.keyframes_in, (unsigned long long)st.releases,
-                    (unsigned long long)st.requests, (unsigned long long)st.replies_gone, (unsigned long long)unknown,
+                    (unsigned long long)st.requests, (unsigned long long)st.replies_gone, (unsigned long long)unknown, (unsigned long long)x.stats().evicted_early,
                     x.stats().ms_place, x.stats().ms_aliked);
         return 0;
     } catch (const std::exception& e) {

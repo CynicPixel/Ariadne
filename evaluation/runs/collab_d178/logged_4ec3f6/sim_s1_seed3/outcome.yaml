@@ -1,0 +1,11 @@
+outcome: explicitly_incomplete
+corrupt:
+incomplete:
+  - "agent 0: reliable class 6 key 4 to 1 unacked (last sent 38.760000 s ago)"
+  - "agent 0: reliable class 6 key 5 to 1 unacked (last sent 38.760000 s ago)"
+  - "agent 0: reliable class 6 key 6 to 1 unacked (last sent 38.760000 s ago)"
+  - "agent 0: reliable class 5 key 1 to 1 unacked (last sent 39.760000 s ago)"
+  - "agent 0: reliable class 5 key 2 to 1 unacked (last sent 39.760000 s ago)"
+  - "agent 0: reliable class 5 key 3 to 1 unacked (last sent 39.760000 s ago)"
+  - "agent 0: reliable class 5 key 4 to 1 unacked (last sent 39.760000 s ago)"
+  - "agent 0: reliable class 6 key 7 to 1 unacked (last sent 39.760000 s ago)"

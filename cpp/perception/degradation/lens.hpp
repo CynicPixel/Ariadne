@@ -124,13 +124,13 @@ inline LensMap BuildLensMap(const LensModel& m) {
 }
 
 /// Bilinear resampling of every channel; round half up to 8 bits.
-inline core::ImageU8 ApplyLens(const core::ImageU8& clean, const LensMap& map) {
-    if (clean.width != map.width || clean.height != map.height) {
-        throw std::invalid_argument("lens: image size does not match the map");
-    }
-    core::ImageU8 out(map.width, map.height, clean.channels);
+/// Rows [v0, v1) of the resample: pure scalar arithmetic, no OpenCV (this header is the determinism substrate
+/// and the manifest/determinism include path - arch §3 dependency rule; the Kaggle/AWS test_unit build broke when
+/// D226 put cv::parallel_for_ here). lens_parallel.hpp wraps this span under cv::parallel_for_ for OpenCV-linked
+/// consumers; every output pixel is an independent pure function, so any row partition is bit-identical.
+inline void ApplyLensRowSpan(const core::ImageU8& clean, const LensMap& map, int v0, int v1, core::ImageU8& out) {
     const int C = clean.channels;
-    for (int v = 0; v < map.height; ++v) {
+    for (int v = v0; v < v1; ++v) {
         for (int u = 0; u < map.width; ++u) {
             const size_t i = size_t(v) * size_t(map.width) + size_t(u);
             const double su = map.src_u[i], sv = map.src_v[i];
@@ -157,6 +157,14 @@ inline core::ImageU8 ApplyLens(const core::ImageU8& clean, const LensMap& map) {
             }
         }
     }
+}
+
+inline core::ImageU8 ApplyLens(const core::ImageU8& clean, const LensMap& map) {
+    if (clean.width != map.width || clean.height != map.height) {
+        throw std::invalid_argument("lens: image size does not match the map");
+    }
+    core::ImageU8 out(map.width, map.height, clean.channels);
+    ApplyLensRowSpan(clean, map, 0, map.height, out);
     return out;
 }
 

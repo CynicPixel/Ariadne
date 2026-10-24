@@ -215,7 +215,7 @@ TEST(LiveLink, AssemblerLenientDropsWhereStrictThrows) {
     const std::string L = "/l", R = "/r";
     auto img = [](int64_t t) { return EncodeRgbImage(t, 8, 6, 100); };
     for (const bool strict : {true, false}) {
-        SimFrameAssembler a(map, 0, L, R, strict);
+        SimFrameAssembler a(&map, 0, L, R, strict);
         std::vector<int64_t> emitted;
         auto on = [&](const StereoFrame& f) { emitted.push_back(f.t_ns); };
         const auto l1 = img(50), r2 = img(100), l2 = img(100);
@@ -231,5 +231,95 @@ TEST(LiveLink, AssemblerLenientDropsWhereStrictThrows) {
             a.Feed(R, late.data(), late.size(), on);
             EXPECT_EQ(a.unpaired(), 2u);
         }
+    }
+}
+
+// D229: the lane ingest pipeline's guard. Ingest on a real second thread through a depth-1 in-order slot, Apply on
+// this thread, against the single-threaded Feed on an identical message sequence: the emitted frames must be byte
+// identical (gray + left RGB), ids and stamps equal, and the unpaired accounting the same. The sequence exercises
+// pairs, an unpaired left, a late right (dropped) and varying pixel content.
+TEST(LiveLink, PipelinedIngestMatchesFeedExactly) {
+    ariadne::perception::LensModel lens;
+    lens.width = 8;
+    lens.height = 6;
+    lens.fx = lens.fy = 11;   // output focal > render: barrel margin, the map actually resamples
+    lens.render_fx = lens.render_fy = 10;
+    lens.cx = lens.render_cx = 3.5;
+    lens.cy = lens.render_cy = 2.5;
+    lens.k1 = -0.05;
+    const auto map = ariadne::perception::BuildLensMap(lens);
+    const std::string L = "/l", R = "/r";
+    // (topic, t_ns, fill): two clean pairs, one unpaired left (60), one late right (60) after 100 emitted.
+    const std::vector<std::tuple<const std::string*, int64_t, uint8_t>> seq = {
+        {&L, 50, 10}, {&R, 50, 20}, {&L, 60, 30}, {&L, 100, 40}, {&R, 100, 50}, {&R, 60, 60}, {&L, 150, 70}, {&R, 150, 80},
+    };
+    auto run = [&](bool pipelined) {
+        SimFrameAssembler a(&map, 0, L, R, /*strict=*/false);
+        std::vector<ariadne::runtime::StereoFrame> out;
+        auto on = [&](const ariadne::runtime::StereoFrame& f) {
+            ariadne::runtime::StereoFrame c = f;
+            c.left = f.left.clone();
+            c.right = f.right.clone();
+            c.left_rgb = f.left_rgb.clone();
+            out.push_back(c);
+        };
+        if (!pipelined) {
+            for (const auto& [topic, t, fill] : seq) {
+                const auto b = EncodeRgbImage(t, 8, 6, fill);
+                a.Feed(*topic, b.data(), b.size(), on);
+            }
+        } else {
+            std::mutex mu;
+            std::condition_variable cv;
+            std::optional<SimFrameAssembler::Ingested> slot;
+            bool eof = false;
+            std::thread ingest([&] {
+                for (const auto& [topic, t, fill] : seq) {
+                    const auto b = EncodeRgbImage(t, 8, 6, fill);
+                    auto in = a.Ingest(*topic, b.data(), b.size());
+                    std::unique_lock<std::mutex> lk(mu);
+                    cv.wait(lk, [&] { return !slot.has_value(); });
+                    slot.emplace(std::move(in));
+                    cv.notify_all();
+                }
+                std::lock_guard<std::mutex> lk(mu);
+                eof = true;
+                cv.notify_all();
+            });
+            for (;;) {
+                std::optional<SimFrameAssembler::Ingested> in;
+                {
+                    std::unique_lock<std::mutex> lk(mu);
+                    cv.wait(lk, [&] { return slot.has_value() || eof; });
+                    if (!slot.has_value()) break;
+                    in.emplace(std::move(*slot));
+                    slot.reset();
+                }
+                cv.notify_all();
+                a.Apply(std::move(*in), on);
+            }
+            ingest.join();
+        }
+        return std::make_tuple(std::move(out), a.unpaired(), a.pending(), a.emitted());
+    };
+    const auto [f0, u0, p0, e0] = run(false);
+    const auto [f1, u1, p1, e1] = run(true);
+    EXPECT_EQ(u0, u1);
+    EXPECT_EQ(p0, p1);
+    EXPECT_EQ(e0, e1);
+    ASSERT_EQ(f0.size(), f1.size());
+    ASSERT_EQ(f0.size(), 3u);   // 50, 100, 150
+    for (size_t i = 0; i < f0.size(); ++i) {
+        EXPECT_EQ(f0[i].t_ns, f1[i].t_ns);
+        EXPECT_EQ(f0[i].id, f1[i].id);
+        auto same = [](const cv::Mat& a, const cv::Mat& b) {
+            ASSERT_EQ(a.size(), b.size());
+            ASSERT_EQ(a.type(), b.type());
+            ASSERT_TRUE(a.isContinuous() && b.isContinuous());
+            EXPECT_EQ(0, std::memcmp(a.data, b.data, a.total() * a.elemSize()));
+        };
+        same(f0[i].left, f1[i].left);
+        same(f0[i].right, f1[i].right);
+        same(f0[i].left_rgb, f1[i].left_rgb);
     }
 }
