@@ -2199,6 +2199,9 @@ offline from the run traces, so the effective number of independent priors is lo
 - the gradient matches finite differences, Huber included;
 - the solve is bit-identical when off;
 - a 1.5° reference error is estimated to 0.62°, and tilt RMS goes 3.78° → 2.01°;
+  **corrected 2026-10-24 (D123–D124):** that is one seed under x86's argument-evaluation order (arm64 gets 2.71°).
+  The fixture's own σ for ĝ is ≈ 2.0° per axis, and only 14–17 % of seeds reach < 1°. Recovery to 0.62° is not
+  shown. The redesigned check is the 50-seed NEES consistency test;
 - a 30° outlier prior moves its keyframe by 1.85°.
 `PgoLevMarq` 4/4 and numerical `PgoProblem`/`PoseGraph` 10/10 pass; the oracle was not rerun (the off path is
 unchanged).
@@ -3437,6 +3440,13 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
     - The both-directions line-of-sight check is `[DESIGN]`: it misses no crossed cell but over-blocks on 272 of 624
       segments.
     - The D\* Lite trigger split is supported (AAAI 2002).
+  - **D116 amended 2026-10-24 (D123): "FAR ≤ string-pulled lattice" is FALSE.** After the test's map draws were
+    sequenced, `VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice` trial #9 routes 37.40 cells
+    against the lattice's 33.24 (+12.5 %).
+    - The old pass came from x86's argument order, which drew a different map.
+    - Same defect class as hazard seed 0 (EXPLORATION_4.6 §10).
+    - The test is quarantined (`DISABLED_`, unchanged) and OPEN, parked until after the freeze.
+    - FAR stays `[DESIGN]`. No report or video may claim FAR ≤ lattice. The live `Route` uses A*.
 ## 2026-10-22 — D100: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
 
 - **Loader:** `runtime::TumSource` (`cpp/runtime/datasets/tum.hpp`), with `infra/scripts/fetch_tum.py` (sha256
@@ -5218,3 +5228,94 @@ rule):
 **Decision (M's, per the rule).** No coding is adopted under D233. Anything else needs a new pre-registration with
 fp32 as the reference and a flip tolerance justified by the 1-ulp floor above. That is a new open, so it waits
 until after the 2026-10-24 feature freeze.
+## 2026-10-24 — D123–D124 (A1; applied 2026-10-24, M signed off; 2.x SLAM's tests): the arm64 GravityPgo divergence is a test-fixture defect
+
+**Finding** (`evaluation/runs/arm64/20261023T233147Z-cpuarm-1e25b3/README.md`, commit 1647d6b). Graviton's 2.71 deg
+against x86's 0.62 deg is not a numerical difference.
+- `Make()` builds each prior's noise as `Vec3(nz(gen), nz(gen), 0)`. The order in which C++ evaluates function
+  arguments is unspecified, so GCC x86-64 draws y first and aarch64 draws x first. The two architectures solve
+  different problems.
+- x86 forced to aarch64's order reproduces arm64 exactly (2.7104 deg, tilt 3.1702, seeds 14/100).
+- arm64's path is clean: converged, perturbation-stable, HAL ops bit-exact, and the same answer from a scalar LM and
+  with Eigen vectorisation off. **The arm64 path is not wrong; the COOL Arm-vs-Arm claim is unaffected.**
+
+**D123: brace every multi-draw RNG initialiser in the tests.**
+- 44 sites in 13 files (`sequencing_proposal.txt`, a dry run); none in `cpp/`.
+- `{a(g), b(g)}` is evaluated left to right by rule ([dcl.init.list]), even when it resolves to a constructor. Every
+  architecture then draws the same noise (aarch64's present order).
+- x86 test values change wherever the old order mattered: those tests' expectations were x86-order artefacts and
+  must be re-checked on both architectures in one run.
+- Add a CI grep that fails on the pattern (`Type(f(g), f(g)…)` with ≥ 2 draws).
+- Not applied: the files are 2.x's, and the auto-mode classifier rightly refused a scripted rewrite of them.
+- **Applied 2026-10-24** (maintainer granted `tests/**` edits; M approved, including the outcome below).
+  - **The 44 sites, plus 19 more** found by the CI check, which the dry run had missed:
+    - generators named `rng`;
+    - two braced vectors as separate arguments of one call, e.g. `p.Integrate(Vec3{…}, Vec3{…})`;
+    - operands of one operator, e.g. `RandomAxis(g) * ang(g)` (an overloaded operator is a call) and
+      `u(rng) < Per(… g(rng) …)`.
+    These are fixed by braces, one draw per declarator, or `RandomRotation()` in `test_lie`.
+  - **The check:** `infra/scripts/check_rng_sequencing.py`, registered as the ctest
+    `RngSequencing.NoUnsequencedDrawsInTests`; 0 sites in `tests/`. It treats `?:` and control headers as
+    sequenced. It was validated by flagging all 44 original sites on the pre-D123 tree.
+  - **Local x86 ctest: 695/696, with 1 disabled.** `VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice`
+    is quarantined because the resequenced map shows "FAR ≤ lattice" is FALSE on trial #9 (37.40 vs 33.24 cells;
+    D116 amended above; OPEN).
+  - **Values that moved, old → new.** Every printed value of the touched suites, before and after, is in
+    `evaluation/runs/arm64/d123_local_x86/values_diff.txt`. Two are evidence of the 2.5 back end and must be cited
+    with the new numbers:
+    - **planted-outlier certificate (D74):** the stationary points strictly worse than truth go **0 → 2**, all not
+      certified. "Certified out of 10" stays 6/6/6, and after GNC 10/10. The reported seed changes 0 → 3
+      (λ_min −1.1865e4 → −1.3414e4);
+    - **GNC alone on 3 random inter-agent loops:** accepted **1 → 0**, against the stated "a lone link is unverifiable
+      without redundancy".
+  - **Other moves, all still passing:**
+    - the outlier prior moves its keyframe 1.85 → 1.82°;
+    - shared-gravity improvement 68 % → 63 % (2.77/0.90 → 3.04/1.13°) and 10 % → 9 %;
+    - degeneracy NEES 5.95 → 6.09 (54.69 → 58.15 far);
+    - near-miss PCM/GNC precision and recall by ≤ 0.006;
+    - GNC near-miss acceptance 143 → 149 of 199;
+    - approxPolyDP clipping 53 → 49 of 200;
+    - two-lap ATE 0.086 → 0.082 m;
+    - the rest are timings or the last digits.
+  - **Re-baselines** on x86 (ci_aws) and arm64 are queued at this commit.
+
+**D124: GravityPgo's recovery test asserts something its fixture cannot deliver; redesign it, don't loosen it.**
+- Measured over 200 seeds (`conditioning.txt`), the fixture (200 keyframes, odometry rotation σ 0.01 rad per step,
+  priors every 10 keyframes at σ 2.3 deg, a 1.5 deg reference error) passes "gerr < 1 deg and tilt reduced" on
+  14–17 %. Median gerr is 2.0 deg.
+- Denser priors barely help: every keyframe at σ 1.0 deg gives median 0.80 deg and passes 61–63 %.
+- Reason [ASSUMPTION, a rough random-walk smoothing estimate, not derived in a test]:
+  - with only the anchor fixed and the tilt random-walking at 0.57 deg per step, gravity is observable mainly through
+    the priors near the anchor;
+  - that gives σ ≈ 0.7 deg per axis, a median of about 0.85 deg, matching the 0.80 measured;
+  - so the estimator looks about as efficient as the fixture allows. The bound, not the solver, is wrong.
+- **Proposed (recommended): a consistency test.**
+  - Over N = 50 seeds, compare each seed's gerr with the solver's own 2 × 2 marginal covariance of ĝ, taken from H
+    at the optimum.
+  - Assert that the mean NEES lies inside the 99 % χ²(2N)/N band. The priors are drawn with the noise the solver
+    assumes (generation σ = s/√info_scale).
+  - This tests what the feature claims ("the 2-DoF variable recovers the reference error as well as the information
+    allows") and holds on any architecture.
+- **Alternative:** a better-conditioned fixture plus a quantile bound. It needs odometry rotation noise small enough
+  that P(gerr < 1 deg) is at least 0.95, checked over 50 seeds before it becomes the bound.
+- Either way, the "tilt RMS reduced" check stays per seed.
+
+**D124 validated before it is written** (2026-10-24, x86, `gpgo_diag nees 50`, `nees_x86.txt`). M approved the NEES
+form; the Bar-Shalom test, as in D178.
+- The solver's ĝ marginal is the gravity block of H⁻¹ at the optimum, by an LDLT solve on the two gravity columns.
+  `MarginalCovariances` returns pose blocks only. σ ≈ 2.0° per axis for this fixture.
+- Mean NEES over seeds 0–49 lands inside the 99 % band [1.347, 2.803] under both draw orders:
+
+  | prior noise drawn at | aarch64 order (D123's) | x86 order |
+  |---|---|---|
+  | σ/√0.6, the noise the solver assumes (recommended) | 2.53 | 2.30 |
+  | σ, today's draw | 1.84 | 1.67 |
+
+- **Amendment:** "tilt reduced" fails on 1–4 of 50 seeds per configuration (it holds on 46–49 of 50), so it cannot
+  stay a per-seed assertion. It becomes the tilt RMS over the 50 seeds below the odometry's, plus a reduction on
+  ≥ 90 % of seeds.
+- After D123 the seeds are fixed, so pass/fail is deterministic and identical on both architectures.
+- **Applied 2026-10-24:** `GravityPgo.ReferenceGravityErrorIsRecoveredAsWellAsTheInformationAllowsAndTiltShrinks`
+  replaces the single-seed bound.
+  - Priors are drawn at σ/√info_scale; `Make(…, gen_scale)` defaults to 1 for the other tests.
+  - Local x86: mean NEES **2.526** in [1.347, 2.803] (validated 2.53); tilt RMS 8.47 → 3.78°, reduced on 46/50.

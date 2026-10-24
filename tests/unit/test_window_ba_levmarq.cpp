@@ -33,7 +33,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise, bool right_
     std::uniform_real_distribution<double> ux(-1.5, 1.5), uz(1.0, 6.0);
     std::normal_distribution<double> pn(0.0, pix_noise);
     for (int m = 0; m < M; ++m) {
-        const Vec3 X(ux(g), 0.6 * ux(g), uz(g));
+        const Vec3 X{ux(g), 0.6 * ux(g), uz(g)};
         w.X[uint64_t(m)] = X;
         for (int k = 0; k < K; ++k)
             for (bool right : {false, true}) {
@@ -45,7 +45,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise, bool right_
                 o.kf = k;
                 o.landmark = uint64_t(m);
                 o.right = right;
-                o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g));
+                o.z = Vec2{kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g)};
                 w.obs.push_back(o);
             }
     }
@@ -76,7 +76,7 @@ TEST(WindowBaLevMarq, NoiseFreeWindowReturnsTheTruth) {
     const BaWindow truth = w;
     for (size_t k = 1; k < w.T_W_C.size(); ++k) w.T_W_C[k] = Jitter(g, 0.01, 0.03) * w.T_W_C[k];
     std::normal_distribution<double> n(0.0, 0.03);
-    for (auto& [id, X] : w.X) X += Vec3(n(g), n(g), n(g));
+    for (auto& [id, X] : w.X) X += Vec3{n(g), n(g), n(g)};
     const WindowBaReport rep = SolveWindowBa(w, Tight());
     EXPECT_LT(rep.final_energy, 1e-18);
     for (size_t k = 0; k < w.T_W_C.size(); ++k) {
@@ -177,7 +177,7 @@ TEST(WindowBaLevMarq, NoiseFreeVisualInertialWindowReturnsTheTruth) {
     BaWindow w = test::MakeInertialWindow(g, 6, 60, 0.0);
     const BaWindow truth = w;
     std::normal_distribution<double> n(0.0, 1.0);
-    const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+    const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
     for (size_t k = 1; k < w.T_W_C.size(); ++k) w.T_W_C[k] = Jitter(g, 0.01, 0.03) * w.T_W_C[k];
     for (size_t k = 0; k < w.T_W_C.size(); ++k) {
         w.imu.v[k] += rv(0.1);
@@ -244,7 +244,7 @@ TEST(WindowBaLevMarq, DarkWindowIsDeadReckonedWithTheVelocityOfWindow0Held) {
     ASSERT_TRUE(w.imu.hold_v0);
     ASSERT_EQ(held, 0);
     std::normal_distribution<double> n(0.0, 1.0);
-    const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+    const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
     for (size_t k = 1; k < w.T_W_C.size(); ++k) {
         w.T_W_C[k] = Jitter(g, 0.02, 0.1) * w.T_W_C[k];
         w.imu.v[k] += rv(0.2);

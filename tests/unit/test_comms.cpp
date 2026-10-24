@@ -55,7 +55,10 @@ TEST(Comms, LossMatchesRfCommsPerPacketMonteCarlo) {
         const double mean = noise + margin;
         const int n = 200000;
         int dropped = 0;
-        for (int i = 0; i < n; ++i) dropped += u(rng) < ac::rf::Per(mean + sigma * g(rng), noise, bytes);
+        for (int i = 0; i < n; ++i) {   // the uniform first, then the fade: two draws in one expression (D123)
+            const double draw = u(rng);
+            dropped += draw < ac::rf::Per(mean + sigma * g(rng), noise, bytes);
+        }
         const double mc = double(dropped) / n, se = std::sqrt(std::max(mc * (1 - mc), 1e-6) / n);
         const double ours = ac::rf::ExpectedPer(mean, sigma, noise, bytes);
         EXPECT_NEAR(ours, mc, 4.0 * se + 1e-4) << "margin " << margin;

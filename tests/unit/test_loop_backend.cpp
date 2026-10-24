@@ -61,14 +61,15 @@ LoopGeometry Geometry(std::mt19937& g, const SE3& T_W_A, const SE3& T_A_B_geomet
     std::normal_distribution<double> nz(0.0, 1.0);
     const SE3 T_B_A = T_A_B_geometry.inverse();
     while (lg.X_B.size() < 100) {
-        const Vec3 XA = core::Unproject(lg.rig.cam, Vec2(u(g), v(g)), z(g));
+        const Vec2 uv{u(g), v(g)};   // pixel, then depth: sequenced (D123)
+        const Vec3 XA = core::Unproject(lg.rig.cam, uv, z(g));
         const Vec3 XB = T_B_A * XA;
         if (XB.z() < 0.5) continue;
         const Vec2 uvB = core::Project(lg.rig.cam, XB);
         if (uvB.x() < 0 || uvB.x() > 1280 || uvB.y() < 0 || uvB.y() > 720) continue;
         const double d = lg.rig.cam.fx * lg.rig.baseline / XB.z() + noise * 0.65 * nz(g);
-        lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + noise * 0.46 * Vec2(nz(g), nz(g)), lg.rig.cam.fx * lg.rig.baseline / d));
-        lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + noise * 0.46 * Vec2(nz(g), nz(g)));
+        lg.X_B.push_back(core::Unproject(lg.rig.cam, uvB + noise * 0.46 * Vec2{nz(g), nz(g)}, lg.rig.cam.fx * lg.rig.baseline / d));
+        lg.uv_A.push_back(core::Project(lg.rig.cam, XA) + noise * 0.46 * Vec2{nz(g), nz(g)});
     }
     (void)T_W_A;
     Vec6 j;

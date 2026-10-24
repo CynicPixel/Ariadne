@@ -1,0 +1,57 @@
+Running main() from /work/.cache/fetchcontent-arm64/googletest-src/googletest/src/gtest_main.cc
+Note: Google Test filter = GravityPgo.*:PgoLevMarq.*:JointRobust.SharedGravity*:Gnc.NearMisses*
+[==========] Running 11 tests from 4 test suites.
+[----------] Global test environment set-up.
+[----------] 4 tests from PgoLevMarq
+[ RUN      ] PgoLevMarq.DriverContractOneStepOnALinearProblem
+[       OK ] PgoLevMarq.DriverContractOneStepOnALinearProblem (0 ms)
+[ RUN      ] PgoLevMarq.NoiseFreeGraphReturnsTheTruth
+noise-free: E 1.649e+03 -> 1.727e-21 in 5 iterations (5 linearizations, 5 factorizations, 0 failed)
+[       OK ] PgoLevMarq.NoiseFreeGraphReturnsTheTruth (2 ms)
+[ RUN      ] PgoLevMarq.NoisyGraphReachesAStationaryPoint
+noisy: E 919.8791 -> 5.7441 in 23 iterations; max|grad| 5.50e-07
+[       OK ] PgoLevMarq.NoisyGraphReachesAStationaryPoint (9 ms)
+[ RUN      ] PgoLevMarq.SolveIsBitIdenticalTwice
+[       OK ] PgoLevMarq.SolveIsBitIdenticalTwice (5 ms)
+[----------] 4 tests from PgoLevMarq (18 ms total)
+
+[----------] 2 tests from Gnc
+[ RUN      ] Gnc.NearMissesAfterPcm
+near misses 0.5 m / 5 deg: 0 / 200 passed PCM, 0 accepted by GNC | precision (pooled) 1.0000 | ATE 0.0914 m with them, 0.0914 m without
+near misses 0.2 m / 1 deg: 199 / 200 passed PCM, 149 accepted by GNC | precision (pooled) 0.8888 | ATE 0.1031 m with them, 0.0914 m without
+[       OK ] Gnc.NearMissesAfterPcm (1128 ms)
+[ RUN      ] Gnc.NearMissesWithoutPcmReported
+GNC alone, near misses 0.5 m / 5 deg: 0 / 200 accepted, true loops kept 1186 / 1200 (reported)
+[       OK ] Gnc.NearMissesWithoutPcmReported (775 ms)
+[----------] 2 tests from Gnc (1903 ms total)
+
+[----------] 4 tests from GravityPgo
+[ RUN      ] GravityPgo.GradientMatchesFiniteDifferencesIncludingHuber
+[       OK ] GravityPgo.GradientMatchesFiniteDifferencesIncludingHuber (0 ms)
+[ RUN      ] GravityPgo.DisabledIsBitIdenticalToNoPriors
+[       OK ] GravityPgo.DisabledIsBitIdenticalToNoPriors (0 ms)
+[ RUN      ] GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt
+gravity: reference off by 1.50 deg -> estimate off by 2.71 deg | tilt RMS 3.78 deg (odometry) -> 3.17 deg
+/work/tests/unit/test_gravity_pgo.cpp:148: Failure
+Expected: (gerr) < (1.0), actual: 2.7103813386465747 vs 1
+
+[  FAILED  ] GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt (9 ms)
+[ RUN      ] GravityPgo.HuberDownWeightsAnOutlierPrior
+a 30 deg outlier prior moves its keyframe's tilt by 1.82 deg (quadratic cost would follow it further)
+[       OK ] GravityPgo.HuberDownWeightsAnOutlierPrior (3 ms)
+[----------] 4 tests from GravityPgo (14 ms total)
+
+[----------] 1 test from JointRobust
+[ RUN      ] JointRobust.SharedGravityRemovesAnInterAgentTiltBias
+inter-agent sigma_r 0.01 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 2.55 deg, shared 2.31 deg (9% less)
+inter-agent sigma_r 0.05 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 3.04 deg, shared 1.13 deg (63% less)
+[       OK ] JointRobust.SharedGravityRemovesAnInterAgentTiltBias (17 ms)
+[----------] 1 test from JointRobust (17 ms total)
+
+[----------] Global test environment tear-down
+[==========] 11 tests from 4 test suites ran. (1954 ms total)
+[  PASSED  ] 10 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt
+
+ 1 FAILED TEST

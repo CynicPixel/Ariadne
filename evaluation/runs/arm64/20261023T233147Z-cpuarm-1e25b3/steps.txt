@@ -1,0 +1,6 @@
+=== 2026-10-23T23:32:24Z +0s 0 host aarch64 commit a66dac65c0bbc0dcef23d756d2c0688ceabf9e94 dirty true
+=== 2026-10-23T23:32:24Z +0s 1 docker + buildx
+=== 2026-10-23T23:32:48Z +24s 2 opencv-base
+=== 2026-10-23T23:37:02Z +278s 3 core dev image
+=== 2026-10-23T23:37:18Z +294s 4 build test_opencv + diag, run
+=== 2026-10-23T23:40:42Z +498s done rc=0

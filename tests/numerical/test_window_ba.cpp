@@ -37,7 +37,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise) {
     std::uniform_real_distribution<double> ux(-1.5, 1.5), uz(1.0, 6.0);
     std::normal_distribution<double> pn(0.0, pix_noise);
     for (int m = 0; m < M; ++m) {
-        const Vec3 X(ux(g), 0.6 * ux(g), uz(g));
+        const Vec3 X{ux(g), 0.6 * ux(g), uz(g)};
         w.X[uint64_t(100 + m)] = X;
         for (int k = 0; k < K; ++k) {
             for (bool right : {false, true}) {
@@ -48,7 +48,7 @@ BaWindow MakeWindow(std::mt19937& g, int K, int M, double pix_noise) {
                 Vec3 Xc = w.T_W_C[size_t(k)].R.transpose() * (X - w.T_W_C[size_t(k)].t);
                 if (right) Xc.x() -= kCam.baseline;
                 if (Xc.z() < 0.2) continue;
-                o.z = Vec2(kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g));
+                o.z = Vec2{kCam.fx * Xc.x() / Xc.z() + kCam.cx + pn(g), kCam.fy * Xc.y() / Xc.z() + kCam.cy + pn(g)};
                 w.obs.push_back(o);
             }
         }
@@ -222,7 +222,7 @@ TEST(WindowBa, AnchorWindowTiesEveryFreeKeyframeToAFixedOne) {
     uint64_t id = 0;
     for (const auto& pair : {std::pair<int, int>{0, 1}, std::pair<int, int>{2, 3}})
         for (int m = 0; m < 20; ++m, ++id) {
-            w.X[id] = Vec3(ux(g), ux(g), uz(g));
+            w.X[id] = Vec3{ux(g), ux(g), uz(g)};
             for (int k : {pair.first, pair.second})
                 for (bool right : {false, true}) {   // stereo: metric scale is observed
                     WindowObservation o;

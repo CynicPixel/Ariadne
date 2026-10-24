@@ -1,0 +1,63 @@
+input digest ced7640a20cf76d6 truth digest 6c0bbdb4becd09b8 tilt0 3.7807683586294782
+E0 26.39698060794727 (0x1.a65a08568479cp+4)
+  calcJ E=26.39698060794727 (0x1.a65a08568479cp+4) gprobe=1.500000 deg |g|=264.037973
+  setDiag lambda in [9.9999999999988987e-05, 9.9999999999988987e-05]
+  solve rel residual 2.507e-13 (lower-sym 2.281e-13) min pivot 4.305337e+01
+  step |x|=3.385953e-01 x_g=(-1.750061e-02, 2.238749e-02)
+  calcE E=20.354262937672601 (0x1.45ab0f9d37d1cp+4) gprobe=1.025873 deg
+  ACCEPT g=1.025873 deg
+  calcJ E=20.354262937672608 (0x1.45ab0f9d37d1ep+4) gprobe=1.025873 deg |g|=33.652289
+  setDiag lambda in [3.3333333333329662e-05, 3.3333333333329662e-05]
+  solve rel residual 3.474e-12 (lower-sym 3.241e-12) min pivot 2.763061e+01
+  step |x|=6.993581e-01 x_g=(1.575513e-03, 6.610836e-04)
+  calcE E=18.636082085326084 (0x1.2a2d6468a0c09p+4) gprobe=0.929803 deg
+  ACCEPT g=0.929803 deg
+  calcJ E=18.63608208532608 (0x1.2a2d6468a0c08p+4) gprobe=0.929803 deg |g|=16.000317
+  setDiag lambda in [1.1111111110961858e-05, 1.1111111111183902e-05]
+  solve rel residual 1.399e-11 (lower-sym 1.323e-11) min pivot 2.077481e+01
+  step |x|=1.673549e+00 x_g=(-5.224788e-05, 2.093880e-03)
+  calcE E=16.96408753490801 (0x1.0f6ce70d0e942p+4) gprobe=0.917267 deg
+  ACCEPT g=0.917267 deg
+  calcJ E=16.964087534908007 (0x1.0f6ce70d0e941p+4) gprobe=0.917267 deg |g|=15.247906
+  setDiag lambda in [3.7037037035059228e-06, 3.7037037037279674e-06]
+  solve rel residual 3.159e-11 (lower-sym 2.965e-11) min pivot 1.793441e+01
+  step |x|=3.570237e+00 x_g=(-4.449218e-03, 2.159175e-03)
+  calcE E=15.067051943582717 (0x1.e2254a1e1a45bp+3) gprobe=1.172040 deg
+  ACCEPT g=1.172040 deg
+  calcJ E=15.067051943582712 (0x1.e2254a1e1a458p+3) gprobe=1.172040 deg |g|=30.262706
+  setDiag lambda in [1.2345679012426558e-06, 1.2345679012426558e-06]
+  solve rel residual 3.026e-11 (lower-sym 2.912e-11) min pivot 1.673228e+01
+  step |x|=5.981728e+00 x_g=(-9.963897e-03, 8.650670e-04)
+  calcE E=13.203052405929542 (0x1.a67f67c25aed9p+3) gprobe=1.744885 deg
+  ACCEPT g=1.744885 deg
+  calcJ E=13.203052405929551 (0x1.a67f67c25aedep+3) gprobe=1.744885 deg |g|=51.069716
+  setDiag lambda in [4.1152263374755194e-07, 4.1152263374755194e-07]
+  solve rel residual 1.697e-11 (lower-sym 1.937e-11) min pivot 1.601222e+01
+  step |x|=6.195752e+00 x_g=(-1.079954e-02, 8.086999e-04)
+  calcE E=12.301379190793647 (0x1.89a4e5f904eacp+3) gprobe=2.365366 deg
+  ACCEPT g=2.365366 deg
+  calcJ E=12.301379190793641 (0x1.89a4e5f904ea9p+3) gprobe=2.365366 deg |g|=44.660988
+  setDiag lambda in [1.3717421110115424e-07, 1.3717421132319885e-07]
+  solve rel residual 1.052e-11 (lower-sym 1.041e-11) min pivot 1.551094e+01
+  step |x|=3.077490e+00 x_g=(-5.076001e-03, 6.943356e-04)
+  calcE E=12.162904045736186 (0x1.8536828b9a561p+3) gprobe=2.658303 deg
+  ACCEPT g=2.658303 deg
+  calcJ E=12.162904045736189 (0x1.8536828b9a563p+3) gprobe=2.658303 deg |g|=8.801745
+  setDiag lambda in [4.5724736885688344e-08, 4.5724737107732949e-08]
+  solve rel residual 1.391e-11 (lower-sym 1.296e-11) min pivot 1.530655e+01
+  step |x|=6.351905e-01 x_g=(-8.590166e-04, 1.609556e-04)
+  calcE E=12.158404067659923 (0x1.8511a56844e34p+3) gprobe=2.708081 deg
+  ACCEPT g=2.708081 deg
+  calcJ E=12.158404067659918 (0x1.8511a56844e31p+3) gprobe=2.708081 deg |g|=0.349422
+  setDiag lambda in [1.5241578887881246e-08, 1.5241579109925851e-08]
+  solve rel residual 5.699e-11 (lower-sym 5.232e-11) min pivot 1.526274e+01
+  step |x|=8.604643e-02 x_g=(-3.968187e-05, 1.214091e-05)
+  calcE E=12.158372309215714 (0x1.851162ce158d4p+3) gprobe=2.710402 deg
+  ACCEPT g=2.710402 deg
+  calcJ E=12.158372309215723 (0x1.851162ce158d9p+3) gprobe=2.710402 deg |g|=0.012520
+  setDiag lambda in [5.0805262219455471e-09, 5.0805264439901521e-09]
+  solve rel residual 8.837e-10 (lower-sym 8.394e-10) min pivot 1.524866e+01
+  step |x|=3.951735e-02 x_g=(4.233194e-07, 7.998450e-07)
+  calcE E=12.158370111195431 (0x1.85115e3207f1cp+3) gprobe=2.710381 deg
+  ACCEPT g=2.710381 deg
+found 1 iters 10 energy 12.158370111195431 gerr 2.710381 deg

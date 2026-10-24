@@ -1,0 +1,32 @@
+# ORDER=0 GENSCALE=1.0 gpgo_diag nees 50
+input digest 537b49006e8d059b truth digest 609d163f14bb72af tilt0 3.7807683586303984
+seed 0 gerr 3.151 deg sigma 1.997/1.996 deg nees 2.489
+seed 1 gerr 0.648 deg sigma 1.996/1.998 deg nees 0.105
+seed 2 gerr 1.609 deg sigma 1.999/1.996 deg nees 0.650
+seed 3 gerr 2.710 deg sigma 1.996/1.998 deg nees 1.842
+seed 4 gerr 1.777 deg sigma 1.996/1.996 deg nees 0.792
+mean NEES 1.836 over 50 seeds (chi2 99% band for N=50: [1.347, 2.803]); tilt reduced 49/50
+# ORDER=0 GENSCALE=1.2909944 gpgo_diag nees 50
+input digest f6f6d06d994c0d53 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+seed 0 gerr 3.801 deg sigma 1.998/1.996 deg nees 3.619
+seed 1 gerr 0.309 deg sigma 1.996/1.999 deg nees 0.024
+seed 2 gerr 1.676 deg sigma 2.000/1.996 deg nees 0.705
+seed 3 gerr 3.325 deg sigma 1.996/1.999 deg nees 2.772
+seed 4 gerr 1.833 deg sigma 1.996/1.996 deg nees 0.842
+mean NEES 2.526 over 50 seeds (chi2 99% band for N=50: [1.347, 2.803]); tilt reduced 46/50
+# ORDER=1 GENSCALE=1.0 gpgo_diag nees 50
+input digest e91cd13887255427 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+seed 0 gerr 4.709 deg sigma 1.996/1.996 deg nees 5.554
+seed 1 gerr 2.055 deg sigma 1.997/1.997 deg nees 1.060
+seed 2 gerr 4.935 deg sigma 1.997/1.996 deg nees 6.097
+seed 3 gerr 0.624 deg sigma 1.998/1.997 deg nees 0.098
+seed 4 gerr 1.963 deg sigma 1.996/1.996 deg nees 0.967
+mean NEES 1.673 over 50 seeds (chi2 99% band for N=50: [1.347, 2.803]); tilt reduced 47/50
+# ORDER=1 GENSCALE=1.2909944 gpgo_diag nees 50
+input digest 0548d728f5f1bb51 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+seed 0 gerr 5.769 deg sigma 1.996/1.996 deg nees 8.325
+seed 1 gerr 2.224 deg sigma 1.997/1.997 deg nees 1.241
+seed 2 gerr 5.590 deg sigma 1.996/1.997 deg nees 7.818
+seed 3 gerr 0.592 deg sigma 2.000/1.997 deg nees 0.088
+seed 4 gerr 2.068 deg sigma 1.996/1.996 deg nees 1.073
+mean NEES 2.295 over 50 seeds (chi2 99% band for N=50: [1.347, 2.803]); tilt reduced 46/50

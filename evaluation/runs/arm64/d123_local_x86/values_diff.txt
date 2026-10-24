@@ -1,0 +1,121 @@
+2c2
+< H eigenvalues: min 1.603e+00, max 3.795e+09
+---
+> H eigenvalues: min 1.620e+00, max 3.795e+09
+4c4
+< H eigenvalues: min 5.235e+00, max 3.795e+09
+---
+> H eigenvalues: min 5.309e+00, max 3.795e+09
+14c14
+< [ LivePlanner ] 200 fields, 53 where approxPolyDP alone clipped an obstacle
+---
+> [ LivePlanner ] 200 fields, 49 where approxPolyDP alone clipped an obstacle
+17,22c17,22
+< mean NEES over 500 trials: 5.95 at 1.5-12 m (chi^2_6 mean 6); 54.69 at 25-40 m (reported)
+< control       n 120 | sigma_t 0.0039 m sigma_r 0.00085 rad | ratio_t 6.1e-02 ratio_r 7.3e-02 | near 116 (median 1.58 deg) | line 6.6e-01 pixel 6.5e-01 planarity 0.45 corridor 0.48 | s2hat 1.17 rms 6.05 px | ok
+< row-fan       n 120 | sigma_t 0.0064 m sigma_r 0.00135 rad | ratio_t 1.6e-02 ratio_r 2.7e-02 | near 115 (median 1.72 deg) | line 6.0e-01 pixel 8.0e-06 planarity 0.00 corridor 0.63 | s2hat 1.01 rms 5.48 px | ok
+< 3d-line       n 120 | sigma_t 0.0531 m sigma_r 0.00825 rad | ratio_t 6.3e-03 ratio_r 7.5e-04 | near  95 (median 1.34 deg) | line 9.2e-04 pixel 6.1e-05 planarity 0.00 corridor 1.00 | s2hat 1.00 rms 2.81 px | collinear 
+< far-only      n 120 | sigma_t 0.0272 m sigma_r 0.00066 rad | ratio_t 1.0e-01 ratio_r 9.8e-02 | near   0 (median 0.22 deg) | line 1.8e-01 pixel 4.2e-01 planarity 0.09 corridor 0.79 | s2hat 0.96 rms 4.36 px | parallax 
+< small-object  n  25 | sigma_t 0.1366 m sigma_r 0.03199 rad | ratio_t 9.7e-02 ratio_r 1.2e-01 | near  25 (median 1.92 deg) | line 8.7e-02 pixel 8.8e-01 planarity 0.05 corridor 0.88 | s2hat 3.18 rms 1.94 px | conditioning_translation conditioning_rotation 
+---
+> mean NEES over 500 trials: 6.09 at 1.5-12 m (chi^2_6 mean 6); 58.15 at 25-40 m (reported)
+> control       n 120 | sigma_t 0.0032 m sigma_r 0.00071 rad | ratio_t 6.4e-02 ratio_r 9.6e-02 | near 120 (median 1.81 deg) | line 9.5e-01 pixel 6.4e-01 planarity 0.60 corridor 0.39 | s2hat 0.98 rms 5.36 px | ok
+> row-fan       n 120 | sigma_t 0.0064 m sigma_r 0.00137 rad | ratio_t 1.6e-02 ratio_r 2.7e-02 | near 115 (median 1.72 deg) | line 6.0e-01 pixel 6.3e-06 planarity 0.00 corridor 0.62 | s2hat 1.03 rms 5.50 px | ok
+> 3d-line       n 120 | sigma_t 0.0537 m sigma_r 0.00852 rad | ratio_t 6.2e-03 ratio_r 7.4e-04 | near  95 (median 1.34 deg) | line 9.3e-04 pixel 5.8e-05 planarity 0.00 corridor 1.00 | s2hat 1.05 rms 2.85 px | collinear 
+> far-only      n 120 | sigma_t 0.0285 m sigma_r 0.00071 rad | ratio_t 1.0e-01 ratio_r 9.6e-02 | near   0 (median 0.21 deg) | line 6.5e-01 pixel 4.6e-01 planarity 0.41 corridor 0.49 | s2hat 1.10 rms 4.06 px | parallax 
+> small-object  n  25 | sigma_t 0.1396 m sigma_r 0.03266 rad | ratio_t 9.5e-02 ratio_r 1.2e-01 | near  25 (median 1.92 deg) | line 8.7e-02 pixel 8.3e-01 planarity 0.05 corridor 0.88 | s2hat 3.32 rms 1.85 px | conditioning_translation conditioning_rotation 
+30c30
+< pair statistic, two agents, loop 2 forward  mean 6.07
+---
+> pair statistic, two agents, loop 2 forward  mean 6.11
+50,52c50,52
+< near-miss outliers 0.2 m /  1 deg, arch 0.95: precision mean 0.790, recall mean 0.828
+< near-miss outliers 0.5 m /  5 deg, default  : precision mean 0.944, recall mean 0.990
+< near-miss outliers 0.5 m /  5 deg, arch 0.95: precision mean 1.000, recall mean 0.852
+---
+> near-miss outliers 0.2 m /  1 deg, arch 0.95: precision mean 0.792, recall mean 0.827
+> near-miss outliers 0.5 m /  5 deg, default  : precision mean 0.942, recall mean 0.985
+> near-miss outliers 0.5 m /  5 deg, arch 0.95: precision mean 0.996, recall mean 0.850
+56c56
+< PCM: 3000 nodes, 300 loops (60 outliers): 147.7 ms, accepted 240 (reported, not gated)
+---
+> PCM: 3000 nodes, 300 loops (60 outliers): 179.7 ms, accepted 240 (reported, not gated)
+58,65c58,65
+< grid   outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.088 m | 30.0 outer its, 106 ms mean
+< grid   outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.092 m | 30.4 outer its, 125 ms mean
+< grid   outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.084 m | 31.4 outer its, 148 ms mean
+< grid   outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.081 m | 32.0 outer its, 181 ms mean
+< sphere outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.148 m | 29.9 outer its, 160 ms mean
+< sphere outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.140 m | 30.4 outer its, 186 ms mean
+< sphere outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.139 m | 30.4 outer its, 219 ms mean
+< sphere outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.128 m | 31.8 outer its, 276 ms mean
+---
+> grid   outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.088 m | 29.9 outer its, 117 ms mean
+> grid   outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.092 m | 30.4 outer its, 133 ms mean
+> grid   outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.084 m | 31.4 outer its, 155 ms mean
+> grid   outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.081 m | 32.0 outer its, 193 ms mean
+> sphere outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.148 m | 30.0 outer its, 176 ms mean
+> sphere outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.140 m | 30.6 outer its, 203 ms mean
+> sphere outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.139 m | 30.5 outer its, 233 ms mean
+> sphere outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.128 m | 31.9 outer its, 279 ms mean
+72,73c72,73
+< near misses 0.2 m / 1 deg: 199 / 200 passed PCM, 143 accepted by GNC | precision (pooled) 0.8927 | ATE 0.1016 m with them, 0.0914 m without
+< GNC alone on 3 random inter-agent loops: 1 accepted (a lone link is unverifiable without redundancy; reported)
+---
+> near misses 0.2 m / 1 deg: 199 / 200 passed PCM, 149 accepted by GNC | precision (pooled) 0.8888 | ATE 0.1031 m with them, 0.0914 m without
+> GNC alone on 3 random inter-agent loops: 0 accepted (a lone link is unverifiable without redundancy; reported)
+77,82c77,82
+< GNC timing N=1000: 77 true + 8 outlier loops | 894 ms, 28 outer its, 121 LM its | precision 1.000 recall 1.000 (reported)
+< GNC timing N=3000: 277 true + 30 outlier loops | 2618 ms, 26 outer its, 100 LM its | precision 1.000 recall 0.989 (reported)
+< weight reuse, 1000 nodes, 84 events: fast path 60 / 83 warm events | fallbacks: held-in over c2 0, held-out under c2 0, innovation 23 | warm != cold at 0 events | PCM rejected-then-accepted the early true loop: yes
+< weight reuse: total time warm 5862 ms vs cold 7618 ms | final ATE warm 0.1127 m vs cold 0.1127 m | final warm precision 1.000 recall 0.986
+< weight reuse, 3000 nodes, 302 events: fast path 250 (171 ms mean), per event mean 216 ms, worst 666 ms | ATE 0.0999 m (reported)
+< two laps: 10 events, 10 / 10 true loops GNC inliers, wrong loop rejected; fast path 7 / 10 | ATE odometry 0.304 m -> mirror 0.086 m (111 keyframes mirrored of 120; 9 wait in the window)
+---
+> GNC timing N=1000: 77 true + 8 outlier loops | 802 ms, 25 outer its, 111 LM its | precision 1.000 recall 1.000 (reported)
+> GNC timing N=3000: 277 true + 30 outlier loops | 2994 ms, 26 outer its, 107 LM its | precision 1.000 recall 0.989 (reported)
+> weight reuse, 1000 nodes, 84 events: fast path 62 / 83 warm events | fallbacks: held-in over c2 0, held-out under c2 0, innovation 21 | warm != cold at 0 events | PCM rejected-then-accepted the early true loop: yes
+> weight reuse: total time warm 4382 ms vs cold 2964 ms | final ATE warm 0.1123 m vs cold 0.1123 m | final warm precision 1.000 recall 1.000
+> weight reuse, 3000 nodes, 302 events: fast path 249 (167 ms mean), per event mean 233 ms, worst 854 ms | ATE 0.1004 m (reported)
+> two laps: 10 events, 10 / 10 true loops GNC inliers, wrong loop rejected; fast path 7 / 10 | ATE odometry 0.308 m -> mirror 0.082 m (111 keyframes mirrored of 120; 9 wait in the window)
+84,85c84,85
+< gravity: reference off by 1.50 deg -> estimate off by 0.62 deg | tilt RMS 3.78 deg (odometry) -> 2.01 deg
+< a 30 deg outlier prior moves its keyframe's tilt by 1.85 deg (quadratic cost would follow it further)
+---
+> gravity over 50 seeds: mean NEES 2.526 (99 % band [1.347, 2.803]) | tilt RMS 8.47 -> 3.78 deg, reduced on 46/50
+> a 30 deg outlier prior moves its keyframe's tilt by 1.82 deg (quadratic cost would follow it further)
+87c87
+< planted-outlier seed 0: reduced lambda_min -1.1865e+04, explicit-form lambda_min -7.2457e+03 (a full shift would pass at 0.611 x the reduced eta); Ritz -1.1865e+04
+---
+> planted-outlier seed 3: reduced lambda_min -1.3414e+04, explicit-form lambda_min -1.1706e+04 (a full shift would pass at 0.873 x the reduced eta); Ritz -1.3414e+04
+91c91
+< planted outliers (3 per graph, kept in the cost), certified out of 10: from truth 6, dead reckoning 6, chordal 6 | 0 strictly-worse stationary points, all not certified | after GNC 10 / 10
+---
+> planted outliers (3 per graph, kept in the cost), certified out of 10: from truth 6, dead reckoning 6, chordal 6 | 2 strictly-worse stationary points, all not certified | after GNC 10 / 10
+99,105c99,108
+< inter-agent sigma_r 0.01 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 2.59 deg, shared 2.34 deg (10% less)
+< inter-agent sigma_r 0.05 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 2.77 deg, shared 0.90 deg (68% less)
+< noise-free window: E 6.590e+04 -> 1.305e-22 in 7 iterations, 7 factorizations (0 failed)
+< vs solvePnPRefineLM: dt 1.27e-09 m, dr 2.83e-09 rad
+< noise-free VI window: E 8.005e+05 -> 6.977e-12 in 7 iterations, 7 factorizations (0 failed)
+< dark VI window: E 5.426e+05 -> 8.857e-21 in 10 iterations
+< tilted window: E 1.831e+02 -> 5.540e-12; tilt found 2.0000 deg (applied 2)
+---
+> inter-agent sigma_r 0.01 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 2.55 deg, shared 2.31 deg (9% less)
+> inter-agent sigma_r 0.05 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 3.04 deg, shared 1.13 deg (63% less)
+> noise-free window: E 7.951e+04 -> 5.280e-23 in 7 iterations, 7 factorizations (0 failed)
+> vs solvePnPRefineLM: dt 3.56e-09 m, dr 2.62e-09 rad
+> noise-free VI window: E 8.004e+05 -> 7.222e-12 in 7 iterations, 7 factorizations (0 failed)
+> dark VI window: E 5.286e+05 -> 1.027e-20 in 10 iterations
+> tilted window: E 1.831e+02 -> 5.490e-12; tilt found 2.0000 deg (applied 2)
+> /work/tests/unit/test_visibility_graph.cpp:64: Failure
+> Expected: (a.length_cells) <= (PolyLen(pulled) + eps), actual: 37.402996227363388 vs 33.242640688119288
+> 9
+108c111
+< [  PASSED  ] 74 tests.
+---
+> [  PASSED  ] 73 tests.
+110a114,116
+> [  FAILED  ] 1 test, listed below:
+> [  FAILED  ] VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice
+>  1 FAILED TEST
