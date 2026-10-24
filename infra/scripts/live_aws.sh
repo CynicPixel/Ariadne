@@ -196,6 +196,53 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
+cmd_replay_gdb() {   # S3_RUN_TARBALL SCENE PAYLOAD_URI - re-run a failed replay under gdb, in-region; small files only
+  local tarball="$1" scene="$2" pay="$3"
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/replaygdb-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $pay - | tar xz -C /tmp
+cp -a /tmp/p/. .
+mkdir -p /tmp/runsrc build/live/runs
+aws s3 cp $tarball - | tar xz -C /tmp/runsrc
+inner=\$(find /tmp/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap" > \$R/diag_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
+outer=\$(dirname "\$inner")
+# 1. The FAILED replay's own small artifacts, straight out of the tarball.
+cp "\$outer"/replay1.log \$R/ 2>/dev/null || true
+find "\$outer/replay1" -name 'collab_worker_*.err' -exec cp {} \$R/ \\; 2>/dev/null || true
+find "\$outer/replay1" -name trace.jsonl -exec sh -c 'tail -5 "\$1" > "\$2/replay1_trace_tail.jsonl"' _ {} \$R \\; 2>/dev/null || true
+cp "\$outer"/results.yaml \$R/live_results.yaml 2>/dev/null || true
+# 2. The live gate/alias verdict (D178 on: beat-6 numbers).
+python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
+# 3. Fresh staging and the gdb re-run of replay1 (root container: core-dev has no gdb, apt it in).
+src="\$outer"
+rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
+cp -a "\$src" build/live/runs/
+run=build/live/runs/\$(basename "\$src")
+live_dir=\$(basename "\$inner")
+cat > gdbrun.sh <<'GEOF'
+set -x
+apt-get update -qq && apt-get install -y -qq gdb
+gdb -batch -ex run -ex bt -ex 'thread apply all bt 8' --args \\
+  build/docker/cpp/runtime/ariadne_live \\
+  --scene "\$GDB_SCENE" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \\
+  --mission-config configs/mission/mission_v1.yaml --live-config "\$GDB_RUN/live_config.yaml" \\
+  --out "\$GDB_RUN/replay1" --replay "\$GDB_RUN/\$GDB_LIVEDIR/inputs.mcap" \\
+  --directives "\$GDB_RUN/\$GDB_LIVEDIR/directives.jsonl" --planner-config "\$GDB_RUN/planner_config.yaml"
+GEOF
+docker run --rm --memory=20g --memory-swap=20g -v "\$PWD":/work -w /work \\
+  -e GDB_SCENE=$scene -e GDB_RUN="\$run" -e GDB_LIVEDIR="\$live_dir" \\
+  ariadne/core-dev:dev bash gdbrun.sh > /tmp/gdb_full.log 2>&1
+echo "gdb container rc=\$?" >> /tmp/gdb_full.log
+tail -300 /tmp/gdb_full.log > \$R/gdb_bt.txt
+grep -n "Program received\|#0 \|#1 \|#2 \|SIGSEGV" /tmp/gdb_full.log | head -40 >> \$R/gdb_bt.txt || true
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
 cmd_batch() {
   local jobs="$1" max_min="$2"
   [ -f "$REPO_ROOT/$jobs" ] || { log "no job file $jobs"; exit 2; }
@@ -257,6 +304,7 @@ case "${1:-}" in
   run) shift; cmd_run "$@" ;;
   replay-s3) shift; cmd_replay_s3 "$@" ;;
   spool-s3) shift; cmd_spool_s3 "$@" ;;
+  replay-gdb) shift; cmd_replay_gdb "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
