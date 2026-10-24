@@ -254,6 +254,25 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
+cmd_extract_s3() {   # S3_TARBALL GLOB... - stream-extract small members from a run tarball, in-region
+  local tarball="$1"; shift
+  local globs=""
+  local g; for g in "$@"; do globs="$globs --wildcards '$g'"; done
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/extract-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+mkdir -p /tmp/x
+cd /tmp/x
+aws s3 cp $tarball - | tar xz $globs || true
+find /tmp/x -type f | head -40 > \$R/extracted_listing.txt
+cd /tmp/x && find . -type f -size -32M -print0 | tar czf /tmp/extracted.tar.gz --null -T -
+aws s3 cp --only-show-errors /tmp/extracted.tar.gz \$RUN/output/extracted.tar.gz
+du -sh /tmp/x >> \$R/extracted_listing.txt
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
 cmd_batch() {
   local jobs="$1" max_min="$2"
   [ -f "$REPO_ROOT/$jobs" ] || { log "no job file $jobs"; exit 2; }
@@ -316,6 +335,7 @@ case "${1:-}" in
   replay-s3) shift; cmd_replay_s3 "$@" ;;
   spool-s3) shift; cmd_spool_s3 "$@" ;;
   replay-gdb) shift; cmd_replay_gdb "$@" ;;
+  extract-s3) shift; cmd_extract_s3 "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
