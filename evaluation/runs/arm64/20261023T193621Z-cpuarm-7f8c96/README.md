@@ -8,3 +8,6 @@
   3.78 deg on both), x86 recovers gravity to 0.62 deg (tilt 2.01 deg) but arm64 gets 2.71 deg (tilt 3.17 deg), against
   the test's 1.0 deg bound. The pose-graph solve diverges across architectures. Not yet diagnosed [OPEN]: candidates are
   vectorized reductions (Eigen NEON vs SSE/AVX) or OpenCV's linear solve via the HAL.
+  **Diagnosed 2026-10-24:** neither. The test's fixture draws its prior noise in an unspecified argument order, which
+  differs between GCC x86-64 and aarch64. See `../20261023T233147Z-cpuarm-1e25b3/README.md` and D123–D124. The arm64
+  path is correct.

@@ -32,6 +32,7 @@ Mat6 Diag(double st, double sr) {
 }
 const Vec3 kDown(0, 0, -1);
 int kOrder = -1;   // env ORDER, see Make()
+double kGenScale = 1.0;   // env GENSCALE: prior noise drawn at GENSCALE * sigma (information unchanged)
 core::Mat3 Rot(const Vec3& aa) { return core::SO3Exp(aa); }
 struct Chain {
     std::vector<SE3> truth;
@@ -70,10 +71,10 @@ Chain Make(std::mt19937& gen, int n, int every, double sigma_deg, double ref_err
         p.keyframe = uint64_t(i);
         const Vec3 gC = c.truth[size_t(i)].R.transpose() * kDown;
         if (kOrder < 0) {   // as the test: the two draws' order is the compiler's (unspecified, [expr.call])
-            p.g_C = (Rot(s * Vec3(nz(gen), nz(gen), 0)) * gC).normalized();
+            p.g_C = (Rot(kGenScale * s * Vec3(nz(gen), nz(gen), 0)) * gC).normalized();
         } else {            // ORDER=0: first draw -> x (GCC aarch64), ORDER=1: first draw -> y (GCC x86-64)
             const double n1 = nz(gen), n2 = nz(gen);
-            p.g_C = (Rot(s * (kOrder ? Vec3(n2, n1, 0) : Vec3(n1, n2, 0))) * gC).normalized();
+            p.g_C = (Rot(kGenScale * s * (kOrder ? Vec3(n2, n1, 0) : Vec3(n1, n2, 0))) * gC).normalized();
         }
         p.g_ref_W = g_ref.normalized();
         p.information = Eigen::Matrix2d::Identity() / (s * s);
@@ -348,6 +349,7 @@ Out Solve(Chain c, const PgoSettings& s) {
 int main(int argc, char** argv) {
     const std::string mode = argc > 1 ? argv[1] : "trace";
     if (const char* o = std::getenv("ORDER")) kOrder = std::atoi(o);
+    if (const char* o = std::getenv("GENSCALE")) kGenScale = std::atof(o);
     const int N = argc > 2 ? std::atoi(argv[2]) : 50;
     std::mt19937 gen(3);
     const Chain c = Make(gen, 200, 10, 2.3, 1.5);
@@ -390,6 +392,33 @@ int main(int argc, char** argv) {
         cv::detail::LevMarqBase lm(b, ToOpenCv(s));
         const cv::LevMarq::Report r = lm.optimize();
         std::printf("noisy: found %d iters %d energy %.17g (E0 %.4f)\n", r.found, r.iters, r.energy, p.Energy(p.poses()));
+    } else if (mode == "nees") {   // D124: NEES of the gravity estimate against the solver's own marginal covariance
+        double sum = 0; int pass_tilt = 0;
+        for (int sd = 0; sd < N; ++sd) {
+            std::mt19937 g2{uint32_t(sd)};
+            Chain e = Make(g2, 200, 10, 2.3, 1.5);
+            const double t0 = TiltErrorDeg(e);
+            const PgoReport r = SolvePoseGraph(e.g, 0, On());
+            const Vec3 gh = r.gravity_W.begin()->second;
+            PgoProblem p(e.g, 0, On().gravity);
+            p.gravity()[0] = gh;                       // linearise at the optimum, gravity included
+            SparseMat H; Eigen::VectorXd gr;
+            p.Linearize(p.poses(), p.gravity(), H, gr);
+            GuardedLdlt l;
+            if (!l.Factorize(H)) { std::printf("seed %d: H not PD\n", sd); continue; }
+            Eigen::Matrix2d C;
+            for (int c2 = 0; c2 < 2; ++c2) {
+                Eigen::VectorXd u = Eigen::VectorXd::Zero(p.dim()); u(p.pose_dim() + c2) = 1.0;
+                C.col(c2) = l.Solve(u).tail<2>();
+            }
+            // H is the Hessian of E = 1/2 sum r^T W r, so the covariance is H^-1 (no factor 2).
+            const Eigen::Vector2d d = GravityTangentBasis(gh).transpose() * kDown;   // true minus estimate, tangent at gh
+            const double nees = d.dot(C.ldlt().solve(d));
+            sum += nees; pass_tilt += TiltErrorDeg(e) < t0;
+            if (sd < 5) std::printf("seed %d gerr %.3f deg sigma %.3f/%.3f deg nees %.3f\n", sd, Gerr(gh),
+                                    std::sqrt(C(0, 0)) * 180 / M_PI, std::sqrt(C(1, 1)) * 180 / M_PI, nees);
+        }
+        std::printf("mean NEES %.3f over %d seeds (chi2 99%% band for N=50: [1.347, 2.803]); tilt reduced %d/%d\n", sum / N, N, pass_tilt, N);
     } else if (mode == "halcheck") {
         HalCheck();
     } else if (mode == "pure") {

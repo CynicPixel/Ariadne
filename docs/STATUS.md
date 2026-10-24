@@ -435,6 +435,11 @@ Reference-export regeneration: PERCEPTION_2.1 §13.
   scaled 0.6 (measured lag-1 correlation). The mirror syncs the priors and re-solves when they land.
 - **Synthetic:** a 1.5° reference-gravity error is estimated to 0.62° and tilt RMS drops 3.78° → 2.01°; a 30° outlier
   prior is contained. Tests 4/4; existing PGO tests unchanged.
+  - **Corrected 2026-10-24 (D123–D124):** the 0.62° is one lucky seed, under x86's argument-evaluation order (arm64
+    draws the noise in the other order and gets 2.71°).
+  - The fixture's ĝ σ is ≈ 2.0° per axis, and 14–17 % of seeds reach < 1°.
+  - What holds: the estimate is consistent with its own covariance (mean NEES 1.7–2.5 over 50 seeds, inside the χ²
+    99 % band) and tilt drops on 46–49 of 50 seeds.
 - **Not yet on EuRoC:** the sim calibration and part 3 come first (maintainer).
 
 ## 2026-10-21 — 2.1 hard-pair path: ALIKED + LightGlue, our own upstream export, through OpenCV's classes (D63 draft)

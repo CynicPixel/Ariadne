@@ -2199,6 +2199,9 @@ offline from the run traces, so the effective number of independent priors is lo
 - the gradient matches finite differences, Huber included;
 - the solve is bit-identical when off;
 - a 1.5° reference error is estimated to 0.62°, and tilt RMS goes 3.78° → 2.01°;
+  **corrected 2026-10-24 (D123–D124):** that is one seed under x86's argument-evaluation order (arm64 gets 2.71°).
+  The fixture's own σ for ĝ is ≈ 2.0° per axis, and only 14–17 % of seeds reach < 1°. Recovery to 0.62° is not
+  shown. The redesigned check is the 50-seed NEES consistency test;
 - a 30° outlier prior moves its keyframe by 1.85°.
 `PgoLevMarq` 4/4 and numerical `PgoProblem`/`PoseGraph` 10/10 pass; the oracle was not rerun (the off path is
 unchanged).
@@ -5099,3 +5102,21 @@ against x86's 0.62 deg is not a numerical difference.
 - **Alternative:** a better-conditioned fixture plus a quantile bound. It needs odometry rotation noise small enough
   that P(gerr < 1 deg) is at least 0.95, checked over 50 seeds before it becomes the bound.
 - Either way, the "tilt RMS reduced" check stays per seed.
+
+**D124 validated before it is written** (2026-10-24, x86, `gpgo_diag nees 50`, `nees_x86.txt`). M approved the NEES
+form; the Bar-Shalom test, as in D178.
+- The solver's ĝ marginal is the gravity block of H⁻¹ at the optimum, by an LDLT solve on the two gravity columns.
+  `MarginalCovariances` returns pose blocks only. σ ≈ 2.0° per axis for this fixture.
+- Mean NEES over seeds 0–49 lands inside the 99 % band [1.347, 2.803] under both draw orders:
+
+  | prior noise drawn at | aarch64 order (D123's) | x86 order |
+  |---|---|---|
+  | σ/√0.6, the noise the solver assumes (recommended) | 2.53 | 2.30 |
+  | σ, today's draw | 1.84 | 1.67 |
+
+- **Amendment:** "tilt reduced" fails on 1–4 of 50 seeds per configuration (it holds on 46–49 of 50), so it cannot
+  stay a per-seed assertion. It becomes the tilt RMS over the 50 seeds below the odometry's, plus a reduction on
+  ≥ 90 % of seeds.
+- After D123 the seeds are fixed, so pass/fail is deterministic and identical on both architectures.
+- **Not yet applied.** The edits to `test_gravity_pgo.cpp` (and D123's 44 sites) are blocked by this session's
+  auto-mode classifier, and are with the maintainer.
