@@ -87,7 +87,10 @@ dev "$DEV" bash -c "cmake -S /work -B /work/build/perf -G Ninja -DCMAKE_BUILD_TY
   || { cp "$W"/configure.log "$W"/compile.log "$R/" 2>/dev/null; fail "build"; }
 BIN=/work/build/perf/cpp/runtime
 M=/work/.cache/models
-AL="--aliked 1280x720=$M/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx \
+# 1280x720l2 = the same export with the dense-map L2 normalisation rewritten (scripts/l2conv_rewrite.py; listed first so
+# the reference 1280x720 is the one LightGlue's timing rows use)
+AL="--aliked 1280x720l2=$M/aliked_lg_sim_l2conv/aliked_n16_k1024_1280x720_l2conv.onnx \
+    --aliked 1280x720=$M/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx \
     --aliked 960x540=$M/aliked_lg_sim_960x540/aliked_n16_k1024_960x540.onnx \
     --aliked 640x360=$M/aliked_lg_sim_640x360/aliked_n16_k1024_640x360.onnx"
 LG="--lightglue $M/aliked_lg_sim_ref/lightglue_aliked.onnx"
@@ -160,7 +163,7 @@ if [[ " $STAGES " == *" knobs "* ]]; then
   for sc in 0 1; do
     spawn dev -e OPENCV_FOR_THREADS_NUM=4 "$DEV" $BIN/ariadne_perf_bench knobs --kf-dir "/w/kf/s$sc" \
       --pairs "/work/$PI/pairs_s$sc.csv" --collab-config configs/collab/collab_v2.yaml --seed 1 $AL $LG \
-      --settings 1280x720:1024,1280x720:512,1280x720:256,960x540:1024,960x540:512,640x360:1024,640x360:512 \
+      --settings 1280x720:1024,1280x720:512,1280x720:256,960x540:1024,960x540:512,640x360:1024,640x360:512,1280x720l2:1024 \
       --stores "/work/$PI/stores/s$sc/seed1" --dump-features "/w/feat/s$sc" --out "/w/knobs/s$sc" \
       > "$W/knobs_s$sc.log" 2>&1
   done; join

@@ -22,6 +22,7 @@ INPUTS=(
   .cache/models/aliked_lg_sim_ref
   .cache/models/aliked_lg_sim_960x540
   .cache/models/aliked_lg_sim_640x360
+  .cache/models/aliked_lg_sim_l2conv
   .cache/models/eigenplaces_sim_ref/eigenplaces_r50_256_640x360.onnx
   .cache/models/eigenplaces_sim_ref/ref_sim_a0_f200_640x360.atb
   .cache/models/eigenplaces_sim_ref/input_sim_a0_f200.png
