@@ -5507,3 +5507,16 @@ thread computes it, so content is unchanged by construction; only timing moves.
    21a51e0d5d3660ba…), or the divergence explained;
 4. RTF measured on c7i via slotq, lens off, 5 threads;
 5. a unit guard: Ingest+Apply across threads ≡ the old Feed, byte-identical, including unpaired/drop handling.
+
+## 2026-10-24 — D226 amendment (B): the parallel lens moved out of the determinism header (stop-the-line fix)
+D226 as first landed (5cb9e71) put `#include <opencv2/core.hpp>` + cv::parallel_for_ into the header-only
+lens.hpp. That header is the determinism substrate and sits on the manifest include path
+(lens_digest.hpp → determinism.hpp), which OpenCV-free targets build by design (arch §3 dependency rule) —
+test_unit stopped compiling (Kaggle ct-llm-788a810: 239/306 at 943 s; same cmake as ci_aws, so docker too).
+**Fix (e0a55b1):** lens.hpp is OpenCV-free again — serial ApplyLens wraps a factored pure ApplyLensRowSpan.
+The cv::parallel_for_ wrapper lives in a new lens_parallel.hpp (ApplyLensParallel), included only by
+OpenCV-linked consumers (stereo_source's Ingest, SimSource). NOT a .cpp in the opencv lib: LensDigest()
+executes ApplyLens from OpenCV-free targets, so moving the definition there would have broken their link.
+**Evidence:** test_unit builds and its observability/determinism/lens tests pass on e0a55b1; ma_smoke3 lens-ON
+replay trace sha f732c08056b1f937… = the pre-D226 reference on the restructured binary — D226's bit-identity
+claim survives; the row partition is provably value-neutral (pure per-pixel function).
