@@ -167,8 +167,8 @@ cmd_run() {
 
   # 1. The runtime listens first.
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work "${recon_env[@]}" \
-    -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
-    -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
+    -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "payload:$(basename "$REPO_ROOT")")" \
+    -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator 2>/dev/null)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
     "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
