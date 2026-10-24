@@ -161,7 +161,22 @@ src=\$(ls -d /tmp/runsrc/build/live/runs/live-* | tail -1)
 rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
 cp -a "\$src" build/live/runs/
 run=build/live/runs/\$(basename "\$src")
+memmon() {   # 788896 diag (M): 1 s host-side sampler - per-container mem, biggest processes, cgroup peak/oom_kill
+  while :; do
+    { date -u '+%H:%M:%S'; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' 2>/dev/null; } >> \$R/docker_stats.txt
+    { date -u '+%H:%M:%S'; ps -eo pid,ppid,rss,comm --sort=-rss | head -12; } >> \$R/ps_rss.txt
+    for cg in /sys/fs/cgroup/system.slice/docker-*.scope; do
+      [ -d "\$cg" ] || continue
+      echo "\$(date -u '+%H:%M:%S') \$(basename \$cg) peak=\$(cat \$cg/memory.peak 2>/dev/null) \$(grep oom_kill \$cg/memory.events 2>/dev/null | tr '\n' ' ')" >> \$R/cgroup_mem.txt
+    done
+    sleep 1
+  done
+}
+memmon & MEMMON=\$!
 ARIADNE_REPLAY_ONLY=${ARIADNE_REPLAY_ONLY:-} ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+kill \$MEMMON 2>/dev/null || true
+dmesg -T 2>/dev/null | grep -iE 'oom|killed process' > \$R/dmesg_oom.txt || true
+docker ps -aq | xargs -r docker inspect --format '{{.Name}} {{json .State}}' > \$R/docker_state.txt 2>/dev/null || true
 cp "\$run/replay_check.json" \$R/ 2>/dev/null || true
 tar czf \$R/replays.tar.gz "\$run"/replay1 "\$run"/replay2 "\$run"/replay*.log 2>/dev/null || true
 EOF
