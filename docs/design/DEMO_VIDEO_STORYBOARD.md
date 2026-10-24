@@ -98,7 +98,8 @@ robot somewhere its own sense of motion says it can't be just isn't believed.
 2. **PCM:** a consistency graph, with the largest consistent clique kept.
 3. **GNC-TLS:** pseudo-code with μ annealing; outlier weights fade to 0.
    - **Design-choice table:** PCM → GNC holds up to 90 % false loops, and is ~10× faster than GNC alone.
-4. **Known-entry gate** (rendered: s06b part A), then the **live before/after, same maze, same aliasing**:
+4. **Known-entry gate** (rendered: s06b part A), then the **live before/after, same maze, same aliasing**, with the
+   added narration line "In our recorded runs, the difference is stark." (s06c):
    - gate off: agent 1 dragged **15.3 m** and never recovers;
    - gate on: **8 of 8** false matches refused; every robot within **7.5 cm** of ground truth.
    - Both labelled *recorded run*, side by side from the two packs.
