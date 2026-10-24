@@ -57,6 +57,9 @@ All replay rows use the evidence spool `aadffb8df5790ca0-20261017T072237Z` (ci_t
   - **Open bug:** on hazard seed 0, FAR gives 11.115 m against 4.424 m. Gate rows are unaffected, since the live
     `Route` uses A*.
   - The "as FAR joins start and goal" claim was wrong and is now `[DESIGN]` (D116 review).
+  - **"FAR ≤ string-pulled lattice" is FALSE in general** (D116 amended, D123). On the unit test's random maps,
+    once their draws are sequenced, one instance routes 37.40 cells against 33.24 (+12.5 %). The test is quarantined
+    and OPEN. This report makes no FAR ≤ lattice claim.
 
 ## 4.2 The 4.3 gate: FAIL on both scenes
 
@@ -170,7 +173,15 @@ AEP, NBVP, Cieslewski et al.), the OpenCV-native check, and pre-registration (NB
 - Non-regression: ariadne_ta's coverage at 200 s ≥ ariadne_v0's minus its seed spread.
 - No tuning after the runs. A loss is reported as a loss.
 
-**[RESULT PENDING].** This section gets the 48-run table and its losses per T, whatever they are.
+**Abort check (job 1 of 48), done 2026-10-24: GO** (`evaluation/runs/nbv_4.3_ablation/abort_check/`, run
+`20261024T055409Z-cpux86-8d7693`).
+- On the livelock seed (ci_tiny seed 2, ariadne_v0), the at-cell view ran as one accepted 7.84 s turn.
+- Every barrier was answered, and no view was held.
+- Development observation, one run: coverage at 60 s 0.878, against the gated 0.728 on the same seed. The 20 s value
+  is unchanged (0.351).
+
+**[RESULT PENDING].** The other 47 runs wait on the maintainer's spend approval. This section gets the 48-run table
+and its losses per T, whatever they are.
 
 ## 4.5 Limitations (stated, not mitigated)
 
@@ -178,7 +189,8 @@ AEP, NBVP, Cieslewski et al.), the OpenCV-native check, and pre-registration (NB
   coverage.
 - **4.5**'s confidence is uncalibrated: the calibration is degenerate.
 - **4.2**'s risk proxy saturates (FPR 0.34 at threshold 1).
-- **4.6:** the TARE row is TARE-inspired; FAR has an open routing bug on a hazard seed.
+- **4.6:** the TARE row is TARE-inspired. FAR has open routing defects: hazard seed 0, and a random-map instance
+  where it is 12.5 % longer than the lattice. So "FAR ≤ lattice" is not claimed.
 - **Two of the five gain terms are 0** in every run (no producer).
 - **The gate rig is llvmpipe on CPU.** Every row consumed the same rig, but the absolute times are not
   real-robot times.
