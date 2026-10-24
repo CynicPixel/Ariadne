@@ -108,7 +108,10 @@ class CaptionedScene(Scene):
         t = Text("\n".join(wrap(text)), font=FONT, font_size=24, color=TEXT, line_spacing=0.8)
         box = RoundedRectangle(corner_radius=0.1, width=t.width + 0.4, height=t.height + 0.22, stroke_width=0,
                                fill_color=BG, fill_opacity=0.72)
-        return VGroup(box, t.move_to(box)).move_to(self.caption_pos)
+        g = VGroup(box, t.move_to(box)).move_to(self.caption_pos)
+        if hasattr(self, "add_fixed_in_frame_mobjects"):  # 3D scenes: subtitles stay on the screen, not in the world
+            self.add_fixed_in_frame_mobjects(g)
+        return g
 
     def say(self, text: str, dur: float | None = None, run_with=None):
         """Narrate `text`: one subtitle cue per sentence (or comma clause when a sentence exceeds two lines), each held
