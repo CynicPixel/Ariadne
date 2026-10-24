@@ -49,6 +49,11 @@ struct CollabLiveParams {
     std::string log_path;            // live: write collab_events.jsonl here (empty = no log, not replayable)
     std::string replay_log;          // replay: serve this log's choices (synchronous); empty = live
     double wait_timeout_s = 120.0;   // replay: a worker silent this long (wall) is a hard error
+    // What decides the fleet's behaviour besides the inputs: e.g. a hash of the collab config and the build. Live
+    // writes it as the log's first line; replay refuses a log written under a different one (a replay under a
+    // changed config cannot reproduce the run: collab60d's replay read a config that had since enabled D178's gate).
+    // Empty = unchecked (logs from before this field).
+    std::string identity;
     // D174 lockstep fields, IGNORED since D179 (kept so existing call sites compile until rewired).
     bool lockstep = false;
     double feature_latency_s = 0.0;
@@ -92,7 +97,10 @@ public:
                      };
                  }) {
         if (replay_) LoadLog(p_.replay_log);
-        else if (!p_.log_path.empty()) log_.open(p_.log_path);
+        else if (!p_.log_path.empty()) {
+            log_.open(p_.log_path);
+            if (!p_.identity.empty()) Log("{\"e\":\"identity\",\"v\":\"" + p_.identity + "\"}");
+        }
         snap_ = std::make_shared<const CollabSnapshot>();
         if (replay_) history_[0] = snap_;
         else thread_ = std::thread([this] { Run(); });
@@ -462,7 +470,7 @@ private:
     void LoadLog(const std::string& path) {
         std::ifstream f(path);
         if (!f) throw std::runtime_error("collab replay: cannot read " + path);
-        std::string line;
+        std::string line, logged_identity;
         while (std::getline(f, line)) {
             if (line.empty()) continue;
             const YAML::Node n = YAML::Load(line);
@@ -474,7 +482,13 @@ private:
                 for (const auto& k : n["keys"]) drains_[{n["T"].as<int64_t>(), n["agent"].as<ac::AgentId>()}].push_back(k.as<std::string>());
             else if (e == "snap")
                 snaps_read_[n["T"].as<int64_t>()] = n["v"].as<uint64_t>();
+            else if (e == "identity")
+                logged_identity = n["v"].as<std::string>();
         }
+        if (!p_.identity.empty() && !logged_identity.empty() && logged_identity != p_.identity)
+            throw std::runtime_error("collab replay: " + path + " was written under identity " + logged_identity +
+                                     ", this replay runs under " + p_.identity +
+                                     " (config or build changed since the live run: it cannot be reproduced)");
     }
 
     CollabLiveParams p_;
