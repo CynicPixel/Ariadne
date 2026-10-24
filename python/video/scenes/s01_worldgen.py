@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from manim import (DEGREES, DOWN, RIGHT, UP, AnimationGroup, Circle, DashedVMobject, Dot, FadeIn, FadeOut,
                    GrowFromCenter, LaggedStart, Line, MoveAlongPath, Polygon, Text, ThreeDScene, TracedPath,
-                   Transform, VGroup, linear, smooth)
+                   Succession, Transform, VGroup, Wait, linear, smooth)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ariadne_video.data import load_scene  # noqa: E402
@@ -108,9 +108,10 @@ class WorldGen(CaptionedScene, ThreeDScene):
                            pulse.animate(run_time=2.2, rate_func=linear).scale(5).set_stroke(opacity=0),
                            *camera_to(glide, phi=0, theta=-90 * DEGREES, zoom=1.0),
                            cam._frame_center.animate(run_time=glide, rate_func=smooth).move_to(-LIFT),
-                           FadeOut(walls, run_time=glide, rate_func=late), FadeIn(flat_map, run_time=glide, rate_func=late)])
+                           FadeOut(walls, run_time=glide, rate_func=late), FadeIn(flat_map, run_time=glide, rate_func=late),
+                           *[Succession(Wait(0.7 * glide), FadeOut(m, run_time=0.3 * glide)) for m in (beam, halo)],
+                           FadeIn(target2d, run_time=glide, rate_func=late)])
         self.remove(pulse)
-        self.play(FadeOut(beam), FadeOut(halo), FadeIn(target2d), run_time=0.4)
         beam.set_opacity(0)
         halo.set_opacity(0)
 
