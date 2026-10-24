@@ -42,6 +42,7 @@
 #include <cmath>
 #include <functional>
 #include <map>
+#include <tuple>
 #include <memory>
 #include <optional>
 #include <ostream>
@@ -238,6 +239,10 @@ public:
             [this](const slam::PoseGraph& joint) { ObserveSolve(joint); }, EntryGateWithPoses(),
             [this](const ac::EntryGateStats& s) {
                 gate_.tested += s.tested, gate_.rejected += s.rejected, gate_.ungated += s.ungated;
+                for (const auto& d : s.decisions) {
+                    GateEdge& g = gate_edges_[{d.agent_a, d.keyframe_a, d.agent_b, d.keyframe_b}];
+                    ++g.tested, g.rejected += !d.accepted, g.last_d2 = d.d2, g.last_accepted = d.accepted;
+                }
             });
 
         for (ac::AgentId self : fleet) {
@@ -326,6 +331,10 @@ public:
     void SetEntryPoses(const std::map<ac::AgentId, core::SE3>& T_World_W) { *entry_poses_ = T_World_W; }
     /// D178 gate counters summed over every solve (an edge is re-tested at each solve it enters).
     const ac::EntryGateStats& entry_gate_stats() const { return gate_; }
+    /// Per inter-agent edge across all solves: times tested/rejected and its LAST decision (D178 criterion).
+    struct GateEdge { uint64_t tested = 0, rejected = 0; double last_d2 = 0.0; bool last_accepted = false; };
+    using GateEdgeKey = std::tuple<ac::AgentId, uint64_t, ac::AgentId, uint64_t>;
+    const std::map<GateEdgeKey, GateEdge>& entry_gate_edges() const { return gate_edges_; }
 
     // --- state and evidence ---
     const std::vector<std::unique_ptr<ac::CollabNode>>& nodes() const { return nodes_; }
@@ -581,7 +590,8 @@ private:
     std::map<EdgeKey, KeptEdge> kept_edges_;
     std::map<ac::AgentId, std::set<uint64_t>> released_;
     std::shared_ptr<std::map<ac::AgentId, core::SE3>> entry_poses_ = std::make_shared<std::map<ac::AgentId, core::SE3>>();
-    ac::EntryGateStats gate_;
+    ac::EntryGateStats gate_;   // totals only (decisions are folded into gate_edges_)
+    std::map<GateEdgeKey, GateEdge> gate_edges_;
     uint64_t undeliverable_ = 0;
     std::function<ac::SolveOutput(const ac::SolveInput&)> solve_robust_;
     std::vector<std::unique_ptr<ac::CollabNode>> nodes_;

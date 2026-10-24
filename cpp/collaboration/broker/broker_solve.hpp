@@ -124,8 +124,17 @@ struct EntryGate {
     double kappa = 1.0;                      // odometry covariance scale from the scene-1 NEES calibration (>= 1)
     std::shared_ptr<const std::map<AgentId, core::SE3>> T_World_W;
 };
+/// One gate test of one inter-agent edge (evaluation: the D178 true-edge rejection criterion).
+struct EntryGateDecision {
+    AgentId agent_a = 0, agent_b = 0;
+    uint64_t keyframe_a = 0, keyframe_b = 0;
+    double d2 = 0.0;
+    bool accepted = false;
+};
+
 struct EntryGateStats {
     uint64_t tested = 0, rejected = 0, ungated = 0;
+    std::vector<EntryGateDecision> decisions;   // every tested edge of this call, in input order
 };
 
 /// Each agent's keyframe poses and their composed odometry covariance (left perturbation in W_k).
@@ -187,8 +196,10 @@ inline std::vector<LoopEdgeValue> GateEdgesByEntry(const SolveInput& in, const E
                                  AdWa * (2.0 * E) * AdWa.transpose();
         const core::Mat6 S = A * inner * A.transpose();
         const double d2 = r.dot(S.ldlt().solve(r));
-        if (std::isfinite(d2) && d2 <= gate.chi2) out.push_back(e);
+        const bool ok = std::isfinite(d2) && d2 <= gate.chi2;
+        if (ok) out.push_back(e);
         else ++st.rejected;
+        st.decisions.push_back({e.agent_a, e.agent_b, e.keyframe_a, e.keyframe_b, d2, ok});
     }
     if (stats) *stats = st;
     return out;

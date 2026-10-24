@@ -123,6 +123,10 @@ inline int PriorityOf(MessageClass c) {
 }
 inline bool IsReliableClass(MessageClass c) { return c == MessageClass::POSE_EDGE || c == MessageClass::POSE_GRAPH; }
 inline bool IsLatestWinsClass(MessageClass c) { return c == MessageClass::HEARTBEAT || c == MessageClass::ACK; }
+/// D180: classes whose key is a unique request id, so a second first-transmission of a key is a protocol re-send.
+inline bool IsResendTrackedClass(MessageClass c) {
+    return c == MessageClass::MATCH_REQUEST || c == MessageClass::MATCH_RESPONSE;
+}
 inline constexpr int kPriorities = 5;
 inline constexpr int kIncarnationShift = 40;
 
@@ -446,6 +450,7 @@ private:
         double tokens = 0.0;
         std::optional<core::Timestamp> last_refill;
         std::map<uint8_t, std::set<uint64_t>> sent, delivered;
+        std::map<uint8_t, std::set<uint64_t>> ever_sent;   // D180 ledger only: never erased (sent is, on expiry)
         // receive side
         std::map<uint32_t, Reassembly> reassembly;
         std::set<uint32_t> done_ids;
@@ -524,8 +529,9 @@ private:
         f.tracked = IsTracked(om.cls, f.fragments.size());
         f.rto_s = p_.rto_min_s;
         f.record = m.record;
-        f.record.predicted_wire_bytes = om.predicted_wire_bytes;
         f.record.resync = om.resync;
+        f.record.resend = IsResendTrackedClass(om.cls) && !pr.ever_sent[uint8_t(om.cls)].insert(om.key).second;
+        f.record.predicted_wire_bytes = f.record.resend ? -1.0 : om.predicted_wire_bytes;
         ledger_.Record(f.record);
         ++stats_.first_tx_messages;
         pr.sent[uint8_t(om.cls)].insert(om.key);

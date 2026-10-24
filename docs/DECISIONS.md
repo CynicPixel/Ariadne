@@ -5250,3 +5250,69 @@ unchanged.
   timed topics (built from every mission agent); the answer wait loops all NA; remaining "both"/"= 2" hits are
   constructor DEFAULTS always overridden with NA, prose that is genuinely two-valued, or stale comments (two
   LLM-chooser comment lines still say "both agents" over N-generic code; cosmetic).
+## 2026-10-24 — D178 amendment: how "true edges rejected ≤ 1 %" is scored (fixed before any gated sweep result is read)
+
+The sweep staged at 4459d57 (`20261023T213707Z-cpux86-e31421`) logs only the gate's totals (tested, rejected), so the
+pre-registered true-edge criterion cannot be scored from it. **Fix:** `ariadne_collab_sim` now writes
+`entry_gate.csv`: one row per inter-agent edge the gate ever tested, with times tested and rejected, and the last
+squared Mahalanobis distance and decision. Logging only; the gate's inputs and outputs are unchanged.
+**Definitions:**
+- A true edge is one in `edges.csv` with `reason == verified` and `pose_err_deg ≤ 10` (D171 §5's label, same as the
+  precision row). Edges are matched as an unordered (agent, keyframe) pair.
+- "Rejected" means rejected at its LAST test (the latest solve that saw the edge, with the longest odometry chain).
+  "Ever rejected" is also reported but is not the criterion.
+- A true edge the gate never tested (ungated) does not count as rejected, and the ungated count is reported.
+- The criterion is pooled per scene over every gated run (arms × budget levels × seeds): rejected true edges / tested
+  true edges ≤ 1 %, on each scene.
+**Procedure:**
+- The ATE criteria are scored on the e31421 sweep as staged.
+- The true-edge criterion is scored on a logged rerun of the same gated cells (same stores, seeds and configs, with the
+  logging build).
+- Every rerun cell must reproduce e31421's merged ATE and first-transmission bytes exactly. Bytes are compared after
+  folding D180's `wire_resend` back in, since the rerun's build includes D180. If any cell differs, the rerun is not
+  the same experiment: the true-edge criterion is then reported UNSCORED, with the reason.
+
+## 2026-10-24 — D181: endpoint (vertex-cover) verification measured before design: no 2-agent payoff on budgeted rows; deferred
+
+**Question:** would moving verification to one endpoint, with the vertex-cover direction choice of Giamou 2018 and Tian
+2021, cut the bytes the gate rows move? It was measured from existing data before any design was written (preflight;
+advisor).
+**Method:** sweep `20261023T213707Z-cpux86-e31421`, every run's attempted inter-agent pairs (`edges.csv`). With N = 2
+and broker 0, today's scheme already moves features one way: it fetches each distinct agent-1 endpoint. Per agent
+pair the exact optimum is a minimum bipartite vertex cover (König: = maximum matching). Its weighted form is an LP
+with integral optima, solvable by `cv::solveLP` (OpenCV-native check). Keyframes were compared at unit weight.
+**Result:**
+- **Budgeted gate rows (greedy and spectral, 24/24):** 0.0 % saving. Today's fetch set already is the minimum cover,
+  because the policy's shared-keyframe pricing selects candidates that share fetched keyframes.
+- **Elsewhere:** the unbudgeted calibration rows save 2.6–4.3 % on scene 1 and 55–56 % on scene 0, campaign
+  `ideal_s0` saves 59.1 %, and the other campaign rows and the similarity arm save 0.
+- **Pooled over all runs:** 1450 keyframes moved against a minimum of 997, a 31.2 % saving, almost all of it in rows
+  that do not count toward I6.
+**Decision:**
+- The protocol change is NOT built now. Its only gate-relevant benefit is the third-party saving at N ≥ 3 (a non-broker
+  pair fetched to the broker on both sides), which no Phase 3 scene exercises.
+- It is re-measured when 3-agent stores exist (B's 3-agent maze runs), with the same script and pre-registered:
+  "build if the selected rows of the 3-agent demo move ≥ 20 % more keyframes than their minimum cover".
+- The speed side (LightGlue serialized on the fleet thread) is decided by A2's AWS profile. If it is the bottleneck,
+  the remedy is a verify pool with D179-logged commits, which needs no protocol change.
+- Bytes work moves to the 3.6 compression rows and to diagnosing the match_response prediction miss.
+
+## 2026-10-24 — D182: ALIKED dense-L2 graph rewrite (A2's l2conv): adoption rule, pre-registered before the measuring run
+
+**Finding (A2, c7i run `20261024T001208Z-cpux86-6ba75f`):**
+- ALIKED-1280 stops scaling at about 8 OpenCV threads: 843 ms at 8, 829 ms at 16, cpu/wall 3.8.
+- Its "Normalize" (F.normalize on the dense 128×736×1280 map: ReduceL2 → Clip → Expand → Div) runs as one serial
+  cv::dnn layer, about 535 ms at 8–16 threads (64 % of the forward).
+**Change:** an exact ONNX graph rewrite, not an exporter change (A2 `scripts/l2conv_rewrite.py`, 282e1da). The sum of
+squares becomes Mul plus a 1×1 conv with a ones kernel, then Sqrt, then Div by broadcasting; the 470 MB Expand copy is
+dropped.
+- Local fidelity: keypoints and scores bit-identical, descriptors within 1.3e-6.
+- Speed at 8 threads, about 300–350 ms: [PROJECTION].
+**Adopt only if all hold on A2's rerun (`70-A2-perf-x86b`):**
+- (i) 0 accept/reject flips on the 120 real verify pairs, against the 1280×720 K1024 reference;
+- (ii) keypoints bit-identical and descriptor max abs diff ≤ 4.9e-6 (the measured thread-count effect), on every
+  keyframe of those pairs;
+- (iii) measured p50 at 8 threads improves ≥ 1.5×.
+If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If (i) or (ii) misses, it is not adopted.
+On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
+input and output ONNX hashes are committed together.

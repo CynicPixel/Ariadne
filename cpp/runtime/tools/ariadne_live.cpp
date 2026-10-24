@@ -1175,7 +1175,7 @@ int main(int argc, char** argv) {
             {   // D178 entry gate: the known entry poses, set before the fleet thread processes anything
                 std::map<ac::AgentId, core::SE3> ep;
                 for (int k2 = 0; k2 < NA; ++k2) ep[ac::AgentId(k2)] = brief.T_W_O[size_t(k2)];
-                ma->collab->fleet().SetEntryPoses(ep);
+                ma->collab->SetEntryPoses(ep);   // queued onto the fleet thread (the direct fleet() call raced it)
             }
         }
         for (int k = 0; k < NA; ++k) {

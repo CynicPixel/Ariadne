@@ -137,6 +137,9 @@ struct ByteRecord {
     // transmission (-1 = none), and whether it is a resend after an election (broker state is soft): an overhead row.
     double predicted_wire_bytes = -1.0;
     bool resync = false;
+    // D180: a repeat first transmission of a MATCH_REQUEST/RESPONSE id this sender already sent this receiver (a retry
+    // after request_retry_s, or the answer to one): an overhead row, out of the I6 first-transmission side.
+    bool resend = false;
 
     /// Achieved compression ratio. 1.0 means compression did not help, which
     /// for high-entropy descriptors is the expected outcome and is reported.
