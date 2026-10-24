@@ -259,7 +259,14 @@ EOF
     else
       poll_fail=$((poll_fail + 1))
       log "state poll failed ($poll_fail consecutive); retrying"
-      [ "$poll_fail" -ge 30 ] && { log "state poll failing for ~10 min"; break; }
+      if [ "$poll_fail" -ge 30 ]; then
+        # The host cannot see AWS (expired credentials, 2026-10-24 09:22 IST): it must NOT kill a run it cannot see.
+        # The instance's own brake still ends it and its exit trap uploads the results under its instance role.
+        RUN_FINISHED=1
+        log "state poll failing for ~10 min: leaving $iid to its own brake (max ${max_minutes} min);" \
+            "fetch later: aws s3 cp --recursive $s3_run/output build/runs/$run_id/output"
+        return 75
+      fi
     fi
     [ "$state" = terminated ] && break
     sleep 20
