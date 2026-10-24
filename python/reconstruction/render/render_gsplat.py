@@ -118,8 +118,7 @@ def main() -> int:
     def shoot(view, agents, file):
         sel = torch.ones_like(agent, dtype=torch.bool) if agents is None else torch.isin(agent, torch.as_tensor(agents, device=dev))
         img, _, _ = rasterization(G["means"][sel], G["quats"][sel], G["scales"][sel], G["alpha"][sel], G["rgb"][sel],
-                                  T(viewmat(view["pos"], view["target"]))[None], K, a.w, a.h,
-                                  backgrounds=torch.zeros(1, 3, device=dev))
+                                  T(viewmat(view["pos"], view["target"]))[None], K, a.w, a.h)   # default bg = black
         px = (img[0].clamp(0, 1) * 255).round().byte().cpu().numpy()
         (a.out / file).parent.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(a.out / file), cv2.cvtColor(px, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_PNG_COMPRESSION, 6])
