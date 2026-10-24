@@ -2436,7 +2436,7 @@ int main(int argc, char** argv) {
         man.scene = "sim-live/" + brief.scene_id;
         man.seed_recorded = true;
         man.seed = va.seed;
-        man.agent_count = 2;
+        man.agent_count = NA;   // was hardcoded 2 (D213 leftover; demo-video caught it in c51ab2s manifest)
         man.execution_mode = is_live ? "live" : "replay";
         man.planner_config = mc.name;
         man.extra["planner"] = "frontier candidates (1.8) + chooser " + lc.chooser;
