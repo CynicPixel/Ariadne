@@ -6,3 +6,10 @@ run,arch,phase,samples,busy_mean_pct,busy_p95_pct,steal_mean_pct
 20261024T001208Z-cpux86-6ba75f,x86_64,single_t2,167,9.7,12.0,0.0
 20261024T001208Z-cpux86-6ba75f,x86_64,single_t4,124,13.7,22.0,0.0
 20261024T001208Z-cpux86-6ba75f,x86_64,single_t8,106,18.3,36.9,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,c3_t2,141,26.8,37.3,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,c3_t4,4,38.0,44.3,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,single_t1,166,6.3,6.3,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,single_t16,76,35.4,87.5,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,single_t2,157,10.5,12.5,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,single_t4,112,16.3,24.8,0.0
+20261024T003403Z-cpuarm-46e7b8,aarch64,single_t8,88,24.1,47.7,0.0

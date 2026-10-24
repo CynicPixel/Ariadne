@@ -1,4 +1,15 @@
 arch,threads_per_proc,stage,variant,engine,p50_median_ms,single_p50_same_threads_ms,slowdown,box_calls_per_s,best_single_calls_per_s
+aarch64,2,aliked_extract,1280x720,cv_dnn_new,965.261,936.063,1.03,3.11,1.89
+aarch64,2,aliked_extract,640x360,cv_dnn_new,272.763,266.602,1.02,11.0,7.11
+aarch64,2,aliked_extract,960x540,cv_dnn_new,539.811,526.836,1.02,5.56,3.45
+aarch64,2,aliked_forward,1280x720,cv_dnn_new,955.573,918.59,1.04,3.14,1.92
+aarch64,2,aliked_forward,640x360,cv_dnn_new,272.065,263.606,1.03,11.03,7.11
+aarch64,2,aliked_forward,960x540,cv_dnn_new,537.008,519.887,1.03,5.59,3.47
+aarch64,2,eigenplaces_describe,640x360,cv_dnn_classic,322.615,302.121,1.07,9.3,18.16
+aarch64,2,eigenplaces_describe,640x360,cv_dnn_new,499.894,408.12,1.22,6.0,13.16
+aarch64,2,lightglue_match,K1024,cv_dnn_new,1029.07,886.067,1.16,2.92,4.57
+aarch64,2,lightglue_match,K256,cv_dnn_new,163.248,140.606,1.16,18.38,19.55
+aarch64,2,lightglue_match,K512,cv_dnn_new,380.811,327.43,1.16,7.88,10.15
 x86_64,2,aliked_extract,1280x720,cv_dnn_new,1276.23,1248.05,1.02,2.35,1.21
 x86_64,2,aliked_extract,640x360,cv_dnn_new,372.052,359.638,1.03,8.06,4.41
 x86_64,2,aliked_extract,960x540,cv_dnn_new,733.377,714.736,1.03,4.09,2.14
