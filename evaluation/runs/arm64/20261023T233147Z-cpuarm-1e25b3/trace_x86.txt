@@ -1,0 +1,63 @@
+input digest e91cd13887255427 truth digest 609d163f14bb72af tilt0 3.7807683586303984
+E0 35.112217658937332 (0x1.18e5d25f395b3p+5)
+  calcJ E=35.112217658937332 (0x1.18e5d25f395b3p+5) gprobe=1.500000 deg |g|=169.532820
+  setDiag lambda in [9.9999999999988987e-05, 0.00010000000000021103]
+  solve rel residual 4.386e-13 (lower-sym 3.817e-13) min pivot 4.305337e+01
+  step |x|=4.273800e-01 x_g=(-8.321888e-03, 1.785978e-03)
+  calcE E=31.945120795577807 (0x1.ff1f36fbbc6b4p+4) gprobe=1.476746 deg
+  ACCEPT g=1.476746 deg
+  calcJ E=31.945120795577832 (0x1.ff1f36fbbc6bbp+4) gprobe=1.476746 deg |g|=37.134492
+  setDiag lambda in [3.3333333333329662e-05, 3.3333333333551707e-05]
+  solve rel residual 4.077e-12 (lower-sym 3.564e-12) min pivot 2.763071e+01
+  step |x|=8.570053e-01 x_g=(1.130165e-03, -3.606087e-04)
+  calcE E=30.056803148258769 (0x1.e0e8aa6b014cdp+4) gprobe=1.476962 deg
+  ACCEPT g=1.476962 deg
+  calcJ E=30.056803148258759 (0x1.e0e8aa6b014cap+4) gprobe=1.476962 deg |g|=19.320598
+  setDiag lambda in [1.1111111110961858e-05, 1.1111111111183902e-05]
+  solve rel residual 1.690e-11 (lower-sym 1.653e-11) min pivot 2.076168e+01
+  step |x|=2.243661e+00 x_g=(-3.431279e-04, 1.515832e-03)
+  calcE E=27.892929336591624 (0x1.be497045a4ccdp+4) gprobe=1.399705 deg
+  ACCEPT g=1.399705 deg
+  calcJ E=27.892929336591628 (0x1.be497045a4ccep+4) gprobe=1.399705 deg |g|=17.332897
+  setDiag lambda in [3.7037037035059228e-06, 3.7037037037279674e-06]
+  solve rel residual 4.768e-11 (lower-sym 4.312e-11) min pivot 1.787186e+01
+  step |x|=5.365129e+00 x_g=(-4.992918e-03, 5.054568e-03)
+  calcE E=24.613037238870433 (0x1.89cf0022c2dbcp+4) gprobe=1.265150 deg
+  ACCEPT g=1.265150 deg
+  calcJ E=24.61303723887044 (0x1.89cf0022c2dbep+4) gprobe=1.265150 deg |g|=40.796472
+  setDiag lambda in [1.2345679010206112e-06, 1.2345679012426558e-06]
+  solve rel residual 3.174e-11 (lower-sym 3.053e-11) min pivot 1.656225e+01
+  step |x|=9.634943e+00 x_g=(-8.778900e-03, 8.432102e-03)
+  calcE E=20.774202980184622 (0x1.4c6322aa05bd3p+4) gprobe=1.342470 deg
+  ACCEPT g=1.342470 deg
+  calcJ E=20.774202980184615 (0x1.4c6322aa05bd1p+4) gprobe=1.342470 deg |g|=113.869571
+  setDiag lambda in [4.1152263374755194e-07, 4.1152263374755194e-07]
+  solve rel residual 1.644e-11 (lower-sym 1.482e-11) min pivot 1.573123e+01
+  step |x|=1.063732e+01 x_g=(-3.836837e-03, 8.590877e-03)
+  calcE E=18.623438173758888 (0x1.29f99a4e75f55p+4) gprobe=1.442052 deg
+  ACCEPT g=1.442052 deg
+  calcJ E=18.623438173758888 (0x1.29f99a4e75f55p+4) gprobe=1.442052 deg |g|=104.808748
+  setDiag lambda in [1.3717421110115424e-07, 1.3717421132319885e-07]
+  solve rel residual 1.336e-11 (lower-sym 1.121e-11) min pivot 1.532167e+01
+  step |x|=6.397501e+00 x_g=(6.731857e-03, 4.129396e-03)
+  calcE E=18.09981131101339 (0x1.2198d3bec92cap+4) gprobe=1.068483 deg
+  ACCEPT g=1.068483 deg
+  calcJ E=18.099811311013379 (0x1.2198d3bec92c7p+4) gprobe=1.068483 deg |g|=20.831432
+  setDiag lambda in [4.5724736885688344e-08, 4.5724737107732949e-08]
+  solve rel residual 2.755e-11 (lower-sym 2.660e-11) min pivot 1.543885e+01
+  step |x|=2.074259e+00 x_g=(6.522968e-03, 8.813168e-04)
+  calcE E=18.041498462749249 (0x1.20a9fa4ac57a1p+4) gprobe=0.715995 deg
+  ACCEPT g=0.715995 deg
+  calcJ E=18.041498462749257 (0x1.20a9fa4ac57a3p+4) gprobe=0.715995 deg |g|=5.194329
+  setDiag lambda in [1.5241578887881246e-08, 1.5241579109925851e-08]
+  solve rel residual 2.595e-11 (lower-sym 2.605e-11) min pivot 1.562097e+01
+  step |x|=3.512636e-01 x_g=(1.612278e-03, 9.698749e-05)
+  calcE E=18.039506761289015 (0x1.20a1d1d77b50bp+4) gprobe=0.630744 deg
+  ACCEPT g=0.630744 deg
+  calcJ E=18.039506761289029 (0x1.20a1d1d77b50fp+4) gprobe=0.630744 deg |g|=0.288729
+  setDiag lambda in [5.0805262219455471e-09, 5.0805264439901521e-09]
+  solve rel residual 5.482e-11 (lower-sym 5.255e-11) min pivot 1.566975e+01
+  step |x|=5.331803e-02 x_g=(1.311624e-04, 4.860146e-06)
+  calcE E=18.039492968771423 (0x1.20a1c36114b93p+4) gprobe=0.623837 deg
+  ACCEPT g=0.623837 deg
+found 1 iters 10 energy 18.039492968771423 gerr 0.623837 deg

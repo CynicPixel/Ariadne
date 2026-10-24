@@ -416,7 +416,8 @@ interpolated between barrier points, only within the metres that run reached; th
 | ci_tiny ariadne / best baseline | 0.440 / 0.417 | 0.837 / 0.797 | 0.938 / 0.898 | 0.960 / 0.913 | 0.963 / 0.923 | 0.962 / 0.936 |
 | maze_short ariadne / best baseline | 0.187 / 0.167 | 0.349 / 0.288 | 0.422 / 0.392 | 0.485 / 0.455 | 0.556 / 0.531 | 0.641 / 0.591 |
 
-- Per metre, Ariadne is best at every point from 5 to 30 m on both scenes, all 3 seeds in every mean.
+- Per metre, Ariadne is best of these four policies at every point from 5 to 30 m on both scenes, all 3 seeds in
+  every mean. With the two 4.6 rows it is not best everywhere (§14.1).
 - At 40 m only one Ariadne seed got that far, so the 40 m point is not compared.
 - This view does not rescue the claim. The claim is on the time axis, by the §5 amendment, made before any run.
 
@@ -434,3 +435,335 @@ interpolated between barrier points, only within the metres that run reached; th
   rule this is a design change made through §49, not a knob tuned after the failed run. It is open, after the D175 POC.
 
 **Not in this set:** the TARE row and the 1.8 nearest-frontier row ("-"). They are batches b09–b12, the 4.6 record.
+
+### 14.1 With the 4.6 rows: all 36 runs (2026-10-24)
+
+The TARE row and the 1.8 nearest-frontier row ("-") ran in batches b09–b12: same rig, same commit, every job exit 0.
+The four rows above are unchanged, since each run is scored on its own. The claim stays false on both scenes.
+
+| scene | ariadne | coverage_greedy | uncertainty_only | random | tare | nearest_frontier_1.8 |
+|---|---|---|---|---|---|---|
+| ci_tiny AUC | 0.884 | 0.892 | 0.883 | 0.876 | **0.895** | 0.789 |
+| maze_short AUC | 0.440 | **0.495** | 0.399 | 0.374 | 0.443 | 0.237 |
+
+**New losses on the time axis.**
+- ci_tiny: Ariadne is below TARE at T = 20–60 s (TARE 0.901 at 60 s vs 0.846), and below the 1.8 row at T = 20 and
+  40 s (0.522 vs 0.387 at 20 s).
+- maze_short: Ariadne is below TARE at T = 20 s and T = 80–160 s, and below the 1.8 row at T = 20 s (0.087 vs 0.082).
+- Ariadne is above TARE at T ≥ 80 s on ci_tiny and at 180–200 s on maze_short (0.757 vs 0.681 at 200 s).
+
+**Correction to the secondary view.** Ariadne is not best per metre at every point:
+- TARE is above it at 10 m on ci_tiny (0.849 vs 0.837) and at 15 m on maze_short (0.428 vs 0.422).
+- The 1.8 row is above it at 5 m on ci_tiny (0.482 vs 0.440).
+- At every other point from 5 to 30 m Ariadne is best (`coverage_per_metre.txt`).
+
+**The diagnostic reading is weaker than stated in §14.** TARE also chooses near goals: the median chosen path over
+the first 60 s on ci_tiny is 1.01–1.46 m. By T = 60 s it has flown about as far as Ariadne (10.4–11.5 m, against
+8.7–12.0 m), yet its coverage at 60 s is 0.901 against 0.846. So "near goals, fewer metres per second" does not
+explain the whole early gap on ci_tiny. The cause stays [UNVERIFIED]; the time-axis fix waits until after the D175 POC.
+
+## 15. §49 design preflight for the time-axis loss (2026-10-24, before any code or run): D117–D120
+
+**Status: design only.** Nothing here is built or run. It is ready to implement once the D175 POC is up (M's order).
+Every number below is from the 36 gate runs already on disk, through three committed scripts (§15.1). No new run was
+made.
+
+### 15.1 What the existing runs show (the cause, measured)
+
+The §14.1 reading ("near goals, fewer metres per second") was [UNVERIFIED], and TARE weakened it. The GT body
+trajectories (200 Hz, every run, both agents) answer the question directly: where does each policy's time go?
+`time_budget.py` (10 Hz; move = planar speed > 0.03 m/s, turn = in place with |yaw rate| > 0.03 rad/s):
+
+| scene, T ≤ 200 s | move | turn in place | still | yaw per metre |
+|---|---|---|---|---|
+| ci_tiny ariadne | 0.31 | **0.46** | 0.23 | **1.72 rad** |
+| ci_tiny coverage_greedy | 0.44 | 0.42 | 0.14 | 1.10 rad |
+| ci_tiny uncertainty_only | 0.47 | 0.38 | 0.15 | 0.88 rad |
+| ci_tiny tare | 0.31 | 0.48 | 0.21 | 1.78 rad |
+| maze_short ariadne | 0.32 | **0.45** | 0.23 | **1.60 rad** |
+| maze_short coverage_greedy | 0.48 | 0.31 | 0.22 | 0.74 rad |
+| maze_short tare | 0.34 | 0.41 | 0.25 | 1.48 rad |
+
+(Full table, T ≤ 60 s too, in `time_budget.txt`.)
+
+- **Ariadne turns in place for 45–46 % of the mission and moves for 31–32 %.** The mover turns at ω_max = 0.44 rad/s
+  (α_max 0.6 rad/s², `command_planner.hpp` MotionLimits). A 90° turn takes ≈ 4.3 s, nearly a whole 5 s barrier.
+  One radian of turning costs the time of ≈ 1.4 m of travel at the 0.6 m/s cap.
+- **U(a) charges metres only.** C_path is the ρ_agent geodesic; turning is free in the utility. Every row shares the
+  mover, so the row that picks the most turn-heavy goals per metre loses on the time axis. That row is Ariadne,
+  together with TARE, which ranks by the same utility.
+- **The turns are mostly wasted.** `turn_back.py` finds turn → move → opposite-turn triples, the "face the waypoint,
+  drive, turn back to the view's yaw" pattern:
+  - over 200 s, 47 % (maze_short) and 50 % (ci_tiny) of Ariadne's turning time is in such pairs;
+  - in maze_short's first 60 s, where the loss is largest, the share is 67 %: a median 435° spent for 231° net;
+  - over 200 s, the median pair spends 179–215° of rotation for a net heading change of 57–67°.
+- **No turn goes the long way round.** `turn_episodes.py`: no continuous in-place turn exceeds 180° in any run (max
+  179.8°), since `PlanCommand` wraps each turn. The waste is the pairing, not a wrap error. (The maintainer reported
+  turns of "more than 180 degree … turn all the way, not back". No single turn is over 180°; this pairing is what
+  the runs show.)
+- **Where the pairs happen.** `still_decomp.py` classifies each pair by when its second turn starts:
+  - 17–22 of Ariadne's 22 pairs per scene over 200 s start inside a command: the final-yaw turn at the end of the
+    path;
+  - 0–5 start at a barrier, i.e. a reversal by the next command.
+  So the final yaw is the lever, and goal churn is a minor one.
+- **Why the pairing happens (code).**
+  - The view's yaw always faces its target: `v.yaw = atan2(target − eye)` (`nbv.cpp` SampleViews).
+  - The eye is sampled FUEL-style around the target, so the travel direction into the eye is often away from the
+    target.
+  - The live loop sends `follow(path)` with the last pose at `face_yaw` (`face_frontier: true`, ariadne_live.cpp).
+  - So the rig turns to each polyline vertex, drives, then turns back to face the target.
+- **A shared command defect, found on the way.** `Phase4Planner::Route` cuts the polyline at `max_length_m` = 3.0 m
+  but still attaches `goal_yaw`. On a cut command the rig turns to the view's yaw mid-route, at a point that is not
+  the view, then turns back on the next command.
+  - This hits the baselines more than Ariadne: the chosen path exceeds 3.0 m in 64 / 52 / 49 % of coverage-greedy /
+    uncertainty-only / random decisions on ci_tiny, and in 15 % of Ariadne's.
+  - So it does not explain Ariadne's loss. But it is a defect in every row.
+- **Stillness, decomposed** (`still_decomp.py`, per 5 s interval and agent).
+  - Two parts are the same for every row: the pauses between segments inside a command (0.4–0.6 s per interval;
+    every segment starts and ends at rest), and the startup intervals with no motion (6/72 on ci_tiny, 22/72 on
+    maze_short, identical across rows).
+  - **Ariadne alone has 5 extra idle intervals on ci_tiny in the first 60 s (11/72 against 6/72).** That is why its
+    "still" share is 0.28 against 0.21. All 5 come from one livelock, `livelock_ci_tiny_2.txt`:
+    - in ci_tiny seed 2, agent 0 chose the same view for six barriers in a row (t = 20–45 s);
+    - the view's goal is 0.02 m from the agent (path_m 0);
+    - `Phase4Planner::Route` returns an empty path when the goal is the agent's own cell, so the loop sends `hold`;
+    - the turn to the view's yaw is never commanded, the view's gain is never collected, and the view keeps winning.
+  - The Phase 4 rows have no `min_goal_m` filter (only the 1.8 placeholder has one, `planner.hpp`), so at-cell views
+    are admissible but cannot be executed. TARE shows the same, with 4 hold decisions on ci_tiny.
+  - **This is a defect (D125), and D117 would make it worse,** since a turn-only view is cheap under an executed-time
+    cost. So D125 is a prerequisite of D117.
+- **Per seed, the livelock carries most of the ci_tiny loss at 40–60 s** (`gate_rows.jsonl`):
+
+  | ci_tiny coverage, seeds 0 / 1 / 2 | 20 s | 40 s | 60 s |
+  |---|---|---|---|
+  | ariadne | 0.453 / 0.358 / 0.351 | 0.806 / 0.762 / **0.531** | **0.909 / 0.900** / **0.728** |
+  | tare | 0.475 / 0.441 / 0.406 | 0.760 / 0.712 / 0.772 | 0.875 / 0.898 / 0.929 |
+  | coverage_greedy | 0.474 / 0.530 / 0.400 | 0.793 / 0.780 / 0.841 | 0.872 / 0.886 / 0.870 |
+
+  - On seeds 0 and 1 Ariadne is level at 40 s and best of every row at 60 s.
+  - Seed 2 is the livelock (t = 20–45 s), and it pulls the 3-seed mean below every baseline. §14.1's "TARE 0.901 vs
+    0.846 at 60 s" is mostly that one defect, not view placement as first read. That reading is withdrawn.
+  - The loss at T = 20 s is on every seed and predates the livelock: the turning and short-command cost.
+  - maze_short has no holds (0/240). Its loss to coverage-greedy at 100–160 s is on every seed at 120 s, and on
+    seeds 0 and 2 at 160 s (seed 1: 0.534 against 0.492). That is the turning cost and view placement.
+  - What sets Ariadne apart from the cost-free baselines is yaw per metre: many short commands, each with its own
+    turns. D117 prices exactly that.
+  - The five IG terms per candidate are not logged, so "Δentropy dilutes Δcoverage" is still untested. D120 adds the
+    log.
+
+### 15.2 SOTA (primary text; `docs/design/lit/early_coverage.md`)
+
+This was read in the primary texts and pinned code, 2026-10-24. Quotes and line numbers are in the lit file.
+
+- **Time, not distance, is the cost the field uses.**
+  - FUEL (RA-L 2021, Eq. 1) charges `t_lb = max(L/v_max, Δyaw/ψ̇_max)` between views. The code (`662dd23`,
+    `ViewNode::computeCost`) uses yd = 60°/s.
+  - Schmid et al. (RA-L 2020, Eq. 6) use "the expected execution time", from "a constant acceleration model for
+    position and yaw". That is D117's form, here exact because the mover's profile is known.
+  - FUEL's `max()` holds only because a quadrotor yaws while it translates. TARE (RSS 2021, Eq. 4) is written for
+    a vehicle that "can turn in one place" and adds a penalty per stop. For an in-place turner the times add.
+- **Turning on the spot is a named failure.** Schmid §VII-A, on RH-NBVP: "spending a lot of time turning on the
+  spot, and frequent changes of the exploration site … travels only 210 m, covering 60 %".
+- **Back-and-forth between replans is a named failure.** FUEL §V-A: "back-and-forth maneuvers may be generated in
+  successive planning steps and slow down the progress". FUEL's remedy is a heading-consistency term on the first
+  leg (w_c = 1.5 s/rad).
+  - For an in-place turner, D117 charges the actual turn from the current heading, which is the physical version
+    of that term. So no w_c is added.
+- **View yaw.** FUEL's views face their target, as ours do (`sampleViewpoints`: the mean bearing to the cluster's
+  cells).
+  - FUEL's answer to the final turn: up to 15 views per cluster with ≥ 0.8× the best coverage, and the time term
+    picks among them (`getViewpointsInfo`).
+  - No surveyed planner lets a view keep its arrival heading, so D118's twin is [DESIGN].
+  - FUEL's multi-view set is the cited alternative. It would add FUEL's 0.8 threshold; D118 has none.
+- **Gain–cost form.** NBVP and AEP use `g·exp(−λc)`; our U is the linear `g − αc`.
+  - Schmid Table V (coverage at 30 min): linear 76.4 ± 6.5 %, exponential 96.6 ± 5.3 %, accumulated gain over
+    accumulated time along a branch 99.8 ± 0.1 %. Their reason: "both linear and exponential penalties favor
+    suboptimal viewpoints that have low cost".
+  - This is not an early-rate result, and their remedy needs a horizon: a per-candidate g/t rescored every 5 s
+    would favour near goals even more.
+  - So it is **reserved as D121** (efficiency over the TARE local tour), not part of this change. It is the next
+    candidate if §15.5 fails.
+- **Refinement terms.** Schmid's single gain (Eq. 5) scores an unknown voxel 1 and a known one less, falling as it is
+  re-observed. It "initially focuses on global surface exploration, before focusing on areas of low map weight" and
+  was fastest to 95 % (Table IV).
+  - FUEL and TARE keep gain out of the objective entirely.
+  - No surveyed planner normalises each term by its own p90, which gives Δentropy the same weight as Δcoverage
+    whatever their magnitudes.
+  - It is a candidate cause of the maze_short gap that D117 leaves. It is **reserved as D122** (one per-voxel
+    scale), decided on D120's term log, not before.
+- **Early-rate metric.** Cieslewski et al. (IROS 2017, Eq. 9) define t_exp, the mean voxel discovery time, which
+  is the area above the coverage–time curve. Their frontier-in-FOV rule wins most on it. Our AUC is the same
+  quantity up to sign and scale.
+- **Our TARE row is weaker than TARE.** TARE's code (`44500592`, `GetLookAheadPoint`, `PublishWaypoint`) does three
+  things the §31.6 row omits:
+  - it keeps the previous goal while it is ahead (cos > 0) and more than half the lookahead away;
+  - otherwise it continues in the previous direction;
+  - it extends near waypoints (8.0 / 3.5 m) so the vehicle never stops.
+
+  The TARE row stays labelled "TARE-inspired". Any comparison to it is to that row, not to TARE.
+
+### 15.3 OpenCV-native check
+
+- The new cost is the duration of a trapezoidal velocity profile per turn and per segment, already implemented in
+  `core/trajectory/command_planner.hpp` (`PlanProfile`, `PlanCommand`). That is the mover's own profile code.
+  - The speed input differs: the mover's clearance comes from the GT world, the planner's from its own map (unknown
+    counts as occupied). So C_time is an estimate [PROXY], not the executed time.
+  - §15.5 measures the gap.
+- No OpenCV primitive computes a kinematic profile's duration. `cv::` is not the right home and is not used.
+- The extra views (D118) reuse `RaycastIg` and the existing `cv::parallel_for_` over targets (20de9e8), so their
+  cost lands inside the parallel stage.
+- Nothing hand-rolls what OpenCV already provides.
+
+### 15.4 Decisions (proposed)
+
+**D117: the motion cost is the executed time, by the mover's own model.**
+- C_time(a) = Σ durations of `PlanCommand(from = agent pose and heading now, path = Route(a), final yaw = a's yaw,
+  MotionLimits, clearance)`.
+  - Route(a) is the string-pulled polyline the loop will actually send.
+  - This covers every vertex turn, every move at its clearance-limited speed, and the final turn.
+- §4's "time and energy ∝ path, so count once" premise is false in this rig (measured: turning is 45 % of the
+  time). By §4's own rule, the terms come back separately:
+  `U = G − [(λ_d⁰ + λ_e(t))/3]·C_path/p90 − [λ_t(t)/3]·C_time/p90 − C_b/p90 − C_r/p90`.
+  - At t = 0 the weights sum to 1, exactly as before. No new constant: v, ω, α are the worldgen Motion preset.
+- Cost: one `PlanCommand` per kept view (O(polyline vertices)). It needs `Route` per kept view; today it runs only
+  for the chosen one (A* + string-pull per view; measured at implementation, reported).
+- Heading at plan time: the yaw of the latest camera pose in the agent's map frame (the live loop already reads it
+  for D169).
+- **Clearance and speed.** `PlanCommand`'s speed is `min(v_cap, v_lk · clearance)`.
+  - The planner evaluates clearance on its own ESDF (unknown = occupied); the mover uses the GT world. The planner's
+    clearance is never larger, so C_time over-estimates in open space.
+  - It is still the mover's model on the planner's information, with no new constant.
+- **Horizon (preemption).** A barrier's new command replaces the running one, so the tail of a route may never
+  execute.
+  - C_time prices the whole command the loop sends: at most `max_length_m` = 3 m, plus its turns. That is the planner's
+    commitment horizon.
+  - Pricing only the part that fits before the next barrier was rejected: it would make every far goal look as cheap
+    as a near one.
+
+**D118: each view is also offered at its arrival heading.**
+- For every kept view the sampler adds a twin at yaw = the heading of Route's last segment, with its own 256-ray IG
+  and its own C_time (no final turn).
+- U picks between the twins. No threshold, no "turn only if gain > x" knob: if facing the target pays for its
+  turn, the facing view wins.
+- Route returns "no final yaw" for an arrival twin. The loop already supports a pose without yaw (zero quaternion,
+  D151).
+- This is the "arrive and keep the travel heading, don't turn back" behaviour, chosen by the utility rather than
+  hard-coded. It reads the maintainer's "come straight … not back" one way. Their answer to the open question
+  (keep the heading vs drive in reverse) is pending; reversing would need a rear view the rig does not have (§1
+  sensor rig).
+
+**D119: no final yaw on a cut command (defect fix, every row).**
+- When `Route` cuts the polyline at `max_length_m`, the command carries no final yaw. The view's yaw applies only
+  when the command ends at the view.
+- It changes every row that routes through `Phase4Planner::Route`: all four 4.3 policies and TARE. Those rows
+  re-run (§15.5).
+- The 1.8 row has its own `Route` (`planner.hpp`), whose yaw faces the centroid from wherever the cut leaves it. It
+  is untouched, so its gated runs are reused, provided a replay identity check shows its commands are byte-identical
+  at the new commit.
+
+**D125: an at-cell view runs as an in-place turn (defect fix, every Phase 4 row).**
+- When the view's goal is the agent's own cell, `Route` returns that one pose with the view's yaw instead of an empty
+  path. `PlanCommand` then produces a pure turn (no move, `turn_to(yaw)`), and the gain is collected.
+- No `min_goal_m` filter is added. An at-cell view is legitimate (turn to look), as long as it is executed.
+- It is a prerequisite of D117 (§15.1). It is always on, with no key.
+
+**D120: the trace logs each candidate's five normalised IG terms and its C_path, C_time, and turn time.**
+- This is what makes the remaining early gap on ci_tiny (TARE vs Ariadne at equal time budgets) testable, instead
+  of read from utilities.
+
+**Goal commitment: not proposed as a decision yet.**
+- D117 already favours the current goal, because its cost is computed from the current heading: a goal the rig
+  already faces carries no turn.
+- FUEL has no explicit hysteresis. It replans every ≤ 1.5 s, from the state 0.2 s ahead, and gets continuity from
+  the consistency term plus its tour objective.
+- TARE has one: it keeps the goal while the goal is ahead and > L/2 away. That adds L, TARE's lookahead distance
+  (8 m indoors), which we would have to re-derive for our rig.
+- Proposed: none until D117's soft commitment has been measured. §15.5 reports the goal-change rate per row (from
+  `current_task.since_t_s`). TARE's rule is the cited candidate if churn stays high.
+- The data supports waiting: 0–5 of 22 turn-back pairs per scene are next-command reversals (§15.1).
+- **Reserved D126:** TARE's commitment rule plus waypoint extension (`GetLookAheadPoint`, `kExtendWayPoint`). It is
+  the next candidate after D121 and D122. It needs its L re-derived for this rig first.
+
+### 15.5 Pre-registered ablation (before any run; the claim and the reporting are fixed here)
+
+- **Rig: as the gate.** Lockstep live, RTF 0 + D168, c7i.4xlarge llvmpipe, 200 s, ci_tiny and maze_short × seeds
+  0–2, the same Phase 4 shadow mapper and scorer for every row.
+- **Commit:** the gate tree (a1p d59ee3d) + D117–D120 and D125 only. D117, D118 and D120 sit behind mission_v2 keys,
+  so one binary runs every row. The two defect fixes, D119 and D125, are always on.
+- **Rows** (each 2 scenes × 3 seeds = 6 runs):
+
+| row | D119 + D125 shared fixes | D117 time cost | D118 arrival twins | purpose |
+|---|---|---|---|---|
+| random, coverage_greedy, uncertainty_only, tare | ✓ | — | — | the baselines, re-run with the shared fixes |
+| nearest_frontier_1.8 | n/a | — | — | gated runs reused (neither fix touches its Route), if the replay identity check holds |
+| ariadne_v0 | ✓ | — | — | Ariadne as gated + the shared fixes; the reference for D117/D118 |
+| ariadne_t | ✓ | ✓ | — | D117 alone |
+| ariadne_ta | ✓ | ✓ | ✓ | D117 + D118 (the proposed policy) |
+
+  That is 7 rows × 6 = **42 runs**, ≈ 22 min each on llvmpipe, the same rig and batching as the 36-run gate. It runs
+  through slotq in band 30+, with the user's OK for the spend first.
+- **Before any run:**
+  - a replay identity check that, with every new key off, decisions and commands are byte-identical to d59ee3d
+    (as for 20de9e8);
+  - unit tests:
+    - an arrival twin carries no final yaw;
+    - a cut command carries no yaw;
+    - an at-cell view yields a one-pose turn command, not a hold;
+    - C_time is monotone in the turn angle and the path.
+- **The C_time estimate is measured, not assumed.** Per row, it reports the chosen candidate's predicted C_time
+  against the realised GT time to the goal, or to the next barrier if the command is preempted. It gives the median
+  and p90 of predicted/realised.
+  - A unit test that feeds `PlanCommand` and the mover the same clearance would be tautological, so none is claimed.
+- **Also reported per row:** the goal-change rate (from `current_task.since_t_s`) and plan_ms. D117/D118 add
+  `Route` and IG work per kept view, and that cost is stated.
+- **Claim (unchanged from §5):** the proposed policy (ariadne_ta) ≥ every re-run baseline at every T = 20…200 s, per
+  scene. Every loss is listed per T.
+- **Also reported, not claimed:**
+  - AUC per row;
+  - coverage per metre;
+  - the §15.1 time budget per row (turn share, turn-back share, yaw per metre);
+  - ariadne_v0 against the gated ariadne row, which is the run-to-run plus D119 change.
+- **Pre-registered non-regression:** ariadne_ta's coverage at 200 s ≥ ariadne_v0's minus the seed spread (max − min)
+  of ariadne_v0 at 200 s. The late advantage must survive.
+- **No tuning after the runs.** If the claim fails, the result is reported as a loss, and the next change goes
+  through §49 again (D120's term log is the input).
+- **TARE with the new utility** (tare_ta) is a separate row, not a replacement for the baseline TARE. It is added
+  only if the maintainer wants the §31.6 "same utility, different scheduling" comparison redone (+6 runs).
+
+**Amendments (2026-10-24, before any run; DECISIONS "D125/D119 implemented").**
+- (a) The replay identity check is: identical with every key off, except the enumerated cut and at-cell records,
+  where the fixes fire. The base is feat/ph4-nagent `9efbdba` (main 4a12b50 merged; D227 lens-off is on B's branch only, NOT in it), not d59ee3d.
+- (b) The 1.8 row is re-run, not reused: **48 runs** (`configs/mission/ablation_4.3/runs_48.jobs`). These are
+  development runs.
+  - A run is valid only with every barrier answered and no reorder timeouts.
+  - Off-AWS was tried first and declined (test-compute-session: no docker or gz on its kernels today). So they run on
+    the gate's own rig (AWS c7i, llvmpipe, slotq band 30+) once the maintainer approves the spend.
+  - Measured gate wall time: median 13.1 min per 200 s run (2.8–26.8, 34 logged jobs), not the ≈ 22 min estimated
+    above. That puts 48 runs at ≈ 11–12 c7i.4xlarge spot-hours.
+- (c) The gated `ariadne` row is context only against ariadne_v0: the base commit and the fixes
+  differ.
+- (d) **Predicted vs realised C_time** is measured on ariadne_t and ariadne_ta only: the rows whose trace says
+  `terms.time_model: exact_command`. Every other row logs path / speed under `time_s`, and is not mixed in.
+- (e) **Plan cost.** The trace records no plan time. The proxy is `lockstep.jsonl` `wall_paused_s` per barrier, which
+  also includes the command round-trip to the mover. It is reported per row as such.
+- (f) **First run = the abort check.** `ci_tiny 2 200 ariadne_v0` (the livelock seed) runs first. The other jobs go
+  only if all of these hold:
+  - every `kind:"turn"` trace record has its `mover_state` answer `accepted: true` with `segments: 1`;
+  - `answer_timeouts` = 0;
+  - the agent's GT shows no hold at a won at-cell view.
+  The live-loop turn-here branch has never executed (no recording had an at-cell view).
+- (g) **D119 evidence** is in the mover logs, not the trace (the trace carries no final yaw): no final-turn segment
+  on a command whose polyline is 3.0 m.
+- (h) **One commit for all 48 runs.** No merge between batches.
+
+### 15.6 The §49 ritual, at implementation
+
+1. ALGORITHMS.md, the NBV entry: the time-cost form (FUEL-style yaw-aware time, exact profile here) and the yaw
+   twins, with the citations of §15.2.
+2. Arch §21.4: C_time is the executed-command duration; the ∝-path collapse applies only to rigs that translate and
+   yaw together.
+3. The ablation matrix: the rows of §15.5.
+4. The benchmark config: mission_v2 keys `cost_time: exact_command` and `view_yaw: target | target+arrival`, plus
+   the D119 and D125 fixes (always on, no key: they are defects).
+5. The run manifest: the planner block records `cost_time` and `view_yaw`, and the trace adds the D120 per-candidate
+   terms.

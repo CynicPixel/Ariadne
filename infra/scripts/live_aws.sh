@@ -121,11 +121,34 @@ aws s3 cp $uri - | tar xz -C /tmp
 (cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
 cp -a /tmp/p/. . && cp /tmp/p/SHA256SUMS \$R/
 mkdir -p build/live/runs
-ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} \
+ARIADNE_LOCKSTEP=${ARIADNE_LOCKSTEP:-} ARIADNE_LIVE_CONFIG=${ARIADNE_LIVE_CONFIG:-} ARIADNE_PLANNER_CONFIG=${ARIADNE_PLANNER_CONFIG:-} ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} ARIADNE_PROFILE=${ARIADNE_PROFILE:-} ARIADNE_SAMPLER=${ARIADNE_SAMPLER:-} \
   infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1 || echo "live_run_failed" >> \$R/live_run.log
 run=\$(ls -d build/live/runs/live-* | tail -1)
 infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
 tar czf \$R/run.tar.gz --exclude='*.sock' \$run
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
+cmd_replay_s3() {   # S3_RUN_TARBALL SCENE - replay an EXISTING recording in-region (no local download; collab60d)
+  local tarball="$1" scene="$2"
+  local refs; refs="$(cmd_push)"
+  local uri; uri="$(cmd_payload "$scene")"
+  local script="$REPO_ROOT/build/live_payload/replays3-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $uri - | tar xz -C /tmp
+(cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
+cp -a /tmp/p/. .
+mkdir -p /tmp/runsrc build/live/runs
+aws s3 cp $tarball - | tar xz -C /tmp/runsrc
+src=\$(ls -d /tmp/runsrc/build/live/runs/live-* | tail -1)
+rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
+cp -a "\$src" build/live/runs/
+run=build/live/runs/\$(basename "\$src")
+ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+cp "\$run/replay_check.json" \$R/ 2>/dev/null || true
+tar czf \$R/replays.tar.gz "\$run"/replay1 "\$run"/replay2 "\$run"/replay*.log 2>/dev/null || true
 EOF
   } > "$script"
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
@@ -190,6 +213,7 @@ case "${1:-}" in
   payload) shift; cmd_payload "$@" ;;
   smoke) shift; cmd_smoke "$@" ;;
   run) shift; cmd_run "$@" ;;
+  replay-s3) shift; cmd_replay_s3 "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

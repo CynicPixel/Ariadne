@@ -1,0 +1,3 @@
+input digest ced7640a20cf76d6 truth digest 6c0bbdb4becd09b8 tilt0 3.7807683586294782
+default  found 1 iters   10 E 26.3969806079 -> 12.1583701112 gerr 2.7104 tilt 3.1702
+tight    found 1 iters   15 E 26.3969806079 -> 12.1583700029 gerr 2.7104 tilt 3.1702

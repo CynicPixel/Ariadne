@@ -1,0 +1,121 @@
+records old 8 new 8
+(5, 0) 19 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 5000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'follow', 'waypoints_xy_m': [[0.275, 3.075], [0.325, 3.125]]} chosen 0
+    new command: {'stamp_ns': 5000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'follow', 'waypoints_xy_m': [[0.275, 3.075], [0.325, 3.125]]} chosen 0
+(5, 1) 19 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 5000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.125, 5.675]]} chosen 0
+    new command: {'stamp_ns': 5000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.125, 5.675]]} chosen 0
+(10, 0) 27 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 10000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[-0.075, 2.975]]} chosen 3
+    new command: {'stamp_ns': 10000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[-0.075, 2.975]]} chosen 3
+(10, 1) 25 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 10000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.175, 5.125]]} chosen 0
+    new command: {'stamp_ns': 10000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.175, 5.125]]} chosen 0
+(15, 0) 95 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 15000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[1.375, 2.875]]} chosen 0
+    new command: {'stamp_ns': 15000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[1.375, 2.875]]} chosen 0
+(15, 1) 37 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 15000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.425, 4.025]]} chosen 0
+    new command: {'stamp_ns': 15000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[9.425, 4.025]]} chosen 0
+(20, 0) 63 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 20000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[1.025, 2.775]]} chosen 0
+    new command: {'stamp_ns': 20000000000, 'topic': '/ariadne/agent_0/cmd', 'kind': 'goto', 'waypoints_xy_m': [[1.025, 2.775]]} chosen 0
+(20, 1) 137 diffs
+    .candidates[0].rank: only in new
+    .candidates[0].utility: only in new
+    .candidates[1].rank: only in new
+    .candidates[1].utility: only in new
+    .candidates[2].rank: only in new
+    .candidates[2].utility: only in new
+    .candidates[3].rank: only in new
+    .candidates[3].utility: only in new
+    .candidates[4].rank: only in new
+    .candidates[4].utility: only in new
+    .candidates[5].rank: only in new
+    .candidates[5].utility: only in new
+    old command: {'stamp_ns': 20000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[8.925, 4.575]]} chosen 0
+    new command: {'stamp_ns': 20000000000, 'topic': '/ariadne/agent_1/cmd', 'kind': 'goto', 'waypoints_xy_m': [[8.925, 4.575]]} chosen 0

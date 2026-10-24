@@ -1,0 +1,12 @@
+tool: ariadne_entry_nees
+scene: /data/code/Ariadne/evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw/scene
+stores:
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed1/store_agent1.bin, agent: 1, keyframes: 259}
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed1/store_agent0.bin, agent: 0, keyframes: 362}
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed2/store_agent1.bin, agent: 1, keyframes: 259}
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed2/store_agent0.bin, agent: 0, keyframes: 360}
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed3/store_agent1.bin, agent: 1, keyframes: 260}
+  - {store: /data/code/Ariadne-3x/build/runs/20261023T163202Z-cpux86-0345a5/output/results/passa/s1/seed3/store_agent0.bin, agent: 0, keyframes: 362}
+keyframes: 1862
+nees: {mean: 17.6685, median: 10.9306, p90: 57.9702, p99: 97.3873}
+kappa: 2.94474

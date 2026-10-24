@@ -1,0 +1,312 @@
+tool: ariadne_collab_sim
+protocol: v2
+arm: similarity
+seed: 2
+comms_scenario: ideal
+budget: {bytes_per_s: 0, burst_bytes: 0, source: ""}
+response_ratio: {value: 0, calibration_run: ""}
+robust: true
+entry_gate: {enabled: false, chi2: 22.4577, entry_sigma_m: 0.1, entry_sigma_rad: 0.0349066, kappa: 2.9447, tested: 0, rejected: 0, ungated: 0}
+local_encoding: int8
+verify: {min_pnp_inliers: 25, calibration: ""}
+agents: 2
+duration_s: 228.9
+bytes:
+  - {class: 0, messages: 916, wire_first: 246264, transmitted_first: 209624, predicted_first: -1, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+  - {class: 1, messages: 265, wire_first: 178056, transmitted_first: 167456, predicted_first: 178064, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+  - {class: 3, messages: 260, wire_first: 35336, transmitted_first: 24936, predicted_first: -1, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+  - {class: 4, messages: 260, wire_first: 35270283, transmitted_first: 34464249, predicted_first: -1, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+  - {class: 5, messages: 536, wire_first: 111154, transmitted_first: 89714, predicted_first: 162944, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+  - {class: 6, messages: 104, wire_first: 626376, transmitted_first: 608854, predicted_first: 993516, wire_retransmit: 0, wire_resync: 333, wire_resend: 0}
+  - {class: 12, messages: 213, wire_first: 33160, transmitted_first: 24640, predicted_first: -1, wire_retransmit: 0, wire_resync: 0, wire_resend: 0}
+total_wire_bytes: {first: 36500962, all: 36500962}
+predicted: {match_request: 0, match_response: 0, uncalibrated_prices: 0, uncalibrated_class_prices: 641, unadvertised_prices: 0}
+protocol: {candidates: 1702, selected: 0, expired: 0, edges_verified: 536, solves: 79, broker_changes: 1}
+verify: {calls: 1702, geometric: 636, gated: 536, ms_total: 1.37621e+06, reasons: {degenerate: 100, essential_gate: 344, few_3d: 21, few_matches: 683, pnp_gate: 18, verified: 536}}
+solve: {calls: 79, ms_total: 15676.2, robust_inter_agent: 19426, robust_inliers: 13876}
+estimates:
+  - {agent: 0, anchor: 0, T_G_W: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]}
+  - {agent: 1, anchor: 0, T_G_W: [-0.0016018078714383766, 0.012719066929169028, 0.99991782639774673, -4.8129143714904785, -0.0083920090221828482, 0.99988372744437182, -0.012732076677465632, 0.067850574851036072, -0.9999635035320612, -0.0084117137612130747, -0.0014948831007202124, 10.904270172119141]}
+kept_inter_edges:   # kept by the last solve that contained them; never injected (merge evidence)
+  - {agent_a: 0, kf_a: 17, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 19, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 22, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 25, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 25, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 25, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 25, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 25, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 26, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 27, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 28, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 28, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 28, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 28, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 28, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 29, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 107, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 122, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 130, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 131, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 131, agent_b: 1, kf_b: 48, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 166, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 193, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 193, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 209, agent_b: 1, kf_b: 6, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 209, agent_b: 1, kf_b: 10, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 209, agent_b: 1, kf_b: 12, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 210, agent_b: 1, kf_b: 5, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 210, agent_b: 1, kf_b: 6, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 211, agent_b: 1, kf_b: 12, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 211, agent_b: 1, kf_b: 13, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 211, agent_b: 1, kf_b: 14, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 212, agent_b: 1, kf_b: 13, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 212, agent_b: 1, kf_b: 14, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 212, agent_b: 1, kf_b: 16, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 213, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 213, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 213, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 214, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 214, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 214, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 215, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 215, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 215, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 216, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 216, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 216, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 217, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 217, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 217, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 218, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 218, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 218, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 219, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 219, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 219, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 220, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 220, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 220, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 221, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 221, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 221, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 222, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 222, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 222, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 223, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 223, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 223, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 224, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 224, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 224, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 225, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 225, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 225, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 226, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 226, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 226, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 227, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 227, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 227, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 228, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 228, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 229, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 229, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 230, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 230, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 231, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 231, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 231, agent_b: 1, kf_b: 83, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 232, agent_b: 1, kf_b: 38, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 232, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 232, agent_b: 1, kf_b: 83, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 233, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 233, agent_b: 1, kf_b: 83, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 233, agent_b: 1, kf_b: 85, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 234, agent_b: 1, kf_b: 45, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 234, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 234, agent_b: 1, kf_b: 83, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 235, agent_b: 1, kf_b: 78, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 235, agent_b: 1, kf_b: 82, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 235, agent_b: 1, kf_b: 83, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 236, agent_b: 1, kf_b: 45, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 236, agent_b: 1, kf_b: 47, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 236, agent_b: 1, kf_b: 78, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 237, agent_b: 1, kf_b: 47, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 237, agent_b: 1, kf_b: 78, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 237, agent_b: 1, kf_b: 79, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 238, agent_b: 1, kf_b: 48, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 238, agent_b: 1, kf_b: 77, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 238, agent_b: 1, kf_b: 78, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 239, agent_b: 1, kf_b: 48, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 239, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 239, agent_b: 1, kf_b: 77, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 240, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 240, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 240, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 241, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 241, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 241, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 242, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 242, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 242, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 243, agent_b: 1, kf_b: 73, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 243, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 243, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 244, agent_b: 1, kf_b: 73, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 244, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 244, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 245, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 245, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 245, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 246, agent_b: 1, kf_b: 64, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 246, agent_b: 1, kf_b: 65, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 246, agent_b: 1, kf_b: 66, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 247, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 247, agent_b: 1, kf_b: 32, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 248, agent_b: 1, kf_b: 19, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 248, agent_b: 1, kf_b: 20, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 248, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 249, agent_b: 1, kf_b: 19, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 249, agent_b: 1, kf_b: 20, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 249, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 250, agent_b: 1, kf_b: 19, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 250, agent_b: 1, kf_b: 20, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 250, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 251, agent_b: 1, kf_b: 19, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 251, agent_b: 1, kf_b: 20, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 251, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 252, agent_b: 1, kf_b: 21, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 252, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 252, agent_b: 1, kf_b: 64, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 253, agent_b: 1, kf_b: 29, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 253, agent_b: 1, kf_b: 31, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 253, agent_b: 1, kf_b: 64, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 254, agent_b: 1, kf_b: 31, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 254, agent_b: 1, kf_b: 32, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 254, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 255, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 255, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 255, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 256, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 256, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 257, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 257, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 258, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 258, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 258, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 259, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 259, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 259, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 260, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 260, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 260, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 261, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 261, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 261, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 262, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 262, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 262, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 263, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 263, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 263, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 264, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 264, agent_b: 1, kf_b: 36, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 264, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 265, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 265, agent_b: 1, kf_b: 35, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 265, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 266, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 266, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 267, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 267, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 267, agent_b: 1, kf_b: 37, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 268, agent_b: 1, kf_b: 32, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 268, agent_b: 1, kf_b: 33, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 268, agent_b: 1, kf_b: 34, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 269, agent_b: 1, kf_b: 31, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 269, agent_b: 1, kf_b: 32, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 270, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 270, agent_b: 1, kf_b: 67, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 270, agent_b: 1, kf_b: 68, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 271, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 271, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 271, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 272, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 272, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 272, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 273, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 273, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 273, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 274, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 274, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 274, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 275, agent_b: 1, kf_b: 22, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 275, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 275, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 276, agent_b: 1, kf_b: 23, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 276, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 276, agent_b: 1, kf_b: 67, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 277, agent_b: 1, kf_b: 24, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 277, agent_b: 1, kf_b: 59, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 277, agent_b: 1, kf_b: 68, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 278, agent_b: 1, kf_b: 69, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 279, agent_b: 1, kf_b: 71, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 279, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 279, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 280, agent_b: 1, kf_b: 71, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 280, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 280, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 281, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 281, agent_b: 1, kf_b: 73, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 281, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 282, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 282, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 282, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 283, agent_b: 1, kf_b: 73, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 283, agent_b: 1, kf_b: 74, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 283, agent_b: 1, kf_b: 75, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 284, agent_b: 1, kf_b: 50, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 284, agent_b: 1, kf_b: 51, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 284, agent_b: 1, kf_b: 73, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 285, agent_b: 1, kf_b: 50, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 285, agent_b: 1, kf_b: 51, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 285, agent_b: 1, kf_b: 52, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 286, agent_b: 1, kf_b: 50, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 286, agent_b: 1, kf_b: 51, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 286, agent_b: 1, kf_b: 52, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 287, agent_b: 1, kf_b: 51, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 287, agent_b: 1, kf_b: 52, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 287, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 288, agent_b: 1, kf_b: 53, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 288, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 288, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 289, agent_b: 1, kf_b: 71, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 289, agent_b: 1, kf_b: 72, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 289, agent_b: 1, kf_b: 76, t_s: 178.6, weight: 1}
+  - {agent_a: 0, kf_a: 294, agent_b: 1, kf_b: 72, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 295, agent_b: 1, kf_b: 54, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 295, agent_b: 1, kf_b: 55, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 295, agent_b: 1, kf_b: 72, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 296, agent_b: 1, kf_b: 72, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 297, agent_b: 1, kf_b: 54, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 297, agent_b: 1, kf_b: 55, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 297, agent_b: 1, kf_b: 72, t_s: 180.6, weight: 1}
+  - {agent_a: 0, kf_a: 298, agent_b: 1, kf_b: 54, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 298, agent_b: 1, kf_b: 55, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 298, agent_b: 1, kf_b: 72, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 299, agent_b: 1, kf_b: 55, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 300, agent_b: 1, kf_b: 55, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 301, agent_b: 1, kf_b: 55, t_s: 182.6, weight: 1}
+  - {agent_a: 0, kf_a: 302, agent_b: 1, kf_b: 55, t_s: 184.6, weight: 1}
+  - {agent_a: 0, kf_a: 303, agent_b: 1, kf_b: 55, t_s: 184.6, weight: 1}
+injected:
+ate_merged: {rmse_m: 0.0172369, frame_anchor: 0, merged_agents: 2, kf_merged: 616, kf_released: 616}
+ate_solo:
+  - {agent: 0, rmse_m: 0.0102104, keyframes: 351, prefix_unreleased: 0}
+  - {agent: 1, rmse_m: 0.0217186, keyframes: 265, prefix_unreleased: 0}
+endpoints:
+  - {agent: 0, first_tx: 873, retx_fragments: 0, acked: 613, delivered: 1011, duplicates: 0, decode_rejected: 0, expired: 0, superseded: 0, abandoned_reliable: 0}
+  - {agent: 1, first_tx: 553, retx_fragments: 0, acked: 553, delivered: 1331, duplicates: 0, decode_rejected: 0, expired: 0, superseded: 0, abandoned_reliable: 0}
+network: {sent: 26349, lost_link_down: 0, lost_random: 0, reordered: 0}
+outcome: consistent

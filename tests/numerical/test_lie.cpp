@@ -16,8 +16,15 @@ std::mt19937 Rng() { return std::mt19937(20260830u); }
 
 Vec3 RandomAxis(std::mt19937& g) {
     std::normal_distribution<double> n(0.0, 1.0);
-    Vec3 v(n(g), n(g), n(g));
+    Vec3 v{n(g), n(g), n(g)};
     return v.normalized();
+}
+
+// A random rotation vector: the axis first, then the angle. `RandomRotation(g, ang)` leaves the two draws unsequenced
+// (an overloaded operator is a call), so the same seed gave x86 and arm64 different vectors (D123).
+Vec3 RandomRotation(std::mt19937& g, std::uniform_real_distribution<double>& ang) {
+    const Vec3 axis = RandomAxis(g);
+    return axis * ang(g);
 }
 
 constexpr double kTight = 1e-12;
@@ -28,7 +35,7 @@ TEST(Hat, MatchesCrossProduct) {
     auto g = Rng();
     std::uniform_real_distribution<double> u(-3.0, 3.0);
     for (int i = 0; i < 100; ++i) {
-        Vec3 a(u(g), u(g), u(g)), b(u(g), u(g), u(g));
+        Vec3 a{u(g), u(g), u(g)}, b{u(g), u(g), u(g)};
         EXPECT_LT((Hat(a) * b - a.cross(b)).norm(), kTight);
     }
 }
@@ -37,7 +44,7 @@ TEST(Hat, VeeInverts) {
     auto g = Rng();
     std::uniform_real_distribution<double> u(-3.0, 3.0);
     for (int i = 0; i < 100; ++i) {
-        Vec3 a(u(g), u(g), u(g));
+        Vec3 a{u(g), u(g), u(g)};
         EXPECT_LT((Vee(Hat(a)) - a).norm(), kTight);
     }
 }
@@ -46,7 +53,7 @@ TEST(SO3, ExpProducesValidRotation) {
     auto g = Rng();
     std::uniform_real_distribution<double> ang(-3.0 * M_PI, 3.0 * M_PI);
     for (int i = 0; i < 200; ++i) {
-        const Mat3 R = SO3Exp(RandomAxis(g) * ang(g));
+        const Mat3 R = SO3Exp(RandomRotation(g, ang));
         EXPECT_LT((R.transpose() * R - Mat3::Identity()).norm(), 1e-13);
         EXPECT_NEAR(R.determinant(), 1.0, 1e-13);
     }
@@ -57,7 +64,7 @@ TEST(SO3, LogInvertsExp) {
     // Stay inside (-pi, pi), where log is the true inverse of exp.
     std::uniform_real_distribution<double> ang(-M_PI + 1e-6, M_PI - 1e-6);
     for (int i = 0; i < 500; ++i) {
-        const Vec3 phi = RandomAxis(g) * ang(g);
+        const Vec3 phi = RandomRotation(g, ang);
         EXPECT_LT((SO3Log(SO3Exp(phi)) - phi).norm(), 1e-11) << "phi norm " << phi.norm();
     }
 }
@@ -105,8 +112,8 @@ TEST(SE3, ExpLogRoundTrip) {
     std::uniform_real_distribution<double> pos(-10.0, 10.0);
     for (int i = 0; i < 500; ++i) {
         Vec6 xi;
-        xi.head<3>() = Vec3(pos(g), pos(g), pos(g));
-        xi.tail<3>() = RandomAxis(g) * ang(g);
+        xi.head<3>() = Vec3{pos(g), pos(g), pos(g)};
+        xi.tail<3>() = RandomRotation(g, ang);
         EXPECT_LT((SE3Log(SE3Exp(xi)) - xi).norm(), 1e-9) << "xi " << xi.transpose();
     }
 }
@@ -127,15 +134,15 @@ TEST(SE3, CompositionAndInverse) {
     std::uniform_real_distribution<double> pos(-10.0, 10.0);
     for (int i = 0; i < 200; ++i) {
         Vec6 a, b;
-        a.head<3>() = Vec3(pos(g), pos(g), pos(g));  a.tail<3>() = RandomAxis(g) * ang(g);
-        b.head<3>() = Vec3(pos(g), pos(g), pos(g));  b.tail<3>() = RandomAxis(g) * ang(g);
+        a.head<3>() = Vec3{pos(g), pos(g), pos(g)};  a.tail<3>() = RandomRotation(g, ang);
+        b.head<3>() = Vec3{pos(g), pos(g), pos(g)};  b.tail<3>() = RandomRotation(g, ang);
         const SE3 A = SE3Exp(a), B = SE3Exp(b);
 
         EXPECT_LT(((A * A.inverse()).matrix() - Mat4::Identity()).norm(), 1e-11);
         // Composition of transforms must agree with composition of matrices.
         EXPECT_LT(((A * B).matrix() - A.matrix() * B.matrix()).norm(), 1e-11);
         // Acting on a point must agree with the homogeneous product.
-        const Vec3 p(pos(g), pos(g), pos(g));
+        const Vec3 p{pos(g), pos(g), pos(g)};
         EXPECT_LT(((A * p) - (A.R * p + A.t)).norm(), kTight);
     }
 }
@@ -149,8 +156,8 @@ TEST(SE3, AdjointMovesPerturbationsBetweenFrames) {
     std::uniform_real_distribution<double> pos(-5.0, 5.0);
     for (int i = 0; i < 200; ++i) {
         Vec6 tv;
-        tv.head<3>() = Vec3(pos(g), pos(g), pos(g));
-        tv.tail<3>() = RandomAxis(g) * ang(g);
+        tv.head<3>() = Vec3{pos(g), pos(g), pos(g)};
+        tv.tail<3>() = RandomRotation(g, ang);
         const SE3 T = SE3Exp(tv);
 
         Vec6 xi;                      // small perturbation
@@ -170,8 +177,8 @@ TEST(SE3, AdjointIsMultiplicativeAndIdentityAtIdentity) {
     std::uniform_real_distribution<double> pos(-5.0, 5.0);
     for (int i = 0; i < 100; ++i) {
         Vec6 a, b;
-        a.head<3>() = Vec3(pos(g), pos(g), pos(g));  a.tail<3>() = RandomAxis(g) * ang(g);
-        b.head<3>() = Vec3(pos(g), pos(g), pos(g));  b.tail<3>() = RandomAxis(g) * ang(g);
+        a.head<3>() = Vec3{pos(g), pos(g), pos(g)};  a.tail<3>() = RandomRotation(g, ang);
+        b.head<3>() = Vec3{pos(g), pos(g), pos(g)};  b.tail<3>() = RandomRotation(g, ang);
         const SE3 A = SE3Exp(a), B = SE3Exp(b);
         EXPECT_LT((SE3Adjoint(A * B) - SE3Adjoint(A) * SE3Adjoint(B)).norm(), 1e-9);
     }
@@ -218,7 +225,7 @@ TEST(SE3, LeftJacobianInverseMatchesTheDefinition) {
         for (int rep = 0; rep < 4; ++rep) {
             const Vec3 axis = RandomAxis(g);
             Vec6 xi;
-            xi.head<3>() = Vec3(n(g), n(g), n(g)) *
+            xi.head<3>() = Vec3{n(g), n(g), n(g)} *
                            (rep % 2 ? 5.0 : 0.3);
             xi.tail<3>() = axis * a;
             const Mat6 an = SE3LeftJacobianInverse(xi);

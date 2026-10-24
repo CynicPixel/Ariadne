@@ -1,0 +1,4 @@
+ci_tiny 0 200 configs/mission/ablation_4.3/mission_v2_random.yaml
+ci_tiny 0 200 configs/mission/ablation_4.3/mission_v2_coverage_greedy.yaml
+ci_tiny 0 200 configs/mission/ablation_4.3/mission_v2_uncertainty_only.yaml
+ci_tiny 0 200 configs/mission/ablation_4.3/mission_v2_tare.yaml

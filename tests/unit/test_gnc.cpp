@@ -51,11 +51,11 @@ SE3 At(const Vec3& t, double yaw) {
 SE3 RandomPose(std::mt19937& g, double half_extent) {
     std::normal_distribution<double> n(0.0, 1.0);
     std::uniform_real_distribution<double> u(-half_extent, half_extent);
-    Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+    Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
     q.normalize();
     SE3 T;
     T.R = q.toRotationMatrix();
-    T.t = Vec3(u(g), u(g), u(g));
+    T.t = Vec3{u(g), u(g), u(g)};
     return T;
 }
 
@@ -249,7 +249,7 @@ TEST(Gnc, NearMissesAfterPcm) {
             for (int k = 0; k < 10; ++k) {
                 const auto [a, b] = s.loop_pairs[size_t(60 + k)];
                 Vec6 xi;
-                xi << err_t * Vec3(n(g), n(g), n(g)).normalized(), err_r * Vec3(n(g), n(g), n(g)).normalized();
+                xi << err_t * Vec3{n(g), n(g), n(g)}.normalized(), err_r * Vec3{n(g), n(g), n(g)}.normalized();
                 const SE3 bad = core::SE3Exp(xi) * (s.truth[size_t(a)].inverse() * s.truth[size_t(b)]);
                 near.push_back(s.Loop(g, a, b, &bad));
             }
@@ -341,7 +341,7 @@ TEST(Gnc, NearMissesWithoutPcmReported) {
         for (int k = 0; k < 10; ++k) {
             const auto [a, b] = s.loop_pairs[size_t(60 + k)];
             Vec6 xi;
-            xi << 0.5 * Vec3(n(g), n(g), n(g)).normalized(), 0.087 * Vec3(n(g), n(g), n(g)).normalized();
+            xi << 0.5 * Vec3{n(g), n(g), n(g)}.normalized(), 0.087 * Vec3{n(g), n(g), n(g)}.normalized();
             const SE3 bad = core::SE3Exp(xi) * (s.truth[size_t(a)].inverse() * s.truth[size_t(b)]);
             near.push_back(s.Loop(g, a, b, &bad));
         }
@@ -491,7 +491,7 @@ size_t AddEvent(Scenario& s, std::mt19937& g, const Event& ev) {
         bad = RandomPose(g, 5.0);
     } else {
         Vec6 xi;
-        xi << 0.5 * Vec3(n(g), n(g), n(g)).normalized(), 0.087 * Vec3(n(g), n(g), n(g)).normalized();
+        xi << 0.5 * Vec3{n(g), n(g), n(g)}.normalized(), 0.087 * Vec3{n(g), n(g), n(g)}.normalized();
         bad = core::SE3Exp(xi) * (s.truth[size_t(ev.a)].inverse() * s.truth[size_t(ev.b)]);
     }
     const size_t e = s.Loop(g, ev.a, ev.b, &bad);

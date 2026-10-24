@@ -1,0 +1,7 @@
+CPU_FEATURES_LINE=NEON FP16 *NEON_DOTPROD *NEON_FP16 *NEON_BF16
+threads=1
+  Version control:               5.0.0
+    Version control (extra):     5.0.0
+  Parallel framework:            pthreads
+    Custom HAL:                  YES (carotene (ver 0.0.1) KleidiCV (ver 26.03))
+  ONNX Runtime:                  NO

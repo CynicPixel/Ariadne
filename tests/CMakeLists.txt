@@ -27,6 +27,13 @@ target_link_libraries(test_numerical PRIVATE ariadne::core ariadne::perception a
 target_compile_definitions(test_numerical PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 gtest_discover_tests(test_numerical)
 
+# D123: no unsequenced random draws in a test fixture (the argument order differs between x86-64 and aarch64 GCC).
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME RngSequencing.NoUnsequencedDrawsInTests
+           COMMAND ${Python3_EXECUTABLE} -I ${CMAKE_SOURCE_DIR}/infra/scripts/check_rng_sequencing.py ${CMAKE_SOURCE_DIR}/tests)
+endif()
+
 add_executable(test_protocol
   protocol/test_serialization.cpp
   protocol/test_collab_protocol.cpp
@@ -78,9 +85,11 @@ if(OpenCV_FOUND)
     unit/test_exposure_glue.cpp
     unit/test_edge_verifier.cpp
     unit/test_multi_agent.cpp
+    unit/test_entry_gate.cpp
     unit/test_keyframe_spool.cpp
     unit/test_live_link.cpp
     unit/test_live_planner.cpp
+    unit/test_lockstep_gate.cpp
     unit/test_depth_eval.cpp
     unit/test_planning.cpp
     unit/test_xfeat_reference.cpp
@@ -112,6 +121,7 @@ if(OpenCV_FOUND)
     unit/test_egress.cpp
     unit/test_nbv.cpp
     unit/test_phase4_planner.cpp
+    unit/test_nbv_time.cpp
     unit/test_multiagent.cpp
     unit/test_allocation.cpp
     unit/test_visibility_graph.cpp

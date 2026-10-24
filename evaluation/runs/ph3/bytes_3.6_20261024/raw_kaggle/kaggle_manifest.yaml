@@ -1,0 +1,24 @@
+name: "a2-bytes36"
+platform: kaggle-cpu
+evidence: development (off-AWS; not phase-gate, COOL or judge-box timing evidence)
+commit: "13cad72c36806846450782d20fc77131572a30c2"
+kaggle_image: "gcr.io/kaggle-images/python@sha256:17b2fc7f27c25c6c2fd4230ec8e66097ab2b89fc88e1e4d6f338b72e1ee0bc3e"
+kaggle_zone: "asia-east1-a"
+opencv_dataset: "image ariadne/opencv-base:5.0.0 image_id sha256:ef2e39ab36559cdc381b76eebaa60dd87b0ee0b85d2b93637c046910d7c5e03b opencv_commit 40738fb16ceddb5fb3fea747585f7ce6abb0605b"
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+tests: "none"
+extra: "O=$CI_OUT/bytes; mkdir -p $O; export OPENCV_FOR_THREADS_NUM=4; M=.cache/models/aliked_lg_sim_ref; build/docker/cpp/runtime/ariadne_perf_bench bytes --stores-root build/bytes_inputs/stores --pairs-dir evaluation/runs/perf/pipeline_profile_20261024/inputs --collab-config configs/collab/collab_v2.yaml --seed 1 --aliked 1280x720=$M/aliked_n16_k1024_1280x720.onnx --lightglue $M/lightglue_aliked.onnx --out $O > $O/bench.log 2>&1; echo \"rc=$?\" >> $O/bench.log; (cd build/bytes_inputs/stores && sha256sum */seed1/*.bin) > $O/stores.SHA256SUMS; sha256sum $M/aliked_n16_k1024_1280x720.onnx $M/lightglue_aliked.onnx > $O/models.SHA256SUMS"
+inputs: [build/bytes_inputs/stores,.cache/models/aliked_lg_sim_ref]
+model_env: [ARIADNE_ALIKED_LG_SIM_REF=/work/.cache/models/aliked_lg_sim_ref]
+require_models: 0
+jobs: 4
+ctest_jobs: 4
+host: "4 vCPU, AMD EPYC 7B12, 31 GiB"
+cpu_flags: "avx2"
+build_rc: 0
+ctest_rc: not_run
+ctest_summary: ""
+ctest_skipped_or_not_run: 0
+extra_rc: 0
+exit: 0
+seconds: 2658

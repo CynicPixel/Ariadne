@@ -167,8 +167,8 @@ cmd_run() {
 
   # 1. The runtime listens first.
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work "${recon_env[@]}" \
-    -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)" \
-    -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator)" ] && echo true || echo false)" \
+    -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "payload:$(basename "$REPO_ROOT")")" \
+    -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator 2>/dev/null)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
     "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
@@ -230,6 +230,12 @@ async def main():
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
+  # D224: an external sampler (A2's profiling) beside the run - started after the containers, stopped with them.
+  SAMPLER_PID=""
+  if [ -n "${ARIADNE_SAMPLER:-}" ]; then
+    bash "$ARIADNE_SAMPLER" "$REPO_ROOT/$run/sampler" > "$REPO_ROOT/$run/sampler.log" 2>&1 &
+    SAMPLER_PID=$!
+  fi
   local rc; rc="$(docker wait "$rt")"
   docker logs "$rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
   docker logs "$sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
@@ -237,6 +243,7 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
   docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
   [ -z "$orch" ] || docker logs "$orch" > "$REPO_ROOT/$run/orchestrator.log" 2>&1 || true
   printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
+  [ -z "${SAMPLER_PID:-}" ] || kill "$SAMPLER_PID" 2>/dev/null || true
   stop_mine
   for c in "${CONTAINERS[@]}"; do docker rm "$c" >/dev/null 2>&1 || true; done
   CONTAINERS=()
@@ -255,7 +262,7 @@ cmd_replay() {
   [ -f "$REPO_ROOT/$run/planner_config.yaml" ] && extra+=(--planner-config "$run/planner_config.yaml")
   [ -f "$REPO_ROOT/$run/shadow_map_config.yaml" ] && extra+=(--shadow-map-config "$run/shadow_map_config.yaml")
   for i in 1 2; do
-    docker run --rm --memory=4g --memory-swap=4g -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
+    docker run --rm --memory="${ARIADNE_RT_MEM:-4g}" --memory-swap="${ARIADNE_RT_MEM:-4g}" -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
       --scene "$scene" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
       --mission-config configs/mission/mission_v1.yaml --live-config "$cfg" \
       --out "$run/replay$i" --replay "$run/$live_dir/inputs.mcap" "${extra[@]}" \

@@ -43,11 +43,11 @@ Mat6 Diag(double st, double sr) {
 SE3 RandomPose(std::mt19937& g, double half_extent) {
     std::normal_distribution<double> n(0.0, 1.0);
     std::uniform_real_distribution<double> u(-half_extent, half_extent);
-    Eigen::Quaterniond q(n(g), n(g), n(g), n(g));
+    Eigen::Quaterniond q{n(g), n(g), n(g), n(g)};
     q.normalize();
     SE3 T;
     T.R = q.toRotationMatrix();
-    T.t = Vec3(u(g), u(g), u(g));
+    T.t = Vec3{u(g), u(g), u(g)};
     return T;
 }
 

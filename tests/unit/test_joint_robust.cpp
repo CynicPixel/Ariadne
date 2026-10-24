@@ -180,7 +180,7 @@ TEST(JointRobust, SharedGravityRemovesAnInterAgentTiltBias) {
             for (size_t k = 0; k < chain.size(); k += 2) {
                 GravityPrior p;
                 p.keyframe = chain[k];
-                p.g_C = (core::SO3Exp(s * Vec3(nz(gen), nz(gen), 0)) * (j.truth[chain[k]].R.transpose() * kDown))
+                p.g_C = (core::SO3Exp(s * Vec3{nz(gen), nz(gen), 0}) * (j.truth[chain[k]].R.transpose() * kDown))
                             .normalized();
                 p.g_ref_W = kDown;
                 p.information = Eigen::Matrix2d::Identity() / (s * s);

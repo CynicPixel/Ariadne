@@ -70,6 +70,15 @@ if(OpenCV_FOUND)
   add_executable(ariadne_dnn_timing tools/ariadne_dnn_timing.cpp)
   target_link_libraries(ariadne_dnn_timing PRIVATE ariadne::perception_opencv opencv_imgcodecs)
 
+  # Pipeline profile (A2, 2026-10-24; measurement only): the keyframe inputs of the knob study, and the DNN bench
+  # (engine / thread / input-size / LightGlue-K timing + the knobs' verdicts through the fleet's verify path).
+  add_executable(ariadne_perf_kfdump tools/ariadne_perf_kfdump.cpp)
+  target_link_libraries(ariadne_perf_kfdump PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+  add_executable(ariadne_perf_bench tools/ariadne_perf_bench.cpp)
+  target_link_libraries(ariadne_perf_bench PRIVATE
+    ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
+
   # 2.1 hard-pair evaluation: loop-candidate verification (PERCEPTION_2.1 §12.4). Offline, no runner hunk.
   add_executable(ariadne_loop_verify tools/ariadne_loop_verify.cpp)
   target_link_libraries(ariadne_loop_verify PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
@@ -90,6 +99,9 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_collab_sim PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_collab_sim RUNTIME DESTINATION bin COMPONENT ariadne)
+  # D178 calibration of the known-entry gate (scene 1 only, pre-registered).
+  add_executable(ariadne_entry_nees tools/ariadne_entry_nees.cpp)
+  target_link_libraries(ariadne_entry_nees PRIVATE ariadne::runtime_opencv ariadne::slam_opencv)
   # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (LIVE_COLLAB §1).
   add_executable(ariadne_collab_worker tools/ariadne_collab_worker.cpp)
   target_link_libraries(ariadne_collab_worker PRIVATE

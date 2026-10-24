@@ -1,0 +1,2 @@
+[ perf record: Woken up 114 times to write data ]
+[ perf record: Captured and wrote 30.210 MB /opt/ariadne/results/replay_asis/sampler/perf.data (543597 samples) ]

@@ -14,6 +14,8 @@ refine_passes: 2                # D170
 local_encoding: int8            # arch §15.7 default (per-keyframe scale); fp16 = the ablation row. D171: identical
                                 # LightGlue match sets to fp32 on the D90 sim pairs (LocalDescriptorCodec test)
 robust: true                    # PCM -> chordal re-init -> GNC-TLS (D76); false = the plain-PGO ablation row
+entry_gate: {enabled: false, chi2: 22.4577, entry_sigma_m: 0.10, entry_sigma_deg: 2.0, kappa: 2.9447}   # D178: known-start
+                                # Mahalanobis gate (chi2_6 0.999; kappa from the scene-1 NEES calibration); default off
 retrieval:
   min_score: 0.8                # Swarm-SLAM's stereo similarity_threshold (cslam_experiments kitti_stereo.yaml, on
                                 # CosPlace, EigenPlaces' predecessor from the same group); sim check via edges.csv

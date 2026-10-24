@@ -1,0 +1,4 @@
+ariadne-orchestrator:1 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-orchestrator:live-a007806eb911 sha256:a007806eb911d6ad4dde88cab373f2b585973415bc585a088a2a77b5ef2c0f92
+ariadne/core-dev:dev 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:live-8668bd7ece68 sha256:8668bd7ece68de59029fc47289e0034a0647f2dee1c60f96ac52a999e88017fb
+ariadne-console:1 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-console:live-6fb2e1a366ee sha256:6fb2e1a366ee2e1cdce7173dc06d45f0ba5c1c904c1adf59a63bca3575b7b0da
+ariadne/sim:dev 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-sim:live-8b780f52cb9a sha256:8b780f52cb9a1d48c142e176e1690dc5373f238feb606bb6e869aba933df33d9

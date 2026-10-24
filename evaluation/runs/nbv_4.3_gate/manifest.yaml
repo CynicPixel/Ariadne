@@ -10,7 +10,7 @@ real_time_factor: 0 (unpaced) + D168 estimator_processes   # the sim paces the l
 scenes: [ci_tiny, maze_short]
 seeds: [0, 1, 2]
 mission_s: 200
-policies: [ariadne, coverage_greedy, uncertainty_only, random]   # configs/mission/gate/mission_v2_<policy>.yaml
+policies: [ariadne, coverage_greedy, uncertainty_only, random, tare, nearest_frontier_1.8]   # configs/mission/gate/mission_v2_<policy>.yaml; "-" = 1.8
 runs: runs.txt
 scorer: python/analysis/gate_coverage.py
-not_in_this_set: [tare, "-" (1.8 nearest-frontier)]   # b09-b12, the 4.6 rows; separate record
+policies_4_6: [tare, nearest_frontier_1.8]   # b09-b12 (configs mission_v2_tare.yaml and "-" = the 1.8 placeholder), same rig and commit

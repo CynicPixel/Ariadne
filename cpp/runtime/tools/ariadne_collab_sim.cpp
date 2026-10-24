@@ -34,6 +34,7 @@
 #include "collaboration/protocol/outcome.hpp"
 #include "collaboration/retrieval/local_descriptor_codec.hpp"
 #include "perception/association/hard_pair_matcher.hpp"
+#include "planning/mission/frontier_mission.hpp"
 #include "runtime/agent/collab_fleet.hpp"
 #include "runtime/agent/collab_store.hpp"
 #include "runtime/datasets/scene_walls.hpp"
@@ -151,6 +152,12 @@ int main(int argc, char** argv) {
                 return r->gt_T_W_B * r->T_B_C;
             },
             &ecsv);
+        if (cfg.entry_gate.enabled) {   // D178 known starts: the briefing's entry placements (scene entrances), not GT
+            const auto T_W_O = planning::mission::EntryPoses(scene, int(fleet.size()));
+            std::map<ac::AgentId, core::SE3> entry;
+            for (ac::AgentId a : fleet) entry[a] = T_W_O.at(size_t(a));
+            fleet_.SetEntryPoses(entry);
+        }
         const auto& nodes = fleet_.nodes();
         std::map<ac::AgentId, ac::CollabNode*> node_of;
         for (const auto& n : nodes) node_of[n->self()] = n.get();
@@ -196,7 +203,7 @@ int main(int argc, char** argv) {
         const auto cum = [&](bool first_only) {
             uint64_t s = 0;
             for (const auto& r : comms.ledger().Records())
-                if (!first_only || !r.retransmit) s += r.wire_bytes;
+                if (!first_only || !(r.retransmit || r.resend)) s += r.wire_bytes;
             return s;
         };
         const int64_t dt = int64_t(std::llround(cfg.dt_s * 1e9));
@@ -225,12 +232,20 @@ int main(int argc, char** argv) {
         // --- outputs -------------------------------------------------------------------------------------------
         {
             std::ofstream l(fs::path(out) / "ledger.csv");
-            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit,resync,"
+            l << "t_s,sender,receiver,class,payload_bytes,transmitted_bytes,wire_bytes,compressed,retransmit,resync,resend,"
                  "predicted_wire_bytes\n";
             for (const auto& r : comms.ledger().Records())
                 l << 1e-9 * double(r.t.ns - t_first) << ',' << r.sender << ',' << r.receiver << ',' << int(r.type) << ','
                   << r.payload_bytes << ',' << r.transmitted_bytes << ',' << r.wire_bytes << ',' << int(r.compressed)
-                  << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << r.predicted_wire_bytes << '\n';
+                  << ',' << int(r.retransmit) << ',' << int(r.resync) << ',' << int(r.resend) << ',' << r.predicted_wire_bytes << '\n';
+        }
+        if (cfg.entry_gate.enabled) {
+            // D178: each inter-agent edge the gate tested, over all solves; the criterion uses the last decision.
+            std::ofstream g(fs::path(out) / "entry_gate.csv");
+            g << "agent_a,kf_a,agent_b,kf_b,tested,rejected,last_d2,last_accepted\n";
+            for (const auto& [k, e] : fleet_.entry_gate_edges())
+                g << std::get<0>(k) << ',' << std::get<1>(k) << ',' << std::get<2>(k) << ',' << std::get<3>(k) << ','
+                  << e.tested << ',' << e.rejected << ',' << e.last_d2 << ',' << int(e.last_accepted) << '\n';
         }
         std::vector<const ac::CollabNode*> cn;
         for (const auto& n : nodes) cn.push_back(n.get());
@@ -250,19 +265,25 @@ int main(int argc, char** argv) {
           << "\ncomms_scenario: " << scenario.name << "\nbudget: {bytes_per_s: " << cfg.budget_bytes_per_s
           << ", burst_bytes: " << cfg.budget_burst_bytes << ", source: \"" << cfg.budget_source << "\"}"
           << "\nresponse_ratio: {value: " << cfg.response_ratio << ", calibration_run: \"" << cfg.calibration_run << "\"}"
-          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nlocal_encoding: " << cfg.local_encoding
+          << "\nrobust: " << (cfg.robust ? "true" : "false") << "\nentry_gate: {enabled: "
+          << (cfg.entry_gate.enabled ? "true" : "false") << ", chi2: " << cfg.entry_gate.chi2 << ", entry_sigma_m: "
+          << cfg.entry_gate.entry_sigma_m << ", entry_sigma_rad: " << cfg.entry_gate.entry_sigma_rad << ", kappa: "
+          << cfg.entry_gate.kappa << ", tested: " << fleet_.entry_gate_stats().tested << ", rejected: "
+          << fleet_.entry_gate_stats().rejected << ", ungated: " << fleet_.entry_gate_stats().ungated << "}" << "\nlocal_encoding: " << cfg.local_encoding
           << "\nverify: {min_pnp_inliers: " << cfg.verify.min_pnp_inliers << ", calibration: \"" << cfg.verify_calibration
           << "\"}" << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";
         // Per class (COLLAB_3.2 §7, D171): first transmission outside resync (the I6 measured side) with the senders'
-        // per-message predictions; overhead rows apart: retransmissions and resends to a new broker (resync).
-        struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, predicted_msgs = 0;
+        // per-message predictions; overhead rows apart: retransmissions, resends to a new broker (resync) and protocol
+        // re-sends of a request id (D180).
+        struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, resend = 0, predicted_msgs = 0;
                             double predicted = 0; };
         std::map<int, ClassBytes> cls;
         for (const auto& r : comms.ledger().Records()) {
             ClassBytes& c = cls[int(r.type)];
             if (r.retransmit) c.retx += r.wire_bytes;
             else if (r.resync) c.resync += r.wire_bytes;
+            else if (r.resend) c.resend += r.wire_bytes;
             else {
                 ++c.msgs, c.wire += r.wire_bytes, c.transmitted += r.transmitted_bytes;
                 if (r.predicted_wire_bytes >= 0) ++c.predicted_msgs, c.predicted += r.predicted_wire_bytes;
@@ -272,7 +293,7 @@ int main(int argc, char** argv) {
         for (const auto& [k, c] : cls)
             y << "  - {class: " << k << ", messages: " << c.msgs << ", wire_first: " << c.wire << ", transmitted_first: "
               << c.transmitted << ", predicted_first: " << (c.predicted_msgs == c.msgs && c.msgs ? c.predicted : -1.0)
-              << ", wire_retransmit: " << c.retx << ", wire_resync: " << c.resync << "}\n";
+              << ", wire_retransmit: " << c.retx << ", wire_resync: " << c.resync << ", wire_resend: " << c.resend << "}\n";
         y << "total_wire_bytes: {first: " << cum(true) << ", all: " << cum(false) << "}\n";
         double pred_req = 0, pred_resp = 0;
         uint64_t edges_verified = 0, solves = 0, cands = 0, selected = 0, expired = 0, uncal = 0, unadv = 0, changes = 0,

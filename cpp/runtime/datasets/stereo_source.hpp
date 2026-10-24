@@ -28,6 +28,7 @@
 #include "core/random/seed.hpp"
 #include "perception/degradation/degradation_config.hpp"
 #include "perception/degradation/lens.hpp"
+#include "perception/degradation/lens_parallel.hpp"
 #include "perception/radiometric/flat_field.hpp"
 #include "perception/rgbd/depth_stereo.hpp"
 #include "perception/stereo/camera_model.hpp"
@@ -265,7 +266,9 @@ inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t
 // --- Simulator recording ---------------------------------------------------------
 
 /// Raw stereo frame assembly from the sim's CDR images, shared by the bag replay (SimSource) and the live runtime
-/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41) -> D (2.2, when set) -> gray, then pair
+/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41; map null = lens off, the frame stays
+/// the clean pinhole render - the live runtime's default since the D41 amendment, D227) -> D (2.2, when set) ->
+/// gray, then pair
 /// left/right by header stamp. Feed() one image message at a time, in delivery order.
 ///   strict (bags): a pair completing before an older pending stamp means a frame is missing -> throws.
 ///   lenient (live): the older, unpaired frames are dropped and counted (unpaired()); the run goes on.
@@ -280,13 +283,21 @@ class SimFrameAssembler {
 public:
     using Degrade = SimDegrade;
 
-    SimFrameAssembler(const perception::LensMap& map, uint32_t agent, std::string t_left, std::string t_right,
+    SimFrameAssembler(const perception::LensMap* map, uint32_t agent, std::string t_left, std::string t_right,
                       bool strict, Degrade d = {})
         : map_(map), agent_(agent), t_left_(std::move(t_left)), t_right_(std::move(t_right)), strict_(strict), d_(d) {}
 
-    /// Returns true if a frame was emitted through on_frame.
-    bool Feed(std::string_view topic, const uint8_t* data, size_t size,
-              const std::function<void(const StereoFrame&)>& on_frame) {
+    /// One decoded, lens/degrade/gray-processed image: the per-message half of Feed (D229), safe to build on a
+    /// dedicated ingest thread while Apply pairs and emits on the VO thread. The only cross-message state Ingest
+    /// touches is D's per-side arrival counter, so Ingest calls must stay in delivery order (one ingest thread).
+    struct Ingested {
+        bool left = false;
+        int64_t t_ns = 0;
+        cv::Mat gray;
+        cv::Mat rgb;   // left only: the post-lens/degrade RGB (console + splat tee)
+    };
+
+    Ingested Ingest(std::string_view topic, const uint8_t* data, size_t size) {
         const bool left = topic == t_left_;
         if (!left && topic != t_right_) throw std::logic_error("sim: assembler fed a foreign topic");
         const auto im = ros_cdr::DecodeImage(data, size);
@@ -296,14 +307,22 @@ public:
         for (uint32_t r = 0; r < im.height; ++r) {
             std::memcpy(&clean.data[size_t(r) * im.width * 3], &im.data[size_t(r) * im.step], im.width * 3);
         }
-        core::ImageU8 seen = perception::ApplyLens(clean, map_);
+        core::ImageU8 seen = map_ ? perception::ApplyLensParallel(clean, *map_) : std::move(clean);
         if (d_.params) {
             const int c = left ? 0 : 1;
             seen = perception::DegradeParallel(seen, *d_.params, d_.seed[c], arrived_[c]++, d_.threads);
         }
-        cv::Mat gray;
-        cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), gray, cv::COLOR_RGB2GRAY);
-        const int64_t t = im.header.stamp.ns();
+        Ingested out;
+        out.left = left;
+        out.t_ns = im.header.stamp.ns();
+        cv::cvtColor(cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()), out.gray, cv::COLOR_RGB2GRAY);
+        if (left) out.rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
+        return out;
+    }
+
+    /// Pairing + emission (VO thread). Returns true if a frame was emitted through on_frame.
+    bool Apply(Ingested&& in, const std::function<void(const StereoFrame&)>& on_frame) {
+        const int64_t t = in.t_ns;
         if (t <= last_emitted_) {   // a side arriving after its stamp was emitted or dropped
             if (strict_) throw std::runtime_error("sim: image at " + std::to_string(t) + " after its stamp was emitted");
             ++unpaired_;
@@ -311,8 +330,8 @@ public:
         }
         StereoFrame& f = pending_[t];
         f.t_ns = t;
-        (left ? f.left : f.right) = gray;
-        if (left) f.left_rgb = cv::Mat(int(im.height), int(im.width), CV_8UC3, seen.data.data()).clone();
+        (in.left ? f.left : f.right) = in.gray;
+        if (in.left) f.left_rgb = in.rgb;
         if (f.left.empty() || f.right.empty()) return false;
         // Complete pair: it must be the oldest pending stamp, or a frame went missing.
         if (pending_.begin()->first != t) {
@@ -334,12 +353,18 @@ public:
         return true;
     }
 
+    /// Returns true if a frame was emitted through on_frame (= Apply(Ingest(...)), the single-threaded shape).
+    bool Feed(std::string_view topic, const uint8_t* data, size_t size,
+              const std::function<void(const StereoFrame&)>& on_frame) {
+        return Apply(Ingest(topic, data, size), on_frame);
+    }
+
     size_t emitted() const { return n_; }
     size_t pending() const { return pending_.size(); }
     size_t unpaired() const { return unpaired_; }
 
 private:
-    const perception::LensMap& map_;
+    const perception::LensMap* map_;
     uint32_t agent_;
     std::string t_left_, t_right_;
     bool strict_;
@@ -631,7 +656,7 @@ public:
                     scene_params->radiance_scale *= event;
                 }
                 for (int c = 0; c < 2; ++c) {
-                    core::ImageU8 seen = perception::ApplyLens(r.img[c], map_);
+                    core::ImageU8 seen = perception::ApplyLensParallel(r.img[c], map_);
                     if (degradation_) {
                         seen = perception::DegradeParallel(seen, depth_seen[c], scene_params ? *scene_params : *degradation_,
                                                            seed_[c], n, threads_);

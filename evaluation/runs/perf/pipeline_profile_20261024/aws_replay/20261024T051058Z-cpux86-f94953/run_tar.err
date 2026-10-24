@@ -1,0 +1,3 @@
+tar: shadow_map_config.yaml: Not found in archive
+tar: Exiting with failure status due to previous errors
+aws 0 pigz 0 tar 2

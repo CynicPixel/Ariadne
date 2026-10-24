@@ -1,0 +1,6 @@
+outcome: explicitly_incomplete
+corrupt:
+incomplete:
+  - "agent 1 (member of (31,a803617659589552,b0) adopted by agent 0) adopted a different epoch"
+  - "agent 0: reliable class 6 key 26 to 1 unacked (last sent 1.620000 s ago)"
+  - "agent 0: reliable class 6 key 27 to 1 unacked (last sent 5.620000 s ago)"

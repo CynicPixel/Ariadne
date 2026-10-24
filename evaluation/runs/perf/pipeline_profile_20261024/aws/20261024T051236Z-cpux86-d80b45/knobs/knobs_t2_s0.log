@@ -1,0 +1,3 @@
+[ WARN:0@0.031] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+[ WARN:0@0.723] global net_impl_backend.cpp:345 setPreferableTarget Targets are not supported by the new graph engine for now
+knobs: 60 pairs x 1 settings + store, 89 keyframes, threads 2

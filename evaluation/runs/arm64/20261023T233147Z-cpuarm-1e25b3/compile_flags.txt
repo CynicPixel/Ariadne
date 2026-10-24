@@ -1,0 +1,5 @@
+    113   FLAGS = -O3 -DNDEBUG -std=c++17 -fPIE -ffp-contract=off
+     71   FLAGS = -O3 -DNDEBUG -std=c++17 -fPIC -ffp-contract=off
+     37   FLAGS = -O3 -DNDEBUG -std=c++17 -fPIE -ffp-contract=off -Wall -pedantic -Wextra -Wno-unused-parameter -Wold-style-cast -fsigned-char -Wnon-virtual-dtor -Wunused-result -Wunused-parameter -Werror=unused-parameter -Wmissing-declarations -Wzero-as-null-pointer-constant -faligned-new -Wextra-semi
+     30   FLAGS = -Wall -Wextra -Wundef -Wshadow -Wcast-align -Wcast-qual -Wstrict-prototypes -Wa,--noexecstack -O3 -DNDEBUG -fPIC -ffp-contract=off -DZSTD_DISABLE_ASM
+     27   FLAGS = -O3 -DNDEBUG
