@@ -119,6 +119,7 @@ if(OpenCV_FOUND)
     unit/test_egress.cpp
     unit/test_nbv.cpp
     unit/test_phase4_planner.cpp
+    unit/test_nbv_time.cpp
     unit/test_multiagent.cpp
     unit/test_allocation.cpp
     unit/test_visibility_graph.cpp

@@ -63,6 +63,15 @@ inline planning::Phase4Params LoadPhase4Params(const std::string& path, const mi
     p.nbv.frustum.grid = n["nbv"]["rays_grid"].as<int>();
     p.nbv.frustum.rank_grid = n["nbv"]["rank_grid"].as<int>();
     p.nbv.tare_subspace_m = n["nbv"]["tare_subspace_m"].as<double>();
+    // D117/D118/D120 keys (NBV_4.3 §15.6); absent = the gated behaviour (cost_time none, view_yaw target, no log).
+    const std::string ct = n["nbv"]["cost_time"] ? n["nbv"]["cost_time"].as<std::string>() : "none";
+    if (ct == "exact_command") p.nbv.cost_time = true;
+    else if (ct != "none") throw std::invalid_argument("planner config: nbv.cost_time " + ct);
+    const std::string vy = n["nbv"]["view_yaw"] ? n["nbv"]["view_yaw"].as<std::string>() : "target";
+    if (vy == "target+arrival") p.nbv.arrival_twins = true;
+    else if (vy != "target") throw std::invalid_argument("planner config: nbv.view_yaw " + vy);
+    if (p.nbv.arrival_twins && !p.nbv.cost_time) throw std::invalid_argument("planner config: view_yaw needs cost_time");
+    p.nbv.term_log = n["nbv"]["term_log"] && n["nbv"]["term_log"].as<bool>();
     p.nbv.rho_r = mc.rho_r, p.nbv.rho_a = mc.rho_a, p.nbv.escape_m = escape_m;
     p.refused_radius_m = refused_radius_m;
     p.max_command_m = max_command_m;
@@ -96,7 +105,7 @@ class A1Planner : public MissionPlanner {
 public:
     A1Planner(const mis::MissionConfig& mc, const mis::Briefing& b, const planning::Phase4Params& p, std::string policy,
               double autonomous_threshold, int n_agents = 2)
-        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold),
+        : b_(b), policy_(std::move(policy)), threshold_(autonomous_threshold), term_log_(p.nbv.term_log),
           planner_(Phase4BriefFrom(mc, b), p, n_agents) {}
 
     size_t Integrate(const KeyframeInput& k) override { return planner_.Integrate(k.agent, k.t_ns, ToDepthFrame(k)); }
@@ -107,6 +116,7 @@ public:
             in[a].active = ctx.active[a];
             in[a].linked = true;
             in[a].position = ctx.position[a];
+            in[a].yaw = ctx.yaw[size_t(a)];
             in[a].flown_m = ctx.flown_m[a];
             for (const auto& [k, g] : ctx.refused_goals) if (k == a) in[a].refused_goals.push_back(g);
         }
@@ -162,7 +172,9 @@ public:
             ao.classical = takeable ? j : OtherTask(out, a, -1, threshold_);
             out.joint[a] = j;
             tj << (a ? "," : "") << "{\"reserve_rule\":" << (ap.nbv.reserve_rule ? "true" : "false")
-               << ",\"supervisor_event\":\"" << ap.nbv.supervisor_event << "\",\"tare\":\"" << ap.nbv.tare << "\"}";
+               << ",\"supervisor_event\":\"" << ap.nbv.supervisor_event << "\",\"tare\":\"" << ap.nbv.tare << "\"";
+            if (term_log_) TermLog(ap.nbv, tj);
+            tj << "}";
         }
         tj << "]}";
         out.trace_json = tj.str();
@@ -183,6 +195,7 @@ public:
         in.active = ctx.active[size_t(self)];
         in.linked = linked;   // D174: the fleet's comms state; true before collab runs (coordination-only rows)
         in.position = ctx.position[size_t(self)];
+        in.yaw = ctx.yaw[size_t(self)];
         in.flown_m = ctx.flown_m[size_t(self)];
         for (const auto& [k, g] : ctx.refused_goals) if (k == self) in.refused_goals.push_back(g);
         std::vector<planning::RegionDirective> dirs;
@@ -227,6 +240,26 @@ public:
     const planning::Phase4Plan& LastPlan() const { return plan_; }
 
 private:
+    /// D120: every candidate's normalised IG terms, C_path and C_time (raw, with their p90 scales), turn time and U,
+    /// in the options' final order, so a term's share of each decision is read from the trace, not inferred.
+    static void TermLog(const planning::NbvPlan& nb, std::ostringstream& tj) {
+        // time_model: what time_s means in this row (D117's command time, or the gated path / speed), so the
+        // predicted-vs-realised analysis never mixes the two.
+        tj << ",\"terms\":{\"time_model\":\"" << (nb.timed ? "exact_command" : "path_over_speed")
+           << "\",\"lambda_path\":" << nb.lambda_path << ",\"lambda_t\":" << nb.lambda_t << ",\"path_scale\":"
+           << nb.path_scale << ",\"time_scale\":" << nb.time_scale << ",\"unroutable\":" << nb.unroutable
+           << ",\"candidates\":[";
+        for (size_t i = 0; i < nb.options.size(); ++i) {
+            const auto& t = nb.options[i];
+            tj << (i ? "," : "") << "{\"task\":" << t.task_id << ",\"xy\":[" << t.goal_xy.first << "," << t.goal_xy.second
+               << "],\"yaw\":" << t.goal_yaw << ",\"arrival\":" << (t.keep_heading ? "true" : "false") << ",\"ig\":[";
+            for (int k = 0; k < 5; ++k) tj << (k ? "," : "") << t.ig_norm[size_t(k)];
+            tj << "],\"gain\":" << t.gain << ",\"path_m\":" << t.path_m << ",\"time_s\":" << t.cost[3]
+               << ",\"turn_s\":" << t.turn_s << ",\"u\":" << t.utility << "}";
+        }
+        tj << "]}";
+    }
+
     /// The agent's own best takeable option under the risk gate (the uncoordinated fallback's "classical").
     int OwnBest(const AgentOptions& ao) const {
         for (int i = 0; i < int(ao.options.size()); ++i)
@@ -237,6 +270,7 @@ private:
     mis::Briefing b_;
     std::string policy_;
     double threshold_;
+    bool term_log_;
     planning::Phase4Planner planner_;
     planning::Phase4Plan plan_;
 };

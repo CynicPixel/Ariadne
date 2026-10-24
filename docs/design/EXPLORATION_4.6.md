@@ -240,3 +240,29 @@ and OPEN, and no report claims FAR ≤ lattice.
   change is left to the caller.
 - `DStarLite::Update` applies every changed cell on every replan. `new_obstacle` and the other triggers are trace
   labels only.
+
+## 12. Gate result: the TARE row (2026-10-24; `evaluation/runs/nbv_4.3_gate/`, NBV_4.3 §14.1)
+
+These are 6 TARE runs plus 6 runs of the 1.8 nearest-frontier row, on the same rig and commit as the 4.3 rows: AWS
+c7i with llvmpipe, RTF 0 with D168, a1p `d59ee3d`, every job exit 0.
+
+**TARE-inspired scheduling (D116) is level with Ariadne on AUC and not ahead of every row.**
+
+| | ci_tiny AUC | maze_short AUC |
+|---|---|---|
+| tare | **0.895** | 0.443 |
+| ariadne | 0.884 | 0.440 |
+| coverage_greedy | 0.892 | **0.495** |
+| nearest_frontier_1.8 | 0.789 | 0.237 |
+
+- **ci_tiny** (about one 6 m subspace, so nearly local-only, as pre-registered in §6): TARE has the best AUC. It is
+  the best row at T = 60 s (0.901), below Ariadne from T = 80 s, and 0.960 against 0.962 at 200 s. This scene does not
+  test the global tour; it is a null result for TARE's global layer, not evidence for or against it.
+- **maze_short:** TARE is above Ariadne at T = 20 s and T = 80–160 s, and below it at 180–200 s (0.681 vs 0.757). It
+  is below coverage_greedy at every T.
+- **Per metre flown:** on ci_tiny, TARE and Ariadne are within 0.02 of each other at every point from 5 to 30 m. On
+  maze_short they are within 0.01 up to 20 m, then Ariadne is ahead (0.556 vs 0.535 at 25 m, 0.641 vs 0.592 at 30 m).
+- **The 1.8 row** (the D45 placeholder) is the fastest early on ci_tiny (0.522 at 20 s), then plateaus at 0.82. It is
+  last on both scenes by AUC.
+
+Neither 4.6 row changes the 4.3 verdict, which stays false.

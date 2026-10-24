@@ -5319,3 +5319,111 @@ form; the Bar-Shalom test, as in D178.
   replaces the single-seed bound.
   - Priors are drawn at σ/√info_scale; `Make(…, gen_scale)` defaults to 1 for the other tests.
   - Local x86: mean NEES **2.526** in [1.347, 2.803] (validated 2.53); tilt RMS 8.47 → 3.78°, reduced on 46/50.
+## 2026-10-24 — D117–D122 (A1, proposed; §49 preflight, docs only): the 4.3 time-axis loss is turning — charge the mover's executed time
+
+Full record: `docs/design/NBV_4.3.md` §15; literature `docs/design/lit/early_coverage.md`; evidence
+`evaluation/runs/nbv_4.3_gate/{time_budget,turn_back,turn_episodes}.{py,txt}` (the 36 gate runs' GT; no new run).
+
+**Cause, measured.**
+- Ariadne turns in place for 45–46 % of the mission and moves for 31–32 % (coverage-greedy: 31–42 % and 44–48 %), at
+  1.6–1.7 rad of yaw per metre against 0.7–1.1.
+- About half of that turning (47–50 %; 67 % in maze_short's first 60 s) is "face the waypoint, drive, turn back to the
+  view's yaw", because every view faces its target and views are sampled around it.
+- U(a) charges metres only, while one radian at ω_max 0.44 rad/s costs the time of 1.4 m.
+- No single turn exceeds 180° (the wrap is correct).
+
+**Decisions (proposed).**
+- **D117:** C_time = the duration of `PlanCommand` over the polyline `Route` will send, from the current heading.
+  This is the mover's own profile, on the planner's clearance [PROXY]. Predicted against realised time is measured
+  per row.
+  - §4's "time ∝ path" collapse is dropped for this rig, and the arch's separate C_motion/C_time terms return, with
+    weights summing to 1 at t = 0.
+  - [PAPER] Schmid 2020 Eq. 6 (execution time), FUEL Eq. 1 (time with yaw; max() there because a quadrotor yaws
+    while it flies), TARE Eq. 4 (a per-stop penalty for an in-place turner).
+- **D118:** every kept view also gets an arrival-heading twin (own IG, no final turn), and U chooses. [DESIGN]: no
+  surveyed planner keeps the arrival heading. FUEL's alternative (≤ 15 views at ≥ 0.8× coverage) is cited.
+- **D119 (defect, every Phase 4 row):** a command cut at `max_length_m` carries no final yaw. Today the rig turns to
+  the view's yaw mid-route.
+- **D120:** the trace logs each candidate's normalised IG terms, C_path, C_time and turn time.
+- **D121 (reserved):** efficiency over the local tour, Schmid's v_GN. Our linear `g − αc` was the worst form in their
+  Table V. Not part of this change.
+- **D122 (reserved):** one per-voxel gain scale (Schmid Eq. 5) instead of per-term p90. Decided on D120's log.
+- **D125 (defect, every Phase 4 row; a prerequisite of D117):** a view at the agent's own cell runs as an in-place
+  turn, not a hold.
+  - In ci_tiny seed 2 the same at-cell view was chosen for six barriers. `Route` returned an empty path, so the
+    agent held for 30 s.
+  - That one livelock carries most of ci_tiny's 40–60 s loss: on seeds 0 and 1 Ariadne is best at 60 s
+    (0.909 / 0.900).
+- **D126 (reserved):** TARE's commitment rule plus waypoint extension. Its L has to be re-derived for this rig first.
+
+**Pre-registered ablation (§15.5).** 7 rows × 2 scenes × 3 seeds = 42 lockstep runs:
+- the four Phase 4 baselines re-run with D119 and D125;
+- ariadne_v0, ariadne_t (D117) and ariadne_ta (D117 + D118);
+- the 1.8 row reused under a replay identity check.
+
+The claim is unchanged ("≥ every baseline at every T"), with a non-regression bound at 200 s and no tuning after
+the runs. Spend needs the maintainer's OK.
+
+## 2026-10-24 — D125/D119 implemented; D151 amended (NaN = turn here); §15.5 pre-registration amended before any run (A1)
+
+**D151 amendment (approved by M on design and by B, owner of the mover and the live loop).** A waypoint whose x or y
+is NaN means "the rig's current position": `PlanCommand` adds no face-turn and no move, only the final turn when the
+pose has a yaw.
+- Why a sentinel and not a finite goto: the mover plans from its GT pose, and the planner's estimate is centimetres
+  away. A finite waypoint there makes the rig first turn to face that offset, in any direction up to 180°, then
+  creep, then turn to the yaw. A tolerance on short moves would be a new constant. The sentinel needs none.
+- Every finite command is unchanged. A waypoint 1e-12 m away still takes the coincident rule (the final turn only),
+  and one 1 cm away still faces, moves and turns (`test_nbv_time`).
+- NaN survives the wire: `ros_cdr::PoseArray` doubles end to end, through the link, the bridge and gz (B).
+  `ClearanceAlong` is never reached, since there is no move.
+- The trace never prints the NaN (B's condition): a turn-here command is `"kind":"turn"`, `"waypoints_xy_m":[]`,
+  `"turn_yaw":<rad>`.
+
+**D125 as built.**
+- `Phase4Planner::Route` returns one (NaN, NaN) waypoint with the view's yaw when A* reaches the goal at the start
+  cell.
+- An unreachable goal still routes empty, and the loop holds.
+- With `face_frontier: false`, an at-cell view has nothing to execute and holds, stated in the trace.
+- Tests (`tests/unit/test_nbv_time.cpp`):
+  - the livelock geometry (eye 2 cm from the agent, inside its cell) routes as one turn-here waypoint;
+  - from 8 poses 3 cm around, it is exactly one `kTurn` of `PlanProfile(|Δyaw|)`;
+  - closed loop in miniature: integrating the frame the turn sees collapses the view's coverage (> 5×), so the view
+    stops winning.
+
+**D119 as built.**
+- `Route` returns a NaN yaw when it cuts the polyline at `max_command_m`, and the loop then sends no final yaw.
+- An uncut command keeps the view's yaw (test).
+
+**§15.5 amendments, written before any run:**
+- (a) **Replay identity check.** The "byte-identical to d59ee3d with every key off" wording contradicts the
+  always-on D119 and D125, so it was false by construction. The check is now:
+  - with every new key off, decisions and commands are identical to the base, except the enumerated records where a
+    cut command or an at-cell view occurs;
+  - the fixes fire exactly there.
+  The base is now feat/ph4-nagent after the main merge (`9efbdba`: main 4a12b50; B's D227 lens-off is NOT in it), not
+  d59ee3d.
+- (b) **Rig.** 8 rows × 6 = **48 development runs** (`configs/mission/ablation_4.3/runs_48.jobs`).
+  - The 1.8 row is re-run rather than reused, because the base commit changed (main merged into the tree; one commit is pinned for all 48 runs).
+  - A run counts only if every lockstep barrier is answered (`answer_timeouts` = 0) and the D152 reorder has no
+    timeouts.
+  - M first routed the runs off AWS (test-compute-session). It declined: no docker or gz on its kernels today, and
+    llvmpipe on 4 vCPU risks answer timeouts. So the runs go on the gate's own rig (AWS c7i, llvmpipe, slotq band
+    30+), with the maintainer's spend approval.
+  - Measured gate wall time: median 13.1 min per 200 s run (34 logged jobs), so ≈ 11–12 c7i.4xlarge spot-hours.
+- **Replay identity check, done before any run** (`evaluation/runs/nbv_4.3_ablation/replay_identity/`). The local
+  20 s ci_tiny recording (a1p `build/gate/local/repro_a`) was replayed with the new binary.
+  - **Keys off:** all 8 decisions have identical choices and commands. The only differences are new trace fields
+    from main and CBBA wire bytes 920 vs 904 (main's appended D175/D171 wire fields, not this change).
+  - That recording has no cut or at-cell command, so it does not exercise the D119/D125 fixes themselves; the unit
+    tests do.
+  - **Keys on (ariadne_ta):** the run completes and every trace record parses. Arrival twins win 7/8 decisions;
+    0 unroutable.
+- (c) The gated `ariadne` row (36-run gate) is compared to ariadne_v0 only as context: the base commit and the
+  fixes all differ.
+- (d)–(h), also before any run (NBV_4.3 §15.5):
+  - predicted-vs-realised C_time only on rows with `time_model: exact_command`;
+  - plan cost via `lockstep.jsonl` `wall_paused_s`, which includes the command round-trip;
+  - the first job, ci_tiny seed 2 ariadne_v0, is an abort check: turn commands accepted with one segment, no answer
+    timeouts, no hold at a won at-cell view;
+  - D119 evidence comes from the mover logs;
+  - one pinned commit for all 48 runs.

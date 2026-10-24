@@ -171,6 +171,36 @@ void TareSchedule(const cv::Mat& plan, const GridFrame& g, const Cell& me, const
 
 }  // namespace
 
+double CommandTime(const ViewCommand& c, double x, double y, double z, double heading, bool final_yaw, double yaw,
+                   const core::scripted::MotionLimits& L, const cv::Mat& clear_a, const GridFrame& g, double rho_a,
+                   double z_max, double* turn_s) {
+    using namespace core::scripted;
+    std::vector<Waypoint> path;
+    for (const auto& [wx, wy] : c.wp) path.push_back({wx, wy, z, false, 0.0});
+    if (!path.empty() && final_yaw && !c.cut) path.back().has_yaw = true, path.back().yaw = yaw;
+    if (std::isnan(heading)) {   // unknown: as if already facing the first move (or the final yaw of a turn here)
+        heading = path.empty() || std::isnan(path[0].x) ? (path.empty() ? 0.0 : path[0].yaw)
+                                                         : std::atan2(path[0].y - y, path[0].x - x);
+    }
+    const ClearanceFn clr = [&](double x0, double y0, double z0, double x1, double y1, double z1) {
+        const int n = std::max(int(std::ceil(std::hypot(x1 - x0, y1 - y0) / g.cell)), 1);
+        double cmin = 1e9;
+        for (int i = 0; i <= n; ++i) {   // every cell along the move, as the mover's ClearanceAlong
+            const Cell q = CellOf(g, x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n);
+            const bool in = q.r >= 0 && q.c >= 0 && q.r < clear_a.rows && q.c < clear_a.cols;
+            cmin = std::min(cmin, in ? double(clear_a.at<float>(q.r, q.c)) : 0.0);
+        }
+        return std::min({std::max(cmin, rho_a), z0, z1, z_max - std::max(z0, z1)});
+    };
+    double T = 0, turns = 0;
+    for (const Segment& s : PlanCommand({x, y, z, heading, 0.0}, 0.0, path, L, clr, "c_time")) {
+        T += s.duration;
+        if (s.kind == Segment::Kind::kTurn) turns += s.duration;
+    }
+    if (turn_s) *turn_s = turns;
+    return T;
+}
+
 double VoxelEntropy(const TsdfVoxel* v, double w_min) {
     if (!v || v->w <= w_min) return 1.0;
     return Hb(0.5 * std::exp(-double(v->w)));   // free 0.5 e^-w and occupied 1 - 0.5 e^-w have the same entropy
@@ -376,6 +406,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     // lambda schedule (D114): the path-proportional costs counted once.
     const double fe = std::min(1.0, st.e_used_m / p.e_total_m), ft = std::min(1.0, in.t_s / p.mission_T_s);
     out.lambda_path = (1.0 + (1.0 + fe * fe * fe) + (1.0 + ft * ft * ft)) / 3.0;
+    out.lambda_t = 1.0 + ft * ft * ft;
 
     // Scored at the commanded cell itself (rad 0): with the known-free plan space every commanded goal has the agent's
     // body clear, the practice of FUEL / NBVP / GBPlanner2, and the score belongs to the pose the agent is sent to.
@@ -544,6 +575,52 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     for (auto& s : per_target)
         for (auto& c : s) out.options.push_back(std::move(c));
 
+    // --- D117 executed-command time, D118 arrival twins (Ariadne policy, behind their keys) -----------------------
+    const bool timed = p.cost_time && p.policy == NbvPolicy::kAriadne && in.router;
+    out.timed = timed;
+    if (timed) {
+        const double z = st.position.z();
+        std::vector<TaskCandidate> kept, twins;
+        kept.reserve(out.options.size());
+        for (auto& c : out.options) {
+            const ViewCommand cmd = (*in.router)(c.goal_xy);
+            double t = 0, turn = 0;
+            bool ok = cmd.ok;
+            if (ok) {
+                try {
+                    t = CommandTime(cmd, st.position.x(), st.position.y(), z, in.heading, true, c.goal_yaw, p.motion,
+                                    tm.clear_a, g, p.rho_a, in.bounds.hi.z(), &turn);
+                } catch (const std::exception&) {
+                    ok = false;   // PlanCommand refused it (zero clearance): one view never aborts the plan
+                }
+            }
+            if (!ok) {
+                ++out.unroutable;
+                continue;
+            }
+            c.cost[3] = t, c.turn_s = turn;
+            // D118: a view the command reaches by a move is also offered at that move's heading, with no final turn.
+            if (p.arrival_twins && !cmd.cut && !cmd.wp.empty() && !std::isnan(cmd.wp.back().first)) {
+                const auto& b = cmd.wp.back();
+                const std::pair<double, double> a = cmd.wp.size() > 1 ? cmd.wp[cmd.wp.size() - 2]
+                                                                      : std::make_pair(st.position.x(), st.position.y());
+                TaskCandidate w = c;
+                w.goal_yaw = std::atan2(b.second - a.second, b.first - a.first);
+                w.keep_heading = true;
+                const IgCounts ig = RaycastIg(map, core::Vec3(c.goal_xy.first, c.goal_xy.second, p.sampler.z), w.goal_yaw,
+                                              p.frustum, envp, in.bounds, -1, peerp, in.footprints ? &g : nullptr);
+                w.ig_raw[kCoverage] = ig.coverage, w.ig_raw[kEntropy] = ig.entropy, w.ig_raw[kEgressConfidence] = ig.egress;
+                w.footprint = ig.footprint;
+                w.cost[3] = CommandTime(cmd, st.position.x(), st.position.y(), z, in.heading, false, 0.0, p.motion,
+                                        tm.clear_a, g, p.rho_a, in.bounds.hi.z(), &w.turn_s);
+                twins.push_back(std::move(w));
+            }
+            kept.push_back(std::move(c));
+        }
+        for (auto& w : twins) kept.push_back(std::move(w));
+        out.options = std::move(kept);
+    }
+
     // --- self-normalisation and utility (§21.3/§21.4, D114) ------------------------------------------------------
     std::array<double, 5> scale{};
     for (int k = 0; k < 5; ++k) {
@@ -554,6 +631,10 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     std::vector<double> vp, vb, vr;
     for (const auto& c : out.options) vp.push_back(c.path_m), vb.push_back(c.cost[1]), vr.push_back(c.cost[4]);
     const double sp = P90Scale(vp), sb = P90Scale(vb), sr = P90Scale(vr);
+    std::vector<double> vt;
+    for (const auto& c : out.options) vt.push_back(c.cost[3]);
+    const double st_ = timed ? P90Scale(vt) : 0.0;
+    out.path_scale = sp, out.time_scale = st_;
     core::PhiloxStream rng(p.random_seed, uint64_t(std::llround(in.t_s * 1000.0)), uint64_t(agent));
     for (auto& c : out.options) {
         c.gain = 0;
@@ -563,7 +644,14 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
         }
         const double cp = sp > 0 ? c.path_m / sp : 0.0, cb = sb > 0 ? c.cost[1] / sb : 0.0, cr = sr > 0 ? c.cost[4] / sr : 0.0;
         switch (p.policy) {
-            case NbvPolicy::kAriadne: c.utility = c.gain - out.lambda_path * cp - cb - cr; break;
+            case NbvPolicy::kAriadne:
+                if (timed) {   // D117: lambda_t's third prices the executed time; at t = 0 the weights still sum to 1
+                    const double ct = st_ > 0 ? c.cost[3] / st_ : 0.0;
+                    c.utility = c.gain - (out.lambda_path - out.lambda_t / 3.0) * cp - out.lambda_t / 3.0 * ct - cb - cr;
+                } else {
+                    c.utility = c.gain - out.lambda_path * cp - cb - cr;
+                }
+                break;
             case NbvPolicy::kCoverageGreedy: c.utility = c.ig_norm[kCoverage]; break;
             case NbvPolicy::kUncertaintyOnly: c.utility = c.ig_norm[kEntropy]; break;
             case NbvPolicy::kRandom: c.utility = rng.NextUniform(); break;

@@ -1,0 +1,4 @@
+ci_tiny 1 200 configs/mission/ablation_4.3/mission_v2_ariadne_v0.yaml
+ci_tiny 1 200 configs/mission/ablation_4.3/mission_v2_ariadne_t.yaml
+ci_tiny 1 200 configs/mission/ablation_4.3/mission_v2_ariadne_ta.yaml
+ci_tiny 1 200 -

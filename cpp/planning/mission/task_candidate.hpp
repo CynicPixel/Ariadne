@@ -52,6 +52,9 @@ struct TaskCandidate {
     std::array<double, 5> ig_norm{};                // divided by the candidate set's running p90 (self-normalised)
     double gain = 0;                                // G(a) = sum of the normalised terms (weights 1, §21.3)
     std::array<double, 5> cost{};                   // §21.4 C_motion, C_bandwidth, C_energy, C_time, C_risk
+                                                    // (C_time: path / speed; D117 on: the executed command, s)
+    double turn_s = 0;                              // D117/D120: the part of C_time spent turning in place, s
+    bool keep_heading = false;                      // D118 arrival twin: the command carries no final yaw
     double utility = 0;                             // U(a) = G - sum lambda_k C_k (λ scheduled, §21.4)
     // §23 gate input. risk = max(geometric, structural):
     //   geometric  the D158 bottleneck rule (what a responder would need to follow the agent there), from D111's
