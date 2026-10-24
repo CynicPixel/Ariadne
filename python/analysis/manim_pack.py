@@ -28,10 +28,20 @@ def read_jsonl(p):
 def export_scene(scene_dir: Path, out: Path) -> dict:
     sc = json.load(open(scene_dir / "scene.json"))
     walls = []
-    for s in sc.get("surfaces", []):
-        if s.get("kind") != "wall":
-            continue
-        walls.append({k: v for k, v in s.items() if k not in ("pixel_sha256",)})
+    # Geometry truth: each wall is one world-frame quad mesh (meshes/wall_*.obj) - two unique XY corners
+    # give the film its 2D segment; scene.json surfaces carry the names/sizes but no world pose.
+    for obj in sorted(scene_dir.glob("meshes/wall_*.obj")):
+        pts, zs = [], []
+        for line in open(obj):
+            if line.startswith("v "):
+                _, x, y, z = line.split()[:4]
+                pts.append((round(float(x), 4), round(float(y), 4)))
+                zs.append(float(z))
+        uniq = sorted(set(pts))
+        if len(uniq) >= 2:
+            (x0, y0), (x1, y1) = uniq[0], uniq[-1]
+            walls.append({"name": obj.stem, "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                          "height_m": round(max(zs) - min(zs), 3)})
     geo = {
         "scene_id": sc["scene_id"],
         "seed": sc["seed"],
@@ -61,16 +71,23 @@ def export_paths(run: Path, out: Path) -> dict:
     for r in read_jsonl(run / "telemetry.jsonl"):
         t = r.get("type")
         if t == "pose":
-            est.setdefault(r["agent"], []).append((r["t_ns"], r["xy_m"][0], r["xy_m"][1], r.get("yaw", "")))
+            est.setdefault(r["agent"], []).append((r["t_s"], r["xy"][0], r["xy"][1], r.get("yaw", "")))
         elif t == "gt_pose":
-            gt.setdefault(r["agent"], []).append((r["t_ns"], r["xy_m"][0], r["xy_m"][1], r.get("yaw", "")))
+            gt.setdefault(r["agent"], []).append((r["t_s"], r["xy"][0], r["xy"][1], r.get("yaw", "")))
     agents = sorted(set(est) | set(gt))
     for k in agents:
         for name, rows in (("est", est.get(k, [])), ("gt", gt.get(k, []))):
+            rows = sorted(rows)
+            thin, last_bin = [], None   # ~10 Hz for the film; the raw stream is per frame
+            for r in rows:
+                b = int(r[0] * 10)
+                if b != last_bin:
+                    thin.append(r)
+                    last_bin = b
             with open(d / f"agent{k}_{name}.csv", "w", newline="") as f:
                 w = csv.writer(f)
-                w.writerow(["t_ns", "x_m", "y_m", "yaw_rad"])
-                w.writerows(sorted(rows))
+                w.writerow(["t_s", "x_m", "y_m", "yaw_rad"])
+                w.writerows(thin)
     # Keyframes: vo_trace marks them; the pose comes from the estimator's own TUM at that stamp.
     for raw in sorted((run / "raw").iterdir()):
         if not raw.is_dir():
@@ -85,6 +102,8 @@ def export_paths(run: Path, out: Path) -> dict:
         tum_file = raw / "estimate_body.tum"
         if tum_file.exists():
             for line in open(tum_file):
+                if line.startswith("#"):
+                    continue
                 v = line.split()
                 if len(v) >= 8:
                     tum[int(round(float(v[0]) * 1e9))] = v[1:8]
@@ -98,10 +117,15 @@ def export_paths(run: Path, out: Path) -> dict:
                     t = int(r["t_ns"])
                     near = min(tum, key=lambda u: abs(u - t)) if tum else None
                     pose = tum.get(near, [""] * 7) if near is not None and abs(near - t) < 50_000_000 else [""] * 7
-                    rows.append([r["frame"], t] + pose)
+                    yaw = ""
+                    if pose[3] != "":
+                        qx, qy, qz, qw = (float(v) for v in pose[3:7])
+                        import math
+                        yaw = math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz))
+                    rows.append([len(rows), r["frame"], t / 1e9] + pose[:3] + [yaw] + pose[3:])
         with open(d / f"agent{agent}_keyframes.csv", "w", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["frame", "t_ns", "x", "y", "z", "qx", "qy", "qz", "qw"])
+            w.writerow(["kf", "frame", "t_s", "x", "y", "z", "yaw_rad", "qx", "qy", "qz", "qw"])
             w.writerows(rows)
     return {"agents": agents}
 
@@ -111,7 +135,24 @@ def export_collab(run: Path, out: Path) -> list:
     d.mkdir(exist_ok=True)
     gaps = []
     if (run / "collab_edges.csv").exists():
-        shutil.copy(run / "collab_edges.csv", d / "edges.csv")
+        kft = {}
+        for raw in sorted((run / "raw").iterdir()):
+            if raw.is_dir() and "agent" in raw.name and (raw / "vo_trace.csv").exists():
+                a = int([p for p in raw.name.split("-") if p.startswith("agent")][0][5:])
+                with open(raw / "vo_trace.csv") as f:
+                    kft[a] = [int(r["t_ns"]) / 1e9 for r in csv.DictReader(f) if r.get("keyframe") == "1"]
+        with open(run / "collab_edges.csv") as f, open(d / "edges.csv", "w", newline="") as g:
+            rd = csv.DictReader(f)
+            w = csv.writer(g)
+            w.writerow(list(rd.fieldnames) + ["t_s_a", "t_s_b"])
+            for r in rd:
+                if r["agent_a"] == "agent_a":   # the run writes the header twice (both the wiring and
+                    continue                    # CollabLive emit one; flagged, harmless here)
+                def ts(ak, kk):
+                    ks = kft.get(int(r[ak]), [])
+                    i = int(r[kk])
+                    return round(ks[i], 3) if i < len(ks) else ""
+                w.writerow(list(r.values()) + [ts("agent_a", "kf_a"), ts("agent_b", "kf_b")])
     else:
         gaps.append("no collab_edges.csv (collab off in this run)")
     # The CollabLive telemetry line (untyped): per-agent anchor/merged/verified + fleet counters.
