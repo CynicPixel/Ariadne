@@ -177,7 +177,7 @@ for k in 0 1 2; do
     --out build/vo_out/agent\$k --spool build/spools/agent\$k --recon-config configs/recon/recon_v1.yaml \\
     > \$R/sim_vo_agent\$k.log 2>&1 || echo "sim_vo agent \$k FAILED" >> \$R/sim_vo_agent\$k.log
 done
-tar czf /tmp/spools.tar.gz -C build spools
+tar czf /tmp/spools.tar.gz build/spools $scene
 aws s3 cp --only-show-errors /tmp/spools.tar.gz \$RUN/output/spools.tar.gz
 {
   echo "spools.tar.gz bytes: \$(stat -c%s /tmp/spools.tar.gz)"
@@ -186,6 +186,7 @@ aws s3 cp --only-show-errors /tmp/spools.tar.gz \$RUN/output/spools.tar.gz
     echo "agent\$k files: \$(find build/spools/agent\$k -type f | wc -l)  size: \$(du -sh build/spools/agent\$k | cut -f1)"
     grep -h "keyframes" build/vo_out/agent\$k/*/results.yaml 2>/dev/null | head -2
   done
+  grep -h "scene_id" $scene/scene.json | head -1
   (cd build/spools && find . -type f | sort | head -50)
 } > \$R/spools_listing.txt
 EOF
