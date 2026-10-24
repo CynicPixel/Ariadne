@@ -202,6 +202,11 @@ ones, and every route is valid (each segment re-checked by symmetric line of sig
 
 ## 11. Literature review of the post-design fixes (2026-10-23; `docs/design/lit/phase4_fixes_route_cbba.md`)
 
+**Amended 2026-10-24 (D123, D116): "FAR ≤ string-pulled lattice" is FALSE in general.** It holds on the 12
+evidence-spool routes above. On the unit test's random maps, once their draws are sequenced (D123), trial #9 gives
+37.40 cells against 33.24 (+12.5 %). That is the same defect class as hazard seed 0 below. The test is quarantined
+and OPEN, and no report claims FAR ≤ lattice.
+
 **The lattice join (`749187f`): our claim about FAR was wrong; the join is `[DESIGN]`.**
 - 749187f said the join works "as FAR joins start/goal through its local planner". FAR §III-C (p. 3) says
   otherwise: "The planner first add p_robot and p_goal as two vertices … and connect them to the vertices … with

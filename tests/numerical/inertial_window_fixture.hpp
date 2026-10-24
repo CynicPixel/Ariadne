@@ -80,7 +80,7 @@ inline BaWindow MakeInertialWindow(std::mt19937& g, int K, int M, double pix_noi
     std::normal_distribution<double> pn(0.0, pix_noise);
     for (int m = 0; m < M; ++m) {
         const double z = uz(g);
-        const Vec3 X = mid * Vec3(ux(g) * z / 3.0, 0.6 * ux(g) * z / 3.0, z);
+        const Vec3 X = mid * Vec3{ux(g) * z / 3.0, 0.6 * ux(g) * z / 3.0, z};
         const uint64_t id = uint64_t(100 + m);
         w.X[id] = X;
         for (int k = 0; k < K; ++k)
@@ -92,7 +92,7 @@ inline BaWindow MakeInertialWindow(std::mt19937& g, int K, int M, double pix_noi
                 o.kf = k;
                 o.landmark = id;
                 o.right = right;
-                o.z = Vec2(w.cam.fx * Xc.x() / Xc.z() + w.cam.cx + pn(g), w.cam.fy * Xc.y() / Xc.z() + w.cam.cy + pn(g));
+                o.z = Vec2{w.cam.fx * Xc.x() / Xc.z() + w.cam.cx + pn(g), w.cam.fy * Xc.y() / Xc.z() + w.cam.cy + pn(g)};
                 w.obs.push_back(o);
             }
     }

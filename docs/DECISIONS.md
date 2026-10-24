@@ -3440,6 +3440,13 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
     - The both-directions line-of-sight check is `[DESIGN]`: it misses no crossed cell but over-blocks on 272 of 624
       segments.
     - The D\* Lite trigger split is supported (AAAI 2002).
+  - **D116 amended 2026-10-24 (D123): "FAR ≤ string-pulled lattice" is FALSE.** After the test's map draws were
+    sequenced, `VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice` trial #9 routes 37.40 cells
+    against the lattice's 33.24 (+12.5 %).
+    - The old pass came from x86's argument order, which drew a different map.
+    - Same defect class as hazard seed 0 (EXPLORATION_4.6 §10).
+    - The test is quarantined (`DISABLED_`, unchanged) and OPEN, parked until after the freeze.
+    - FAR stays `[DESIGN]`. No report or video may claim FAR ≤ lattice. The live `Route` uses A*.
 ## 2026-10-22 — D100: 2.6 TUM RGB-D — sensor depth into StereoVo through a virtual rig; regression pinned (fr1 not in class)
 
 - **Loader:** `runtime::TumSource` (`cpp/runtime/datasets/tum.hpp`), with `infra/scripts/fetch_tum.py` (sha256
@@ -5062,7 +5069,7 @@ Shepperd round trip at every entrance heading incl. 180°, live == replay chunks
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
 
-## 2026-10-24 — D123–D124 (A1, proposed; 2.x SLAM's tests, M signs off): the arm64 GravityPgo divergence is a test-fixture defect
+## 2026-10-24 — D123–D124 (A1; applied 2026-10-24, M signed off; 2.x SLAM's tests): the arm64 GravityPgo divergence is a test-fixture defect
 
 **Finding** (`evaluation/runs/arm64/20261023T233147Z-cpuarm-1e25b3/README.md`, commit 1647d6b). Graviton's 2.71 deg
 against x86's 0.62 deg is not a numerical difference.
@@ -5081,6 +5088,37 @@ against x86's 0.62 deg is not a numerical difference.
   must be re-checked on both architectures in one run.
 - Add a CI grep that fails on the pattern (`Type(f(g), f(g)…)` with ≥ 2 draws).
 - Not applied: the files are 2.x's, and the auto-mode classifier rightly refused a scripted rewrite of them.
+- **Applied 2026-10-24** (maintainer granted `tests/**` edits; M approved, including the outcome below).
+  - **The 44 sites, plus 19 more** found by the CI check, which the dry run had missed:
+    - generators named `rng`;
+    - two braced vectors as separate arguments of one call, e.g. `p.Integrate(Vec3{…}, Vec3{…})`;
+    - operands of one operator, e.g. `RandomAxis(g) * ang(g)` (an overloaded operator is a call) and
+      `u(rng) < Per(… g(rng) …)`.
+    These are fixed by braces, one draw per declarator, or `RandomRotation()` in `test_lie`.
+  - **The check:** `infra/scripts/check_rng_sequencing.py`, registered as the ctest
+    `RngSequencing.NoUnsequencedDrawsInTests`; 0 sites in `tests/`. It treats `?:` and control headers as
+    sequenced. It was validated by flagging all 44 original sites on the pre-D123 tree.
+  - **Local x86 ctest: 695/696, with 1 disabled.** `VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice`
+    is quarantined because the resequenced map shows "FAR ≤ lattice" is FALSE on trial #9 (37.40 vs 33.24 cells;
+    D116 amended above; OPEN).
+  - **Values that moved, old → new.** Every printed value of the touched suites, before and after, is in
+    `evaluation/runs/arm64/d123_local_x86/values_diff.txt`. Two are evidence of the 2.5 back end and must be cited
+    with the new numbers:
+    - **planted-outlier certificate (D74):** the stationary points strictly worse than truth go **0 → 2**, all not
+      certified. "Certified out of 10" stays 6/6/6, and after GNC 10/10. The reported seed changes 0 → 3
+      (λ_min −1.1865e4 → −1.3414e4);
+    - **GNC alone on 3 random inter-agent loops:** accepted **1 → 0**, against the stated "a lone link is unverifiable
+      without redundancy".
+  - **Other moves, all still passing:**
+    - the outlier prior moves its keyframe 1.85 → 1.82°;
+    - shared-gravity improvement 68 % → 63 % (2.77/0.90 → 3.04/1.13°) and 10 % → 9 %;
+    - degeneracy NEES 5.95 → 6.09 (54.69 → 58.15 far);
+    - near-miss PCM/GNC precision and recall by ≤ 0.006;
+    - GNC near-miss acceptance 143 → 149 of 199;
+    - approxPolyDP clipping 53 → 49 of 200;
+    - two-lap ATE 0.086 → 0.082 m;
+    - the rest are timings or the last digits.
+  - **Re-baselines** on x86 (ci_aws) and arm64 are queued at this commit.
 
 **D124: GravityPgo's recovery test asserts something its fixture cannot deliver; redesign it, don't loosen it.**
 - Measured over 200 seeds (`conditioning.txt`), the fixture (200 keyframes, odometry rotation σ 0.01 rad per step,
@@ -5118,5 +5156,7 @@ form; the Bar-Shalom test, as in D178.
   stay a per-seed assertion. It becomes the tilt RMS over the 50 seeds below the odometry's, plus a reduction on
   ≥ 90 % of seeds.
 - After D123 the seeds are fixed, so pass/fail is deterministic and identical on both architectures.
-- **Not yet applied.** The edits to `test_gravity_pgo.cpp` (and D123's 44 sites) are blocked by this session's
-  auto-mode classifier, and are with the maintainer.
+- **Applied 2026-10-24:** `GravityPgo.ReferenceGravityErrorIsRecoveredAsWellAsTheInformationAllowsAndTiltShrinks`
+  replaces the single-seed bound.
+  - Priors are drawn at σ/√info_scale; `Make(…, gen_scale)` defaults to 1 for the other tests.
+  - Local x86: mean NEES **2.526** in [1.347, 2.803] (validated 2.53); tilt RMS 8.47 → 3.78°, reduced on 46/50.

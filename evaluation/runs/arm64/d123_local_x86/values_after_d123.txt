@@ -1,0 +1,116 @@
+Galilean direction |Hn|/|n| 2.481e-10 vs a single-keyframe translation 6.003e+06
+H eigenvalues: min 1.620e+00, max 3.795e+09
+H eigenvalues: min -2.754e-08, max 3.795e+09
+H eigenvalues: min 5.309e+00, max 3.795e+09
+init (flat b_a prior): |g| 9.81000, condition 5.04e+04, chi2/dof 8.63e-10; bg err 4.36e-07, ba err 7.65e-07, g angle 1.91e-06 deg
+init (prior 0.2): chi2/dof 1.16e-02; ba err 0.076, g angle 0.442 deg (x 9.81 = 0.076)
+scale 1.00: ok 1, |g| unconstrained 9.821, chi2/dof 1.164e-02 ()
+scale 1.05: ok 1, |g| unconstrained 9.902, chi2/dof 1.641e-01 ()
+scale 1.50: ok 1, |g| unconstrained 10.640, chi2/dof 1.300e+01 ()
+scale 3.00: ok 0, |g| unconstrained 13.206, chi2/dof 1.602e+02 (|g| 13.206428 outside tolerance)
+[  PASSED  ] 36 tests.
+[  PASSED  ] 7 tests.
+gravity 0.181 deg off; bg err 6.92e-05, ba err 3.19e-02; stretch drift: VIO 0.0052 m vs bridge 0.5218 m; error at its end: VIO 0.0061 m vs bridge 0.5207 m; RMSE VIO 0.0043 vs bridge 0.2288
+[ LivePlanner ] 200 fields, 49 where approxPolyDP alone clipped an obstacle
+noise-free: E 1.649e+03 -> 1.727e-21 in 5 iterations (5 linearizations, 5 factorizations, 0 failed)
+noisy: E 919.8791 -> 5.7441 in 9 iterations; max|grad| 1.98e-08
+mean NEES over 500 trials: 6.09 at 1.5-12 m (chi^2_6 mean 6); 58.15 at 25-40 m (reported)
+control       n 120 | sigma_t 0.0032 m sigma_r 0.00071 rad | ratio_t 6.4e-02 ratio_r 9.6e-02 | near 120 (median 1.81 deg) | line 9.5e-01 pixel 6.4e-01 planarity 0.60 corridor 0.39 | s2hat 0.98 rms 5.36 px | ok
+row-fan       n 120 | sigma_t 0.0064 m sigma_r 0.00137 rad | ratio_t 1.6e-02 ratio_r 2.7e-02 | near 115 (median 1.72 deg) | line 6.0e-01 pixel 6.3e-06 planarity 0.00 corridor 0.62 | s2hat 1.03 rms 5.50 px | ok
+3d-line       n 120 | sigma_t 0.0537 m sigma_r 0.00852 rad | ratio_t 6.2e-03 ratio_r 7.4e-04 | near  95 (median 1.34 deg) | line 9.3e-04 pixel 5.8e-05 planarity 0.00 corridor 1.00 | s2hat 1.05 rms 2.85 px | collinear 
+far-only      n 120 | sigma_t 0.0285 m sigma_r 0.00071 rad | ratio_t 1.0e-01 ratio_r 9.6e-02 | near   0 (median 0.21 deg) | line 6.5e-01 pixel 4.6e-01 planarity 0.41 corridor 0.49 | s2hat 1.10 rms 4.06 px | parallax 
+small-object  n  25 | sigma_t 0.1396 m sigma_r 0.03266 rad | ratio_t 9.5e-02 ratio_r 1.2e-01 | near  25 (median 1.92 deg) | line 8.7e-02 pixel 8.3e-01 planarity 0.05 corridor 0.88 | s2hat 3.32 rms 1.85 px | conditioning_translation conditioning_rotation 
+odometry leg NEES (storage forward): forward 6.01 backward 6.01
+odometry leg NEES (storage mixed): forward 6.24 backward 6.24
+pair statistic, one chain, disjoint   mean 5.90 (chi^2_6: 6)
+pair statistic, one chain, nested     mean 6.15 (chi^2_6: 6)
+pair statistic, one chain, crossing   mean 5.95 (chi^2_6: 6)
+pair statistic, one chain, backward   mean 5.93 (chi^2_6: 6)
+pair statistic, one chain, shared-end mean 5.75 (chi^2_6: 6)
+pair statistic, two agents, loop 2 forward  mean 6.11
+pair statistic, two agents, loop 2 reversed mean 5.96
+greedy clique size == exact on 200 / 200 planted-clique graphs (8-24 vertices)
+per-loop alpha 0.001 (default) outliers 10%: recall mean 1.000 worst 1.000 | precision mean 1.000 worst 1.000
+per-loop alpha 0.001 (default) outliers 20%: recall mean 1.000 worst 1.000 | precision mean 1.000 worst 1.000
+per-loop alpha 0.001 (default) outliers 30%: recall mean 1.000 worst 1.000 | precision mean 1.000 worst 1.000
+per-loop alpha 0.001 (default) outliers 40%: recall mean 1.000 worst 1.000 | precision mean 1.000 worst 1.000
+per-loop alpha 0.05            outliers 10%: recall mean 0.988 worst 0.933 | precision mean 1.000 worst 1.000
+per-loop alpha 0.05            outliers 20%: recall mean 0.992 worst 0.900 | precision mean 1.000 worst 1.000
+per-loop alpha 0.05            outliers 30%: recall mean 0.982 worst 0.900 | precision mean 1.000 worst 1.000
+per-loop alpha 0.05            outliers 40%: recall mean 0.990 worst 0.933 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.95) (arch)      outliers 10%: recall mean 0.860 worst 0.700 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.95) (arch)      outliers 20%: recall mean 0.857 worst 0.600 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.95) (arch)      outliers 30%: recall mean 0.838 worst 0.700 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.95) (arch)      outliers 40%: recall mean 0.843 worst 0.633 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.999)            outliers 10%: recall mean 0.993 worst 0.933 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.999)            outliers 20%: recall mean 0.993 worst 0.900 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.999)            outliers 30%: recall mean 0.982 worst 0.900 | precision mean 1.000 worst 1.000
+fixed chi2_6(0.999)            outliers 40%: recall mean 0.990 worst 0.933 | precision mean 1.000 worst 1.000
+near-miss outliers 0.2 m /  1 deg, default  : precision mean 0.750, recall mean 1.000
+near-miss outliers 0.2 m /  1 deg, arch 0.95: precision mean 0.792, recall mean 0.827
+near-miss outliers 0.5 m /  5 deg, default  : precision mean 0.942, recall mean 0.985
+near-miss outliers 0.5 m /  5 deg, arch 0.95: precision mean 0.996, recall mean 0.850
+near-miss outliers 1.0 m / 10 deg, default  : precision mean 1.000, recall mean 1.000
+near-miss outliers 1.0 m / 10 deg, arch 0.95: precision mean 1.000, recall mean 0.852
+blind spot: accepted 5 loops, the WRONG (aliased) cluster
+PCM: 3000 nodes, 300 loops (60 outliers): 179.7 ms, accepted 240 (reported, not gated)
+no outliers: stop weights, 30 inliers / 30 loops, energy 86.567931 vs plain 86.567931
+grid   outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.088 m | 29.9 outer its, 117 ms mean
+grid   outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.092 m | 30.4 outer its, 133 ms mean
+grid   outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.084 m | 31.4 outer its, 155 ms mean
+grid   outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.081 m | 32.0 outer its, 193 ms mean
+sphere outliers 10%: precision worst 1.000, recall worst 0.967 | ATE mean 0.148 m | 30.0 outer its, 176 ms mean
+sphere outliers 20%: precision worst 1.000, recall worst 0.967 | ATE mean 0.140 m | 30.6 outer its, 203 ms mean
+sphere outliers 30%: precision worst 1.000, recall worst 0.967 | ATE mean 0.139 m | 30.5 outer its, 233 ms mean
+sphere outliers 40%: precision worst 1.000, recall worst 0.967 | ATE mean 0.128 m | 31.9 outer its, 279 ms mean
+ramp grid outliers 50%: success 10 / 10, ATE mean 0.084 m
+ramp grid outliers 60%: success 10 / 10, ATE mean 0.098 m
+ramp grid outliers 70%: success 10 / 10, ATE mean 0.086 m
+ramp grid outliers 80%: success 10 / 10, ATE mean 0.100 m
+ramp grid outliers 90%: success 10 / 10, ATE mean 0.096 m
+near misses 0.5 m / 5 deg: 0 / 200 passed PCM, 0 accepted by GNC | precision (pooled) 1.0000 | ATE 0.0914 m with them, 0.0914 m without
+near misses 0.2 m / 1 deg: 199 / 200 passed PCM, 149 accepted by GNC | precision (pooled) 0.8888 | ATE 0.1031 m with them, 0.0914 m without
+GNC alone on 3 random inter-agent loops: 0 accepted (a lone link is unverifiable without redundancy; reported)
+PCM no_consensus -> GNC: inliers 0 / 3, components 2
+GNC alone, near misses 0.5 m / 5 deg: 0 / 200 accepted, true loops kept 1186 / 1200 (reported)
+self-consistent cluster: 0 / 8 wrong loops accepted, 30 inliers total (reported)
+GNC timing N=1000: 77 true + 8 outlier loops | 802 ms, 25 outer its, 111 LM its | precision 1.000 recall 1.000 (reported)
+GNC timing N=3000: 277 true + 30 outlier loops | 2994 ms, 26 outer its, 107 LM its | precision 1.000 recall 0.989 (reported)
+weight reuse, 1000 nodes, 84 events: fast path 62 / 83 warm events | fallbacks: held-in over c2 0, held-out under c2 0, innovation 21 | warm != cold at 0 events | PCM rejected-then-accepted the early true loop: yes
+weight reuse: total time warm 4382 ms vs cold 2964 ms | final ATE warm 0.1123 m vs cold 0.1123 m | final warm precision 1.000 recall 1.000
+weight reuse, 3000 nodes, 302 events: fast path 249 (167 ms mean), per event mean 233 ms, worst 854 ms | ATE 0.1004 m (reported)
+two laps: 10 events, 10 / 10 true loops GNC inliers, wrong loop rejected; fast path 7 / 10 | ATE odometry 0.308 m -> mirror 0.082 m (111 keyframes mirrored of 120; 9 wait in the window)
+certificate flag: 12 / 12 solved events certified (chordal surrogate of the mirror)
+gravity over 50 seeds: mean NEES 2.526 (99 % band [1.347, 2.803]) | tilt RMS 8.47 -> 3.78 deg, reduced on 46/50
+a 30 deg outlier prior moves its keyframe's tilt by 1.82 deg (quadratic cost would follow it further)
+noise-free 5 nodes: certified for the isotropic chordal surrogate (eta 2.35e-06 = 1e-10 ||M||; f - f* <= 3.52e-05, 4.6e+24% of f = 7.67534e-28) | gap -4.14e-12, eta_min 2.35e-12
+planted-outlier seed 3: reduced lambda_min -1.3414e+04, explicit-form lambda_min -1.1706e+04 (a full shift would pass at 0.873 x the reduced eta); Ritz -1.3414e+04
+wound ring 12: f 8038, max|grad_R| 1.6e-12: not certified (lambda_min <= -3.349e+02 at eta 5.00e-07): unknown, not wrong
+perturbed (0.3 rad, not refined): not certified (lambda_min <= -3.958e+03 at eta 8.62e-05): unknown, not wrong
+low noise: 10 / 10 certified, worst bound 4.04e-04 of f
+planted outliers (3 per graph, kept in the cost), certified out of 10: from truth 6, dead reckoning 6, chordal 6 | 2 strictly-worse stationary points, all not certified | after GNC 10 / 10
+/work/tests/unit/test_certificate.cpp:338: Skipped
+set ARIADNE_PGO_SESYNC (infra/scripts/models.sh pgo-sesync)
+seed 0: PCM kept 10 / 16 inter-agent, GNC inliers 10 true + 0 false | ATE 0.169 m (true loops only: 0.169 m; re-init 80 nodes) | without re-init: 10 inter inliers, ATE 0.169 m
+seed 1: PCM kept 10 / 16 inter-agent, GNC inliers 10 true + 0 false | ATE 0.235 m (true loops only: 0.235 m; re-init 80 nodes) | without re-init: 10 inter inliers, ATE 0.235 m
+seed 2: PCM kept 10 / 16 inter-agent, GNC inliers 10 true + 0 false | ATE 0.196 m (true loops only: 0.196 m; re-init 80 nodes) | without re-init: 10 inter inliers, ATE 0.196 m
+seed 3: PCM kept 10 / 16 inter-agent, GNC inliers 10 true + 0 false | ATE 0.274 m (true loops only: 0.274 m; re-init 80 nodes) | without re-init: 10 inter inliers, ATE 0.274 m
+seed 4: PCM kept 10 / 16 inter-agent, GNC inliers 10 true + 0 false | ATE 0.299 m (true loops only: 0.299 m; re-init 80 nodes) | without re-init: 10 inter inliers, ATE 0.299 m
+inter-agent sigma_r 0.01 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 2.55 deg, shared 2.31 deg (9% less)
+inter-agent sigma_r 0.05 rad, 2 deg tilt bias: agent-1 tilt RMS per-agent gravity 3.04 deg, shared 1.13 deg (63% less)
+noise-free window: E 7.951e+04 -> 5.280e-23 in 7 iterations, 7 factorizations (0 failed)
+vs solvePnPRefineLM: dt 3.56e-09 m, dr 2.62e-09 rad
+noise-free VI window: E 8.004e+05 -> 7.222e-12 in 7 iterations, 7 factorizations (0 failed)
+dark VI window: E 5.286e+05 -> 1.027e-20 in 10 iterations
+tilted window: E 1.831e+02 -> 5.490e-12; tilt found 2.0000 deg (applied 2)
+/work/tests/unit/test_visibility_graph.cpp:64: Failure
+Expected: (a.length_cells) <= (PolyLen(pulled) + eps), actual: 37.402996227363388 vs 33.242640688119288
+9
+[far] cells: target (80, 252) exits (70, 31) (168, 250)
+[far] hazard0: FAR 88.473 cells (2 bends, exit 1) vs pulled A* 88.473 cells (exit 1); nodes 39
+[  PASSED  ] 73 tests.
+[  SKIPPED ] 1 test, listed below:
+[  SKIPPED ] Certificate.SeSyncBenchmarkGraphs
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice
+ 1 FAILED TEST

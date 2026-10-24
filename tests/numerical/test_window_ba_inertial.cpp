@@ -28,7 +28,7 @@ Eigen::MatrixXd DenseH(const BaSystem& s, const BaLayout& L) {
 /// Move every free state off the truth (poses, velocities, biases, landmarks) and give window[0] a bias prior.
 void Perturb(BaWindow& w, std::mt19937& g, double scale) {
     std::normal_distribution<double> n(0.0, 1.0);
-    const auto rv = [&](double s) { return Vec3(s * n(g), s * n(g), s * n(g)); };
+    const auto rv = [&](double s) { return Vec3{s * n(g), s * n(g), s * n(g)}; };
     for (size_t k = 0; k < w.T_W_C.size(); ++k) {
         if (!w.fixed[k]) {
             Vec6 d;

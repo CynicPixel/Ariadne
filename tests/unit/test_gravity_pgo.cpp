@@ -1,7 +1,8 @@
 // GRAVITY_PRIOR consumption in the pose-graph solver (D73 part 2c; design ROBUST_BACKEND_2.5.md §8, D59 handoff):
 //   - the analytic gradient (pose + gravity blocks, Huber regime included) matches finite differences of the energy;
 //   - disabled (default) the solve is bit-identical to a graph without priors;
-//   - a 1.5 deg error in the reference gravity is recovered by the 2-DoF per-agent variable, and tilt drift shrinks;
+//   - a 1.5 deg error in the reference gravity is recovered as well as the information allows (D124: mean NEES over
+//     50 seeds inside the 99 % chi^2 band, against the solver's own marginal), and tilt drift shrinks;
 //   - one 30 deg outlier prior is down-weighted by the Huber kernel.
 #include "slam/pose_graph/pgo_levmarq.hpp"
 
@@ -33,8 +34,9 @@ struct Chain {
 };
 
 /// A walk with rotation noise in the odometry (tilt drifts), priors every `every` keyframes measured from the truth
-/// with sigma_deg noise, against a reference gravity rotated by ref_err_deg about x.
-Chain Make(std::mt19937& gen, int n, int every, double sigma_deg, double ref_err_deg) {
+/// with sigma_deg noise (drawn at gen_scale x sigma_deg; the information always says sigma_deg), against a reference
+/// gravity rotated by ref_err_deg about x.
+Chain Make(std::mt19937& gen, int n, int every, double sigma_deg, double ref_err_deg, double gen_scale = 1.0) {
     Chain c;
     std::normal_distribution<double> nz(0.0, 1.0);
     SE3 T;
@@ -65,7 +67,7 @@ Chain Make(std::mt19937& gen, int n, int every, double sigma_deg, double ref_err
         GravityPrior p;
         p.keyframe = uint64_t(i);
         const Vec3 gC = c.truth[size_t(i)].R.transpose() * kDown;
-        p.g_C = (Rot(s * Vec3(nz(gen), nz(gen), 0)) * gC).normalized();
+        p.g_C = (Rot(gen_scale * s * Vec3{nz(gen), nz(gen), 0}) * gC).normalized();
         p.g_ref_W = g_ref.normalized();
         p.information = Eigen::Matrix2d::Identity() / (s * s);
         c.g.AddGravityPrior(p);
@@ -135,18 +137,49 @@ TEST(GravityPgo, DisabledIsBitIdenticalToNoPriors) {
     }
 }
 
-TEST(GravityPgo, RecoversTheReferenceGravityErrorAndReducesTilt) {
-    std::mt19937 gen(3);
-    Chain c = Make(gen, 200, 10, 2.3, 1.5);
-    Chain plain = c;
-    const double tilt0 = TiltErrorDeg(c);
-    const PgoReport r = SolvePoseGraph(c.g, 0, On());
-    ASSERT_EQ(r.gravity_W.size(), 1u);
-    const double gerr = std::acos(std::clamp(r.gravity_W.begin()->second.dot(kDown), -1.0, 1.0)) * 180.0 / M_PI;
-    std::printf("gravity: reference off by 1.50 deg -> estimate off by %.2f deg | tilt RMS %.2f deg (odometry) -> %.2f deg\n",
-                gerr, tilt0, TiltErrorDeg(c));
-    EXPECT_LT(gerr, 1.0);
-    EXPECT_LT(TiltErrorDeg(c), tilt0);
+TEST(GravityPgo, ReferenceGravityErrorIsRecoveredAsWellAsTheInformationAllowsAndTiltShrinks) {
+    // D124 (replaces "gerr < 1 deg on one seed", which this fixture delivers on only 14-17 % of seeds: its own sigma
+    // for the gravity estimate is ~2 deg per axis). Over 50 seeds, the estimate's error is consistent with the
+    // solver's own 2 x 2 marginal covariance (the gravity block of H^-1 at the optimum): the mean NEES lies in the 99 %
+    // chi^2(2N)/N band (Bar-Shalom, as D178). The priors are drawn with the noise the solver assumes, sigma /
+    // sqrt(info_scale). And the tilt shrinks: RMS over the seeds, and on >= 90 % of them (it fails on 1-4 of 50).
+    const int N = 50;
+    const double gen_scale = 1.0 / std::sqrt(GravityOptions{}.info_scale);
+    double nees_sum = 0, tilt0_ss = 0, tilt1_ss = 0;
+    int reduced = 0;
+    for (int seed = 0; seed < N; ++seed) {
+        std::mt19937 gen{uint32_t(seed)};
+        Chain c = Make(gen, 200, 10, 2.3, 1.5, gen_scale);
+        const double tilt0 = TiltErrorDeg(c);
+        const PgoReport r = SolvePoseGraph(c.g, 0, On());
+        ASSERT_EQ(r.gravity_W.size(), 1u);
+        const Vec3 gh = r.gravity_W.begin()->second;
+        const double tilt1 = TiltErrorDeg(c);
+        tilt0_ss += tilt0 * tilt0, tilt1_ss += tilt1 * tilt1, reduced += tilt1 < tilt0;
+        // The marginal of the gravity variable, linearised at the optimum (poses and gravity both solved).
+        PgoProblem p(c.g, 0, On().gravity);
+        p.gravity()[0] = gh;
+        SparseMat H;
+        Eigen::VectorXd grad;
+        p.Linearize(p.poses(), p.gravity(), H, grad);
+        GuardedLdlt ldlt;
+        ASSERT_TRUE(ldlt.Factorize(H)) << seed;
+        Eigen::Matrix2d C;
+        for (int k = 0; k < 2; ++k) {
+            Eigen::VectorXd e = Eigen::VectorXd::Zero(p.dim());
+            e(p.pose_dim() + k) = 1.0;
+            C.col(k) = ldlt.Solve(e).tail<2>();   // E = 1/2 sum r^T W r, so the covariance is H^-1
+        }
+        const Eigen::Vector2d d = GravityTangentBasis(gh).transpose() * kDown;   // truth - estimate, tangent at gh
+        nees_sum += d.dot(C.ldlt().solve(d));
+    }
+    const double nees = nees_sum / N, tilt0 = std::sqrt(tilt0_ss / N), tilt1 = std::sqrt(tilt1_ss / N);
+    std::printf("gravity over %d seeds: mean NEES %.3f (99 %% band [1.347, 2.803]) | tilt RMS %.2f -> %.2f deg, "
+                "reduced on %d/%d\n", N, nees, tilt0, tilt1, reduced, N);
+    EXPECT_GT(nees, 1.347);   // chi^2(100)/50 at 0.5 % and 99.5 %
+    EXPECT_LT(nees, 2.803);
+    EXPECT_LT(tilt1, tilt0);
+    EXPECT_GE(reduced, 45);   // >= 90 % of the seeds
 }
 
 TEST(GravityPgo, HuberDownWeightsAnOutlierPrior) {
