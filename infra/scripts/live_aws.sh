@@ -318,6 +318,14 @@ python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_buil
 tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz "\${ARIADNE_RESULTS_URI%/results}/pack.tar.gz" || true
 grep -h "mission loop failed\|KILLED\|exited rc" "\$inner"/../*.log 2>/dev/null | head -5 >> \$R/pack_build.log || true
 EOF
+    # LIVE_AWS_EXTRA_MANIFEST_TARBALL: also pull every manifest.yaml out of ANOTHER recording on the same
+    # instance (free in-region; rides the pack job so no second launch). Used for the 60d/60e A/B seed check.
+    if [ -n "${LIVE_AWS_EXTRA_MANIFEST_TARBALL:-}" ]; then cat <<EOF
+mkdir -p /tmp/xman
+aws s3 cp ${LIVE_AWS_EXTRA_MANIFEST_TARBALL} - | tar xz -C /tmp/xman --wildcards '*manifest.yaml' || true
+find /tmp/xman -name manifest.yaml | while read -r m; do { echo "== \$m"; cat "\$m"; } >> \$R/extra_manifest.txt; done
+EOF
+    fi
   } > "$script"
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
