@@ -290,7 +290,10 @@ def main():
         "  events_timeline.csv: D179 event counts per tick.\n"
         "- decisions.json: every trace record (vision summary -> decision -> command), snapshot_png dropped.\n"
         "- planning/slab_*.png (+ p4slab) and slab_index.csv: the occupancy/ESDF slabs over time.\n"
-        "- frames/: final per-agent camera jpg + feature overlays; dump keyframe-time frames with:\n"
+        "- frames/: final per-agent camera jpg + feature overlays. ALL images (jpg and frame PNGs) are STANDARD\n"
+        "  true-colour files on disk (both writers convert RGB->BGR before cv::imwrite): a normal viewer or PIL\n"
+        "  shows true colours, cv2.imread returns BGR arrays as for any image - do NOT channel-swap the files.\n"
+        "  Dump keyframe-time frames with:\n"
         "    ariadne_frame_dump --rec <live_to_rec OUT> --scene <SCENE> --agent k --frames <from keyframes.csv> --out frames/agent<k>\n"
         "- meta.json: agents, scene, the honest gaps list.\n")
     print(f"pack: {out} ({sum(p.stat().st_size for p in out.rglob('*') if p.is_file())/1e6:.1f} MB,"
