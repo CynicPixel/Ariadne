@@ -1177,6 +1177,18 @@ int main(int argc, char** argv) {
         // a DNN. collab: false = none of this exists (D168 digests unchanged).
         uint64_t collab_config_digest = 0;              // the consumed collab config BYTES (collab60d lesson)
         std::string collab_config_path_used;
+        std::atomic<bool> integ_stop{false};
+        std::thread integrator;
+        int replans = 0, commands_sent = 0, answer_timeouts = 0;
+        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
+        size_t rays = 0;
+        std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
+        // The loud-fail scope starts HERE, not at the mission loop: diag4 (8bab46) proved a throw between
+        // collab init and the loop - lanes already running, ~0.6 s consumed - unwinds main past the joinable
+        // lane threads and dies as terminate-without-exception with the reason lost. Everything from collab
+        // init on is inside the try; the ONE teardown below always runs; results.yaml says mission_error.
+        std::exception_ptr mission_err;
+        try {
         if (ma && lc.collab.enabled) {
             if (!lc.estimator_processes)
                 throw std::invalid_argument("collab: true requires estimator_processes: true (the tee lives in the worker)");
@@ -1389,7 +1401,7 @@ int main(int argc, char** argv) {
             fs::create_directories(run_dir / "approvals");
             chooser = std::make_unique<ChooserLink>(chooser_socket);
         }
-        int replans = 0, commands_sent = 0, answer_timeouts = 0;
+        // declared above the try: the results block in the teardown reads them
         // Operator directives (AGENTIC_7 §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
         // replan barrier in name order, stamped and appended to directives.jsonl. Replay: that file, verbatim.
         std::vector<mis::Directive> directives;
@@ -1402,9 +1414,7 @@ int main(int argc, char** argv) {
         if (is_live) fs::create_directories(run_dir / "directives_inbox");
         Lines directives_log(run_dir / "directives.jsonl"), directives_rejected(run_dir / "directives_rejected.jsonl");
         if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
-        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
-        size_t rays = 0;
-        std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
+        // integrated/rays/refused_goals: declared above the try (the teardown's results block reads them)
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
         // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
         // whose goal lies within refused_radius_m of it CONTINUES it (since_ns kept); anything else starts a new one.
@@ -1421,8 +1431,7 @@ int main(int argc, char** argv) {
         // (t, agent, id) sort keeps it); cross-agent interleaving makes the demo map not bit-reproducible, which is
         // accepted - demo is not the evidence substrate.
         std::mutex planner_mu;
-        std::atomic<bool> integ_stop{false};
-        std::thread integrator;
+        // integ_stop/integrator are declared above the mission try block: the teardown joins them.
         if (lc.demo) {
             integrator = std::thread([&] {
                 while (!integ_stop) {
@@ -1458,8 +1467,6 @@ int main(int argc, char** argv) {
         // a replay arrival-wait runtime_error reached main, the std::thread members' dtors called terminate
         // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
         // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
-        std::exception_ptr mission_err;
-        try {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
