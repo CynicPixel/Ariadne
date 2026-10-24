@@ -179,8 +179,15 @@ for k in 0 1 2; do
 done
 tar czf /tmp/spools.tar.gz -C build spools
 aws s3 cp --only-show-errors /tmp/spools.tar.gz \$RUN/output/spools.tar.gz
-(cd build/spools && find . -type f | sort | head -50) > \$R/spools_listing.txt
-du -sh build/spools >> \$R/spools_listing.txt
+{
+  echo "spools.tar.gz bytes: \$(stat -c%s /tmp/spools.tar.gz)"
+  du -sh build/spools
+  for k in 0 1 2; do
+    echo "agent\$k files: \$(find build/spools/agent\$k -type f | wc -l)  size: \$(du -sh build/spools/agent\$k | cut -f1)"
+    grep -h "keyframes" build/vo_out/agent\$k/*/results.yaml 2>/dev/null | head -2
+  done
+  (cd build/spools && find . -type f | sort | head -50)
+} > \$R/spools_listing.txt
 EOF
   } > "$script"
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
