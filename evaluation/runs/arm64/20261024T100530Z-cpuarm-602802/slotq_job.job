@@ -1,0 +1,4 @@
+OWNER=M
+DIR=/data/code/Ariadne-pm5
+VCPU=16
+CMD='ARIADNE_RUNNER_JSON=/data/code/Ariadne-pm5/build/aws-json/runner.json infra/eval/arm64_aws_launch.sh run'
