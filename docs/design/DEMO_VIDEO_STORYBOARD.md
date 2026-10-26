@@ -175,18 +175,31 @@ that changed.
 **Ledger.** RI §8 (ci_tiny spool, 2 agents, label "replay"; 0 reroutes happened). No FAR/TARE claim. Risk 0.340 →
 0 not used (design doc only).
 
-### 10 · One shared model (≈ 30 s)
-**Narration.** And as they explore, the robots' pieces come together into something you can walk through. Each
-robot's views become a cloud of tiny, soft, coloured blobs, called Gaussian splats. Because their maps agree, the
-pieces slot into one model, which we can view from angles no robot ever stood at.
+### 10 · One shared model (≈ 34 s)
+**Narration.** As the robots explore, their views build one shared model. Each robot's camera keyframes become
+small, coloured Gaussian splats. Piece by piece, their submaps fill the building's shared frame. These trained
+submaps come from a two-hundred-second mission. Without a mission time limit, exploration can continue toward
+a complete shared map.
 
 **On screen.**
-- Submaps fly in, one colour per agent, and lock into place. **3D Gaussian splatting** (gsplat).
-- An orbit to a novel view.
-- **Chip:** 259,994 Gaussians, 0 dropped keyframes.
-- **Table:** 92.9 % of wall seed points (agents 1–2) within 10 cm of ground truth.
+- WorldGen building skeleton, top view then tilt into 3D.
+- All 51 trained submaps fade directly into their measured world positions in submap creation order;
+  no lateral motion or offsets. About 60,000 sampled Gaussians use actual trained colours, scales and rotations.
+  Render Gaussian footprints to transparent layers and ramp their alpha explicitly; PMobject fades do not work.
+- Brief measured-run counts: 1,476 keyframes · 51 submaps · 2,590,315 Gaussians.
+- Remove measured badge, statistics, and source note. Fade the complete model into place, replacing the partial
+  reconstruction, under the chip "illustrative · gsplat trained on rendered views of the generated maze, not a robot
+  run". The completion is a CUDA gsplat model (187,405 Gaussians, 3,000 steps) displayed through a Gaussian
+  rasterizer.
+- After the full model fades in, show a six-second full turnaround, then fade out. The assembly camera stays still.
 
-**Ledger.** RI §10. A2's AWS GPU render replaces the cpu_init view when it lands. No PSNR or quality metric is shown.
+**Ledger.** The assembly uses AWS batch training `20261024T121121Z-gpu-ae604c` from the 200 s mission `626abe`.
+The final complete-map visual is a gsplat model trained on 70 rendered WorldGen views of the same scene and frame
+(A2, AWS g4dn run `20261026T211816Z-gpu-2705f3`; held-out PSNR 23.1 → 24.4 dB on 6 views; walls render lighter
+than the target in one held-out view; geometry fidelity unmeasured). It is an illustration, not a reconstruction
+from a measured run without a time limit.
+Narration describes continued exploration *toward* a complete map. Measured statistics apply only to the preceding
+trained-submap segment. Source geometry and this distinction remain documented in the scene and evidence record.
 
 ### 11 · Under the hood (≈ 20 s)
 **Narration.** Under the hood, the vision is built on OpenCV 5, and the heavy lifting runs on AWS: simulation,

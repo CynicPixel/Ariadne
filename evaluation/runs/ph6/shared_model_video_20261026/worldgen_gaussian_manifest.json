@@ -1,0 +1,707 @@
+{
+  "source": "WorldGen textured surfaces",
+  "measured": false,
+  "scene_id": "8410a254a94cc16b",
+  "format": "position f32x3, scale f32x3, RGBA u8x4, quaternion wxyz u8x4",
+  "gaussians": 187405,
+  "roof": "omitted for interior view",
+  "sha256": "04d1b6785f0fdf3cecfb34bdbfe6146c3fa16d1e2dd5db453944d10c6c103876",
+  "surfaces": [
+    {
+      "mesh": "board_000000.obj",
+      "gaussians": 154,
+      "mesh_sha256": "a1f743c1d5eb199bdf74ac1e3c9236ef583d07fce41e88e9ac2b623308ca33c2",
+      "texture_sha256": "56da94eebc2d834cf294d16da3073581f01aca22f2d52f92b755e4837fafc600"
+    },
+    {
+      "mesh": "board_000001.obj",
+      "gaussians": 154,
+      "mesh_sha256": "d963fd21cbb4797b19dc193415c422e51bbc4395b4d4b4f85e13c60a4fc06fc5",
+      "texture_sha256": "e17b095d5bfbc79ba7b2c6cdd1dfb2998b177b919515c3ee481ec5940eeb102c"
+    },
+    {
+      "mesh": "board_000002.obj",
+      "gaussians": 154,
+      "mesh_sha256": "aed82df15b8411840444ac215936f44a505630fc00e7a233990570d8a918bc54",
+      "texture_sha256": "34eeaf717e747f22252ca09ecb48758d18fef7228ae5f5133b78d0584d0c7a1f"
+    },
+    {
+      "mesh": "floor_000000.obj",
+      "gaussians": 2499,
+      "mesh_sha256": "1354cc42c79079aa2d6fd4dfd7e49d49b65ef6903c6f06363bc12f80577f6096",
+      "texture_sha256": "28b838719535d2679d65e24b96aef771272b7179f4f233330c9d3b6f9dce9655"
+    },
+    {
+      "mesh": "floor_000001.obj",
+      "gaussians": 2548,
+      "mesh_sha256": "f485e799a764846fc87b4146b8977d4f63f1728f35cf61a916c56466b40ca162",
+      "texture_sha256": "3da8d06409a0a8faafd10b195ca4a5911eca729b2e8acb5500e790d505c6cbe2"
+    },
+    {
+      "mesh": "floor_000002.obj",
+      "gaussians": 840,
+      "mesh_sha256": "c77bf4466d3ece01bf158ac257a48b532d64f69aa3696f3dbb7c5fc5c9e93137",
+      "texture_sha256": "b16417531337942f0b943f95d61d367c607cf1e1ef8ac31dd0b0a6f576959ce6"
+    },
+    {
+      "mesh": "floor_000003.obj",
+      "gaussians": 420,
+      "mesh_sha256": "a6292c07784368640b2205ac8f22d2c4f88157e4d925e13f2e60f1df1d418438",
+      "texture_sha256": "97ec8729816c58b7848de16e2e6748ff1d4836db192859f671aade1283b716ed"
+    },
+    {
+      "mesh": "floor_000004.obj",
+      "gaussians": 540,
+      "mesh_sha256": "b430ff66a227c437cf6b5d60caa1d6f99e5156b1480e24dc07fcf5d2e883ae61",
+      "texture_sha256": "2501688296f252f06c8d9a76041dabeaa877eebc883c9a6250441a0a2740eda0"
+    },
+    {
+      "mesh": "floor_000005.obj",
+      "gaussians": 1022,
+      "mesh_sha256": "178831b3a81f6d6f19298c659a11a2ff792d2e4ada01cd7ced4c4f06f113efb9",
+      "texture_sha256": "cdeea023835e86a393fdf537353e603b398665f817d4c6ab934e37cb855dcadc"
+    },
+    {
+      "mesh": "floor_000006.obj",
+      "gaussians": 975,
+      "mesh_sha256": "22d768bd994a7f08f6888012f283807030706ff1c8f1c957b2dea8ba2fff46d9",
+      "texture_sha256": "7ebbb64d2f64600bba9369dcfa8c2879b85c3fbba1b561df2d48e83001914450"
+    },
+    {
+      "mesh": "floor_000007.obj",
+      "gaussians": 1026,
+      "mesh_sha256": "5b0931828ba07d5553a5a9af5859293ab8ebbae7ad1c1b87ea3388be3ae6b02c",
+      "texture_sha256": "6a917311f846c1a482c9f4d9eaec8fb3eba9ec6821886b92373bfc5b2be7c50f"
+    },
+    {
+      "mesh": "floor_000008.obj",
+      "gaussians": 741,
+      "mesh_sha256": "853d8bd8aa16384fefd26923d34f97b041d636721b7b09f79cdf5a3e24666f55",
+      "texture_sha256": "0d560e7f422e18afec6701e17bcacfdc675b3cad5900106a1d5b3acc798cd465"
+    },
+    {
+      "mesh": "floor_000009.obj",
+      "gaussians": 378,
+      "mesh_sha256": "b6a0da4441193a8d847342b7e4628590ccd9aca2baf4c44fb87b32cb74349b0b",
+      "texture_sha256": "c9ca7273dbfafda2243ab81a5be88f0bb3b27cac047af3816da3d5649af1b835"
+    },
+    {
+      "mesh": "floor_00000a.obj",
+      "gaussians": 924,
+      "mesh_sha256": "220213677a27fe25b82401aa9081609268dd22013d0618ef25bcda1eebf674d6",
+      "texture_sha256": "fb6738710183662d7f39dc53a3362c2f6e067692cbf35798acb30d3c5be5dcb5"
+    },
+    {
+      "mesh": "floor_00000b.obj",
+      "gaussians": 615,
+      "mesh_sha256": "caa2e704e68108a3b2d0660495e6c2de1eba65208435fc2c20f189a82eac9601",
+      "texture_sha256": "030e539bc920193dee82f400336c19286047aab68e23ea29952606cc06529225"
+    },
+    {
+      "mesh": "floor_00000c.obj",
+      "gaussians": 870,
+      "mesh_sha256": "0a0f94af8b80115d07c237e4db9e47d8326e1c6e30f09e6f612e6ddca0cbceed",
+      "texture_sha256": "52c77f00faca429e21bfa691f5de1b88ac60e77e42013bb5da3e39fb36739845"
+    },
+    {
+      "mesh": "floor_00000d.obj",
+      "gaussians": 441,
+      "mesh_sha256": "eef8e156e95a00ef7452f00accfa1b2206cee0ce0b855458850296c11d41cd8d",
+      "texture_sha256": "5b40530c3626fe960e0f4e0f4e248f65c397d32f724a5010ab9567db1f91d5ba"
+    },
+    {
+      "mesh": "floor_00000e.obj",
+      "gaussians": 1008,
+      "mesh_sha256": "83a42b9fb302bfd32eb64d890f5374795e891334b14dd0a5a00a4871e3a34bfc",
+      "texture_sha256": "bf46a2d829d29ca9e6c28b3b73883bd6e2147c37ef07126295c0bcc9a05d492f"
+    },
+    {
+      "mesh": "floor_00000f.obj",
+      "gaussians": 1235,
+      "mesh_sha256": "a2cdb2e7729879e3358057734df4675e69804f857913be5c9ffaf39d19a02657",
+      "texture_sha256": "534a5c924e49555cc7bc5bbc92697f4bc60e3cc7420e8cacbcf16bc2aa1f248e"
+    },
+    {
+      "mesh": "floor_000010.obj",
+      "gaussians": 1008,
+      "mesh_sha256": "4b84ebdbaf24c89fc8b9b2081262d8ef007b3b2ede9df25c91714603175aa044",
+      "texture_sha256": "308d5a059cbecdfaa5809854b6fee222b19c9d7ff6090a01c614b741a4015e2e"
+    },
+    {
+      "mesh": "floor_000011.obj",
+      "gaussians": 432,
+      "mesh_sha256": "68f4cd7aac908282d86034a534dd6913bbb2541553342323e6a32623a22f8323",
+      "texture_sha256": "11c85d652cbf5c5064208bc9dc37dde99afb6ea092deb630bffad3afe7804faf"
+    },
+    {
+      "mesh": "floor_000012.obj",
+      "gaussians": 1152,
+      "mesh_sha256": "fedb85153ece0ede710a19e590da8866e6cad844536c920de008568e9f1d3da6",
+      "texture_sha256": "db2c3bec9b475f99e90066f8c1fb3d60a3dd82f26f3dbe1ed457ad5418cfe585"
+    },
+    {
+      "mesh": "floor_000013.obj",
+      "gaussians": 32,
+      "mesh_sha256": "47786c064ecbdaf8fec1a7785c1232c3764fc4c14289a05865056af1f6d002a1",
+      "texture_sha256": "92508510b782c3da99102c53098b6ac2d34cd7f692bf6f31eb125bdffdda1bfe"
+    },
+    {
+      "mesh": "floor_000014.obj",
+      "gaussians": 504,
+      "mesh_sha256": "34c7265730b459252c84a69a736b2e80b2658e2c666296f33e91a7b1d8ebc83d",
+      "texture_sha256": "535d30bd6da904f1672f1bbaf0cc946959f89d84229eb34d36c5aeb0abe44d4e"
+    },
+    {
+      "mesh": "floor_000015.obj",
+      "gaussians": 38,
+      "mesh_sha256": "6c36391b1a4860bbb9edd1ab86a2fa0d90efab690690269d699d054d04133e01",
+      "texture_sha256": "f4a2a8bb6e136c1503268bbed097b24398c2f4cba2de3cfc0354bcf1f5321853"
+    },
+    {
+      "mesh": "floor_000016.obj",
+      "gaussians": 286,
+      "mesh_sha256": "9d425a5f9904e32343c2d4ccf60d6b0113b3d8e3b0119dea3cd5ba9987c118d8",
+      "texture_sha256": "9b366f07c0cabdde8158eb4eb153be825de7e8484c4deb238b9b9e8abc091afc"
+    },
+    {
+      "mesh": "prop_000000.obj",
+      "gaussians": 112,
+      "mesh_sha256": "2ff247bce933e8b1672fa2c3cea032c2befe2919664d82f596ca63281bef42e6",
+      "texture_sha256": "7852f1c1cf043fcb0b2ee89dc2b25a56519d9b76cc71d2ce5b061a043448242b"
+    },
+    {
+      "mesh": "prop_000001.obj",
+      "gaussians": 112,
+      "mesh_sha256": "78049d45475a623efedd835d4a650664aeaa378f74271b259a22aa49f83c6760",
+      "texture_sha256": "49c5c459b830cfc01c42962da6da84c8cca31d75bea4440a85918c10cea474b6"
+    },
+    {
+      "mesh": "prop_000002.obj",
+      "gaussians": 96,
+      "mesh_sha256": "3be45631cd7293828a57892c9535731217ed33a5ac4b9f41d76ba245f684f0f8",
+      "texture_sha256": "a4d3f1a85f4ba18e5de00d6b946892cb2d2fe117366556df64bccb7926c27519"
+    },
+    {
+      "mesh": "prop_000003.obj",
+      "gaussians": 96,
+      "mesh_sha256": "1d755ff281db2a3c8ca85160aaea3446cdae28cf58dfbd05a95e6a8e601ed2af",
+      "texture_sha256": "60b315f795242d73a2a1c427cab48e1f0ae8a3cc45e6f6dd9f3ee747f3901e81"
+    },
+    {
+      "mesh": "prop_000004.obj",
+      "gaussians": 168,
+      "mesh_sha256": "3a78c5340ab0696312cb1e56adbdc9364fda8b54580b3f5583ec1217cf66240b",
+      "texture_sha256": "6bce653bc62e50b9b8fcfd112dae6312cd113fd475e5b7594ac5e0f14e089222"
+    },
+    {
+      "mesh": "prop_000010.obj",
+      "gaussians": 390,
+      "mesh_sha256": "86b00d1f37c6cfae0949ba1e45cba6defd11c0e99d5d34782f95af549bf1e1d1",
+      "texture_sha256": "51048595b2269cc9c02a466e51d817e933c368ca8ec5cc10071252101f5263b2"
+    },
+    {
+      "mesh": "prop_000011.obj",
+      "gaussians": 390,
+      "mesh_sha256": "a5bb690cff1dde01ebe40b6724d730e4f39760672637ba36e9b53270da0ed87a",
+      "texture_sha256": "19fe62e0bcda7b85214ce4a821c90ad20a750d68dcb94508d3a75e4bc455db7b"
+    },
+    {
+      "mesh": "prop_000012.obj",
+      "gaussians": 420,
+      "mesh_sha256": "7c7aa5b7a0e36517ff97518046bb82e56e2c7232633366bd657cc4c5dda4c9d2",
+      "texture_sha256": "c63c0eb2c9d5c5f769f4115ab1d367bc32ec45ec48ab4f0657787b8dfd073ed5"
+    },
+    {
+      "mesh": "prop_000013.obj",
+      "gaussians": 420,
+      "mesh_sha256": "da5b5245d99b22ae540218498f7e82d58cb5cafa8944233dbbfc410374ab59c1",
+      "texture_sha256": "0bcb29c7c556785f6902a053bf7c8cc94b883569faf83a0c313bbafe38066cc0"
+    },
+    {
+      "mesh": "prop_000014.obj",
+      "gaussians": 182,
+      "mesh_sha256": "4e1feb09112ce61bd735a00fb40af8cfd50dc81fea6f34b62f34cdebda33165e",
+      "texture_sha256": "823506f09162626de758924528fdaf3ee926acac39e748fab0fc5209156385e9"
+    },
+    {
+      "mesh": "prop_000020.obj",
+      "gaussians": 96,
+      "mesh_sha256": "6d1ee82fa0784c707b0271c160c866f0a0b3a2af0c2ef079b782e1d27fa3a6b3",
+      "texture_sha256": "db8af17636a8d73b3616a9489a77cca2c05c41e166a931c540cdac71203ba89f"
+    },
+    {
+      "mesh": "prop_000021.obj",
+      "gaussians": 96,
+      "mesh_sha256": "a5c4bd34ee98ceddf4f2fd676f4c00d9eb404fd6a15e43608a91e0d64ef05c15",
+      "texture_sha256": "8adc6734d352788f085b1716d01a1af5b534ee5d513f32975084c185d79e7227"
+    },
+    {
+      "mesh": "prop_000022.obj",
+      "gaussians": 120,
+      "mesh_sha256": "e118f5ad3b24bf23976309df67b6c21089aaf5fdc67e59936c556cb7e7f2bfd8",
+      "texture_sha256": "483d8880b3f4c3b2220f6da1d67c2f175bad132ceb26b2e1f0c031bc4996db1b"
+    },
+    {
+      "mesh": "prop_000023.obj",
+      "gaussians": 120,
+      "mesh_sha256": "369e930d4b8a76945083baf337c68ce0b688ea69a43bb43fa25c3f27404d8252",
+      "texture_sha256": "597eee7c8f3990699c2598d499b9e8207d31600b3bebec9df90f774ce8e9b3f4"
+    },
+    {
+      "mesh": "prop_000024.obj",
+      "gaussians": 80,
+      "mesh_sha256": "7ab7bdcf805e87e6b95cab330f28024cd17305676754aa984b26eba61c7028ba",
+      "texture_sha256": "04d611aed0ccc530b30d6d6f2f4e41246598a019df14ea43638b2302bd010dc2"
+    },
+    {
+      "mesh": "prop_000030.obj",
+      "gaussians": 270,
+      "mesh_sha256": "77c16b0035ea93201c36bd631771c1354c8abecb5fea489b378248b03e13e842",
+      "texture_sha256": "1dd9a199656c71a76818fb4b96048d90a912d1a585418c92e34a424e9234f58d"
+    },
+    {
+      "mesh": "prop_000031.obj",
+      "gaussians": 270,
+      "mesh_sha256": "1098273554b98dab7d616fda605f0fcc1bda61014c21345c1a7fc52738810a24",
+      "texture_sha256": "ed90305380f14b9e866fdb71446bd5ad0fa85a36d7b4ec26b42dc99e0a9ff680"
+    },
+    {
+      "mesh": "prop_000032.obj",
+      "gaussians": 270,
+      "mesh_sha256": "a3549198135b588177678e663e1ce40866f18a74e1e9297dbab024fca030b7b1",
+      "texture_sha256": "679148f468feab3730438d5b1e44c3914426412d2637703407a557e30220af09"
+    },
+    {
+      "mesh": "prop_000033.obj",
+      "gaussians": 270,
+      "mesh_sha256": "342f624d88781c8e765a237cd81814a4e7a9892ba15692544e23960843139f8e",
+      "texture_sha256": "89d4c05df1d9e7f816e401fdd6529495aaca418dd04a1b5d76e6a04717c9e895"
+    },
+    {
+      "mesh": "prop_000034.obj",
+      "gaussians": 81,
+      "mesh_sha256": "29753e3620e4cf6e6b28529e98cf2a42f405c3d1686e42e9f5ec8f923b3bb4ab",
+      "texture_sha256": "da29c82c0af277437d8749f715f67c6b9d10d58c808f4c880b4de033d3a387e4"
+    },
+    {
+      "mesh": "wall_000000.obj",
+      "gaussians": 4104,
+      "mesh_sha256": "4d9b43eccebfd78e51d352154b0a6c40bede1714c1a9b196d1c82a07c2175d2a",
+      "texture_sha256": "8df4125e116ab9b6aa707298901f5aad22a146e05e660c43360bda7735958779"
+    },
+    {
+      "mesh": "wall_000001.obj",
+      "gaussians": 4050,
+      "mesh_sha256": "8d9ac426cdc94a07018e5c542eb7f455e5c58567e2daca585c97ac6332197d5e",
+      "texture_sha256": "9b9f300873da8b4da5ee164a7add5ffea19ef606bde0d7c796eb1f95ee249f02"
+    },
+    {
+      "mesh": "wall_000002.obj",
+      "gaussians": 4698,
+      "mesh_sha256": "01232f39adbd9cc2ec2e7e7ca209b528e6390f910592153a1058ad8e249f5f07",
+      "texture_sha256": "3ade8b917a68d6bd116c25a9e7fe429ca887d807b61b7e9c8583d223376c487d"
+    },
+    {
+      "mesh": "wall_000003.obj",
+      "gaussians": 2916,
+      "mesh_sha256": "25b6e46458d94138e0576215d92c5149a773aad0a09429632524458424d600d7",
+      "texture_sha256": "4a15168978751b3b4bc62d92f069df3b7fddd4a608d979317758c9c6d5f9b648"
+    },
+    {
+      "mesh": "wall_000004.obj",
+      "gaussians": 3780,
+      "mesh_sha256": "b2041223d4d1a3c87d09e6ea1be728da2276a389433555845e883dae148f9c3a",
+      "texture_sha256": "b4f2b045413e4bac6bb9f92873235891f5ba59f14795415c88eba512f8bbcb9e"
+    },
+    {
+      "mesh": "wall_000005.obj",
+      "gaussians": 1512,
+      "mesh_sha256": "3a6dcf8f1ec826a48cac77a15348279f0728fc25b4401850f7f36315156fc5a0",
+      "texture_sha256": "b2927b9b4acb4a9c0a5139d4c52b023cfa37cede54984fc8ab4b5766c2fda007"
+    },
+    {
+      "mesh": "wall_000006.obj",
+      "gaussians": 1080,
+      "mesh_sha256": "ae9236c0e5cdda49fe90f421fe9bb5f35998feaca644bd3ce878e23c791d3d23",
+      "texture_sha256": "d06f156ecc77e92531aa5afa5ce2a0708b27737b3efe0abc9f3863a2c520cb0b"
+    },
+    {
+      "mesh": "wall_000007.obj",
+      "gaussians": 702,
+      "mesh_sha256": "a5cbe845f6b929d221fadeab153f6233f58822769cdd2c3ee7535aa73aa11967",
+      "texture_sha256": "8a38055f18faff8985e0a5d28712c240fae1ed2923369ea3c15ef7da316b97bc"
+    },
+    {
+      "mesh": "wall_000008.obj",
+      "gaussians": 1782,
+      "mesh_sha256": "4f7e08a6a5c0743f7e2ff6365cc71a8830a8238fd70e59379e199b2677698bfb",
+      "texture_sha256": "871f9e774245806b647b7e87a849c39fec3a6203a96a125deeb29c31c3e32aaa"
+    },
+    {
+      "mesh": "wall_000009.obj",
+      "gaussians": 3402,
+      "mesh_sha256": "c5fb221cfc40b6a2068ad04621738f6513f9a0966b17a50de7fd47ac818e7efe",
+      "texture_sha256": "791c8a7a37bd1b7582278250f85f5d2758334fe435cd4a3c2597465a2d32b1eb"
+    },
+    {
+      "mesh": "wall_00000a.obj",
+      "gaussians": 4860,
+      "mesh_sha256": "f58e2b1ce749ecfb957f909bf8a33a61fe9a5dd6cfd6dba1fc8d46e4651ca433",
+      "texture_sha256": "fb400738c247a5d6d200a0ac25e8fce19f8e9de0ab47a885ae1e4c8f2ac87f6c"
+    },
+    {
+      "mesh": "wall_00000b.obj",
+      "gaussians": 4050,
+      "mesh_sha256": "caf69352c5cb3aee05fc869fa328b3edb136a32eb1bb76c07c574611fc0db67a",
+      "texture_sha256": "61ca320245ad889577c2d76a54a25d1b2c047d14c90eba12b4d89432bca6ed1d"
+    },
+    {
+      "mesh": "wall_00000c.obj",
+      "gaussians": 1728,
+      "mesh_sha256": "44eaa16e7a710106d22b7ec83c528d1017823f464dcbe83f0e6bbd1513aec5b8",
+      "texture_sha256": "70b17df48f1f04b924f2cbf5102f320943a00f35b4b84bf25c1b63b5b774453c"
+    },
+    {
+      "mesh": "wall_00000d.obj",
+      "gaussians": 756,
+      "mesh_sha256": "918ad47c452f754c3fa553d128adf5673c4587b555875786862142693a0ac894",
+      "texture_sha256": "c183dcb535c820c7fdc6f607c221adf28db5cbbdbd3a103d7aad650c72658192"
+    },
+    {
+      "mesh": "wall_00000e.obj",
+      "gaussians": 5994,
+      "mesh_sha256": "f840e3ecf821dd76001cefbade6440b0a0b4fcae3b6adf6a95415f0093614fd0",
+      "texture_sha256": "5d5de3ae1ec42825db551f2ed540301ae3b48c31865ddc3d1d9d84e1731ec907"
+    },
+    {
+      "mesh": "wall_00000f.obj",
+      "gaussians": 108,
+      "mesh_sha256": "bdebfbc96be9b939e6ce1ea12c1c0571461cbf59838b378bd7318a47c38799fb",
+      "texture_sha256": "3f8892b8acf2a5920bbbfda724c24de81b327fce91616ed42426fee6602f0093"
+    },
+    {
+      "mesh": "wall_000010.obj",
+      "gaussians": 2970,
+      "mesh_sha256": "b5b22e42b288f21002f8e3eee1ed24f2bada4034f663054b945fea7bc3a8ffc1",
+      "texture_sha256": "6d6b42b5c4bef7e19da43b49dfddf58c362643c968a22025da04b99b18fade45"
+    },
+    {
+      "mesh": "wall_000011.obj",
+      "gaussians": 2916,
+      "mesh_sha256": "c26b3f6d2fd67a614419d3c5f25791adfa750d76a4ae3854ad32b9dabf3c15ef",
+      "texture_sha256": "7cda847ff3becd22977c5d036270f39d96cd2ebbc460b93d11dbecc9f9279863"
+    },
+    {
+      "mesh": "wall_000012.obj",
+      "gaussians": 3780,
+      "mesh_sha256": "46eead43ba6858c86a860019f5f5b9639b2b364bc0d3cd3d6fad122c6db15bf6",
+      "texture_sha256": "2809ee6fcfcd1b726c009ce135a44720771fa0d29b3b1ec01c4727bee5c61b58"
+    },
+    {
+      "mesh": "wall_000013.obj",
+      "gaussians": 4698,
+      "mesh_sha256": "3c96cf0d8cd74d73dd80656c2275dc4168f5d4daaffff19a020bf8e5d5675e97",
+      "texture_sha256": "d17c7e9148bef0261c176b58a56074dfe8a7861eaca8223f5e45e837ba943fd5"
+    },
+    {
+      "mesh": "wall_000014.obj",
+      "gaussians": 1674,
+      "mesh_sha256": "8be7f95a1420ecf598e504b1424f06c30e3904e5f155a217eaf210354b09ffec",
+      "texture_sha256": "0beab3ef02fd34031fe118266407a84a92353ed04e2d795c0121c7025ede79d7"
+    },
+    {
+      "mesh": "wall_000015.obj",
+      "gaussians": 1296,
+      "mesh_sha256": "3b1fb84564365c40238e684420e7c16422e5795d14ef68ed39d6dc75fc3508ad",
+      "texture_sha256": "56a83517ee3f5e5b636fee2fbd4d02887ec79c012e0f98a2f07b21e4f666c3e3"
+    },
+    {
+      "mesh": "wall_000016.obj",
+      "gaussians": 1782,
+      "mesh_sha256": "c7fa82fa62c2b79d4b6e45a02e3b28f29660adb56c7ad076e0de6d57175d284c",
+      "texture_sha256": "ed56e0d5611092d985627151daf64e447582eca16173d62403b25504cdf61f5a"
+    },
+    {
+      "mesh": "wall_000017.obj",
+      "gaussians": 1080,
+      "mesh_sha256": "be891f8816573e8c15bbd090cf779e15512c3cc52ba6813d0554f8ddcdd60f3c",
+      "texture_sha256": "d33765fdea8305db1f306b4298b0a54cb20c076904bf2924c5ed9ecf8046d658"
+    },
+    {
+      "mesh": "wall_000018.obj",
+      "gaussians": 4050,
+      "mesh_sha256": "91d7af4ff4da3c9b6b0e059971965a992d188cc8f98cf7d11c2626b6e130e67b",
+      "texture_sha256": "edf0899e9e0e9216b1a7916e6095207deb4a4bea64aea3360de3913623b2bb5a"
+    },
+    {
+      "mesh": "wall_000019.obj",
+      "gaussians": 3726,
+      "mesh_sha256": "4a883556332ac1d780506776824c88a29851d28c9d652f727715b2b3e03d13c9",
+      "texture_sha256": "6bb42779f9cfb907c0eb5203ee330fb0bad047409e8d69015569b734411328fb"
+    },
+    {
+      "mesh": "wall_00001a.obj",
+      "gaussians": 3402,
+      "mesh_sha256": "30a562771f5111edc618fb8701c2ab3bbeb11ea82a87254b51aa2e66b3ee7838",
+      "texture_sha256": "b6c823647f3aabcbfc54243401bf666dca43ad1560a17572108d1ae5927c2fb7"
+    },
+    {
+      "mesh": "wall_00001b.obj",
+      "gaussians": 756,
+      "mesh_sha256": "b7a7eb557b871ea891a5a183ba237a597e9035d41502f92b4c6b2c5977c95bd5",
+      "texture_sha256": "f6577872e08c9ded219e28e9a1c5624f0ea0037d21435356ed312c810a2b6097"
+    },
+    {
+      "mesh": "wall_00001c.obj",
+      "gaussians": 1836,
+      "mesh_sha256": "9d7f0d0930760509c547067660ca92beff9476c652f69a69cb18d88d313046a8",
+      "texture_sha256": "cbdfc1a7343c861eebe5227b0cf2fc1559ee3dc3d4a12d641a809ab9b5532e70"
+    },
+    {
+      "mesh": "wall_00001d.obj",
+      "gaussians": 3726,
+      "mesh_sha256": "8bd9f9341383dc82d416c9a9f3195337ec077ef5ee7fc3f03eb9ada0106690e4",
+      "texture_sha256": "6e8284bd91c6a9cabeb12e94ce325f6e2fe8819c5f23a23f2e40f880a39dc226"
+    },
+    {
+      "mesh": "wall_00001e.obj",
+      "gaussians": 2970,
+      "mesh_sha256": "d78be4358f6b0f3d9d9e1c848d1b3aa1833865264247979956c02fae47d2d014",
+      "texture_sha256": "9e9912be25a6a98d33dfe9f0ece89f9d9804e174006986f11659491895fa7892"
+    },
+    {
+      "mesh": "wall_00001f.obj",
+      "gaussians": 7236,
+      "mesh_sha256": "d5ee911159025a3aa0581d80d9cde2fec548334d2957331aa610d66c7e9cfc91",
+      "texture_sha256": "86264d84d3d99bbd4b5a3c7d1005b938e165d51d6e6f12e1be0d864a252e1cf1"
+    },
+    {
+      "mesh": "wall_000020.obj",
+      "gaussians": 1728,
+      "mesh_sha256": "4365eb0c56f6e7970628b7a2e3ad777a6e0390efc865c5d93f0081f5ab2c54c9",
+      "texture_sha256": "232ec9fe4373d6c70a7d0ff9495a75f411939b9554511c4a858e15df5620db45"
+    },
+    {
+      "mesh": "wall_000021.obj",
+      "gaussians": 702,
+      "mesh_sha256": "b8f1fb895f7f1ee967aebccb3147a71271e8a8105306f77e83d0625088ca22cb",
+      "texture_sha256": "6e329fa14e7310dafd7cfdcd41d12a5dda4a530befa5198f567cea5c23003577"
+    },
+    {
+      "mesh": "wall_000022.obj",
+      "gaussians": 1134,
+      "mesh_sha256": "ecf34269ccdeba34449323f49fdda17e75a654a036821d936802963828dc150e",
+      "texture_sha256": "8b813f12ee4a1fa18734bd6373f7372d1ff875409a618496f1756c74e5a740ce"
+    },
+    {
+      "mesh": "wall_000023.obj",
+      "gaussians": 1242,
+      "mesh_sha256": "f26d58c23c418fc736afddbe9d91253114e1cd03e977a5910d255dc00be02dbd",
+      "texture_sha256": "c20930627a3d5d4f94573bdc24468cc8fc2869bafe2bf8ef2a9039911eddd2ce"
+    },
+    {
+      "mesh": "wall_000024.obj",
+      "gaussians": 4266,
+      "mesh_sha256": "c007299348a885c62c00274a7e30f4f00bdfa4e45ed0efcc8b4f9d541b4bd5bb",
+      "texture_sha256": "6da1b49e5883d6ed6c05e846a6bc678ccec5fcbf0567799aa92a171597385f95"
+    },
+    {
+      "mesh": "wall_000025.obj",
+      "gaussians": 1836,
+      "mesh_sha256": "54b1395109d9883f75ce2d007dc650bbe46b680c8949e0aaaf2dd5d6724d249c",
+      "texture_sha256": "1e3df5ea5a7db81cc51f3cedd5a8612f44a9d2280ecfe99ff042a3c0d1625da7"
+    },
+    {
+      "mesh": "wall_000026.obj",
+      "gaussians": 1674,
+      "mesh_sha256": "0e26a5db2e9f00ca1e98773543aec256afe2c39c7e22228e72cee123300aebbc",
+      "texture_sha256": "794e2b2ba87aacbfb1f4192555dacf996745adfa9078cc1bcf927f17192de8fb"
+    },
+    {
+      "mesh": "wall_000027.obj",
+      "gaussians": 1350,
+      "mesh_sha256": "fea06deac576b53c3373c9da109bab1aa3d3291f333949a43d6343238ba633da",
+      "texture_sha256": "578b3353c3a954ebc1b0fc94931b1d8284ba335c37e3e7b6e47cd8dd9aa78ff4"
+    },
+    {
+      "mesh": "wall_000028.obj",
+      "gaussians": 1404,
+      "mesh_sha256": "4472807d2f500315e72716bdbb260d6fdc969196f5f1535633da44606196fcae",
+      "texture_sha256": "5b3c74d9e9cc30b6d9c86a091295cd8015e7526f615d8d3fe61bd4ca5075dda4"
+    },
+    {
+      "mesh": "wall_000029.obj",
+      "gaussians": 4698,
+      "mesh_sha256": "84e6200477e6781a0365689a96c2d9e1764804637d63ff70bb5bcd99df6d6e26",
+      "texture_sha256": "a8f49ca8a3d2cd4a67a10700db2d2e3070074479b5e981c2b2d6c8515183227c"
+    },
+    {
+      "mesh": "wall_00002a.obj",
+      "gaussians": 1620,
+      "mesh_sha256": "50ee089587491e1eaa58419071b0fed161ad69eb5e5a3905906c41d0211b305e",
+      "texture_sha256": "d72945999dae076d87d6cbde512148e55c6ec3be516c5e5e67dc095c2b1fb658"
+    },
+    {
+      "mesh": "wall_00002b.obj",
+      "gaussians": 1674,
+      "mesh_sha256": "69a1e42944607cbbd6d5136a9009c10d457e8fd98e900ad72b50e13e76e2bfc1",
+      "texture_sha256": "fdcf30dbaa817fe7e59eefaacf890b1da2f2ce32278bdec9eeaa8bad5e056de7"
+    },
+    {
+      "mesh": "wall_00002c.obj",
+      "gaussians": 1188,
+      "mesh_sha256": "f68414d67344df2b6c33edc016ece34e6370de14ba7e9cff7e3d2f505501ffd7",
+      "texture_sha256": "bc86484ed8342e097a765c3b9f67d572354f37d828a136b5412fa704fa66c700"
+    },
+    {
+      "mesh": "wall_00002d.obj",
+      "gaussians": 1674,
+      "mesh_sha256": "458ff992ff6ce3a3a34864b614adcaf0d3e3f9fe03cb154518a7a5366822ebc3",
+      "texture_sha256": "5da6067f10b4eeb208ac224dfae4fdc13fd14e880956450542c118e72ba2bc20"
+    },
+    {
+      "mesh": "wall_00002e.obj",
+      "gaussians": 1458,
+      "mesh_sha256": "12f06c9c40056e63138efd4ebf292b1c83dd3cafd74a1ebd7f8032210ab0c281",
+      "texture_sha256": "bc87b74e6ed01a763013b2f2e0fc5915f96613765dfaabc1378884b22aac8665"
+    },
+    {
+      "mesh": "wall_00002f.obj",
+      "gaussians": 1350,
+      "mesh_sha256": "15d5433edddb330f5cac0f2a1db21bb48bd9905a375674ac7d82ca7243a01f61",
+      "texture_sha256": "2e4ecc351a3f8cd269b9186ea5e11a4842e8b3d2765faa9c256c179c86337ba0"
+    },
+    {
+      "mesh": "wall_000030.obj",
+      "gaussians": 1998,
+      "mesh_sha256": "08769357f03f8383abccaf3c685a7ca9bf3a258fa0f26951eb121894447c8818",
+      "texture_sha256": "cc75630f343abaa0f2cddce27af736d18d3eb533fcb6cd9f17925c4ea0c10a0e"
+    },
+    {
+      "mesh": "wall_000031.obj",
+      "gaussians": 2538,
+      "mesh_sha256": "bfff708b2ab216efa325b5f92646f9b41be065d86b8af0409742ceb6b3541b76",
+      "texture_sha256": "29dfae049d9a4adc91764e698be6a9fdb50b7a14dc9e9a5a0de8366dbbdcdb7a"
+    },
+    {
+      "mesh": "wall_000032.obj",
+      "gaussians": 3186,
+      "mesh_sha256": "190a3b1f58edecb7df1e811d0e2fb013f94ecd592d9d31e2cdef0028f568182b",
+      "texture_sha256": "81048ddcfd6a3535ee45d9163d03450e83d2a5265c0725840d3451f639b7db1b"
+    },
+    {
+      "mesh": "wall_000033.obj",
+      "gaussians": 1404,
+      "mesh_sha256": "8f6cb85ffa85e573896bfa0e36a1c36d721f67eee6aa4b68e6e02f74940ded61",
+      "texture_sha256": "807d0d31db689ba7bb80bed3850ba5d9b8a69bcf23504cedeae7cd3df08cb542"
+    },
+    {
+      "mesh": "wall_000034.obj",
+      "gaussians": 1836,
+      "mesh_sha256": "c50392520c191d3bf33187dd35b125b5764bdd7631cadab22d35e7d9efb6cc94",
+      "texture_sha256": "71046800b93b315869814d12b0a5428670f751b51b46a9553202a33a884d2ae8"
+    },
+    {
+      "mesh": "wall_000035.obj",
+      "gaussians": 1728,
+      "mesh_sha256": "9179f98bfdd95f093ddd9a45d911072ddf8e27d56b782c004822f937aef84c0c",
+      "texture_sha256": "3b2f71f6732b0a4f9506294f8eaeb386c9ace9408de8ce75a42e9a2c7c66abe2"
+    },
+    {
+      "mesh": "wall_000036.obj",
+      "gaussians": 1566,
+      "mesh_sha256": "451cca7d35162ee35b7cb4cd48004c940c65a7ea3c5e84c2d7aea8e08350d0a5",
+      "texture_sha256": "2bc4cb8c98b0d3415ee267fc08620da2278711955819f760d2603be4c57d46ad"
+    },
+    {
+      "mesh": "wall_000037.obj",
+      "gaussians": 1512,
+      "mesh_sha256": "d73c988960b5b90d20684c7345c2111b903cdf3daddd62baad2d32db3842660e",
+      "texture_sha256": "28dcf2fe35591345ae29149086bd094e6a9ef85b0ed93af0c833a300b8300238"
+    },
+    {
+      "mesh": "wall_000038.obj",
+      "gaussians": 270,
+      "mesh_sha256": "c5e27dddbe31bf00ab0a171cc4903cecb650eb0c352547e836baa571e644de43",
+      "texture_sha256": "7160bf38323673c4bb073b03dabf88578bd267d9e662fb65498ef6c574649d60"
+    },
+    {
+      "mesh": "wall_000039.obj",
+      "gaussians": 4914,
+      "mesh_sha256": "172058739e3dc7d361b1b33e8abba0c5f091e4b41bd3564e4be9553be057024b",
+      "texture_sha256": "0141bcc63e86ab8f465493162d0deea694237fd31897f90dbf4ab09d1b7e6eba"
+    },
+    {
+      "mesh": "wall_00003a.obj",
+      "gaussians": 108,
+      "mesh_sha256": "23046d9c9d7e3fc0b088f2a0af9b047690d7a9a006d8ab0dbe148a547b43e8bb",
+      "texture_sha256": "890551b8c1a933234cda655bfd1b6064e4a75994ab7b26495c596e62ebfeab16"
+    },
+    {
+      "mesh": "wall_00003b.obj",
+      "gaussians": 162,
+      "mesh_sha256": "c1884f386f6b257cd11c6565389bd074f986778d17393e4f5fdc927f07c13983",
+      "texture_sha256": "eb791b092a154678a49bc84bc6bf2fa3aa7bd4d83aefdb53ea1eae5846c5ebe5"
+    },
+    {
+      "mesh": "wall_00003c.obj",
+      "gaussians": 108,
+      "mesh_sha256": "48716c93360a29ed17a85f170ff7944c66a125567e7dba219ab6280f4b30f6b6",
+      "texture_sha256": "1ee84e3301ab6f061dd3ec69f0b965d70a09bdaadba40fcdc87a92a6e2f51df3"
+    },
+    {
+      "mesh": "wall_00003d.obj",
+      "gaussians": 108,
+      "mesh_sha256": "d650eddeb1b6e8edede6e8dd24e6502abe8ca2cad1838b147b816ef216c7609f",
+      "texture_sha256": "0e70902335aef6b82b2e49f8424b5b558849b3133db5691a5930c105e6360e63"
+    },
+    {
+      "mesh": "wall_00003e.obj",
+      "gaussians": 2538,
+      "mesh_sha256": "4823135f84ce6676d38b89485a9170b083148fde913b9b158d29286976041cef",
+      "texture_sha256": "28ce90aebcb1553bb7246eafd18556472f70523738ca47264d6b210fc1297fa9"
+    },
+    {
+      "mesh": "wall_00003f.obj",
+      "gaussians": 1998,
+      "mesh_sha256": "5c427cdbc59c44b11eca1c9455ddbc85e388e1db1f8e95acb9a1f9c06e50f816",
+      "texture_sha256": "5b6ad95287319fafab476fa2f0269c78003ccf1872a993901729813c4ce3523d"
+    },
+    {
+      "mesh": "wall_000040.obj",
+      "gaussians": 3186,
+      "mesh_sha256": "6a3781977cb2660b8f06f446b60d59c7404a49cacfca3a53da7bad4a0e728667",
+      "texture_sha256": "f91c8a839249a55b007b8273b782a54606173cc9e12d8ad107be25a5ff306e2a"
+    },
+    {
+      "mesh": "wall_000041.obj",
+      "gaussians": 3996,
+      "mesh_sha256": "b2f919a8d8a59932d05eb18afeb3925f70c36b853269b1156343412061ad2c1f",
+      "texture_sha256": "a677a007bdd0e13a9a2d18f0fc87eadd074aff5ad617f92ccf7f11b610b00129"
+    },
+    {
+      "mesh": "wall_000042.obj",
+      "gaussians": 1620,
+      "mesh_sha256": "efb9db565f1abc1e62f994253a92b5e2402f90e2542d60b4dcda0de2deaa4b6d",
+      "texture_sha256": "651247a0d14db268f83cf1e6c4274df7bf21481755fa75d289306afec1fec924"
+    },
+    {
+      "mesh": "wall_000043.obj",
+      "gaussians": 1674,
+      "mesh_sha256": "6a34c623ba583411d385522dfdf7ba54296601f13c0c4d1a683b39e074e41e87",
+      "texture_sha256": "b1d88bdf2ab1b1127affdbd4206a1e73948a0875b05d4f8533720be28aee7aca"
+    },
+    {
+      "mesh": "wall_000044.obj",
+      "gaussians": 3456,
+      "mesh_sha256": "3c1bbd0b9c7f9cf3c8ca6ee311076413b0549b759d58c1e0cbe97f1d4540027d",
+      "texture_sha256": "c6aed49274c37af17f9fb9c71eedf14c0fe3ede0feb5b0af3dbae0e16e1a3122"
+    },
+    {
+      "mesh": "wall_000045.obj",
+      "gaussians": 1026,
+      "mesh_sha256": "95b6373f23082cc9ade271af3038d79e1325d056909b9d35c8aabbabf30b54b5",
+      "texture_sha256": "dde680a81a5e00ece06d5b9b5772f70f11f36de4fd189fe1aa1a3516a8a54a03"
+    }
+  ]
+}
