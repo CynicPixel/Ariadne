@@ -1,3 +1,4 @@
+
 # ARIADNE — Phased Build Plan
 
 **Model:** thin-Ariadne-first. Phase 0 lays plumbing, Phase 1 stands up the entire system end to end with

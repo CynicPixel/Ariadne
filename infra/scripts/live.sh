@@ -116,11 +116,16 @@ start_orchestrator() {   # -> appends its container id; returns once <run>/choos
 
 cmd_run() {
   local scene="$1" out="$2" end_s="${3:-}"
+  if [ "${ARIADNE_EXTERNAL_CONSOLE:-0}" = "1" ]; then
+    mkdir -p "$REPO_ROOT/build/demo"
+    exec {demo_worker_lock}>"$REPO_ROOT/build/demo/runtime.lock"
+    flock -n "$demo_worker_lock" || { log "another demo mission owns this worker"; return 1; }
+  fi
   [ -f "$REPO_ROOT/$scene/mission_live.sdf" ] || { log "no $scene/mission_live.sdf (live.sh compose)"; exit 2; }
   local id; id="$(date -u +%Y%m%dT%H%M%SZ)-$(head -c2 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   local run="$out/live-$id"
   mkdir -p "$REPO_ROOT/$run"
-  local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con orch=""
+  local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con="" orch=""
   # The config this run used, always recorded beside it: replay reads it (chooser, gate, end_s).
   sed -e "${end_s:+s/^end_s: .*/end_s: $end_s/}" -e "${ARIADNE_LOCKSTEP:+s/^lockstep: .*/lockstep: true/}" \
     "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
@@ -135,6 +140,7 @@ cmd_run() {
     planner+=(--shadow-map-config "$run/shadow_map_config.yaml")
   fi
   trap 'stop_mine' EXIT
+  trap 'exit 143' TERM INT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, config $live_cfg, render: $(render_args | cut -d' ' -f1-2)"
 
@@ -156,7 +162,7 @@ cmd_run() {
     CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-recon" --memory=2g --memory-swap=2g -u "$U" -e HOME=/tmp \
       -v "$REPO_ROOT":/work -w /work/python "${ARIADNE_RECON_IMAGE:-ariadne-recon:1}" \
       python -m ariadne_recon.live.service --listen "/work/$run/recon.sock" --out "/work/$run/splat" \
-      --scene "/work/$scene" --backend cpu_init --training-image rgb)")
+      --scene "/work/$scene" --backend cpu_init --training-image rgb --record-link "/work/$run/recon.link")")
     local t0r; t0r=$(date +%s)
     until [ -S "$REPO_ROOT/$run/recon.sock" ]; do
       [ $(( $(date +%s) - t0r )) -lt 30 ] || { log "recon service not listening after 30 s (tee stays off)"; break; }
@@ -167,10 +173,11 @@ cmd_run() {
 
   # 1. The runtime listens first.
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work "${recon_env[@]}" \
+    -e ARIADNE_DEMO_MEDIA="${ARIADNE_EXTERNAL_CONSOLE:-0}" \
     -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "payload:$(basename "$REPO_ROOT")")" \
     -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator 2>/dev/null)" ] && echo true || echo false)" \
     -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
-    "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
+    "$CORE_IMAGE" "${ARIADNE_LIVE_BINARY:-build/docker/cpp/runtime/ariadne_live}" --scene "$scene" \
       --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
       --mission-config configs/mission/mission_v1.yaml --live-config "$live_cfg" \
       --out "$run" --link "$run/link.sock" "${chooser[@]}" "${planner[@]}")")
@@ -188,6 +195,7 @@ cmd_run() {
   # 3. Unpause once every topic is matched end to end.
   local t0; t0=$(date +%s)
   until [ -f "$REPO_ROOT/$run/link.ready" ]; do
+    [ ! -f "$REPO_ROOT/$out/stop.request.json" ] || { log "startup cancelled"; return 0; }
     [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
     docker inspect -f '{{.State.Running}}' "$sim" | grep -q true || { log "sim container exited"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
     sleep 2
@@ -214,6 +222,8 @@ cmd_run() {
     log "world running"
   fi
 
+  # A hosted demo owns one console for the worker lifetime.
+  if [ "${ARIADNE_EXTERNAL_CONSOLE:-0}" != "1" ]; then
   # 4. Console, fed live, with a probe client so frames are served during the run.
   local port="${ARIADNE_CONSOLE_PORT:-8080}"
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
@@ -229,6 +239,8 @@ async def main():
         async for _ in ws: pass
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
+  fi
+
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
   # D224: an external sampler (A2's profiling) beside the run - started after the containers, stopped with them.
   SAMPLER_PID=""
@@ -236,11 +248,25 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
     bash "$ARIADNE_SAMPLER" "$REPO_ROOT/$run/sampler" > "$REPO_ROOT/$run/sampler.log" 2>&1 &
     SAMPLER_PID=$!
   fi
-  local rc; rc="$(docker wait "$rt")"
+  local rc
+  # Keep startup cancellation and an early End run visible to the runtime.
+  while [ "$(docker inspect -f '{{.State.Running}}' "$rt")" = true ]; do
+    if [ -f "$REPO_ROOT/$out/stop.request.json" ]; then
+      for d in "$REPO_ROOT/$run"/*/telemetry.jsonl; do
+        [ ! -f "$d" ] || cp "$REPO_ROOT/$out/stop.request.json" "$(dirname "$d")/stop.request.json"
+      done
+    fi
+    sleep 1
+  done
+  rc="$(docker wait "$rt")"
+  # Runtime EOF flushes the reconstruction table before containers are stopped.
+  if [ "${ARIADNE_SPLAT:-0}" = "1" ]; then
+    timeout 30 docker wait "ariadne-live-$id-recon" >/dev/null || true
+  fi
   docker logs "$rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
   docker logs "$sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
   sleep 3   # the console's last poll sees results.yaml and ends its stream
-  docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  [ -z "$con" ] || docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
   [ -z "$orch" ] || docker logs "$orch" > "$REPO_ROOT/$run/orchestrator.log" 2>&1 || true
   printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
   [ -z "${SAMPLER_PID:-}" ] || kill "$SAMPLER_PID" 2>/dev/null || true

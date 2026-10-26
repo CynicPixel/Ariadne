@@ -24,7 +24,7 @@ table as cited in the repo (not re-run by us); `design` = built and unit-tested 
 | 8 | Egress | 12/12 responder routes GT-valid; final route = GT geodesic (4.44142 m) (D113) | GT |
 | 9 | Exploration | maze_short final coverage 0.757 vs 0.713 / 0.681. The pre-registered time-axis claim FAILS | weak (gate FAIL) |
 | 10 | Reconstruction | Live 3-agent splat: 259,994 Gaussians, 0 drops, determinism-neutral, wall seeds 92.9 % within 10 cm (cpu_init) | none (no real-scene quality metric) |
-| 11 | Agentic | Bedrock Nova 2 Lite: 36/36 live decisions, 0 fallbacks, replay 15/15 | none (7.2 not run) |
+| 11 | Agentic | Matched Bedrock/classical pair: Bedrock agent-0 choice differs on 6/18 replans; both replay verdicts PASS | behavioral comparison only; one scene/seed, no mission-quality outcome |
 | 12 | Perf / cost | Collab sweep $0.0875; pre-merge ~$0.035; replay RTF 0.836 (below real time) | none (absolute numbers) |
 | 13 | Determinism | Recorded live runs replay byte-identically (live vs replay ×2); estimator invariant to thread count | self-check |
 
@@ -44,13 +44,14 @@ table as cited in the repo (not re-run by us); `design` = built and unit-tested 
   - Egress vs the GT geodesic.
   - Volumetric / traversability vs 1.8.
   - Global descriptor int8 vs fp32.
+  - Bedrock vs classical chooser on the same scene/seed (matched decisions and replay; mission outcome not scored).
 - **Weak:**
   - Spectral vs greedy: mm-level, 3/4 cells.
   - Per-metre exploration: only vs the 3 cost-free rows.
   - Late coverage: margins ≤ 0.006 on ci_tiny.
 - **No usable comparator:**
   - Reconstruction: no real-scene quality metric.
-  - Agentic: the classical comparison is not run.
+  - Agentic mission performance: a 500 s matched chooser pair has completed and replayed deterministically, but map/route/task outcomes were not scored against ground truth.
   - Sim retrieval: a size ablation only.
   - COOL: no run.
   - Exploration on its pre-registered claim: it loses.
@@ -188,20 +189,24 @@ table as cited in the repo (not re-run by us); `design` = built and unit-tested 
 | claim | number | comparator | evidence path | caveat / scope | tag |
 |---|---|---|---|---|---|
 | Live splat from the real 3-agent runtime, determinism-neutral | 71 KF, **0 drops**, 4 submaps, **259,994 Gaussians**, 8.3 MB; run digest = the no-tee reference; placement ≤ **2.2e-16** vs briefing | no-tee reference run | `evaluation/runs/ph6/live_e2e_20261024/README.md`; D230/D231 | **cpu_init only, no GPU training**; 20 s lit `maze_demo_0` | measured |
+| Full 200 s mission trained on AWS T4 | **1,476 KF**, 51 submaps, **2,590,315 Gaussians** (batch, 100 it/KF); 270 novel-view orbit frames | — | `evaluation/runs/ph6/shared_model_video_20261026/` (recovered training/render records and S3 manifests) | Recorded 3-agent `maze_demo_0` mission 626abe; gsplat 1.5.3, briefing placement. The reveal is editorial, not live reconstruction footage | measured |
+| Incremental GPU training throughput on that recording | live budget 15 it/KF: **349.7 s for a 200 s mission**, 203 ms/KF median (276 p95) | mission keyframe arrival rate | same evidence, `training_remote.json` | **0.57× real time**, not a real-time training claim. Batch model is used in the video | measured |
 | Seed geometry vs ground truth | wall submaps (agents 1, 2): seeds **92.9 % within 10 cm** of the GT ESDF; agent 0's submaps 65.8 % and 47.3 % | GT ESDF | same README | Percentage of seed points in those submaps, not of submaps. Agent 0's submaps are floor-heavy | measured |
 | gsplat cost on a T4 | full loss at 640×360: **10.9 ms/iter** (100k), **15.3 ms** (250k); render 1.7–3.0 ms | — | D196; `evaluation/runs/ph6/bench_t4_*` | Kaggle idle T4, synthetic scene. "7–10 iterations/KF" is a **[PROJECTION]** | measured / design |
 | Trainer recipe works (synthetic) | batch 100 it/KF: train-view **22.2 → 25.1 dB**, held-out 17.8–20.1 dB vs mean predictor 12.9 dB | predicting the mean (12.9 dB) | D198; `evaluation/runs/ph6/train_smoke_20261023T1340Z` | Synthetic corridor. **Live budget (15 it/KF): +0.5 dB only**, so live quality ≈ seed quality | measured |
 
-- **No real-scene PSNR/SSIM/LPIPS, Chamfer, double-wall or exposure-delay result exists** (Phase 6 exit metrics not
-  measured; GPU training on the ma200 recording is pending). The only real-scene render score on file is the Phase 1
-  placeholder: untrained init, held-out PSNR 17.5 dB, SSIM 0.718, LPIPS 0.68; accuracy 21 mm, completeness 0.66
-  (STATUS 2026-10-15). No published comparator is used anywhere.
+- **The recovered AWS ma200 run has training-view PSNR only:** live budget 23.14 → 25.71 dB,
+  batch 23.34 → 27.40 dB (median before/after on the trained keyframe). These are fitting diagnostics,
+  not held-out or novel-view quality scores. No Phase 6 held-out PSNR/SSIM/LPIPS, Chamfer, double-wall or
+  exposure-delay result is evidenced. The Phase 1 placeholder has held-out PSNR 17.5 dB, SSIM 0.718,
+  LPIPS 0.68; accuracy 21 mm, completeness 0.66 (STATUS 2026-10-15), from a different untrained-init run.
+  No published comparator is used anywhere.
 
 ## 11. Agentic
 
 | claim | number | comparator | evidence path | caveat / scope | tag |
 |---|---|---|---|---|---|
-| The LLM orchestrator (Bedrock Nova 2 Lite) answered every live decision, and the run replays exactly | **36/36** decisions answered, **0 fallbacks**, 0 errors, 18 replans; replay **15/15** checks PASS (trace/mover_state/directives sha256 identical) | none (classical-chooser comparison 7.2 not run) | `evaluation/runs/L1/llm_live_run5_maze_short_90s/README.md` | 90 s, maze_short_6, llvmpipe, 8.7× slower than real time. Working tree, commit pending. Runs 1–4 failed (kept in the README). No option crossed the 0.5 risk gate, so **approval/fallback never fired**. Nova took the planner's rank-0 candidate 27/36 times; 6 picks took a tiny goal against instruction | measured |
+| Matched chooser behavior and replay | 90 s pair: Bedrock answered **36/36** assignments over 18 replans; agent-0 choice differed on **6/18**; 118 model calls, 2,936,424 cumulative input tokens. 500 s pair: 100 joint replans and 200 commands per arm; both two-replay checks PASS, with 200 trace records and identical replay1/replay2 hashes | Same source revision `c143db14`, generated scene `89e61fecbb277f69`, runtime, renderer, and mission settings; chooser-only config difference | `evaluation/runs/agentic_planning_pair_20261025/` and `evaluation/runs/agentic_planning_pair_500s_20261025/`; full 500 s archives in the linked S3 objects | Both runs are on `maze_short_6`; 500 s run recorded 10,001 frames/agent and zero unpaired-frame drops. The 90 s arm had 34/36 movement commands accepted and two unanswered; no approval event. No paired ground-truth coverage, route-quality, or mission-completion metrics were emitted for the 500 s pair. Replay establishes reproducibility, not a mission-performance advantage | measured |
 
 ## 12. Performance / cost
 
@@ -253,8 +258,8 @@ table as cited in the repo (not re-run by us); `design` = built and unit-tested 
     (+2.9 mm). The dark / lamp / dust rows are a paused stretch (D199). Phase 5 exit NOT closed (D149).
 15. **Splat quality / PSNR on the demo scene**: not measured. The live run was cpu_init. The live 15 it/KF budget
     gives +0.5 dB. The recon-gpu image was not validated on a GPU instance. gsplat has not run on AWS GPU.
-16. **Agentic approval / fallback exercised**: never fired. Classical-vs-LLM comparison (7.2): not run.
-17. **Real time**: RTF 0.836 replay, ~0.14 local live, 8.7× slower in the LLM run.
+16. **Agentic approval / fallback exercised**: never fired. A matched classical-vs-Bedrock pair exists, but mission-level benefit is unmeasured.
+17. **Real time**: RTF 0.836 replay; ~0.147 classical and ~0.146 Bedrock for the matched 90 s live pair.
 18. **COOL speed-up**: no measurement. The c8g vs c7i 0.64× is stock (KleidiCV) Arm vs x86, not COOL.
 19. **ALIKED l2conv 2.37×, K 512, int4 / 1-bit codings**: none adopted (D234, D235).
 20. **Cross-architecture bit-identity**: #185 wire bytes differ on arm64. The GravityPgo fixture fix (D123/D124) was

@@ -12,15 +12,42 @@ import asyncio
 import json
 import os
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.gzip import GZipMiddleware
+from .demo import router as demo_router, manager as demo_manager
 
 from .live import FrameLog, LiveRun
 from .replay import TICK_HZ, frame, load_chain
 
 STATIC = Path(__file__).with_name("static")
-app = FastAPI(title="Ariadne console (stub)")
+@asynccontextmanager
+async def lifespan(app):
+    demo_manager.start()
+    try:
+        yield
+    finally:
+        demo_manager.close()
+
+app = FastAPI(title="Ariadne mission console", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.include_router(demo_router)
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+@app.middleware("http")
+async def protect_legacy(request, call_next):
+    # The hosted controller has one mutation boundary; legacy file APIs cannot bypass it.
+    if demo_manager.enabled and request.method == "POST" and not request.url.path.startswith("/api/demo/"):
+        return JSONResponse({"detail": "Use the authenticated demo control API"}, status_code=403)
+    return await call_next(request)
+
+@app.get("/demo")
+def demo_index():
+    return HTMLResponse((STATIC / "demo.html").read_text())
+
 
 # A2's splat panel (feat/ph5-dve via main 3f5e310): /splat page + chunk/table/ws + world.obj; it reads
 # ARIADNE_SPLAT_DIR (trainer output) and ARIADNE_SCENE_DIR (worldgen scene, the GT viewport). Separate page,
@@ -57,7 +84,7 @@ def chain():
 
 @app.get("/")
 def index() -> HTMLResponse:
-    return HTMLResponse((STATIC / "index.html").read_text())
+    return HTMLResponse((STATIC / ("demo.html" if demo_manager.enabled or not ("ARIADNE_LIVE" in os.environ or "ARIADNE_CHAIN" in os.environ) else "index.html")).read_text())
 
 
 @app.get("/healthz")

@@ -121,7 +121,7 @@ def request_human_approval(decision_id: str, agent: int, candidate: int, reason:
         "uncertainty": a["estimator"], "predicted_benefit": f"{c['cells']} frontier cells",
         "risk_score": c["risk"], "risk_reason": c["risk_reason"],
         "alternative_action": {"candidate": alt} if alt >= 0 else {"hold": True},
-        "orchestrator_reason": reason, "requested_unix_s": time.time()}
+        "orchestrator_reason": reason, "requested_unix_s": time.time(), "deadline_unix_s": time.time() + APPROVAL_TIMEOUT_S}
     (adir / f"{aid}.request.json").write_text(json.dumps(packet, indent=1))
     deadline = time.time() + APPROVAL_TIMEOUT_S
     while time.time() < deadline:

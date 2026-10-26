@@ -114,6 +114,7 @@ struct KeyframeView {
 /// Every frame (optional hook): the estimated rectified-left camera pose and a
 /// lazy rectified-RGB getter (only frames that ask pay for the remap).
 struct FrameView {
+    const std::vector<cv::Point2f>* track_px = nullptr; // callback-scoped tracker observations
     uint64_t frame_id = 0;
     int64_t t_ns = 0;
     bool is_keyframe = false;
@@ -718,6 +719,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
         if (args.on_body_pose) args.on_body_pose(vf.t_ns, est_body.back().T);
         if (args.on_frame) {
             FrameView fv;
+            fv.track_px = &tf.points;
             fv.frame_id = vf.frame_id;
             fv.t_ns = vf.t_ns;
             fv.is_keyframe = made_keyframe;

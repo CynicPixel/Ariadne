@@ -37,6 +37,7 @@
 #include "runtime/manifest/run_manifest.hpp"
 #include "runtime/replay/ros_cdr_writer.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
+#include "runtime/live/demo_camera.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -507,7 +508,12 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, kv.track_px.empty() ? cv::Mat(0, 1, CV_32FC2) : cv::Mat(kv.track_px).reshape(2, 1));
         send("#kf", o);
     };
+    std::unique_ptr<live::DemoCamera> demo_camera;
+    if (const char* enabled = std::getenv("ARIADNE_DEMO_MEDIA"); enabled && std::string(enabled) == "1")
+        demo_camera = std::make_unique<live::DemoCamera>(fs::path(out).parent_path() / "snapshots", agent);
     a.on_frame = [&](const tools::FrameView& fv) {
+        if (demo_camera && demo_camera->Wants(fv.t_ns) && fv.track_px)
+            demo_camera->Put(fv.t_ns, fv.left_rect_rgb(), *fv.track_px);
         if (tee) tee->OnFrame(fv.t_ns);   // D174: the lockstep watermark source (#cprog)
         std::vector<uint8_t> o;
         PutPod(o, int64_t(fv.t_ns));
@@ -1080,7 +1086,7 @@ int main(int argc, char** argv) {
             timing_log.Put(o.str());
         };
         auto deliver_kf = [&](int k, KfRec r, const cv::Mat& rgb) {
-            {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
+            if (!std::getenv("ARIADNE_DEMO_MEDIA") || std::string(std::getenv("ARIADNE_DEMO_MEDIA")) != "1") {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
                 cv::Mat bgr;
                 if (rgb.channels() == 3) cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
                 else bgr = rgb;
@@ -1420,6 +1426,7 @@ int main(int argc, char** argv) {
                 }
             });
         }
+        std::chrono::steady_clock::time_point demo_request_started;
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
         std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
@@ -1428,8 +1435,16 @@ int main(int argc, char** argv) {
         // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
         // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
         std::exception_ptr mission_err;
+        bool operator_stopped = false;
+        int64_t terminal_ns = end_ns;
         try {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
+            if (is_live && lc.demo && fs::exists(run_dir / "stop.request.json")) {
+                operator_stopped = true;
+                { std::lock_guard<std::mutex> lk(progress_mu);
+                  terminal_ns = std::min(end_ns, std::max<int64_t>(0, live::MinProgress(lanes))); }
+                break;
+            }
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
                 // EVERY lane (D225: these checks were hardcoded to lanes 0 and 1 after the D213 N-lift - the
@@ -1827,7 +1842,7 @@ int main(int argc, char** argv) {
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
-            if (!lc.demo) cv::imwrite((run_dir / snap).string(), maps.slab);   // D169: no per-replan PNGs in demo
+            cv::imwrite((run_dir / snap).string(), maps.slab);   // operator map must exist when announced
             if (shadow) {
                 const std::string p4 = "snapshots/p4slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
                 cv::imwrite((run_dir / p4).string(),
@@ -2079,22 +2094,39 @@ int main(int argc, char** argv) {
                 std::vector<std::vector<std::pair<double, double>>> prev_goals(static_cast<size_t>(NA));
                 try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
                         // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
-                    chooser->Send(q.str());
-                    if (lc.demo) {   // D169: never wait on the control path - poll the previous horizon's answer
+                    if (lc.demo) {
+                        // One outstanding supervisory request. Motion keeps using the classical
+                        // planner while inference or a human review is pending. A completed answer
+                        // is checked against THIS horizon's candidates below, never replayed blindly.
                         vdid = demo_prev_did;
-                        for (int k = 0; k < NA; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
-                        demo_prev_did = did;
-                        for (int k = 0; k < NA; ++k) {
-                            demo_prev_goals[k].clear();
-                            for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
-                        }
-                        if (vdid.empty()) {
-                            top_problem = "first horizon: no previous request";
-                        } else {
+                        if (!vdid.empty()) {
+                            prev_goals = demo_prev_goals;
                             ans = chooser->Wait(vdid, std::chrono::steady_clock::now());
-                            if (ans.empty()) top_problem = "expired: no answer within one horizon";
+                            const double age = std::chrono::duration<double>(
+                                std::chrono::steady_clock::now() - demo_request_started).count();
+                            if (!ans.empty() || age >= lc.llm_timeout_s) {
+                                demo_prev_did.clear();
+                                if (ans.empty()) top_problem = "expired: supervisory request timed out";
+                            } else {
+                                top_problem = "pending: autonomous planner continues";
+                            }
+                        } else {
+                            top_problem = "first horizon: supervisory request queued";
+                        }
+                        if (demo_prev_did.empty()) {
+                            chooser->Send(q.str());
+                            demo_prev_did = did;
+                            demo_request_started = std::chrono::steady_clock::now();
+                            for (int k = 0; k < NA; ++k) {
+                                demo_prev_goals[k].clear();
+                                for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
+                            }
+                            const auto tmp = run_dir / "supervisor.tmp";
+                            { std::ofstream f(tmp); f << "{\"decision_id\":\"" << did << "\",\"t_s\":" << T * 1e-9 << "}"; }
+                            fs::rename(tmp, run_dir / "supervisor.json");
                         }
                     } else {
+                        chooser->Send(q.str());
                         ans = chooser->Wait(did, std::chrono::steady_clock::now() +
                                                      std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
                     }
@@ -2130,6 +2162,7 @@ int main(int argc, char** argv) {
                             if (e["reason"]) pick_reason[k] = e["reason"].as<std::string>();
                         }
                     }
+                    const int requested_candidate = want[k];
                     if (lc.demo && want[k] >= 0) {   // D169: the answer names the PREVIOUS horizon's candidate;
                         int j = -2;                  // map it by goal, the same rule that continues current_task
                         if (size_t(want[k]) < prev_goals[k].size()) {
@@ -2147,13 +2180,24 @@ int main(int argc, char** argv) {
                         source[k] = "fallback", validation[k] = "missing or out of the candidate set";
                     } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold &&
                                !P[k].exempt[size_t(want[k])]) {
-                        const std::string expect = vdid + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
+                        const std::string expect = vdid + "-a" + std::to_string(k) + "-c" + std::to_string(lc.demo ? requested_candidate : want[k]);
                         std::ifstream f(run_dir / "approvals" / (expect + ".json"));
                         approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
                         bool approved = false;
                         try {
                             approved = !approval_raw[k].empty() && approval_id[k] == expect &&
                                        YAML::Load(approval_raw[k])["verdict"].as<std::string>() == "approved";
+                            if (approved && lc.demo) {
+                                const auto request = YAML::LoadFile((run_dir / "approvals" / (expect + ".request.json")).string());
+                                const auto goal = request["intended_action"]["goal_xy_m"];
+                                const auto current_goal = plan_out.agents[k].options[size_t(want[k])].goal_xy;
+                                // Human permission covers this goal and risk envelope, not another
+                                // nearby option that inherited an index after the map changed.
+                                approved = goal && goal.size() == 2 &&
+                                    std::hypot(goal[0].as<double>() - current_goal.first,
+                                               goal[1].as<double>() - current_goal.second) < 1e-6 &&
+                                    P[k].risk[size_t(want[k])] <= request["risk_score"].as<double>() + 1e-6;
+                            }
                         } catch (const std::exception&) {
                         }
                         if (!approved) source[k] = "fallback", validation[k] = "above the risk threshold without an approval";
@@ -2365,11 +2409,16 @@ int main(int argc, char** argv) {
         if (is_live && !lc.lockstep && !mission_err) {
             for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
-                hold.header.stamp.sec = int32_t(end_ns / 1000000000);
-                hold.header.stamp.nanosec = uint32_t(end_ns % 1000000000);
+                hold.header.stamp.sec = int32_t(terminal_ns / 1000000000);
+                hold.header.stamp.nanosec = uint32_t(terminal_ns % 1000000000);
                 hold.header.frame_id = "world";
                 SendCommand(k, hold);
             }
+        }
+        if (operator_stopped) {
+            past_end = true;
+            for (auto& lane : lanes) lane.images.Close();
+            ::shutdown(fd, SHUT_RDWR);
         }
         // The estimators stop when the READER closes their queues (the first image past end_s, or the end of the
         // input): never earlier, or live and replay would consume different tails.
@@ -2398,6 +2447,7 @@ int main(int argc, char** argv) {
         if (is_live) ::close(fd);
 
         std::ofstream res(run_dir / "results.yaml");
+        if (operator_stopped) res << "operator_stopped: true\nactual_end_s: " << terminal_ns * 1e-9 << "\n";
         if (mission_err) res << "mission_error: true   # the loop failed; see stderr - artifacts above the failure are valid\n";
         res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
             << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id

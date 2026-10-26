@@ -4462,6 +4462,14 @@ This is much more compelling than simply displaying a 3D viewer.
 
 ## 29.3 Implementation
 
+**Hosted-demo amendment (2026-10-26):** the implemented session lifecycle, fixed
+four-pane layout, controller lease, camera/feature packet contract, observed-point
+fallback, recorded playback and post-run training are specified in
+[`design/LIVE_DEMO_CONSOLE.md`](design/LIVE_DEMO_CONSOLE.md). Demo supervision keeps
+one request pending through human review while classical planning continues; it
+revalidates delayed answers against the current map. Ground truth is an explicitly
+separate preview. Hardware performance and publication remain release gates.
+
 **Backend:** FastAPI — WebSocket telemetry at 2–10 Hz, REST for approvals.
 **Frontend:** Three.js with a Gaussian-splat web renderer (e.g. the GaussianSplats3D library), streaming submap
 exports from S3 (§18.2).

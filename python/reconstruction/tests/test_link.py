@@ -139,3 +139,19 @@ def test_a_bad_t_w_o_is_dropped_not_fatal(tmp_path):
     assert not th.is_alive()
     m = json.loads((out / "manifest.json").read_text())
     assert m["link"]["dropped"] == {"malformed_t_w_o": 2} and m["keyframes"] == 0
+
+
+def test_recorded_live_stream_replays_identical_geometry(tmp_path):
+    """Post-run training input uses the exact received stream, including placement changes."""
+    spool = _spool_v3_rgb(tmp_path / "spool")
+    recording = tmp_path / "observed.link"
+    sock, out, th = _start(tmp_path, ("--record-link", str(recording)))
+    mock_tee.send(sock, [str(spool)], None)
+    liv, _ = _finish(th, out)
+    replay_out = tmp_path / "recorded-replay"
+    assert service.main(["--recorded-link", str(recording), "--out", str(replay_out), *LIVE]) == 0
+    rep = json.loads((replay_out / "table.json").read_text())
+    assert len(liv["submaps"]) == len(rep["submaps"])
+    for a, b in zip(liv["submaps"], rep["submaps"]):
+        assert a["T_W_anchor"] == b["T_W_anchor"]
+        assert (out / "chunks" / a["chunk"]).read_bytes() == (replay_out / "chunks" / b["chunk"]).read_bytes()

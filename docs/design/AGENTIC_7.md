@@ -265,3 +265,13 @@ not bit-reproducible across runs, which is accepted and is exactly why the gate 
 the mover's arrival rule and commanded-cell risk read the commanded cell, so a goal switch mid-leg is safe; the moving
 START is handled runtime-side - the planned path is trimmed to the waypoint nearest the agent's LATEST estimated pose
 before the command is sent (demo only), so a follow never backtracks to where the agent stood at plan time.
+
+
+## 5. Hosted demo amendment — 2026-10-26
+
+`LIVE_DEMO_CONSOLE.md` supersedes §4 items 3–4 for the hosted demo. Announced map
+snapshots are now written, and a single nonblocking supervisory request remains
+pending through inference/human review until its wall timeout. The next answer is
+revalidated against current candidates; original approval IDs are retained across
+candidate reindexing, with an exact approved-goal and non-increasing-risk check.
+The controller rejects expired or superseded requests. Lockstep behavior is unchanged.

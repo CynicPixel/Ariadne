@@ -4896,6 +4896,7 @@ actively developed and points to Spark (RECON_6 A.5). The user approved Spark on
   = a new transform, and the active submap replaced in place. Formats include .splat (32 B/Gaussian), .spz and .sog.
 - **The version is pinned exactly** in the page's import (an exact version at least two weeks old), never a floating
   tag.
+- **As-shipped version check:** the submitted viewer imports Spark 2.3.1 (see `python/operator_console/static/splat.html`); the 2.4.0 value above records the version current when this decision was written, not the version in the delivered page. Reproduction follows the import map: Spark 2.3.1 and Three.js 0.180.0.
 - **§49 ritual.** The arch §29.3 sentence gets a dated update naming Spark and this entry. GaussianSplats3D stays
   allowed as a fallback only if Spark fails a measured smoke.
 

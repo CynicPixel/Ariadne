@@ -34,7 +34,7 @@ import numpy as np
 
 from ..spool import Spool, load
 from .export import SPLAT_BYTES, chunk_bytes
-from .link import LinkError, K3, decode_kf, decode_t_w_o, half_rgb, pose12, read_frame
+from .link import LinkError, K3, decode_kf, decode_t_w_o, half_rgb, pose12, read_frame, frame_bytes
 from .placement import briefing_T_W_O, placements
 from .seeding import SeedParams, seed
 from .submaps import SubmapManager
@@ -93,6 +93,7 @@ class Service:
         self.counts: dict[int, int] = {}
         self.n_export: dict[int, int] = {}
         self.last_export: dict[int, float] = {}
+        self.keep_chunks = False
         self.version = 0
         self.period = export_period_s
         self.log = open(out / "service_log.jsonl", "w")
@@ -127,7 +128,7 @@ class Service:
         self.chunk[sid], self.n_export[sid], self.counts[sid] = name, n, len(params["means"])
         self.last_export[sid] = time.monotonic()
         self._table()
-        if old:
+        if old and not self.keep_chunks:
             (self.out / "chunks" / old).unlink(missing_ok=True)
 
     def _table(self) -> None:
@@ -189,24 +190,36 @@ def replay(spools: list[Spool], svc: Service, training_image: str, max_keyframes
     return n
 
 
-def serve(sock_path: str, svc: Service, training_image: str, stats: dict) -> int:
+def serve(sock_path: str | None, svc: Service, training_image: str, stats: dict,
+          record_path: str | None = None, replay_path: str | None = None) -> int:
     """Live: one runtime connection on a unix socket; returns the keyframes ingested when the runtime closes it.
     A #kf of an agent without a placement, of the wrong training image, or malformed is dropped and counted, never
     guessed: the runtime never waits on this service, so dropping is the only back-pressure there is."""
     import socket
     if training_image != "rgb":
         raise SystemExit("live ingest trains on RGB only (D199): the albedo proxy needs B's lamp sink first (D195)")
-    if os.path.exists(sock_path):
-        os.unlink(sock_path)
-    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(sock_path)
-    srv.listen(1)
-    print(f"service: listening on {sock_path}", flush=True)
-    conn, _ = srv.accept()
+    srv = None
+    if replay_path:
+        class FileConnection:
+            def __init__(self, path): self.file = open(path, "rb")
+            def recv(self, n): return self.file.read(n)
+            def close(self): self.file.close()
+        conn = FileConnection(replay_path)
+    else:
+        if os.path.exists(sock_path):
+            os.unlink(sock_path)
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(sock_path)
+        srv.listen(1)
+        print(f"service: listening on {sock_path}", flush=True)
+        conn, _ = srv.accept()
+    recording = open(record_path, "wb") if record_path else None
     n = 0
     try:
         while (f := read_frame(conn)) is not None:
             topic, payload = f
+            if recording:
+                recording.write(frame_bytes(topic, payload))
             stats["frames"][topic] = stats["frames"].get(topic, 0) + 1
             if topic == "#t_w_o":
                 try:
@@ -238,8 +251,11 @@ def serve(sock_path: str, svc: Service, training_image: str, stats: dict) -> int
                 stats["dropped"]["unknown_topic"] = stats["dropped"].get("unknown_topic", 0) + 1
     finally:
         conn.close()
-        srv.close()
-        os.unlink(sock_path)
+        if recording:
+            recording.close()
+        if srv:
+            srv.close()
+            os.unlink(sock_path)
     return n
 
 
@@ -248,6 +264,8 @@ def main(argv=None) -> int:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--spool", nargs="+", help="one composed spool, or one spool per agent")
     src.add_argument("--listen", help="live: unix socket path for B's tee (ARIADNE_RECON_SOCK)")
+    src.add_argument("--recorded-link", help="train after a run from its recorded reconstruction input stream")
+    ap.add_argument("--record-link", help="record received reconstruction inputs for post-run training")
     ap.add_argument("--out", required=True)
     ap.add_argument("--backend", choices=("gpu", "cpu_init"), default="gpu")
     ap.add_argument("--training-image", choices=("albedo_proxy", "rgb"), default="rgb")   # D199: lit demo
@@ -271,7 +289,7 @@ def main(argv=None) -> int:
         trainer = _CpuInit(channels, 30, SeedParams(), 0)
     out = Path(a.out)
     svc = Service(out, a.backend, a.training_image, trainer, a.export_period_s)
-    if a.listen:   # live: the briefing constant until the tee's #t_w_o arrives (and overrides it)
+    if a.listen or a.recorded_link:   # live: the briefing constant until the tee's #t_w_o arrives (and overrides it)
         mode = "live: #t_w_o" + (" (briefing until then)" if a.scene else "")
         placed, unplaced = ({k: briefing_T_W_O(a.scene, k) for k in range(_mission_agents(a.scene))}
                             if a.scene else {}), {}
@@ -282,13 +300,14 @@ def main(argv=None) -> int:
         svc.set_placement(k, T)
     for k, why in unplaced.items():
         print(f"service: agent {k} not placed, not drawn: {why}")
+    svc.keep_chunks = bool(a.record_link)
     t0 = time.time()
     stats = {"frames": {}, "dropped": {}}
-    n = (serve(a.listen, svc, a.training_image, stats) if a.listen
+    n = (serve(a.listen, svc, a.training_image, stats, a.record_link, a.recorded_link) if (a.listen or a.recorded_link)
          else replay(spools, svc, a.training_image, a.max_keyframes, a.pace))
     svc.finish()
     (out / "manifest.json").write_text(json.dumps({
-        "tool": "ariadne_recon.live.service", "spool": a.spool, "listen": a.listen, "link": stats, "spool_run_id": [sp.run_id for sp in spools],
+        "tool": "ariadne_recon.live.service", "spool": a.spool, "listen": a.listen, "recorded_link": a.recorded_link, "link": stats, "spool_run_id": [sp.run_id for sp in spools],
         "spool_schema": [sp.schema_version for sp in spools], "backend": a.backend,
         "splat_backend": "gsplat_cuda" if a.backend == "gpu" else "cpu_init", "training_image": a.training_image,
         "iters": a.iters, "budget_ms": a.budget_ms, "diagnostics": a.diagnostics, "pace": a.pace, "keyframes": n, "wall_s": round(time.time() - t0, 2),

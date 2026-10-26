@@ -87,6 +87,7 @@ if(OpenCV_FOUND)
     unit/test_multi_agent.cpp
     unit/test_entry_gate.cpp
     unit/test_keyframe_spool.cpp
+    unit/test_demo_camera.cpp
     unit/test_live_link.cpp
     unit/test_live_planner.cpp
     unit/test_lockstep_gate.cpp
