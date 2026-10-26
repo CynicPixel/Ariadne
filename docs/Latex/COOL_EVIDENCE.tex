@@ -41,7 +41,7 @@ The COOL comparison is anchored to operations that remain useful in the adopted 
 \begin{tabularx}{\linewidth}{@{}p{38mm}X@{}}
 \toprule
 COOL product & AWS Marketplace \emph{Cloud Optimized OpenCV for Graviton4} (\url{https://aws.amazon.com/marketplace/pp/prodview-fdvbfiewzuehs}): COOL 3.1, an OpenCV 5.x build for Neoverse-V2 with KleidiCV and Arm Performance Libraries, Ubuntu 24.04; C++ SDK under \rp{/opt/cool/cpp_sdk}.\\
-AMI (as published) & \texttt{Graviton5-COOL-v3-prod-k6u24vxijyzvg}; eu-north-1 \texttt{ami-0a302ff85af8d8764}, published in 18 regions (\rp{build/cool-regions.tsv}; DECISIONS D28). The AMI name and the listing version label (3.1) are the vendor's.\\
+AMI (as published) & \texttt{Graviton5-COOL-v3-prod-k6u24vxijyzvg}; eu-north-1 \texttt{ami-0a302ff85af8d8764}, published in 18 regions (\rp{infra/cool/cool-regions.tsv}; DECISIONS D28). The AMI name and the listing version label (3.1) are the vendor's.\\
 Instance & c8g.4xlarge (Graviton4, Neoverse-V2, 16 vCPU), eu-north-1, spot; \texttt{spinup.sh} profile \texttt{cool} (\rp{infra/scripts/spinup.sh}). m8g.4xlarge is the design's concurrent-agent throughput instance (arch \S26.3).\\
 Pinned OpenCV & 5.0.0; opencv \texttt{40738fb16ced}, opencv\_contrib \texttt{755e50675d97} (\rp{infra/docker/opencv-base.Dockerfile}); x86 build hash \texttt{fnv1a64:cf8ea084bb984703}. C++17, Eigen 3.4.1, gcc 13.3, \texttt{-O3 -ffp-contract=off}.\\
 Stock Arm HAL & The stock arm64 build already enables carotene + KleidiCV 26.03; dispatch \texttt{NEON FP16 *NEON\_DOTPROD *NEON\_FP16 *NEON\_BF16} (\rp{evaluation/runs/arm64/20261023T193621Z-cpuarm-7f8c96/opencv_hal_simd.txt}). A stock-versus-COOL pair is therefore KleidiCV-stock versus COOL.\\

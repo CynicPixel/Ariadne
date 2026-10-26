@@ -16,7 +16,7 @@ The ablations did not change this choice of workload. ORB + LK still carries the
 | item | value | source |
 |---|---|---|
 | COOL | AWS Marketplace *Cloud Optimized OpenCV for Graviton4*, COOL 3.1 (OpenCV 5.x, KleidiCV + ArmPL, Ubuntu 24.04), SDK `/opt/cool/cpp_sdk` | https://aws.amazon.com/marketplace/pp/prodview-fdvbfiewzuehs |
-| AMI | `Graviton5-COOL-v3-prod-k6u24vxijyzvg`, eu-north-1 `ami-0a302ff85af8d8764` (18 regions) | `build/cool-regions.tsv`, DECISIONS D28 |
+| AMI | `Graviton5-COOL-v3-prod-k6u24vxijyzvg`, eu-north-1 `ami-0a302ff85af8d8764` (18 regions) | `infra/cool/cool-regions.tsv`, DECISIONS D28 |
 | instance | c8g.4xlarge (Graviton4, Neoverse-V2, 16 vCPU) spot, eu-north-1; m8g.4xlarge is the design's throughput instance | `infra/scripts/spinup.sh` (`cool` profile), arch §26.3 |
 | OpenCV pin | 5.0.0 at opencv `40738fb16ced`, contrib `755e50675d97`; C++17, Eigen 3.4.1, gcc 13.3, `-O3 -ffp-contract=off` | `infra/docker/opencv-base.Dockerfile` |
 | stock Arm HAL | carotene + KleidiCV 26.03, already on in the stock build; dispatch `NEON FP16 *NEON_DOTPROD *NEON_FP16 *NEON_BF16` | `evaluation/runs/arm64/20261023T193621Z-cpuarm-7f8c96/` |

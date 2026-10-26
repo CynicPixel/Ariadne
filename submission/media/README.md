@@ -38,3 +38,4 @@ These are cut from the film's 480p renders (`python/video/media/videos/*/480p15/
 | `fig_nbv_coverage_time.png` | `evaluation/runs/nbv_4.3_gate/` |
 | `fig_bytes_3_6.png` | `evaluation/runs/ph3/bytes_3.6_20261024/` |
 | `frame_agent{0,1}_f600.png` | recorded camera frames, collab60d pack |
+| `console_operator_recorded_run.png` | operator console (top-down map, approvals panel, LLM proposals, directives, incident timeline) replaying recorded run `aadffb8df5790ca0` at t = 45 s; screen capture from 2026-10-23 |

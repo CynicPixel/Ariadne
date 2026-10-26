@@ -72,7 +72,7 @@ From that base, the visual path grew into a keyframe-based stereo-inertial estim
 
 The next layer let agents build partial maps separately, then decide which cross-agent evidence was worth communicating and which candidate joins could safely influence the shared graph. Experiments shaped the final choices: retrieval and matching are selective, messages are budgeted, and geometric checks reject inconsistent joins before global optimization. On the resulting map, a volumetric layer estimates observed support, clearance, and a structural-risk proxy. Candidate views are scored for exploration and assigned to agents; a separate responder-scale search finds a route to an exit through known traversable space. The communication, planning, and egress sections describe those layers and their measured limits in turn.
 
-Two services sit above this deterministic core. An LLM harness can choose among planner proposals and issue constrained directives through an MCP-facing service; it does not estimate geometry or execute unchecked commands. A risk gate routes qualifying actions to human review, while validation and fallback checks remain in ordinary code. Gaussian submaps provide an inspectable visual representation alongside the geometric map. Their live transport and browser display are demonstrated separately from GPU training, which was evaluated on a synthetic corridor. The later sections keep those evidence boundaries visible: the diagram summarizes the system’s connections, while each subsystem section states what its own experiments establish and what has not yet been demonstrated in one integrated mission.
+Two services sit above this deterministic core. An LLM harness can choose among planner proposals and issue constrained directives through an MCP-facing service; it does not estimate geometry or execute unchecked commands. A risk gate is designed to route qualifying actions to human review, while validation and fallback checks remain in ordinary code. Gaussian submaps provide an inspectable visual representation alongside the geometric map. Their live transport and browser display are demonstrated separately from GPU training, which was evaluated on a synthetic corridor. The later sections keep those evidence boundaries visible: the diagram summarizes the system’s connections, while each subsystem section states what its own experiments establish and what has not yet been demonstrated in one integrated mission.
 
 \clearpage
 \begin{figure}[p]
@@ -2341,8 +2341,9 @@ against $829$\,ms on c7i, or $0.64\times$ the x86
 execution time. LightGlue and EigenPlaces measured
 approximately $0.85$--$0.88\times$ the corresponding
 x86 times. These stock-build comparisons establish the
-arm64 workload baseline; COOL-specific measurements are
-identified separately by the loaded-library manifest.
+arm64 workload baseline; a COOL measurement is produced
+by the \code{infra/cool/day1.sh} protocol and identified by
+its loaded-library manifest.
 The controlled COOL comparison uses identical inputs,
 instance type, thread settings, and executable, with
 the OpenCV implementation as the experimental variable.
