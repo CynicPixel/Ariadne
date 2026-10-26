@@ -21,7 +21,7 @@ ORDER = [  # (scene file stem, class): the film's running order
     ("s01_worldgen", "WorldGen"), ("s03_seeing", "Seeing"), ("s04a_ba", "BundleAdjust"),
     ("s05_sharing", "Sharing"), ("s06_trust", "Trust"),
     ("s07_cbba", "SharingWork"), ("s08_agentic", "HumanInLoop"), ("s09_thread", "Thread"),
-    ("s10_splat", "SharedModel"), ("s11_architecture", "Architecture"), ("s12_close", "Close"),
+    ("s10_splat", "SharedModel"), ("s11_architecture", "Architecture"),  # ends with the conclusion + author card
 ]
 
 
