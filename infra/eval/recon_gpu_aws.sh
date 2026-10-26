@@ -24,7 +24,10 @@ R="${ARIADNE_RESULTS:?}"
 : "${IMAGE_TAR:?}" "${IMAGE_ID:?}"
 # RENDER mode (SPLAT_TAR=s3://.../splat_<budget>.tar.gz): the demo-video renders of a trained splat instead of training
 # (python/reconstruction/render/render_gsplat.py; RENDER_ARGS e.g. "--seconds 9 --fps 30"). Output: $R/render/.
-[ -n "${SPLAT_TAR:-}" ] || : "${SPOOLS:?}" "${SCENE_ID:?}"
+# WORLDGEN mode (WORLDGEN_TAR=s3://.../data.tar.gz, maintainer 2026-10-27 for the film's beat 10): trains the generated
+# maze's splat with the tarball's own train_worldgen_gsplat.py (python/video/tools), run byte-for-byte; WORLDGEN_STEPS
+# (default 3000). Output: $R/worldgen/{trained_worldgen.splat, manifest.json, train.log, heldout/target PNGs}.
+[ -n "${SPLAT_TAR:-}${WORLDGEN_TAR:-}" ] || : "${SPOOLS:?}" "${SCENE_ID:?}"
 BUDGETS="${BUDGETS:-}"; [ -n "$BUDGETS" ] || BUDGETS='{"smoke": [15, 30], "live": 15, "batch": 100}'   # smoke first
 SRC="$(pwd)" IN=/opt/in/data
 T0=$(date +%s)
@@ -59,6 +62,39 @@ if [ -n "${SPLAT_TAR:-}" ]; then
   docker run --rm --gpus all -v "$SRC":/src:ro -v "$d":/splat:ro -v "$R/render":/out "$tag" \
     python3 -I /src/python/reconstruction/render/render_gsplat.py --splat /splat --out /out ${RENDER_ARGS:-} \
     > "$R/render/log.txt" 2>&1
+  rc=$?
+  kill "$GU" 2>/dev/null
+  step "done rc=$rc"
+  exit "$rc"
+fi
+
+if [ -n "${WORLDGEN_TAR:-}" ]; then
+  step "2 worldgen ${WORLDGEN_TAR##*/}"
+  mkdir -p /opt/wg "$R/worldgen"
+  aws s3 cp "$WORLDGEN_TAR" - | tar xz -C /opt/wg || fail "worldgen data"
+  d=$(dirname "$(find /opt/wg -name train_worldgen_gsplat.py | head -1)")
+  kv worldgen_tar "$WORLDGEN_TAR"; kv worldgen_script_sha256 "$(sha256sum "$d/train_worldgen_gsplat.py" | cut -d' ' -f1)"
+  # The image has opencv but (no evidence either way) maybe no Pillow, which the script uses only to save its
+  # held-out preview PNGs; the image cannot pip at run time, so a missing Pillow gets a cv2-backed Image.fromarray.
+  cat > "$R/worldgen/run.py" <<'EOF'
+import runpy, sys, types
+try:
+    import PIL.Image
+    print("PIL", PIL.__version__, flush=True)
+except ImportError:
+    import cv2
+    class _Img:
+        def __init__(self, a): self.a = a
+        def save(self, p): cv2.imwrite(str(p), cv2.cvtColor(self.a, cv2.COLOR_RGB2BGR))
+    m = types.ModuleType("PIL"); m.Image = types.SimpleNamespace(fromarray=_Img)
+    sys.modules["PIL"], sys.modules["PIL.Image"] = m, m.Image
+    print("PIL absent: cv2-backed Image.fromarray(...).save", flush=True)
+sys.argv = ["train_worldgen_gsplat.py", "train", "--data", "/data", "--out", "/out", "--steps", sys.argv[1]]
+runpy.run_path("/data/train_worldgen_gsplat.py", run_name="__main__")
+EOF
+  nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used --format=csv -l 5 > "$R/gpu_util.csv" 2>&1 & GU=$!
+  docker run --rm --gpus all -v "$d":/data:ro -v "$R/worldgen":/out "$tag" \
+    python3 /out/run.py "${WORLDGEN_STEPS:-3000}" > "$R/worldgen/train.log" 2>&1
   rc=$?
   kill "$GU" 2>/dev/null
   step "done rc=$rc"
