@@ -176,7 +176,7 @@ def test_schema1_still_loads_without_photo(tmp_path):
 
 
 def test_schema3_merges_list_places_every_agent(tmp_path):
-    """Schema 3 (A1/M/A2, 2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
+    """Schema 3 (2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
     make_spool(tmp_path)
     y = yaml.safe_load((tmp_path / "spool.yaml").read_text())
     y["schema_version"] = 3

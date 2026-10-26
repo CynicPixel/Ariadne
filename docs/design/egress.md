@@ -1,19 +1,19 @@
-# 4.5 Egress (I12) — ρ_responder lattice, D* Lite replanning, 5th-percentile route confidence (A1)
+# Egress: responder-width lattice, multi-exit D* Lite replanning, route confidence
 
-Status: built and measured on the evidence spool (§9); design reviewed by advisor before code (§8). Decision: D113. Arch §22.1–§22.3, invariant 4. Consumes D110
+Status: built and measured on the evidence spool (§9); design reviewed before code (§8). Decision: D113. Arch §22.1–§22.3, invariant 4. Consumes D110
 (the map) and D111 (egress traversability, clearance, risk). The 1.8 egress (A* on the slab, D45) stays as the
 ablation baseline.
 
-## 0. Seam (B's L1 / 7.x contract, 2026-10-23, maintainer's option B)
+## 0. Seam (the L1 / 7.x contract, 2026-10-23, option B)
 
-Phase 4 implements `runtime/live/planner.hpp`'s `MissionPlanner` (`Integrate`, `Plan`, `Route`), on
-`feat/ph7-agentic`. B's requirements:
+Phase 4 implements `runtime/live/planner.hpp`'s `MissionPlanner` (`Integrate`, `Plan`, `Route`).
+The seam's requirements:
 - `Plan` is deterministic given its inputs (replay = live), works in sim time, with no wall-clock work;
 - every option carries a risk in [0, 1] and a reason (the §23 gate reads it);
 - operator directives are honoured: keep_out drops, assign / explore restrict, priority_region weights;
 - `Route` returns world-xy waypoints.
 
-The egress route goes into `PlanOutput.maps` (MapSummary's egress cells). Until B's header is on a branch A1 can build
+The egress route goes into `PlanOutput.maps` (MapSummary's egress cells). Until the seam header is on a branch the planner can build
 on, 4.5 is a library plus a replay evaluator. The adapter is one class.
 
 ## 1. Preflight
@@ -110,7 +110,7 @@ along the route"). On the 1.8 baseline the same statistic used its slab support 
     before any validity is computed.
   - Implementation: per z-layer known-masks, convolved with the capsule disc (`cv::filter2D`), not a per-column loop.
 - **Range check, as run (2026-10-23, before any GT scoring):** on the evidence spool the final route's support is
-  min 0.900, median 0.981, max 1.000, so the **spread is 0.0999 < 0.1 and the rule fires** (advisor: the rule is the
+  min 0.900, median 0.981, max 1.000, so the **spread is 0.0999 < 0.1 and the rule fires** (review: the rule is the
   number, not its parenthetical; a support pinned at 0.90–1.00 cannot rank routes, whatever the cause). The band is
   derived from recorded geometry only, not from what spreads support:
   - The rig flies at 0.8–1.2 m (TravParams agent band, worldgen motion 1.0 ± 0.2 m), with a vertical half-FOV of 28°.
@@ -131,7 +131,7 @@ along the route"). On the 1.8 baseline the same statistic used its slab support 
 - The live obstacle-after-route scenario is an L1 run (a prop appears behind the agents). It is listed for 8.x;
   replay covers test 5.
 
-## 8. Review (advisor, 2026-10-23)
+## 8. Design review (2026-10-23)
 
 1. **3×3 invalidation**, with the D* Lite = Dijkstra test driven through the cell-flip diff: adopted (§4, §6).
 2. **Support's range checked before it becomes the confidence**, with an observable-band fallback pre-registered:

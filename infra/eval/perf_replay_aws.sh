@@ -1,9 +1,9 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# The pipeline profile's live-pipeline replay (A2, 2026-10-24; M-approved 44-A2-replay-perf; MEASUREMENT ONLY).
-# Replays B's ma200 run (20261023T200447Z-cpux86-70a514: 200 s, 3 agents, lockstep, pre-D179) from its recorded
+# The pipeline profile's live-pipeline replay (2026-10-24; job 44-A2-replay-perf; MEASUREMENT ONLY).
+# Replays the ma200 run (20261023T200447Z-cpux86-70a514: 200 s, 3 agents, lockstep, pre-D179) from its recorded
 # inputs.mcap - no Gazebo, so the render is excluded and what remains is the pipeline's own cost - with EXACTLY that
-# run's code and images: B's repo snapshot (runs/<id>/input/repo.tar.gz), its prebuilt payload (ariadne_live and the
+# run's code and images: the run's repo snapshot (runs/<id>/input/repo.tar.gz), its prebuilt payload (ariadne_live and the
 # worker binaries, sha-checked) and its core image by id, invoked as live.sh's cmd_replay does (same flags,
 # --memory=4g). Three replays, one variable: the OpenCV pool of the 3 D168 estimator workers (inherited env):
 #   asis   OpenCV's default (16 = nproc; what the run recorded)       t5   OPENCV_FOR_THREADS_NUM=5 (3 x 5 = 15)
@@ -13,14 +13,14 @@
 #   RUN_ID=20261023T200447Z-cpux86-70a514 PAYLOAD=<s3 payload.tar.gz> BUCKET=<s3://bucket> [VARIANTS="asis t5 t2"] \
 #     bash infra/eval/perf_replay_aws.sh
 # Results ($ARIADNE_RESULTS): steps.txt, run_manifest.yaml, replay_<v>/{wall_s.txt, results.yaml, timing.jsonl,
-#   agent<k>/{results.yaml, estimate_body.tum}, sampler/...}, b_replay1/ (B's own replay outputs, for comparison)
+#   agent<k>/{results.yaml, estimate_body.tum}, sampler/...}, b_replay1/ (the original run's replay outputs, for comparison)
 # ---------------------------------------------------------------------------
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${RUN_ID:?}" "${PAYLOAD:?}" "${BUCKET:?}"
 SRC="$(pwd)" REP=/opt/rep RUNDIR=build/live/runs/live-20261023T200640Z-62e0 SCENE=build/live/scenes/maze_demo_0
 # The CODE under test defaults to the replayed run's own (snapshot, payload, image); CODE_SNAPSHOT / PAYLOAD / CORE_REF /
-# CORE_ID swap in another build (e.g. B's lens-off toggle) on the SAME recorded inputs, so a before/after differs only
+# CORE_ID swap in another build (e.g. the lens-off toggle) on the SAME recorded inputs, so a before/after differs only
 # in the code. REPLAY_ARGS / REPLAY_ENV: extra ariadne_live flags / docker -e settings for every variant. VARIANT_ENV:
 # "variant=KEY=VAL ..." docker -e settings for one variant only (an A/B on one instance, e.g. VARIANTS="t5 t5_nopipe"
 # VARIANT_ENV="t5_nopipe=ARIADNE_LANE_PIPELINE=0"); a variant named t5* / t2* keeps that thread count.
@@ -48,14 +48,14 @@ apt-get -o DPkg::Lock::Timeout=600 install -y -qq docker.io sysstat pigz "linux-
 systemctl start docker 2>/dev/null || true
 kv perf_available "$(command -v perf >/dev/null && echo yes || echo no)"
 
-step "2 B's core image by id"
+step "2 the recorded run's core image by id"
 REG=${CORE_REF%%/*}
 aws ecr get-login-password --region eu-north-1 | docker login --username AWS --password-stdin "$REG" > /dev/null || fail "ecr login"
 docker pull -q "$CORE_REF" > /dev/null || fail "pull $CORE_REF"
 [ "$(docker image inspect "$CORE_REF" --format '{{.Id}}')" = "$CORE_ID" ] || fail "core image id differs"
 kv core_image_id "$CORE_ID"
 
-step "3 B's snapshot + payload + the recorded run (inputs.mcap)"
+step "3 the recorded run's snapshot + payload + the recorded run (inputs.mcap)"
 mkdir -p "$REP" /tmp/p
 aws s3 cp "$CODE_SNAPSHOT" - | tar xz -C "$REP" || fail "snapshot"
 kv code_snapshot "$CODE_SNAPSHOT"; kv replay_args "\"${REPLAY_ARGS:-}\""; kv replay_env "\"${REPLAY_ENV:-}\""
@@ -86,7 +86,7 @@ grep -q '^chooser: *llm' "$REP/$CFG" && EXTRA+=(--decisions "$RUNDIR/$LIVE_DIR/t
 [ -f "$REP/$RUNDIR/shadow_map_config.yaml" ] && EXTRA+=(--shadow-map-config "$RUNDIR/shadow_map_config.yaml")
 printf '%s\n' "${EXTRA[@]}" > "$R/replay_extra_args.txt"
 
-# Symbols for the host-side perf report: the replay's binaries live in the container (/work = B's snapshot, OpenCV
+# Symbols for the host-side perf report: the replay's binaries live in the container (/work = the run's snapshot, OpenCV
 # under /opt/opencv5 in the core image), gone when it exits. /work -> $REP and the image's /opt/opencv5 copied out
 # make the same paths resolve on the host (job 44b's first report came back empty: the call-graph report over 346k
 # samples with unresolvable paths ran into its timeout).

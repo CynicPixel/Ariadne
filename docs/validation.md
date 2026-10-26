@@ -571,7 +571,7 @@ us-west-2, eu-west-1 and eu-central-1, and every SageMaker g4dn/g5/g6 quota chec
   order); pixel centre (x + 0.5, y + 0.5); σ = ½(a·dx² + c·dy²) + b·dx·dy with conic (a, b, c);
   α = min(0.999, opacity·exp(−σ)); skip if σ < 0 or α < 1/255; stop (exclusive) when T·(1 − α) ≤ 1e-4;
   colour += c·α·T; T ← T·(1 − α); background added as T·bg.
-- Consequence (D44, maintainer's decision 2026-10-15): no CPU rasterizer is written; the render runs with gsplat on
+- Consequence (D44, decision 2026-10-15): no CPU rasterizer is written; the render runs with gsplat on
   CUDA off-AWS (Kaggle) until the AWS G/VT quota lands. These transcribed rules stay as the reference for any later
   parity check.
 - **Remote CUDA path, Kaggle `[SMOKE-TEST]` PASS (2026-10-15):** `infra/scripts/kaggle.sh smoke` → kernel
@@ -643,8 +643,8 @@ the tracker's epipolar check (`klt_tracker.cpp`, the `UsacParams` overload of `c
   `tracker_opencv_usac_defect` line in `results.yaml`, which is written only when non-zero. The first draw is the
   draw the tracker always made, so every frame that never threw is byte-identical, and the Phase 1 evidence stands.
   V1_01_easy now completes, with 1 redraw over 2912 frames.
-- **Not done.** No change to OpenCV itself; the pin stays and the COOL baseline stays. An upstream report needs the
-  maintainer's go-ahead.
+- **Not done.** No change to OpenCV itself; the pin stays and the COOL baseline stays. An upstream report needs a
+  go-ahead.
 
 ## 4r. EigenPlaces R50-256 through `cv::dnn` (ONNX): exact against upstream PyTorch `[SMOKE-TEST]` 2026-10-19
 
@@ -653,9 +653,9 @@ Gates 2.1 retrieval (`docs/design/perception.md` §11).
 **Source and environment**
 - Upstream: `gmberton/EigenPlaces` (MIT) at commit `a2969f71d5ea31017443af490b15273ca4c50af1`.
 - Weights: `releases/download/v1.0/ResNet50_256_eigenplaces.pth`, sha256 `2923c102…dc9d7e7`. Downloaded once to the
-  session cache; upstream publishes no checksum, so it is recorded on first download.
-- `python/model_tools/eigenplaces_reference.py` runs in the session image `ariadne-eigenplaces-ref:feat-2.1`
-  (`ariadne-xfeat-ref:1` + torchvision 0.20.1+cpu + onnx 1.17.0; the Dockerfile is session-local, a maintainer ask
+  local cache; upstream publishes no checksum, so it is recorded on first download.
+- `python/model_tools/eigenplaces_reference.py` runs in the reference image `ariadne-eigenplaces-ref:feat-2.1`
+  (`ariadne-xfeat-ref:1` + torchvision 0.20.1+cpu + onnx 1.17.0; the Dockerfile is local, an open ask
   to move it into `infra/docker`).
 - Settings: `--network none`, upstream and weights mounted read-only, torch 1 thread, deterministic algorithms.
 - Upstream's constructor fetches CosPlace weights over `torch.hub` only to initialise the backbone. That one call is
@@ -676,7 +676,7 @@ Gates 2.1 retrieval (`docs/design/perception.md` §11).
 | `readNetFromONNX` `ENGINE_CLASSIC` | 1.0000000 | 1.0000000 |
 
 - Both engines import and run the graph, head included, with |d| = 1.000000. No fallback is needed.
-- **Forward cost (indicative only, host load 23 from other sessions):**
+- **Forward cost (indicative only, host load 23 from other jobs):**
 
   | engine | 752×480 | 376×240 |
   |---|---|---|
@@ -727,7 +727,7 @@ Gates 2.1 retrieval (`docs/design/perception.md` §11).
     the graph**. Match filtering is in-graph (NonZero/Where; the threshold value is not yet read).
 - **Not yet verified:** equality with upstream PyTorch (keypoints, descriptors, matches) on identical 640×640
   inputs.
-- **Decision (maintainer, 2026-10-20): export our own from upstream** (option b), not the opencv_extra files.
+- **Decision (2026-10-20): export our own from upstream** (option b), not the opencv_extra files.
 
 ### 4s-2. Our export: ALIKED-n16 + LightGlue from upstream, exact through cv::ALIKED / cv::LightGlueMatcher `[SMOKE-TEST]` 2026-10-21
 
@@ -739,7 +739,7 @@ Gates 2.1 retrieval (`docs/design/perception.md` §11).
     LightGlue's ALIKED weights were trained on (`ALIKED-k2048-n16`). OpenCV's file is n16rot. Top-K
     (`detection_threshold` 0); LightGlue `depth_confidence` = `width_confidence` = −1; `filter_threshold` 0.1.
   - Native 752×480 (upstream pads to a multiple of 32 by edge replication), no resize.
-- **Tool:** `python/model_tools/aliked_lightglue_reference.py`, session image `ariadne-eigenplaces-ref:feat-2.1`,
+- **Tool:** `python/model_tools/aliked_lightglue_reference.py`, reference image `ariadne-eigenplaces-ref:feat-2.1`,
   `--network none`, kornia stubbed (raises if called; only resize/gray paths use it). Outputs in
   `.cache/feat-2.1-perception/models/aliked_lg_ref/`: `aliked_n16_k{1024,2048}_752x480.onnx`,
   `lightglue_aliked.onnx` (dynamic N), references and a manifest with every sha256.
@@ -888,7 +888,7 @@ fallback) on the GPU instance class the arch names for rendering (§5.10)?
   start: 192.9 s on frame 1 is uptime, not a slow frame.
 - Two failed launches before this one were both the job script's: an S3 prefix outside the instance role's
   `runs/*`, then output dirs owned by root while the containers run as uid 1000. Neither was the render path.
-- **Unblocks:** B's live runs on g4dn (L1 `live_aws.sh`). The 4.3 / 4.6 lockstep gate on g4dn needs B's EGL
+- **Unblocks:** the live runs on g4dn (L1 `live_aws.sh`). The 4.3 / 4.6 lockstep gate on g4dn needs an EGL
   lockstep check first: lockstep is verified on llvmpipe only.
 ## 4u. Lamp photometry of the gz-sim8 / ogre2 camera (Phase 5 preflight) `[SMOKE-TEST]` 2026-10-22
 

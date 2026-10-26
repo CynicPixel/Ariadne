@@ -1,6 +1,6 @@
 """Shared look and helpers for every scene: palette, the world-to-frame map, source tags, timed captions.
 
-Captions are the film's only words until the TTS pass (maintainer, 2026-10-24). Each scene records (start_s, dur_s,
+Captions are the film's only words until the TTS pass (2026-10-24). Each scene records (start_s, dur_s,
 text) and writes media/captions/<Scene>.json, so a voice can be timed against the same cue sheet later.
 """
 from __future__ import annotations

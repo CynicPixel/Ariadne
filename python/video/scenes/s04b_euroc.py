@@ -1,7 +1,7 @@
 """Beat 4b: the from-scratch stereo-VIO + loops on EuRoC's 11 flights against ORB-SLAM3's published numbers.
 
 Data: evidence.euroc() reads evaluation/runs/vio/euroc_full_aws/<run 2>/runs/*/results.yaml (D87);
-ORB-SLAM3 from its paper (tagged published). The maintainer's cut shows the wins: the 7 flights at or better than
+ORB-SLAM3 from its paper (tagged published). The cut shows the wins: the 7 flights at or better than
 ORB-SLAM3 (at its published 3-dp precision) light up; the other 4 stay visible, dimmed, so "7 of 11" stays honest. No
 mean line (docs/results/index.md §3 and do-not-claim 2: never parity). V1_03 is drawn broken at the axis top with its value.
 

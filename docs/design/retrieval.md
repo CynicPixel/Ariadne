@@ -1,4 +1,4 @@
-# 3.1 / 3.6 — retrieval-path enhancement and global-descriptor compression (A1)
+# Place recognition: retrieval enhancement and global-descriptor compression
 
 Status: design fixed **before** the runs (2026-10-22). Decisions: D92 (3.1), D93 (3.6). Builds on D62 (EigenPlaces
 R50-256 through `cv::dnn`, exact index) and its EuRoC protocol (perception.md §11.5).
@@ -23,7 +23,7 @@ against the installed headers). The 3.6 harness is offline numpy over stored des
 path once a consumer exists.
 
 **Wire:** `wire.fbs` `GlobalDescriptor.descriptor` is `[float]`. Shipping any fp16/int8/PCA row therefore needs a
-schema change owned by 3.2 (main session). 3.6 does not touch `core/serialization`, `cpp/collaboration` or the §15.7
+schema change owned by 3.2. 3.6 does not touch `core/serialization`, `cpp/collaboration` or the §15.7
 byte table, and its bytes are **payload bytes `[PROXY]`**: no framing, no compression.
 
 ## 2. 3.6 — global-descriptor compression (D93), fixed before the run

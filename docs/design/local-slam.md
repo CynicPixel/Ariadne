@@ -1,10 +1,10 @@
-# Design — 2.3: real local SLAM (windowed BA, keyframe policy, landmark lifecycle, window exit)
+# Local SLAM: windowed bundle adjustment, keyframe policy, landmark lifecycle, window exit
 
 Plan 2.3 (I3): "keyframe policy (§8.3), landmark lifecycle (§11.2), analytic-Jacobian Schur LM windowed BA
 (§11.3–11.6), window-exit policy (§11.7), covariance recovery, local pose graph." It replaces the 1.5 two-frame BA
 stub inside `StereoVo`. The stub stays selectable as the ablation baseline (arch §0.2).
 
-**Preflight (maintainer's rule):** literature (§7), OpenCV-native check (§6) and advisor review were done before
+**Preflight (project rule):** literature (§7), OpenCV-native check (§6) and design review were done before
 this document. Every threshold below cites its source.
 
 ## 1. Data in → data out
@@ -75,7 +75,7 @@ is recorded in results and the manifest.
 
 - `pose_cov` of the newest keyframe: the 6×6 block of S⁻¹ from `S X = E` (never an explicit inverse). This is the
   absolute covariance relative to the window's fixed oldest keyframe. It feeds §4.2, §8.3 and later §21.3.
-- **Exit edge (corrected by advisor review).** The exiting keyframe k is the gauge, so its covariance is zero and no
+- **Exit edge (corrected by design review).** The exiting keyframe k is the gauge, so its covariance is zero and no
   joint (k, k+1) block exists. With k fixed, the marginal Σ of k+1 *is* the uncertainty of the relative pose
   `Z = X_k⁻¹ X_{k+1}`. Transported to Z's left tangent: `Σ_Z = Ad(X_k⁻¹) Σ Ad(X_k⁻¹)ᵀ`. Then
   `OdometryEdge(k, k+1, Z, Σ_Z)` converts it to the residual tangent (1.5's tested path).
@@ -248,7 +248,7 @@ is open.
 
 # Window bundle adjustment audit
 
-**Question (maintainer):** audit 2.3 against the state of the art. Can we do better with the current features, or must
+**Question:** audit 2.3 against the state of the art. Can we do better with the current features, or must
 feature detection improve first? And is frame dropping benign, or adversarial further down the line?
 
 **Answer, in one paragraph.** The hard EuRoC flights are not limited by feature quality or by the 2.3 backend. They
@@ -417,7 +417,7 @@ upstream of it.
 - Bridge short gaps with the IMU (2.4: preintegration gives a metric prediction over seconds, where constant
   velocity diverges).
 
-### 5. Decision for the maintainer
+### 5. Decision needed
 
 The defects are in the 1.x frontend, so this is a sequencing question.
 
@@ -449,7 +449,7 @@ because it is what turns a bad stretch into a permanent error.
 - DS-VIO (KLT stereo failure on V2_03): <https://arxiv.org/abs/1905.00684>
 - AirSLAM (illumination-robust learned frontend): <https://arxiv.org/abs/2408.03520>
 
-### 6. Outcome (2026-10-17, maintainer chose (A); D54)
+### 6. Outcome (2026-10-17, (A) chosen; D54)
 
 All four fixes landed in the Phase-1 frontend:
 
@@ -496,11 +496,11 @@ pose, and downstream code cannot tell. It also found that every remaining EuRoC 
 This design changes what the VO does while PnP cannot localise. It does not change how often that happens: 2.1
 (re-association) and 2.4 (IMU) attack the loss rate.
 
-**Preflight (maintainer's rule):**
+**Preflight (project rule):**
 - Literature (§2).
 - OpenCV-native check against the installed 5.0.0 headers: `findHomography` / `findEssentialMat` `UsacParams`
   overloads, and `recoverPose` with `distanceThresh`, all in `opencv2/geometry/3d.hpp`.
-- Advisor review before the design and again before the sweep.
+- Design review before the design and again before the sweep.
 
 ### 1. What a lost stretch looks like (measured, `vo_trace.csv`)
 
@@ -685,7 +685,7 @@ designs (`perception.md`, `local-slam.md`, …) follow as each item opens.
 | 6 | **2.2 radiometric** (§6.2, §6.4): flat-field, exposure normalisation, GAT VST + exact unbiased inverse, gated on measured noise | parallel-safe (∥A); needs the noise stages wired into `SimSource` |
 | 7 | **2.6 datasets** (§34.1): all 11 EuRoC sequences (stereo + IMU), a TUM RGB-D subset (sensor depth replaces SGBM) | downloads started at Phase 2 open; regression values pinned per sequence |
 
-Items marked ∥A/∥B may run in parallel worktree sessions the maintainer launches; this session takes the critical
+Items marked ∥A/∥B may run in parallel; the unmarked items are the critical
 path.
 
 ### 2. Conventions (fixed before any Jacobian is written)

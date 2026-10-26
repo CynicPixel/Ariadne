@@ -1,8 +1,8 @@
-# 4.3 Next-best-view (I8): candidates A–E, raycast IG, self-normalisation, λ scheduling, the energy-reserve rule (A1)
+# Next-best-view: candidates, ray-cast information gain, λ scheduling, energy reserve
 
-Status: **reviewed** (advisor 2026-10-23: points 1–6 addressed below; the gate regime decided by the maintainer: lockstep L1, §9), before any code. Decision: D114. Arch §21.1–§21.4; algorithms.md §22.1–§22.2.
+Status: **reviewed** (design review 2026-10-23: points 1–6 addressed below; the gate regime decided: lockstep L1, §9), before any code. Decision: D114. Arch §21.1–§21.4; algorithms.md §22.1–§22.2.
 Consumes D110 (map, frontiers, coarse layer), D111 (trav_a, risk), D113 (the egress route and its support). Feeds
-4.4 allocation and B's `MissionPlanner::Plan` (through `TaskCandidate`, commit e2e538d). The 1.8 nearest-frontier
+4.4 allocation and the runtime's `MissionPlanner::Plan` (through `TaskCandidate`, commit e2e538d). The 1.8 nearest-frontier
 policy stays as the ablation baseline.
 
 ## 0. What the gate asks, and the regime it needs
@@ -29,7 +29,7 @@ NbvPlanner::Plan(inputs, agent) -> std::vector<TaskCandidate>   (sorted by utili
 ```
 
 - `ConnectivityOracle` returns the §16.2 spectral gain Δλ₂ of the inter-agent edge that a view near a peer's
-  keyframe would enable. Its producer is 3.4's selector (D170), whose API was read from `feat/3.4-spectral`:
+  keyframe would enable. Its producer is 3.4's selector (D170), whose API was read from the 3.4 branch:
   - `SelectionProblem` has `n` nodes, `fixed` `GraphEdge{a, b, kappa}`, `candidates` `CandidateEdge{id, a, b,
     kappa}`, `node_bytes` and a budget;
   - `SolveFiedler` / `SelectionReport.lambda2` give λ₂.
@@ -39,8 +39,8 @@ NbvPlanner::Plan(inputs, agent) -> std::vector<TaskCandidate>   (sorted by utili
   - A runtime adapter implements it as λ₂(G ∪ {e}) − λ₂(G) with 3.4's `SolveFiedler`, on the broker's pose graph
     (`fixed`), with kappa the predicted retrieval similarity.
 - `AliasSource` returns §17.3's alias-flagged place pairs.
-- **Conflict, surfaced:** arch §21.3 says every term has a producer. On `feat/ph4-mission` (from main `f8c7030`):
-  - **3.4 is not merged:** it's on `feat/3.4-spectral`, the main session's;
+- **Conflict, surfaced:** arch §21.3 says every term has a producer. On the Phase 4 branch (from main `f8c7030`):
+  - **3.4 is not merged:** it's on its own branch;
   - **§17.3 alias flags have no producer at all.**
 - Until each lands, its term is **0 with the reason in the trace**, never a stand-in value. Generators C and D still
   produce candidates, so their geometry and costs are tested. Their gain is reported as missing.
@@ -84,7 +84,7 @@ The targets per generator:
     support definition of D113).
   - **Δpose_connectivity** = ConnectivityOracle gain (C only; 0 otherwise).
   - **Δloop_disambiguation** = AliasSource value (D only; 0 otherwise).
-- **Saturation check (advisor point 2; evidence-spool map, no GT; `ariadne_volumetric_eval` `known_weights`):**
+- **Saturation check (review point 2; evidence-spool map, no GT; `ariadne_volumetric_eval` `known_weights`):**
 
   | | known voxels | w p10 / p50 / p90 | mean H | H > 0.9 bit |
   |---|---|---|---|---|
@@ -106,7 +106,7 @@ The targets per generator:
 - **C_time** = path / v, with v = worldgen's motion speed.
 - **C_energy** = e_per_m · path.
   - In the kinematic rig all three are ∝ path. After per-term p90 normalisation they become the **same number for
-    every candidate** (advisor, review point 1).
+    every candidate** (design review, review point 1).
   - Kept as three separate terms, with λ⁰ = 1 each, the path weight would be 3 at t = 0. That's against a G where
     usually only 2–3 of the 5 terms are nonzero, so "λ⁰ = 1 is neutral" would be false.
   - **Proposed:** count the proportional costs once:
@@ -150,8 +150,8 @@ The targets per generator:
 - **The claim is "Ariadne ≥ every baseline at every budget fraction".** It's tested per scene. A loss is reported
   as a loss.
 - **Amendment (2026-10-23, before any gate run and before any coverage from the pilot was looked at).** The reason
-  is the adapter pilot's flight speed, not a result: B's 30 s lockstep pilot of A1Planner (`feat/l1-a1planner`
-  ea88599) flew 4.7 and 4.2 m, about 0.15–0.2 m/s against the 0.6 m/s cap.
+  is the adapter pilot's flight speed, not a result: the 30 s lockstep pilot of A1Planner
+  (ea88599) flew 4.7 and 4.2 m, about 0.15–0.2 m/s against the 0.6 m/s cap.
   - Why it's slow: the mover turns in place to each goal's final yaw, goals are 1.4–2.3 m away, and every 5 s
     barrier picks a new goal before the last one is reached.
   - The consequence: in 200 s an agent flies about 30 m, a quarter of the 120 m budget, so most of the fixed
@@ -209,12 +209,12 @@ normalised, costs, U), the choice, and the timings. This is evidence that the ma
     as a term separate from Δentropy.
 - **OpenCV-native:** none for raycast IG. `cv::Volume::raycast` renders depth only and has no voxel read (SMOKE
   §4u). PCA uses `cv::PCA`. Line of sight uses the voxel walk.
-- **B's seam:** `TaskCandidate` → `TaskOption` (8ff170a), with risk and its reason per option.
+- **The runtime's seam:** `TaskCandidate` → `TaskOption` (8ff170a), with risk and its reason per option.
 
-## 9. Open question for the maintainer: the closed loop for the gate
+## 9. Open question: the closed loop for the gate
 
-**L1 facts (B, 2026-10-23):**
-- **Closed loop works today.** `ariadne_live` (feat/ph7-agentic) calls `MissionPlanner::Plan` at every
+**L1 facts (2026-10-23):**
+- **Closed loop works today.** `ariadne_live` calls `MissionPlanner::Plan` at every
   sim-time barrier T = k·5 s. The pick is validated, then `Route` → mover `PoseArray`; the mover checks against the
   ESDF and holds if refused. gz renders whatever is executed. 4.3 plugs in by implementing `MissionPlanner`.
 - **Cost:** no GPU is needed. llvmpipe RTF is 0.13–0.15, about 22–25 min wall per 200 s mission, one run at a time
@@ -223,27 +223,27 @@ normalised, costs, U), the choice, and the timings. This is evidence that the ma
   after their stamp, depending on wall latency, so runs N and N+1 differ. Replaying a recording is bit-exact
   (D152a).
 - **Lockstep** (pause at each barrier via gz WorldControl, resume after the commands) is not built; about half a
-  day for B. It removes the latency confound and makes classical/NBV runs reproducible.
+  day of runtime work. It removes the latency confound and makes classical/NBV runs reproducible.
 
 **The options:**
 - **(a) L1 as is:** 24+ runs, ≈ 10 h on the dev host. Variance includes wall-latency noise, which differs by
   policy (the costlier planners lag more), confounding the comparison.
-- **(b) L1 with lockstep (B, ½ day):** the same 24+ runs, reproducible per seed. The policies differ only in their
+- **(b) L1 with lockstep (½ day):** the same 24+ runs, reproducible per seed. The policies differ only in their
   choices. On g4dn, if §4v passes, faster.
 - **(c) A GT-raycast kinematic loop now, as a development harness, then (a) or (b) for the gate figure:**
   CPU-only, seconds per run, a different regime, labelled.
 
-**Decision (maintainer, 2026-10-23): (b), lockstep L1.** B is asked to schedule lockstep. The gate runs go through
-A1's `MissionPlanner` on `ariadne_live`, with the axes of §5. The library and the replay decision log (§7) are built
+**Decision (2026-10-23): (b), lockstep L1.** The runtime schedules lockstep. The gate runs go through
+the Phase 4 `MissionPlanner` on `ariadne_live`, with the axes of §5. The library and the replay decision log (§7) are built
 meanwhile.
 
-## 10. Review (advisor, 2026-10-23)
+## 10. Design review (2026-10-23)
 
 1. Path-proportional costs counted once (λ_path); the effective weight stated (§4).
 2. Δentropy saturation measured before adoption: not saturated (§3).
 3. Gate axes pre-registered (§5).
 4. ConnectivityOracle shaped to 3.4's real API, read-only from its branch (§1).
-5. L1's closed-loop facts got from B before asking the maintainer (§9).
+5. L1's closed-loop facts gathered before the decision (§9).
 6. AWS provenance: the D112 payload binaries were built at `df38a12` (pinned by `inputs.SHA256SUMS`); run commit
    `c8a3262`. Both go into the D112 run record.
 
@@ -277,8 +277,8 @@ replans, agent 1 at the 12 after the merge):
 
 ## 12. Amendment: plan space and the risk rule (2026-10-23, before any gate run)
 
-**Found by B on a replay of the A1Planner pilot:** risk 1.0 on 27/28 → 162/172 options. Two causes, fixed in order:
-1. **The arrival rule** (`30ac351`). I read D158's bottleneck at the goal cell alone. B's D158 takes the max over
+**Found on a replay of the A1Planner pilot:** risk 1.0 on 27/28 → 162/172 options. Two causes, fixed in order:
+1. **The arrival rule** (`30ac351`). I read D158's bottleneck at the goal cell alone. The runtime's D158 takes the max over
    the goal's escape_m disc, the widest way to arrive near the goal. That's now `ArrivalBottleneck`.
    - It barely helped: 154/172 were still at 1.0.
 2. **The plan space.**
@@ -286,9 +286,9 @@ replans, agent 1 at the 12 after the merge):
      paths ran through unobserved columns, where the egress clearance `clear_r` is 0, and every maximin was 0.
    - **Now:** the plan space and every view goal are restricted to `trav_a ∧ clear_r ≥ ρ_agent`: known-free
      columns with ρ_agent clearance to anything not observed free (`KnownFreePlan`).
-     - That is B's D153b standoff rule, adopted live after the mover refused 10/10 goals next to unseen walls.
+     - That is the D153b standoff rule, adopted live after the mover refused 10/10 goals next to unseen walls.
 
-**Literature check** (asked by the maintainer, done before this was committed):
+**Literature check** (requested, done before this was committed):
 - **TARE** (Cao et al., RSS 2021), read in primary text:
   - §III defines a viewpoint position p_v ∈ Q_trav, the traversable subspace;
   - the local horizon's candidates come from H_trav, "the traversable subspace identified by considering collision
@@ -302,12 +302,12 @@ replans, agent 1 at the 12 after the merge):
 - **FAR** (Yang et al., IROS 2022): routes "attemptably" through unknown space, but for goal-directed navigation,
   not exploration viewpoints. It stays a §31.6 comparator; `Route` doesn't use it.
 
-**Effect:** to be measured on B's replay of the same recording after the rebuild (risk histogram per replan), before
-the gate starts. The gate waits on it (YIELD set by A1).
+**Effect:** to be measured on a replay of the same recording after the rebuild (risk histogram per replan), before
+the gate starts. The gate waits on it (YIELD set).
 
 ## 13. Literature review of every post-design fix, and the return space (2026-10-23, before any gate run)
 
-The maintainer asked for a primary-text review of every fix made after a measurement. The full reports, with quotes,
+A primary-text review was requested for every fix made after a measurement. The full reports, with quotes,
 pages and the URLs read, are in `docs/design/lit/phase4_fixes_nbv.md` and `phase4_fixes_route_cbba.md`. The
 findings that change this item:
 
@@ -331,10 +331,10 @@ findings that change this item:
 - The disc compensated for goals in unknown space. Since §12, every commanded goal is known-free with ρ_agent clearance,
   so the risk is read at that cell (`arrive = 0`). It can no longer score a goal by a cell the agent is never sent to.
   - `ArrivalBottleneck` stays (rad 0).
-  - The effect on the risk spread is measured on B's replay before the gate.
+  - The effect on the risk spread is measured on a replay before the gate.
 
 **The return distance for §21.4's hard rule: the swept body along the flown track (`FlownReturnSpace`).**
-- **Finding (B, a1p replay of ci_tiny_0, 2026-10-23):** after §12, from t = 10 s every replan has
+- **Finding (a1p replay of ci_tiny_0, 2026-10-23):** after §12, from t = 10 s every replan has
   `E_remaining 118.83 < 1.30 × E(return) inf`.
   - The forward rig never observes the way in, so the entrance is not known-free.
   - The rule fired on every replan, and the unreachable return left only {hold}.
@@ -464,7 +464,7 @@ explain the whole early gap on ci_tiny. The cause stays [UNVERIFIED]; the time-a
 
 ## 15. §49 design preflight for the time-axis loss (2026-10-24, before any code or run): D117–D120
 
-**Status: design only.** Nothing here is built or run. It is ready to implement once the D175 POC is up (M's order).
+**Status: design only.** Nothing here is built or run. It is ready to implement once the D175 POC is up.
 Every number below is from the 36 gate runs already on disk, through three committed scripts (§15.1). No new run was
 made.
 
@@ -498,8 +498,8 @@ trajectories (200 Hz, every run, both agents) answer the question directly: wher
   - in maze_short's first 60 s, where the loss is largest, the share is 67 %: a median 435° spent for 231° net;
   - over 200 s, the median pair spends 179–215° of rotation for a net heading change of 57–67°.
 - **No turn goes the long way round.** `turn_episodes.py`: no continuous in-place turn exceeds 180° in any run (max
-  179.8°), since `PlanCommand` wraps each turn. The waste is the pairing, not a wrap error. (The maintainer reported
-  turns of "more than 180 degree … turn all the way, not back". No single turn is over 180°; this pairing is what
+  179.8°), since `PlanCommand` wraps each turn. The waste is the pairing, not a wrap error. (The reported
+  turns were "more than 180 degree … turn all the way, not back". No single turn is over 180°; this pairing is what
   the runs show.)
 - **Where the pairs happen.** `still_decomp.py` classifies each pair by when its second turn starts:
   - 17–22 of Ariadne's 22 pairs per scene over 200 s start inside a command: the final-yaw turn at the end of the
@@ -648,7 +648,7 @@ This was read in the primary texts and pinned code, 2026-10-24. Quotes and line 
 - Route returns "no final yaw" for an arrival twin. The loop already supports a pose without yaw (zero quaternion,
   D151).
 - This is the "arrive and keep the travel heading, don't turn back" behaviour, chosen by the utility rather than
-  hard-coded. It reads the maintainer's "come straight … not back" one way. Their answer to the open question
+  hard-coded. It reads the request "come straight … not back" one way. The answer to the open question
   (keep the heading vs drive in reverse) is pending; reversing would need a rear view the rig does not have (§1
   sensor rig).
 
@@ -728,16 +728,16 @@ This was read in the primary texts and pinned code, 2026-10-24. Quotes and line 
 - **No tuning after the runs.** If the claim fails, the result is reported as a loss, and the next change goes
   through §49 again (D120's term log is the input).
 - **TARE with the new utility** (tare_ta) is a separate row, not a replacement for the baseline TARE. It is added
-  only if the maintainer wants the §31.6 "same utility, different scheduling" comparison redone (+6 runs).
+  only if the §31.6 "same utility, different scheduling" comparison is wanted again (+6 runs).
 
 **Amendments (2026-10-24, before any run; DECISIONS "D125/D119 implemented").**
 - (a) The replay identity check is: identical with every key off, except the enumerated cut and at-cell records,
-  where the fixes fire. The base is feat/ph4-nagent `9efbdba` (main 4a12b50 merged; D227 lens-off is on B's branch only, NOT in it), not d59ee3d.
+  where the fixes fire. The base is `9efbdba` (main 4a12b50 merged; D227 lens-off is on the runtime branch only, NOT in it), not d59ee3d.
 - (b) The 1.8 row is re-run, not reused: **48 runs** (`configs/mission/ablation_4.3/runs_48.jobs`). These are
   development runs.
   - A run is valid only with every barrier answered and no reorder timeouts.
-  - Off-AWS was tried first and declined (test-compute-session: no docker or gz on its kernels today). So they run on
-    the gate's own rig (AWS c7i, llvmpipe, slotq band 30+) once the maintainer approves the spend.
+  - Off-AWS was tried first and declined (the Kaggle CI queue: no docker or gz on its kernels today). So they run on
+    the gate's own rig (AWS c7i, llvmpipe, slotq band 30+) once the spend is approved.
   - Measured gate wall time: median 13.1 min per 200 s run (2.8–26.8, 34 logged jobs), not the ≈ 22 min estimated
     above. That puts 48 runs at ≈ 11–12 c7i.4xlarge spot-hours.
 - (c) The gated `ariadne` row is context only against ariadne_v0: the base commit and the fixes

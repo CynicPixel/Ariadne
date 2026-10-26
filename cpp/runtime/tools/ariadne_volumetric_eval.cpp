@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
             return std::tie(a.t_ns, a.agent, a.kf_id) < std::tie(b.t_ns, b.agent, b.kf_id);
         });
         // One merge per non-anchor agent: its T_O0_Ok and t_merge = the later keyframe of its merge edge
-        // ([ASSUMPTION]: found then). Schemas 1 and 2 (A2's D195 photometric fields; two agents) have one `merge` block,
+        // ([ASSUMPTION]: found then). Schemas 1 and 2 (the D195 photometric fields; two agents) have one `merge` block,
         // agent 1's; schema 3 (Phase 8 §42, N agents) = schema 2's fields + a `merges` list of {agent, ok, T_O0_O, edge}
         // [DESIGN]. The photometric fields are not read here. Agent 0 anchors W (D45).
         int n_agents = 2;

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# DIAGNOSTIC (A1, not a gate): where does GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt diverge on arm64
+# DIAGNOSTIC (not a gate): where does GravityPgo.RecoversTheReferenceGravityErrorAndReducesTilt diverge on arm64
 # (x86 0.62 deg, Graviton 2.71 deg, run 20261023T193621Z-cpuarm-7f8c96)? Runs as root ON a cpuarm instance via
 # spinup.sh. Steps 1-2 and the dev image are infra/eval/arm64_aws.sh's own recipe (same Dockerfiles, same pin); then
 # only the slam library + test_opencv are built, and infra/eval/gpgo_diag.cpp (input digests, a per-call LM trace,

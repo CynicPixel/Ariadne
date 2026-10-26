@@ -1,4 +1,4 @@
-# Design — Phase 3.2: the full collaboration protocol (I5)
+# Multi-agent collaboration protocol: two-stage exchange, verification, broker, merging
 
 Plan 3.2: "two-stage exchange, bookkeeping/high-water marks, store-and-forward with priority classes and TTLs
 (§15.3), heartbeats, anchor propagation and frame-tagged poses (§15.5), broker election with epochs (§15.4)".
@@ -476,7 +476,7 @@ rows wait on it:
 - the §15.7 byte table, with a hard 15% gate;
 - ATE against cumulative bytes, spectral vs greedy vs similarity, on 2 or more scenes × 3 seeds.
 
-Status: revised after advisor review 1 (2026-10-23). Nothing is built yet.
+Status: revised after design review 1 (2026-10-23). Nothing is built yet.
 
 ### 0. Preflight
 
@@ -684,7 +684,7 @@ opportunities (v1, the 1.6 retrieval row).
 ### 8. Order and cost
 
 1. 3.4 merges first. It needs a rebase onto main and its own AWS pre-merge.
-2. Then this, on `feat/3.2-sim`:
+2. Then this:
    - the seam change and tests;
    - pass A with its store;
    - pass B over CommsNode with its tests: no lookahead, determinism, outcome;

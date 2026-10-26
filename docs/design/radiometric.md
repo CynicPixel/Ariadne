@@ -1,6 +1,6 @@
-# 2.2 Radiometric front end: flat field, VST denoise, exposure normalisation
+# Radiometric front end: flat field, VST denoising, exposure normalisation
 
-Plan item 2.2, branch `feat/2.2-radiometric`. Decisions D65–D69. Arch §6.1–§6.4, algorithms.md §14.2/§14.5.
+Plan item 2.2. Decisions D65–D69. Arch §6.1–§6.4, algorithms.md §14.2/§14.5.
 
 **Status (2026-10-21):** the components are implemented and unit-verified against the paper (§5). The sim matrix and
 the EuRoC runs (§6) are **not yet measured**. Falloff (stage 3) is Phase 5 and out of scope.
@@ -218,7 +218,7 @@ unchanged (8535765251477677907).
 
 ### 6.1 Matrix (fixed here before running; trimmed 2026-10-21)
 
-**Trimmed by the maintainer: run only what cannot be done without.** The one essential comparison is
+**Trimmed (decision): run only what cannot be done without.** The one essential comparison is
 `dark3_dust0_ag16` × {off, VST gated with the Gaussian denoiser}. The other rows are defined in
 `configs/benchmark/radiometric_2.2.yaml` but not run. The EuRoC forced-on runs are dropped: the gate is off on all
 11 flights, so default EuRoC is unaffected.
@@ -297,14 +297,14 @@ Metrics: ATE, lost frames, stereo-match valid fraction, landmarks alive, radiome
 
 # Degraded visual environments
 
-Session A2, branch `feat/ph5-dve` (from `main` f8c7030). Decisions D130–D149. Status is dated in `the development log (archive/dev-history branch)`.
+Branched from `main` f8c7030. Decisions D130–D149. Status is dated in `the development log (archive/dev-history branch)`.
 
 ### 1. What the preflight established
 
 **Order, honestly:**
 - The literature pass, the OpenCV-native check and the render probe below came first.
-- The algorithms.md survey (§9, §10, §13–14, §17–18) and the advisor review did NOT. They were done on 2026-10-23,
-  after D130–D138 were committed, at the maintainer's prompt. They changed:
+- The algorithms.md survey (§9, §10, §13–14, §17–18) and the design review did NOT. They were done on 2026-10-23,
+  after D130–D138 were committed, on request. They changed:
   - D135 (D139);
   - Stage 3 (D140);
   - the D132 framing;
@@ -339,7 +339,7 @@ Session A2, branch `feat/ph5-dve` (from `main` f8c7030). Decisions D130–D149. 
 | 5.3 | Controller + Stage 4 + replay lamp actuator | built, unit + closed-loop tests | D132; runner wiring and the live loop (light_config) to do |
 | 5.4 | Configs frozen + L9 dust fidelity | options built (D135); decision and freeze wait on one measured pair | — |
 | 5.5 | Confined worlds, baseline sweep 4/8/12/20 cm | not started | §9.4 validator first |
-| 5.6 | OIVIO | **blocked**: the official page says downloads are unavailable; every Drive ID returns 404 (2026-10-22) | maintainer decision: email ARPG, or approve a substitute (§49) |
+| 5.6 | OIVIO | **blocked**: the official page says downloads are unavailable; every Drive ID returns 404 (2026-10-22) | decision needed: email ARPG, or approve a substitute (§49) |
 
 ### 3. The sensor model after D130
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 # Host side of the generic "build + selected tests on AWS" job (infra/eval/ci_aws.sh): stage a clean HEAD, launch
-# it through spinup.sh, tear down what this run staged. Moves compiles and ctest runs off the maintainer's
+# it through spinup.sh, tear down what this run staged. Moves compiles and ctest runs off the dev
 # workstation (hard cap: 2 heavy local jobs) onto one 16-vCPU spot instance. Runs from the repo root of WHATEVER
-# checkout or worktree it lives in; NAME keys every run, so sessions never collide.
+# checkout or worktree it lives in; NAME keys every run, so concurrent runs never collide.
 #   infra/eval/ci_aws_launch.sh stage NAME     git bundle, inputs.tar, dev image to ECR (temp tag) -> per-run prefix
 #   infra/eval/ci_aws_launch.sh run NAME       ONE spinup.sh attempt (cpux86, MAX_MINUTES, default 90) -> build/runs/<id>/
 #   infra/eval/ci_aws_launch.sh teardown NAME  delete this run's ECR temp tag and staging prefix; sweep strays
@@ -20,11 +20,11 @@
 #          JOBS / CTEST_JOBS  build and ctest parallelism on the instance, default 16 / 8
 # TESTS and EXTRA travel base64-encoded (a regex like '^(CollabProtocol|Serialization)\.' survives no hand quoting).
 #
-# Usage from a session (times in IST; the dispatcher logs both):
+# Usage (times in IST; the dispatcher logs both):
 #   1. Locally, by the owner, on a clean HEAD:  infra/eval/ci_aws_launch.sh stage d174-proto
 #      Light except the dev image's docker build, which is cached unless infra/docker/ changed.
 #   2. A queue job (/data/code/Ariadne/infra/scripts/slotq.sh; write <name>.tmp, rename to .job):
-#        OWNER=M
+#        OWNER=<name>
 #        DIR=/data/code/Ariadne-3x
 #        VCPU=16
 #        CMD='TESTS="^(CollabProtocol|Serialization)\." EXTRA="ctest --test-dir build/docker -N | tail -1" infra/eval/ci_aws_launch.sh run d174-proto'
@@ -64,7 +64,7 @@ stage() {
   local stage="$STAGE_ROOT/$NAME-$short"
   echo "$commit" > "$W/commit"; echo "$stage" > "$W/stage"
   git bundle create "$W/repo.bundle" HEAD 2>/dev/null
-  # The dev image from this tree's Dockerfile, under a private tag (the shared :dev tag moves with other sessions;
+  # The dev image from this tree's Dockerfile, under a private tag (the shared :dev tag moves with other builds;
   # docker tags are host-global, so the tag carries NAME).
   local img="ariadne/core-dev:ci-$NAME"
   DOCKER_BUILDKIT=1 docker build -q -f infra/docker/core.Dockerfile --target dev -t "$img" . >/dev/null

@@ -5,14 +5,14 @@ results: EuRoC vs ORB-SLAM3's published numbers, and the pose-graph solver vs GT
 
 Data. Right-hand front-end crops: the collab60d pack's agent-0 frames, with the coarse-to-fine LK estimates and the
 forward-backward and epipolar rejects from an OFFLINE replay of the front end's per-frame loop with OpenCV 5
-(tools/track_replay.py -> data/tracks/): illustrative. The diagrams are illustrative. Facts: M, 2026-10-24 (front end:
+(tools/track_replay.py -> data/tracks/): illustrative. The diagrams are illustrative. Facts: 2026-10-24 (front end:
 FAST + ORB, pyramidal LK 21 px / 4 levels, forward-backward 0.5 px, F-RANSAC 1 px, left-right LK triangulation with an
 SGBM 3-sigma check; back end: 10-keyframe window with Forster IMU preintegration, LM with the Schur complement as in
 docs/design/local-slam.md §3: invert each landmark's 3x3 block, S = H_cc - sum H_cl H_ll^-1 H_lc, dense LDLT for
 the keyframes, back-substitute each landmark; drop plus odometry edge on exit). The demo runs the front end + PnP +
 2-keyframe BA; the IMU window is the full stack, measured on EuRoC, and is drawn only in its own panel, never over demo
 frames. Results: EuRoC wins counted from evidence.euroc() (D87) at ORB-SLAM3's published 3-dp precision, no mean
-(maintainer); pose-graph solver vs GTSAM 100/100 (D52). Internal IDs stay off screen.
+(by design); pose-graph solver vs GTSAM 100/100 (D52). Internal IDs stay off screen.
 
   python/video/render.sh scenes/s04a_ba.py BundleAdjust
 """

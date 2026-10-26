@@ -4,12 +4,12 @@
 # into the queue; one dispatcher launches the next job, in name order, as soon
 # as the quota has room for it. A freed slot waits at most POLL_S seconds.
 #
-#   infra/scripts/slotq.sh dispatch          # the one dispatcher (M runs it)
+#   infra/scripts/slotq.sh dispatch          # the one dispatcher (one host runs it)
 #   infra/scripts/slotq.sh status            # queue, running, done, free vCPU
 #
 # A job is $Q/queue/<NN>-<name>.job, priority = name order (10-, 20-, ...):
-#   OWNER=A1                       # session to tell when it starts/ends
-#   DIR=/data/code/Ariadne-a1p     # working tree the command runs in
+#   OWNER=<name>                   # who to notify when it starts/ends
+#   DIR=/data/code/Ariadne-wt1     # working tree the command runs in
 #   VCPU=16                        # vCPU it needs from the CPU spot quota
 #   CMD='infra/eval/foo_launch.sh run'   # ONE launch attempt, foreground until the run ends
 # Write it as <name>.tmp and rename it to .job, so the dispatcher never reads half a file.

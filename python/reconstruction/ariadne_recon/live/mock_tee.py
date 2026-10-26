@@ -1,12 +1,12 @@
-"""A stand-in for B's runtime tee (link.py's contract, D231): plays per-agent spools into the service's socket.
+"""A stand-in for the runtime tee (link.py's contract, D231): plays per-agent spools into the service's socket.
 
   python -m ariadne_recon.live.mock_tee --sock SOCK --spool DIR [DIR ...] [--scene DIR] [--pace 1]
 
 Sends what ariadne_live's deliver_kf tee sends: #t_w_o per agent first (the briefing constant from --scene, else
 identity), then every keyframe as #kf in mission-time order. The spool holds RGB at spool scale, the tee sends it at
 full res: the mock upsamples 2x nearest, which half_rgb() maps back to the spool's pixels exactly, so a mocked live
-run trains on the same pixels as the replay. K (full res) follows B's formula from the spool camera Kz.
-For bring-up and tests only; the live demo uses B's C++ tee.
+run trains on the same pixels as the replay. K (full res) follows the runtime's formula from the spool camera Kz.
+For bring-up and tests only; the live demo uses the C++ tee.
 """
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-# 4.2 Traversability and structural risk at ρ_agent and ρ_responder (A1)
+# Traversability and structural risk at robot and responder width
 
 Status: 2026-10-23. Decision: D111. **Changed after measuring; each change is in §6, and the preflight gaps are in
 `docs/design/next-best-view.md`.** Traversability is done in replay; the risk proxy is built but **uncalibrated**. Arch §20.5, §22.1 (the lattice), §44 (honesty
@@ -105,7 +105,7 @@ capsule on the egress field) has recall 0.374 and closes the target cell for bot
 7724) are closed by **unobserved** voxels, not occupied ones. The unknown fraction over GT-traversable columns is
 about 2 % at 0–0.8 m, scattered pinholes that a 0.4 m sphere of about 2000 voxels cannot avoid, rising to
 11–39 % above 1.3 m. The rig flies at 1.0 m with a 28° vertical half-FOV, so a standing body's volume is not
-observable from it. So the egress product is the hybrid of §2, on the advisor's review. It keeps D45's accepted
+observable from it. So the egress product is the hybrid of §2, on the design review's review. It keeps D45's accepted
 definition of "observed" and adds the 3D obstacle test. Strict 3D is kept and reported as a finding.
 
 **Change 2: the clearance convention** (see `docs/design/next-best-view.md` §5). The first hybrid made 4 false claims (GT
@@ -147,7 +147,7 @@ before any calibration data existed.
 
 Status: design fixed before any hazard scene exists (2026-10-23). Decision: D112. Calibrates D111's structural-risk
 `[PROXY]` (`traversability-risk.md` §3, arch §20.5: "calibrated against the GT-labeled zones in the simulated
-scenes"). Renders on AWS g4dn, as the maintainer approved on 2026-10-23.
+scenes"). Renders on AWS g4dn, as approved on 2026-10-23.
 
 ### 1. Preflight
 

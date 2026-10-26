@@ -9,7 +9,7 @@ Inputs:
                W of `anchor`, and T_G_W) and `kept_inter_edges` (every inter-agent loop the robust stage still kept
                in its last solve, never an injected one, with when it was first kept).
 
-Output DIR/spool.yaml, schema_version 3 (A1's N-agent reader; A2's schema-2 bundle fields unchanged): the per-agent
+Output DIR/spool.yaml, schema_version 3 (the N-agent reader; the schema-2 bundle fields unchanged): the per-agent
 bundles concatenated (files are symlinked, never copied), and instead of schema 1/2's single `merge:` block a
 `merges:` list with one entry per non-anchor agent k:
 

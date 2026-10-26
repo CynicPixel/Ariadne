@@ -83,8 +83,8 @@ struct LiveConfig {
     bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
                                            // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
                                            // agents). false until the acceptance (live + 3 equal replays) passes.
-    bool lens = false;                     // D227 (the D41 amendment, maintainer-directed): the read-time synthetic
-                                           // lens. OFF by default for every live/demo/POC run - A2 measured it at
+    bool lens = false;                     // D227 (the D41 amendment): the read-time synthetic
+                                           // lens. OFF by default for every live/demo/POC run - measured at
                                            // ~58 ms/frame, about half the lane - and the calibration then reports
                                            // the render pinhole with D = 0. `lens: true` restores the D41 operator.
     bool demo = false;                     // D169 (agentic.md §4): judges-live mode. No lockstep, keyframes integrate
@@ -97,7 +97,7 @@ struct LiveConfig {
     struct Multiagent {
         bool enabled = false;
         std::string scenario;                 // comms scenario yaml (3.3); live runs need mode: ideal (RF needs tracks)
-        std::string broker_mode = "plain";    // plain | discount | overlap (A1 R1/R2)
+        std::string broker_mode = "plain";    // plain | discount | overlap (R1/R2)
         double consensus_timeout_s = 10.0;    // older consensus than this = uncoordinated
         double discount_range_m = 4.0;        // R2 P(d) range (broker_mode discount)
         double discount_tau_s = 10.0;         // R2 cut-off age constant [ASSUMPTION, logged]
@@ -195,7 +195,7 @@ cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHa
     return back;
 }
 
-// --- A2's live splat tee (D220; service contract D231) -----------------------------------------------------------
+// --- The live splat tee (D220; service contract D231) -----------------------------------------------------------
 // ariadne_live CONNECTS to the recon service's Unix socket (env ARIADNE_RECON_SOCK) and tees every delivered
 // keyframe: topic "#kf" = u32 LE json_len | JSON | Z fp16 | S fp16 | RGB rgb8 (JSON carries both intrinsics: K
 // full-res for the RGB, Kz spool-scale matching Z/S; invalid depth is 0, the spool convention), topic "#t_w_o" =
@@ -421,7 +421,7 @@ core::SE3 GetSe3(const uint8_t*& q) {
 int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
                        const std::string& collab_socket, bool lens_on, tools::StereoVoArgs va, const std::string& out,
                        int argc, char** argv) {
-    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (A2: 16/5/2 bit-identical) and a
+    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (16/5/2 bit-identical) and a
     // 3-worker fleet at the default pool thrashes the box (cpu PSI 26 % -> 1.2 % at 5 on c7i.4xlarge, job 46).
     {
         int n = 5;
@@ -437,8 +437,8 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     live::MessageQueue imus{512};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (A2 job 15: 0.833 vs 0.839; the lane is
-    // track/keyframe compute, not ingest), so the default is OFF (M: an unmeasured extra thread does not belong
+    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (job 15: 0.833 vs 0.839; the lane is
+    // track/keyframe compute, not ingest), so the default is OFF (an unmeasured extra thread does not belong
     // on the demo path). ARIADNE_LANE_PIPELINE=1 enables it; its payoff case is a live path with heavy ingest
     // (lens-on or degradation rows).
     const char* lp = std::getenv("ARIADNE_LANE_PIPELINE");
@@ -495,9 +495,9 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
         PutMat(o, b.rgb);
-        // Phase 6 training image (reconstruction.md, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
+        // Phase 6 training image (reconstruction.md, 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
         // fp16-rounded) + albedo_valid (half-res CV_8U) from KeyframeFalloff::Normalize. That code lives on
-        // feat/ph5-dve (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
+        // the DVE branch (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
         // says "none" and the recon service refuses to train live unless the run is the RGB ablation - nothing
         // silently falls back.
         const std::string ti = "none";
@@ -655,7 +655,7 @@ int main(int argc, char** argv) {
             else if (k == "--chooser-socket") chooser_socket = v;   // chooser llm, live
             else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
             else if (k == "--directives") directives_path = v;      // replay: the live run's directives.jsonl
-            else if (k == "--planner-config") planner_cfg_path = v;  // A1's Phase 4 planner (mission_v2.yaml); else 1.8
+            else if (k == "--planner-config") planner_cfg_path = v;  // the Phase 4 planner (mission_v2.yaml); else 1.8
             else if (k == "--shadow-map-config") shadow_cfg_path = v;   // one map for every row: p4slab snapshots
             else if (k == "--seed") va.seed = std::stoull(v);
             else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
@@ -701,7 +701,7 @@ int main(int argc, char** argv) {
         pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
         pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
         pp.eps_cells = lc.eps_cells, pp.max_command_m = lc.max_command_m;
-        // The mission planner behind the seam: A1's Phase 4 planner with --planner-config, else the 1.8 placeholder
+        // The mission planner behind the seam: the Phase 4 planner with --planner-config, else the 1.8 placeholder
         // (the ablation's row). The scene's worldgen seed is the run seed mixed into the random policy's seed.
         std::unique_ptr<live::MissionPlanner> planner;
         std::string planner_name = "placeholder_1.8";
@@ -736,7 +736,7 @@ int main(int argc, char** argv) {
             std::vector<multi::Rigid2> T_G_W;                         // known entry poses: the 2D part of T_W_O[k]
             std::vector<uint64_t> kf_count, bid_seq, patch_seq, cons_seq;   // per agent counters
             std::vector<std::optional<std::pair<uint64_t, core::SE3>>> last_kf;  // for the odometry edge
-            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (A1 e82307f)
+            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (e82307f)
             // D174 (collab: true): the fleet OWNS the radio nodes; `nodes` stays empty then. The DNN runs in
             // per-agent ariadne_collab_worker processes; LightGlue verification runs in the parent (collab.Step).
             std::unique_ptr<perception::HardPairMatcher> lightglue;
@@ -744,7 +744,7 @@ int main(int argc, char** argv) {
             std::vector<pid_t> collab_pids;
             std::vector<std::string> collab_socks;
             std::ofstream edges_csv;
-            std::map<ac::AgentId, bool> linked;   // the fleet's comms state, for A1's linked[k]
+            std::map<ac::AgentId, bool> linked;   // the fleet's comms state, for the planner's linked[k]
             std::mutex two_mu;                    // brief.T_W_O: barrier writes vs the telemetry readers
             multi::BrokerParams broker;
             bool discounted = false;                                  // broker_mode discount: R2 ApplyConsensus
@@ -754,7 +754,7 @@ int main(int argc, char** argv) {
         };
         std::unique_ptr<MaState> ma;
         if (lc.multiagent.enabled) {
-            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (A1's planner)");
+            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (the Phase 4 planner)");
             ma = std::make_unique<MaState>();
             ma->scenario = ac::LoadCommsScenario(lc.multiagent.scenario);
             if (is_live && ma->scenario.mode != "ideal")
@@ -805,14 +805,14 @@ int main(int argc, char** argv) {
             ma->max_options = lc.multiagent.max_bid_options;
             planner_name += " +multiagent(" + lc.multiagent.broker_mode + "," + ma->scenario.name + ")";
         }
-        // A2's splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
+        // The splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
         std::unique_ptr<SplatTee> splat;
         if (const char* sp = std::getenv("ARIADNE_RECON_SOCK")) {
             splat = std::make_unique<SplatTee>(sp, brief.T_W_O);
             if (!splat->on()) std::fprintf(stderr, "ariadne_live: splat tee: %s absent or refused; tee off\n", sp);
         }
 
-        // The shadow map (next-best-view.md §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
+        // The shadow map (next-best-view.md §5 amendment): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
         // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
         std::unique_ptr<planning::Phase4Planner> shadow;
@@ -844,7 +844,7 @@ int main(int argc, char** argv) {
             link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl"),
             timing_log(run_dir / "timing.jsonl");
         const auto wall_start = std::chrono::steady_clock::now();
-        // D224 (A2's profiling ask): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
+        // D224 (profiling): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
         // wall-clock decomposition of the barrier's stages. Default off; it only ADDS a file, never changes timing-
         // dependent behaviour, so digests are untouched either way.
         const bool profiling = std::getenv("ARIADNE_PROFILE") && std::string(std::getenv("ARIADNE_PROFILE")) == "1";
@@ -1424,8 +1424,8 @@ int main(int argc, char** argv) {
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
         };
         std::vector<CurrentTask> current(static_cast<size_t>(NA));
-        // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu. A1
-        // (2026-10-23): Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
+        // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu.
+        // As of 2026-10-23, Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
         // sequence is never reordered; per-agent keyframe order stays time order (each lane already is, and the
         // (t, agent, id) sort keeps it); cross-agent interleaving makes the demo map not bit-reproducible, which is
         // accepted - demo is not the evidence substrate.
@@ -1831,7 +1831,7 @@ int main(int argc, char** argv) {
                 }
                 pmark(6);   // sends enqueued
                 // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
-                // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
+                // the centralised joint[k] ("the equivalent of the old joint[k]").
                 plan_out = live::PlanOutput(NA);
                 std::ostringstream mt;
                 mt.precision(10);
@@ -1856,7 +1856,7 @@ int main(int argc, char** argv) {
                    << ",\"heartbeat\":" << charged(core::MessageClass::HEARTBEAT) << "}}";
                 plan_out.trace_json = mt.str();
                 // The console map and the return route are what the OPERATOR received over the radio (D175 SS8.2,
-                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and A1's
+                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and the
                 // incremental D* Lite over it at rho_responder. Its confidence is NOT computed (support is not on
                 // the wire) - the console must not show one.
                 const cv::Mat merged = ma->layers[size_t(NA)].Merged();
@@ -1911,7 +1911,7 @@ int main(int argc, char** argv) {
                 cv::Mat plan;
                 std::vector<mis::Candidate> cands;   // ELIGIBLE only (path >= min_goal_m), nearest first
                 std::vector<double> risk;
-                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
+                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
             };
@@ -1995,7 +1995,7 @@ int main(int argc, char** argv) {
                          << ",\"candidate\":" << continues;
                 }
                 for (size_t i = 0; i < ao.options.size(); ++i) {
-                    const auto& t = ao.options[i];   // the seam's fields only (A1's TaskCandidate names)
+                    const auto& t = ao.options[i];   // the seam's fields only (the TaskCandidate names)
                     const double r = t.risk;
                     pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
@@ -2366,7 +2366,7 @@ int main(int argc, char** argv) {
                   << "\",\"command\":{\"stamp_ns\":" << T << ",\"topic\":\"" << cmd_topic.at(k) << "\",\"kind\":\""
                   << (turn_here ? "turn" : cmd.poses.empty() ? "hold" : cmd.poses.size() == 1 ? "goto" : "follow")
                   << "\",\"waypoints_xy_m\":[";
-                if (!turn_here)   // the turn's NaN position stays in the PoseArray only: the trace is JSON (B's rule)
+                if (!turn_here)   // the turn's NaN position stays in the PoseArray only: the trace is JSON (the trace rule)
                     for (size_t i = 0; i < cmd.poses.size(); ++i) o << (i ? "," : "") << Xy(cmd.poses[i].position.x, cmd.poses[i].position.y);
                 o << "]";
                 if (turn_here) o << ",\"turn_yaw\":" << turn_yaw;

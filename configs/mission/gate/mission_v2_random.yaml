@@ -5,7 +5,7 @@ name: mission_v2
 base: mission_v1                 # grid, carving, slab, clearance, replan_period_s: mission_v1's
 planner:
   policy: random                # ariadne | coverage_greedy | uncertainty_only | random | tare (next-best-view.md §5, D116);
-                                 # the 1.8 nearest-frontier row is B's PlaceholderPlanner, not this planner
+                                 # the 1.8 nearest-frontier row is the PlaceholderPlanner, not this planner
   random_seed: 0                 # the random row's Philox seed; the run's seed is mixed in by the runtime
   allocator: cbba                # cbba | sga | greedy (D115); only the ariadne policy allocates by auction
   max_bundle: 1                  # D115 correction: CBBA = SGA exactly at L_t = 1; 2 is a reported row

@@ -1,6 +1,6 @@
 # Phase 6 — Reconstruction: incremental Gaussian splatting in the live console
 
-DRAFT (A2, 2026-10-24). Sources are the decision entries (`docs/decisions.md`) and the evidence directories named inline. Tags: **measured**
+DRAFT (2026-10-24). Sources are the decision entries (`docs/decisions.md`) and the evidence directories named inline. Tags: **measured**
 = a run we can point to; **[DESIGN]** = built and unit-tested, not yet measured end to end; **[PROJECTION]** = a
 derived number. Nothing here is a projection presented as measured.
 
@@ -34,7 +34,7 @@ NOT yet measured on a sim spool.**
     seed quality**, a measured property, not tuned away.
   - Freezing and re-anchoring are bitwise exact on the GPU.
 - **Live end to end, real runtime to real service** (D230/D231; `evaluation/runs/reconstruction/live_e2e_20261024`).
-  - B's 20 s 3-agent lit `maze_demo_0` run, teed over a socket: 71 keyframes, 0 drops, 4 submaps, 259,994 Gaussians.
+  - A 20 s 3-agent lit `maze_demo_0` run, teed over a socket: 71 keyframes, 0 drops, 4 submaps, 259,994 Gaussians.
   - The tee is determinism-neutral: the run digest equals the no-tee reference.
   - Placement from the runtime matches the briefing to ≤ 2.2e-16.
   - Seeds against the GT ESDF: 92.9 % of wall submaps within 10 cm. Agent 0's floor-heavy submaps reach 47–66 %.
@@ -46,7 +46,7 @@ NOT yet measured on a sim spool.**
 
 ### Running / next (fill before submission)
 - **GPU training on the 200 s demo recording**, Kaggle T4, pre-approved.
-  - Dataset: B's ma200 rerun `20261024T022434Z-cpux86-626abe` (tree 95544d6, which contains the D225 barrier fix).
+  - Dataset: the ma200 rerun `20261024T022434Z-cpux86-626abe` (tree 95544d6, which contains the D225 barrier fix).
     It is lens-ON, since it predates D227. Per-agent spools via `ariadne_sim_vo --spool`.
   - Report: held-out PSNR/SSIM/LPIPS at the batch and live budgets, ms/KF, Gaussians.
 - The exit-gate geometry checks (Chamfer to the GT mesh, the double wall) and the exposure-delay ablation are not

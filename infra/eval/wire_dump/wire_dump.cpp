@@ -1,4 +1,4 @@
-// DIAGNOSTIC (A1, for M, not a gate; post-demo backlog): hex dump of the four fixed messages of
+// DIAGNOSTIC (not a gate; post-demo backlog): hex dump of the four fixed messages of
 // Serialization.PreTaskConsensusBytesUnchanged (tests/protocol/test_serialization.cpp), byte for byte, so the x86 and
 // arm64 encodings can be compared offset by offset. The fixtures below are copied verbatim from that test.
 //   infra/eval/wire_dump/run.sh   (configure + build the core deps, compile this file, print the dump)

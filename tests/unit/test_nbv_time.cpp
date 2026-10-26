@@ -96,7 +96,7 @@ TEST(NbvTime, TurnHereIsOnePureTurnFromAnyNearbyPose) {
     }
     const Vec5 at{3.0, 2.0, 1.0, 0.3, 0.0};
     EXPECT_TRUE(PlanCommand(at, 7.0, {{nan, nan, 1.0, false, 0.0}}, L, wide, "x").empty()) << "no yaw: nothing to do";
-    // Every finite waypoint is as before (M's check): 1e-12 m away is the existing coincident rule (the final turn
+    // Every finite waypoint is as before (checked): 1e-12 m away is the existing coincident rule (the final turn
     // only), 1 cm away is a face-turn, a move and the final turn.
     const auto same = PlanCommand(at, 7.0, {{3.0 + 1e-12, 2.0, 1.0, true, M_PI}}, L, wide, "x");
     ASSERT_EQ(same.size(), 1u);

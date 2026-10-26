@@ -3,7 +3,7 @@
   python3 python/video/ariadne_video/data.py SCENE_DIR [RUN_DIR]   (prints a summary; numpy only)
 
 SCENE_DIR is a worldgen output (scene.json + scene_gt.npz, e.g. maze_demo_0). RUN_DIR is a live run dir
-(telemetry.jsonl, trace.jsonl, collab_edges.csv, snapshots/), or B's data pack once it has the same files.
+(telemetry.jsonl, trace.jsonl, collab_edges.csv, snapshots/), or the exported data pack once it has the same files.
 Nothing here invents a number: every value a scene draws comes from these files, so the on-screen tag "measured"
 traces back to a path. World frame as scene.json: metres, x east, y north, grid row 0 = SOUTH.
 """

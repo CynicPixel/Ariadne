@@ -11,7 +11,7 @@
 #   images.txt       "<ecr ref> <local name> <image id>" per line: pulled, retagged to the names the scripts use,
 #                    and their ids checked. core.sh is told not to rebuild the dev image (ARIADNE_SKIP_DEV_BUILD).
 # Each step is logged to $ARIADNE_RESULTS/steps.txt as it happens. The gate directory, the ctest log and every stage
-# log come back. JOBS defaults to 8 (16 vCPU host; the 2-job cap is the maintainer's workstation's).
+# log come back. JOBS defaults to 8 (16 vCPU host; the 2-job cap is the dev workstation's).
 # MODE=full runs the FULL gate (phase1.sh without --premerge) into evaluation/runs/gates/phase2_exit/exit_gate: its fresh Kaggle
 # render is relayed to the launching host through $STAGE/relay (infra/eval/render_relay.sh), whose token stays there.
 set -uo pipefail

@@ -1,4 +1,4 @@
-# Design — Phase 1.9: evaluation harness v1 (one report per run chain, every §30.2 metric)
+# Evaluation harness: one report per run chain, every registered metric
 
 Plan 1.9: "ATE/RPE vs GT (Umeyama alignment, `evo` as oracle), bytes by class, route validity vs GT; one
 auto-generated report page per run (§30, §36)." The Phase 1 exit gate: "every metric in §30.2 emits a number

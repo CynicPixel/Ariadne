@@ -1,9 +1,9 @@
 """Beat 6c: the live before/after on the same maze (recorded runs), then the pose-graph certificate.
 
-Left, gate OFF: recorded run collab60d (B's pack, paths/agent*_est.csv): the robots' shared-frame estimates replayed
+Left, gate OFF: recorded run collab60d (the run's pack, paths/agent*_est.csv): the robots' shared-frame estimates replayed
 over 60 s; robot 2 (agent 1) jumps when the aliased merges land (merge_events.csv) and ends far from its ground truth
 (error computed here from est vs gt). Right, gate ON: recorded run collab60e on the same scene. Its numbers come from
-B's gate_report_collab60e.json (entry gate tested/rejected, per-agent max error vs GT); its paths are drawn when
+the run's gate_report_collab60e.json (entry gate tested/rejected, per-agent max error vs GT); its paths are drawn when
 data/pack_collab60e/ exists. Certificate: docs/results/index.md §5 (D74), scoped to SE-Sync's cost.
 
   python/video/render.sh scenes/s06c_live.py LiveGate
@@ -78,7 +78,7 @@ class LiveGate(CaptionedScene):
                 trails.add(always_redraw(lambda f=f, paths=paths, a=a: trail(f, paths, a)),
                            always_redraw(lambda f=f, paths=paths, a=a: marker(f, paths, a)))
 
-        # until B's collab60e pack lands, the gate-on panel shows the robots at their entrances (no path drawn)
+        # until the collab60e pack lands, the gate-on panel shows the robots at their entrances (no path drawn)
         starts_on = VGroup(*[agent_marker(e["agent"], fr, *e["start_xy_m"], np.deg2rad(e["start_yaw_deg"]), size=0.08)
                              for e in sc.starts]) if not est_on else VGroup()
         self.play(FadeIn(title), FadeIn(wl), FadeIn(wr), FadeIn(hl), FadeIn(hr), FadeIn(chip), FadeIn(starts_on),

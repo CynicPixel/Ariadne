@@ -11,7 +11,7 @@ namespace ariadne::perception {
 
 namespace {
 // Philox sites are allocated downward from kMaxSite by each USAC user (tracker -1, PnP -2, bridge -3..-6). This one
-// sits well below them so a site the critical-path session adds next does not collide.
+// sits well below them so a site added next does not collide.
 constexpr uint64_t kSiteReassociationUsac = core::PhiloxStream::kMaxSite - 16;
 }  // namespace
 

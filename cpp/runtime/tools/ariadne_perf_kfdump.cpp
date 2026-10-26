@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_perf_kfdump: the pipeline profile's keyframe inputs (A2, 2026-10-24; measurement only). Runs one agent's
+// ariadne_perf_kfdump: the pipeline profile's keyframe inputs (2026-10-24; measurement only). Runs one agent's
 // shipped front-end over a sim recording exactly as ariadne_collab_passa does (same StereoVoArgs, same seed and IMU
 // noise operator, so the same keyframes at the same OpenCV thread count), and writes the CollabKeyframeInput of the
 // chosen keyframes - what CollabFrontend::ExtractLocal consumes - so the speed knobs (ALIKED input size, LightGlue K)

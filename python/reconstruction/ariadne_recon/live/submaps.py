@@ -2,7 +2,7 @@
 
 Each submap is anchored to its FIRST keyframe. Its Gaussians live in that keyframe's camera frame ("anchor frame")
 and are never rewritten by a pose update: a pose-graph update changes only T_O_anchor, so the whole submap moves
-rigidly. The console places a submap at T_W_O[agent] @ T_O_anchor (B's tee sends T_W_O per agent), so a PGO update
+rigidly. The console places a submap at T_W_O[agent] @ T_O_anchor (the runtime tee sends T_W_O per agent), so a PGO update
 or an O -> W change is one 4x4 per submap: no retraining, no re-download (exit-gate bullet 2).
 
 Intra-submap drift is deliberately not corrected (arch §18.6); submaps are kept short instead: a submap closes after

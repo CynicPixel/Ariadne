@@ -1,5 +1,5 @@
 # D58 baseline, kept as the ablation since D59 (2026-10-19): euroc_v2 with imu.mode attitude_only. euroc_v2 itself
-# switched to imu.mode full (maintainer). Every other value is euroc_v2's.
+# switched to imu.mode full. Every other value is euroc_v2's.
 # 2.3 windowed BA (local-slam.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: euroc_v2_attitude

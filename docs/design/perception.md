@@ -1,20 +1,20 @@
-# Design — 2.1: perception swap-in (XFeat keyframes + LK, re-association, SGBM/WLS, retrieval, hard path)
+# Visual front end: XFeat keyframes + LK, re-association, SGBM/WLS, retrieval, hard-pair path
 
 DRAFT 2026-10-17, rev 2.
-- **rev 1** was written in the scratchpad before the `feat/2.1-perception` worktree existed. It was recovered verbatim
-  after a session crash.
+- **rev 1** was written as a draft before the 2.1 branch existed. It was recovered verbatim
+  after a crash.
 - **rev 2** adds:
-  - D56 (lost-frame handling, landed on `feat/phase2-foundations` by the critical-path session) to the baseline;
+  - D56 (lost-frame handling, landed on the Phase 2 foundations branch) to the baseline;
   - the §4.0 attribution, measured from D56's `vo_trace.csv`;
   - the window-expiry finding that reshapes §4.3.
 
 Every number in §3 is fixed BEFORE measuring any 2.1 code. The §4.0 numbers are measurements of the existing D56 v2
 runs, not of anything new.
 
-**Preflight:** literature (§8), OpenCV-native check against the installed build (§7), advisor review. The advisor
+**Preflight:** literature (§8), OpenCV-native check against the installed build (§7), design review. The design review
 reviewed the design twice on 2026-10-17, and its corrections are folded in.
 
-**Ownership (resolved by D56):** the critical-path session owns lost-frame handling. This means:
+**Ownership (resolved by D56):** the Phase 2 foundations work owns lost-frame handling. This means:
 - the visual rotation bridge, the decaying velocity, `PoseSource`, segments, and `lost.reanchor`;
 - 2.1 is measured on top of D56;
 - 2.1 changes no lost-handling code. It only adds configs, and the lost-mode re-association call in §4.3.
@@ -50,7 +50,7 @@ sweep. This is recorded in a new D6x entry; D54 itself is not edited (append-onl
 
 ### 2.2 D56 v2 = `bridge` / `every_frame`, τ 0.5 s (`build/euroc_lost/v2_bridge_every_frame`, seed 1)
 
-This is the tree 2.1 is built on, once `feat/phase2-foundations` is merged in.
+This is the tree 2.1 is built on, once the Phase 2 foundations branch is merged in.
 
 | | MH01 | MH02 | MH03 | MH04 | MH05 | V101 | V102 | V103 | V201 | V202 | V203 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -66,7 +66,7 @@ This is the tree 2.1 is built on, once `feat/phase2-foundations` is merged in.
 
 ## 3. Acceptance, fixed before measuring
 
-**CONFIRMED by the maintainer 2026-10-17** (rev 2 as written; V1_03 held to D54's 0.4389). The brief says "beats the
+**CONFIRMED 2026-10-17** (rev 2 as written; V1_03 held to D54's 0.4389). The brief says "beats the
 D54 table"; read literally, the merged tree fails that before 2.1 adds anything (V1_02 above). So:
 
 1. **Failing four** (MH_04, MH_05, V1_03, V2_03), under the 2.1 v2 config: lost frames AND ATE both strictly below
@@ -78,7 +78,7 @@ D54 table"; read literally, the merged tree fails that before 2.1 adds anything 
    | ATE < (m) | 0.3642 | 0.3490 | 0.4389 | 1.2662 |
 
    - V1_03's ATE bar (0.4389, from D54) sits below D56's own 0.562, a regression 2.1 does not control.
-   - If the maintainer prefers, V1_03 is held to the D56 row instead, and that choice is stated in the results.
+   - If preferred, V1_03 is held to the D56 row instead, and that choice is stated in the results.
 2. **Passing seven:** no regression against the **D56 v2** row (§2.2). The tolerance comes from a measured spread, not
    a guess:
    - Before any new-config run, D56 v2 is re-run on the 7 passing flights with seeds 2 and 3. The seed perturbs USAC
@@ -119,7 +119,7 @@ D54 table"; read literally, the merged tree fails that before 2.1 adds anything 
      `reassociation` (mode, descriptor policy, store), and the keypoint caps. §7.3 makes the caps manifest fields,
      not constants.
 
-### 3 rev 3 — re-baselined on D58, 3-seed medians on both sides (maintainer, 2026-10-18; written BEFORE any D58-tree run)
+### 3 rev 3 — re-baselined on D58, 3-seed medians on both sides (decision, 2026-10-18; written BEFORE any D58-tree run)
 
 Why: the D58 merge (`dbbf8d5`) turns on `imu: attitude_only` in `slam/euroc_v2.yaml`, so every 2.1 row now runs
 with the gyro while lost. Against D54/D56 bars, D58's gain would be credited to 2.1. Every rev-2 row (§9.2–9.11)
@@ -147,7 +147,7 @@ Bars (median = median of seeds 1–3):
 5. The bar values are written below when the baselines finish, before the 2.1 candidate (A4t-r, §9.11) runs on this
    tree.
 
-**Rev 3 amendment (maintainer, 2026-10-18, time-gated):** the passing seven run the 2.1 candidate at **seed 1
+**Rev 3 amendment (2026-10-18, time-gated):** the passing seven run the 2.1 candidate at **seed 1
 only**; the failing four keep 3 seeds. The passing-seven limit is still the worst D58 seed (floored at D58 median ×
 1.02), now applied to the candidate's single seed. This is weaker evidence than a 3-seed median, and the results say
 so.
@@ -252,7 +252,7 @@ The share of lost frames that fall after the 9th lost keyframe of their stretch:
 - Count them twice: in the window, and in the out-of-window store (§4.3).
 - Report the share of (b) frames where that count ≥ the deficit.
 - **If a flight's ceiling is small, it is reported before building**, and that flight's criterion moves to 2.4. That
-  move is the maintainer's call, not mine.
+  move is a project decision, not this design's.
 
 ### 4.1 XFeatEngine (§7.1, §7.4)
 
@@ -321,7 +321,7 @@ Options:
     and is bounded by count and age.
   - On a lost-mode PnP success, the matched landmarks are put back into StereoVo under their old ids.
   - Reinsertion is a new StereoVo hunk (e.g. `ReinstateLandmarks(ids, X_w)`). StereoVo is a shared file, so this
-    is coordinated with the critical-path session.
+    is coordinated with the Phase 2 foundations work.
   - **Risk:** a stale X_w. A landmark that left the window was last BA-refined there and is now fixed. That is
     acceptable for relocalisation, and the BA refines it again once it is back in the window.
 - **(ii) `lost.reanchor: gated` (config only, no code).**
@@ -364,7 +364,7 @@ Options:
   - `cv::ALIKED`;
   - `cv::LightGlueMatcher`.
 
-  The export images need `infra/docker/*` changes. Those are a maintainer ask, or a session image
+  The export images need `infra/docker/*` changes. Those need approval, or a local image
   `ARIADNE_CORE_DEV_IMAGE=ariadne/core-dev:feat-2.1-perception`.
 - **LightGlue pairs with ALIKED only.** In DL-VINS-Factory, XF+LG gave no valid monocular trajectory on any dataset and
   0.377 m stereo-inertial on EuRoC, while XF+LK was competitive.
@@ -416,7 +416,7 @@ Philox site of the re-association PnP: `kMaxSite-16`.
 Not touched: `bundle_adjustment/`, `pose_graph/`, `robust/`, the 2.4 inertial files, `stereo_lk_matcher.*`, D56's
 lost-handling code (`rotation_bridge.*`, the lost branches in `stereo_vo.cpp`).
 
-Merge of `feat/phase2-foundations` (D57 + D58) into this branch, 2026-10-18 (`dbbf8d5`):
+Merge of the Phase 2 foundations branch (D57 + D58) into this branch, 2026-10-18 (`dbbf8d5`):
 - `stereo_vo_runner.hpp`: include block only; both sides kept.
 - `docs/algorithms.md`: D58 and 2.1 both inserted a "§1.3b". D58's (inertial) keeps 1.3b because it is already on
   the shared branch. **The 2.1 re-association entry is now §1.3c.**
@@ -424,7 +424,7 @@ Merge of `feat/phase2-foundations` (D57 + D58) into this branch, 2026-10-18 (`db
   `Replenish`/`AddTracks`/quality gate touch different steps.
 - The merged tree passes ctest 332/332 (2 fixture tests skipped by env, as before).
 
-Handover note: `.cache` in this worktree is a symlink. The `.gitignore` pattern `.cache/` matches only directories,
+Note: `.cache` in a worktree checkout is a symlink. The `.gitignore` pattern `.cache/` matches only directories,
 so it shows as `?? .cache`. Do not commit it.
 
 ## 7. OpenCV-native check (installed `ariadne/core-dev:dev`, `/opt/opencv5`, 2026-10-17)
@@ -515,7 +515,7 @@ so it shows as `?? .cache`. Do not commit it.
 - The pre-loss window holds a SPARSE map, because the dark right image barely stereo-matches (§4.0: about 20 valid
   stereo matches per lost keyframe).
 - **MH_04's re-association ceiling is low by measurement.** Its loss is a stereo-triangulation problem in the dark: 2.2
-  radiometry, or 2.4's IMU through the hover. Per §4.0 this goes to the maintainer before (i) the out-of-window store
+  radiometry, or 2.4's IMU through the hover. Per §4.0 this goes to review before (i) the out-of-window store
   is built, because the store cannot hold landmarks that were never triangulated.
 
 ### 9.4 Three seeds: A1 against D56 v2 (local dev box); a retraction
@@ -598,7 +598,7 @@ Verified (dev container, shared host):
   - Describe refuses only points outside the image;
   - ORB stays the default with no extra manifest/results output;
   - config validation.
-- The D50 timing (12–15 ms, 8 threads) was NOT re-measured: the host ran at load 18 with other sessions' containers
+- The D50 timing (12–15 ms, 8 threads) was NOT re-measured: the host ran at load 18 with other containers
   (the reference test printed 61 ms). §3.3 timing is measured on a quiet host only.
 
 ### 9.6 First XFeat run end to end: MH_04, seed 1 (smoke config, not a §5 row), 2026-10-18
@@ -664,7 +664,7 @@ reassoc_trace) after the cadence change.
 | V2_03 | 0.831/0.810/1.060 [0.831] | 152/148/156 [152] | 0.947/1.123/1.406 [1.123] | 198/184/184 [184] | 1.2662 / 183 | ✓✓✓ ; ✓✓✓ | ✓ |
 
 - **Under 3-seed medians, A4 passes both bars on all four.** Under seed 1 alone (rev 2 as confirmed), MH_04's ATE
-  fails: 0.422 against 0.3642. Both verdicts stand until the maintainer rules on rev 3.
+  fails: 0.422 against 0.3642. Both verdicts stand until rev 3 is ruled on.
 - **Engine and association do different jobs** (A2 against A4):
   - XFeat alone removes the MH hover losses (MH_04 lost 50 with or without re-association).
   - Re-association is what cuts the V flights: V1_03 127 → 60, V2_03 184 → 152.
@@ -718,7 +718,7 @@ Reading, fixed now:
 - **Both → both fixes.**
 - **Neither** (each alone holds, the combination regresses) → an interaction; look at track age and stereo-valid
   fraction before guessing.
-- Out of bounds without a §49 decision by the maintainer: "FAST corners for LK, XFeat for descriptors only". It
+- Out of bounds without a §49 decision: "FAST corners for LK, XFeat for descriptors only". It
   contradicts "XFeat primary" and §7.2's "tracked XFeat keypoints".
 
 **2×2 result** (ATE median of 3 seeds; A1 = seed 1, with the D56 3-seed median in brackets):
@@ -756,7 +756,7 @@ So both in-spec fixes, rows A4t / A4g / A4gt.
 
 **Pass condition, fixed before running:** a fix row is worth taking to the full 11-flight × 3-seed sweep only if its
 median ATE is within the §3 tolerance on all three of MH_01, MH_03 and V1_02. Otherwise it is reported as a
-negative result, and the next step goes to the maintainer.
+negative result, and the next step goes to review.
 
 **Results** (`build/a1/{A4T,A4G,A4GT}/s{1,2,3}`; ORB `euroc_v2` on MH_01 again byte-identical to A1 with the gate
 code present). ATE s1/s2/s3 [median] against the §3 tolerance; forwards per frame (median of seeds) = the XFeat
@@ -786,9 +786,9 @@ Lost frames: 0 on MH_01 and MH_03 in every row. On V1_02: A4t 0/0/0, A4g 7/8/8, 
   - But the XFeat matcher has no ratio test (upstream's `match`), and a 100% acceptance rate is what aliasing would
     look like.
   - The diagnostic that would decide it, A4t with re-association off or with ratio 0.75 on V1_02, was NOT run: the
-    pass condition sends the next step to the maintainer.
+    pass condition sends the next step to review.
 
-### 9.11 V1_02 on A4t: is re-association the cause? (maintainer chose this step, 2026-10-18; reading fixed before running)
+### 9.11 V1_02 on A4t: is re-association the cause? (step chosen 2026-10-18; reading fixed before running)
 
 V1_02, seeds 1–3: A4t-off (re-association off) and A4t-r (ratio 0.75 on top of XFeat's mutual-NN + cos > 0.82;
 ratio 0.75 is ORB-SLAM2 relocalisation's value, already in A1). The tolerance is median ATE ≤ 0.1597 and lost ≤ 13.
@@ -796,8 +796,8 @@ ratio 0.75 is ORB-SLAM2 relocalisation's value, already in A1). The tolerance is
 - **A4t-r passes V1_02** → A4t-r is the candidate: register it and run the full 11 flights × 3 seeds. It keeps
   re-association, which the V flights of the failing four need (§9.8).
 - **Only A4t-off passes** → re-association with XFeat descriptors hurts V1_02 in a way a ratio test does not fix.
-  Back to the maintainer, because the failing four need re-association.
-- **Neither passes** → V1_02's failure is not re-association's (the engine/cadence again). Back to the maintainer.
+  Back to review, because the failing four need re-association.
+- **Neither passes** → V1_02's failure is not re-association's (the engine/cadence again). Back to review.
 
 **Results** (D56 tree, pinned binary md5 `ce812f7d…`, `slam/euroc_v2.yaml` as of D56; `build/a1/A4T_R`, `build/a1/A4T_OFF`):
 
@@ -825,7 +825,7 @@ ratio 0.75 is ORB-SLAM2 relocalisation's value, already in A1). The tolerance is
 
 `build/a1/A4TR_D58/s{1,2,3}`; `build/a1/cfg/euroc_v2_xfeat_a4t_r.yaml` + `slam/euroc_v2.yaml` (D58). Failing four
 on 3 seeds, passing seven on seed 1 (rev 3 amendment). The host was suspended overnight mid-sweep; the runs resumed
-and completed. The progress log was lost with the session; results were read from the run directories.
+and completed. The progress log was lost in the crash; results were read from the run directories.
 
 | failing four | ATE s1/s2/s3 [med] | bar | lost s1/s2/s3 [med] | bar | per seed ATE ; lost | verdict | forwards/frame |
 |---|---|---|---|---|---|---|---|
@@ -864,7 +864,7 @@ What the numbers say:
 - XFeat cost: 0.24–0.88 forwards per frame. The V2 flights sit near frame rate (0.79–0.88), which is close to C8's
   limit in practice.
 
-### 9.13 Which component regresses under the gyro? (maintainer chose this, 2026-10-19; reading fixed BEFORE running)
+### 9.13 Which component regresses under the gyro? (chosen 2026-10-19; reading fixed BEFORE running)
 
 Seed 1, merged tree, `slam/euroc_v2.yaml` (D58), on V2_01, V2_03 and MH_02:
 - **A4t-off·D58**: XFeat + cadence 300, re-association OFF (`build/a1/cfg/euroc_v2_xfeat_a4t_off.yaml`).
@@ -901,13 +901,13 @@ Reading (rule fixed above):
   XFeat cuts lost frames hardest (V2_01 18 → 8) but costs accuracy on V2_03 and MH_02 even without re-association.
 - One seed. A1·D58 has not been run on the failing four or on the other passing flights.
 
-### 9.14 A1·D58 (ORB + lost-mode re-association, D58 gyro) as the 2.1 candidate (maintainer, 2026-10-19)
+### 9.14 A1·D58 (ORB + lost-mode re-association, D58 gyro) as the 2.1 candidate (decision, 2026-10-19)
 
 Judged against §3 rev 3 exactly as written, the same bars A4t-r failed, with no change: the failing four on 3 seeds,
 the passing seven on seed 1. The seed-1 runs of V2_01, V2_03 and MH_02 come from §9.13 (deterministic, not re-run).
 
 If it passes, it deviates from the locked "XFeat primary features" (arch §0.2, arch §7.2), so it needs a §49
-arch decision by the maintainer (D60–D64). XFeat stays config-selectable as the measured ablation (§9.6–9.13). If it
+arch decision (D60–D64). XFeat stays config-selectable as the measured ablation (§9.6–9.13). If it
 fails, it is reported like A4t-r.
 
 **Results** (`build/a1/A1_D58/s{1,2,3}`), against §3 rev 3 unchanged:
@@ -941,7 +941,7 @@ About the two misses (facts, not excuses; the verdict stands):
 - **V2_02 is one seed.** D58's own spread there is 0.106–0.118. A1 is 7% over the worst of it. Seeds 2–3 were not
   run (rev 3 amendment), so it is not known whether this is noise.
 
-**Post-hoc check (maintainer's choice, after the seed-1 verdict): V2_02 seeds 2 and 3.**
+**Post-hoc check (chosen after the seed-1 verdict): V2_02 seeds 2 and 3.**
 
 | V2_02 | ATE s1/s2/s3 [med] | lost s1/s2/s3 [med] |
 |---|---|---|
@@ -954,9 +954,9 @@ known.** The rev-3 verdict (seed 1: ✗) is reported unchanged next to it. Remai
 
 ### 9.15 Why MH_05's ATE bar (0.2274, D54-equivalent coasting) is not beaten: a compensating error (2026-10-19)
 
-The maintainer asked for this investigation before closing out. It is read-only on existing outputs; scripts are in
-the session scratchpad (`mh05*.py`, numpy, Umeyama SE(3) as in the runner's ATE). The lost-handling code belongs to
-the critical-path session (D56/D58), so the finding goes to them.
+This investigation was requested before closing out. It is read-only on existing outputs; scripts are in
+a scratch directory (`mh05*.py`, numpy, Umeyama SE(3) as in the runner's ATE). The lost-handling code belongs to
+the Phase 2 foundations work (D56/D58), so the finding goes there.
 
 1. **Where MH_05 loses frames.**
    - Frames 1–85 (start): frame 0's keyframe has 6 stereo-valid points and creates 2 landmarks.
@@ -987,10 +987,10 @@ the critical-path session (D56/D58), so the finding goes to them.
   and 0.227. On seed 1 the same coasting error compounds it (1.07 m, ATE 0.560: D54's own table value).
 - **The 0.2274 bar therefore rewards a compensating error, not better lost handling.** By every local measure
   (crossing error, RPE) D58 is better than coasting.
-- Nothing is wrong with D56/D58's lost handling here. That is the message to the critical-path session.
+- Nothing is wrong with D56/D58's lost handling here. That is the message to the Phase 2 foundations work.
 - The A1·D58 MH_05 "miss" is a comparison against seed-luck in the baseline.
 - The verdict as written stands (rev 3: ✗). Whether to judge MH_05 against D58 (0.3429, which A1 beats on all three
-  seeds) or by RPE is the maintainer's call. Changing the bar after the result would be post-hoc, and must be
+  seeds) or by RPE is a project decision. Changing the bar after the result would be post-hoc, and must be
   reported as such.
 
 ## 10. SGBM + WLS confidence (§9.3), §9.4 validator, §9.6 contract — design (2026-10-19, BEFORE code)
@@ -1088,7 +1088,7 @@ frame of the GT poses).
   - a Python script (`python/analysis/stereo_confidence_eval.py`, numpy only) renders GT and computes the curves.
   - A manifest goes with the figure directory (§36).
 
-### 10.6b Advisor review (2026-10-19), folded in before any code
+### 10.6b Design review (2026-10-19), folded in before any code
 
 - **Our SGBM already runs a left-right check** (`disp12_max_diff: 1`, uniqueness 15, speckle 200). That is why the
   native wiring turns all three off. So on SGBM-valid pixels, WLS's own check (1.5 px) is mostly redundant, and its
@@ -1142,7 +1142,7 @@ Against §10.7:
    - occlusion band, SGBM's own checks off (disp12 = 1e6): > 80% valid, yet > 80% confidence 0, which is WLS's
      left-right check at work;
    - 1 vs 8 threads byte-identical.
-3. **Quality: UNMEASURED** (maintainer's call: deferred). The §10.6 evaluation is designed, not built.
+3. **Quality: UNMEASURED** (decision: deferred). The §10.6 evaluation is designed, not built.
 4. **Cost:** right SGBM 23.3 ms + filter 13.5 ms (left SGBM 34.4 ms for scale), best of 5, 8 threads, load 3.8, at
    752×480 / 96 disparities. Pipeline: median 39.7 ms (MH_01, 719 passes), 52.2 ms (V2_01, 512 passes) under
    2-parallel load.
@@ -1210,9 +1210,9 @@ MatMul/Gemm and the ReduceL2/Div of `F.normalize`. All are common importer ops; 
 
 ### 11.4 Smoke test (SMOKE §4r) before dependent code
 
-1. Export in a **session image** (`ariadne-eigenplaces-ref:feat-2.1`, FROM `ariadne-xfeat-ref:1` plus pinned
-   torchvision and onnx). Shared `infra/docker/*` is not touched; moving the Dockerfile into the repo is a
-   maintainer ask.
+1. Export in a **local image** (`ariadne-eigenplaces-ref:feat-2.1`, FROM `ariadne-xfeat-ref:1` plus pinned
+   torchvision and onnx). Shared `infra/docker/*` is not touched; moving the Dockerfile into the repo needs
+   approval.
    - The weights are downloaded once and their sha256 recorded.
    - The export runs `--network none` after that.
    - Outputs: an ONNX file (opset 17) and reference descriptors from upstream's own model on fixed inputs (a EuRoC
@@ -1222,9 +1222,9 @@ MatMul/Gemm and the ReduceL2/Div of `F.normalize`. All are common importer ops; 
 3. If the importer fails, the result is recorded as such. Options then: D50's pattern (our graph from weights) or
    ORT (absent → a build change, not allowed).
 
-### 11.5 Evaluation and acceptance (FIXED 2026-10-19 after the advisor review and SMOKE §4r, before any run)
+### 11.5 Evaluation and acceptance (FIXED 2026-10-19 after the design review and SMOKE §4r, before any run)
 
-Advisor points folded in:
+Design-review points folded in:
 - the existing `GLOBAL_DESCRIPTOR` contract (256-D unit vector, cosine) is the interface;
 - mean-bit ORB is the baseline;
 - the shapes are fixed;
@@ -1322,7 +1322,7 @@ gemm is a few µs and is the default proposed in D62.
 **Not measured here:** CLAHE (arch ablation); a size between 376 and 752; cross-machine annoy determinism (read
 from source as a risk, §11.2).
 
-### 11.7 Size decision, revisited (bar 2 missed) — DECIDED 2026-10-20 by the maintainer: (a) 376×240
+### 11.7 Size decision, revisited (bar 2 missed) — DECIDED 2026-10-20: (a) 376×240
 
 - **(a) Keep 376×240 as the default.** It is ≈ 4.3× cheaper (≈ 150–200 ms against 650–850 ms here), passes bar 1
   with margin, and misses bar 2 by half a query. 752 stays a config option.
@@ -1393,7 +1393,7 @@ This is a stated limitation and does not block 2.1.
       verify legitimately.
 - **Geometry, identical for every row: the 1.6 verifier's own call.** Raw cam0 pixels → `cv::undistortPoints`
   (EuRoC radtan, `cam0/sensor.yaml`, P = K) → `findEssentialMat(pa, pb, K, cv::RANSAC, 0.999, 1.0, 1000, mask)` →
-  `recoverPose` (amended after the advisor review; an earlier draft said USAC_MAGSAC, whose threshold is a sigma
+  `recoverPose` (amended after the design review; an earlier draft said USAC_MAGSAC, whose threshold is a sigma
   bound rather than a crisp inlier cut).
   - Read from the pinned `geometry/src/five-point.cpp`: the `RANSAC` flag runs classic OpenCV RANSAC, not USAC.
     The threshold is divided by the mean focal length and is a crisp cut.
@@ -1421,7 +1421,7 @@ This is a stated limitation and does not block 2.1.
     Python scores them, as `place_eval` does.
 
 - **Metrics:**
-  1. **Verification, judged by geometry** (advisor review). Every pair has a GT relative pose, so a wrong accept
+  1. **Verification, judged by geometry** (design review). Every pair has a GT relative pose, so a wrong accept
      is defined by what breaks a pose graph, not by the distance labels. A pair is:
      - **relevant:** positive-labelled and its estimated pose error ≤ 10°;
      - **false:** pose error > 10° or an estimator failure, whatever its label;
@@ -1450,14 +1450,14 @@ This is a stated limitation and does not block 2.1.
   about 0° (< 0.1°). Same for the swapped pair, where the error must be large unless the inverse is used. This
   catches an inverted R or a swapped point order.
 
-### 12.5 Acceptance (FIXED 2026-10-21 after the advisor review, before any EuRoC run)
+### 12.5 Acceptance (FIXED 2026-10-21 after the design review, before any EuRoC run)
 
 1. **C vs A (the placeholder):**
    - pooled pose AUC@10°(C) ≥ AUC@10°(A) + 0.05;
    - AND C ≥ A in per-flight AUC@10° on at least 8 of the 11 flights;
    - AND AP_geom(C) ≥ AP_geom(A).
 2. **C vs B (does LightGlue earn its cost?):** if AUC@10°(C) − AUC@10°(B) < 0.02, LightGlue's ≈ 0.6 s per pair is
-   not earned on EuRoC. That is reported and goes to the maintainer; it is not decided in the doc.
+   not earned on EuRoC. That is reported and goes to review; it is not decided in the doc.
 3. **Reported, no bar:**
    - D vs C, which decides the wrapper's default normalisation by measurement;
    - E vs C on E's subset, which decides K;
@@ -1482,7 +1482,7 @@ highest-C non-positives, selected before E ran).
 | D ALIKED + LightGlue (OpenCV per-axis) | 0.912 | 0.354 / 0.602 / 0.773 | 0.729 / 0.854 / 0.924 | 0.867 | 616 / 1918 |
 | E K = 2048 (subset) | 0.926 (C on the subset: 0.906) | 0.354 / 0.598 / 0.767 (C: 0.607) | 0.721 / 0.849 / 0.922 | 0.965 | 610 / 77 |
 
-**AP_geom denominator, stated (found in the advisor's post-run review).** The scorer as first written counts recall
+**AP_geom denominator, stated (found in the design review's post-run review).** The scorer as first written counts recall
 over each row's OWN correct positives (354 for A, 612 for C). A positive the row gets wrong is then a false item,
 not missed recall, so the AP measures how well a row ranks its own successes. The fixed-denominator version (all 676
 positive-labelled pairs, the same for every row) is the like-for-like one:
@@ -1535,7 +1535,7 @@ positive-labelled pairs, the same for every row) is the like-for-like one:
   verifies them, so it is not penalised. This is the overlap the geometric definition (§12.4) was written to treat
   as neutral.
 
-**Cost** (median over flights; load average 17–20 from other sessions, about 2× the quiet smoke-test figures;
+**Cost** (median over flights; load average 17–20 from other jobs, about 2× the quiet smoke-test figures;
 indicative only):
 
 | | ORB | ALIKED K = 1024 | ALIKED K = 2048 |
@@ -1549,7 +1549,7 @@ hard-pair cost: rare pairs only (C8).
 ## 13. Regenerating the reference exports (fresh checkout; phase1.sh requires both)
 
 `infra/scripts/phase1.sh` fails without `.cache/models/eigenplaces_ref/manifest.yaml` and
-`.cache/models/aliked_lg_ref/manifest.yaml`. They were made in this session (outputs under
+`.cache/models/aliked_lg_ref/manifest.yaml`. They were made in this work item (outputs under
 `.cache/feat-2.1-perception/models/`, copied to `.cache/models/`).
 
 **One command each (L4, 2026-10-21):** `infra/scripts/models.sh eigenplaces` and `infra/scripts/models.sh aliked-lg`
@@ -1559,7 +1559,7 @@ regeneration into `.cache/feat-2.1-perception/models_regen/` reproduced all 11 E
 ALIKED+LightGlue files **bit-exactly**, the ONNX files included (18 s and 2 min). The steps by hand:
 
 **1. Image** (FROM `ariadne-xfeat-ref:1`, which `infra/scripts/models.sh xfeat` builds). Not in `infra/docker/`
-(shared); moving it there is a maintainer ask.
+(shared); moving it there needs approval.
 ```dockerfile
 FROM ariadne-xfeat-ref:1
 RUN pip install --no-cache-dir --root-user-action=ignore --index-url https://download.pytorch.org/whl/cpu \

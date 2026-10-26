@@ -25,7 +25,7 @@
 #          MAX_MINUTES the kernel's own timeout (push -t), default 90 (a full ctest takes ~33 min; 3 of 11 kernels on 2026-10-24 stalled RUNNING with no logs, so the Kaggle-side brake must be short. [UNVERIFIED: that push -t is enforced])
 #          JOBS / CTEST_JOBS  default 4 / 4 (the kernel has 4 vCPU)
 # The repo goes up as `git archive COMMIT` (tracked files only) (tracked files only)
-# (maintainer, 2026-10-24); everything on Kaggle is PRIVATE. The token never leaves this host: the Kaggle CLI runs
+# (2026-10-24); everything on Kaggle is PRIVATE. The token never leaves this host: the Kaggle CLI runs
 # in kaggle.sh's pinned container with ~/.kaggle mounted read-only.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -101,7 +101,7 @@ stage() {
   local ins=(); read -r -a ins <<< "$(echo ${INPUTS-$DEFAULT_INPUTS})"
   : > "$W/inputs_slug"
   if [ ${#ins[@]} -gt 0 ]; then
-    # INPUTS_ROOT: the checkout the INPUTS paths are relative to (another session's worktree), default this one.
+    # INPUTS_ROOT: the checkout the INPUTS paths are relative to (e.g. another worktree), default this one.
     # find -L / tar h dereference symlinks (a worktree's .cache points into the main checkout).
     local ir="${INPUTS_ROOT:-$REPO_ROOT}" d="$REPO_ROOT/$W/inputs"; mkdir -p "$d"
     local p; for p in "${ins[@]}"; do [ -d "$ir/$p" ] || die "missing input $ir/$p (set INPUTS / INPUTS_ROOT)"; done

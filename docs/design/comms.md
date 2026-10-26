@@ -1,6 +1,6 @@
-# 3.3 Comms broker node — RFComms link model, wall attenuation, partitions (D102)
+# Radio model: RF link with wall attenuation, partitions, per-size loss (D102)
 
-Session A2, 2026-10-22, branch `feat/3.3-comms`. Arch §5.7; the seam is collaboration.md §2.
+2026-10-22. Arch §5.7; the seam is collaboration.md §2.
 
 ## 1. What it is
 

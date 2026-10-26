@@ -1,0 +1,26 @@
+# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.
+mode: live
+scene_id: 8410a254a94cc16b
+live_config: live_collab_v1
+mission_config: mission_v1
+end_s: 60
+consumed: {messages: 86508, digest_fnv1a64: 'e64594521849089c'}
+replans: 12
+commands_sent: 36
+commands_decided: 36
+lockstep: true
+estimator_processes: true
+planner: a1_phase4:ariadne +multiagent(plain,ideal)
+shadow_map: none
+reorder_released_on_timeout: 0
+reorder_released_out_of_order: 0
+unrouted_messages: 0
+answer_timeouts: 0
+refused_goals: 2
+wall_s: 1527.22
+end_to_end_rtf: 0.0392871   # sim seconds per wall second, whole run incl. startup; gz's own view is gz_stats.jsonl
+agents:
+  - {agent: 0, frames: 1201, keyframes: 125, unpaired_frames_dropped: 0, keyframes_integrated: 125, image_queue_max_depth: 1, track_mean_ms: 106.14, track_max_ms: 362.461, lock_mean_ms: 0.000461975, lock_max_ms: 0.022677, queue_wait_mean_ms: 1142.38}
+  - {agent: 1, frames: 1201, keyframes: 67, unpaired_frames_dropped: 0, keyframes_integrated: 67, image_queue_max_depth: 1, track_mean_ms: 91.009, track_max_ms: 345.607, lock_mean_ms: 0.000437848, lock_max_ms: 0.001245, queue_wait_mean_ms: 1157.51}
+  - {agent: 2, frames: 1201, keyframes: 67, unpaired_frames_dropped: 0, keyframes_integrated: 67, image_queue_max_depth: 1, track_mean_ms: 96.1141, track_max_ms: 389.449, lock_mean_ms: 0.000454301, lock_max_ms: 0.022735, queue_wait_mean_ms: 1152.43}
+rays: 39528

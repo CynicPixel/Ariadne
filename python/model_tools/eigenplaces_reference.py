@@ -1,4 +1,4 @@
-"""EigenPlaces reference exporter (2.1, design perception.md §11.4). OFFLINE tool, run in the session image
+"""EigenPlaces reference exporter (2.1, design perception.md §11.4). OFFLINE tool, run in the reference image
 ariadne-eigenplaces-ref:feat-2.1 with --network none, the upstream checkout and the weights mounted read-only:
 
   python -I eigenplaces_reference.py --upstream /ep --weights /w/ResNet50_256_eigenplaces.pth --out /out \

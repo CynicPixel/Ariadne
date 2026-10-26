@@ -240,7 +240,7 @@ TEST(Nbv, ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc) {
 }
 
 TEST(Nbv, ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved) {
-    // B's live finding (2026-10-23): the forward rig never observes the space behind it, so the way back to the entrance
+    // A live-run finding (2026-10-23): the forward rig never observes the space behind it, so the way back to the entrance
     // is not known-free; E(return) = inf fired the hard rule on every replan and left only {hold}. The return space adds
     // the swept body of the flown track (GBPlanner's homing over the robot's own path; next-best-view.md §13).
     Scene sc(WallMap(true));

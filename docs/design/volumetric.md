@@ -1,4 +1,4 @@
-# 4.1 Volumetric stack — voxel-hash TSDF, tri-state occupancy, incremental ESDF, frontiers, coarse layer (A1)
+# Volumetric mapping: voxel-hash TSDF, tri-state occupancy, incremental ESDF, frontiers
 
 Status: design fixed before measuring (2026-10-22). Decision: D110. Arch §20.1–§20.4, §20.6. Consumers: 4.2
 (traversability), 4.3 (NBV candidates A, IG raycasts), 4.5 (egress lattice), 4.6 (coarse layer). The 1.8
@@ -99,7 +99,7 @@ definition; it was not a tuned threshold, and both runs are reported.
 - **Correction (2026-10-23).** As first committed (`f3eb6bb`), clearance was `edt·voxel − voxel/2` on a
   centre-to-centre FH transform, and this design called that the GT's convention. It is only along an axis; on
   diagonals it is optimistic. It produced 4 false egress claims at GT clearance 0.395 m. The brute-force test had
-  copied the same formula, so it passed. Found by the advisor review, `docs/design/next-best-view.md` §5.
+  copied the same formula, so it passed. Found by the design review, `docs/design/next-best-view.md` §5.
 - **Transform:** FH's lower envelope is exact for centre-to-centre distance only. The cube metric is `(2|Δ| − 1)²/4`
   per axis, still separable. Each axis pass (x, then y, then z) is an exact **windowed min-convolution** over the
   capped reach `k = ⌈d_max/v⌉ + 1 = 11`: a true distance ≤ d_max has every axis offset ≤ `d_max/v + ½`. The passes
@@ -131,7 +131,7 @@ definition; it was not a tuned threshold, and both runs are reported.
 - 0.5 m cells, 10³ voxels each. Per cell: known fraction, occupied fraction, mean weight. A cell is `unknown` if its
   known fraction is below 0.5, `occupied` if any voxel in it is occupied, and `free` otherwise.
 - RLE: (state, run) varint pairs in z-y-x order. The byte count is reported.
-- **Not on the wire here:** `wire.fbs` and the byte table belong to 3.2 (main session). This provides the codec and
+- **Not on the wire here:** `wire.fbs` and the byte table belong to 3.2. This provides the codec and
   its byte count, for message class 5 when 3.2 adds it.
 
 ## 4. Interface (replay now, live later)

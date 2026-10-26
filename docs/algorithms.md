@@ -4,7 +4,7 @@ Reference catalogue for reimplementation. Sourced from five parallel deep-resear
 
 **Setting:** multi-agent visual SLAM + collaborative reconstruction in post-disaster, human-inaccessible structures — darkness under self-carried illumination, texture-poor rubble, dust, GPS-denied, bandwidth-constrained. Fire/smoke is a **stretch goal** ([positioning doc](./docs/architecture.md) §2.3).
 
-**Status:** Domains 1, 2, 4, 4b, 5 complete (§1–§21). **Domain 3 — active perception, next-best-view, multi-robot task allocation — is the only one still owed**; its agent hit API session rate limits on both attempts. Re-run when the limit resets. (§20.2 notes that TARE and FAR Planner, the two most reusable SubT exploration planners, belong to that domain.)
+**Status:** Domains 1, 2, 4, 4b, 5 complete (§1–§21). **Domain 3 — active perception, next-best-view, multi-robot task allocation — is the only one still owed**; its research pass hit API rate limits on both attempts. Re-run when the limit resets. (§20.2 notes that TARE and FAR Planner, the two most reusable SubT exploration planners, belong to that domain.)
 
 | # | Domain | Status |
 |---|---|---|

@@ -1,6 +1,6 @@
-# 4.4 Allocation: event-triggered CBBA (bundles 1–2) and broker sequential greedy, logged identically (A1)
+# Task allocation: event-triggered CBBA and broker sequential greedy
 
-Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table waits on the master session (§5). Decision: D115. Arch §21.7; algorithms.md §22.3/§22.3.1
+Status: **reviewed** (design review 2026-10-23, §9), before any code. The wire table waits on the pending wire-format edits (§5). Decision: D115. Arch §21.7; algorithms.md §22.3/§22.3.1
 (CBBA, transcribed from the paper: Algorithm 3, eqs. 3–6, Table I, Theorems 1–2). Consumes D114's per-agent
 `TaskCandidate` sets. Replaces `Phase4Planner`'s greedy joint pick, which stays as the ablation's simplest row.
 
@@ -23,7 +23,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
 - **A task is a 4.3 target.** Its `task_id` is stable across replans.
 - **§21.7's spatial clustering is 4.3's targets.** Frontier clusters split along their PCA axis, and coarse 0.5 m
   cells, are already spatial clusters.
-- **No second clustering pass** (advisor review):
+- **No second clustering pass** (design review):
   - `cv::partition` is a transitive closure, so it would chain together the pieces that generator A's PCA split
     just separated;
   - a "smallest member" id changes whenever membership changes, which breaks exactly-once across replans.
@@ -44,7 +44,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
   - c̄_ij = max(0, G_ij − C_b,ij/P_b − C_r,ij/P_r) > 0: the task's value net of its non-path costs;
   - **G_ij is recomputed on the auction's common scales P:** Σ_k raw_k / P_k, with P_k the max over agents of each
     agent's p90 scale for term k. The scales are exchanged in the first message of an allocation event and frozen
-    for its rounds (advisor review).
+    for its rounds (design review).
     - With per-agent p90s, an agent with a sparse candidate set would bid on an inflated scale. Every Table I
       y-comparison would then be meaningless, and CBBA = SGA would still hold, on wrong inputs.
     - The max is a max-consensus: idempotent and order-free, so it settles within D hops, like CBBA itself.
@@ -63,7 +63,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
 - **One comparator** everywhere: Table I's y-comparisons, BuildBundle's argmax, SGA's argmax and the oracle.
   Compare by bid, then lexicographic (agent id, task id) (§III-B's tie-break). Otherwise ties would break test 2's
   equality for spurious reasons.
-- **Timestamps s:** round indices in replay and tests, sim time live. Never the wall clock (B's determinism
+- **Timestamps s:** round indices in replay and tests, sim time live. Never the wall clock (the runtime's determinism
   requirement).
 
 ## 4. Two allocators, one log format
@@ -90,7 +90,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
   - `TaskConsensus { tasks:[ulong]; y:[float]; z:[byte]; s:[long]; scales:[float]; }`
   - one field appended to `Envelope` (`task_consensus:TaskConsensus`), plus `WireCodec::EncodeTaskConsensus` and
     `DecodeTaskConsensus`.
-- **Coordination:** the master session has uncommitted 3.4 edits to `wire.fbs` and `serializer.hpp`, at exactly
+- **Coordination:** the 3.4 work has uncommitted edits to `wire.fbs` and `serializer.hpp`, at exactly
   that append point. I've asked it how it wants the table added. The CBBA core takes encode/decode as two function
   objects, so the codec plugs in without the core depending on FlatBuffers.
 - **Until the table lands:**
@@ -102,7 +102,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
 
 - **L_t = 1:** the assignment LP is integral (total unimodularity), so `cv::solveLP` gives the optimum (algorithms.md
   §22.3).
-- **L_t = 2, N_u = 2, the missions:** a sorted scan, exact without enumerating every combination (advisor review):
+- **L_t = 2, N_u = 2, the missions:** a sorted scan, exact without enumerating every combination (design review):
   - each agent's bundles are ≤ 2 tasks, scored at their best order, about N_t²/2 per agent;
   - sort agent 1's bundles by score;
   - for each agent-0 bundle, take the first disjoint agent-1 bundle. Only bundles sharing one of agent 0's ≤ 2
@@ -134,7 +134,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
 
 - **Replay:** run on the 4.3 decision log's per-agent candidate sets at each replan. The two agents are connected
   after the merge and disconnected before it, which is the spool's real topology.
-  - **What replay can't show** (advisor review): agent 1's keyframes are held until the merge, so it has no
+  - **What replay can't show** (design review): agent 1's keyframes are held until the merge, so it has no
     candidates before it. Replay exercises only the connected N_u = 2 case, 1–2 rounds.
   - The interesting regimes (disconnection, reconnection, stale timestamps) are covered by the synthetic tests
     (2, 3) and by live L1. They're never claimed from replay.
@@ -143,7 +143,7 @@ Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table 
 - **Live (lockstep L1):** the gate ablation uses Ariadne with CBBA. The broker-SGA row reuses the same runs'
   logged inputs, so it needs no extra live runs.
 
-## 9. Review (advisor, 2026-10-23)
+## 9. Design review (2026-10-23)
 
 Blocking points, all adopted:
 1. Common auction scales: the max of the agents' p90s, frozen per event. Test 8 (§3).
@@ -155,7 +155,7 @@ Sharpening points, all adopted:
 - one comparator; timestamps from rounds or sim time;
 - Theorem 1(2) needs no modification for DMG (Lemma 4 is for scores that are not DMG);
 - replay's limits stated;
-- the wire table coordinated with the master session.
+- the wire table coordinated with the 3.4 wire edits.
 
 The remaining choice is the time-discounted DMG score itself (§3). It is the paper's own form, with D114's λ_path
 and the common scales: no new constant.
@@ -163,7 +163,7 @@ and the common scales: no new constant.
 ## 10. Correction (2026-10-23, measured before any commit of code)
 
 - **[SUPERSEDED by §15: the cause is a non-DMG score, not L_t]** **§1's "CBBA = SGA" holds exactly at L_t = 1 only.** At L_t = 2 a stale second-slot bid can make them differ
-  (algorithms.md §22.3.1, correction). The first test sweep found it on 1 of 60 instances. The advisor's three
+  (algorithms.md §22.3.1, correction). The first test sweep found it on 1 of 60 instances. The design review's three
   separating checks then confirmed the mechanism:
   - L_t = 1: 2000 / 2000 equal, no tail release;
   - L_t = 2: 5 / 1000 diverge, all with eq. 6 tail releases;
@@ -177,7 +177,7 @@ and the common scales: no new constant.
   - L_t = 2: converged, conflict-free, divergence only with tail releases, and ≥ 50 % of brute force, labelled
     empirical.
 
-## 11. Wire (2026-10-23, master session's option (b))
+## 11. Wire (2026-10-23, option (b))
 
 - **Schema:** `TaskConsensus { tasks:[ulong]; y:[float]; z:[byte]; s:[long]; scales:[float] }` in `wire.fbs`,
   appended last in `Envelope`.
@@ -256,7 +256,7 @@ replans).
 
 ## 15. Literature review: §10's reason was wrong; bid warping (2026-10-23)
 
-This is the primary-text review the maintainer asked for (`docs/design/lit/phase4_fixes_route_cbba.md`).
+This is the requested primary-text review (`docs/design/lit/phase4_fixes_route_cbba.md`).
 
 **§10 said "CBBA = SGA holds exactly at L_t = 1 only". That is wrong as a statement about the paper.**
 - Theorem 1 (Choi et al., T-RO 2009, §V-B, p. 919) holds for any L_t, through N_min = min{N_t, N_u·L_t}. Its
@@ -302,8 +302,8 @@ This is the primary-text review the maintainer asked for (`docs/design/lit/phase
 - L_t = 2 bought nothing on the spool and cost 1.4 s of legs per replan (§14).
 - L_t = 1 is CBAA (Choi p. 916). With N_t > N_u it leaves tasks unassigned per auction, which costs nothing here
   because each agent flies one task per replan.
-- The L_t = 2 replay row (§14) was measured before warping. Re-measuring it is an evaluation run and waits for the
-  maintainer.
+- The L_t = 2 replay row (§14) was measured before warping. Re-measuring it is an evaluation run and waits for
+  approval.
 
 **Convergence (§`63fdbee`): supported, one correction.**
 - Theorem 1's bound is N_min·D; the "2 N_t D" written earlier is not in the paper.

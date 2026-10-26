@@ -7,14 +7,14 @@
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
 #                                                  config: ARIADNE_LIVE_CONFIG (default configs/mission/live_v1.yaml)
 #                                                  ARIADNE_LOCKSTEP=1: lockstep (D165), recorded in the run's config
-#                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: A1's Phase 4
+#                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: the Phase 4
 #                                                  planner (copied into the run as planner_config.yaml; replay uses it)
 #                                                  ARIADNE_SHADOW_MAP_CONFIG=configs/mission/mission_v2.yaml: a Phase 4
 #                                                  TSDF on the same keyframes -> snapshots/p4slab_<ms>.png (any planner)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
-# container ids `docker run -d` printed for them (other sessions share the docker daemon):
+# container ids `docker run -d` printed for them (other users share the docker daemon):
 #   rt       ariadne/core-dev  ariadne_live --link <run>/link.sock  (listens first)
 #   sim      ariadne/sim       ros2 launch ariadne_sim live_world.launch.py: gz sim PAUSED + RosGzBridge +
 #                              RuntimeLink in one component container; unpaused here once <run>/link.ready exists
@@ -185,12 +185,12 @@ cmd_run() {
     chooser=(--chooser-socket "$run/chooser.sock")
   fi
 
-  # 0b. The splat recon service (A2, D231; tee D220), only with ARIADNE_SPLAT=1: it LISTENS before the runtime
-  # connects. cpu_init backend (numpy/scipy/cv2 - A2's ariadne-recon image, never the console image). The tee is a
+  # 0b. The splat recon service (D231; tee D220), only with ARIADNE_SPLAT=1: it LISTENS before the runtime
+  # connects. cpu_init backend (numpy/scipy/cv2 - the ariadne-recon image, never the console image). The tee is a
   # silent no-op when this did not start, so gate runs are untouched.
   local recon_env=()
-  # A pre-set ARIADNE_RECON_SOCK (container path) reaches the runtime as-is: the mock/test path - A2's
-  # service-side mock and my tee smoke both listen outside this script.
+  # A pre-set ARIADNE_RECON_SOCK (container path) reaches the runtime as-is: the mock/test path - the
+  # service-side mock and the tee smoke both listen outside this script.
   [ -n "${ARIADNE_RECON_SOCK:-}" ] && recon_env=(-e ARIADNE_RECON_SOCK="$ARIADNE_RECON_SOCK")
   if [ "${ARIADNE_SPLAT:-0}" = "1" ]; then
     local recon_backend="${ARIADNE_RECON_BACKEND:-cpu_init}"
@@ -261,7 +261,7 @@ cmd_run() {
   docker exec -d "$sim" sh -c "echo \"tap started $(date -u +%H:%M:%S)\" > /work/$run/gz_stats.err; . /opt/ros/jazzy/setup.sh; exec gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" \
     || echo "docker exec for the stats tap failed" > "$REPO_ROOT/$run/gz_stats.err"
   docker exec "$sim" sh -c ". /opt/ros/jazzy/setup.sh; timeout 3 gz topic -l" > "$REPO_ROOT/$run/gz_topics.txt" 2>&1 || true
-  for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn (A1)
+  for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn
     if docker exec "$sim" sh -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
          > "$REPO_ROOT/$run/renderer.txt" 2>&1 && [ -s "$REPO_ROOT/$run/renderer.txt" ]; then break; fi
     echo "renderer: ogre2.log not found at probe time" > "$REPO_ROOT/$run/renderer.txt"
@@ -296,7 +296,7 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
   fi
 
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
-  # D224: an external sampler (A2's profiling) beside the run - started after the containers, stopped with them.
+  # D224: an external sampler (profiling) beside the run - started after the containers, stopped with them.
   SAMPLER_PID=""
   if [ -n "${ARIADNE_SAMPLER:-}" ]; then
     bash "$ARIADNE_SAMPLER" "$REPO_ROOT/$run/sampler" > "$REPO_ROOT/$run/sampler.log" 2>&1 &

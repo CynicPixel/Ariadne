@@ -1,4 +1,4 @@
-# Design — Phase 1.8: placeholder mission layer (occupancy, nearest frontier, egress route)
+# Mission layer: occupancy, nearest frontier, egress route
 
 Plan 1.8: "occupancy from raw depth into a plain voxel grid, nearest-frontier policy, A* route to exit at ρ_agent
 (§20–§22 interfaces, minimal internals)". Runs in replay from the 1.7 spool (keyframe depth + σ + poses + the 1.6

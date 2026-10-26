@@ -43,7 +43,7 @@ target ISA — differently on amd64 vs Graviton. Contraction is therefore disabl
 globally rather than only for `D`, so the property cannot be lost by a file moving
 between targets.
 
-## 2026-08-31 — D6 `[OPEN — needs maintainer decision]`: `cv::XFeat` does not exist
+## 2026-08-31 — D6 `[OPEN — needs a decision]`: `cv::XFeat` does not exist
 
 arch §0.2 locks XFeat as the primary feature extractor. `docs/algorithms.md` records
 this as low-risk because XFeat is "a native OpenCV 5 class", and at line 63 documents a
@@ -103,7 +103,7 @@ architecture uses SURF/BRIEF/FREAK/DAISY, and it fetches `boostdesc`/`vgg` blobs
 time from a slow third-party host, which stalled the first build entirely. Built contrib set is
 `ximgproc`, `xphoto`, `optflow`, `quality` — exactly the modules C7 names.
 
-## 2026-09-06 — D9 `[OPEN — needs maintainer decision]`: dust is composited after the sensor chain
+## 2026-09-06 — D9 `[OPEN — needs a decision]`: dust is composited after the sensor chain
 
 §5.6 states the degradation chain in this order:
 
@@ -175,7 +175,7 @@ tunable correlation time; (c) keep it white and state the limitation. (b) is
 cheap and closest to the physics. Grouped with D9 because both are questions
 about how faithful the dust model needs to be before Phase 5 depends on it.
 
-## 2026-09-06 — D12 `[OPEN — needs maintainer decision]`: §15.7 size table vs measurement
+## 2026-09-06 — D12 `[OPEN — needs a decision]`: §15.7 size table vs measurement
 
 Measured on `cpp/core/serialization/wire.fbs` (envelope overhead 96 B excluded by
 differencing against an empty graph; messages fully POPULATED, see the trap below):
@@ -210,7 +210,7 @@ batch-level `anchor:FrameTag`, and nodes from one agent share a frame, so hoisti
 the batch satisfies §15.5 while removing 8 B/node. Combined with a `struct` node (no vtable,
 -10 B) and delta-encoded ids and timestamps, 28 B is plausibly reachable.
 
-### The actual question for the maintainer
+### The actual question
 
 Is 28 B a *prediction* of what this schema costs, or a *design target* the schema must meet?
 
@@ -270,7 +270,7 @@ Consequences:
 This extends §15.7 rather than contradicting it, and needs the §49 ritual to land in the
 architecture doc.
 
-## 2026-09-06 — D15 `[DECIDED by maintainer]`: XFeat is implemented on OpenCV 5 primitives, not run through ONNX
+## 2026-09-06 — D15 `[DECIDED]`: XFeat is implemented on OpenCV 5 primitives, not run through ONNX
 
 Resolves D6. XFeat has no implementation in OpenCV 5.0.0 despite `algorithms.md` L63 claiming
 `cv::XFeat` exists. Two routes were available: export upstream's PyTorch weights to ONNX and
@@ -576,9 +576,9 @@ actual plus 100% forecast, and the limit is a variable (100 now, 200 after activ
 the credits are gone before the email arrives. Every Phase 7 launch template MUST set
 `instance_initiated_shutdown_behavior = "terminate"` and a max-lifetime shutdown in user-data.
 
-**Locked-decision tension, for the maintainer.** arch §0.2 puts Gazebo on g5/g6. That may not fit
+**Locked-decision tension, open.** arch §0.2 puts Gazebo on g5/g6. That may not fit
 the credit pool. Record-once rendering could move to local Mesa llvmpipe (proven at 320x240 / 5 Hz,
-unmeasured at 1280x720 stereo), but gsplat needs CUDA regardless. The maintainer decides once real
+unmeasured at 1280x720 stereo), but gsplat needs CUDA regardless. It is decided once real
 prices are pulled.
 
 **D26 addendum (2026-09-29), credit activities done.** All five Free Tier credit activities were
@@ -611,9 +611,9 @@ Why these and not smaller:
 - c8g.large is the smallest size on COOL's published price list (c8g.medium is not among the visible
   dimensions).
 
-**Locked-decision tension, for the maintainer.** arch §0.2 / Invariant 2 name **m8g.4xlarge** for the
+**Locked-decision tension, open.** arch §0.2 / Invariant 2 name **m8g.4xlarge** for the
 COOL benchmark, and §27.1's concurrent-pipeline "knee" sweep is not meaningful on 2 vCPUs. c8g.large is
-right for development and smoke runs. Sizing the FINAL benchmark is the maintainer's call. m8g.4xlarge needs
+right for development and smoke runs. Sizing the FINAL benchmark is a separate decision. m8g.4xlarge needs
 16 vCPU, above the current Standard quota of 5, so a request would be needed.
 
 **Biggest cost unknown:** whether local Mesa llvmpipe renders 1280x720 stereo at a usable rate. If it does,
@@ -672,7 +672,7 @@ m8g.4xlarge, Mumbai is $0.51/h against Stockholm's $0.76/h. Worth revisiting for
 
 ## 2026-09-29 — D29: minimal network: the region's default VPC, one egress-only security group
 
-The maintainer asked for the network to be as minimal as possible to keep costs down. The main stack no longer
+Requirement: the network is to be as minimal as possible to keep costs down. The main stack no longer
 creates a VPC. It uses eu-north-1's **default VPC** (172.31.0.0/16, one public subnet per AZ, internet
 gateway), which every region ships with, free and already present. The only network object Ariadne
 creates is `ariadne-test-runner`, an egress-only security group with no inbound rules; debugging goes
@@ -709,7 +709,7 @@ both PENDING at filing.
 - arch §0.2 places Gazebo on g5/g6. §4f shows that is not necessary for record-once bags, so the GPU
   requirement shrinks to gsplat alone. The locked decision is not changed here; this only records the evidence.
 - Fallbacks if both cases fail (e.g. off-AWS GPU time for gsplat) conflict with the locked "gsplat service on
-  AWS g5/g6" and are the maintainer's call.
+  AWS g5/g6" and need a separate decision.
 
 ## 2026-09-29 — D31: §30.2 becomes a code registry; rotational ATE added; "rotation/translation error" interpreted
 
@@ -877,7 +877,7 @@ rightsstatements.org InC-NC 1.0). The competition licenses every *submitted* mat
 lawful commercial or noncommercial purpose" (`submission/README.md` line 209); data only referenced is
 not covered (line 210); third-party-terms violations disqualify (line 222). Therefore **no EuRoC pixels in any
 submitted material** (report figures, demo video, S3/ECR artifacts). Derived metrics are treated as facts that may
-be reported (confirmed by the maintainer 2026-09-30: report EuRoC numbers, never its pixels). The data lives only in `.cache/` (gitignored and
+be reported (confirmed 2026-09-30: report EuRoC numbers, never its pixels). The data lives only in `.cache/` (gitignored and
 dockerignored; `spinup.sh` snapshots via `git ls-files --exclude-standard`, so it never uploads).
 
 **Fetch** (`infra/scripts/fetch_euroc.py`, stdlib only). The server honours HTTP Range. The script reads the outer
@@ -1021,7 +1021,7 @@ at per-agent offsets. A scene is accepted only with ≥ 3 inter-agent same-headi
 opportunities in ≥ 2 rooms (~400–850 in 3 rooms on the seeds inspected), and only if a start delay keeps the agents ≥ 1.0 m
 apart throughout.
 
-**Deviations from the arch text.** Items 1–6 were in the design draft the maintainer told me to implement ("continue with the implementation", 2026-09-30). Items 7–9 arose during implementation and are **pending the maintainer's confirmation**:
+**Deviations from the arch text.** Items 1–6 were in the design draft approved for implementation (2026-09-30). Items 7–9 arose during implementation and are **pending confirmation**:
 1. IMU is synthesized by the kinematic mover from the trajectory's closed-form derivatives; IMU noise and bias
    random walk are a seeded consumption-time operator, not SDF `<imu><noise>` (§5.3). Forced by SMOKE §4g: gz's
    IMU reports (0, 0, 9.8) and zero rate on a pose-written body. One IMU config file serves the noise operator
@@ -1074,7 +1074,7 @@ on the 200 Hz streams after SMOKE §4k found a stall-induced drop.
 
 ## 2026-10-01 — D39: canonical IMU / GT-pose streams written from the scripts; the live ones become a cross-check
 
-**Accepted by the maintainer 2026-10-01** ("yes go ahead, make sure it is deterministically correct").
+**Accepted 2026-10-01**, on the condition that it is deterministically correct.
 
 **Problem.** Deep queues (D38) did not make the live 200 Hz path lossless: the full `ci_tiny` mission (199 s)
 lost one of 39,800 agent-1 IMU samples (t = 174.435 s) between gz-transport and the bag, while every sample that
@@ -1131,7 +1131,7 @@ remedy is re-record.
 
 ## 2026-10-01 — D40: the sim recorder reads gz-transport directly; no bridge or DDS in the recording path
 
-**Accepted by the maintainer 2026-10-01** ("go with A, but with loud failures"). Deviates from design §7 /
+**Accepted 2026-10-01** (option A, with loud failures). Deviates from design §7 /
 arch §5.9's `ros2 bag record` via `ros_gz_bridge`; the bridge stays for live (closed-loop, demo) runs.
 
 **Why.** Three logged full recordings (SMOKE §4l) put every lost message on the DDS link between the bridge
@@ -1184,7 +1184,7 @@ operator (`cv::remap` with the forward model), consistent with D37's degradation
 exercised with exactly known coefficients. (B) pinhole only in sim; EuRoC (real radtan) exercises undistort.
 (C) the Ogre1 backend — not verified to render headless on EGL here; not recommended.
 
-**Accepted by the maintainer 2026-10-01 ("go with a"). As built:**
+**Accepted 2026-10-01 (option a). As built:**
 - **Render:** `configs/sim/rig_stereo_v1.yaml` has no `camera.distortion` (the composer refuses one, naming
   this decision); the SDF carries no `<distortion>`, so gz has nothing to ignore and `camera_info` D is zero.
   The render truth is pinhole fx = fy = 640, cx = 639.5, cy = 359.5 (pixel-centre); the mission manifest
@@ -1330,10 +1330,10 @@ Studio quota checked (eu-north-1, us-east-1). The 2026-09-29 cases auto-closed u
 same day. gsplat 1.4.0 cannot rasterize without CUDA: even `_torch_impl._rasterize_to_pixels` calls a CUDA kernel and
 needs `nerfacc` (SMOKE §4o).
 
-**Decision (maintainer).** Delegate the gsplat render to Kaggle for now. Kaggle rather than Colab because it has a
+**Decision.** Delegate the gsplat render to Kaggle for now. Kaggle rather than Colab because it has a
 CLI (`kaggle datasets` / `kaggle kernels push|status|output`), so the run is scripted and its environment
 recorded. This deviates from the locked compute placement ("gsplat on AWS g5/g6", arch §18.2) and is **interim**;
-arch §18.2 carries the note. The maintainer also stated that **the demo needs realtime rendering**, so a live GPU
+arch §18.2 carries the note. A further requirement: **the demo needs realtime rendering**, so a live GPU
 (AWS once the quota lands) stays on the critical path and the quota cases stay open.
 
 **Consequences.** No Ariadne-written CPU rasterizer (it would be throwaway once any GPU exists). The C++→Python
@@ -1494,7 +1494,7 @@ and stale-epoch rejection (Phase 3). Nightly CI of the thin run is open: it need
 
 ## 2026-10-16 — D49: no nightly CI — the thin run is a local pre-merge gate
 
-**Decision (maintainer).** No nightly CI for the end-to-end run: "this is just a hackathon project", and "before we
+**Decision.** No nightly CI for the end-to-end run: "this is just a hackathon project", and "before we
 check off each feature, we do run e2e once". Nightly infrastructure (a self-hosted runner, the 12 GB recording, a GPU)
 would cost more than it saves before Oct 24. Unit tests alone are not enough: the 257 tests stayed green while §4.2 and
 §18.2 went unused (D48). arch §0.2 is updated to say this.
@@ -1545,7 +1545,7 @@ engine is wired into the pipeline (2.1).
 ## 2026-10-16 — D51: the Phase 2 solvers run on OpenCV 5's `LevMarqBase`; our residuals, Jacobians and sparse algebra behind it
 
 **Context.** Arch §11.6 specifies LM as `(H + λI)δ = −g` with its own λ schedule (λ₀ = 1e-4·max diag H, ×2 on
-reject, ÷3 on accept, 15 iterations). The maintainer asked that Phase 2 use OpenCV natively as far as it honestly
+reject, ÷3 on accept, 15 iterations). Requirement: Phase 2 uses OpenCV natively as far as it honestly
 goes. OpenCV 5 ships `cv::detail::LevMarqBase`, a Ceres-style LM driver over a pluggable `LevMarqBackend`.
 
 **Decision.** The pose-graph solver (and, when 2.3 lands, the windowed BA) implements `LevMarqBackend`; OpenCV's
@@ -1620,7 +1620,7 @@ D54 changes. D53 and D54 land in the same commit, so no commit carries D53 alone
   The SE-Sync test excludes exactly those two files and switches to an energy + stationarity criterion; evidence in
   `pose-graph.md` §5.
 
-## 2026-10-17 — D54: frontend re-baseline — tracked points become map points again (maintainer: option A)
+## 2026-10-17 — D54: frontend re-baseline — tracked points become map points again (option A)
 
 `docs/design/local-slam.md#window-audit` traced the hard flights' lost frames to how tracked points become 3-D points. Feature
 quality and the 2.3 backend were not the cause.
@@ -1808,7 +1808,7 @@ Design and evidence: `docs/design/inertial.md`.
   - EuRoC v2 average ATE 0.289 → **0.223 m**; V2_03 1.27 → **0.68**, V1_03 0.56 → 0.42, V1_02 0.14 → 0.10.
   - Costs: V1_01 +17 mm, MH_04 +30 mm.
   - Stereo class: **10/11**. Stereo-inertial class: not yet (`full` needed, as planned).
-- **Gyro-seeded LK** (Hwangbo 2009) is built as a one-hunk seam in `klt_tracker.*` (maintainer-approved), tested,
+- **Gyro-seeded LK** (Hwangbo 2009) is built as a one-hunk seam in `klt_tracker.*` (approved), tested,
   and **off**. Lost frames −3% only; V1_03 0.42 → 0.82.
 - **Gravity** (Mahony 2008 Theorem 5.1, the paper's kP = 1, kI = 0.3) is on every keyframe record. Its error against
   ground truth is a median 1.3–4.2° per flight, 15° worst: MAV dynamics leak through. Recorded so that a
@@ -1816,7 +1816,7 @@ Design and evidence: `docs/design/inertial.md`.
   producing gravity-prior edges in 2.4; 2.5 consumes them.]
 - `imu.mode` defaults to `none`: v1, `sim_v2` (no sim IMU plumbing yet) and the sim gate are unchanged. Pre-merge
   **PASS**.
-- **Maintainer decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
+- **Decision recorded for `full`:** window exit carries a loose bias prior forward; poses and velocity
   still drop and emit an edge.
 
 ## 2026-10-19 — D59 (part 2): 2.4 full — inertial window BA, initialisation + refinement, opt-in `euroc_v2_full`
@@ -1829,7 +1829,7 @@ Design and evidence: `docs/design/inertial.md` §4 (as built). Part 1 (8691fb3):
   v and b free, bias prior = previous marginal × 10 (carried by the random walk when degenerate or unsolved).
   Tests: FD gradient and Hessian of every inertial block, Schur = dense, noise-free VI window → truth.
 - **Correction while building (§4.2):** the IMU does not observe velocity (Galilean null space, tested), so an inertial
-  chain ties keyframes only out of a group with two pose-determined keyframes. **Maintainer decision:** in a window
+  chain ties keyframes only out of a group with two pose-determined keyframes. **Decision:** in a window
   whose window[0] has no covisible partner, v₀ is held at the previous solve's value instead of holding lost
   keyframes at predicted poses. On EuRoC this triggers in up to ~25% of solves on the dark flights (MH_04, V2_03),
   ~0–5% on the easy ones: the oldest keyframe often shares fewer than `pnp.min_correspondences` landmarks.
@@ -1849,7 +1849,7 @@ Design and evidence: `docs/design/inertial.md` §4 (as built). Part 1 (8691fb3):
 - **§4.4 not decided.** Fake outages (0.5–10 s, MH_01/MH_02/V1_01/V2_01): IMU propagation drifts less to 2 s (0.24 vs
   0.45 m), then diverges (10 s: 11 m vs 3.1 m), consistent with the gravity defect (δg T²/2). The metric also scored
   the wrong instant. Re-measured after part 3 with drift to ~2–3 s after re-anchoring; `decay` stays the default.
-- Pre-merge **not run** (maintainer, 2026-10-18: only when absolutely needed); the EuRoC sweeps and unit tests are
+- Pre-merge **not run** (2026-10-18 rule: only when absolutely needed); the EuRoC sweeps and unit tests are
   the evidence. `euroc_v2` (attitude_only) and `sim_v2` (none) unchanged.
 
 ## 2026-10-19 — D59 (part 3): bias prior never looser than the carried prior; gravity-in-window is a negative result
@@ -1872,20 +1872,20 @@ Design and evidence: `docs/design/inertial.md` §4.8–4.9.
   Full vs attitude_only across outages (2.5 s after re-anchoring): better up to 5 s (2 s: 0.18 vs 0.61 m), worse at
   10 s (4.6 vs 3.1 m): long IMU-only stretches diverge; bounding them belongs with map segments (2.1 / Phase 3).
 - ctest 328/328. `euroc_v2` (attitude_only) byte-identical to D58 on MH_01; `euroc_v2_full` stays opt-in pending
-  the maintainer's switch decision. Pre-merge not run (maintainer's instruction).
+  a switch decision. Pre-merge not run (by rule: targeted runs suffice).
 
 ## 2026-10-19 — D59 (switch): `euroc_v2` is imu.mode full; attitude_only kept as `euroc_v2_attitude`
 
-- **Maintainer decision.** EuRoC average ATE 0.121 vs 0.223 m, 9/11 vs 4/11 flights in the stereo-inertial class
+- **Decision.** EuRoC average ATE 0.121 vs 0.223 m, 9/11 vs 4/11 flights in the stereo-inertial class
   (inertial.md §4.9). Costs: MH_03 +6 mm; V1_03 (0.357) and V2_02 (+1 mm) stay out of class.
 - `configs/slam/euroc_v2.yaml` takes the full-mode values of `euroc_v2_full` (removed: identical apart from its name;
   the D59 evidence directories keep that name). `configs/slam/euroc_v2_attitude.yaml` is the D58 configuration,
   kept as the baseline/ablation.
-- **Verified by targeted runs, not the pre-merge (maintainer's instruction):** the new `euroc_v2` reproduces the
+- **Verified by targeted runs, not the pre-merge (by rule):** the new `euroc_v2` reproduces the
   committed full-mode V2_03 trajectory byte for byte, and `euroc_v2_attitude` reproduces D58 on MH_01 byte for byte.
   `sim_v2` (imu none) and the sim gate are untouched.
 - **Ownership corrected:** gravity-prior edges (arch §10.4) are a 2.4 deliverable per the plan, produced here and
-  consumed by 2.5's pose graph; the D58 entry had assigned them to 2.5. They are this session's next item.
+  consumed by 2.5's pose graph; the D58 entry had assigned them to 2.5. They are the next item.
 - **Merge note for 2.1:** 2.1's D60 bars were measured against D58 (attitude_only). After merging, EuRoC needs one
   combined sweep; the two gains (re-association, IMU) both act on the lost stretches and need not add.
 
@@ -1902,7 +1902,7 @@ needing 1000 LM iterations where GTSAM needs 8, (c) cubicle and rim refused for 
    with `cv::SVDecomp` and the determinant fix, then translations come from a τ-weighted Laplacian. κ and τ follow
    SE-Sync's isotropic conversion (`τ = 3/tr(I_t⁻¹)`, `κ = 3/(2 tr(I_R⁻¹))`), shared with D74.
    - **Baselines (§49 ablation):** dead reckoning and a `cv::buildMST` spanning tree (Prim, highest κ).
-   - **Gate (maintainer decision 2026-10-18, design §9):** on the SE-Sync graphs where our LM from dead reckoning
+   - **Gate (decision 2026-10-18, design §9):** on the SE-Sync graphs where our LM from dead reckoning
      fails, chordal + LM must reach GTSAM's minimum.
      - The failure set is **torus3D and grid3D**, where GTSAM's LM from the same start stops in the same local
        minima (29950.006 and 253372.10).
@@ -1987,7 +1987,7 @@ that 3D point noise could be ignored. Design: `robust-backend.md` §4.
   [ASSUMPTION]. Calibration follows Zhang's margin-midpoint rule on real candidates with ground truth, protocol fixed
   in design §4, run in D73.
 - **Not wired.** `VerifyResult` does not export inlier correspondences, and the broker's `ProxyInformation` stays,
-  because replacing it changes the Phase-1 sim_collab outputs. Both need a maintainer decision before D73.
+  because replacing it changes the Phase-1 sim_collab outputs. Both need a decision before D73.
 - **Honest covariance is shown at 1.5–12 m only.** On the small-object scene the residuals are about 3× the model
   (σ̂² 3.2), so the covariance is honest there only through the inflation.
 - **Not timed.** It is O(N) per loop with a 6×6 solve [UNVERIFIED].
@@ -2026,7 +2026,7 @@ job.
 - **Blind spot:** 5 aliased, mutually consistent wrong loops beat 3 true ones. Asserted and labelled.
 - **Timing:** 186 ms for 300 loops on 3000 nodes.
 
-**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+**Decision (2026-10-19), following the review's recommendation: the per-loop threshold is the default.**
 - **The two failures are not symmetric.** True loops dropped by the fixed quantile cannot be recovered; near misses
   passed by the default are GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ 176, against GNC's c̄² = 16.8.
 - **Stated trade:** the bound loosens with group size (27.6 at 10 loops, 30.3 at 30, 33.1 at 100, 35.6 at 300,
@@ -2086,7 +2086,7 @@ oracle at 100/100):
 
 ## 2026-10-20 — D73 part 2a: GNC weight reuse across loop events (fast path = fixed point + half-bound innovation test)
 
-**Context.** The maintainer asked for weight reuse before the wiring, to cut per-event latency. Design §6 part 2a
+**Context.** Weight reuse was requested before the wiring, to cut per-event latency. Design §6 part 2a
 holds the protocol, fixed before the first run.
 
 **Decision.**
@@ -2141,7 +2141,7 @@ showed the PnP loop covariance far too confident for PCM and GNC. Design: `robus
   `loop_closure:` section (`configs/slam/euroc_v2_loops.yaml`). Per keyframe:
   - ORB features plus SGBM 3D points, and the mean-bit placeholder descriptor;
   - retrieval, with the last 50 keyframes and the last 10 s excluded;
-  - verification with `edge_verifier`, whose new inlier export was a maintainer-approved hunk;
+  - verification with `edge_verifier`, whose new inlier export was an approved hunk;
   - each loop queued until its keyframes leave the BA window, then one backend event.
   The VO is never written. Outputs: `loop_trace.jsonl`, `loop_candidates.csv` (ground-truth errors, full error
   vector and covariance), and a summary block with the funnel, recall, latency and the PCM good-pair statistic.
@@ -2159,7 +2159,7 @@ The MH_01-only fit failed held-out V1_01, which is stated; hence the joint fit.
 - V1_01 0.0563 → 0.0382 m (−32 %)
 - V1_02, held out: 0.0517 → 0.0254 m (−51 %)
 - **V1_02 funnel precision:** 0.53 → 0.80 → 0.88 → 0.97 (GNC: 142 good, 4 bad).
-- **Held-out NEES:** mean 5.24 passes; the tail is 4.4 % against ≤ 3 %, which misses. The maintainer accepted the
+- **Held-out NEES:** mean 5.24 passes; the tail is 4.4 % against ≤ 3 %, which misses. Decision: accept the
   model with the miss stated; GNC absorbs the tail.
 - **PCM good-pair statistic:** 2.1–7.8, so no odometry scale is needed.
 - **MH_01 without the model:** GNC kept 51 good of 55 (0.93); with it, 118 good of 177 (0.67), at the same ATE
@@ -2207,7 +2207,7 @@ offline from the run traces, so the effective number of independent priors is lo
 unchanged).
 
 **Not done, stated.**
-- No EuRoC run yet, by the maintainer's priority (sim calibration and part 3 first).
+- No EuRoC run yet, by priority (sim calibration and part 3 first).
 - The 4-DoF-pose-graph comparison is recorded, not built [UNVERIFIED citations].
 
 ## 2026-10-21 — D65: gain-up degradation configs for the VST; the 16 shipped configs stay
@@ -2267,7 +2267,7 @@ interpolation would mix the noise the GAT models, and K lives in raw coordinates
 - **Manifest:** a new field `radiometric` (`off`, or mode/decision/denoiser/inverse/flat-field summary). The fits and
   the gate's reasons go in the `radiometric:` block of results.yaml, written only when enabled.
 - **Denoiser: `GaussianBlur` 5×5 by default** (0.8 ms per 1280×720 image; the demo must be near-realtime,
-  maintainer 2026-10-21).
+  decision 2026-10-21).
   - `cv::fastNlMeansDenoising`, arch §6.2's suggestion, is an ablation row only. It takes 8U/16U only, so the
     stabilised image is scaled into 8U, and the stage costs ≈ 360 ms per image with it.
   - BM3D is unavailable: our build has `OPENCV_ENABLE_NONFREE` off.
@@ -2295,7 +2295,7 @@ shipped; the inverse is implemented from the thesis' equations.
 
 ## 2026-10-21 — D69: 2.2 verdict: the gate works as designed; on the measured segment the VST buys nothing measurable
 
-**What was measured.** Per the maintainer: only what cannot be done without, and the demo must be near-realtime.
+**What was measured.** Rule: only what cannot be done without, and the demo must be near-realtime.
 `ariadne_sim_vo`, `ci_tiny_0` agent 0, 1000 frames, `sim_v2`, seed 1. Full numbers: `radiometric.md` §6.
 
 | row | ATE | lost | keyframes | landmarks alive | stereo valid |
@@ -2324,21 +2324,21 @@ shipped; the inverse is implemented from the thesis' equations.
 - **Not run (defined in `configs/benchmark/radiometric_2.2.yaml`):** the rest of the sim matrix (dark2_ag8,
   flat-only, NLM, algebraic) and the EuRoC forced-on rows.
 
-## 2026-10-21 — D80: Phase 3 opened before the Phase 2 gate (maintainer instruction); decision IDs D80–D89 claimed
+## 2026-10-21 — D80: Phase 3 opened before the Phase 2 gate (explicit decision); decision IDs D80–D89 claimed
 
 - **Opened early, explicitly.** arch §0.2 opens a phase only on the previous gate. Phase 2's gate is not passed:
   2.1 and 2.2 are unmerged, 2.5's D74 certificate is open, and the phase-gate premerge has not run.
-  The maintainer started Phase 3 on 2026-10-21 ("start phase 3 collaboration"), given the deadline.
+  Phase 3 was started on 2026-10-21, given the deadline.
 - **What the early opening must not do.** Phase 3 must not change the Phase 2 code paths the gate will measure.
   The Phase-1 gate's pinned references (incl. `figures/bytes.json`) keep describing the Phase-1 exchange until a
   recorded re-pin. The new protocol lives beside it (`docs/design/collaboration.md` §9).
-- **Ownership.** This session takes the critical path in order: 3.2, then 3.4, then 3.5. 3.1 and 3.6 (∥A) and 3.3
-  (∥B) are for parallel sessions; 3.3 implements the `LinkModel` seam published in collaboration.md §2.
+- **Ownership.** The critical path runs in order: 3.2, then 3.4, then 3.5. 3.1 and 3.6 (∥A) and 3.3
+  (∥B) run in parallel; 3.3 implements the `LinkModel` seam published in collaboration.md §2.
 - **IDs.** D80–D89 are Phase 3's critical path. In use elsewhere: D60s (2.1), D70–D74 (2.5).
 
 ## 2026-10-21 — D81: the 3.2 protocol design — per-class delivery, fragment ARQ, one-hop election with epochs
 
-Design: `docs/design/collaboration.md`; advisor-reviewed twice. Preflight: Swarm-SLAM (code-verified), Tian et al. 2018
+Design: `docs/design/collaboration.md`; design-reviewed twice. Preflight: Swarm-SLAM (code-verified), Tian et al. 2018
 (vertex cover), CERBERUS (completed-transmission rule), Lajoie 2026 (real link drop-out), COSMO-Bench. No DTN+C-SLAM
 paper found. OpenCV has nothing native here.
 
@@ -2443,7 +2443,7 @@ Re-tested live as `user/pixel` in eu-north-1. Superseded: the D26–D28 "Bedrock
 verified" open item, and STATUS's "Pending with AWS: GPU quota … Bedrock is blocked".
 
 - **Bedrock runtime works.** `converse` on `eu.amazon.nova-micro-v1:0` answered (9 tokens). No support case is needed.
-- **Orchestrator model (maintainer: "any cheap model that's good enough").** Primary: **Amazon Nova 2 Lite** via the
+- **Orchestrator model (requirement: any cheap model that is good enough).** Primary: **Amazon Nova 2 Lite** via the
   EU profile `eu.amazon.nova-2-lite-v1:0`. Fallback: **DeepSeek V3.2** (`deepseek.v3.2`, in-region on-demand).
   - Quotas (cross-region, EU): Nova 2 Lite 200 RPM / 8M TPM. In-region on-demand: DeepSeek V3.2 and Qwen3-32B at
     1000 RPM / 100M TPM.
@@ -2458,7 +2458,7 @@ verified" open item, and STATUS's "Pending with AWS: GPU quota … Bedrock is bl
 
 ## 2026-10-19 — D60: 2.1 — ORB + lost-mode re-association ships for EuRoC v2; XFeat stays a measured ablation (overrides "XFeat primary" for this phase)
 
-> **Approved by the maintainer as scoped, 2026-10-19.** It overrides arch §0.2's "XFeat primary features" for the
+> **Approved as scoped, 2026-10-19.** It overrides arch §0.2's "XFeat primary features" for the
 > EuRoC v2 VO front-end only. "XFeat primary" stands for the learned paths. arch §0.2 itself is not amended.
 
 Design, every run and every bar: `docs/design/perception.md` (§3 rev 3, §9).
@@ -2466,7 +2466,7 @@ Design, every run and every bar: `docs/design/perception.md` (§3 rev 3, §9).
 **What ships.** `configs/perception/euroc_v2.yaml` becomes the EuRoC v2 perception config, paired with
 `configs/slam/euroc_v2.yaml`. It is `euroc.yaml` plus a `reassociation:` section. **No file in the repo defines the
 v2 pair** (D58's v2 sweep ran `perception/euroc.yaml` + `slam/euroc_v2.yaml`). So from D60 on, every EuRoC v2
-sweep, the critical-path session's included, must pass `--perception-config configs/perception/euroc_v2.yaml`, or
+sweep, the critical path's included, must pass `--perception-config configs/perception/euroc_v2.yaml`, or
 it silently runs without re-association.
 - Lost-mode re-association, the ORB-SLAM §V-C relocalisation idea restricted to the BA window. When fewer than 30
   live tracks hold a landmark, tracks holding none are described at their pixel and matched against healthy (born at
@@ -2481,7 +2481,7 @@ it silently runs without re-association.
     every new call returns early when its config section is absent.
 
 **Evidence (merged tree with D58's gyro; §3 rev 3: 3-seed medians on the failing four, seed 1 on the passing seven
-by the maintainer's time-gated amendment):**
+by the time-gated amendment):**
 - Failing four, against min(D54-equivalent, D58):
   - lost frames pass on all four (medians 264 → 67, 101 → 99, 141 → 92, 171 → 122);
   - ATE passes on MH_04, V1_03 and V2_03 (V2_03 0.595 → 0.535 on every seed).
@@ -2533,7 +2533,7 @@ front-end in 2.1, revisited if a later phase removes the regression.
 **Correction to D54 (append-only).** D54's quoted lost frames "MH_04 266, V2_03 181, V1_03 139, MH_05 100" are
 v1's, taken from the v1 rows of the same sweep. v2's are 278, 183, 146 and 107 (perception.md §2.1).
 
-**Merge note.** `feat/phase2-foundations` (D57, D58) is merged into `feat/2.1-perception` (`dbbf8d5`).
+**Merge note.** The phase-2 foundations (D57, D58) are merged into the 2.1 perception line (`dbbf8d5`).
 `algorithms.md`: D58's inertial section keeps §1.3b; 2.1's re-association catalogue entry is §1.3c.
 
 ## 2026-10-19 — D61: §9.3's confidence — the WLS map wired without touching our SGBM; off by default until consumed
@@ -2560,12 +2560,12 @@ Design: `docs/design/perception.md` §10.
   - EuRoC MH_01 and V2_01 with `confidence: wls`: results and trajectories byte-identical to the v2 config.
   - Cost per stereo pass at 752×480: right SGBM 23 ms + filter 14 ms, best of 5 at load 3.8 (pipeline median 40–52 ms
     under load).
-- **Not measured: quality.** The AUC against EuRoC's Leica scans is deferred by the maintainer (2026-10-19) and
+- **Not measured: quality.** The AUC against EuRoC's Leica scans is deferred (2026-10-19) and
   recorded as unmeasured. Nothing in 2.1 consumes the map. Turning it on in a shipped config waits for a consumer
   (TSDF §20.1 or §11.2) and that measurement.
 
 
-## 2026-10-20 — D62 (DRAFT, pending the maintainer): place retrieval — EigenPlaces R50-256 via cv::dnn; exact index default, cv::ANNIndex the ablation
+## 2026-10-20 — D62 (DRAFT, pending approval): place retrieval — EigenPlaces R50-256 via cv::dnn; exact index default, cv::ANNIndex the ablation
 
 Design: `docs/design/perception.md` §11. Catalogue: `algorithms.md` §1.6 (as-built note).
 
@@ -2587,7 +2587,7 @@ Design: `docs/design/perception.md` §11. Catalogue: `algorithms.md` §1.6 (as-b
     top-1 equals exact on 297/297.
 - **Acceptance (§11.5, fixed before the run):** bar 1 PASS. Bar 2 MISSED by 15/297 = 0.0505 against 0.05: half a
   query, consistent direction, paired McNemar p = 0.028 (optimistic, the queries are correlated).
-- **Size (§11.7): DECIDED by the maintainer 2026-10-20, (a) 376×240 is the default.** The bar-2 miss is accepted
+- **Size (§11.7): DECIDED 2026-10-20, (a) 376×240 is the default.** The bar-2 miss is accepted
   and stated. 752×480 stays a selectable export. A size in between was not measured.
 - **Limits:**
   - EuRoC-scoped: the rig is 1280×720 RGB, and sim needs its own export and an RGB path.
@@ -2597,7 +2597,7 @@ Design: `docs/design/perception.md` §11. Catalogue: `algorithms.md` §1.6 (as-b
 
 ## 2026-10-21 — D63: the hard-pair path — ALIKED-n16 + LightGlue from our own upstream export, through cv::ALIKED / cv::LightGlueMatcher
 
-**Approved as scoped by the maintainer, 2026-10-21.**
+**Approved as scoped, 2026-10-21.**
 
 Design: `docs/design/perception.md` §12. Smoke: `validation.md` §4s / §4s-2. Catalogue: `algorithms.md`
 (the correction note under the OpenCV-5 inventory).
@@ -2607,7 +2607,7 @@ Design: `docs/design/perception.md` §12. Smoke: `validation.md` §4s / §4s-2. 
   Size())`; one instance per thread. The models are exported by `python/model_tools/aliked_lightglue_reference.py`
   from `cvg/LightGlue@eb42fee` with the weights `Shiaoming/ALIKED@683d7c6` `aliked-n16.pth` and LightGlue
   `v0.1_arxiv` `aliked_lightglue.pth`, configured as glue-factory's official setting.
-- **Why our own export** (the maintainer's call, 2026-10-20): opencv_extra's files are an unlicensed personal
+- **Why our own export** (decision, 2026-10-20): opencv_extra's files are an unlicensed personal
   export, of ALIKED-**n16rot** (LightGlue's ALIKED weights were trained on n16), at a fixed 640×640 square.
 - **Deviations from OpenCV's documented use, stated:**
   - pre-normalised keypoints, not OpenCV's per-axis rule;
@@ -2660,7 +2660,7 @@ Design: `docs/design/perception.md` §12. Smoke: `validation.md` §4s / §4s-2. 
 
 ## 2026-10-22 — 2.1 close-out notes (bookkeeping; no new decision)
 
-- **D62 stays DRAFT.** The maintainer decided its size question (376×240, 2026-10-20), but its deviation from the
+- **D62 stays DRAFT.** Its size question was decided (376×240, 2026-10-20), but its deviation from the
   arch's "Use `cv::ANNIndex`" (exact index as the default) has not been explicitly approved. 2.5, the first
   consumer, should take that call.
 - **Projection-guided re-association** (the PRIORITY item's second half, ORB-SLAM's track-local-map search into the
@@ -2691,11 +2691,11 @@ metric as `inertial.md` §4.9.
   - V2_02 has 7 lost frames: its miss is drift, not lost stretches, so the trigger does not fire there.
   - The 2.4-only per-flight lost counts were not recorded in §4.9, so "still dominate" is judged on the combined run
     alone.
-  - **Maintainer's call** whether V1_03 alone justifies building it (register: 2.1 row).
+  - **Open decision:** whether V1_03 alone justifies building it (register: 2.1 row).
 
 ## 2026-10-21 — D62 approved: the exact index is PlaceIndex's default; cv::ANNIndex stays as the scale ablation
 
-**Approved as scoped by the maintainer, 2026-10-21.** This supersedes the "D62 stays DRAFT" line in the 2.1 close-out
+**Approved as scoped, 2026-10-21.** This supersedes the "D62 stays DRAFT" line in the 2.1 close-out
 notes above. The D62 entry itself is unchanged.
 
 - **What is approved:** `PlaceIndex` defaults to `exact` (one gemm, deterministic, a few µs at thousands of
@@ -2718,7 +2718,7 @@ notes above. The D62 entry itself is unchanged.
 ## 2026-10-22 — D90: sim-rig exports — EigenPlaces and ALIKED-n16 + LightGlue at 1280×720 RGB, with an RGB path
 
 **Settled 2026-10-22** by the sim retrieval evaluation (`docs/design/retrieval.md#sim-retrieval`, rule fixed before the
-run): EigenPlaces' sim default is **640×360**. Everything else follows D62/D63 as approved. The maintainer's
+run): EigenPlaces' sim default is **640×360**. Everything else follows D62/D63 as approved. The earlier
 approval of the size was replaced by that pre-registered rule, as the Phase 4 brief asked; it is re-openable.
 
 - **What:**
@@ -2795,7 +2795,7 @@ Design and protocol fixed before the run: `docs/design/retrieval.md` §2. Result
   - fp16 and int8 (258 B) give identical hits on all 297 queries, at both sizes.
   - PCA truncation is admissible at 376×240 but not at 752×480. PCA→256's gain is mean-centring.
   - All differences are n.s. (McNemar p ≥ 0.07).
-- **Recommendation for the wire (3.2's call, main session):** int8 with a per-vector fp16 scale, 258 B per keyframe
+- **Recommendation for the wire (3.2's call):** int8 with a per-vector fp16 scale, 258 B per keyframe
   against 1024 B. `wire.fbs` `GlobalDescriptor.descriptor` is `[float]`, so this needs a schema change; 3.6 changed
   no comms file. The bytes here are payload `[PROXY]`.
 - **Limits:**
@@ -2885,7 +2885,7 @@ a non-certified planted-outlier graph a full shift would pass at 0.61× the redu
   | tinyGrid3D | — | — | certified |
   | smallGrid3D | — | — | certified |
 
-- **The large SE-Sync graphs (2026-10-22, maintainer-approved; `evaluation/runs/robust-backend/certificate_sesync/`).** One
+- **The large SE-Sync graphs (2026-10-22, approved; `evaluation/runs/robust-backend/certificate_sesync/`).** One
   container each, in order, hard memory cap, cgroup `memory.peak`. grid3D ran only after the projection rule written
   into the manifest beforehand (≈ 12 kB per edge on the first four, ×10 for 3D-lattice fill → < 6 GB) passed.
 
@@ -2967,9 +2967,9 @@ verifying agent, so the broker sees pre-gated edges.
 **Not done, stated.** `AgentSubgraph` carries no gravity priors, and `SolveMultiAgent` does not call the entry point.
 Both are main's (3.2 / 3.5).
 
-## 2026-10-22 — D86: Phase 2 acceptances, delegated to M (EuRoC 9/11, TUM fr1, D74 wording, D91 pool rule, D90 size)
+## 2026-10-22 — D86: Phase 2 acceptances (EuRoC 9/11, TUM fr1, D74 wording, D91 pool rule, D90 size)
 
-**Delegation.** The maintainer asked M to decide, with an advisor review, and gave this criterion: "we SHOULD NOT
+**Criterion.** Decided with an independent review, against this criterion: "we SHOULD NOT
 COMPROMISE ON QUALITY AND ROBUSTNESS to a reasonable degree, if we are at par with sota lit mostly im good to go".
 Each verdict below is held to that criterion against the local-slam.md#estimator-plan §1 reference table (ORB-SLAM3 T-RO 2021
 Table II). Nothing here is from memory.
@@ -2986,42 +2986,42 @@ Table II). Nothing here is from memory.
    - **The full-system run is owed.** With loops on (D73 2b), three flights already sit at ORB-SLAM3's level:
      MH_01 0.021 (ORB-SLAM3 0.036), V1_01 0.038 (0.038), V1_02 0.025 (0.014). No 11-flight loops-on run exists.
      The SOTA-parity claim may only be made from that run, which is the like-for-like comparison with ORB-SLAM3.
-     It is a gate item for Phase 2 (heavy, so the maintainer is asked before it runs).
-2. **TUM fr1 (A2's D100 after renumbering): accepted as "regression pinned"**, which is the gate's wording.
+     It is a gate item for Phase 2 (heavy, so it is approved before it runs).
+2. **TUM fr1 (D100 after renumbering): accepted as "regression pinned"**, which is the gate's wording.
    - The fr1 rows are a cross-class comparison: ORB-SLAM2's RGB-D rows are full SLAM; ours is VO with loops off.
      The deployed rig is stereo, not RGB-D, so this does not block.
    - **Condition:** the fr1/xyz target (0.017) is tagged [UNVERIFIED]. It is sourced from the cited table, or its
-     in-class verdict is dropped, before the number is cited anywhere. Owner: A2.
+     in-class verdict is dropped, before the number is cited anywhere.
 3. **D74's gate wording: accepted as "certified fraction reported".** A certificate proves optimality of the given
    cost, not that the cost is outlier-free. The wound-ring test covers the intent of the original wording: a
    strictly worse stationary point is not certified.
    - **Blocks the Phase 2 checkmark:** parity with SE-Sync is shown only on parking-garage (Table 1) and two small
-     grids. sphere, torus, grid3D, cubicle and rim must land (B, about 2 h) before D74 or Phase 2 is marked done.
+     grids. sphere, torus, grid3D, cubicle and rim must land (about 2 h) before D74 or Phase 2 is marked done.
 4. **D91: per-thread instances accepted; the process-wide pool rule is accepted only for shared-wrapper DNN use.**
    `cv::setNumThreads(1)` also throttles the always-on per-frame pipeline (remap, pyramids, LK), which is what the
    COOL benchmark measures (INV2).
    - **Carry to 7.3:** the benchmark's thread setting is decided explicitly and recorded in its manifest, and pool=1
      is never set process-wide in the runtime that the benchmark times.
 5. **D90's sim size: accepted as provisional (640×360), to be settled by data.** The sim retrieval evaluation reports
-   a 640×360 vs 1280×720 recall row, and the default follows that row. Owner: A1 (3.1).
+   a 640×360 vs 1280×720 recall row, and the default follows that row. Owner: 3.1.
 
 **What the Phase 2 checkmark now waits on, in order:**
 1. the merged-main build and push;
-2. A2's merge;
+2. the 2.6 (TUM) merge;
 3. the integrated premerge;
-4. B's SE-Sync large graphs;
+4. the SE-Sync large graphs;
 5. the 11-flight EuRoC run with loops on;
 6. the phase-gate full run.
 
-Items 3, 5 and 6 are heavy: the maintainer is asked before each.
+Items 3, 5 and 6 are heavy: each is approved before it runs.
 
-## 2026-10-23 — D88: 5.6's real-data low-light check uses EuRoC's dark flights; OIVIO dropped (maintainer)
+## 2026-10-23 — D88: 5.6's real-data low-light check uses EuRoC's dark flights; OIVIO dropped
 
 **Context.** Plan 5.6 validates the degraded-vision path on OIVIO. On 2026-10-22 the official page said "downloads
-temporarily unavailable", and every Drive ID returned 404 (A2, `feat/ph5-dve`). The candidate substitute, CAVERS, is
+temporarily unavailable", and every Drive ID returned 404. The candidate substitute, CAVERS, is
 RGB-D, not stereo, so it does not match the rig.
 
-**Decision (maintainer, 2026-10-23).** "its not that deep, darkening is already a stretch goal ... go with Euroc's
+**Decision (2026-10-23).** "its not that deep, darkening is already a stretch goal ... go with Euroc's
 dark flights."
 - 5.6's real-data check runs on EuRoC's dark, fast flights: MH_04_difficult, MH_05_difficult and V1_03_difficult.
 - They are real stereo + IMU with ground truth, at our rig's modality. V1_03 is already the D86 regression case.
@@ -3035,12 +3035,12 @@ falloff and active-exposure claims (5.2/5.3) rest on the sim (5.1 calibration) a
 - catalogue: `algorithms.md` dataset note;
 - arch: the arch decision is this entry;
 - ablation matrix: the 5.6 row names the three flights;
-- benchmark config: A2's 5.6 config lists the flights;
+- benchmark config: the 5.6 config lists the flights;
 - manifest: unchanged, since the dataset is already recorded by name.
 
 ## 2026-10-23 — D89: supersedes D88 — 5.6 runs on UMA-VI's illumination-change sequences (open, real stereo + IMU); EuRoC's dark flights stay as the full-GT companion
 
-**Maintainer, 2026-10-23:** "if there is a dataset available openly without chasing maintainers go for it, revert
+**Decision, 2026-10-23:** "if there is a dataset available openly without chasing maintainers go for it, revert
 the decision". So D88's choice of EuRoC as the primary is reverted.
 
 **Checked 2026-10-23:**
@@ -3062,7 +3062,7 @@ the decision". So D88's choice of EuRoC as the primary is reverted.
 - **Claim scope, as in D88:** abrupt illumination changes and low light on real sensors. Not a co-mounted lamp in
   total darkness; the lamp claims rest on the sim.
 
-**Open, for A2 to settle from the data before writing code:**
+**Open, to settle from the data before writing code:**
 - What `IllChange` actually shows (lights switched off and on is the expected content) [UNVERIFIED]: inspect
   `sample.zip` first.
 - Image size and rate, the IMU model and rate, and the on-disk format: verify against the calibration files.
@@ -3105,7 +3105,7 @@ field except timings.
   - `Drain` drops those candidates only (the query's others still run) and counts them (`unmirrorable`,
     `mirror_anchor_kf` in results.yaml).
   - Unit test `LoopBackend.KeyframesBeforeTheAnchorAreUnreachable`.
-- **Not done, registered (2.4 row, owner M):** the VO-side prefix itself. An uninformative bridge edge would let PCM
+- **Not done, registered (2.4 row):** the VO-side prefix itself. An uninformative bridge edge would let PCM
   pass almost any pair spanning it. The same chain feeds the 3.2 broker.
 
 **Result (run 2, keyframe-refined ATE in m):**
@@ -3176,7 +3176,7 @@ Each decision below is summarised there with its reasons; the evidence is filled
   is open reaches the client; the stream ends when the run does — this test found an end-of-stream bug, fixed).
 - **D155 — where live runs execute.** Built: `live_aws.sh` (one g4dn.xlarge spot, the whole D84 quota, through
   `spinup.sh` and its three brakes; images in ECR tagged by image id, pushed 2026-10-23; locally built binaries as a
-  checksummed S3 payload). **Not run:** the launch needs the maintainer's go-ahead for the spend, and the NVIDIA EGL
+  checksummed S3 payload). **Not run:** the launch needs a go-ahead for the spend, and the NVIDIA EGL
   path of the sim image is still an open `[SMOKE-TEST]`. **The acceptance runs below are local, Mesa llvmpipe, RTF
   ≈ 0.14** (no GPU on the dev host). The register's acceptance does not depend on the GPU; a real-time-factor-1 demo
   does.
@@ -3261,7 +3261,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
 - **Evidence:** 5 tests, with independent brute force. On the evidence spool: precision 1.000, recall 0.900,
   starts → target both, against 1.8's 1.000 / 0.898 / both (`evaluation/runs/mapping/traversability/`).
 - **Changed after measuring:**
-  - the strict → hybrid rule (advisor review);
+  - the strict → hybrid rule (design review);
   - the clearance convention (D110's correction);
   - the support test (before any calibration data existed).
 - **Open:**
@@ -3305,7 +3305,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   - the GT margin by hand.
 - **Scenes:** seeds 0 / 1 / 2 have 5 / 4 / 5 hazards (scene ids `f232a40b77b3538f`, `d0ab877b3a06fc04`,
   `3406f0792c57a975`).
-- **Next:** render on AWS g4dn (maintainer, 2026-10-23), run the Phase 1 estimator chain to a spool, then the 4.1
+- **Next:** render on AWS g4dn (decision, 2026-10-23), run the Phase 1 estimator chain to a spool, then the 4.1
   map, then calibration by the protocol fixed in the design §3: the threshold on seed 0, the report on seeds 1–2,
   and AUC ≥ 0.75 to enter planning.
 
@@ -3361,10 +3361,10 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
 - **Measured before adoption:** Δentropy is not saturated on the evidence-spool map (known-voxel w p50 0.74–0.83;
   mean H 0.61–0.66 bit; a third over 0.9 bit).
 - **Conflict surfaced:** two §21.3 producers are absent on this branch. 3.4's spectral gain is unmerged
-  (feat/3.4-spectral), and §17.3's alias flags don't exist anywhere. Those terms are 0, with the reason in the trace,
+  (3.4), and §17.3's alias flags don't exist anywhere. Those terms are 0, with the reason in the trace,
   until they land. They're never a stand-in value.
-- **Gate:** the coverage-vs-budget ablation has pre-registered axes (§5). It runs on **lockstep L1** (maintainer):
-  B builds a gz pause at each barrier, so runs are reproducible per seed. The replay decision log tests the
+- **Gate:** the coverage-vs-budget ablation has pre-registered axes (§5). It runs on **lockstep L1** (decision):
+  the live runtime builds a gz pause at each barrier, so runs are reproducible per seed. The replay decision log tests the
   machinery only.
 
 ## 2026-10-23 — D115: 4.4 allocation = CBBA (L_t ≤ 2, event-triggered) and broker SGA on a time-discounted DMG score with common auction scales
@@ -3384,8 +3384,8 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   - **Common scales make bids comparable across agents.** Per-agent p90s would not.
 - **Oracle:** exact every round. L_t = 1 by `cv::solveLP` (total unimodularity). L_t = 2 with N_u = 2 by a sorted
   disjoint scan.
-- **Wire:** `TaskConsensus` (MessageClass TASK_CONSENSUS = 10 already exists) is to be added with the master
-  session, which holds open 3.4 edits to `wire.fbs`. Until then the bytes come from a test codec, labelled, and are
+- **Wire:** `TaskConsensus` (MessageClass TASK_CONSENSUS = 10 already exists) is to be added with the pending
+  3.4 edits to `wire.fbs`, still open. Until then the bytes come from a test codec, labelled, and are
   never claimed.
 - **Replay** exercises only the connected two-agent case. The disconnection and staleness regimes come from the
   synthetic tests and live L1.
@@ -3416,7 +3416,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   - Replay: 226 B per message (was 2.4 KB), 11.8 KB per spool (was 123.4 KB), CBBA = SGA 40 / 40.
   - The L_t = 2 row: CBBA = SGA 40 / 40, the same optimum ratio (0.994), +1.4 s per replan. **L_t = 1 stays the
     default.**
-- **Phase 4 literature review of every post-design fix (2026-10-23, before any gate run; the maintainer's request).**
+- **Phase 4 literature review of every post-design fix (2026-10-23, before any gate run).**
   Primary-text reports: `docs/design/lit/phase4_fixes_{nbv,route_cbba}.md`.
   - **D114, plan space: supported.** Known-free viewpoints and paths match FUEL (code), NBVP 2018 §3 and GBPlanner2
     §IV-A. Optimistic planning through unknown space appears only for goal-directed navigation.
@@ -3424,7 +3424,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
     the commanded cell, which is known-free since the plan-space change. That is the FUEL / NBVP / GBPlanner2 practice.
   - **§21.4 return: E(return) is now computed over the known-free plan plus the agent's swept body along its flown
     track (`FlownReturnSpace`).** This follows GBPlanner's homing over robot odometry and CERBERUS's Recovery Homing.
-    - It fixes B's finding that E(return) = inf put every replan on {hold}.
+    - It fixes the live-run finding that E(return) = inf put every replan on {hold}.
     - A route lost even over the track is its own supervisor event and does not restrict the options `[DESIGN]`.
     - The swept band is agent-width only: it never enters a ρ_responder claim (invariant 4).
     - ×1.3 is the architecture's `[DESIGN]`; GBPlanner2's margin is additive.
@@ -3479,7 +3479,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
 - **Configs:** `tum_v1` (perception and slam) is euroc_v2's values with `imu.mode none` (TUM has no gyro) and
   `min_depth_m` 0.4. `ba.sigma_px` stays EuRoC's calibrated 0.46 [ASSUMPTION].
 - **Regression (`configs/benchmark/tum_regression.yaml`, checked by `infra/scripts/tum_regression.py`):**
-  - It is a separate pinned check, not part of `--premerge` (maintainer).
+  - It is a separate pinned check, not part of `--premerge` (decision).
   - Targets were fixed before measuring: the worst of ORB-SLAM2 T-RO 2017 Table III's RGB-D class.
   - Seed 1, full sequences, ATE with SE(3) alignment. evo_ape (`tum -a`) on TUM's raw `groundtruth.txt` agrees to
     1e-6 m on all three.
@@ -3505,7 +3505,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
 
 ## 2026-10-22 — D101: L2 — the seeded sim IMU noise operator; sim_v2 runs the full inertial layer
 
-(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.)
+(Decision IDs D100–D109 are claimed for 2.6 in STATUS.)
 
 - **Operator:** `core/inertial/imu_noise_operator.hpp`. It applies the Kalibr/EuRoC continuous model, discretised at
   the nominal rate, to the sim's clean canonical IMU stream at consumption time (D37), like D:
@@ -3523,7 +3523,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   the operator is set**, so default sim runs, including the Phase-1 gate's `sim_v1`, see what they saw before.
   - `ImuNoiseModel()` reports exactly the injected model.
   - `results.yaml` records `imu_noise_config`.
-- **`sim_v2` → `imu.mode full`** (maintainer's instruction). It uses euroc_v2's imu section with noise inflation 1,
+- **`sim_v2` → `imu.mode full`** (decision). It uses euroc_v2's imu section with noise inflation 1,
   because the injected model is the estimator's model.
   - The pre-switch `sim_v2` is kept verbatim as `sim_v2_vo`, as euroc_v2 → euroc_v2_attitude was. D69 and the
     synthetic `StereoVo` tests now name it.
@@ -3550,7 +3550,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
 
 ## 2026-10-22 — D102: 3.3 comms broker node — RFComms-derived link model with wall attenuation, scripted partitions, one ledger; L8 keeps the 1500 B MTU
 
-(Decision IDs D100–D109 are claimed by this session in STATUS on `feat/2.6-tum`.) Design and numbers:
+(Decision IDs D100–D109 are claimed for 2.6 in STATUS.) Design and numbers:
 `docs/design/comms.md`.
 
 - **`RfLinkModel` implements the collaboration.md §2 `LinkModel` seam.**
@@ -3569,14 +3569,14 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   - `collapsed_v1` loses 1.6 / 17 / 49 % of 1500-byte datagrams at 0 / 1 / 2 walls.
   - The partition scenario is down for exactly the scripted 25 s.
 - **Seam limit, stated:** `Sample()` has no datagram size, so `loss_p` is for 1500 B. 40-byte heartbeats would see
-  1.3–2.3× less loss near the edge. A size on the seam is the 3.2 owner's call; nothing in
+  1.3–2.3× less loss near the edge. A size on the seam is 3.2's call; nothing in
   `collaboration/protocol/` was changed.
 - **L8, conditional: keep `kPathMtuBytes` = 1500 under RFComms as modelled.**
   - At `collapsed_v1`'s median power, goodput rises with size: 0.61 at 64 B vs 0.80 at 1472 B.
   - At the edge (the 2-wall mean, −81.7 dBm) the best size is 512 B, and 1472 B costs ≤ 3 %.
   - Under the physical case instead (PER in bits, slow per-link fading), 1472 B gives 0.06 against 0.59 at 64 B: a
     3–10× loss at the edge.
-  - Recommendation to the 3.2 owner (comms.md §4): if the link model is made physical, cap or adapt edge-link
+  - Recommendation for 3.2 (comms.md §4): if the link model is made physical, cap or adapt edge-link
     fragment size. The serializer is not changed here.
 - **3.3 is partial.** No protocol traffic runs over the real link until 3.2's sim integration (`protocol: v2`)
   exists.
@@ -3636,7 +3636,7 @@ SMOKE §4u measured what the renderer does, so Stage 3 (§6.2) and the lamp cali
   not robust", and that a gradient-percentile metric wins 13 of 18 datasets. The stall and the limit cycle below are
   that documented weakness. **Comparator row (§6.5):** `metric: percentile` (the p-th percentile of gradient
   magnitude, Zhang's M_perc; our grid search needs no smooth approximation).
-- **Deviation under §49, flagged for the maintainer:** arch §6.5 has the lamp "optimizing the same objective plus an
+- **Deviation under §49, flagged for decision:** arch §6.5 has the lamp "optimizing the same objective plus an
   energy cost term". D132 spends one brightness decision in a FIXED cost order (lamp → t → gain), which is the
   limiting case of an energy cost below the noise cost of gain. A continuous energy-weighted split is not built.
   The same test found a limit cycle: the metric barely penalises clipping, so it stepped up into 20 % clipped and the
@@ -3753,12 +3753,12 @@ Analysis of the pinned D100 outputs only (`estimate_body.tum` against `groundtru
     1 s RPE.
   - Test: rerun fr1 with the depth association tightened (`max_dt` 20 → 5 ms; frames without a close depth are
     dropped) and with depth warped to the RGB stamp by the previous frame's velocity.
-  - Where the flag goes: `--depth-max-dt-ms` on the TUM tool. It lands after `feat/2.6-tum` merges, not as a commit
+  - Where the flag goes: `--depth-max-dt-ms` on the TUM tool. It lands after the 2.6 TUM work merges, not as a commit
     to that branch mid-merge.
 
 ## 2026-10-23 — D137: the first GPU render session — ci_tiny_dark + its fixed-light twin on g4dn spot
 
-Maintainer-approved 2026-10-23.
+Approved 2026-10-23.
 - **Script:** `infra/scripts/remote_dark_render.sh`, through `spinup.sh --profile gpu` (spot, `--max-minutes 150`).
 - **Image:** the exact local sim image `sha256:8b780f52…`, uploaded as zstd (735 MB) to `runs/images/`, the only
   prefix the instance role may read. The instance checks the image id before rendering.
@@ -3800,7 +3800,7 @@ Maintainer-approved 2026-10-23.
 
 ## 2026-10-23 — D140: Stage 3 uses OpenCV's normals and enforces a feature mask (preflight corrections to D134)
 
-The algorithms.md survey and the advisor review (2026-10-23) changed D134 in two ways.
+The algorithms.md survey and the design review (2026-10-23) changed D134 in two ways.
 
 **1. Normals: `cv::depthTo3d` + `cv::RgbdNormals`** (ptcloud, OpenCV 5.0.0, `opencv_ptcloud` linked into
 `perception_opencv`). The OpenCV-native check had missed this; D134's hand-rolled cross product is removed because it
@@ -3843,7 +3843,7 @@ Config/Degrad 20/20.
     order, so their canonical bags should be unchanged; to verify in the pre-merge determinism run.
   - Writer backlog: 12 RGB 1280×720 streams plus depth at 20 Hz exceeded the recorder's 4 GiB cap at t ≈ 70 s, and
     it aborted rather than drop messages (D40). The one-pass sweep is therefore not recordable on a g4dn as
-    designed. Splitting it (passes or agents) is a decision for the maintainer (D148/D149).
+    designed. Splitting it (passes or agents) is a separate decision (D148/D149).
 
 ## 2026-10-23 — D139: the headlamp dust model in D (replaces D135's lamp airlight as the physics; algorithms.md §10.2)
 
@@ -3873,7 +3873,7 @@ Config/Degrad 20/20.
   - The 5.4 freeze measures the headlamp model at matched mean veil against Koschmieder, on the dark recording that
     has now been rendered (D137).
 
-## 2026-10-23 — D141: 5.6 validates on Hilti 2023 `site2_robot_3`, not OIVIO (maintainer-approved substitute, §49)
+## 2026-10-23 — D141: 5.6 validates on Hilti 2023 `site2_robot_3`, not OIVIO (approved substitute, §49)
 
 **Why the substitute.** OIVIO (arch §34.2, plan 5.6) cannot be obtained.
 - Its page says trajectory downloads are "temporarily unavailable" and asks people to email the authors.
@@ -3884,17 +3884,17 @@ confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
 - Data: OAK-D stereo + IMU; open Hugging Face `Hilti-Research/hilti-slam-challenge-2023`, ungated, CC BY-NC-SA 3.0.
 - Ground truth is public (`ground_truth/site2_robot_3.txt`): TLS-surveyed control points, 3-DoF positions only, sparse.
 - The considered alternative, CAVERS (arXiv 2604.15052), is RGB-D only, so it was not taken.
-- Approved by the maintainer 2026-10-23.
+- Approved 2026-10-23.
 
 **What changes against §34.2 / plan 5.6.**
 - **Not available here:** the 100/50/15 % light-power sweep (OIVIO only).
 - **Metric:** sparse-position error at the control points, Hilti's protocol, not dense ATE.
 - **Report:** names the substitute and the reason.
 - **Unchanged:** the honesty requirement. Report where sim-tuned settings transfer and where they do not.
-- **Still open:** the maintainer may email ARPG for OIVIO access. If it arrives, OIVIO runs as well.
+- **Still open:** OIVIO access may be requested from ARPG. If it arrives, OIVIO runs as well.
 - **Supersedes D88/D89 (main, 2026-10-23).** D88 chose EuRoC's dark flights as the 5.6 primary; D89 then chose
-  UMA-VI's `IllChange` sequences (ambient switching, end-drift metric). This entry came after both, and the master
-  session confirmed on merge planning that it stands: Hilti `site2_robot_3` has the co-moving onboard light in a dark
+  UMA-VI's `IllChange` sequences (ambient switching, end-drift metric). This entry came after both, and merge
+  planning confirmed that it stands: Hilti `site2_robot_3` has the co-moving onboard light in a dark
   room, which neither of those has (algorithms.md §8.1). EuRoC MH_04/MH_05/V1_03 remain the full-GT low-light companion,
   cited from D87's full-system run (keyframe-refined ATE 0.046 / 0.044 / 0.288 m), not re-run here.
 
@@ -3906,9 +3906,9 @@ confirms an onboard, co-moving light in a dark room (RA-L, arXiv 2404.09765).
 
 ## 2026-10-23 — D142: Phase 5 CPU work runs next to the data on AWS; the no-dust lighting rows first
 
-**Why AWS.** This host's link measured about 1.9 MB/s total, shared with another session's 12 GB upload. At that
+**Why AWS.** This host's link measured about 1.9 MB/s total, shared with a concurrent 12 GB upload. At that
 rate the two dark recordings (25 GB) plus Hilti `site2_robot_3` (35 GB) would take about 9 h. Hugging Face → EC2
-and S3 → EC2 are fast and in-region. Maintainer-approved 2026-10-23.
+and S3 → EC2 are fast and in-region. Approved 2026-10-23.
 
 **Session** (`infra/eval/ph5_aws.sh`, spinup `--profile cpux86 --type c7i.2xlarge`; the profile is main's D86
 `cpux86`, carried over).
@@ -4105,7 +4105,7 @@ and the two rows' lost frames / keyframes:
   ~127° (D143); ISO up to 1549.
 
 **Not done, deliberately.** No parameter was changed after the failed run (design-preflight rule). Candidate
-fixes, each to go through preflight (literature, OpenCV-native check, advisor) before any code:
+fixes, each to go through preflight (literature, OpenCV-native check, design review) before any code:
 - isolate first: what Hilti does to the pipeline that MH_04 does not (frame rate 10 vs 20 Hz, the co-moving lamp's
   falloff under rotation, fisheye-rectified periphery, left/right ISO lag); the candidates are listed, not ranked;
 - Stage 3 falloff normalisation with its `feature_mask` (D134/D140): needs depth, i.e. SGBM on this rig;
@@ -4115,7 +4115,7 @@ fixes, each to go through preflight (literature, OpenCV-native check, advisor) b
 stereo pairing and the Hilti scorer. **What does not:** pose accuracy on a real dark
 sequence with a co-moving lamp. The honest 5.6 line is 0/100 until a preflighted fix moves it.
 
-## 2026-10-23 — D145: §31.5 illumination rows defined (preflight: arch, SOTA pass, OpenCV check, advisor)
+## 2026-10-23 — D145: §31.5 illumination rows defined (preflight: arch, SOTA pass, OpenCV check, design review)
 
 **Preflight.**
 - **Arch read:** §5.3 (lamp), §5.6 (D: "scene radiance scale (darkness level)", replay exposure acts on sensing only),
@@ -4124,7 +4124,7 @@ sequence with a co-moving lamp. The honest 5.6 line is 0/100 until a preflighted
 - **SOTA pass:** primary sources opened, list below.
 - **OpenCV-native:** not applicable to scene lighting (the renderer's job, §5.6). The radiometric stages were checked
   in D134/D140.
-- **Advisor:** reviewed twice.
+- **Design review:** reviewed twice.
 
 **Literature facts that shape the rows.**
 - **No benchmark compares world-fixed lights with a co-moving lamp in the same dark scene.**
@@ -4200,16 +4200,16 @@ BT.601 luminance. "Lit" = at least one 8-bit output step: the noise floor of `la
   `lamp_power` cannot recover clipped hotspot pixels. Those rows carry the clipped fraction, and a live re-render
   (`light_config`) is the reference for them.
 
-## 2026-10-23 — D146: 5.2 wiring: Stage 3 runs at keyframes; per-frame is an ablation row (maintainer choice (c))
+## 2026-10-23 — D146: 5.2 wiring: Stage 3 runs at keyframes; per-frame is an ablation row (choice (c))
 
-**Where depth comes from (the question put to the maintainer).** Stage 3 divides by the predicted lamp irradiance,
-which needs a depth map. The runner computes SGBM only at keyframes. The maintainer chose (c), 2026-10-23: Stage 3
+**Where depth comes from (the open question).** Stage 3 divides by the predicted lamp irradiance,
+which needs a depth map. The runner computes SGBM only at keyframes. Option (c) was chosen, 2026-10-23: Stage 3
 runs at keyframes now, and an every-frame SGBM row comes later as an ablation. Grounds:
 - **Arch §19.1 / §18.2:** the load-bearing consumer is the keyframe bundle (`rgb // falloff-normalized albedo-proxy`).
   §6.2 lets features use the proxy only "when the ablation says it helps".
 - **DarkGS** (Zhang et al., arXiv 2403.10814) builds its calibrated-light model into training-view rendering, which
   is per view used for training, not per tracked frame.
-- **The per-frame cost is not measured.** The "20–40 ms" given to the maintainer was `[ASSUMPTION]`. The keyframe
+- **The per-frame cost is not measured.** The "20–40 ms" estimate given was `[ASSUMPTION]`. The keyframe
   path now times Stage 3 (`falloff_ms`), and SGBM is already timed inside `t_kf`.
 
 **Inputs, and what Stage 3 refuses (no silent wrong division):**
@@ -4274,8 +4274,8 @@ error exposed it, and the comment is corrected.)
 
 ## 2026-10-23 — D147: 5.3 wiring (replay): the controller at keyframes, the applied state on every frame, known-gain LK
 
-Preflight: arch §6.5 and §6.2 Stage 4, D132, the runner and sources as built, a literature check, and advisor review
-(2026-10-23). Replay only. The live lamp path (gz `light_config`) waits on an ownership answer from M.
+Preflight: arch §6.5 and §6.2 Stage 4, D132, the runner and sources as built, a literature check, and design review
+(2026-10-23). Replay only. The live lamp path (gz `light_config`) waits on an ownership decision.
 
 **The loop.** At each keyframe the runner calls D132's `Decide` on the frame it just tracked (arch §6.5: keyframe
 rate; slew ≤ 0.5 stop per decision). The command goes to the source: `StereoSource::SetPhotometric` (default no-op,
@@ -4336,12 +4336,12 @@ frame on).
   controller runs. 5.3 owns them.
 - This is perception evidence (Failure E), not the agentic runtime trace (arch §0.2 invariant 3).
 
-**D132 deviation approved (maintainer, 2026-10-23).** The fixed order stays: lamp → exposure → gain, which is the
+**D132 deviation approved (2026-10-23).** The fixed order stays: lamp → exposure → gain, which is the
 limiting case of an energy cost below gain's noise cost. Arch §6.5 gives the lamp an energy-cost term; that text now
 records an approved deviation (§49). The trade-off is energy, which replay cannot measure anyway.
 
-**The actuator seam: the contract a live sink implements** (owner split, set by M on 2026-10-23: A2 owns the
-controller and this interface; B, `feat/live-runtime`, owns the live sink: gz `light_config` through the ros_gz/gz
+**The actuator seam: the contract a live sink implements** (split set on 2026-10-23: the photometric side owns the
+controller and this interface; the live runtime owns the live sink: gz `light_config` through the ros_gz/gz
 service wrapper). No ROS or gz type goes below runtime (arch §3). The seam is
 `StereoSource::SetPhotometric(const PhotometricCommand&)`; the report comes back on the frames.
 - **Command** (`runtime::PhotometricCommand`): `decision_id` (increasing), `decided_ns` (the stamp of the frame it
@@ -4352,7 +4352,7 @@ service wrapper). No ROS or gz type goes below runtime (arch §3). The seam is
     intensity_ref`; in replay it is D's `lamp_power`.
 - **Report, on every frame** (`StereoFrame::photo`, `runtime::FramePhoto`): the state that frame was actually exposed
   with, i.e. `exposure_rel`, `gain`, `lamp_rel` as applied. Plus:
-  - `applied_ns`: the sim-time stamp at which the newest command reached the actuator (B's requirement; mover answers
+  - `applied_ns`: the sim-time stamp at which the newest command reached the actuator (the live runtime's requirement; mover answers
     already carry one);
   - `decision_id`: the last command the sink has applied, in whole or in part;
   - `clamped` and `clamp_reason`: true when the sink applied something other than the command (actuator limits,
@@ -4384,19 +4384,19 @@ service wrapper). No ROS or gz type goes below runtime (arch §3). The seam is
   | rebuilt × √2 | 327 | 0.015 px |
   | not rescaled | 290 | 0.263 px |
 
-- **B's live-side notes (ack of the contract, 2026-10-23):**
+- **Live-side notes (ack of the contract, 2026-10-23):**
   - In lockstep the world pauses at 5 s barriers. A `light_config` call near a barrier is applied at the first step
     after resume, and `applied_ns` is that sim time. Latency then quantises to the step.
   - A refused call reports `clamped = true`, `clamp_reason = "service refused"`, and the PREVIOUS `lamp_rel` as
     applied.
   - Both are consistent with "the report says what the frame was actually lit with".
-- **`t_max_s` is required** (advisor review of fe6194c). D132's 30 ms default would silently give 1.3 stops of
+- **`t_max_s` is required** (design review of fe6194c). D132's 30 ms default would silently give 1.3 stops of
   headroom instead of 2. The first decision refuses a `t_max_s` longer than the measured frame interval.
 - **What the replay rows can and cannot show.**
   - **The lamp does not move in replay.** Frames start at `lamp_rel` 1 = `lamp_max`, so brightening goes to exposure.
     Darkening spends gain, then exposure, and reaches the lamp only below `t_min`, about 4.6 stops under `t_ref`.
   - So the replay row is exposure (and gain) control, not lamp co-control, and a flat `lamp_state` is expected. Evidence
-    for the lamp half comes from B's live sink.
+    for the lamp half comes from the live sink.
 - **Known bias, `[UNVERIFIED]` size.** The controller reads the keyframe AFTER Stage 1's flat field. Where K < 1
   (D's vignette 0.28 toward the edges), a raw value above 255·K becomes 255 and counts as clipped, although the sensor
   did not clip.
@@ -4507,21 +4507,21 @@ c7i spot) is asked separately.
 
 ## 2026-10-23 — D149: Phase 5 exit gate — NOT closed; each bullet against its evidence
 
-The format follows D172. Evidence is as of tip `93a21a9` (feat/ph5-dve). On 2026-10-23 the user ruled (via M) that
-dark, lamp-lit and dusty runs are STRETCH goals, taken up after the live demo runs in real time (D199). Bullets that
+The format follows D172. Evidence is as of tip `93a21a9`. A 2026-10-23 ruling made
+dark, lamp-lit and dusty runs STRETCH goals, taken up after the live demo runs in real time (D199). Bullets that
 need them are marked so: they are deferred by that ruling, not dropped.
 
 | Gate bullet | Status | Evidence |
 |---|---|---|
 | DVE ablation rows (§31.5): each radiometric stage's effect on repeatability, match precision, ATE, loop-closure precision; negatives kept | **partial** | ATE / keyframes / lost frames for the 10 §31.5 rows (D145–D147 Results, AWS `649f156`), with negatives kept (features-on-proxy +2.9 mm; lamp 15 % 1.32 m). D142's preliminary lighting rows. **Not measured:** repeatability, match precision and loop-closure precision per stage; the dust rows (5.4: stretch) |
-| Live-vs-replay exposure-control comparison (§5.6 approximation) | **blocked: stretch** | Replay side done: D147 contract, trace checks 171/171 and 168/168, Failure E recovered in 2.35 s. The live side needs B's 5.3 lamp sink, and D145 limits the comparison to the lamp path (sdformat14 has no exposure element). The lamp path is a dark-world item, so stretch under D199 |
+| Live-vs-replay exposure-control comparison (§5.6 approximation) | **blocked: stretch** | Replay side done: D147 contract, trace checks 171/171 and 168/168, Failure E recovered in 2.35 s. The live side needs the 5.3 live lamp sink, and D145 limits the comparison to the lamp path (sdformat14 has no exposure element). The lamp path is a dark-world item, so stretch under D199 |
 | OIVIO (→ Hilti 2023 site2_robot_3, D141): tracking survives lamp-lit sequences with reported ATE; failure segments documented | **measured, failing** | D144: all 3 rows score 0/100 (GCP rms 10–229 m; 14–22 % of frames lost). The failure segments are documented as failure case FC-5.6-1: losses while turning with a dark far field. The sim-tuned settings do not transfer. Kept as the negative result §34.2 asks for |
 | Corridor degeneracy detector fires on degenerate scenes and suppresses loop attempts (gate ordering) | **blocked: recording** | Pre-registered in D148 (criteria fixed before data). The sweep render failed twice over: the TF bug (fixed `82ffa00`) and the writer backlog (one-pass not recordable). The user chose a 2-camera confined_v1 render (approved; g4dn spot had no capacity in any eu-north-1 AZ at 14:47Z, retrying), then the approved CPU replay (`ph5_aws.sh ROWS=d148`) |
 
 **Plan items.**
 - 5.1: dark worlds, lamp, calibration. Done (D131, D133, D137).
 - 5.2: Stage 3 at keyframes. Done (D146; trajectory equality measured).
-- 5.3: replay co-control and the Failure E scenario. Done (D147 Results). The live `light_config` sink is B's.
+- 5.3: replay co-control and the Failure E scenario. Done (D147 Results). The live `light_config` sink belongs to the live runtime.
 - 5.4: dust configs frozen. Open, stretch (D199).
 - 5.5: confined worlds done (D138). The baseline sweep is not recordable one-pass on g4dn (D138 correction), and its
   re-design is open. The SimSource right-camera selection, the sweep configs and depth_eval are built and tested.
@@ -4535,7 +4535,7 @@ need them are marked so: they are deferred by that ruling, not dropped.
 
 **Closes when:** the corridor bullet is measured against D148, and the per-stage repeatability, match-precision and
 loop-closure rows are run (a CPU row set, still to be defined after preflight). The stretch bullets are re-opened by
-the user's call once the live demo runs in real time.
+decision once the live demo runs in real time.
 
 ## 2026-10-23 — D170: 3.4 spectral prioritisation — full-graph Fiedler space, greedy + 1-swap, a valid shared-cost bound, broker selection behind a hook
 
@@ -4543,7 +4543,7 @@ Design: `docs/design/spectral-selection.md`. Code:
 - `cpp/collaboration/candidate_selection/{selection,spectral_selector,response_cost}.hpp`;
 - `CollabNode::MaybeSelect`.
 
-Branch `feat/3.4-spectral`.
+Plan item 3.4.
 
 **Decision.**
 - **Objective:** λ₂ of the broker's candidate graph, built Swarm-SLAM's way (verified from the `cslam` source). Nodes
@@ -4606,7 +4606,7 @@ Branch `feat/3.4-spectral`.
   and the arm comparison. Tian et al. RSS 2018 for budgeted exchange and the greedy-coverage row. RFComms (D102) for
   per-size PER.
 - **OpenCV-native check:** cv::dnn EigenPlaces; cv::ALIKED + cv::LightGlueMatcher; findEssentialMat; solvePnPRansac.
-- **Advisor:** review 1, folded into the design.
+- **Design review:** review 1, folded into the design.
 
 **Decisions:**
 1. **Two passes.**
@@ -4699,7 +4699,7 @@ Branch `feat/3.4-spectral`.
   - The script exited before collecting, so the instance took B1 and the stores with it. Fixed: any failure now
     collects first, and the pass-A stores are kept under the run's results (`STORES_FROM` reuses them, checked
     against `stores.SHA256SUMS`).
-  - **Trimmed to the gate's rows** (maintainer, 2026-10-23: no runs beyond what the gate needs). B2 runs two budget
+  - **Trimmed to the gate's rows** (2026-10-23 rule: no runs beyond what the gate needs). B2 runs two budget
     levels (25 %, 50 %) instead of four, and C runs one seed per variant and scene. The plot still has three arms on
     2 scenes × 3 seeds; the 10 % and 100 % levels are not run.
 
@@ -4715,7 +4715,7 @@ Branch `feat/3.4-spectral`.
 **The run.** `phase1.sh` in full mode on clean commit b59a77d, on AWS (cpux86 spot, 32 min), with a fresh Kaggle
 render.
 - The render is relayed: the instance hands the package to S3, and the workstation renders it with its own token.
-  The Kaggle token never leaves the workstation; staging it to S3 was refused by the auto-mode classifier.
+  The Kaggle token never leaves the workstation; staging it to S3 was rejected.
 - Evidence: `evaluation/runs/gates/phase2_exit/exit_gate/aadffb8df5790ca0-20261023T050501Z/`.
 
 **Result: 53/54.**
@@ -4756,7 +4756,7 @@ render.
 ## 2026-10-23 — D190: Phase 6 architecture — the GPU trains, the browser renders; only the active submap trains; budgets derived from a T4 measurement
 
 Design `docs/design/reconstruction.md` (preflight: arch §18–19, §29, D44, plan 6.1–6.4 and the exit gate; algorithms.md §2–4;
-SOTA survey reconstruction.md Appendix A; OpenCV-native check Appendix B; advisor review). M reviewed it on 2026-10-23: the
+SOTA survey reconstruction.md Appendix A; OpenCV-native check Appendix B; design review). Reviewed on 2026-10-23: the
 design is sound. Benchmark approved; the rest is built once D191–D195 are written.
 - **Split.** The python service (PyTorch + gsplat v1.5.3 pinned, Apache-2.0) trains. A browser renderer draws
   the splats on the client GPU (every web renderer surveyed rasterises client-side, A.5). Two budgets, kept apart:
@@ -4768,7 +4768,7 @@ design is sound. Benchmark approved; the rest is built once D191–D195 are writ
   - No published T4 number exists for any candidate or for gsplat (A.3/A.4), so the iteration count comes from
     `kaggle.sh bench`: train and render ms/iter against N, resolution and packed, with and without D-SSIM, plus the
     append path.
-  - The demo T4 is shared with gz EGL and B's estimators on one g4dn.xlarge (B, 2026-10-23). The idle number is an
+  - The demo T4 is shared with gz EGL and the live estimators on one g4dn.xlarge (2026-10-23). The idle number is an
     upper bound; the budget is measured with gz rendering.
 - **Bounded work.** Only the active submap trains (Gaussian-SLAM / GLC-SLAM). Closed submaps are frozen and sent once.
   Submaps are anchored to their first keyframe in the agent's odometry frame O and close at 30 KF (arch §18.6: 20–40).
@@ -4780,10 +4780,10 @@ design is sound. Benchmark approved; the rest is built once D191–D195 are writ
   - Iterations: at least 40 % on the new keyframe (Gaussian-SLAM).
   - Loss: 0.8 L1 + 0.2 D-SSIM (Kerbl 2023) plus a σ-weighted depth L1 (§19.3 L_photo + L_depth). L_light and the
     §19.4 specular weight belong to the batch path (6.3).
-- **Interfaces** (agreed with B): `ariadne_live` tees each D168 `#kf` record (LinkFrame framing) to a recon socket, and
+- **Interfaces** (agreed with the live runtime): `ariadne_live` tees each D168 `#kf` record (LinkFrame framing) to a recon socket, and
   sends T_W_O[k] once per agent. The replay spool (reconstruction.md#first-reconstruction-loop, schema bumped) feeds the same reader. The splat panel is
-  its own JS module on its own `/splat` websocket inside B's console.
-- **Open, with the user (through M):** judging-week GPU hosting (one T4 shared with gz, or a second GPU; on-demand
+  its own JS module on its own `/splat` websocket inside the operator console.
+- **Open:** judging-week GPU hosting (one T4 shared with gz, or a second GPU; on-demand
   $0.558/h, quota 0; spot reclaimed 3× on 2026-10-23), and Spark instead of GaussianSplats3D (arch §29.3's example
   is unmaintained per its own README).
 
@@ -4832,12 +4832,12 @@ depth-seeded, **unoptimised** Gaussians to the same `/splat` panel: geometry fro
 training image, no photometric optimisation.
 - The panel and the manifest say `splat_backend: cpu_init` and "initialisation only, no GPU". No PSNR/SSIM/LPIPS is
   computed or quoted on this path; Chamfer against the GT mesh may be.
-- The realtime demo still needs a GPU (maintainer, D44). This path exists so a reclaimed or missing GPU degrades the
+- The realtime demo still needs a GPU (D44). This path exists so a reclaimed or missing GPU degrades the
   demo instead of blanking the panel.
 
 ## 2026-10-23 — D195: training images are the albedo proxy by default; linear RGB on lit worlds is an ablation row
 
-Locked (arch §0.2, arch §19.1): the training images are the falloff-normalised albedo proxy. M's review
+Locked (arch §0.2, arch §19.1): the training images are the falloff-normalised albedo proxy. A design review
 (2026-10-23) adds that the demo world is dark, lit by the agents' own lamps (arch §42–43).
 - **Default.** The trainer refuses a record without the proxy: a `#kf` or spool record tagged `training_image: none`.
   That refusal applies unless the run is configured as the RGB ablation. There is no silent fallback.
@@ -4845,11 +4845,11 @@ Locked (arch §0.2, arch §19.1): the training images are the falloff-normalised
   so §19.1's coherence problem does not arise. It is labelled in the manifest and on the panel, and compared with the
   proxy only on its own scene.
 - **The live chain to the proxy** (stated so nobody expects it sooner):
-  1. B's 5.3 lamp sink, because `KeyframeFalloff::Normalize` needs the frame's applied photometric state and live has
+  1. the 5.3 live lamp sink, because `KeyframeFalloff::Normalize` needs the frame's applied photometric state and live has
      no D;
-  2. a dark demo world (Phase 8, unowned; M is raising it with the user);
+  2. a dark demo world (Phase 8, unowned; raised for decision);
   3. a lamp calibration for that world's rig.
-- **Until then.** B's `#kf` carries the fields, tagged `none`. The trainer is built and gated on replay spools of
+- **Until then.** The live `#kf` carries the fields, tagged `none`. The trainer is built and gated on replay spools of
   `ci_tiny_dark_0` (lamp-only, calibrated, proxy in `KeyframeBundle`, D146). The spool writer emitting the proxy is
   6.1's first item.
 - **Display.** The panel shows the albedo proxy directly and is labelled so. §19.1's relit view needs a custom
@@ -4885,12 +4885,12 @@ the median of 40 timed iterations after 8 warm-up. Times are ms per iteration (f
 - **Caveats.**
   - [ASSUMPTION] The synthetic scene is representative: ~2 px footprints filling the view. Real submaps with larger
     Gaussians touch more pixels each.
-  - The demo T4 also renders gz, so these are upper bounds until measured under gz load (B, D190).
+  - The demo T4 also renders gz, so these are upper bounds until measured under gz load (D190).
 
-## 2026-10-23 — D197: the console splat renderer is Spark, not GaussianSplats3D (user-approved)
+## 2026-10-23 — D197: the console splat renderer is Spark, not GaussianSplats3D (approved)
 
 Arch §29.3 names GaussianSplats3D "e.g." as the in-browser Gaussian renderer. Its README now says it is no longer
-actively developed and points to Spark (reconstruction.md A.5). The user approved Spark on 2026-10-23, through M.
+actively developed and points to Spark (reconstruction.md A.5). Spark was approved on 2026-10-23.
 - **Spark (sparkjs, MIT, v2.4.0 at 2026-10-20).** Many `SplatMesh` objects are sorted together, each with its own
   transform, and they resize incrementally. That is exactly the shape D190 needs: one mesh per submap, re-anchoring
   = a new transform, and the active submap replaced in place. Formats include .splat (32 B/Gaussian), .spz and .sog.
@@ -4944,29 +4944,29 @@ already rests on, without mixing:
   and live budgets, with the PSNR, SSIM and LPIPS of the exit gate. Any change to the live recipe (iteration
   placement, pruning at low iteration counts) goes through its own entry with backing.
 
-## 2026-10-23 — D199: the live demo trains on linear RGB on the lit procedural maze; the albedo proxy is the dark-world stretch (user directive)
+## 2026-10-23 — D199: the live demo trains on linear RGB on the lit procedural maze; the albedo proxy is the dark-world stretch (directive)
 
-The user's directive, relayed by M on 2026-10-23: dark, lamp-lit and dusty runs are stretch goals, taken up only
-after the core demo runs in real time. The demo world is a lit, random, seeded procedural maze. This session's demo
+The directive of 2026-10-23: dark, lamp-lit and dusty runs are stretch goals, taken up only
+after the core demo runs in real time. The demo world is a lit, random, seeded procedural maze. The reconstruction demo
 parts are the incrementally updating splat in the console and a 3D model of the maze shown next to it.
 - **Default for the live demo:** `training_image: rgb`. The service trains on the keyframe's linear RGB, labelled
   "RGB (lit world)" on the panel and in the manifest. Under fixed lights the radiance is static, so §19.1's
-  coherence problem does not arise. B's `#kf` record carries the RGB as is.
+  coherence problem does not arise. The live `#kf` record carries the RGB as is.
 - **D195 is narrowed, not reversed.** The albedo proxy stays the locked training image when the light source is the
   agents' own lamp: dark and lamp-lit worlds, the stretch. D195's refusal rule still applies there. A dark-world
   record without the proxy is refused, never silently trained on RGB.
-- **The Oct 24 offline gsplat** runs over B's lit 3-agent mission, not maze_dark_0. The glue is unchanged: per-agent
+- **The Oct 24 offline gsplat** runs over the lit 3-agent live mission, not maze_dark_0. The glue is unchanged: per-agent
   spools plus pass B's T_G_W per agent.
 - **Priority:** real-time incremental splat updates first.
-- **Open for M:** what "a 3D model of the maze" means here. One reading is the generator's own scene mesh (ground
-  truth, labelled as such). The other is a reconstructed model (A1's TSDF/ESDF). They make different claims and
+- **Open:** what "a 3D model of the maze" means here. One reading is the generator's own scene mesh (ground
+  truth, labelled as such). The other is a reconstructed model (the planner's TSDF/ESDF). They make different claims and
   must not be confused on screen.
 
 ## 2026-10-23 — D173: §42 item 7 false-closure injection in pass B; merge evidence; the N-agent mission spool (schema 3)
 
-**Context.** Phase 8's demo mission (B's D213) gets the collaboration items (§42 items 4–8, 13–14, 16) from one
+**Context.** Phase 8's demo mission (D213) gets the collaboration items (§42 items 4–8, 13–14, 16) from one
 mission recording replayed through 3.2's pass A/B. Item 7 needs "at least one false closure generated
-intentionally", and A1's N-agent mission stage needs per-agent merges, which the 2-agent 1.7 spool cannot carry.
+intentionally", and the N-agent mission stage needs per-agent merges, which the 2-agent 1.7 spool cannot carry.
 
 **Decisions.**
 - **`CollabNode::InjectVerifiedEdge`** (evaluation only) plants an edge at the broker exactly as if its verify hook had
@@ -4977,7 +4977,7 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
   verified on that agent pair, and planting waits until both keyframes are released and the pair has a verified edge.
   Logged as reason `injected` in edges.csv. results.yaml reports, per injection: planted time, ground-truth error,
   solves seen, solves that kept it, final weight, and rejected.
-- **What is and is not rejected (correcting M's earlier claim to B).** PCM accepts a lone candidate in a pair group as
+- **What is and is not rejected (correcting an earlier claim).** PCM accepts a lone candidate in a pair group as
   "untested" (pcm.hpp), so a false closure with no competitor is kept. It is rejected once true loops for that pair
   exist. Smoke (scene 0, ideal link, 30 s, `build/smoke/b_inject`, NOT gate data):
   - The injection was planted at 25.0 s, 4 m / 45° off, when the pair's only other edges were the false aliasing group.
@@ -4988,7 +4988,7 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
   - `estimates`: per agent, the adopted frame anchor and T_G_W.
   - `kept_inter_edges`: every inter-agent loop still kept by the last solve that contained it, with when it was first
     kept. Injected loops are never evidence: the smoke's injection was the first loop ever kept.
-- **Mission spool schema 3** (agreed with A1 and A2): A2's schema-2 bundle fields, plus A1's `merges:` list in place
+- **Mission spool schema 3** (agreed across planning, reconstruction and photometrics): the schema-2 bundle fields, plus a `merges:` list in place
   of the single `merge:` block. Composer: `python/analysis/compose_mission_spool.py`.
   - Inputs: per-agent `ariadne_sim_vo --spool` runs and the pass-B run.
   - For each agent k: T_O0_Ok = T_G_W0⁻¹ · T_G_Wk, only when agents 0 and k share an anchor.
@@ -5000,9 +5000,9 @@ intentionally", and A1's N-agent mission stage needs per-agent merges, which the
 **Tests.** protocol 62/62. Composer 2/2: a 3-agent chain merge, an unmerged agent, and the split-brain case (different
 anchors never merge).
 
-## D218 (2026-10-24, B): D175 item 4 - the per-agent pipeline in ariadne_live, POC proven
+## D218 (2026-10-24): D175 item 4 - the per-agent pipeline in ariadne_live, POC proven
 
-multiagent.enabled: per-agent A1 planners fed only through the radio (coordination-only CollabNodes over the
+multiagent.enabled: per-agent Phase 4 planners fed only through the radio (coordination-only CollabNodes over the
 seeded CommsNode, scenario yaml), the D175 SS5 barrier order with a 0.5 s radio tick ladder + delivery pump,
 share-nothing fork-join between barriers (no locks), auction picks replacing the centralised joint[k], the
 operator's received map + OperatorEgress driving the console. Evidence (20 s, 3 agents, lit maze_demo_0,
@@ -5012,7 +5012,7 @@ dedup); double replay PASS; oracle A/B on the SAME binary reproduces digest 3d10
 (multiagent:false = D175's oracle row, untouched). Runs: build/live/ma_smoke3, build/live/oracle_ab.
 ## 2026-10-24 — D230: splat placement — every agent trains in its own odometry frame; T_W_O per agent from the briefing or the merge
 
-**Context.** The multi-agent POC (item 10, M's order 2026-10-24) needs one splat view of all agents in the mission
+**Context.** The multi-agent POC (item 10, ordered 2026-10-24) needs one splat view of all agents in the mission
 world W, side by side with the generated world's GT mesh, which lives in W. The replay used W = agent 0's odometry
 frame and baked agent 1's merge into the poses (`T_O0_C`), so the reconstruction and the GT viewport did not share a
 frame, a third agent was not handled, and a live T_W_O change would have meant re-ingesting.
@@ -5020,14 +5020,14 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
 **Decision** (`python/reconstruction/ariadne_recon/live/placement.py`, `service.py`).
 - Keyframes enter in their own agent's odometry frame O_k. A submap is drawn at T_W_O[k] T_O_anchor (arch §18.6:
   a frame change is one matrix per submap, no retraining). `Service.set_placement(k, T_W_O)` is the one entry point,
-  used by the replay now and by B's `t_w_o` tee record later (B, 2026-10-24: the tee is a strict superset of the
+  used by the replay now and by the runtime's `t_w_o` tee record later (2026-10-24: the tee is a strict superset of the
   briefing constant).
 - **briefing** (default with `--scene`): T_W_Ok = T_W_Bk T_B_C for every agent: entrance k's pose (scene.json
   `entrances[k]`, z from `routes/agent_k.json`) times the rig extrinsic (mission `R_B_optical_rows`,
-  `t_B_camera_m.left`). This is the live demo's known-starts rule (B, D216), transcribed from `ariadne_mission.cpp`'s
+  `t_B_camera_m.left`). This is the live demo's known-starts rule (D216), transcribed from `ariadne_mission.cpp`'s
   world anchor and generalised from agent 0 to agent k.
   A live scene's `mission_live.json` is read first: `live.demo.entrances[k]` is the WORLD entrance mission agent k
-  ran (worldgen `mission.py`; B, 2026-10-24); without the block, agent k = entrance k.
+  ran (worldgen `mission.py`; 2026-10-24); without the block, agent k = entrance k.
 - **merges**: agent 0 from the briefing, agent k as T_W_O0 T_O0_Ok from the spool (schema 3 `merges:`, D213; or
   schema < 3's `merge:`). Agent k's own entrance is not used, as in `ariadne_mission.cpp`.
 - An agent with no placement is skipped and listed under `unplaced` in the manifest. It is never drawn in someone
@@ -5039,25 +5039,25 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
 spool, an unmerged agent never drawn, and set_placement moving the table without new chunks. All reconstruction
 python tests 23/23 (ariadne-recon:1).
 
-## 2026-10-24 — D231: the live keyframe tee contract (B ↔ A2) and the service's `--listen` mode
+## 2026-10-24 — D231: the live keyframe tee contract (runtime ↔ service) and the service's `--listen` mode
 
-**Context.** The POC's last splat gap: the live runtime feeds the service directly, not through a spool. B owns the
-runtime side (`ariadne_live` `deliver_kf`) and `live.sh`; A2 owns the service. The format was proposed by A2 and
-confirmed with amendments by B (2026-10-24).
+**Context.** The POC's last splat gap: the live runtime feeds the service directly, not through a spool. The runtime side is
+`ariadne_live` `deliver_kf` and `live.sh`; the other side is the service. The format was proposed by the service side and
+confirmed with amendments by the runtime side (2026-10-24).
 
 **Contract** (`python/reconstruction/ariadne_recon/live/link.py`).
-- **Transport.** B's LinkFrame framing (D150: `"ARL1" | topic | payload`, little-endian) on a unix stream socket. The
+- **Transport.** The runtime's LinkFrame framing (D150: `"ARL1" | topic | payload`, little-endian) on a unix stream socket. The
   service listens on `ARIADNE_RECON_SOCK`; `ariadne_live` connects. The runtime side keeps a bounded queue of 8 per
   agent, drops the oldest, counts drops in its results, and is a silent no-op with no listener. The splat never
   back-pressures VO or the mission (memory: pipeline share-nothing).
 - **`#kf`** = u32 json_len | JSON {agent, id, t_ns, pose_version (0 until PGO re-anchoring), T_O_C (12 row-major),
   K (full res, the RGB's), Kz (spool scale, Z/S's), w, h, zw, zh, training_image} | Z | S (float16, zh×zw, **0 =
-  invalid**, B's HalfAsSpool(MaskedDepth32)) | RGB (rgb8, h×w×3, rectified left).
+  invalid**, the runtime's HalfAsSpool(MaskedDepth32)) | RGB (rgb8, h×w×3, rectified left).
 - **`#t_w_o`** = JSON {agent, t_s, xyzquat [x, y, z, qx, qy, qz, qw], **qw last**}: once per agent at start (the
   briefing constant), then on every change. `#pose_version` is the agreed upgrade path for re-anchoring.
 - **Live trains on the replay's pixels.** The spool stores RGB at scale 0.5 by INTER_AREA. `half_rgb()` is the
   integer 2×2 area average (`(a + b + c + d + 2) >> 2`), tested bit-exact against `cv2.resize(INTER_AREA)`, and the
-  trainer gets Kz. Proved end to end: B's 3 bring-up spools through the mock tee and the socket give byte-identical
+  trainer gets Kz. Proved end to end: the 3 bring-up spools through the mock tee and the socket give byte-identical
   chunks to the replay (4 submaps; placements equal to 4e-16 after the quaternion round trip).
 - **Robustness.** A malformed `#kf` or `#t_w_o`, a keyframe of an agent with no placement, a non-RGB training image,
   or an unknown topic is dropped and counted in the manifest's `link` block, never guessed and never fatal. With
@@ -5068,22 +5068,22 @@ confirmed with amendments by B (2026-10-24).
 **Tests.** `tests/test_link.py` 13/13 (bit-exact half_rgb, #kf round trip and short payload, qw-last quaternion,
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
-bugs before B's tee exists: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
+bugs before the runtime tee existed: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
 
 ## 2026-10-24 — D232: the estimator is thread-count-invariant; the pipeline's critical path is the per-agent lane (measured)
 
-**Context.** M's pipeline profile (measurement only). Job 44b (`20261024T024346Z-cpux86-29bfe2`, c7i.4xlarge) replayed
-B's ma200 run (`70a514`: 200 s, 3 agents, pre-D179 lockstep) from its recorded `inputs.mcap`. It used that run's own
+**Context.** The pipeline profile (measurement only). Job 44b (`20261024T024346Z-cpux86-29bfe2`, c7i.4xlarge) replayed
+the ma200 live run (`70a514`: 200 s, 3 agents, pre-D179 lockstep) from its recorded `inputs.mcap`. It used that run's own
 snapshot, payload binaries and core image (by id), with the flags of `live.sh cmd_replay`. The only variable was the
 OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/performance/pipeline_profile_20261024/aws_replay/`.
 
 **Facts.**
 - **Thread-count invariance.** `estimate_body.tum` is bit-identical at pools of 16 (default), 5 and 2: all 3 agents,
-  4001 poses each, max position difference 0. It is also identical to B's own replay1. So, unlike `cv::ALIKED`
+  4001 poses each, max position difference 0. It is also identical to the run's own earlier replay1. So, unlike `cv::ALIKED`
   (live-collaboration.md §7: output depends on the thread count), the estimator's pool size is not part of the determinism
   contract.
 - **Pool sizing barely helps.** Wall time 402.8 s (16), 383.4 s (5, −4.8 %), 417.9 s (2: keyframes 117 → 155 ms). PSI CPU
-  pressure is 9.4 % at 16 and 0.1 % at 5. Recommendation to B: default the worker pool to 5 threads (3 × 5 = 15 of 16
+  pressure is 9.4 % at 16 and 0.1 % at 5. Recommendation: default the worker pool to 5 threads (3 × 5 = 15 of 16
   vCPU). Sizing does not close the RTF 0.52 → 1 gap.
 - **Critical path.** The 3 per-agent lane threads run at 93-97 % of one core each, while the box is 51 % busy and the
   pool threads sit near 20 %. Per frame the lane spends ~94 ms (mean): ~36 ms in the worker's own track and keyframe
@@ -5091,7 +5091,7 @@ OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/performa
   then the scalar single-threaded double-precision `ApplyLens`, then cvtColor, then a clone. Per-function attribution
   comes from job 45 (perf).
 
-**Decision (M, 2026-10-24): the fix order sent to B.**
+**Decision (2026-10-24): the fix order.**
 - (a) Parallelise `ApplyLens` rows with `cv::parallel_for_`. Bit-identical, so no decision is needed.
 - (a2) Pipeline the lane: ingest of frame n+1 on a second thread while frame n tracks. A 2-stage in-order SPSC
   hand-off on the same data, also bit-identical.
@@ -5102,10 +5102,10 @@ OpenCV pool of the 3 D168 estimator workers. Evidence: `evaluation/runs/performa
 
 ## 2026-10-24 — D233: Phase 3.6 local-feature wire codings — pre-registered adoption rule (before any run)
 
-**Context.** M delegated 3.6 to A2 (2026-10-24). The MATCH_RESPONSE dominates the collaboration bytes: today's
-int8 / K1024 / float XYZ is ~136 kB per keyframe (3.2 sweep). M's survey (`collab_fast_survey.md` §1-2) finds no
+**Context.** 3.6 was opened on 2026-10-24. The MATCH_RESPONSE dominates the collaboration bytes: today's
+int8 / K1024 / float XYZ is ~136 kB per keyframe (3.2 sweep). The survey (`collab_fast_survey.md` §1-2) finds no
 published test of the stock LightGlue-ALIKED weights on quantised or PCA'd inputs [UNVERIFIED], so this is measured
-on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/design/wire-coding.md` (advisor-reviewed).
+on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/design/wire-coding.md` (design-reviewed).
 
 **Method (fixed here).**
 - Inputs: the 120 real verify pairs of run `0345a5` (`pairs.py`: per scene 30 verified + 6 per rejection reason),
@@ -5132,18 +5132,18 @@ on our data, as arch §31.9 requires (accuracy against bytes). Design: `docs/des
   2. median pnp_inliers(S)/pnp_inliers(R) over R-accepted pairs ≥ 0.90 (ProxyInformation σ ∝ √(30/n): ≤ 5.4 %
      wider);
   3. wire bytes/KF ≥ 15 kB below R (≥ 1 s of airtime at 15 kB/s).
-- **Adopted** only if bars 1, 2 and 3 all hold. **M decides** if bars 2 and 3 hold with 0 reject→accept and
+- **Adopted** only if bars 1, 2 and 3 all hold. **A separate decision is made** if bars 2 and 3 hold with 0 reject→accept and
   ≤ 1 accept→reject codec flip per scene. Otherwise **not adopted**.
-- Pose error (D63 pose_err, GT t/r) is reported. It is flagged to M if S's median exceeds the largest median of R's
+- Pose error (D63 pose_err, GT t/r) is reported. It is flagged if S's median exceeds the largest median of R's
   5 seeds.
-- If fp32 itself fails bar 1 or bar 2, nothing is adopted without M.
+- If fp32 itself fails bar 1 or bar 2, nothing is adopted without a separate decision.
 - The combination row must itself clear bars 1-3. It reports the absolute bytes/KF next to the reduction, and
   predicted vs measured wire bytes: the zstd ratio is calibrated on scene 1 and predicts scene 0, and today's
   layout-blind predictor is shown alongside (I6, ≤ 15 %).
 - Reach: 0 flips bounds the stratified flip rate at ≤ 10 % per scene and direction, ≤ 5 % over both (95 %, rule of
   three). It is a screen.
 
-**Approved:** M, 2026-10-24, as written, plus the two reporting additions (absolute bytes; predicted vs measured).
+**Approved:** 2026-10-24, as written, plus the two reporting additions (absolute bytes; predicted vs measured).
 Runs on test-compute's Kaggle CPU harness (4 vCPU AVX2; the platform difference is covered by the in-run R).
 
 ## 2026-10-24 — D232 correction: the pool-sizing gain is −1.6 %, not −4.8 % (cold start in the first variant's wall)
@@ -5175,7 +5175,7 @@ pair keyframes, and the store replay reproduces production on 120/120 pairs. Evi
 **Decision: not adopted.** That is D182's rule as pre-registered: if (i) or (ii) misses, it is not adopted. It is not
 relaxed after the fact, although the flip is a borderline pair, one match from the essential gate, which production
 itself rejected. The local 2-keyframe check (≤ 2.07e-6) did not predict the 178-keyframe maximum.
-- The ready adoption commit (`fb05b8b`, branch `a2/d182-l2conv-adopt`) stays unmerged. Production keeps
+- The ready adoption commit (`fb05b8b`) stays unmerged. Production keeps
   `aliked_n16_k1024_1280x720.onnx`.
 - Revisiting it would need a new pre-registration with a RANSAC-seed envelope for the flip criterion (D233's
   control). That is a new open, so it is outside the 2026-10-24 feature freeze.
@@ -5183,7 +5183,7 @@ itself rejected. The local 2-keyframe check (≤ 2.07e-6) did not predict the 17
 **K 512 (D233's job-70 row): not adopted.** `1280x720:512` against `1280x720:1024` loses 4 accepted pairs (bar: 0)
 at a median PnP-inlier ratio of 0.526 (bar ≥ 0.90).
 
-## 2026-10-24 — D234: Phase 3.6 result (D233's rule) — no wire coding adopted; the fp32 control fails, so the decision is M's; post-hoc: int4 and 1-bit reproduce fp32's verdicts
+## 2026-10-24 — D234: Phase 3.6 result (D233's rule) — no wire coding adopted; the fp32 control fails, so it goes to a separate decision; post-hoc: int4 and 1-bit reproduce fp32's verdicts
 
 Run `20261024T053045Z-kaggle-a2-bytes36`: Kaggle CPU (4 vCPU AMD EPYC 7B12, AVX2), commit `13cad72`, test-compute's
 off-AWS harness, $0. The run was 120 pairs × 24 settings plus 4 reseeds of R; the PCA was fitted on scene 1
@@ -5196,7 +5196,7 @@ off-AWS harness, $0. The run was 120 pairs × 24 settings plus 4 reseeds of R; t
   Every flip below is therefore a codec flip.
 - **Control: fp32 fails bar 1.** It has 1 reject→accept per scene against int8: scene 0 pair 0:299-1:53 is GT-true,
   scene 1 pair 0:21-1:63 is GT-false. Today's int8 is already one verdict per scene from the uncompressed features.
-  By D233, nothing is adopted without M.
+  By D233, nothing is adopted without a separate decision.
 
 **Per coding (D233 bars; R wire = 135.70 kB/KF; each row at the other factor's today value):**
 
@@ -5226,10 +5226,10 @@ rule):
   on this sample sits below its numeric resolution: borderline pairs flip at 1e-7 perturbations, independently of
   RANSAC's seed.
 
-**Decision (M's, per the rule).** No coding is adopted under D233. Anything else needs a new pre-registration with
+**Decision (per the rule).** No coding is adopted under D233. Anything else needs a new pre-registration with
 fp32 as the reference and a flip tolerance justified by the 1-ulp floor above. That is a new open, so it waits
 until after the 2026-10-24 feature freeze.
-## 2026-10-24 — D123–D124 (A1; applied 2026-10-24, M signed off; 2.x SLAM's tests): the arm64 GravityPgo divergence is a test-fixture defect
+## 2026-10-24 — D123–D124 (applied 2026-10-24, signed off; 2.x SLAM's tests): the arm64 GravityPgo divergence is a test-fixture defect
 
 **Finding** (`evaluation/runs/arm64/20261023T233147Z-cpuarm-1e25b3/README.md`, commit 1647d6b). Graviton's 2.71 deg
 against x86's 0.62 deg is not a numerical difference.
@@ -5247,8 +5247,8 @@ against x86's 0.62 deg is not a numerical difference.
 - x86 test values change wherever the old order mattered: those tests' expectations were x86-order artefacts and
   must be re-checked on both architectures in one run.
 - Add a CI grep that fails on the pattern (`Type(f(g), f(g)…)` with ≥ 2 draws).
-- Not applied: the files are 2.x's, and the auto-mode classifier rightly refused a scripted rewrite of them.
-- **Applied 2026-10-24** (maintainer granted `tests/**` edits; M approved, including the outcome below).
+- Not applied at first: the files are 2.x's, and a scripted rewrite of them was rightly rejected.
+- **Applied 2026-10-24** (`tests/**` edits approved, including the outcome below).
   - **The 44 sites, plus 19 more** found by the CI check, which the dry run had missed:
     - generators named `rng`;
     - two braced vectors as separate arguments of one call, e.g. `p.Integrate(Vec3{…}, Vec3{…})`;
@@ -5301,8 +5301,8 @@ against x86's 0.62 deg is not a numerical difference.
   that P(gerr < 1 deg) is at least 0.95, checked over 50 seeds before it becomes the bound.
 - Either way, the "tilt RMS reduced" check stays per seed.
 
-**D124 validated before it is written** (2026-10-24, x86, `gpgo_diag nees 50`, `nees_x86.txt`). M approved the NEES
-form; the Bar-Shalom test, as in D178.
+**D124 validated before it is written** (2026-10-24, x86, `gpgo_diag nees 50`, `nees_x86.txt`). The NEES
+form was approved; the Bar-Shalom test, as in D178.
 - The solver's ĝ marginal is the gravity block of H⁻¹ at the optimum, by an LDLT solve on the two gravity columns.
   `MarginalCovariances` returns pose blocks only. σ ≈ 2.0° per axis for this fixture.
 - Mean NEES over seeds 0–49 lands inside the 99 % band [1.347, 2.803] under both draw orders:
@@ -5320,7 +5320,7 @@ form; the Bar-Shalom test, as in D178.
   replaces the single-seed bound.
   - Priors are drawn at σ/√info_scale; `Make(…, gen_scale)` defaults to 1 for the other tests.
   - Local x86: mean NEES **2.526** in [1.347, 2.803] (validated 2.53); tilt RMS 8.47 → 3.78°, reduced on 46/50.
-## 2026-10-24 — D117–D122 (A1, proposed; §49 preflight, docs only): the 4.3 time-axis loss is turning — charge the mover's executed time
+## 2026-10-24 — D117–D122 (proposed; §49 preflight, docs only): the 4.3 time-axis loss is turning — charge the mover's executed time
 
 Full record: `docs/design/next-best-view.md` §15; literature `docs/design/lit/early_coverage.md`; evidence
 `evaluation/runs/planning/nbv_gate/{time_budget,turn_back,turn_episodes}.{py,txt}` (the 36 gate runs' GT; no new run).
@@ -5363,11 +5363,11 @@ Full record: `docs/design/next-best-view.md` §15; literature `docs/design/lit/e
 - the 1.8 row reused under a replay identity check.
 
 The claim is unchanged ("≥ every baseline at every T"), with a non-regression bound at 200 s and no tuning after
-the runs. Spend needs the maintainer's OK.
+the runs. Spend needs approval.
 
-## 2026-10-24 — D125/D119 implemented; D151 amended (NaN = turn here); §15.5 pre-registration amended before any run (A1)
+## 2026-10-24 — D125/D119 implemented; D151 amended (NaN = turn here); §15.5 pre-registration amended before any run
 
-**D151 amendment (approved by M on design and by B, owner of the mover and the live loop).** A waypoint whose x or y
+**D151 amendment (approved on design and for the mover and the live loop).** A waypoint whose x or y
 is NaN means "the rig's current position": `PlanCommand` adds no face-turn and no move, only the final turn when the
 pose has a yaw.
 - Why a sentinel and not a finite goto: the mover plans from its GT pose, and the planner's estimate is centimetres
@@ -5375,9 +5375,9 @@ pose has a yaw.
   creep, then turn to the yaw. A tolerance on short moves would be a new constant. The sentinel needs none.
 - Every finite command is unchanged. A waypoint 1e-12 m away still takes the coincident rule (the final turn only),
   and one 1 cm away still faces, moves and turns (`test_nbv_time`).
-- NaN survives the wire: `ros_cdr::PoseArray` doubles end to end, through the link, the bridge and gz (B).
+- NaN survives the wire: `ros_cdr::PoseArray` doubles end to end, through the link, the bridge and gz.
   `ClearanceAlong` is never reached, since there is no move.
-- The trace never prints the NaN (B's condition): a turn-here command is `"kind":"turn"`, `"waypoints_xy_m":[]`,
+- The trace never prints the NaN (the live loop's condition): a turn-here command is `"kind":"turn"`, `"waypoints_xy_m":[]`,
   `"turn_yaw":<rad>`.
 
 **D125 as built.**
@@ -5401,15 +5401,15 @@ pose has a yaw.
   - with every new key off, decisions and commands are identical to the base, except the enumerated records where a
     cut command or an at-cell view occurs;
   - the fixes fire exactly there.
-  The base is now feat/ph4-nagent after the main merge (`9efbdba`: main 4a12b50; B's D227 lens-off is NOT in it), not
+  The base is now the N-agent planning line after the main merge (`9efbdba`: main 4a12b50; the D227 lens-off is NOT in it), not
   d59ee3d.
 - (b) **Rig.** 8 rows × 6 = **48 development runs** (`configs/mission/ablation_4.3/runs_48.jobs`).
   - The 1.8 row is re-run rather than reused, because the base commit changed (main merged into the tree; one commit is pinned for all 48 runs).
   - A run counts only if every lockstep barrier is answered (`answer_timeouts` = 0) and the D152 reorder has no
     timeouts.
-  - M first routed the runs off AWS (test-compute-session). It declined: no docker or gz on its kernels today, and
+  - The runs were first routed off AWS (the Kaggle CPU queue). That was declined: no docker or gz on its kernels today, and
     llvmpipe on 4 vCPU risks answer timeouts. So the runs go on the gate's own rig (AWS c7i, llvmpipe, slotq band
-    30+), with the maintainer's spend approval.
+    30+), with spend approval.
   - Measured gate wall time: median 13.1 min per 200 s run (34 logged jobs), so ≈ 11–12 c7i.4xlarge spot-hours.
 - **Replay identity check, done before any run** (`evaluation/runs/planning/nbv_ablation/replay_identity/`). The local
   20 s ci_tiny recording (a1p `build/gate/local/repro_a`) was replayed with the new binary.
@@ -5477,9 +5477,9 @@ so they really are separate places); each pass pairs with agent 1's one place an
 pair, one vote" undercounts nothing on the true side and still overcounts revisits on the false side. Not retuned on
 this data. `pcm_place_grouping` stays in the code, default off, as a measured ablation row.
 
-## 2026-10-24 — D177: known-entry gate on inter-agent edges (pre-registered; known starts, maintainer 2026-10-23)
+## 2026-10-24 — D177: known-entry gate on inter-agent edges (pre-registered; known starts, decision 2026-10-23)
 
-**Basis.** Agents enter through known openings (maintainer: drones inserted through windows), so each agent's odometry
+**Basis.** Agents enter through known openings (drones inserted through windows), so each agent's odometry
 frame W_k has a known placement T_World_Wk at entry. An inter-agent loop edge (a, ka) -> (b, kb) with measurement
 Z = T_Ca_Cb implies T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1 (the snapshot poses). Against the prior T_Wa_Wb = T_World_Wa^-1
 T_World_Wb, the only legitimate disagreement is VO drift accumulated since entry by both agents.
@@ -5491,7 +5491,7 @@ with L_k(kf) the odometry path length of agent k from its first keyframe to kf (
 measured drift ratio, the 0.5 m floor covers entry placement error, 10 deg is 7x the worst measured rotation drift. The
 aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-sized true loops are far inside.
 - Config `entry_gate: {enabled: false, floor_m: 0.5, per_m: 0.05, rot_deg: 10}`, default off; the entry poses come from
-  the briefing (live: B's T_W_O[k]; pass B: the scene's agent start poses, i.e. GT of the first released keyframe
+  the briefing (live: the runtime's T_W_O[k]; pass B: the scene's agent start poses, i.e. GT of the first released keyframe
   composed with its odometry pose, the same placement an operator records at insertion).
 - **Pass criteria (fixed now, same as D176):** B2 + C rerun with it on (grouping off): scene 0 budgeted rows merged ATE
   < 0.10 m in >= 5 of 6 cells; scene 1 not worse by > 10 % (or 2 mm); no run corrupt. Also reported: true edges the
@@ -5499,12 +5499,12 @@ aliasing group (about 5 m / 100 deg, the 6 m lattice) is far outside; drift-size
 - **Scope, honestly:** this guards the known-starts deployment. It does not solve aliasing between agents whose starts
   are unknown, nor aliases smaller than the drift bound; those remain 3.5 (repetition worlds, §17.3 diagnostics).
 
-**D176/D177 status correction (2026-10-24).** Both were designed without the preflight the maintainer requires (SOTA
-literature pass + advisor before any design; no ad-hoc incremental fixes after a failed run). D177 is WITHDRAWN as a
-pre-registration: not built, not run. The D176 grouping code is parked uncommitted (git stash on feat/live-collab).
+**D176/D177 status correction (2026-10-24).** Both were designed without the required preflight (SOTA
+literature pass + design review before any design; no ad-hoc incremental fixes after a failed run). D177 is WITHDRAWN as a
+pre-registration: not built, not run. The D176 grouping code is parked uncommitted (git stash).
 The measurements above stand. The design restarts from a literature survey of perceptual aliasing in multi-robot loop
 closure (PCM's large-false-clique failure and its successors, systems in repetitive/subterranean environments, gating
-against known initial poses, ambiguity-aware back ends), then an advisor review, then a pre-registered decision.
+against known initial poses, ambiguity-aware back ends), then an design review, then a pre-registered decision.
 
 **D176 record correction (2026-10-24).** The negative result covers the IMPLEMENTATION tested, not spatial place
 grouping in general: places were clustered sequentially in keyframe-id order (a new place whenever a keyframe left the
@@ -5513,10 +5513,10 @@ grouping in each agent's own frame (revisits merged), with one-to-one support pe
 ambiguity test (Olson 2009), is the literature's direction for the unknown-start case and belongs to 3.5. Surveys:
 scratchpad alias_survey.md / collab_fast_survey.md, summarized in the next decision.
 
-## 2026-10-24 — Preflight for the collaboration redesign (surveys + advisor)
+## 2026-10-24 — Preflight for the collaboration redesign (surveys + design review)
 
 Two literature surveys from primary sources (scratchpad `alias_survey.md`, `collab_fast_survey.md`; summarized here),
-then advisor review. Findings that drive D178/D179:
+then design review. Findings that drive D178/D179:
 - **PCM states its own failure mode** (Mangelson et al., ICRA 2018, Assumption 2: the measurement system must not be
   "biased toward selecting incorrect measurements over correct ones"); revisits + top-k retrieval are that bias. Its
   successors (group-k consistency, Forsgren et al. IROS 2022 / IJRR 2024; CLIPPER, Lusk et al. ICRA 2021; ROBIN, Shi et
@@ -5538,8 +5538,8 @@ then advisor review. Findings that drive D178/D179:
 ## 2026-10-24 — D178: known-entry Mahalanobis gate on inter-agent loops + GNC initialised from the entry prior (pre-registered)
 
 **Basis:** LAMP / LAMP 2.0 (known entry frame, traversal-growing proximity gate), Olson 2009 (Mahalanobis gate, covariance
-projected along the odometry path), Kimera-Multi (GNC's initial guess). Known starts: maintainer 2026-10-23.
-**Prior.** T_World_Wk for each agent from the mission briefing's start poses (live: B's T_W_O[k]; pass B: the scene's
+projected along the odometry path), Kimera-Multi (GNC's initial guess). Known starts: decision 2026-10-23.
+**Prior.** T_World_Wk for each agent from the mission briefing's start poses (live: the runtime's T_W_O[k]; pass B: the scene's
 agent spawn poses, NOT ground truth of a keyframe), labelled in manifests as a known-start prior.
 **Residual.** For an inter-agent edge (a, ka) -> (b, kb) with Z = T_Ca_Cb: implied T_Wa_Wb = T_Wa_Ca Z T_Wb_Cb^-1,
 prior P = T_World_Wa^-1 T_World_Wb, r = Log(P^-1 implied) in R^6 (the left-multiplicative convention).
@@ -5565,9 +5565,9 @@ travel per agent at 1 % drift; the demo's paths are checked against that. Unknow
 place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio ambiguity test, repetition worlds,
 §17.3 diagnostics).
 
-## 2026-10-24 — D179: asynchronous collaboration, committed on the sim clock (maintainer: no barrier syncs)
+## 2026-10-24 — D179: asynchronous collaboration, committed on the sim clock (requirement: no barrier syncs)
 
-**Requirement** (maintainer 2026-10-24): collaboration "blazingly fast", no barrier syncs, asynchronous. **Semantics:**
+**Requirement** (2026-10-24): collaboration "blazingly fast", no barrier syncs, asynchronous. **Semantics:**
 - All collaboration compute is asynchronous and never waited on: DNN in the per-agent collab workers; retrieval,
   verification and broker solves on the fleet's own thread.
 - The radio stays a single owner on SIM time (D175's coordination and its D218 replay proof depend on it). Every
@@ -5576,11 +5576,11 @@ place grouping per agent frame with one-to-one support, Olson's eigenvalue-ratio
   events at their logged ticks, so replays equal the live run they log (record/replay is the substrate, arch §0.2).
 - The runtime's `Step(t)` enqueues tick t and returns. With collab on, the fleet thread owns the radio nodes; D175 sends
   are sim-timestamped entries in a queue into the fleet thread, and coordination deliveries come back through a queue
-  the runtime drains at its barrier step 2. **Invariant 1 (B):** the drain order is per tick, FIFO per sender, ticks in
-  order, and replay reproduces exactly that order from the log. **Invariant 2 (B):** the published snapshot {T_O0_O,
+  the runtime drains at its barrier step 2. **Invariant 1:** the drain order is per tick, FIFO per sender, ticks in
+  order, and replay reproduces exactly that order from the log. **Invariant 2:** the published snapshot {T_O0_O,
   Linked, Telemetry} is swapped atomically as one value; the planner reads it lock-free.
 - Replaces D174's lockstep (watermark waits, feature replies at ask + feature_latency_s).
-- **Amendment (2026-10-24, B's request):** the snapshot also carries, per fleet member k, what k's radio node knew at
+- **Amendment (2026-10-24, the runtime's request):** the snapshot also carries, per fleet member k, what k's radio node knew at
   that tick: `Component()` (broker, members, accepted epoch), `LastHeartbeat(j)` for every peer heard, and
   `AckedPatchVersion(j)` for every other member (`CollabSnapshot::agent[k]`). The D175 fork-join reads these from its
   one per-barrier snapshot instead of from nodes the fleet thread owns (a data race under D179). The values are frozen
@@ -5608,12 +5608,12 @@ verification redesign (next bytes item), and is not settled here.
 **Pass/fail for the next byte-table run:** the existing I6 gate (each gated class ≤ 15 % error on first transmission),
 unchanged.
 
-## D225 addendum (2026-10-24, B): the deterministic gate guard + the N-generic audit
+## D225 addendum (2026-10-24): the deterministic gate guard + the N-generic audit
 
 - The barrier predicates are factored into runtime/live/lockstep_gate.hpp (AllReached / AllDoneShort /
   MinProgress, templates over any lane range) and unit-tested (LockstepGate, 4 tests): ANY lagging lane holds
   the barrier at N = 3 and 4, and PreD225ShapeTripsHere keeps the old lanes[0]&&[1] shape as a documented trip
-  target - it fails deterministically, no timing involved (M's call: the race was not reproducible in replay,
+  target - it fails deterministically, no timing involved (decision: the race was not reproducible in replay,
   whose unbounded all-N answer wait hard-syncs the lanes; the on-instance replay x2 remains the e2e tripwire,
   test_barrier_n3.sh the forward lane-skew invariant).
 - N-generic audit of the live lane (ariadne_live.cpp, live/*.hpp): the Reorderer's watermark is min over ALL
@@ -5646,7 +5646,7 @@ squared Mahalanobis distance and decision. Logging only; the gate's inputs and o
 
 **Question:** would moving verification to one endpoint, with the vertex-cover direction choice of Giamou 2018 and Tian
 2021, cut the bytes the gate rows move? It was measured from existing data before any design was written (preflight;
-advisor).
+design review).
 **Method:** sweep `20261023T213707Z-cpux86-e31421`, every run's attempted inter-agent pairs (`edges.csv`). With N = 2
 and broker 0, today's scheme already moves features one way: it fetches each distinct agent-1 endpoint. Per agent
 pair the exact optimum is a minimum bipartite vertex cover (König: = maximum matching). Its weighted form is an LP
@@ -5661,24 +5661,24 @@ with integral optima, solvable by `cv::solveLP` (OpenCV-native check). Keyframes
 **Decision:**
 - The protocol change is NOT built now. Its only gate-relevant benefit is the third-party saving at N ≥ 3 (a non-broker
   pair fetched to the broker on both sides), which no Phase 3 scene exercises.
-- It is re-measured when 3-agent stores exist (B's 3-agent maze runs), with the same script and pre-registered:
+- It is re-measured when 3-agent stores exist (the 3-agent live maze runs), with the same script and pre-registered:
   "build if the selected rows of the 3-agent demo move ≥ 20 % more keyframes than their minimum cover".
-- The speed side (LightGlue serialized on the fleet thread) is decided by A2's AWS profile. If it is the bottleneck,
+- The speed side (LightGlue serialized on the fleet thread) is decided by the AWS pipeline profile. If it is the bottleneck,
   the remedy is a verify pool with D179-logged commits, which needs no protocol change.
 - Bytes work moves to the 3.6 compression rows and to diagnosing the match_response prediction miss.
 
-## 2026-10-24 — D182: ALIKED dense-L2 graph rewrite (A2's l2conv): adoption rule, pre-registered before the measuring run
+## 2026-10-24 — D182: ALIKED dense-L2 graph rewrite (l2conv): adoption rule, pre-registered before the measuring run
 
-**Finding (A2, c7i run `20261024T001208Z-cpux86-6ba75f`):**
+**Finding (c7i run `20261024T001208Z-cpux86-6ba75f`):**
 - ALIKED-1280 stops scaling at about 8 OpenCV threads: 843 ms at 8, 829 ms at 16, cpu/wall 3.8.
 - Its "Normalize" (F.normalize on the dense 128×736×1280 map: ReduceL2 → Clip → Expand → Div) runs as one serial
   cv::dnn layer, about 535 ms at 8–16 threads (64 % of the forward).
-**Change:** an exact ONNX graph rewrite, not an exporter change (A2 `scripts/l2conv_rewrite.py`, 282e1da). The sum of
+**Change:** an exact ONNX graph rewrite, not an exporter change (`scripts/l2conv_rewrite.py`, 282e1da). The sum of
 squares becomes Mul plus a 1×1 conv with a ones kernel, then Sqrt, then Div by broadcasting; the 470 MB Expand copy is
 dropped.
 - Local fidelity: keypoints and scores bit-identical, descriptors within 1.3e-6.
 - Speed at 8 threads, about 300–350 ms: [PROJECTION].
-**Adopt only if all hold on A2's rerun (`70-A2-perf-x86b`):**
+**Adopt only if all hold on the rerun (`70-A2-perf-x86b`):**
 - (i) 0 accept/reject flips on the 120 real verify pairs, against the 1280×720 K1024 reference;
 - (ii) keypoints bit-identical and descriptor max abs diff ≤ 4.9e-6 (the measured thread-count effect), on every
   keyframe of those pairs;
@@ -5687,9 +5687,9 @@ If (iii) misses but (i) and (ii) hold, it is reported and decided separately. If
 On adoption: the model sha changes, every manifest names the rewritten graph, and the rewrite script plus the
 input and output ONNX hashes are committed together.
 
-## 2026-10-24 — D227 (D41 amendment, maintainer-directed): the synthetic lens is OFF in the live runtime
+## 2026-10-24 — D227 (D41 amendment): the synthetic lens is OFF in the live runtime
 
-**Order (maintainer, via M, ~09:20 IST):** turn the D41 read-time lens distortion off for live/demo/POC runs. A2's
+**Order (2026-10-24):** turn the D41 read-time lens distortion off for live/demo/POC runs. The
 per-function profile (job 44b/45 line) measured it as most of the ~58 ms/frame ingest cost, about 50 % of the lane,
 and it is optional sim realism, not a claim-bearing operator. No baseline reruns: every run from the next one on is
 the new baseline.
@@ -5703,7 +5703,7 @@ the new baseline.
   the clean pinhole render); `LiveSimSource::Calibration()` reports the RENDER intrinsics with **D = 0** (the camera
   the estimator then actually sees); `CameraConfig()` says `+lens(off)` so every manifest and digest names the state.
 - Replay honours it: replay consumes `inputs.mcap` (clean pixels) through the same `LiveSimSource`/worker path with
-  the same live config, so a lens-off replay of a lens-on recording is valid for perf (A2's RTF measurement) but its
+  the same live config, so a lens-off replay of a lens-on recording is valid for perf (the RTF measurement) but its
   trace is a new baseline, not comparable to the live trace.
 - Untouched: `SimSource` (dataset/eval bag path, D37/D41 regression rows), `ariadne_sim_vo`/spool tools, and
   `ariadne_sim_calib` (which already had `--lens auto|on|off`; its lens-off truth is the raw render). The D41
@@ -5716,14 +5716,14 @@ the new baseline.
 - Manifests: `camera_config: rig_stereo_v2+lens(D41)` (restored) vs `rig_stereo_v2+lens(off)` (default).
 - (artifacts: `build/live/ma_smoke3/.../replay_lenson`, `replay_lensoff{1,2}`.)
 
-## 2026-10-24 — D210–D229 registry backfill (B): the Phase-8 block, recorded (M's audit: STATUS claimed them, DECISIONS lacked them)
+## 2026-10-24 — D210–D229 registry backfill: the Phase-8 block, recorded (an audit found STATUS claimed them, DECISIONS lacked them)
 
-D210, D228, D229 are UNUSED (free numbers in B's block). D230/D231 are A2's (recorded above). Each entry: decision,
+D210, D228, D229 are UNUSED (free numbers in the block). D230/D231 are recorded above. Each entry: decision,
 why, evidence.
 
 ### D211: maze_dark — the arch §42 demo world (commit 663e4ce)
 Dark variant of the demo maze, lit only by the agents' own spot lamps. Built so the dark demo is a scene swap, not a
-code path. Evidence: `build/live/scenes/maze_dark_0/`. NOTE: all dark/lighting/dust work is PAUSED by the maintainer
+code path. Evidence: `build/live/scenes/maze_dark_0/`. NOTE: all dark/lighting/dust work is PAUSED
 (see D217); the world exists, nothing consumes it yet.
 
 ### D212: three agents in worldgen (commit 9659abe)
@@ -5755,18 +5755,18 @@ user-chosen entrance subset and target, world untouched; check_demo_target flood
 in `build/live/`.
 
 ### D217: DEFERRED — the dark/lamp demo toggle
-Maintainer (via M, 2026-10-24): pause ALL dark/lighting/dust work until the multi-agent POC runs. The number is
+Decision (2026-10-24): pause ALL dark/lighting/dust work until the multi-agent POC runs. The number is
 reserved for the toggle; no code exists. Revisit after the POC demo is green at real time.
 
 ### D219: live_aws.sh knobs (commit 149f01c)
 LIVE_AWS_PROFILE (cpux86 = c7i CPU slots), LIVE_AWS_MAX_MIN, and cmd_run bakes the caller's
 ARIADNE_LOCKSTEP/LIVE_CONFIG/PLANNER_CONFIG/RT_MEM/PROFILE/SAMPLER into the remote script. Why: slotq jobs must be
-one self-contained line. Evidence: every 5x/6x-B job file since.
+one self-contained line. Evidence: every 5x/6x job file since.
 
 ### D220: the live splat tee (commit 2a123e8)
 SplatTee in ariadne_live: #kf = u32 len | JSON (agent, id, t_ns, pose_version, T_O_C, K full-res, Kz spool) | Z fp16 |
 S fp16 | RGB; #t_w_o xyzquat (qw last); bounded 8/agent, drop-oldest, sender thread per agent; ARIADNE_SPLAT=1 or a
-pre-set ARIADNE_RECON_SOCK. Why: D230/D231 contract with A2's gsplat service. Evidence: no-tee digest
+pre-set ARIADNE_RECON_SOCK. Why: D230/D231 contract with the gsplat service. Evidence: no-tee digest
 cd6a07aa6fdd000a reproduced 3x with tee variants (determinism-neutral); e2e with the real service: placement
 <= 2.2e-16, 92.9 % of wall points within 10 cm, 71 kf -> 4 submaps, 259,994 Gaussians.
 
@@ -5786,12 +5786,12 @@ operator story (and invariant 6's bytes visible live). Evidence: D222 commit; pa
 Fleet thread owns compute+radio; Send(k,fn,t) enqueues in call order; Drain(k,T) at barrier step 2 (FIFO-per-sender,
 logged + replayed); ONE Snapshot(T) per barrier, all reads off the snapshot (b). A missing agent view = "nothing
 heard yet" (fresh-node semantics: singleton component, broker=self, acked 0) — never .at() (c; the collab60b exit-139
-lesson, run 056f14). Why: the maintainer's no-barrier-sync order for collab. Evidence: collab60c live PASS at this
+lesson, run 056f14). Why: the no-barrier-sync requirement for collab (D179). Evidence: collab60c live PASS at this
 shape; replay logs replayable from collab_events.jsonl.
 
-### D224: pipeline profiling hooks + A2's sampler (commits 805ae69, 7e082c1, 95544d6)
+### D224: pipeline profiling hooks + the host sampler (commits 805ae69, 7e082c1, 95544d6)
 Default-off instrumentation (digest-neutral) + perf_sampler.sh vendored verbatim (sha c93b1497ce8484a3) so
-ARIADNE_SAMPLER works on instances. Why: D232 perf work needs per-function attribution, not guesses. Evidence: A2's
+ARIADNE_SAMPLER works on instances. Why: D232 perf work needs per-function attribution, not guesses. Evidence: the
 job 45 attribution ran on these hooks.
 
 ### D225 (root entry; addendum above): the lockstep barrier waits on EVERY lane (commit 0105f5e)
@@ -5829,8 +5829,8 @@ and first-transmission bytes with D180's re-sends folded back in). Baseline with
 - The gate is decisive only with known starts. Unknown-start aliasing remains 3.5.
 **Cost:** the gated sweep $0.0875 and the logged rerun $0.0882. Two rerun attempts were lost: 4fc41e was killed by the
 host on a transient AuthFailure (spinup since fixed), and 080b8f didn't collect entry_gate.csv (fixed in c0e498b).
-**Next:** the entry gate is ENABLED in the live config `collab_live_v1` (B). D178 merges to main with D179/D180 after
-B's D179 acceptance.
+**Next:** the entry gate is ENABLED in the live config `collab_live_v1`. D178 merges to main with D179/D180 after
+the D179 acceptance.
 
 ## 2026-10-24 — D180 RESULT: request accounting fixed; byte table still FAILS on match_response (diagnosed)
 
@@ -5850,13 +5850,13 @@ byte-table run. Scored with `collab_gate.py`; evidence in `evaluation/runs/colla
 - **Verdict:** I6 byte table FAIL, reported as such. The fix (an expected answer rate in the predictor, calibrated
   cross-scene; or fewer unanswered requests) needs its own preflight and pre-registration before the next byte run.
 
-## 2026-10-24 — D228: estimator workers pin their OpenCV pool to 5 threads (maintainer-approved, D232 line)
+## 2026-10-24 — D228: estimator workers pin their OpenCV pool to 5 threads (approved, D232 line)
 **Decision:** RunEstimatorWorker (D168 process-per-agent mode) calls cv::setNumThreads on entry: default 5,
 env ARIADNE_WORKER_CV_THREADS overrides (experiments only). The in-process arrangement (D152a turn lock) is
 untouched — its semantics assume an idle pool per call, and it is not the production path.
-**Why:** A2's job 46 on c7i.4xlarge (3 workers, lens off): trajectories bit-identical 16 vs 5 threads (the
+**Why:** job 46 on c7i.4xlarge (3 workers, lens off): trajectories bit-identical 16 vs 5 threads (the
 estimator is thread-count-invariant), wall −1.6 %, and cpu PSI 26 % → 1.2 % — the fleet stops thrashing the box.
-**Evidence:** evaluation/runs/performance/pipeline_profile_20261024/processed/replay_perf_threads.csv (A2);
+**Evidence:** evaluation/runs/performance/pipeline_profile_20261024/processed/replay_perf_threads.csv;
 run 20261024T051058Z-cpux86-f94953.
 
 ## 2026-10-24 — D229: the lane ingest pipeline (D232 item a2) — pre-registered before code
@@ -5866,10 +5866,10 @@ in-order SPSC. SimFrameAssembler::Feed splits into Ingest (stateless per message
 counter, which stays in delivery order on the single ingest thread) and Apply (pairing state + emission, on the
 VO thread). Depth 1 preserves the D166 pacing backpressure: at most one frame is pre-ingested, so no queue
 between gz and the estimator holds more than one sub-step. The D167 wait timer becomes the SPSC pop wait.
-**Why:** post-D227 the lane sits at 48–52 ms ≈ the 50 ms frame period (A2 job 46); overlapping ingest with
+**Why:** post-D227 the lane sits at 48–52 ms ≈ the 50 ms frame period (job 46); overlapping ingest with
 tracking is the remaining lever to RTF ≥ 1 for the demo. The ingest output is bit-identical regardless of which
 thread computes it, so content is unchanged by construction; only timing moves.
-**Acceptance before merge (maintainer, via M, 2026-10-24):**
+**Acceptance before merge (2026-10-24):**
 1. lockstep barrier semantics unchanged — a frame must not cross a barrier cut (the gate still reads estimator
    progress, and ingest-ahead is bounded at 1);
 2. live + replay×2 byte-identical on a 3-agent run;
@@ -5878,7 +5878,7 @@ thread computes it, so content is unchanged by construction; only timing moves.
 4. RTF measured on c7i via slotq, lens off, 5 threads;
 5. a unit guard: Ingest+Apply across threads ≡ the old Feed, byte-identical, including unpaired/drop handling.
 
-## 2026-10-24 — D226 amendment (B): the parallel lens moved out of the determinism header (stop-the-line fix)
+## 2026-10-24 — D226 amendment: the parallel lens moved out of the determinism header (stop-the-line fix)
 D226 as first landed (5cb9e71) put `#include <opencv2/core.hpp>` + cv::parallel_for_ into the header-only
 lens.hpp. That header is the determinism substrate and sits on the manifest include path
 (lens_digest.hpp → determinism.hpp), which OpenCV-free targets build by design (arch §3 dependency rule) —
@@ -5896,17 +5896,17 @@ All five pre-registered criteria ran:
 1. barrier semantics unchanged (construction + the lockstep runs below);
 2. live + replay×2 PASS (ma_smoke4, 3 agents, replay_check 17/17);
 3. digest-neutral (pipelined AND kill-switch replays = lens-off reference 21a51e0d…);
-4. **RTF on c7i (A2 job 15, run 4d412c, one instance, both arms, $0.027): pipelined 0.833 vs kill-switch 0.839 vs
+4. **RTF on c7i (job 15, run 4d412c, one instance, both arms, $0.027): pipelined 0.833 vs kill-switch 0.839 vs
    job-46 reference 0.836 — a −0.7 % change, within noise of zero.** Both arms' trajectories byte-identical to the
    reference on all 3 agents.
 5. unit guard in (PipelinedIngestMatchesFeedExactly).
 **Why no gain:** D229 overlaps the ingest half of Feed. Post-D227 (lens off) that half is a few ms of decode+gray;
 job 45's ~50 ms Feed share WAS the lens. The lens-off lane is tracking + keyframe compute (FAST ~11 ms, SGBM, LK;
 keyframe ~126 ms on 30 % of steps one agent runs >80 ms).
-**Decision (M, on the measurement):** D229 is recorded NEGATIVE and the default is OFF — the single-threaded
+**Decision (on the measurement):** D229 is recorded NEGATIVE and the default is OFF — the single-threaded
 shape is the production path (an extra thread with no measured gain does not belong on the demo path; the
 pipeline-hyperoptimized rule). The code stays behind ARIADNE_LANE_PIPELINE=1, unit-guarded and digest-proven;
 its payoff case is a live path whose ingest is heavy again (lens-on rows, the paused dark/degradation demo —
 DegradeParallel runs inside Ingest and would overlap tracking).
-**RTF ≥ 1 (A2's inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
-lockstep path - a new decision for the maintainer, NOT started (feature freeze).
+**RTF ≥ 1 (inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
+lockstep path - a new decision, NOT started (feature freeze).

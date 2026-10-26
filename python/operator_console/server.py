@@ -49,7 +49,7 @@ def demo_index():
     return HTMLResponse((STATIC / "demo.html").read_text())
 
 
-# A2's splat panel (feat/ph5-dve via main 3f5e310): /splat page + chunk/table/ws + world.obj; it reads
+# The splat panel (main 3f5e310): /splat page + chunk/table/ws + world.obj; it reads
 # ARIADNE_SPLAT_DIR (trainer output) and ARIADNE_SCENE_DIR (worldgen scene, the GT viewport). Separate page,
 # linked from the console header - never blended with the GT model (user rule: own viewport).
 from operator_console.splat import router as splat_router  # noqa: E402

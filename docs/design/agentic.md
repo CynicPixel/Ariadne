@@ -1,10 +1,10 @@
-# 7.1–7.2 — the agentic layer (design; decisions D156–D162)
+# Agentic layer: Bedrock + MCP task chooser, C++ validation, risk gate (D156–D162)
 
-Status: design 2026-10-23, session B. Plan items 7.1, 7.2; invariant 3. Arch §23 (human authority / risk gate),
+Status: design 2026-10-23. Plan items 7.1, 7.2; invariant 3. Arch §23 (human authority / risk gate),
 §25 (agentic orchestration: §25.1 the LLM only chooses, §25.2 MCP tool surface, §25.3 the ablation), §29.3 (approval
 REST). Builds on L1 (`live-runtime.md`): the live runtime already computes the candidate set and calls a chooser.
 
-## 0. Preflight (2026-10-23): literature, algorithms.md, OpenCV 5, advisor
+## 0. Preflight (2026-10-23): literature, algorithms.md, OpenCV 5, design review
 
 **algorithms.md.** Domain 3 (active perception / NBV / multi-robot allocation) is still owed there, and it holds no
 LLM-in-the-loop survey; this pass is that survey for the choose step only. Pointers it does hold: TARE / FAR Planner
@@ -44,15 +44,15 @@ CERBERUS's comms-aware backtrack rule (line 3197).
 and encoded with OpenCV. Nothing in OpenCV 5 replaces the chooser itself (`cv::dnn` runs vision models, not a tool-
 using language model), so the LLM stays on Bedrock (D84), outside every algorithm library (arch §3).
 
-**Advisor.** Reviewed the first draft (2026-10-23): bottleneck clearance instead of the path minimum for the risk
+**Design review.** Reviewed the first draft (2026-10-23): bottleneck clearance instead of the path minimum for the risk
 (the minimum saturates on every turn), eligible candidates only, approvals verified by C++ from the console's file,
 replay copies the recorded choice block. All four are in §2.
 
-## 0b. Revision B (2026-10-23, maintainer: "go with B") — the seams around Phase 4, not a planner
+## 0b. Revision B (2026-10-23, decision: "go with B") — the seams around Phase 4, not a planner
 
 **Why.** The planner I had in `ariadne_live` (frontier standoffs, one-shot A* paths, per-run knobs) duplicates arch
-§21 / plan 4.3–4.6, which A1 owns (D110–D129) and is preflighting. The maintainer: "don't hard code the paths, let
-the agents reach consensus and locomote, informed by llm, and directable/guidable by the user". Under B, A1 builds
+§21 / plan 4.3–4.6 (D110–D129), which the Phase 4 work covers. The requirement: "don't hard code the paths, let
+the agents reach consensus and locomote, informed by llm, and directable/guidable by the user". Under B, Phase 4 builds
 NBV, CBBA consensus and the route graph (4.3–4.6); this item builds the seams those plug into, the LLM's task-level
 role, and operator direction. The 1.8 + standoff code becomes `PlaceholderPlanner`, an ablation baseline (standing
 rule), and its knobs stay inside it.
@@ -62,7 +62,7 @@ existing assignments; produces candidate observation poses, task assignments, re
 communication actions, human escalation requests); §21.7–21.8 (event-triggered CBBA, bundles 1–2, broker-greedy
 ablation; FAR / D* Lite within-task path); §23 (risk gate, approval packet, envelope without comms); §25.1 (the LLM
 owns task selection, negotiation, explanation, exception handling, escalation; never poses, paths or thresholds);
-§29.3 (approval REST). A1's `volumetric.md` §4 already fixes the INPUT: `planning::MissionInput` (per-keyframe
+§29.3 (approval REST). `volumetric.md` §4 already fixes the INPUT: `planning::MissionInput` (per-keyframe
 depth + agent states), "the L1 live runtime fills the same struct".
 
 **Literature for the seams (2026-10-23; abstracts / project pages).**
@@ -81,8 +81,8 @@ depth + agent states), "the L1 live runtime fills the same struct".
    PlanOutput`, where `PlanContext` = time, agent states, active directives, the previous output, and the mover's
    answers; `PlanOutput` = Plane E's products: per-agent task (kind, region or pose, utility terms, risk), route
    (waypoints the planner computed, or none = hold), the ranked alternatives the LLM may choose among, and
-   escalation requests. `PlaceholderPlanner` wraps the current code; A1's Phase 4 planner implements the same
-   interface (proposal to A1, not imposed: STATUS + `agentic.md` §0b).
+   escalation requests. `PlaceholderPlanner` wraps the current code; the Phase 4 planner implements the same
+   interface (a proposal, not imposed: STATUS + `agentic.md` §0b).
 2. *Directives* (`planning/mission/directives.hpp`, deterministic, applied by the runtime to every planner):
    `priority_region(polygon, weight)`, `keep_out(polygon)`, `assign(agent, region)`, `explore(agent, region,
    time_budget_s)`, `goto(agent, pose)` (last resort), `hold(agent)` / `release(agent)`, `approve` / `reject`
@@ -93,16 +93,16 @@ depth + agent states), "the L1 live runtime fills the same struct".
    escalate; translate operator text into directive proposals; explain. Never routes, poses or thresholds. The
    C++ validation of §2 stays (in-set, risk gate with a console-written approval, exactly-once comes from the
    allocator, not from a rule here).
-4. *Consensus* is the allocator's (A1, 4.4). Until it lands, `PlaceholderPlanner` allocates by the joint greedy
+4. *Consensus* is the allocator's (4.4). Until it lands, `PlaceholderPlanner` allocates by the joint greedy
    rule with exactly-once (algorithms.md line 1165), labelled placeholder.
 
-**Review (advisor, 2026-10-23) — folded in.**
+**Design review (2026-10-23) — folded in.**
 - *Directives are recorded inputs.* Console clicks arrive at wall time; the runtime takes directives only at the
   replan barrier, stamps each with the replan T at which it takes effect, writes `directives.jsonl`, and replay
   re-applies that file (the mover-answer pattern, D153b). `live_replay_check.py` compares it. Confirmed LLM
   proposals take the same path.
-- *No second `planning::MissionInput`.* A1 owns that name on `feat/ph4-mission`; the live side gets
-  `live::KeyframeInput` with the same fields plus an adapter, naming A1's struct so the swap is one line.
+- *No second `planning::MissionInput`.* Phase 4 owns that name; the live side gets
+  `live::KeyframeInput` with the same fields plus an adapter, naming the planning struct so the swap is one line.
 - *`PlanOutput` has "continue".* A command is sent only when an agent's route changes materially; otherwise the
   planner answers "no change" and the mover keeps executing (the 45 s run's turn-in-place thrash, solved by the
   event-triggered structure of §21.7, not by a knob). Replans stay on fixed sim-time ticks (determinism).
@@ -207,7 +207,7 @@ not in the model:
    distance left, and `candidate` = the option whose goal lies within `refused_radius_m` of it (the radius the
    refused-goal rule already uses; no new knob), else −1. A pick within that radius continues the task (`since`
    kept). The prompt says a switch costs a turn and must name its cause. **No hysteresis rule in C++:** commitment
-   is the Phase 4 planner's (A1, CBBA bundles, arch §21.7); the classical chooser keeps its 1.8 behaviour.
+   is the Phase 4 planner's (CBBA bundles, arch §21.7); the classical chooser keeps its 1.8 behaviour.
 2. *Directives invisible.* The operator drew seven `priority_region`s; the planner reweights only candidates INSIDE a
    region, none of agent 1's ever was, and the request had no directive field, so Nova could not act on them. The
    request now has the active directives, and each candidate the region directives covering its goal, the product of
@@ -234,13 +234,13 @@ at `real_time_factor` 1 and judges interact in real time. It changes four things
 1. **No lockstep.** The world never pauses. The mover keeps executing its current command until a newer one arrives
    (receding horizon), so a slow replan degrades to a longer leg of the old plan, never a freeze.
 2. **Integration off the replan path.** Keyframes integrate into the planner's map on a background thread as they
-   arrive, serialized with `Plan` by one planner mutex (A1: `Plan` is a pure function of the integrated map plus the
+   arrive, serialized with `Plan` by one planner mutex (`Plan` is a pure function of the integrated map plus the
    `PlanContext`, so "the map at plan time" stays well-defined). The replan takes whatever is integrated when it
    fires; `keyframes_integrated` in results.yaml says how far behind it ran.
 3. **Gate-only artifacts off.** The shadow TSDF and the per-replan slab/egress PNGs are skipped (`snapshots: false`);
    the console renders from telemetry, not files.
-4. **The LLM is supervisory and non-blocking (maintainer direction, 2026-10-23).** Planning stays deterministic: at
-   every replan the classical pick (A1 planner's own choice within the risk gate) is commanded IMMEDIATELY - there is
+4. **The LLM is supervisory and non-blocking (decision, 2026-10-23).** Planning stays deterministic: at
+   every replan the classical pick (the Phase 4 planner's own choice within the risk gate) is commanded IMMEDIATELY - there is
    no `ChooserLink::Wait` on the control path. The decision request still goes to the orchestrator with the same
    facts; its answer is collected non-blocking at the NEXT replan and, if it names a different candidate that still
    exists and passes the same validation (risk gate, approvals, reserve-return exemption), it is applied as an
@@ -256,7 +256,7 @@ Acceptance (M2, g4dn EGL, renderer string must name the NVIDIA device): a 2-agen
 gz_stats holds >= 0.95x wall, no mover stall waits on a missing command, the per-decision trace is complete, and
 frame handling keeps up (drops, if any, are counted in the link stats and said out loud).
 
-Planner facts folded in (A1, 2026-10-23, read from phase4_planner.cpp, not memory): `Plan` is NOT pure - it carries
+Planner facts folded in (2026-10-23, read from phase4_planner.cpp, not memory): `Plan` is NOT pure - it carries
 incremental egress state (D* Lite + visibility graph updated in place) - so demo keeps ONE Plan caller and never
 reorders or reconstructs; "deterministic" means deterministic given the SEQUENCE of (map at plan time, context).
 `Integrate` calls may interleave arbitrarily between Plans under the single mutex; per-agent keyframe order must stay

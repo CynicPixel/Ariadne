@@ -1,4 +1,4 @@
-# Phase 3.6 — descriptor compression (section for the Phase 3 report; A2, 2026-10-24)
+# Phase 3.6 — descriptor compression (section for the Phase 3 report; 2026-10-24)
 
 Tags as in the other report files: **measured** = a run we can point to. Evidence:
 `evaluation/runs/collaboration/wire_coding_20261024/` (§36-complete: README, command, raw, processed, `scripts/analyze.py`,

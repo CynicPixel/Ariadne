@@ -1,7 +1,7 @@
 """Beat 6 (replaces 6a/6b/6c): trusting a loop closure, in ≤ 30 s. A strip across the top shows every check a candidate
 meets, in order; four slides show what passes it and what stops it.
 
-Facts and numbers: M, 2026-10-25, each checked against its file (configs/collab/collab_live_v1.yaml; cpp/slam/robust/*).
+Facts and numbers: 2026-10-25, each checked against its file (configs/collab/collab_live_v1.yaml; cpp/slam/robust/*).
 1. The alias (python/video/data/collab60d/collab_edges.csv, agent0 kf96 <-> agent1 kf52; frames f880/f900 of the pack):
    95 matches, 55 essential inliers, 35 PnP inliers; ground truth: wrong by 14.9 m, 138 deg. Read here.
 2. Gate off, recorded run collab60d: the verify reasons over all its candidates (read here; header row duplicated once in

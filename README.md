@@ -14,145 +14,115 @@
 
 ```
 
-Autonomous multi-agent visual SLAM and 3D reconstruction for GPS-denied, communication-constrained disaster environments.
+**Autonomous multi-agent visual SLAM, collaborative mapping and 3D reconstruction for GPS-denied,
+communication-constrained disaster environments, and a route a person can follow back out.**
 
-## The problem
+[**Live operator console**](https://www.ariadne.cynicpixel.xyz/) · [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf)
+· [**Video**](submission/video/) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
+· [**Docs map**](docs/README.md)
 
-After a structural collapse, the spaces most important to search are often the least accessible to people: unstable, unlit, obstructed by rubble, and disconnected from positioning and communications infrastructure.
+![Ariadne architecture](submission/architecture/ariadne_architecture.png)
 
-Ariadne uses a fleet of autonomous visual agents to explore these spaces, build a shared 3D model, and determine how responders can safely reach points of interest and return.
+## What Ariadne is
 
-The difficulty is not simply mapping the environment. Agents must decide what to observe, what information is worth transmitting, which observations belong to the same physical location, and when exploration should give way to consolidation.
+After a structural collapse, the spaces that most need searching are the ones people cannot safely enter: dark,
+cluttered, cut off from GPS and from reliable radio. Ariadne sends a team of small stereo-camera agents in. They:
+- map the space collaboratively over a lossy, byte-budgeted radio;
+- refuse look-alike places that would tear the shared map apart;
+- hand incident command two things: a 3D Gaussian-splat model of what they saw, and an egress route checked at
+  responder width (a void a robot fits through is not a route for a person).
 
-Concrete and rubble create low texture and strong perceptual aliasing. Self-carried illumination makes appearance dependent on camera pose. Communication, energy, motion, and mission time are finite resources.
+An LLM orchestrator on Amazon Bedrock chooses tasks from what the cameras found. Plain C++ validates every choice before
+anything moves. A human approves anything risky.
 
-## The question
+Everything below the orchestrator is our own estimator stack, built on OpenCV 5 primitives:
+- stereo-inertial VIO;
+- windowed bundle adjustment;
+- pose graphs with a robust back end and an optimality certificate;
+- spectral collaboration under a byte budget;
+- TSDF/ESDF mapping, next-best-view, CBBA allocation, D* Lite egress.
 
-How should multiple autonomous visual agents allocate sensing, motion, and communication while maintaining a consistent world model under a shared mission budget?
+GTSAM and Ceres appear only as test oracles, never at runtime.
 
-Ariadne evaluates three principles:
+## Headline results (measured; every number links to its run)
 
-1. Allocate sensing and motion to uncertainty that matters to the shared model, rather than simply maximizing local coverage.
-2. Spend communication on relationships that improve global estimation, rather than transmitting redundant observations.
-3. Treat false inter-agent correspondences as an expected operating condition and contain them before they corrupt the global map.
+| subsystem | result | comparator |
+|---|---|---|
+| Inter-agent matching | ALIKED + LightGlue (through `cv::dnn`) loop verification: pose AUC@10° **0.607 vs ORB 0.284**, better on **11/11** EuRoC flights | matched baseline ([D63](docs/decisions.md)) |
+| Stereo-inertial SLAM | Full system **at or better than ORB-SLAM3 on 7 of 11** EuRoC flights | published (ORB-SLAM3 T-RO 2021) · [runs](evaluation/runs/vio/euroc_full_aws/) |
+| Place recognition | EigenPlaces R@1 **0.626** vs mean-bit 0.444 / random 0.167 (EuRoC, 297 queries); across agents in sim R@1 **0.75** | matched baseline · [runs](evaluation/runs/retrieval/) |
+| Aliasing-proof merging | Known-entry gate: merged-map error **3.78 m → 1.5 cm**, **0 of 560** true loops rejected (pre-registered, 3 seeds) | matched (gate off vs on) · [runs](evaluation/runs/collaboration/known_entry_gate/) |
+| ... on recorded live runs | Gate off: 32 of 32 geometry-verified loops were false and one robot ended **15.3 m** off. Gate on, same scene and seed: **8/8 refused**, every robot within **7.5 cm**. 250 s mission: **291** inter-robot edges kept, all robots merged, ≤ **0.22 m** | [gate off](evaluation/runs/collaboration/live_gate_off_20261024_c51ab2/) · [gate on](evaluation/runs/collaboration/live_gate_on_20261024_debba5/) · [250 s](evaluation/runs/live-agentic/demorec_250s_20261024_99ee9d/) |
+| Robust back end | **Certified globally optimal** (SE-Sync's cost) on **7** public benchmark graphs; PCM→GNC survives up to **90 %** outliers | published (SE-Sync Table 1) · [runs](evaluation/runs/robust-backend/) |
+| Pose-graph solver | Matches GTSAM on **100/100** synthetic graphs | oracle ([D52](docs/decisions.md)) |
+| Task allocation | CBBA reaches **0.994** of the exact optimum (worst 0.983; the theoretical guarantee is ≥ 0.5) | exact oracle · [runs](evaluation/runs/planning/allocation_replay/) |
+| Egress | **12/12** responder-width routes valid against ground truth; incremental D* Lite equals a fresh search on 180 obstacle-flip rounds | ground truth · [runs](evaluation/runs/egress/) |
+| Agentic loop | Final integrated run: **80/80** Bedrock decisions validated, never chose an approval-gated option (**0/80**), and the mover refused 3 unsafe goals. Matched Bedrock-vs-classical pairs replay byte-identically | [evidence](submission/evidence/agentic-vision.md) |
+| Reconstruction | Gaussian splat trained on AWS g4dn: **2.59 M** Gaussians from 3 agents. On the generated maze, held-out PSNR **24.36 dB** | [runs](evaluation/runs/reconstruction/) |
+| Graviton4 | Native arm64 build passes **708/708** C++ tests; replay digests are identical to x86 | [evidence](submission/evidence/cool.md) |
+| Cost | All **94** AWS runs (spot) for about **$4.8** of compute; a full collaboration sweep costs about $0.09 | [run index](submission/runs/RUNS.md) |
 
-## The thread
+What does not hold up, and why, is listed in [docs/results/index.md](docs/results/index.md) ("do not claim") and in
+[docs/failure-cases.md](docs/failure-cases.md).
 
-A map is useful only when it supports a decision.
+## OpenCV 5 in the working path
 
-Ariadne therefore treats responder egress as a first-class output. The reconstructed environment becomes a spatial cost field incorporating traversability, clearance, reconstruction uncertainty, and structural risk. Routes are continuously recomputed as the world model changes.
+| stage | OpenCV 5 | in Ariadne |
+|---|---|---|
+| Rectification, pyramids | `cv::stereoRectify`, `initUndistortRectifyMap`, `remap`, `buildOpticalFlowPyramid` | every frame |
+| Tracking | `calcOpticalFlowPyrLK` (forward–backward), `FAST` + `ORB`, `findFundamentalMat` (USAC) | every frame |
+| Stereo depth | `StereoSGBM`, `ximgproc` WLS; left–right LK on the rectified row | keyframes |
+| Pose | `solvePnPRansac`, `solvePnPRefineLM`, `findEssentialMat`, `recoverPose` | per frame and per loop |
+| Optimisation | `cv::detail::LevMarqBase` under our Schur-complement BA and pose-graph solvers | windowed BA, pose graphs |
+| Learned features | `cv::dnn`: EigenPlaces (place recognition), XFeat (graph we assemble), `cv::ALIKED` + `cv::LightGlueMatcher` | keyframes, inter-agent verification |
+| Restoration | flat field, VST denoising, exposure normalisation, CLAHE | radiometric front end |
+| Mapping oracle | `cv::Volume` (TSDF/HashTSDF) | tests of our voxel-hash TSDF |
+| Rendering | decision maps and keyframes rendered for the orchestrator's `observe_image` tool | agentic loop |
 
-A newly observed obstruction can invalidate a route. Better reconstruction can increase route confidence. Poorly observed space remains expensive to traverse.
+The pinned build is OpenCV 5.0.0 + contrib, built from source at fixed commits. Its build hash is recorded in every run
+manifest. Details: [report §OpenCV 5](submission/report/ariadne_technical_report.pdf), [docs/build.md](docs/build.md).
 
-Routes are evaluated at responder clearance, not agent clearance. A void a robot can enter is not automatically a viable human route.
+## AWS
 
-## Approach
+| service | role |
+|---|---|
+| EC2 spot, c7i.4xlarge | every replay, gate and collaboration sweep, plus the live lockstep runs; one instance per run, torn down after |
+| EC2 spot, c8g.4xlarge (Graviton4) | native arm64 build, tests and timings; the COOL protocol (`./ariadne cloud cool`) |
+| EC2 spot, g4dn.xlarge (T4) | Gazebo EGL rendering, Gaussian-splat training and rendering, the final integrated stack |
+| Amazon Bedrock | Nova 2 Lite task chooser (EU inference profile), DeepSeek fallback in-region; tools exposed over MCP |
+| S3 · ECR · IAM · SSM | run inputs and outputs (`runs/<id>/`), image registry, least-privilege runner role, no SSH |
+| Terraform · Budgets | the whole account as code (`infra/aws/terraform`), with a credits budget and alerts |
+| CloudFront | the hosted operator console |
 
-Ariadne uses stereo RGB cameras, an IMU, and a co-mounted controllable light. No LiDAR or depth sensor is required.
-
-**Perception.** OpenCV 5 handles image restoration, feature extraction, matching, optical flow, stereo, calibration, and geometric estimation. Frame-rate tracking uses sparse optical flow, while learned features are evaluated at keyframes and for candidate inter-agent registrations.
-
-**Local SLAM.** Each agent maintains an independent keyframe map with landmark management, triangulation, windowed bundle adjustment, and a local pose graph. Bundle adjustment uses analytic Jacobians, manifold SE(3) updates, and Schur elimination. The estimator is implemented around OpenCV 5 primitives with a single global perturbation convention.
-
-**Collaboration.** Agents exchange compact global descriptors first. Expensive local descriptors and geometric evidence are requested only for selected candidates. Candidate selection is budgeted according to the contribution of each potential relationship to the connectivity of the joint pose graph. Communication is measured at the serialization boundary, including framing and compression overhead.
-
-**Consensus.** Candidate relationships pass through retrieval, two-view geometry, degeneracy checks, pairwise consistency filtering, and robust pose-graph optimization. Graduated non-convexity allows the global optimizer to reject severe correspondence contamination without requiring a clean initial solution.
-
-**Reconstruction.** Validated keyframes anchor incremental 3D Gaussian submaps. Camera geometry and inter-agent registration remain authoritative; the photorealistic representation is downstream of the geometric solution.
-
-**Orchestration.** Deterministic estimators produce pose, depth, registration, uncertainty, and coverage information. The coordination layer uses these outputs to allocate observations, negotiate resources, request peer interactions, and escalate high-risk actions to human command. Every decision is traceable to the visual evidence that triggered it.
-
-## OpenCV 5 in the stack
-
-OpenCV 5 is a core part of the system rather than a preprocessing dependency.
-
-| Stage        | OpenCV 5                     | Role                                                    |
-| ------------ | ---------------------------- | ------------------------------------------------------- |
-| Restoration  | `photo`, `imgproc`, `xphoto` | denoising, illumination compensation, contrast recovery |
-| Tracking     | `video`                      | pyramidal optical flow                                  |
-| Features     | `features`                   | ALIKED, DISK; XFeat implemented on OpenCV 5 primitives  |
-| Matching     | `features`                   | LightGlue, ANNIndex                                     |
-| Geometry     | `geometry`                   | essential matrix, PnP, triangulation                    |
-| Calibration  | `calib`                      | camera and multi-camera calibration                     |
-| Stereo       | `stereo`, `ximgproc`         | disparity and filtering                                 |
-| Point clouds | `ptcloud`                    | TSDF, HashTSDF, point-cloud processing                  |
-| Evaluation   | `quality`                    | image-quality metrics                                   |
-
-The systems above these primitives are implemented in Ariadne: keyframes, local maps, bundle adjustment, pose graphs, robust consensus, inter-agent communication, task allocation, byte accounting, reconstruction management, and egress planning.
-
-## Deterministic evaluation
-
-Simulation is separated from perception and estimation so every baseline consumes identical observations.
-
-Gazebo generates a scene, trajectory, and seed once and records the result as MCAP. Every subsequent run consumes that recording. Image degradation is applied at replay time through a seeded deterministic operator keyed by seed, frame, and processing site.
-
-This allows restoration, SLAM, communication, and planning changes to be compared on exactly the same observations rather than on independently rendered simulations.
-
-Closed-loop active perception is evaluated over multiple seeds rather than a single run.
-
-## Layout
-
-```text
-cpp/core            SE(3), uncertainty, serialization, RNG, timing
-cpp/perception      restoration, features, tracking, stereo, exposure
-cpp/slam            IMU, landmarks, local map, BA, pose graph, loop closure
-cpp/collaboration   retrieval, communication, candidate selection, PCM, GNC
-cpp/reconstruction  point clouds, Gaussian submaps, fusion, rendering
-cpp/planning        frontier detection, NBV, risk, assignment, routes
-python/              reconstruction services, orchestration, world generation
-ros2/                 agent, simulator, and operator nodes
-evaluation/           datasets, scenarios, metrics, baselines, ablations
-infra/                containers, deployment, AWS infrastructure
-tests/                unit, numerical, integration, protocol, regression, E2E
-```
-
-Dependency direction is enforced. Algorithm libraries do not depend on ROS 2, simulator types, or AWS services. Replay and evaluation operate entirely from recorded data.
-
-## Build
-
-Requirements:
-
-* C++17
-* CMake 3.22+
-* Ninja
-* OpenCV 5 and contrib
-* Eigen
-* ROS 2 Jazzy
-* Gazebo Harmonic
+## Quick start
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-ctest --test-dir build
+./ariadne build                        # pinned images: OpenCV 5 base, core (+ full C++ suite), simulator, orchestrator
+./ariadne test                         # C++ suite + reconstruction, world-generation and determinism tests
+./ariadne gate                         # end-to-end replay gate, one verdict
+./ariadne run maze_short 6 200         # live closed loop in a seeded world (200 s)
+./ariadne replay <run> <scene>         # replay twice, compare digests
+./ariadne cloud e2e                    # the final integrated stack on AWS
 ```
 
-OpenCV is built from a pinned source revision so the exact 5.x module set and configuration are reproducible.
+[docs/build.md](docs/build.md) has every command, the pinned dependencies and the repository layout.
 
-## Validation
+## Where things are
 
-Validation starts with public datasets containing known trajectories and geometry, then moves to controlled disaster environments in simulation and real co-moving-light sequences.
-
-The evaluation compares independent exploration, coverage-driven coordination, and Ariadne's uncertainty and connectivity-aware policy using:
-
-* trajectory and registration error
-* reconstruction quality and completeness
-* shared-map consistency
-* communication volume by category
-* mission time and energy proxies
-* time to first valid route
-* route validity against ground truth
-* robustness under communication loss and visual corruption
-
-Ablations remove restoration, active allocation, communication prioritization, and robust consensus independently so each component is evaluated on measured contribution rather than assumed value.
+| | |
+|---|---|
+| [`submission/`](submission/README.md) | every competition deliverable, mapped to the requirements |
+| [`docs/`](docs/README.md) | architecture, algorithms, design per subsystem, decision log (D1–D235), results, report sources |
+| [`evaluation/runs/`](evaluation/README.md) | committed evidence for every claim, by subsystem |
+| `cpp/` · `python/` · `ros2/` · `simulator/` · `configs/` · `infra/` · `tests/` | the system |
 
 ## Responsible use
 
-Ariadne is designed for search and rescue in environments unsafe for human entry.
+Ariadne is decision support for incident command in spaces unsafe for people. It maps geometry, traversability,
+uncertainty and routes, not people's identities. The language model chooses only among tasks the deterministic planner
+proposes. Every choice is validated in C++, risky actions require human approval, and the responder route is computed
+from observed 3D clearance independent of the model. Ariadne does not replace structural assessment or human authority.
 
-The system represents geometry, traversability, uncertainty, and routes rather than persistent identity. High-consequence actions remain subject to explicit human approval, and uncertainty is exposed throughout the planning stack.
+## Team
 
-Ariadne is decision support for incident command. It does not replace professional structural assessment or human authority.
-
-## Project
-
-Built for the OpenCV AI Competition 2026.
+Suvojit Das: design, engineering, evaluation. Built for the OpenCV AI Competition 2026 (powered by AWS).

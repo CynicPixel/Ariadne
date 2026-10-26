@@ -1,6 +1,6 @@
-# Design — Phase 3.4: spectral prioritisation of feature requests (I6, arch §16)
+# Spectral prioritisation of feature requests under a byte budget
 
-**Owner:** M. **Decision:** D170. **Status:** design; selector library and unit tests first, broker wiring second, the
+**Decision:** D170. **Status:** design; selector library and unit tests first, broker wiring second, the
 sim integration of 3.2 over 3.3's CommsNode right after (the Phase 3 gate rows wait on it).
 
 ## 0. Preflight (design-preflight rule)
@@ -37,7 +37,7 @@ sim integration of 3.2 over 3.3's CommsNode right after (the Phase 3 gate rows w
 - `cv::solveLP` (simplex: maximise cᵀx subject to Ax ≤ b, x ≥ 0) **is** used, for the bound's LP (§4).
 - The eigen solve uses Eigen (already in core): `SimplicialLDLT` on the grounded Laplacian.
 
-**Advisor** (2026-10-23), five corrections, all taken:
+**Design review** (2026-10-23), five corrections, all taken:
 1. MAC's bound needs a relaxation of the **shared-cost** feasible set (§4).
 2. No Kron reduction of the objective; superseded by the full-graph solve of §3.
 3. Today's behaviour stays the default; `n_features` is v2-only; v1 bytes stay identical (§6).
@@ -66,7 +66,7 @@ pending: they are re-scored next round as the graph changes, and dropped after `
     consumes. (Corrected 2026-10-23; an earlier draft listed loops.)
 - **In-flight candidates** (selected, not yet verified) are not edges, as in Swarm-SLAM.
   - The sim runs measure how often a selection lands next to an in-flight candidate. In-flight-as-edges becomes an
-    ablation only if that is material (advisor).
+    ablation only if that is material (design review).
 - **Selection period:** 5 s, Swarm-SLAM's default. It is a manifest field.
 - **Candidate edges:** κ_e = the retrieval similarity s_e ∈ (0, 1].
 - **Objective:** λ₂(L_fixed + Σ_{e∈S} κ_e L_e), the full graph (no reduction).

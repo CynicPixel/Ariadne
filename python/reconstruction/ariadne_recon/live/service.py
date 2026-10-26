@@ -1,10 +1,10 @@
 """The reconstruction service loop (reconstruction.md §1/§3; D190, D194, D195): keyframes in -> submap chunks + table out.
 
   python -m ariadne_recon.live.service --spool DIR [DIR ...] --out SPLAT_DIR [--scene DIR] [--placement briefing|merges]
-  python -m ariadne_recon.live.service --listen SOCK --out SPLAT_DIR [--scene DIR]      # live: B's tee (link.py) [--backend gpu|cpu_init]
+  python -m ariadne_recon.live.service --listen SOCK --out SPLAT_DIR [--scene DIR]      # live: the runtime tee (link.py) [--backend gpu|cpu_init]
          [--training-image albedo_proxy|rgb] [--iters N | --budget-ms MS] [--export-period-s 2]
 
-Input: a spool (schema 2 for the albedo proxy; replay from files alone), or live: `--listen` takes B's `#kf` / `#t_w_o`
+Input: a spool (schema 2 for the albedo proxy; replay from files alone), or live: `--listen` takes the runtime's `#kf` / `#t_w_o`
 tee (link.py, D231) into the same `ingest()` / `set_placement()`. Output, in SPLAT_DIR (what operator_console.splat serves):
   table.json, chunks/<sid>_<n>.splat, service_log.jsonl (one line per keyframe), manifest.json
 
@@ -16,7 +16,7 @@ Training image (D195, D199): `rgb` on lit worlds (the live demo's default, D199)
 lamp is the light (D195), and then a keyframe without the proxy is refused. Nothing falls back silently.
 
 Placement (placement.py, D230): every keyframe enters in its own agent's odometry frame O_k; the table places a
-submap at T_W_O[k] @ T_O_anchor. Live, T_W_O[k] comes from B's tee (the briefing constant until collab moves it,
+submap at T_W_O[k] @ T_O_anchor. Live, T_W_O[k] comes from the runtime tee (the briefing constant until collab moves it,
 then a `t_w_o` record: set_placement, one matrix, no retraining). A replay takes it from the briefing (--scene,
 --placement briefing: every agent's own entrance, the demo's known-starts rule) or from the spool's merges
 (--placement merges: agent 0's entrance, agent k via T_O0_Ok). An agent without a placement is not drawn.
@@ -197,7 +197,7 @@ def serve(sock_path: str | None, svc: Service, training_image: str, stats: dict,
     guessed: the runtime never waits on this service, so dropping is the only back-pressure there is."""
     import socket
     if training_image != "rgb":
-        raise SystemExit("live ingest trains on RGB only (D199): the albedo proxy needs B's lamp sink first (D195)")
+        raise SystemExit("live ingest trains on RGB only (D199): the albedo proxy needs the lamp sink first (D195)")
     srv = None
     if replay_path:
         class FileConnection:
@@ -263,7 +263,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--spool", nargs="+", help="one composed spool, or one spool per agent")
-    src.add_argument("--listen", help="live: unix socket path for B's tee (ARIADNE_RECON_SOCK)")
+    src.add_argument("--listen", help="live: unix socket path for the runtime's tee (ARIADNE_RECON_SOCK)")
     src.add_argument("--recorded-link", help="train after a run from its recorded reconstruction input stream")
     ap.add_argument("--record-link", help="record received reconstruction inputs for post-run training")
     ap.add_argument("--out", required=True)

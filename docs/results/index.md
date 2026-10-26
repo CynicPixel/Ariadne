@@ -1,4 +1,4 @@
-<!-- Compiled 2026-10-24 by M from main (3c3befb+); every number quoted from the cited D-entry or run file. Source for the video claims and the report results section. -->
+<!-- Compiled 2026-10-24 from main (3c3befb+); every number quoted from the cited D-entry or run file. Source for the video claims and the report results section. -->
 # Ariadne: best stand-behind result per subsystem (for demo video + technical report)
 
 Compiled 2026-10-24 from `main` (post-consolidation 59fe978 + video commits). Read-only pass over
@@ -130,7 +130,7 @@ table as cited in the repo (not re-run by us); `design` = built and unit-tested 
 | PCM → GNC survives perceptual-aliasing groups up to the analytic limit | breakpoint **90 %** (groups of 10), **70 %** (two growing groups) | GNC alone: no breakpoint (worst 7/10, 5/10 at 70 %) but **~10× slower** (165–313 ms vs 15–118 ms) | D75; `evaluation/runs/robust-backend/outlier_ramp/README.md` | Synthetic, 60 loops/graph, 10 seeds/rate. PCM breaks exactly where the largest false group outnumbers the true loops | measured |
 | GNC rejects planted outliers | 10/10 outliers rejected, 10/10 certified after GNC | before GNC: 6/10 certified | D74 | Synthetic 60-node | measured |
 | Robust joint multi-agent solve | 10/10 true inter-agent loops kept, 0 false, on 5 seeds | true-loops-only solve (equal ATE) | D76; `tests/unit/test_joint_robust.cpp` | Unit test | measured |
-| Loop noise model held out | mean good-loop NEES **5.24**; tail 4.4 % above χ²₆(0.99) | criterion ≤ 3 % (**missed**, accepted by the maintainer) | `evaluation/runs/robust-backend/loop_closure/README.md` | V1_02 held out | measured |
+| Loop noise model held out | mean good-loop NEES **5.24**; tail 4.4 % above χ²₆(0.99) | criterion ≤ 3 % (**missed**, accepted) | `evaluation/runs/robust-backend/loop_closure/README.md` | V1_02 held out | measured |
 
 ## 6. Comms protocol
 

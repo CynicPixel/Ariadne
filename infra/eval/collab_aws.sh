@@ -12,7 +12,7 @@
 #      scene (D171 §4-§5)
 #   C  the fault campaign on the spectral arm at the 25 % level: ideal, collapsed_partition_v1, datagram faults; one
 #      seed (C_SEEDS) per variant and scene
-# Trimmed to the Phase 3 gate's rows (maintainer, 2026-10-23: no runs beyond what the gate needs): two budget levels
+# Trimmed to the Phase 3 gate's rows (2026-10-23: no runs beyond what the gate needs): two budget levels
 # instead of D171's four, the campaign on one seed. STORES_FROM=<S3 prefix of an earlier run's results> fetches its
 # pass-A stores (checked against stores.SHA256SUMS) instead of rerunning stage A.
 # Any failure still collects what exists (the B1 runs, the pass-A stores) before the instance goes away.

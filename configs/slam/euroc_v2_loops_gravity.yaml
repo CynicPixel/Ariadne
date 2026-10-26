@@ -3,7 +3,7 @@
 # gate -> PCM -> GNC on a mirror of the VO graph). Read-only towards the VO: every euroc_v2 output is unchanged; the
 # loop-closed keyframe trajectory is scored next to it. Identical to euroc_v2.yaml apart from name and loop_closure.
 # D59 (inertial.md §4): imu.mode full -- Forster preintegration in the window BA. Default since 2026-10-19
-# (maintainer): EuRoC average ATE 0.121 vs 0.223 m for attitude_only (euroc_v2_attitude, the D58 baseline/ablation).
+# (decision): EuRoC average ATE 0.121 vs 0.223 m for attitude_only (euroc_v2_attitude, the D58 baseline/ablation).
 # 2.3 windowed BA (local-slam.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: euroc_v2_loops_gravity

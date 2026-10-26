@@ -1,6 +1,6 @@
 """Beat 12: why it matters, and the team. Back to the maze: the thread lit from the casualty to the nearest exit at
 person width (computed on maze_demo_0's ground-truth lattice, as in beat 9: illustrative), three robots at their
-doors; then the team card (wording to confirm with M before the final render).
+doors; then the team card (wording to confirm before the final render).
 
   python/video/render.sh scenes/s12_close.py Close
 """
@@ -19,7 +19,7 @@ from ariadne_video.mobjects import agent_marker, maze_frame, maze_walls, polylin
 from ariadne_video.style import DATA, DIM, FONT, TARGET, TEXT, THREAD, CaptionedScene  # noqa: E402
 from s09_thread import descend, dijkstra  # noqa: E402
 
-TEAM = [("Suvojit Das", "design, engineering, evaluation")]  # [ASSUMPTION] wording pending M / the maintainer
+TEAM = [("Suvojit Das", "design, engineering, evaluation")]  # [ASSUMPTION] wording pending review
 
 
 class Close(CaptionedScene):

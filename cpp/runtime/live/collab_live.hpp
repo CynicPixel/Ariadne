@@ -195,7 +195,7 @@ public:
         return h->second;
     }
 
-    // D174 call-site compatibility until the runtime reads one Snapshot per barrier (B's invariant 2 needs that).
+    // D174 call-site compatibility until the runtime reads one Snapshot per barrier (the runtime's invariant 2 needs that).
     [[deprecated("D179: read Snapshot(T) once per barrier")]] std::map<ac::AgentId, core::SE3> T_O0_O() {
         return Snapshot(-1)->T_O0_O;
     }

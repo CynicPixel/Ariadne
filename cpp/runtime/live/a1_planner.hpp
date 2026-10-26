@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// A1Planner: A1's Phase 4 planner (planning::Phase4Planner, feat/ph4-mission) behind the runtime's MissionPlanner seam
+// A1Planner: the Phase 4 planner (planning::Phase4Planner) behind the runtime's MissionPlanner seam
 // (agentic.md §0b, option B). A field copy in both directions, nothing decided here:
 //   Integrate  KeyframeInput -> planning::DepthFrame (the spool-scale depth and sigma, the camera pose in W)
 //   Plan       PlanContext -> Phase4AgentInput[2] (active, linked = true, position, flown_m, refused goals) and the
@@ -25,7 +25,7 @@
 
 namespace ariadne::runtime::live {
 
-/// planner-config (configs/mission/mission_v2.yaml) -> Phase4Params, A1's key mapping (2026-10-23, def61de).
+/// planner-config (configs/mission/mission_v2.yaml) -> Phase4Params, the planner's key mapping (2026-10-23, def61de).
 /// Live-config values the seam already owns (refused radius, command length, clearances) come from the runtime.
 inline planning::Phase4Params LoadPhase4Params(const std::string& path, const mis::MissionConfig& mc, double refused_radius_m,
                                                double max_command_m, double escape_m, uint64_t run_seed,
@@ -41,7 +41,7 @@ inline planning::Phase4Params LoadPhase4Params(const std::string& path, const mi
     else if (pol == "tare") p.nbv.policy = P::kTare;
     else throw std::invalid_argument("planner config: policy " + pol);
     *policy_name = pol;
-    // the run's seed mixed in (A1: "mix in the run's seed"): splitmix64 of the pair, so seeds 0..2 differ per policy seed
+    // the run's seed mixed in ("mix in the run's seed"): splitmix64 of the pair, so seeds 0..2 differ per policy seed
     uint64_t z = n["planner"]["random_seed"].as<uint64_t>() * 0x9E3779B97F4A7C15ULL + run_seed;
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
     z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;

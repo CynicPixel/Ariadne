@@ -1,6 +1,6 @@
-# L1 — the live closed-loop runtime (design; decisions D150–D155)
+# Live closed-loop runtime (D150–D155)
 
-Status: implemented 2026-10-23 (session B); acceptance on the local llvmpipe host, evidence `evaluation/runs/live-agentic/live_loop/`;
+Status: implemented 2026-10-23; acceptance on the local llvmpipe host, evidence `evaluation/runs/live-agentic/live_loop/`;
 the AWS GPU path is built, not run. Amendments from the runs: D152a (estimators take turns), D153b (standoff goals,
 the previous outcome is an input), D154 fix (console directory).
 
@@ -120,7 +120,7 @@ EGL path of `ariadne/sim` has never run, so it is a `[SMOKE-TEST]` gate first, r
 CPU is the budget, not GPU: the GT depth cameras are off in the live world (the estimator never sees them), and the
 world's real-time factor is set from the smoke's measurement.
 
-**D165 — lockstep (2026-10-23; A1's 4.3 gate, maintainer's choice via A1).** Unpaused, gz keeps running while
+**D165 — lockstep (2026-10-23; chosen for the 4.3 gate).** Unpaused, gz keeps running while
 the runtime plans and chooses, so a command lands ~1.7 s of sim time after its barrier (measured `applied_ns −
 stamp`) and that lag depends on wall latency: two live runs of one seed differ. `lockstep: true` in the live config:
 - **gz does the pausing, sim-side.** `[SMOKE-TEST §4w: the bridge forwards run_to_sim_time; /clock stops at T exactly]` The runtime asks for `WorldControl.run_to_sim_time = T` (gz-msgs10 field 7; gz-sim8
@@ -169,8 +169,8 @@ stamp`) and that lag depends on wall latency: two live runs of one seed differ. 
 
 # Multi-agent pipeline
 
-**Owner:** M (overall design, comms classes, live collab fleet). **A1:** per-agent planning, coverage summaries, allocation
-over messages. **B:** the live runtime wiring and the console.
+**Scope:** overall design, comms classes, live collab fleet; per-agent planning, coverage summaries, allocation
+over messages; the live runtime wiring and the console.
 **Status:** design. No new algorithms. This wires what exists so the thesis holds in the live system.
 
 ### 0. The gap this closes
@@ -215,7 +215,7 @@ own sensors ──> VO + CollabFrontend (worker k) ──> own keyframes
 Nothing reaches planner_k except through CommsNode, the same lossy, budgeted, partitionable link the SLAM
 collaboration uses. Every byte is counted at the serializer and tagged by class (invariant 6).
 
-**Peer alignment.** Entry poses are known (maintainer, 2026-10-23: drones inserted through windows), so every agent
+**Peer alignment.** Entry poses are known (2026-10-23: drones inserted through windows), so every agent
 holds an entry-pose T_G_W(j) for each peer from t = 0, and peer summaries are placeable before any SLAM collaboration.
 Once live-collaboration.md (D174) runs, adopted broker estimates refine those values. The POSE_GRAPH estimate already carries
 every member's frame (`agent_frames`); CollabNode is changed to keep the peers' values as well as its own, with no
@@ -227,7 +227,7 @@ therefore show what the operator has RECEIVED, and agents out of radio range sto
 behaviour. A separate view, labelled "ground truth / evaluation", shows the GT coverage for comparison and is never
 presented as the system's map.
 
-### 2. Messages (M adds the tables, codec, ledger classes and CommsNode routing)
+### 2. Messages (the tables, codec, ledger classes and CommsNode routing)
 
 | Class | Content | Cadence | Priority (§15.3) |
 |---|---|---|---|
@@ -240,7 +240,7 @@ presented as the system's map.
   ids differ between agents. The broker treats two bids whose goals lie within `r_same` as the same task when it
   enforces exactly-once. `r_same` = the planner's `min_goal_m` (1.0 m in live_v1): goals closer than that are already
   "the same place" to the planner. This approximates CBBA's shared task list, and the deviation is stated.
-- **Byte budget (revised with A1's measurement, 2026-10-23).** Measured on the D168 c7i run (ci_tiny_0 × ariadne,
+- **Byte budget (revised with the planner-side measurement, 2026-10-23).** Measured on the D168 c7i run (ci_tiny_0 × ariadne,
   200 s, changed blocks only, 2-bit packed plus a 4 B header per block, zlib -9 standing in for zstd):
   - per 5 s patch: median 238 B, p90 463 B, max 508 B;
   - per agent over the run: about 53 B/s; bids about 64 B/s.
@@ -252,7 +252,7 @@ presented as the system's map.
   - they are counted and reported per class like everything else;
   - under that bucket SUBMAP_PATCH is cancellable, oldest first; bids and consensus are not.
 
-  Caveats: the ρ_responder bit and maze-sized scenes are not yet measured (A1 expects < 2× and 2–3×). The budget sweep
+  Caveats: the ρ_responder bit and maze-sized scenes are not yet measured (expected < 2× and 2–3×). The budget sweep
   (§4) varies only the SLAM share.
 
 ### 3. Allocation over messages: broker SGA first, full CBBA as the ablation
@@ -308,15 +308,15 @@ Otherwise the result is reported as measured (invariant 7).
   received is a function of the seed. The live-collaboration.md §3 watermark rules apply to keyframe and feature data.
 - **Acceptance.** Three replays equal the live run; the `collab: false` digest is unchanged (D168).
 
-### 6. Ownership and order (final submission, Oct 26)
+### 6. Work items and order (final submission, Oct 26)
 
-| # | Who | What | Depends on |
+| # | Area | What | Depends on |
 |---|---|---|---|
-| 1 | M | wire tables and codec for classes 7–10, CommsNode routing to per-agent mailboxes, delivery events, ledger tags; protocol tests | — |
-| 2 | M | live-collaboration.md fleet (D174): CollabFrontend in the worker, CollabFleet in the parent, T_G_W per agent | — |
-| 3 | A1 | per-agent `Phase4Planner` instances, `ExportSummary` / `IntegrateSummary` on the §20.6 0.5 m coarse layer (planner_k plans on own fine map + peers' coarse coverage), the task key, `TASK_BID` building, the broker SGA over received bids, the uncoordinated fallback; the identity check that the oracle row is unchanged | 1 (message structs) |
-| 4 | B | ariadne_live: one planner per agent fed only through its mailbox; heartbeat poses as peers; the operator node and its received map; the console shows bytes by class, assignments and "uncoordinated" | 1, 3 (NOT 2: entry poses place the summaries) |
-| 5 | M | §4 required rows in lockstep on AWS (CPU), then evidence and plots | 1, 3, 4 |
+| 1 | comms | wire tables and codec for classes 7–10, CommsNode routing to per-agent mailboxes, delivery events, ledger tags; protocol tests | — |
+| 2 | comms | live-collaboration.md fleet (D174): CollabFrontend in the worker, CollabFleet in the parent, T_G_W per agent | — |
+| 3 | planning | per-agent `Phase4Planner` instances, `ExportSummary` / `IntegrateSummary` on the §20.6 0.5 m coarse layer (planner_k plans on own fine map + peers' coarse coverage), the task key, `TASK_BID` building, the broker SGA over received bids, the uncoordinated fallback; the identity check that the oracle row is unchanged | 1 (message structs) |
+| 4 | runtime | ariadne_live: one planner per agent fed only through its mailbox; heartbeat poses as peers; the operator node and its received map; the console shows bytes by class, assignments and "uncoordinated" | 1, 3 (NOT 2: entry poses place the summaries) |
+| 5 | evaluation | §4 required rows in lockstep on AWS (CPU), then evidence and plots | 1, 3, 4 |
 
 Item 2 (live-collaboration.md) runs in parallel. It adds drift correction and the SLAM-collaboration panel, and it is not on
 the thesis rows' critical path.
@@ -345,7 +345,7 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 - **benchmark config:** `configs/benchmark/multiagent_v1.yaml`.
 - **manifest:** row, budget, scenario, per-class bytes, task-key radius.
 
-### 8. Planner-side decisions (A1 and M, 2026-10-23)
+### 8. Planner-side decisions (2026-10-23)
 
 1. **Received layer.** planner_k's TSDF is built from its OWN keyframes only. Each peer's coverage summary lands in a
    separate per-peer received layer: tri-state, on the §20.6 0.5 m grid. That layer:
@@ -376,21 +376,21 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 - `BrokerAssign(bids, members, r_same)` → consensus
 - `ApplyConsensus(consensus, options, timeout)` → a pick, or "uncoordinated"
 
-**Oracle row:** the current Phase4Planner code path, untouched; proven identical by A1's replay/eval check.
+**Oracle row:** the current Phase4Planner code path, untouched; proven identical by the replay/eval check.
 
-**Deviation from §20.6, decided 2026-10-23 (A1 and M).** Coverage travels as `SUBMAP_PATCH` (8) at the PLANNER grid
+**Deviation from §20.6, decided 2026-10-23.** Coverage travels as `SUBMAP_PATCH` (8) at the PLANNER grid
 (0.05 m, 32 × 32 blocks, 2-bit codes: unknown / occupied / free / free-and-ρ_responder-passable), not as §20.6's
 0.5 m coarse summary. Reason: egress at ρ_responder (0.40 m) on 0.5 m cells would erase doorways, breaking invariant 4
 at the operator. Sizing:
 - **Wire:** 256 B packed per block plus ≤ 64 B FlatBuffers overhead, zstd-compressed (protocol test
   `CoordinationWire.*`).
-- **Estimate:** 0.5–3 KB per 5 s patch [ESTIMATE; A1 measures on a real run].
+- **Estimate:** 0.5–3 KB per 5 s patch [ESTIMATE; to be measured on a real run].
 
 `SUBMAP_SUMMARY` (7) stays reserved.
 
-### 9. Broker modes: R1 overlap-aware and R2 discounting (maintainer-approved, 2026-10-23)
+### 9. Broker modes: R1 overlap-aware and R2 discounting (approved 2026-10-23)
 
-Backed by a survey; the report is in the session scratchpad and is to be copied into evaluation evidence with the
+Backed by a survey; the report is in a scratch directory and is to be copied into evaluation evidence with the
 rows. Its findings:
 - Per-view IG stays unknown-voxel counting. That equals MI for a noise-free sensor (Corah & Michael ICRA 2021), and
   per-ray MI models (FSMI, CSQMI) cost more for less.
@@ -404,10 +404,10 @@ rows. Its findings:
     peers' goals in the newest consensus it holds, with P(d) decayed by e^(−age/τ), τ = 30 s [ASSUMPTION].
 - **kOverlap (R1, Lauri et al. RA-L 2020, lifted to blocks):**
   - Each bid option carries `footprint`: ≤ 32 `{bx, by, w}`, where w is the count of the option's full-IG unknown
-    voxels in that block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; A1 20de9e8). It is collected inside the existing ray cast and only when the
+    voxels in that block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; 20de9e8). It is collected inside the existing ray cast and only when the
     per-agent planner asks, so the oracle row is untouched.
   - The broker replaces only the coverage term with its marginal, Δcov(o | S) = Σ_b max(0, w_ob − residual_b). Costs
-    are subtracted as in D114 (maintainer: cost enters as gain − λ·cost).
+    are subtracted as in D114 (decision: cost enters as gain − λ·cost).
   - Per round it logs Δf, the pure-gain f(S) and the data-dependent upper bound UB, reported as f/UB on the gain
     proxy only. The ½ partition-matroid bound applies to the pure-gain variant only, never to exploration time
     (invariant 7).
@@ -613,7 +613,7 @@ Deployment settings:
   uses the existing credential path. Missing credentials fail visibly.
 
 GitHub points to the repository remote. Paper uses `docs/report/main.pdf` if present;
-that file currently belongs to the maintainer's uncommitted paper work. Video is
+that file currently belongs to uncommitted paper work. Video is
 hidden until configured. Publishing these artifacts and hardware qualification
 remain deployment gates, not claims made by a local browser test.
 

@@ -1,12 +1,12 @@
 # Phase 5 — Degraded visual environments (dark, lamp-lit, dust)
 
-DRAFT (A2, 2026-10-24). Sources are the decision entries (`docs/decisions.md`) and the evidence directories named inline. Tags: **measured**
+DRAFT (2026-10-24). Sources are the decision entries (`docs/decisions.md`) and the evidence directories named inline. Tags: **measured**
 = a run we can point to; **[DESIGN]** = built and unit-tested, not yet measured end to end; **[PROJECTION]** = a
 derived number. Nothing here is a projection presented as measured.
 
-**Status: built; exit gate NOT closed (D149).** On 2026-10-23 the maintainer ruled the dark, lamp-lit and dusty runs
+**Status: built; exit gate NOT closed (D149).** On 2026-10-23 a project decision ruled the dark, lamp-lit and dusty runs
 STRETCH goals, to be taken up after the live demo runs in real time (D199). Dark/DVE work has been paused in every
-session since (STATUS 2026-10-24). The bullets that need them are deferred by that ruling, not dropped.
+work stream since (STATUS 2026-10-24). The bullets that need them are deferred by that ruling, not dropped.
 
 ### What was built
 - **Radiometric pipeline at the frame boundary.**
@@ -20,7 +20,7 @@ session since (STATUS 2026-10-24). The bullets that need them are deferred by th
   - Runs at keyframes, with the applied state on every frame and known-gain LK (D132, D147).
   - Replay trace checks pass, 171/171 and 168/168.
   - The Failure E scenario recovers in 2.35 s (D147 Results).
-  - The live `light_config` sink is B's and is not wired.
+  - The live `light_config` sink belongs to the runtime and is not wired.
 - **Worlds.**
   - `ci_tiny_dark` (co-moving lamp) and its fixed-light twin, rendered on g4dn spot (D137).
   - `confined_v1` and a one-pass baseline-sweep rig (D138).
@@ -40,7 +40,7 @@ session since (STATUS 2026-10-24). The bullets that need them are deferred by th
   - Not measured: per-stage repeatability, match precision and loop-closure precision. These are a CPU row set
     still to be defined through preflight.
 - **Real-data validation (5.6) is negative** (D141, D143, D144; `evaluation/runs/perception/radiometric/hilti_5.6/`).
-  - OIVIO was offline, so the maintainer-approved substitute was Hilti 2023 `site2_robot_3`, with equidistant
+  - OIVIO was offline, so the approved substitute was Hilti 2023 `site2_robot_3`, with equidistant
     cameras through `cv::fisheye`.
   - All three rows score **0/100**: sim-tuned, EuRoC-tuned, and EuRoC + radiometric. GCP rms is 10–229 m and
     14–22 % of frames are lost.
@@ -63,4 +63,4 @@ session since (STATUS 2026-10-24). The bullets that need them are deferred by th
 ### Honest summary sentence
 The radiometric front end and lamp control are built, deterministic under replay and ablated on sim. On real data
 (Hilti) the estimator fails in dark-far-field turns, and that negative result stands. The dark/lamp/dust evaluation
-is deferred by the maintainer's real-time-first ruling.
+is deferred by the real-time-first ruling.

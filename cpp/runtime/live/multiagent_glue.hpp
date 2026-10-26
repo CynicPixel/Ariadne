@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // D175 item 4 glue: the planning library's plain structs (planning::multi, no comms type by design) to and from
-// the wire's value structs (core::*Value, serializer.hpp). M's wire tables mirror A1's structs field for field,
+// the wire's value structs (core::*Value, serializer.hpp). the wire tables mirror the planning structs field for field,
 // so every function here is a mechanical copy - nothing is decided, rounded or reordered. The runtime
 // (ariadne_live) is the only caller: planner_k's exports go out through CollabNode::SendPatch/SendBid/
 // SendConsensus, and what NodeHooks::coordination delivers comes back through the From* functions.

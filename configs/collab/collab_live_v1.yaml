@@ -33,7 +33,7 @@ gate:                           # D71 gate + the loop noise model; EuRoC-fitted 
   noise_floor_t_m: 0.014
   noise_k_r: 0.178
   noise_floor_r_rad: 0.0095
-entry_gate:                     # D178 known-entry gate, ENABLED on M's sweep PASS (26864da, 2026-10-24: scene-0
+entry_gate:                     # D178 known-entry gate, ENABLED on the D178 sweep PASS (26864da, 2026-10-24: scene-0
   enabled: true                 # worst cell 3.78 m -> 0.0147 m, scene 1 unchanged, 0 corrupt, 0/269 + 0/291 true
   chi2: 22.4577                 # edges rejected). chi-square 97.5 % at 6 dof
   entry_sigma_m: 0.10           # operator placement, per axis [ASSUMPTION, physical]

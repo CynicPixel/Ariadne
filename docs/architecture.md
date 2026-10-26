@@ -316,7 +316,7 @@ Use `cv::ANNIndex` for retrieval/index persistence.
 >   full matrix when stale, over-fetch then filter, exact rescoring).
 >
 > Retrieval on EuRoC: pooled R@1 0.626 (376×240) / 0.677 (752×480) against 0.444 for mean-bit (perception.md
-> §11.6). Default inference size 376×240 (maintainer, 2026-10-20; §11.7). No consumer in 2.1; 2.5 consumes the loop-candidate query.
+> §11.6). Default inference size 376×240 (2026-10-20; §11.7). No consumer in 2.1; 2.5 consumes the loop-candidate query.
 
 ---
 
@@ -1562,7 +1562,7 @@ measures that gap directly.
 
 > **As built (5.3, D132, 2026-10-22; not yet wired into a runner).** `perception/exposure_control/`. The metric is
 > Shim et al. eq. 1, with Zhang's gradient percentile as the comparator row (algorithms.md §9.4: Shim is "not robust").
-> **Approved deviation (maintainer, 2026-10-23, D147):** the lamp is not optimised with an energy cost term. One
+> **Approved deviation (2026-10-23, D147):** the lamp is not optimised with an energy cost term. One
 > brightness decision is spent in a fixed order (lamp → exposure → gain), the limiting case of a small energy cost. In
 > replay, lamp power is D's `lamp_power`, a radiance scale: exact for ambient 0 and a decoded render (SMOKE §4u).
 > **Wiring (D147):**
@@ -5403,7 +5403,7 @@ Source:
 - https://arpg.colorado.edu/oivio/
 
 > **As built (5.6, D141, 2026-10-23).** OIVIO could not be obtained (downloads withdrawn; Drive IDs 404). The
-> maintainer approved **Hilti 2023 `site2_robot_3`** as the 5.6 sequence: an onboard co-moving light in a dark room
+> approved substitute is **Hilti 2023 `site2_robot_3`** as the 5.6 sequence: an onboard co-moving light in a dark room
 > (algorithms.md §8.1), OAK-D stereo + IMU, public sparse 3-DoF TLS ground truth, CC BY-NC-SA 3.0. There is no
 > light-power sweep. OIVIO remains preferred if access is granted.
 

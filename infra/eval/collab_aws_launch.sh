@@ -4,7 +4,7 @@
 #   infra/eval/collab_aws_launch.sh stage      git bundle, inputs.tar, both recordings (persistent), image to ECR
 #   infra/eval/collab_aws_launch.sh run [STAGES]   spinup.sh (cpux86, 240 min cap: spinup.sh's limit) -> build/runs/<id>/
 #   infra/eval/collab_aws_launch.sh teardown   delete this run's temp ECR tag and staged inputs; sweep strays
-# The recordings are PERSISTENT datasets under runs/_datasets/ (maintainer, 2026-10-23: re-uploading per run costs
+# The recordings are PERSISTENT datasets under runs/_datasets/ (2026-10-23: re-uploading per run costs
 # too much time): `stage` syncs each once (s3 sync skips unchanged files); teardown never deletes them.
 set -euo pipefail
 cd "$(dirname "$0")/../.."

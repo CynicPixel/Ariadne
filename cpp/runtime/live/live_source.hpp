@@ -160,7 +160,7 @@ public:
 
     long released_on_timeout() const { return timeouts_; }
     /// Releases whose stamp went BACKWARDS (a timeout skip let newer stamps out first, then the stragglers arrived):
-    /// the consumed order was not canonical. 0 means the stream order was canonical end to end (A1, 2026-10-23).
+    /// the consumed order was not canonical. 0 means the stream order was canonical end to end (2026-10-23).
     long released_out_of_order() const { return order_breaks_; }
 
     /// Every timed topic counts as heard from now (D165 lockstep): after a pause the runtime asked for, the silence was

@@ -247,7 +247,7 @@ public:
 
         for (ac::AgentId self : fleet) {
             ac::NodeHooks h = Hooks(self);
-            if (customize) customize(self, h);   // live: the D175 coordination mailbox (ariadne_live, B)
+            if (customize) customize(self, h);   // live: the D175 coordination mailbox (ariadne_live)
             nodes_.push_back(std::make_unique<ac::CollabNode>(self, fleet, codec_, comms_.ledger(), std::move(h), np));
             node_of_[self] = nodes_.back().get();
         }

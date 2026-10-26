@@ -1,6 +1,6 @@
 # Final report — Phase 4: volumetric mapping, traversability, exploration, allocation, egress (DRAFT)
 
-Draft for plan item 8.4, written 2026-10-24 by A1. Every number cites a run directory or a decision. Negative
+Draft for plan item 8.4, written 2026-10-24. Every number cites a run directory or a decision. Negative
 results are reported as measured. Status words follow the completion register: done, partial, FAIL.
 
 ## 4.0 What Phase 4 is
@@ -180,7 +180,7 @@ AEP, NBVP, Cieslewski et al.), the OpenCV-native check, and pre-registration (ne
 - Development observation, one run: coverage at 60 s 0.878, against the gated 0.728 on the same seed. The 20 s value
   is unchanged (0.351).
 
-**[RESULT PENDING].** The other 47 runs wait on the maintainer's spend approval. This section gets the 48-run table
+**[RESULT PENDING].** The other 47 runs wait on spend approval. This section gets the 48-run table
 and its losses per T, whatever they are.
 
 ## 4.5 Limitations (stated, not mitigated)

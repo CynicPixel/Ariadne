@@ -1,15 +1,15 @@
-# Design — Phase 6: dense reconstruction to full spec, live-incremental (D190–D209)
+# Gaussian-splat reconstruction: live-incremental, keyframe-anchored submaps (D190–D209)
 
 Status: **design proposal** (2026-10-23), after the preflight (arch §18–19, §29, D44, plan items 6.1–6.4 and the exit
-gate; algorithms.md §2–4; the survey in Appendix A; the OpenCV check in Appendix B; one advisor review). Nothing is built
-until M has the summary. Every constant below without a citation is [ASSUMPTION] until the T4 microbenchmark (§2)
+gate; algorithms.md §2–4; the survey in Appendix A; the OpenCV check in Appendix B; one design review). Nothing is built
+until the summary is reviewed. Every constant below without a citation is [ASSUMPTION] until the T4 microbenchmark (§2)
 or a gate measurement replaces it.
 
 ## 1. What runs where
 
 ```text
 keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4)      ──► console (browser)
- live: B's #kf       ingest → submap manager → seed → train active submap         Spark renders the splats
+ live: the #kf tee  ingest → submap manager → seed → train active submap         Spark renders the splats
        (D168 record)  → lifecycle → export chunk (rate-limited)                    (WebGL, client GPU);
  replay: spool dir    PGO version → re-anchor = new 4×4 per submap                  per-submap transform
  (same reader)                                                                       = re-anchoring
@@ -24,10 +24,10 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
     **first deliverable is a Kaggle T4 microbenchmark** (free): forward+backward ms/iter for N = 50k/100k/250k/500k
     Gaussians at 320×180 and 640×360, packed vs unpacked, plus the append-Gaussians path, with and without the
     D-SSIM term. Iterations per keyframe are then derived, not chosen.
-  - **The T4 is shared** (B, 2026-10-23): demo mode today is ONE g4dn.xlarge running gz EGL + bridge + the runtime
+  - **The T4 is shared** (2026-10-23): demo mode today is ONE g4dn.xlarge running gz EGL + bridge + the runtime
     (parent + two estimator workers) + console. The idle-T4 benchmark is an upper bound; the budget is measured with gz
-    rendering on the same GPU, and the demo's GPU sizing (a second instance, or g5/g6) is a Phase 8 decision for M and
-    the user.
+    rendering on the same GPU, and the demo's GPU sizing (a second instance, or g5/g6) is a Phase 8
+    decision.
   - **Render budget (browser):** splat count (Spark's stated budget is 1–5 M on a computer, A.5), sort rate, and bytes
     per update (32 B/Gaussian .splat; 16 B Spark packed). Closed submaps are sent once; only the active submap is
     re-sent, at most every ~2 s [ASSUMPTION].
@@ -46,26 +46,26 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
 | Lifecycle | NEW → UNSTABLE → SUPPORTED → STABLE by a per-Gaussian count of keyframe updates in which it was visible and consistent; STABLE are frozen (gradients masked) | arch §18.4; RTG-SLAM Tables 13/15 (A.6 item 1). RTG's δη = 100 counts consecutive FRAMES (Replica, every frame processed): ~3.3 s of observation at 30 Hz. Ours counts keyframes, so the threshold is converted at equal observation time: 3.3 s × 4.4 KF/s ≈ **15 keyframe updates** (D191) [ASSUMPTION: equal time ≈ equal evidence; keyframes are more distinct views than consecutive frames, so this errs towards freezing late] |
 | Exposure | per-keyframe 3×4 affine, identity, enabled when the submap's own step counter passes 5000 | arch §18.7. Live: ~110 ms/KF total at the dark KF rate leaves order 10 iterations per keyframe [to be derived from the benchmark], so a 30-KF submap gets ~300 steps ≪ 5000 — **the transform likely never switches on live** (D192); the exposure-delay ablation and the gate's geometry-mush evidence run on the batch path |
 | Merge | nearest-chunk overlap pruning between submaps/agents | arch §18.7 (Hierarchical 3DGS) — baseline; §18.5 fusion only if it beats it |
-| Training image | **the albedo proxy, always by default** (§19.1 via KeyframeFalloff; locked, arch §0.2). Linear RGB on lit worlds is an **ablation row** with its own D-entry (D195), never a silent fallback: a record tagged `training_image: none` is refused unless the run is configured as that ablation | arch §19.1; D146 (the proxy refuses non-lamp-only scenes); M's review 2026-10-23 |
+| Training image | **the albedo proxy, always by default** (§19.1 via KeyframeFalloff; locked, arch §0.2). Linear RGB on lit worlds is an **ablation row** with its own D-entry (D195), never a silent fallback: a record tagged `training_image: none` is refused unless the run is configured as that ablation | arch §19.1; D146 (the proxy refuses non-lamp-only scenes); review 2026-10-23 |
 | Display | the console shows the albedo proxy directly and labels the panel "albedo proxy" (§19.1's "honest, slightly flat" option); relighting with a virtual lamp needs a custom shader in Spark and is not in scope | arch §19.1 |
 
 ## 3. Interfaces
 
-- **Live input:** B's D168 `#kf` record (id, t_ns, T_O_C, intrinsics, half-res Z/S fp16, full-res rgb), forwarded by
-  `ariadne_live` to a recon socket (a tee of the bytes B's worker already holds; LinkFrame length-prefixed typed
-  records; unix socket, TCP if the service is off-host), plus a pose-version record when PGO re-anchors. B confirmed
-  (2026-10-23) that today's live/demo worlds are LIT (ci_tiny_0, maze_short_6: per-room point lights, ambient 0.35,
-  rig lamps at intensity 0). Arch §42–43 require a dark demo lit by the agents' lamps (M, 2026-10-23), so those
+- **Live input:** the D168 `#kf` record (id, t_ns, T_O_C, intrinsics, half-res Z/S fp16, full-res rgb), forwarded by
+  `ariadne_live` to a recon socket (a tee of the bytes the worker already holds; LinkFrame length-prefixed typed
+  records; unix socket, TCP if the service is off-host), plus a pose-version record when PGO re-anchors. Confirmed
+  (2026-10-23): today's live/demo worlds are LIT (ci_tiny_0, maze_short_6: per-room point lights, ambient 0.35,
+  rig lamps at intensity 0). Arch §42–43 require a dark demo lit by the agents' lamps (2026-10-23), so those
   worlds are not the demo and train only as the RGB ablation (D195). B added `training_image` + half-res albedo
   (fp16) + `albedo_valid` to `#kf` on 2026-10-23, tagged `none` until the chain below exists. **Live proxy training
-  needs three things first:** B's 5.3 lamp sink (Normalize needs the frame's applied photometric state, and live has
+  needs three things first:** the 5.3 lamp sink (Normalize needs the frame's applied photometric state, and live has
   no D to provide it), a dark demo world (Phase 8, unowned), and a lamp calibration for that world's rig. Until then
   the trainer is built and gated on replay spools of `ci_tiny_dark_0` (lamp-only, calibrated; the proxy already sits
-  in `KeyframeBundle`, D146). **Frames:** `#kf` carries T_O_C (per-agent odometry); B's tee adds T_W_O[k] per agent
+  in `KeyframeBundle`, D146). **Frames:** `#kf` carries T_O_C (per-agent odometry); the runtime tee adds T_W_O[k] per agent
   (the scene briefing's entry pose, the frame the console draws trajectories in). Submaps anchor in O; the console
   places one at T_W_O[k] · T_O_anchor. The live loop runs per-agent VO without global PGO today, so pose-version records will be rare until collaboration
-  lands live; the re-anchoring path is exercised by the replay gate. Console: B owns `operator_console`; the splat
-  panel is its own JS module and its own websocket path (`/splat`), no change to B's endpoints or telemetry sections.
+  lands live; the re-anchoring path is exercised by the replay gate. Console: `operator_console` is the runtime's; the splat
+  panel is its own JS module and its own websocket path (`/splat`), no change to the console's endpoints or telemetry sections.
 - **Replay input:** the reconstruction.md#first-reconstruction-loop spool (schema bumped for the albedo proxy and pose versions) — "replay from files
   alone" stays true; the live socket and the spool feed one reader.
 - **Output:** per-submap splat chunks + a submap table (id, agent, anchor kf, T_W_anchor, pose version, count,
@@ -75,7 +75,7 @@ keyframe stream ──► recon service (python, PyTorch + gsplat v1.5.3, ONE T4
 
 The CPU path (reconstruction.md#first-reconstruction-loop fuse + init, D44) streams depth-seeded, **unoptimised** Gaussians to the same console panel,
 labelled "initialisation only, no GPU". Geometry still grows live; appearance is the seed colour. Batch renders and
-the exit-gate metrics go to Kaggle (D44). The live realtime demo still needs a GPU (maintainer, D44).
+the exit-gate metrics go to Kaggle (D44). The live realtime demo still needs a GPU (D44).
 
 ## 5. Open decisions (not mine)
 
@@ -220,7 +220,7 @@ github.com/playcanvas/engine; developer.playcanvas.com/user-manual/gaussian-spla
 Plan 1.7: "fused stereo point cloud, gsplat initialization from it, one offline render; the Python reconstruction
 service boundary (§18.2) exists even though the content is naive". Constraint discovered on 2026-10-15
 (SMOKE §4o, D44): gsplat cannot rasterize without CUDA, the dev box has no NVIDIA GPU, and every AWS GPU quota is
-0 (re-requests escalated). The maintainer's decision: **run the gsplat stage on Kaggle/Colab for now**; the
+0 (re-requests escalated). The decision: **run the gsplat stage on Kaggle/Colab for now**; the
 realtime demo still needs a live GPU (AWS once the quota lands). So the boundary is designed to be
 **backend-agnostic**: the same service code runs locally (CPU: everything except rasterization), on Kaggle (CUDA),
 and later on an AWS GPU node.

@@ -1,5 +1,5 @@
 # 2.6 TUM RGB-D regression (D100). Phase 2 exit-gate line "TUM: stereo/RGB pipeline ATE regression pinned".
-# A separate pinned check, NOT part of phase1.sh --premerge (maintainer, 2026-10-21). Checked by
+# A separate pinned check, NOT part of phase1.sh --premerge (2026-10-21). Checked by
 # infra/scripts/tum_regression.py against each run's results.yaml.
 #
 # TARGETS were fixed 2026-10-21 BEFORE any TUM measurement, as for EuRoC (local-slam.md#estimator-plan): per sequence, the WORST of the

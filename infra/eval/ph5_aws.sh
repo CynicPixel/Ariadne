@@ -43,7 +43,7 @@ docker pull -q "$IMAGE" > /dev/null || { step "pull FAILED"; exit 1; }
 docker image inspect "$IMAGE" --format '{{.Id}}' | tee "$R/image_id.txt"
 
 # HILTI=full (default): fetch + export images, IMU and side files. extras: fetch, then only the side files (exposure
-# + control points) -- a rerun after a full export that predates them. skip: an earlier session already did it all.
+# + control points) -- a rerun after a full export that predates them. skip: an earlier run already did it all.
 HILTI="${HILTI:-full}"
 case "$HILTI" in full|extras|skip) ;; *) step "HILTI must be full|extras|skip"; exit 1 ;; esac
 if [ "$HILTI" = skip ]; then

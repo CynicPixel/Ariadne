@@ -1,6 +1,6 @@
-# 4.6 TARE-style coarse/fine scheduling and a FAR-style visibility graph for agent motion (A1)
+# Exploration scheduling (TARE-style) and visibility-graph motion (FAR-style)
 
-Status: **reviewed** (advisor 2026-10-23, §6), before any code. Decision: D116. Arch §21.5, §21.6, §22.3 (the split),
+Status: **reviewed** (design review 2026-10-23, §6), before any code. Decision: D116. Arch §21.5, §21.6, §22.3 (the split),
 §31.6 (planner rows and the route-query comparator). algorithms.md §22.2 (TARE, FAR, read in primary text).
 
 ## 0. What 4.6 owes
@@ -35,7 +35,7 @@ Status: **reviewed** (advisor 2026-10-23, §6), before any code. Decision: D116.
   1. If the local horizon holds views: take the best view per local target, by D114 utility, then the open tour
      from the agent over those views.
      - **No set cover.** In 4.3 each view belongs to exactly one target, so covering the local targets reduces to
-       one view per target (advisor review).
+       one view per target (design review).
      - **Solver:** nearest-neighbour + 2-opt, always. Exact enumeration is the test oracle only, with the gap
        reported. There is no size threshold to tune.
      - The goal is the first view on that tour.
@@ -57,7 +57,7 @@ replanning.
   count), simplified by `cv::approxPolyDP` with ε = 1 cell.
 - **Graph vertices:** the polygon vertices that bulge into free space, i.e. corners a shortest path can bend around.
   Corners that open toward free space never lie on a shortest path.
-  - **Orientation (advisor review):** `findContours` with `RETR_CCOMP` returns outer contours and holes with
+  - **Orientation (design review):** `findContours` with `RETR_CCOMP` returns outer contours and holes with
     opposite winding. The free-space enclosure is a hole, so a single cross-product sign would keep exactly the
     wrong corners there.
   - Each vertex is therefore classified by its interior angle on the **blocked** side: kept iff that angle is
@@ -86,10 +86,10 @@ replanning.
 | D\* Lite, **shortest** (all weights 0, egress.md §2's ablation row) | D113's ρ_responder lattice | target → exits, incremental |
 | FAR-style graph | the same ρ_responder traversable set, as polygons (this row only, so the two answer one question) | target → exits |
 | A\* on the lattice | the same lattice | fresh search (the oracle) |
-| D\* Lite, weighted (production, w_u = w_c = 1) | the same lattice | reported separately: it minimises cost, not length, so it is never graded on length (advisor review) |
+| D\* Lite, weighted (production, w_u = w_c = 1) | the same lattice | reported separately: it minimises cost, not length, so it is never graded on length (design review) |
 
 - **Latency counts only each structure's own update and query.** ComputeTraversability + BodySupport (≈ 0.5 s)
-  are shared by every row and excluded, or the split's cost would be buried under them (advisor review).
+  are shared by every row and excluded, or the split's cost would be buried under them (design review).
 
 - **Columns:**
   - update ms per replan, and query ms;
@@ -130,7 +130,7 @@ replanning.
   (machinery evidence, as §7 of next-best-view.md).
 - **Gate:** the TARE row in the lockstep L1 ablation (next-best-view.md §5's pre-registered axes).
 
-## 6. Review (advisor, 2026-10-23)
+## 6. Design review (2026-10-23)
 
 Blocking points, all adopted:
 1. The comparator grades on the shortest-path D\* Lite row and times only each structure's own work (§3).
@@ -141,11 +141,11 @@ Non-blocking points:
 - **Attemptable FAR routes:** kept to the comparator and exploration logging until B confirms the mover accepts
   segments through unknown space. `Route` never emits one before that.
 - **Gate cost:** the TARE row makes 6 policies × 2 scenes × 3 seeds = 36 lockstep runs, ≈ 14 h on llvmpipe
-  against the ≈ 10 h first stated. Added to next-best-view.md §5, and B and the maintainer are told.
+  against the ≈ 10 h first stated. Added to next-best-view.md §5.
 - **ci_tiny is about one subspace** at S = 6 m, so its TARE row is nearly local-only; a null result there is not
   over-read.
 
-## 7. Facts from B (2026-10-23)
+## 7. Facts from the runtime (2026-10-23)
 
 - **The mover accepts segments through unknown cells.** Its check is against the scene's ground-truth ESDF, not
   the estimated map. A refusal holds the whole command, and the runtime then excludes goals within

@@ -1,7 +1,7 @@
-# wire-coding.md — local-feature payload compression on real verify pairs (Phase 3.6, A2, 2026-10-24)
+# Local-feature wire coding on real verification pairs
 
-Owner A2 (delegated by M, 2026-10-24). Decision block D233 (pre-registration) and D234 (result).
-Status: DESIGN. Rule pre-registered (D233) before any run. Advisor-reviewed 2026-10-24: in-run controls, fragment
+2026-10-24. Decision block D233 (pre-registration) and D234 (result).
+Status: DESIGN. Rule pre-registered (D233) before any run. Design-reviewed 2026-10-24: in-run controls, fragment
 accounting, per-component PCA scale, corrected reach.
 
 ## 1. What and why
@@ -10,7 +10,7 @@ A loop-closure candidate between two agents is checked by sending one keyframe's
 arch §15.7) to the verifier, which runs LightGlue + essential/PnP RANSAC + the D71 degeneracy gate. That message
 is the expensive one: about 1,024 × (8 B keypoint + 132 B int8 descriptor + 12 B XYZ) ≈ 155 kB per keyframe today,
 against ~150 B for the pose edge it buys (arch §15.7: "it is cheap to send the answer and expensive to send the
-evidence"). M's survey (`collab_fast_survey.md` §1-2) puts the published like-for-like at 20.1 kB (D2SLAM, PCA'd
+evidence"). The survey (`collab_fast_survey.md` §1-2) puts the published like-for-like at 20.1 kB (D2SLAM, PCA'd
 SuperPoint) and states that no paper tests the *stock* LightGlue-ALIKED weights on quantised or PCA'd inputs
 (**[UNVERIFIED]**). This study measures that on our data, as arch §31.9 requires: accuracy against bytes, never a
 byte saving alone.
@@ -26,7 +26,7 @@ feature family (locked).
 
 Conservative by construction: both endpoints' features take the codec's round trip, as today's fleet does (the
 verifier decodes its own response too). One-way endpoint verification with the verifier keeping its own float
-features (survey A2, MAD-DR's asymmetry) can only do better than these numbers.
+features (the survey, MAD-DR's asymmetry) can only do better than these numbers.
 
 ## 2. Inputs and why the stores, not re-extraction
 
@@ -96,7 +96,7 @@ the max |Δz| and max |Δx| that each G introduces, over all pair keyframes.
   alignment and a 2 B vtable slot, so the proxy is within ±16 B per keyframe of a real schema.
 - K is fixed per setting, so bytes per keyframe are near-constant. The table reports the mean over the pair
   keyframes as an absolute number next to the reduction against R. For scale, the 3.2 sweep measured today's
-  int8/K1024/xyz at ~136 kB/KF (M).
+  int8/K1024/xyz at ~136 kB/KF.
 - Prediction gate (I6, ≤ 15 % predicted-vs-measured): for the combination row, the tool also reports wire bytes
   predicted from the closed-form size of the new layout (per-KF header + K × bytes/kp + FlatBuffers envelope, plus
   34 B per fragment) against the measured ones, so the predictor can take the new formula if it is adopted.
@@ -130,19 +130,19 @@ scene 0 is the held-out claim for PCA.
 3. **Bytes:** wire bytes per keyframe (fragmented, §4) at least 15 kB below R. That is ≥ 1 s of airtime at the
    15 kB/s low end of the link budget (survey §6).
 
-A coding is **adopted** only if it clears 1, 2 and 3. It goes to **M decides** if it clears 2 and 3 with no
+A coding is **adopted** only if it clears 1, 2 and 3. It goes to **a decision** if it clears 2 and 3 with no
 reject → accept codec flip and at most 1 accept → reject codec flip per scene. Otherwise it is **not adopted**.
 
-**Pose accuracy (reported, flags to M, not a bar).** D63's pose_err_deg and gt_err_t/r on the pairs both accept.
-If S's median pose_err_deg in a scene exceeds the largest median of R's 5 seeds, the coding is flagged to M even if
+**Pose accuracy (reported as flags, not a bar).** D63's pose_err_deg and gt_err_t/r on the pairs both accept.
+If S's median pose_err_deg in a scene exceeds the largest median of R's 5 seeds, the coding is flagged even if
 it clears the bars.
 
 **Combination.** The recommended wire format is the adopted descriptor coding + adopted geometry (+ K 512 if job 70 adopts it, then re-measured). Its
 factorial row must itself clear 1-3 (interactions are measured, not assumed). If it doesn't, the drop-one rows
-of the factorial decide, and M picks.
+of the factorial decide, and one is picked.
 
 **If the controls fail.** If fp32 itself has a codec flip or misses bar 2 against R, int8-today is already at or
-below the floor this sample can resolve. Nothing is adopted without M, and the floor is reported.
+below the floor this sample can resolve. Nothing is adopted without review, and the floor is reported.
 
 **Reach (stated with every claim).** Each scene has 30 accepted and 30 rejected pairs. Rejects were sampled 6 per
 reason, so the counts are not population rates: 0 codec flips bound the per-reason-stratified flip rate at ≤ 10 %
@@ -151,8 +151,8 @@ the follow-up before an adopted coding goes in a gate.
 
 ## 6. Where it runs
 
-Kaggle CPU kernel via test-compute-session's off-AWS harness (`infra/eval/ci_kaggle_launch.sh`): 4 vCPU, AVX2,
-`OPENCV_FOR_THREADS_NUM=4`. D233 approved by M as written, plus the two reporting adds of §4 (2026-10-24). It is an accuracy study, so it is hardware-agnostic. Timing is not measured: LightGlue
+Kaggle CPU kernel via the off-AWS harness (`infra/eval/ci_kaggle_launch.sh`): 4 vCPU, AVX2,
+`OPENCV_FOR_THREADS_NUM=4`. D233 approved as written, plus the two reporting adds of §4 (2026-10-24). It is an accuracy study, so it is hardware-agnostic. Timing is not measured: LightGlue
 always sees 128-D input, so its cost changes with K only, and job 42 already measured K 1024 vs 512. Inputs: the 4
 local stores (~650 MB, uploaded as a private Kaggle dataset; no AWS egress), the pairs CSVs, the pinned LightGlue
 ONNX.

@@ -402,7 +402,7 @@ TEST(Serialization, PoseGraphsRemainHighlyCompressible) {
 }
 
 // --- Pre-D115 bytes are unchanged by the CbbaConsensus append (master's rule 2) ---------------------------------
-// Size and FNV-1a of fixed messages, recorded with the PRE-change tree (feat/ph4-mission at 1ca0457, whose wire.fbs
+// Size and FNV-1a of fixed messages, recorded with the PRE-change tree (at 1ca0457, whose wire.fbs
 // and serializer.hpp equal main's), so appending TaskConsensus must leave every existing Envelope message
 // byte-identical.
 namespace {

@@ -1,4 +1,4 @@
-# Design — Phase 2.5: robust backend
+# Robust back end: degeneracy gate, PCM, GNC-TLS, optimality certificate
 
 Plan 2.5 (local-slam.md#estimator-plan §1, phased plan Phase 2): replace the Phase-1 pose-graph placeholders with arch §13–§14 as
 specified — chordal initialisation, degeneracy gate → PCM → GNC-TLS (the §14.5 order is inviolable), the SE-Sync-style
@@ -12,7 +12,7 @@ certificate behind a flag, and a real intra-agent loop-candidate source. Decisio
 - D76: the joint-graph entry point for the broker, plus shared gravity (§11).
 
 The per-section "As built" notes record what was measured. **Still open:**
-- **SE-Sync certificate run on the large graphs** (sphere, torus, grid3D, cubicle, rim): pending the maintainer
+- **SE-Sync certificate run on the large graphs** (sphere, torus, grid3D, cubicle, rim): pending approval
   (heavy). garage, tinyGrid3D and smallGrid3D certify.
 - **The planted-outlier gate wording.** "Not certified on planted-outlier graphs" holds for 4/10; 6/10 certify. This is
   reported, not tuned (local-slam.md#estimator-plan §3; D74).
@@ -32,7 +32,7 @@ no separate manifest field. Evidence: D73 part 2b, `evaluation/runs/robust-backe
 `--premerge` sets only `ARIADNE_PGO_ORACLE`. The SE-Sync suites are hour-long evidence runs that the gate never
 enables.
 
-## 0. Preflight (done before this design; evidence in the session handover)
+## 0. Preflight (done before this design)
 
 - **Literature, checked at the sources.** GNC (Yang et al., RA-L 2020, arXiv 1909.08605: Prop. 4, Remark 5, §VI-B);
   SE-Sync (Rosen et al., IJRR 2019, arXiv 1612.07386: eqs. 12–18, Thm 7, eq. 119, Table 1; reference code read for
@@ -91,7 +91,7 @@ its own `lmDiag`, so faking it in the backend would corrupt the step-quality tes
   stationary). With the quaternion normalised, GTSAM reaches 0.634192400 (7 its) vs ours 0.634192268: same minimum
   (2.1e-7 relative). `SeSyncBenchmarkGraphs` now asserts equal initial energies (the check whose absence hid this);
   the SE-Sync oracle is regenerated under `.cache/feat-2.5-robust-backend/oracle/pgo_sesync_v2/` (the shared
-  `.cache/oracle/pgo_sesync` is left untouched; the maintainer re-runs `models.sh pgo-sesync` after merge).
+  `.cache/oracle/pgo_sesync` is left untouched; `models.sh pgo-sesync` is re-run after merge).
 - **Guard before adopting clamp-off on the GNC path.** The 1e-6 floor is currently the only regulariser if a block of H
   loses rank — e.g. GNC zeroes the only loop joining two odometry segments (D56 makes segmented graphs real). The GNC
   wrapper therefore anchors every connected component of the *active* graph explicitly, and a disconnection test is in
@@ -224,7 +224,7 @@ missions, with ground truth. A candidate is labelled bad when its PnP edge error
 0.2 m / 2°. Each threshold goes to the midpoint of the margin between the good and bad groups (Zhang 2016). The
 thresholds are never tuned on the synthetic scenes.
 **Not wired.** `VerifyResult` does not export its inlier correspondences, and replacing `ProxyInformation` in the 1.6
-broker would change the Phase-1 sim_collab outputs. Both wait for D73, pending a maintainer decision.
+broker would change the Phase-1 sim_collab outputs. Both wait for D73, pending a decision.
 
 ## 5. PCM (arch §14.5, D72)
 
@@ -294,7 +294,7 @@ Tests (`tests/unit/test_pcm.cpp`, 12/12; ctest 355/355 on the merged tree):
   the wider bound makes a small-offset cluster slightly more likely to merge with the true loops' clique. The defence
   remains the degeneracy gate and Iteration 7.
 
-**Maintainer decision (2026-10-19), following the advisor's recommendation: the per-loop threshold is the default.**
+**Decision (2026-10-19), following the design review: the per-loop threshold is the default.**
 The fixed quantile's failure (dropping true loops) cannot be recovered downstream. The default's failure (near misses
 passing) is GNC's job. A 0.5 m / 5° near miss has rᵀΩr ≈ (0.5/0.05)² + (0.087/0.01)² ≈ 176, against GNC's
 c̄² = 16.8. **Condition, carried into §6:** if GNC fails its near-miss gate, the first remedy is a tighter α_loop
@@ -375,12 +375,12 @@ init that includes the outliers. The near-miss precision is TP/(TP + accepted ne
   the gate does not exercise GNC. GNC on its own rejects all of them as well, measured separately.
 - **0.2 m / 1° near misses** are 4σ translation errors, and neither stage separates them. They cost 11 % ATE. That
   is the price of the D72 decision, now measured.
-- **Timing replaces the earlier [ASSUMPTION]** given to the maintainer for demo latency (0.3–0.8 s at 1,000 nodes).
+- **Timing replaces the earlier [ASSUMPTION]** given for demo latency (0.3–0.8 s at 1,000 nodes).
   Measured: 1.6 s at 1,000 and 4.75 s at 3,000 per loop event, run in the background. The cost is about 27
   warm-started LM solves. The obvious lever, warm-starting the weights from the previous event so that only new
   loops start at w = 1, is not implemented. It is part 2's first optimisation if the demo needs it.
 
-**Part 2a — weight reuse across loop events (maintainer: "weight reuse then wire up", 2026-10-20).**
+**Part 2a — weight reuse across loop events (decision: "weight reuse then wire up", 2026-10-20).**
 - **State.** The caller carries a `GncState` (per edge: −1 not active last event, 0 outlier, 1 inlier). Edges are
   append-only, so indices are stable keys. A loop that was PCM-active last event and is still active starts at its
   previous decision; every other active loop starts at 1. The PCM mask always wins.
@@ -480,7 +480,7 @@ touched). Retrieval: 1.6's mean-bit descriptor with a temporal exclusion window 
 EigenPlaces lands. Verification: `edge_verifier` unchanged. Output flows gate → PCM → GNC. The Phase-1 1.6 false loop
 accept becomes a regression case that must now be rejected.
 
-**As built, part 2b backend (2026-10-20, slam-only; the runtime adapter follows the main-session merge).**
+**As built, part 2b backend (2026-10-20, slam-only; the runtime adapter follows the main-branch merge).**
 - **Pieces.** `cpp/slam/loop_closure/retrieval.hpp` takes plain float descriptors: cosine similarity, a temporal
   exclusion window, top-k. `loop_backend.{hpp,cpp}` runs gate → PCM → GNC (with `GncState`) once per query keyframe
   (candidates batched) on a mirror of the VO graph.
@@ -549,7 +549,7 @@ accept becomes a regression case that must now be rejected.
 - **Sim:** the EuRoC floor does not transfer (different camera, rendered images). The demo needs its own
   calibration from one sim mission run with ground truth. Every calibrated value in config carries its provenance.
 
-**Result with the noise model (2026-10-21; maintainer accepted the model with its tail miss stated).**
+**Result with the noise model (2026-10-21; the model accepted with its tail miss stated).**
 - **Fits.** The MH_01-only fit failed held-out V1_01 (mean NEES 9.53, 11.8 % above χ²₆(0.99)). Refit jointly on
   MH_01 + V1_01: k_t 1.33, floor_t 0.014 m, k_r 0.178, floor_r 0.0095 rad.
 - **Held-out V1_02:** mean NEES **5.24** (pass) but **4.4 %** above χ²₆(0.99) (fail, against ≤ 3 %). The median of
@@ -608,7 +608,7 @@ accept becomes a regression case that must now be rejected.
   VIO and optimises a 4-DoF pose graph (VINS-Mono; ORB-SLAM3's inertial essential graph) [UNVERIFIED at the
   source]. Soft 2-DoF priors plus an estimated gravity direction is the alternative used here; the 4-DoF graph is a
   future ablation.
-- **Not run on EuRoC yet** (maintainer: the sim calibration and part 3 come first). A null result at σ 2.3° is
+- **Not run on EuRoC yet** (decision: the sim calibration and part 3 come first). A null result at σ 2.3° is
   plausible and would be recorded as such.
 
 **Maintainer decisions (2026-10-19, after D71).**
@@ -618,9 +618,9 @@ accept becomes a regression case that must now be rejected.
    a "2.5 or Phase 3?" question; it is read as "in 2.5". This changes the Phase-1 sim_collab outputs that
    `--premerge` pins, so D73 re-pins them and lists the change.
 
-## 9. Init acceptance gate — "the SE-Sync graphs that failed from dead reckoning" (maintainer decision 2026-10-18)
+## 9. Init acceptance gate — "the SE-Sync graphs that failed from dead reckoning" (decision 2026-10-18)
 
-The maintainer asked for the advisor's recommendation: a physically logical gate, measured rather than assumed, without a
+The design review's recommendation was requested: a physically logical gate, measured rather than assumed, without a
 rabbit hole. Premise corrected: the SE-Sync oracle always started from the files' own vertices, so which graphs fail
 from dead reckoning was never measured. It is measured first, then gated. Protocol, fixed before running:
 

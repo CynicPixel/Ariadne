@@ -2,7 +2,7 @@
 # configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
 name: live_v1
 end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
-lens: false                  # D227 (D41 amendment, maintainer-directed 2026-10-24): the read-time synthetic lens
+lens: false                  # D227 (D41 amendment, 2026-10-24): the read-time synthetic lens
                              # is OFF in the live runtime; frames stay the clean render, calibration reports D = 0.
 chooser: classical           # classical = the nearest reachable frontier at least min_goal_m away; 7.1 adds the orchestrator
 command:
@@ -25,7 +25,7 @@ command:
 risk_gate:
   autonomous_threshold: 1.01 # §23 gate OFF for the L1 runs (risk is computed and traced, never gates): L1 predates
                              # the agentic layer; the 7.x configs set it
-estimator_processes: true   # D168 (M, 2026-10-23): every gate row runs one estimator process per
+estimator_processes: true   # D168 (2026-10-23): every gate row runs one estimator process per
                              # agent; the manifest shows it via the run's recorded live_config.yaml
 lockstep: false              # D165: true = gz paused at every barrier until the commands are applied (ARIADNE_LOCKSTEP=1
                              # in live.sh sets it in the run's recorded config); false = the world runs free

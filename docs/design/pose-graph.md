@@ -1,4 +1,4 @@
-# Design — Phase 2: the sparse SE(3) pose-graph solver (arch §11.6, §12, §13 groundwork)
+# Sparse SE(3) pose-graph solver
 
 The first Phase 2 component (`local-slam.md#estimator-plan` §1, step 1). It optimises a pose graph:
 
@@ -164,7 +164,7 @@ byte-identical (arch §0.2).
     test reports it as "different minima, lower: gtsam".
 
 
-## 6. Literature: what the 2026 search added (searched 2026-10-16, after the maintainer asked)
+## 6. Literature: what the 2026 search added (searched 2026-10-16, on request)
 
 - **SE-Sync benchmark graphs:** a real-structure oracle set with known certified optima (Rosen et al., IJRR 2019).
 - **COSMO-Bench** (arXiv 2508.16731, 2025): 24 real collaborative-SLAM pose-graph datasets from LiDAR. It is the right

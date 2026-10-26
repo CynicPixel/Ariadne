@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_perf_bench: the pipeline profile's DNN bench (A2, 2026-10-24; M's delegation; MEASUREMENT ONLY - it calls
+// ariadne_perf_bench: the pipeline profile's DNN bench (2026-10-24; MEASUREMENT ONLY - it calls
 // the shipped wrappers and the shipped verify path, it changes none of them). Two modes:
 //
 // TIMING (one process; its OpenCV pool is OPENCV_FOR_THREADS_NUM, read back with cv::getNumThreads and recorded):
@@ -301,7 +301,7 @@ int Timing(std::map<std::string, std::vector<std::string>>& a) {
         const std::vector<cv::DMatch> m2 = full->Match(A, B);
         row("lightglue_match", "K" + ks, "cv_dnn_new", s, m1.size(), Digest(m1), Digest(m2));
         if (k == 1024 || k == 512) {   // per-op DETAILED: node names carry the layer (transformers.<i>), so a layer's
-                                        // share of the forward is summed from them (the adaptive-depth payoff, M)
+                                        // share of the forward is summed from them (the adaptive-depth payoff)
             cv::dnn::Net net = cv::dnn::readNetFromONNX(lg, cv::dnn::ENGINE_NEW);
             net.setProfilingMode(cv::dnn::DNN_PROFILE_DETAILED);
             const cv::Mat ka = perception::HardPairMatcher::NormalizeUpstream(A.keypoints, A.size).reshape(1, std::vector<int>{1, k, 2});

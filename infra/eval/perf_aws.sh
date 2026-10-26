@@ -1,6 +1,6 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# The pipeline profile's AWS replay (A2, 2026-10-24; M's delegation, MEASUREMENT ONLY): the dnn matrix and the speed
+# The pipeline profile's AWS replay (2026-10-24; MEASUREMENT ONLY): the dnn matrix and the speed
 # knobs' accuracy cost, on recorded data, on one instance. Runs as root ON THE INSTANCE, launched by
 # infra/eval/perf_aws_launch.sh through spinup.sh (cpux86 = c7i.4xlarge, cpuarm = c8g.4xlarge):
 #   COMMIT=<sha> STAGE=<s3 prefix> DATA0=<s3> DATA1=<s3> STORES_FROM=<s3 results of 0345a5> STAGES="timing knobs" \

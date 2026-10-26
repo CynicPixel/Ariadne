@@ -8,7 +8,7 @@ name: live_web_demo_v1
 mode: demo                   # D169
 estimator_processes: true    # D168: one estimator process per agent
 end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
-lens: false                  # D227 (D41 amendment, maintainer-directed 2026-10-24): the read-time synthetic lens
+lens: false                  # D227 (D41 amendment, 2026-10-24): the read-time synthetic lens
                              # is OFF in the live runtime; frames stay the clean render, calibration reports D = 0.
 chooser: llm                 # the Bedrock orchestrator chooses among the planner's candidates (agentic.md D156)
 command:
@@ -42,7 +42,7 @@ telemetry_hz: 5.0           # bounded console pose rate; camera media is a separ
 multiagent:
   enabled: true
   scenario: configs/comms/ideal.yaml   # live runs need mode ideal (RF models need recorded tracks; D175 SS5)
-  broker_mode: plain                   # plain | discount | overlap (A1 R1/R2); one key, exposed for the rows
+  broker_mode: plain                   # plain | discount | overlap (R1/R2); one key, exposed for the rows
   consensus_timeout_s: 10.0            # a consensus older than this = "uncoordinated" (D175 SS8.3 lag rule)
   max_bid_options: 8                   # top-M options per TASK_BID (wire cap)
 

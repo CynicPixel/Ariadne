@@ -1,10 +1,10 @@
-# live-collaboration.md: the 3.x collaboration stack inside the live runtime (D174)
+# Collaboration inside the live runtime (D174)
 
-**Owner:** M. **Runtime side:** B (ariadne_live, console). **Status:** design, before build.
+**Runtime side:** ariadne_live, console. **Status:** design, before build.
 
 ## 0. Why
 
-The live judge endpoint (Phase 8, D213) runs the agents in the live loop (`ariadne_live`, B), but collaboration
+The live judge endpoint (Phase 8, D213) runs the agents in the live loop (`ariadne_live`), but collaboration
 runs only offline: pass A/B over the recording (3.2, D171/D173). The live runtime has no comms node, no broker and no
 inter-agent loops, and every agent's world alignment is the briefing's constant (`linked = true`). The demo needs
 these live, because the judges drive it:
@@ -12,9 +12,9 @@ these live, because the judges drive it:
 - the "cut comms" switch;
 - the "inject false closure" button.
 
-Maintainer decision 2026-10-23:
-- **For Oct 24 (B):** a concurrent pass A/B over the growing recording, labelled with its measured lag.
-- **For the final submission (M):** real live collaboration, specified here.
+Decision 2026-10-23:
+- **For Oct 24:** a concurrent pass A/B over the growing recording, labelled with its measured lag.
+- **For the final submission:** real live collaboration, specified here.
 
 ## 1. One implementation (the governing rule)
 
@@ -55,7 +55,7 @@ estimator worker k (D168, no DNN)        ariadne_collab_worker k (DNN, own pool)
                                            <------------------------ #freq (kf) -------  features hook: pending
                                             ALIKED + points3d ------ #fresp ---------->  answered on a later Tick
                                                                                          Tick(sim t): CommsNode, nodes
-                                                                                         T_G_W(k) -> T_W_O[k] (B)
+                                                                                         T_G_W(k) -> T_W_O[k] (runtime)
 ```
 
 - The collab worker listens on its own Unix socket (LinkFrame, `runtime/live/link_frame.hpp`); the estimator worker
@@ -89,13 +89,13 @@ estimator worker k (D168, no DNN)        ariadne_collab_worker k (DNN, own pool)
 ## 4. Feedback into the live loop
 
 - `T_G_W(k)` from the fleet's adopted estimate maps agent k's odometry frame into the shared frame G.
-  B's refactor replaces the briefing's constant `T_W_O[k]` with a mutex-guarded value:
+  The runtime refactor replaces the briefing's constant `T_W_O[k]` with a mutex-guarded value:
   - **Initial value:** the known entry pose.
   - **Updated:** to `T_G_W(0)^-1 * T_G_W(k)` after each adopted broker estimate (the same formula as the D173
     composer).
-- A1's planner gets `linked[k]` from the fleet's comms state (a partitioned agent is unlinked), not a constant.
+- The Phase 4 planner gets `linked[k]` from the fleet's comms state (a partitioned agent is unlinked), not a constant.
 
-**Decided (maintainer, 2026-10-23): known starts.** Think of drones inserted through the building's windows: the
+**Decided (2026-10-23): known starts.** Think of drones inserted through the building's windows: the
 operator places them, so each entry pose is known when it goes in.
 - The briefing's start alignment `T_W_O[k]` is a legitimate prior, labelled as the known entry pose. It is not hidden
   ground truth.
@@ -119,7 +119,7 @@ operator places them, so each entry pose is known when it goes in.
   - Keyframes: the latest released keyframe of each.
   - Offset: 4 m and 45° (fixed, so every press is the same experiment).
   - Armed only when that pair has kept true loops. The panel shows kept_solves and the final weight.
-- **Telemetry** (JSON lines, 1 Hz plus events), for B's panel:
+- **Telemetry** (JSON lines, 1 Hz plus events), for the console panel:
   - bytes per class, first transmission vs overhead;
   - budget and token level;
   - each selection round: candidates, selected, predicted vs measured bytes;
@@ -139,8 +139,8 @@ Per agent, at the lit-maze keyframe rate of ~1.6 KF/s (D142: 78 KF per 1000 fram
   the parent.
 
 With gz, 3 estimators and 3 collab frontends, a g4dn.xlarge (4 vCPU) will not hold real time. A g4dn.2xlarge
-(8 vCPU) or g4dn.4xlarge (16 vCPU), with the same single T4, is the realistic target. The maintainer is filing the on-demand
-G/VT quota at 16 vCPU (one g4dn.4xlarge). Measured, not assumed, in the M2-style acceptance below.
+(8 vCPU) or g4dn.4xlarge (16 vCPU), with the same single T4, is the realistic target. The on-demand
+G/VT quota at 16 vCPU (one g4dn.4xlarge) is being requested. Measured, not assumed, in the M2-style acceptance below.
 
 A GPU path for the two models (ONNX Runtime with CUDA; arch §0.2 allows an ORT fallback if it logs which ran)
 would cut this to a few ms per keyframe. It is a separate image change and an [UNVERIFIED] gain, so it is out of scope
@@ -176,12 +176,12 @@ unless the measured CPU budget fails.
      Call sites in ariadne_live (spawn, tee calls, barrier tick, T_W_O feedback, panel): B, after the D175 POC.
 3. **Worker side:** the frontend in the worker behind `collab: true` (default false, so the D168 digests are
    unchanged), plus the #ckf/#freq/#fresp codecs. Test: lazy == eager features.
-4. **Parent side:** the fleet in ariadne_live, the lockstep watermark, the T_W_O feedback (B), and telemetry.
+4. **Parent side:** the fleet in ariadne_live, the lockstep watermark, the T_W_O feedback, and telemetry.
 5. **Acceptance, lockstep:** a 3-agent lit maze, 60 s, `collab: true`.
    - Three replays equal live.
    - Merged ATE and kept loops reported.
    - With `collab: false`, the D168 digest is unchanged.
-6. **Acceptance, demo mode, on the GPU instance (with B's M2):**
+6. **Acceptance, demo mode, on the GPU instance (with the runtime's M2):**
    - Holds ≥ 0.95× real time with 3 agents and collab on.
    - Lag reported.
    - The cut-comms and inject buttons exercised once each, with their outcome in the trace.
@@ -214,7 +214,7 @@ a pinned OpenCV thread count (§7 step 1).
 **Replay (deterministic).** The same classes run synchronously from the log. A tick commits exactly the logged
 arrivals (waiting for the workers if needed, which costs replay wall time only). `Drain(k, T)` returns exactly the
 logged keys, keeping the rest for later drains. `Snapshot(T)` returns the logged version (the fleet keeps its published
-versions in replay). So replays equal the live run they log - B's invariant 1 (drain order) and invariant 2 (one
+versions in replay). So replays equal the live run they log - the runtime's invariant 1 (drain order) and invariant 2 (one
 consistent snapshot) hold both ways.
 
 **What it costs.** Live decisions now depend on wall-clock arrival (as on real robots); determinism is a property of

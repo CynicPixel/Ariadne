@@ -54,7 +54,7 @@ TEST(ExposureGlue, ConfigSection) {
     EXPECT_TRUE(e.Enabled());
     EXPECT_DOUBLE_EQ(e.t_ref_s, 0.0125);   // D147's 2 stops of headroom under 50 ms
     EXPECT_EQ(e.params.metric.metric, "percentile");
-    EXPECT_THROW(Parse("mode: live\n"), ariadne::core::ConfigError);                   // the live sink is B's
+    EXPECT_THROW(Parse("mode: live\n"), ariadne::core::ConfigError);                   // the live sink is the runtime's
     EXPECT_THROW(Parse("mode: replay\nt_max_s: 0.05\nt_ref_s: 0.1\n"), ariadne::core::ConfigError);   // above t_max
     EXPECT_THROW(Parse("mode: replay\nt_max_s: 0.05\nbogus: 1\n"), ariadne::core::ConfigError);
     EXPECT_THROW(Parse("mode: replay\n"), ariadne::core::ConfigError);   // t_max_s required (the frame period)

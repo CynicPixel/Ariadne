@@ -5,7 +5,7 @@ The service (python/reconstruction/ariadne_recon/live/service.py) keeps, in ARIA
   chunks/<sid>_<n>.splat  the submap's Gaussians in its ANCHOR frame (32 B/Gaussian), replaced when it changes
 Both are written atomically (temp file + rename), so a reader never sees half a file.
 
-Routes (own paths, B's console endpoints untouched):
+Routes (own paths, the console's other endpoints untouched):
   GET /splat                      the panel page (static/splat.html)
   GET /api/splat/table            the current table
   GET /api/splat/chunk/{name}     one chunk (name checked against <int>_<int>.splat)

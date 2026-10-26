@@ -54,7 +54,7 @@ void ApplyDirectives(int agent, const std::vector<RegionDirective>& dirs,
     if (ap->nbv.reserve_rule) return;   // the hard rule's {return, hold} is outside every directive (§21.4)
     std::vector<TaskCandidate> kept;
     std::vector<char> used(dirs.size(), 0);
-    // assign / explore restrict only when at least one option's goal lies inside (B's semantics): an agent is never
+    // assign / explore restrict only when at least one option's goal lies inside (the seam's semantics): an agent is never
     // left without a task because its region holds no candidate yet.
     std::vector<char> restrict_ok(dirs.size(), 0);
     for (size_t k = 0; k < dirs.size(); ++k) {

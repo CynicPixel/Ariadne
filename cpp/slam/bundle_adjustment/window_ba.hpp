@@ -94,7 +94,7 @@ struct BaInertial {
     Vec6 prior_b = Vec6::Zero();
     Mat6 prior_info = Mat6::Zero();
     /// v_0 is not a variable (held at its value): set by AnchorWindow when window[0] is the only pose-determined
-    /// keyframe of its group, the one case where the IMU's Galilean null space is not removed by vision (maintainer
+    /// keyframe of its group, the one case where the IMU's Galilean null space is not removed by vision (design
     /// decision 2026-10-18; inertial.md §4.2). Otherwise false: v_0 is free, biases carry the only prior.
     bool hold_v0 = false;
     /// Gravity's DIRECTION is a variable (2 tilt parameters, |g| fixed; inertial.md §4.8): with window[0]'s 6-DoF pose

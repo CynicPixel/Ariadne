@@ -1,6 +1,6 @@
-"""The live keyframe tee's wire format (reconstruction.md §3; contract agreed with B 2026-10-24, D231). numpy + stdlib only.
+"""The live keyframe tee's wire format (reconstruction.md §3; contract agreed 2026-10-24, D231). numpy + stdlib only.
 
-Framing = B's LinkFrame (cpp/runtime/live/link_frame.hpp, D150), little-endian:
+Framing = the runtime's LinkFrame (cpp/runtime/live/link_frame.hpp, D150), little-endian:
   frame = u32 magic "ARL1" | u32 topic_len | topic | u32 payload_len | payload
 The service LISTENS on a unix stream socket (ARIADNE_RECON_SOCK); ariadne_live connects and tees from deliver_kf. The
 runtime side is bounded and drop-oldest, and a no-op when no service listens: the splat never back-pressures VO.
@@ -93,7 +93,7 @@ def decode_kf(payload: bytes) -> dict:
 
 
 def encode_kf(hdr: dict, Z: np.ndarray, S: np.ndarray, rgb: np.ndarray) -> bytes:
-    """The runtime side's encoding (the mock and the tests use it; B's C++ tee writes the same bytes)."""
+    """The runtime side's encoding (the mock and the tests use it; the C++ tee writes the same bytes)."""
     j = json.dumps(hdr).encode()
     return (struct.pack("<I", len(j)) + j + np.asarray(Z, "<f2").tobytes() + np.asarray(S, "<f2").tobytes()
             + np.ascontiguousarray(rgb, np.uint8).tobytes())

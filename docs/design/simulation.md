@@ -1,4 +1,4 @@
-# Design — Phase 1.1–1.3: procedural room-maze worlds, kinematic mover, MCAP recording
+# Procedural room-maze worlds, kinematic mover, MCAP recording
 
 Status: **worldgen implemented and frozen (GENERATOR_VERSION 1); mover, CDR decoder and recorder implemented (D38); full-mission evidence pending**
 (2026-09-30). Implements arch §5.3–§5.5, §5.8, §5.9 and plan items 1.1–1.3. Deviations from the arch text are
@@ -284,7 +284,7 @@ reduced-resolution CI rig. Recorded here, not decided.
 
 ## 8. Deviations from the arch text (DECISIONS D37)
 
-Items 1–6 were in the draft the maintainer told me to implement; items 7–9 arose during implementation and
+Items 1–6 were in the approved draft; items 7–9 arose during implementation and
 are **pending confirmation**.
 
 1. **IMU synthesized by the mover; noise as a consumption-time operator**, not gz's IMU and SDF `<imu><noise>`

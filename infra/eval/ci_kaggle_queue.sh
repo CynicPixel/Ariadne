@@ -5,12 +5,12 @@
 # the next job, in name order, whenever Kaggle has a free session (a push refused for "session count" waits), and
 # pulls each finished kernel's results to build/runs-offaws/<id>/.
 #
-#   infra/eval/ci_kaggle_queue.sh dispatch     the one dispatcher (test-compute-session runs it)
+#   infra/eval/ci_kaggle_queue.sh dispatch     the one dispatcher (one host runs it)
 #   infra/eval/ci_kaggle_queue.sh status       queue, running, done
 #
 # A job is $Q/queue/<NN>-<name>.job (write <name>.tmp, rename to .job), sourced by bash:
-#   OWNER=A2                        session to tell when it ends
-#   NAME=a2-knobs-s0                ci_kaggle_launch.sh NAME ([a-z0-9-], <= 36 chars)
+#   OWNER=<name>                    who to notify when it ends
+#   NAME=knobs-s0                   ci_kaggle_launch.sh NAME ([a-z0-9-], <= 36 chars)
 #   COMMIT=13cad72                  the commit to build (any ref in the shared object DB)
 #   INPUTS_ROOT=/data/code/Ariadne-2.2-radiometric   optional: the tree INPUTS are relative to
 #   INPUTS=".cache/models/x build/y" optional: unset = the default model+oracle set, "" = none

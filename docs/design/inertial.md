@@ -1,4 +1,4 @@
-# Design — 2.4 inertial layer: attitude_only (D58) and full preintegration (D59), both built
+# Inertial layer: attitude-only (D58) and full preintegration (D59)
 
 Plan 2.4 (arch §10). Order fixed by local-slam.md#estimator-plan §1: `attitude_only` first (§10.7 fallback, about half a day), then
 Forster preintegration in the window BA (about two days). If `full` is not in the stereo-inertial class by then, ship
@@ -7,7 +7,7 @@ Forster preintegration in the window BA (about two days). If `full` is not in th
 **Preflight:**
 - Literature (`algorithms.md` §1.3b): Forster 2017, Mahony 2008, Hwangbo 2009, Campos 2020.
 - OpenCV-native check: OpenCV 5 has no inertial primitives; the LM driver and SE(3) maths are already ours.
-- Advisor review.
+- Design review.
 
 ## 1. Validated before use (step 2)
 
@@ -93,7 +93,7 @@ discrete noise density²/Δt).
 ### 4.2 State, factors, conventions
 
 - Per keyframe: `T_W_C` (left perturbation, as now), `v_W`, `b_g`, `b_a`: a 15-dimensional block.
-  - **As built (advisor review, 2026-10-18; replaces "every 6 becomes the block size"):** the parameter vector is
+  - **As built (design review, 2026-10-18; replaces "every 6 becomes the block size"):** the parameter vector is
     `[poses 6·n_c | inertial 9·n_i | landmarks 3·n_l]`. Landmarks never touch v or b, so `Hcl`, the Schur
     elimination, `CameraCovariance` and the exit edge are unchanged; only the reduced system S grows. A pose's
     fixedness and its velocity/bias's are separate (window[0]: pose fixed, v and b free). With no inertial blocks every
@@ -112,7 +112,7 @@ discrete noise density²/Δt).
 - **Bias random walk** between consecutive keyframes: `b_j − b_i`, covariance random-walk density² × Δt.
 - **Energy ½ rᵀΩr** (the reprojection term's Huber quadratic is s²/2): the IMU-vs-vision weighting is exact. No
   robust kernel on inertial factors.
-- **Window[0]** (maintainer, 2026-10-18; NOT ORB-SLAM3's choice, which also fixes velocity):
+- **Window[0]** (decision, 2026-10-18; NOT ORB-SLAM3's choice, which also fixes velocity):
   - its pose is the gauge, fixed;
   - its velocity is free;
   - its biases get a loose Gaussian prior from the previous solve, with covariance × `imu.bias_prior_inflation`
@@ -124,7 +124,7 @@ discrete noise density²/Δt).
   `InertialOnlyChainHasTheGalileanNullSpace`: |Hn|/|n| 2.5e-10 vs 6e6 for a real direction). So `AnchorWindow`
   follows inertial factors only out of a group that holds two pose-determined keyframes (fixed, or reached through
   covisibility); two positions at different times fix c.
-- **Dark windows: v_0 held (maintainer, 2026-10-18).** When window[0] (the gauge) has no covisible partner, the rule
+- **Dark windows: v_0 held (decision, 2026-10-18).** When window[0] (the gauge) has no covisible partner, the rule
   above would hold every lost keyframe at its predicted pose and the stiff inertial factors would pull the biases
   toward the prediction's error. Instead window[0]'s velocity is held at the previous solve's estimate
   (`BaInertial::hold_v0`, set by `AnchorWindow` only in that case): window[0]'s group then ties inertially and the
@@ -178,7 +178,7 @@ outage length, is MEASURED on held-out fake outages of 0.5–10 s cut into track
 
 ### 4.6 Defaults
 
-- **2026-10-19 (maintainer): `euroc_v2` is `imu.mode: full`** (avg 0.121 vs 0.223 m, 9/11 vs 4/11 in the
+- **2026-10-19 (decision): `euroc_v2` is `imu.mode: full`** (avg 0.121 vs 0.223 m, 9/11 vs 4/11 in the
   stereo-inertial class; costs MH_03 +6 mm, V1_03 still out). The attitude_only config is kept as
   `euroc_v2_attitude` (the D58 baseline and ablation). The opt-in `euroc_v2_full` it replaces was identical apart
   from its name; the §4.7–4.9 evidence directories still carry that name.
