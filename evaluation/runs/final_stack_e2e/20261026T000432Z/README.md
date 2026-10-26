@@ -2,7 +2,7 @@
 
 - **Scene:** `maze_short_6`.
 - **Configs** (`selection.txt`): perception `sim_v1_rad_flat`, SLAM `sim_v2_loops` (10-keyframe window VIO with IMU and loop closure), IMU noise `imu_noise_v1`, live `live_final_e2e`, chooser llm (Bedrock Nova 2 Lite).
-- **Source:** `c143db14` plus the working-tree diff listed in `source_status.txt`.
+- **Source:** branch `final-stack-e2e` at `714924a`, which is `c143db14` plus the diff listed in `source_status.txt`.
 - **Outcome** (`run/results.yaml`, `campaign.log`):
   - 40 replans, 80 commands decided and sent;
   - `answer_timeouts: 0`, `refused_goals: 3`;
