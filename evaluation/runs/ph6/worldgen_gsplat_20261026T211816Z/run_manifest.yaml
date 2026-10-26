@@ -1,0 +1,9 @@
+run_kind: recon_gpu_training
+created_utc: 2026-10-26T21:20:40Z
+instance_type: g4dn.xlarge
+gpu: "Tesla T4, 595.91.07, 15360 MiB"
+image: ariadne/recon-gpu:build
+image_id: sha256:a827de5514fe8f9314f17418c9f84edd4a1c53af907a6a6d7ea8456aeb2f0caf
+image_tar: s3://ariadne-836505524290-eun1/runs/images/ariadne-recon-gpu-a827de5514fe.tar.zst
+worldgen_tar: s3://ariadne-836505524290-eun1/runs/video-worldgen-gsplat-20261026/input/data.tar.gz
+worldgen_script_sha256: 7d8da02ae3ca6afb4b555447b98509b07f4e293e251dd31110a1d0f065ba6935
