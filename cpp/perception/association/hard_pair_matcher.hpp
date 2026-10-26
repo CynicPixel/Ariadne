@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // Hard-pair matcher (arch §7.2 "ALIKED + LightGlue on hard pairs only", C8;
-// PERCEPTION_2.1.md §12): the expensive verifier for rare, high-value pairs,
+// perception.md §12): the expensive verifier for rare, high-value pairs,
 // such as loop or inter-agent candidates that survived retrieval. Never at
 // frame rate (≈ 0.5 s per extraction, ≈ 0.6 s per match at K = 1024 on this CPU).
 //

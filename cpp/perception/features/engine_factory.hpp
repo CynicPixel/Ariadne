@@ -1,5 +1,5 @@
 #pragma once
-// The §7.1 engine named by features.engine (PERCEPTION_2.1.md §4.1): a config change swaps it everywhere the runtime
+// The §7.1 engine named by features.engine (perception.md §4.1): a config change swaps it everywhere the runtime
 // takes a LocalFeatureEngine (tracker replenish, keyframe description, re-association). ORB stays the default and the
 // ablation baseline.
 #include "perception/features/feature_engine.hpp"

@@ -1,4 +1,4 @@
-"""Operator authority through the console (design AGENTIC_7 §0b; arch §23, §29.3), against a fake live run directory:
+"""Operator authority through the console (design agentic.md §0b; arch §23, §29.3), against a fake live run directory:
 a directive lands in directives_inbox/ as one complete file; an LLM proposal reaches the inbox only after a person
 confirms it (author records both); an approval is written where the runtime verifies it, and only for a pending request.
 """

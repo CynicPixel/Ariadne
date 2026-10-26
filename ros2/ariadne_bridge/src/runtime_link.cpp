@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_bridge::RuntimeLink (design LIVE_RUNTIME_L1 D150). The only ROS code of the live runtime.
+// ariadne_bridge::RuntimeLink (design live-runtime.md D150). The only ROS code of the live runtime.
 //
 // Loaded into the SAME component container as ros_gz_bridge::RosGzBridge, with intra-process comms, so a bridged
 // message reaches this node without a DDS hop (D40: every measured loss of the old recording path was on that hop).

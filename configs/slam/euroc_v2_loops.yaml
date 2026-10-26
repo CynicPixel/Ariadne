@@ -1,9 +1,9 @@
-# D73 part 2b (ROBUST_BACKEND_2.5.md §8): euroc_v2 + intra-agent loop closure (retrieval -> verifier -> degeneracy
+# D73 part 2b (robust-backend.md §8): euroc_v2 + intra-agent loop closure (retrieval -> verifier -> degeneracy
 # gate -> PCM -> GNC on a mirror of the VO graph). Read-only towards the VO: every euroc_v2 output is unchanged; the
 # loop-closed keyframe trajectory is scored next to it. Identical to euroc_v2.yaml apart from name and loop_closure.
-# D59 (INERTIAL_2.4.md §4): imu.mode full -- Forster preintegration in the window BA. Default since 2026-10-19
+# D59 (inertial.md §4): imu.mode full -- Forster preintegration in the window BA. Default since 2026-10-19
 # (maintainer): EuRoC average ATE 0.121 vs 0.223 m for attitude_only (euroc_v2_attitude, the D58 baseline/ablation).
-# 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
+# 2.3 windowed BA (local-slam.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: euroc_v2_loops
 
@@ -31,7 +31,7 @@ keyframe:
 ba:
   huber_delta: 2.0
   max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
-  sigma_px: 0.46                # calibrated (LOCAL_SLAM_2.3.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
+  sigma_px: 0.46                # calibrated (local-slam.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
   backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
   window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
   chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
@@ -41,7 +41,7 @@ ba:
   step_norm_tolerance: 1.0e-8
   min_gradient_tolerance: 1.0e-8
 
-lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+lost:                           # lost-frame handling (local-slam.md#lost-frames, D56); absent = coast / every_frame (the 1.5 baseline)
   motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
   reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
   bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
@@ -52,10 +52,10 @@ lost:                           # lost-frame handling (LOST_FRAMES.md, D56); abs
   reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences
 
 imu:                            # D59 full (attitude_only behaviour until initialised). Absent = none.
-  mode: full                    # velocity + biases in the window BA (INERTIAL_2.4 §4)
+  mode: full                    # velocity + biases in the window BA (inertial.md §4)
   seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
   bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
-  stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
+  stationary_s: 2.0             # local-slam.md#estimator-plan §3 stationary-start test
   kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
   ki: 0.3
   full:
@@ -71,7 +71,7 @@ imu:                            # D59 full (attitude_only behaviour until initia
     repropagate_gyro: 0.01      # rad/s (VINS-Mono)
     repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
     lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
-  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+  gravity_prior:                # GRAVITY_PRIOR edges (inertial.md §4.10), consumed by the pose graph (2.5)
     stride_keyframes: 10        # one per window length: non-overlapping data
     source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
     attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)
@@ -83,7 +83,7 @@ loop_closure:
   exclude_seconds: 10.0        # ... nor keyframes within 10 s
   min_score: 0.5               # cosine, mean-bit PLACEHOLDER descriptor (1.6's retrieval_threshold) [ASSUMPTION]
   top_k: 3
-  # Edge noise model (ROBUST_BACKEND_2.5.md §8): var = k sigma_PnP^2 + floor^2 per block. Fitted 2026-10-21 by maximum
+  # Edge noise model (robust-backend.md §8): var = k sigma_PnP^2 + floor^2 per block. Fitted 2026-10-21 by maximum
   # likelihood on the ground-truth-good loops of MH_01_easy + V1_01_easy (euroc_v2_loops runs, nearest-sample GT);
   # held-out validation pending [ASSUMPTION until then]. MH_01-only fit failed held-out V1_01 (mean NEES 9.5).
   noise_model: true

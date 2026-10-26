@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_volumetric_eval: 4.1's evaluation on a 1.7 spool (design VOLUMETRIC_4.1 §6, D110). Replay only, no GT.
+// ariadne_volumetric_eval: 4.1's evaluation on a 1.7 spool (design volumetric.md §6, D110). Replay only, no GT.
 //
 // The same keyframes, anchor and merge timing as the 1.8 tool's merged run (D45: agent 0's briefed entry pose
 // anchors W; agent 1 joins through the 1.6 loop at t_merge, sharing its history then; a schema-3 spool carries one
@@ -12,19 +12,19 @@
 //   ariadne_volumetric_eval --spool DIR --scene DIR --config configs/mission/mission_v1.yaml --out DIR
 //                           [--egress 1 [--support-band LO,HI]] [--nbv 1]
 //
-// --egress 1 (4.5, design EGRESS_4.5 §7, D113): every replan_period_s of mission time (1.8's schedule: t0 + k T,
+// --egress 1 (4.5, design egress.md §7, D113): every replan_period_s of mission time (1.8's schedule: t0 + k T,
 // then once after the last keyframe), D111's maps -> body support -> the §22.1 penalty -> EgressPlanner (D* Lite,
 // target -> any briefed entrance at rho_responder). One JSON line per replan in egress_routes.jsonl; the final
 // route's support range in results.yaml (the §7 pre-registered range check, read before any GT scoring).
-// --nbv 1 (4.3, NBV_4.3 §7, D114; implies the replan schedule): at every replan, PlanNbv per integrated agent
+// --nbv 1 (4.3, next-best-view.md §7, D114; implies the replan schedule): at every replan, PlanNbv per integrated agent
 // (pose = its latest keyframe, flown = summed keyframe displacement, peers = the other agent's keyframes); one JSON
 // line per (replan, agent) in nbv_decisions.jsonl: targets per generator, notes, timing, the top 10 options. The
 // trajectory is the spool's: this logs what the planner WOULD choose (machinery evidence, not policy value).
-// --phase4 1 (4.4, ALLOCATION_4.4 §8, D115): the real planning::Phase4Planner fed the same keyframes (Integrate) and
+// --phase4 1 (4.4, allocation.md §8, D115): the real planning::Phase4Planner fed the same keyframes (Integrate) and
 // planned on the same schedule (Plan, both agents once active, linked after the merge); per replan one line in
 // phase4_allocation.jsonl: its CBBA event (trigger, rounds, messages, TASK_CONSENSUS wire bytes), and on the SAME
 // auction instance the totals of CBBA, broker SGA, the greedy joint pick and the exact optimum.
-// --route-compare 1 (4.6, EXPLORATION_4.6 §3, D116; with --egress 1): at every egress replan, on the same
+// --route-compare 1 (4.6, exploration.md §3, D116; with --egress 1): at every egress replan, on the same
 // rho_responder traversable set, D* Lite SHORTEST (all weights 0, incremental), the FAR-style visibility graph
 // (incremental update + query) and a fresh A* (oracle): each structure's own update and query time only (the shared
 // map work is excluded), Euclidean length of each executed polyline (lattice paths string-pulled), validity.
@@ -270,7 +270,7 @@ int main(int argc, char** argv) {
             s_fr.Add(Ms(t0));
             ++integrated[k.agent];
         };
-        // --- 4.5 egress replans (EGRESS_4.5 §4/§7) ----------------------------------------------------------------
+        // --- 4.5 egress replans (egress.md §4/§7) ----------------------------------------------------------------
         planning::GridFrame gf;
         gf.ox = ox, gf.oy = oy, gf.cell = cell, gf.cols = cols, gf.rows = rows;
         planning::TravParams trp;
@@ -401,7 +401,7 @@ int main(int argc, char** argv) {
                 const planning::Phase4Plan P = p4->Plan(ts, ag, {});
                 const double ms = Ms(t1);
                 s_p4.Add(ms);
-                // The rows, on the SAME auction instance (ALLOCATION_4.4 §4/§8): CBBA, broker SGA, greedy, optimum.
+                // The rows, on the SAME auction instance (allocation.md §4/§8): CBBA, broker SGA, greedy, optimum.
                 std::vector<float> sc;
                 std::vector<std::vector<int>> view;
                 const planning::AuctionInstance in = planning::BuildAuction(P, gf, 1, &sc, &view);
@@ -590,7 +590,7 @@ int main(int argc, char** argv) {
                         unk.at<uint8_t>(z * rows + r, c) = map.State({cx0 + c, cy0 + r, z}) == planning::kUnknown;
             cv::imwrite((fs::path(out) / "diag_unknown_by_layer.png").string(), unk);
         }
-        // NBV_4.3 §3 check (no GT): known-voxel weight quantiles, and the binary entropy each would carry under the
+        // next-best-view.md §3 check (no GT): known-voxel weight quantiles, and the binary entropy each would carry under the
         // proposed p_occ (free 0.5 e^-w, occupied 1 - 0.5 e^-w), so a saturated Delta-entropy is caught before adoption.
         std::string wq;
         {
@@ -624,7 +624,7 @@ int main(int argc, char** argv) {
         const size_t rle = planning::EncodeCoarseRle(coarse).size();
         std::ofstream res(fs::path(out) / "results.yaml");
         res.precision(6);
-        res << "# ariadne_volumetric_eval (VOLUMETRIC_4.1 §6, D110). Generated; host timings are indicative.\n"
+        res << "# ariadne_volumetric_eval (volumetric.md §6, D110). Generated; host timings are indicative.\n"
             << "keyframes_integrated: {" << [&] {
                    std::ostringstream o;
                    for (int a = 0; a < n_agents; ++a) o << (a ? ", " : "") << "agent" << a << ": " << integrated[size_t(a)];
@@ -644,7 +644,7 @@ int main(int argc, char** argv) {
             << "traversability: {ms: " << trav_ms << ", responder_cells: " << cv::countNonZero(tm.trav_r)
             << ", agent_cells: " << cv::countNonZero(tm.trav_a) << ", risk_proxy_max: " << risk_max << "}   # [PROXY] risk, uncalibrated\n"
             << "risk_terms: {" << risk_where << "}\n";
-        res << "known_weights: {" << wq << "}   # NBV_4.3 §3 entropy-saturation check\n";
+        res << "known_weights: {" << wq << "}   # next-best-view.md §3 entropy-saturation check\n";
         if (phase4_on) res << "phase4: {replans: " << s_p4.ms.size() << ", plan_ms: {mean: " << s_p4.Mean() << ", p95: " << s_p4.Pct(0.95) << "}}\n";
         if (nbv_on) res << "nbv: {replans_x_agents: " << s_nbv.ms.size() << ", ms: {mean: " << s_nbv.Mean() << ", p95: " << s_nbv.Pct(0.95) << "}}\n";
         if (egress_on) {
@@ -653,7 +653,7 @@ int main(int argc, char** argv) {
             for (const auto& q : last_route.cells) sv.push_back(last_support.at<float>(q.r, q.c));
             std::sort(sv.begin(), sv.end());
             auto Q = [&](double p) { return sv.empty() ? 0.0 : double(sv[size_t(std::floor(p * double(sv.size() - 1)))]); };
-            res << "egress:   # 4.5 (EGRESS_4.5, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = " << ew.w_r << "\n"
+            res << "egress:   # 4.5 (egress.md, D113): D* Lite at rho_responder, w_u = w_c = 1, w_r = " << ew.w_r << "\n"
                 << "  support_band_m: [" << band_lo << ", " << band_hi << "]\n"
                 << "  replans: " << replans << "\n  reroutes: " << reroutes << "\n  first_route_s: " << first_valid_s
                 << "\n  final: {found: " << (last_route.found ? "true" : "false") << ", exit: " << last_route.exit

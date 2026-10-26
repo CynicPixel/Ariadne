@@ -1,4 +1,4 @@
-"""Render the 1.9 report (design HARNESS_1.9): figures from OUT/figures/data.npz + bytes.json, and a
+"""Render the 1.9 report (design evaluation-harness.md): figures from OUT/figures/data.npz + bytes.json, and a
 self-contained OUT/report.html (figures embedded). Every figure is drawn here, never by hand (§36).
 
 Colours: categorical slots 1-2 of the validated reference palette (blue = agent 0, orange = agent 1;

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The live runtime's input side (design LIVE_RUNTIME_L1 D152). ROS-free: messages arrive as (topic, CDR bytes)
+// The live runtime's input side (design live-runtime.md D152). ROS-free: messages arrive as (topic, CDR bytes)
 // from the link (link_frame.hpp) or from a recording of a previous live run, and go through the SAME decoder and
 // frame assembly as the bag replay (SimFrameAssembler).
 //

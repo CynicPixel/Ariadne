@@ -1,4 +1,4 @@
-// The live mover's command planner (core/trajectory/command_planner.hpp; design LIVE_RUNTIME_L1 D151).
+// The live mover's command planner (core/trajectory/command_planner.hpp; design live-runtime.md D151).
 //   - PlanProfile equals motion.py's plan_profile on every turn and move of the Python golden scripts
 //     (tests/fixtures/scripted/): turns at the preset's (omega_max, alpha_max), moves at their own cruise speed;
 //   - a commanded path appended to a script keeps it contiguous (Script::Validate), ends at the waypoint and the

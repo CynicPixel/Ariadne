@@ -1,7 +1,7 @@
 """Beat 8 data: one decision from the final integrated live run, copied into data/agentic_final/.
 
 Source: the final integrated live run (Nova 2 Lite via Amazon Bedrock, two robots, 200 s) at
-  /data/code/Ariadne-e2e-final/evaluation/runs/final_stack_e2e/20261026T000432Z/.../89e61fecbb277f69-live-20261026T001641Z
+  /data/code/Ariadne-e2e-final/evaluation/runs/live-agentic/final_stack_e2e/20261026T000432Z/.../89e61fecbb277f69-live-20261026T001641Z
 Copies the t = 80 s decision images the model was given (observe_image: the map and both robots' keyframes), the
 trimmed trace records of that decision (tool-call names and inputs, assignments, candidates' risk and approval flag,
 validation, the command), the mover's response to the command, and whole-run counts:
@@ -16,7 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
-RUN = Path("/data/code/Ariadne-e2e-final/evaluation/runs/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/"
+RUN = Path("/data/code/Ariadne-e2e-final/evaluation/runs/live-agentic/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/"
            "live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z")
 T_S = 80
 OUT = Path(__file__).resolve().parents[1] / "data" / "agentic_final"

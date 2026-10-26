@@ -507,7 +507,7 @@ TEST(PerceptionCv, FisheyeRectificationPutsCorrespondencesOnOneRowWithMetricDisp
     EXPECT_LT(dy, 1e-3);
     EXPECT_LT(depth_rel, 1e-4);
 
-    // The crop ALGORITHMS warns about, measured: rectified focal and the share of the rectified image fed by the lens.
+    // The crop algorithms.md warns about, measured: rectified focal and the share of the rectified image fed by the lens.
     cv::Mat white(800, 1280, CV_8UC1, cv::Scalar(255)), out_l;
     rect.RectifyLeft(white, out_l);
     const double valid = cv::countNonZero(out_l) / static_cast<double>(out_l.total());
@@ -641,7 +641,7 @@ TEST(KltTracker, UsacEmptyModelDefectIsAbsorbedByARedraw) {
     EXPECT_EQ(r.inlier.size(), p0.size());
 }
 
-// --- Online row refinement (AUDIT_2.3.md, D54) -------------------------------------------------------------------
+// --- Online row refinement (local-slam.md#window-audit, D54) -------------------------------------------------------------------
 
 namespace {
 
@@ -674,7 +674,7 @@ TEST(StereoRowRefinement, EstimatorRecoversAKnownResidualAndZeroOnAnAlignedPair)
     const cv::Mat left = Texture(41, 752, 480);
     StereoMatchParams p = LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc.yaml").stereo_match;
     const std::vector<cv::Point2f> pts = Grid(752, 480);
-    const double a = -1.30, b = 0.23 / 752.0, c = -1.10 / 480.0;   // the V2_01 shape (AUDIT_2.3.md §1)
+    const double a = -1.30, b = 0.23 / 752.0, c = -1.10 / 480.0;   // the V2_01 shape (local-slam.md#window-audit §1)
     const RowCorrection est = EstimateRowCorrection(left, RightWithRowError(left, 12.5, a, b, c), pts, p);
     ASSERT_TRUE(est.ok) << est.why;
     EXPECT_TRUE(est.slopes_fitted);

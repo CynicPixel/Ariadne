@@ -18,7 +18,7 @@
 //     colour), NOT the falloff-normalised albedo proxy of §19.1 (Phase 5);
 //     exposure_state and lamp_state are unset (§6.5, Phase 5).
 // The Phase 1 producer is tools::RunStereoVo's keyframe hook; the consumers are
-// the 1.6 exchange (features) and the 1.7 spool (bundles), see design PHASE1_GATE.
+// the 1.6 exchange (features) and the 1.7 spool (bundles), see design evaluation-harness.md#end-to-end-gate.
 // ---------------------------------------------------------------------------
 #include "core/geometry/pinhole.hpp"
 #include "perception/stereo/sgbm_stereo.hpp"
@@ -48,7 +48,7 @@ struct Keyframe {
     perception::StereoDepth depth;
     std::vector<uint64_t> landmark_ids;
     std::vector<float> global_descriptor;           // empty until a place-recognition consumer fills it
-    // Tracking provenance (LOST_FRAMES.md, D56; AUDIT_2.3 §4): a keyframe made while tracking was lost has a
+    // Tracking provenance (local-slam.md#lost-frames, D56; local-slam.md#window-audit §4): a keyframe made while tracking was lost has a
     // PREDICTED pose. Consumers (exchange, reconstruction, planning) weight or exclude it by this, not by guessing
     // from pose_cov. segment counts loss onsets: keyframes of different segments are joined only by predictions.
     slam::PoseSource pose_source = slam::PoseSource::kMeasured;

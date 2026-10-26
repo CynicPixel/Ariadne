@@ -434,7 +434,7 @@ TEST(DegradationFidelity, LampAirlightFollowsTheLobeAndThePower) {
     EXPECT_NEAR(Degrade(black, far, p, 1, 0).At(100, 100, 0), 64, 1);
 }
 
-// --- D139: the headlamp dust model (ALGORITHMS §10.2) ------------------------
+// --- D139: the headlamp dust model (algorithms.md §10.2) ------------------------
 
 namespace {
 DegradationParams HeadlampParams() {

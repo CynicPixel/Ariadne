@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The I5 exit verdict (design COLLAB_3.2 §6): every run ends `consistent` or
+// The I5 exit verdict (design collaboration.md §6): every run ends `consistent` or
 // `explicitly incomplete` (with the exact list of what is missing), never
 // silently `corrupt`.
 //

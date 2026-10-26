@@ -1,12 +1,12 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The parent's side of the live collaboration, ASYNCHRONOUS (design LIVE_COLLAB §9, D179; replaces D174's lockstep).
+// The parent's side of the live collaboration, ASYNCHRONOUS (design live-collaboration.md §9, D179; replaces D174's lockstep).
 //
 // One fleet thread owns the CollabFleet and its radio nodes (one per participant, the operator included). Every call the
 // runtime makes is non-blocking:
 //   Step(t)            enqueue sim tick t (the runtime's 0.5 s ladder)
 //   Send(k, fn, t)     enqueue a D175 send: fn(node k, t) runs on the fleet thread, in call order
-//   CutComms / RestoreComms / InjectFalse   enqueue the panel actions (LIVE_COLLAB §5)
+//   CutComms / RestoreComms / InjectFalse   enqueue the panel actions (live-collaboration.md §5)
 //   Drain(k, T)        agent k's coordination deliveries produced so far (ticks in order, FIFO per sender)
 //   Snapshot(T)        the latest published {T_O0_O, Linked, per-agent Component/LastHeartbeat/AckedPatchVersion,
 //                      Telemetry, version}: ONE atomically swapped value

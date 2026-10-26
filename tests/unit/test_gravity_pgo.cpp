@@ -1,4 +1,4 @@
-// GRAVITY_PRIOR consumption in the pose-graph solver (D73 part 2c; design ROBUST_BACKEND_2.5.md §8, D59 handoff):
+// GRAVITY_PRIOR consumption in the pose-graph solver (D73 part 2c; design robust-backend.md §8, D59 handoff):
 //   - the analytic gradient (pose + gravity blocks, Huber regime included) matches finite differences of the energy;
 //   - disabled (default) the solve is bit-identical to a graph without priors;
 //   - a 1.5 deg error in the reference gravity is recovered as well as the information allows (D124: mean NEES over

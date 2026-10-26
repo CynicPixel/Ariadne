@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The 3.2 transport: one `Endpoint` per agent (design COLLAB_3.2 §3).
+// The 3.2 transport: one `Endpoint` per agent (design collaboration.md §3).
 //
 // WHAT IT DOES, data in -> data out:
 //   Enqueue(dest, OutMessage)  -- an application message, NOT yet encoded
@@ -13,7 +13,7 @@
 // - Encoding happens at FIRST TRANSMISSION, with the reliable sequence number
 //   assigned there. A queued message that is superseded, expires or is
 //   cancelled therefore never consumed a number and cannot open a hole in a
-//   reliable stream (the Phase-1 Inbox's failure mode, COLLAB_3.2 §1).
+//   reliable stream (the Phase-1 Inbox's failure mode, collaboration.md §1).
 // - Fragments carry (msg_id, index, count). Loss is per datagram; whole-message
 //   retransmission would not converge (0.7^15 ≈ 0.5% for a 15-datagram graph
 //   at 30% loss). Acks name message ids: `done` ids plus a fragment bitmap per
@@ -141,7 +141,7 @@ struct OutMessage {
     std::optional<core::Duration> ttl;   // best-effort expiry (§3.3); none for edges/graphs
     uint64_t key = 0;                    // content id: keyframe / request / submap id; bookkeeping + cancel
     bool supersedes = false;             // a POSE_GRAPH snapshot: replaces a queued, unsent one
-    double predicted_wire_bytes = -1.0;  // the sender's prediction (COLLAB_3.2 §7, D171); ledger only
+    double predicted_wire_bytes = -1.0;  // the sender's prediction (collaboration.md §7, D171); ledger only
     bool resync = false;                 // a resend to a new broker (overhead row, D171)
 };
 
@@ -373,7 +373,7 @@ public:
         return out;
     }
 
-    // --- outcome accounting (COLLAB_3.2 §6) ---
+    // --- outcome accounting (collaboration.md §6) ---
 
     /// Reliable messages not yet acked by `dest` (queued or in flight).
     size_t UnackedReliable(AgentId dest) const {

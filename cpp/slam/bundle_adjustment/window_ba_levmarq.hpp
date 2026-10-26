@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Windowed BA on OpenCV 5's LM driver (D51; design LOCAL_SLAM_2.3.md §3): the
+// Windowed BA on OpenCV 5's LM driver (D51; design local-slam.md §3): the
 // same contract as the pose graph (pgo_levmarq.hpp) -- energy = the robust
 // cost at the PROBE state, jtb = +J^T W r, solveDecomposed solves
 // (H + D) x = -right with the Schur complement inside, currentOplusX writes
@@ -35,7 +35,7 @@ std::map<int, Mat6> WindowBaCovariances(const BaWindow& w, const std::vector<int
 /// see (EuRoC V1_03: the null vector is a common scale of two keyframes' translations, with far / right-less landmarks).
 /// `bias_cov`, inertial windows only: also the marginals of the biases [bg; ba] of `bias_keyframes` (fixed poses
 /// allowed: biases are always variables) from the same factorization (window[1]'s becomes the next solve's window[0]
-/// bias prior, INERTIAL_2.4 §4.2). `gravity_cov`: the tilt marginal (estimate_gravity windows; GravityTangentBasis of
+/// bias prior, inertial.md §4.2). `gravity_cov`: the tilt marginal (estimate_gravity windows; GravityTangentBasis of
 /// the window's g_W).
 bool TryWindowBaCovariances(const BaWindow& w, const std::vector<int>& keyframes, std::map<int, Mat6>& cov,
                             std::string* why = nullptr, const WindowBaReport* solve = nullptr,

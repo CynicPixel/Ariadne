@@ -1,4 +1,4 @@
-"""Read and validate the reconstruction spool (design RECON_1.7, arch §18.2).
+"""Read and validate the reconstruction spool (design reconstruction.md#first-reconstruction-loop, arch §18.2).
 
 The spool is written by C++ (`cpp/reconstruction/spool/keyframe_spool.hpp`). Every
 §18.2 field must be present; a missing or malformed field is an error, never a

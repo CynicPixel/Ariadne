@@ -47,7 +47,7 @@ struct BaParams {
     double huber_delta = 2.0;            // §11.3
     int max_iterations = 15;             // §11.6
     double sigma_px = 1.0;
-    // 2.3 (LOCAL_SLAM_2.3.md): "two_frame_stub" (1.5, the ablation baseline; the default, so v1 configs are
+    // 2.3 (local-slam.md): "two_frame_stub" (1.5, the ablation baseline; the default, so v1 configs are
     // unchanged) or "window" (OpenCV LevMarqBase windowed BA). Every window key is REQUIRED when backend == window.
     std::string backend = "two_frame_stub";
     int window_size = 10;                // DSO N_f = 7 ("more than 7 ... marginal"); catalogue 10-15
@@ -59,7 +59,7 @@ struct BaParams {
     double min_gradient_tolerance = 1e-8;
 };
 
-/// Behaviour while tracking is lost (LOST_FRAMES.md, D56). The defaults are the Phase-1 behaviour, so a config
+/// Behaviour while tracking is lost (local-slam.md#lost-frames, D56). The defaults are the Phase-1 behaviour, so a config
 /// without a `lost:` section is unchanged; a `lost:` section must name every key.
 struct LostParams {
     // How a lost frame's pose is predicted: "coast" (constant velocity frozen at loss, the 1.5 behaviour) or
@@ -77,7 +77,7 @@ struct LostParams {
     int reanchor_min_points = 30;       // gated: tracked landmarks + new ones >= this (2 x pnp.min_correspondences)
 };
 
-/// imu.mode full (D59, INERTIAL_2.4 §4): Forster preintegration in the window BA. Required iff mode is full.
+/// imu.mode full (D59, inertial.md §4): Forster preintegration in the window BA. Required iff mode is full.
 struct ImuFullParams {
     double noise_inflation_gyro = 3.0;     // §4.1, measured on EuRoC Machine Hall; the sim's IMU is exact (1)
     double noise_inflation_accel = 9.0;
@@ -93,7 +93,7 @@ struct ImuFullParams {
     std::string lost_motion = "decay";     // while lost: "decay" (D56/D58 translation) or "propagate" (IMU, §4.4)
 };
 
-/// GRAVITY_PRIOR edges (arch §10.4, INERTIAL_2.4 §4.10). Absent (`imu.gravity_prior` not in the config): none.
+/// GRAVITY_PRIOR edges (arch §10.4, inertial.md §4.10). Absent (`imu.gravity_prior` not in the config): none.
 struct GravityPriorParams {
     bool enabled = false;
     int stride_keyframes = 10;        // one edge per this many keyframes: non-overlapping windows (§4.10 correlation)
@@ -109,14 +109,14 @@ struct ImuParams {
     std::string mode = "none";
     bool seed_lk = false;           // §10.5: predict LK's starting point from the gyro rotation
     int bias_window = 200;          // tracked pairs in the VO-aided gyro-bias median (attitude.hpp)
-    double stationary_s = 2.0;      // PHASE2_PLAN §3 stationary-start test
+    double stationary_s = 2.0;      // local-slam.md#estimator-plan §3 stationary-start test
     double kp = 1.0;                // Mahony et al. 2008 §VI
     double ki = 0.3;
     ImuFullParams full;
     GravityPriorParams gravity_prior;
 };
 
-/// Intra-agent loop closure (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): retrieval -> verifier -> degeneracy gate
+/// Intra-agent loop closure (D73 part 2b; design robust-backend.md §8): retrieval -> verifier -> degeneracy gate
 /// -> PCM -> GNC on a mirror of the VO graph. OFF without a `loop_closure:` section, so existing configs and their
 /// outputs are unchanged; a `loop_closure:` section must name every key except the optional `certificate`.
 /// Read-only towards the VO.

@@ -1,4 +1,4 @@
-"""Recall@k of global place descriptors on EuRoC (design PERCEPTION_2.1 §11.5). numpy only.
+"""Recall@k of global place descriptors on EuRoC (design perception.md §11.5). numpy only.
 
   python3 -I place_recall_eval.py ROOT [--dist 1.0] [--angle 30] [--exclude-s 30]
 
@@ -96,7 +96,7 @@ def main() -> int:
     def r(x, q):
         return x / q if q else float("nan")
 
-    out = ["# place_recall_eval (PERCEPTION_2.1 §11.5). Generated.",
+    out = ["# place_recall_eval (perception.md §11.5). Generated.",
            f"protocol: {{dist_m: {a.dist}, angle_deg: {a.angle}, exclude_s: {a.exclude_s}}}", "flights:"]
     print(f"{'flight':18s} {'q/n':>9s}  " + "  ".join(f"{m+'@'+str(k):>12s}" for m in METHODS for k in KS)
           + f"  {'random@1':>9s} {'random@5':>9s}")

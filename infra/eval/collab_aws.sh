@@ -1,5 +1,5 @@
 #!/bin/bash
-# The 3.2/3.4 gate sweep (design SIMCOLLAB_3.2 §4-§6, D171) on one AWS instance, as root, launched by
+# The 3.2/3.4 gate sweep (design collaboration.md#simulated-collaboration §4-§6, D171) on one AWS instance, as root, launched by
 # infra/eval/collab_aws_launch.sh through spinup.sh. Inputs staged under $STAGE as for the pre-merge
 # (premerge_aws.sh): repo.bundle, images.txt (the dev image), inputs.tar (the sim exports), and the recordings as
 # persistent datasets under $DATA0 / $DATA1 with their SHA256SUMS in inputs.tar.

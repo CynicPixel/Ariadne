@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.3 next-best-view (arch §21.2-§21.4; design NBV_4.3, D114). Planning-level: no runtime, ROS or AWS type.
+// 4.3 next-best-view (arch §21.2-§21.4; design next-best-view.md, D114). Planning-level: no runtime, ROS or AWS type.
 //
 //   targets   generators A frontier clusters (PCA-split above 2 m), B low-weight surface coarse cells (bottom
 //             decile), C peers' keyframes this agent has not been near, D alias places, E low-support egress runs;
@@ -104,7 +104,7 @@ struct PeerKeyframe {
 };
 
 /// Delta lambda_2 of the inter-agent edge a view near `peer_kf_id` would enable (3.4's selector, via a runtime
-/// adapter; NBV_4.3 §1).
+/// adapter; next-best-view.md §1).
 class ConnectivityOracle {
 public:
     virtual ~ConnectivityOracle() = default;
@@ -117,14 +117,14 @@ struct AliasPlace {
     double value = 0;   // the disambiguation value of observing it (§21.3)
 };
 
-/// §17.3 alias-flagged places (no producer yet; NBV_4.3 §1).
+/// §17.3 alias-flagged places (no producer yet; next-best-view.md §1).
 class AliasSource {
 public:
     virtual ~AliasSource() = default;
     virtual std::vector<AliasPlace> Places() const = 0;
 };
 
-enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // NBV_4.3 §5; kTare: 4.6
+enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // next-best-view.md §5; kTare: 4.6
 
 /// D117: the command the live loop would send for a view, from the planner's own Route (Phase4Planner): its
 /// waypoints (one (NaN, NaN) = turn here, D125) and whether it was cut short of the view (D119: no final yaw).
@@ -152,7 +152,7 @@ struct NbvParams {
     double tare_subspace_m = 6.0;              // D116: 12 coarse cells = one horizon width (2 x the depth gate)
     double split_extent_m = 2.0;               // FUEL's PCA split above this AABB extent
     double peer_near_m = 4.0, peer_seen_m = 2.0;
-    double rho_r = 0.40, rho_a = 0.20, escape_m = 0.5;   // D158's risk mapping (B, AGENTIC_7)
+    double rho_r = 0.40, rho_a = 0.20, escape_m = 0.5;   // D158's risk mapping (B, agentic.md)
     double e_total_m = 1e9;                    // energy budget, in metres in the kinematic rig
     double e_per_m = 1.0, speed_mps = 0.5;
     double reserve = 1.3;

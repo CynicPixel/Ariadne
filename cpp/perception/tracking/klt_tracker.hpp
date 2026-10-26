@@ -109,7 +109,7 @@ public:
     /// nullptr keeps the 1.4 behaviour exactly.
     TrackedFrame Process(const cv::Mat& gray, uint64_t frame_id, uint64_t seed, const cv::Matx33d* predicted = nullptr);
 
-    /// Re-association (PERCEPTION_2.1.md §4.3): rename live tracks -- the ones the last Process() returned -- to
+    /// Re-association (perception.md §4.3): rename live tracks -- the ones the last Process() returned -- to
     /// the ids of existing landmarks, so the SLAM side, which keys landmarks by track id, finds them again. The
     /// track keeps its position and age. Parallel arrays; throws unless every `from` is live and every `to` is
     /// neither live nor repeated (one track per landmark). Ids never come from next_id_, so no fresh id collides.

@@ -1,4 +1,4 @@
-// Visual-inertial window BA (INERTIAL_2.4.md §4.2, §4.5), OpenCV-free: the assembled gradient and Hessian including
+// Visual-inertial window BA (inertial.md §4.2, §4.5), OpenCV-free: the assembled gradient and Hessian including
 // the inertial, bias random-walk and bias-prior blocks against finite differences of the energy, Schur == dense with
 // inertial blocks in the reduced system, the Galilean null space of an inertial-only chain, and AnchorWindow's rule
 // that an inertial factor ties only out of a group with two pose-determined keyframes.

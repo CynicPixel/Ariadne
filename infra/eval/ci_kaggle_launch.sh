@@ -24,7 +24,7 @@
 #                      whatever it writes to $CI_OUT comes back as extra_out/
 #          MAX_MINUTES the kernel's own timeout (push -t), default 90 (a full ctest takes ~33 min; 3 of 11 kernels on 2026-10-24 stalled RUNNING with no logs, so the Kaggle-side brake must be short. [UNVERIFIED: that push -t is enforced])
 #          JOBS / CTEST_JOBS  default 4 / 4 (the kernel has 4 vCPU)
-# The repo goes up as `git archive COMMIT` (tracked files only) minus IDEA.md and docs/ARIADNE_PHASED_PLAN.md
+# The repo goes up as `git archive COMMIT` (tracked files only) (tracked files only)
 # (maintainer, 2026-10-24); everything on Kaggle is PRIVATE. The token never leaves this host: the Kaggle CLI runs
 # in kaggle.sh's pinned container with ~/.kaggle mounted read-only.
 set -euo pipefail
@@ -32,7 +32,7 @@ cd "$(dirname "$0")/../.."
 REPO_ROOT=$PWD
 IMAGE=ariadne-kaggle:2.2.4                  # kaggle.sh's pinned CLI image (built by kaggle.sh on first use)
 OPENCV_IMAGE=ariadne/opencv-base:5.0.0
-EXCLUDE=(':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')
+EXCLUDE=()
 DEFAULT_INPUTS=".cache/models/xfeat_ref .cache/models/eigenplaces_ref .cache/models/aliked_lg_ref
   .cache/models/eigenplaces_sim_ref .cache/models/aliked_lg_sim_ref .cache/oracle/pgo"
 B=build/ci_kaggle
@@ -95,7 +95,6 @@ stage() {
   # The code under test: tracked files of COMMIT only (a dirty tree never leaks in), plus the commit id it claims.
   local src="$W/src"; mkdir -p "$src"
   git archive --format=tar --add-virtual-file=.kaggle_commit:"$commit" -o "$src/repo.tar.keep" "$commit" -- . "${EXCLUDE[@]}"
-  tar tf "$src/repo.tar.keep" | grep -q -x -E 'IDEA.md|docs/ARIADNE_PHASED_PLAN.md' && die "excluded file in repo.tar.keep"
   echo "ariadne-ci-src-${commit:0:12}" > "$W/src_slug"
   dataset_up "ariadne-ci-src-${commit:0:12}" "ci_kaggle/$NAME/src" "ariadne-ci-src-${commit:0:12}"
   # Inputs, content-addressed by their checksum list (paths + sha256), as ci_aws_launch.sh stages them.

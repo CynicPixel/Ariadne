@@ -5,8 +5,8 @@
 // It OWNS, for one mission:
 //   - the link stack: a base LinkModel (ideal, or RFComms-derived with or without wall attenuation;
 //     rf_link_model.hpp) under a FaultPlan for scripted partitions and disconnects;
-//   - the Network that every datagram crosses (COLLAB_3.2 §2), which enforces that link state;
-//   - the ONE ByteLedger every Endpoint records into (§15.6, COLLAB_3.2 §2).
+//   - the Network that every datagram crosses (collaboration.md §2), which enforces that link state;
+//   - the ONE ByteLedger every Endpoint records into (§15.6, collaboration.md §2).
 // Ledger rule: only Endpoints write the ledger, at their serialization boundary (first sends, retransmissions,
 // heartbeats, acks). The node forwards and drops datagrams through the Network, which has no ledger at all, so a
 // forwarded datagram can never be counted twice (tested: draining the network adds no rows).

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Global-optimality certificate for a pose graph (arch §14.8, D74; design ROBUST_BACKEND_2.5.md §7). Behind a flag:
+// Global-optimality certificate for a pose graph (arch §14.8, D74; design robust-backend.md §7). Behind a flag:
 // nothing in the runtime calls it unless `loop_closure.certificate` is set; it is a verification artifact, never a
 // solver on the hot path.
 //
@@ -10,7 +10,7 @@
 // (IsotropicFromInformation, D70); w_e is the edge's GNC weight (1 for odometry; loops at or under kInactiveGncWeight
 // are dropped, as in SolvePoseGraph). So a `certified` result reads "globally optimal for the isotropic chordal
 // surrogate of this edge set". It proves optimality of the GIVEN cost, not correctness: an outlier kept in the cost
-// can be certified (PHASE2_PLAN §3; reported, never tuned away). The certificate is ONE-DIRECTIONAL: `not certified`
+// can be certified (local-slam.md#estimator-plan §3; reported, never tuned away). The certificate is ONE-DIRECTIONAL: `not certified`
 // means unknown, not wrong (§14.8).
 //
 // THE MATRIX. Stack the unknowns as X = [t_1 .. t_n | R_1 .. R_n] (3 x 4n). Every residual above is linear in X:
@@ -19,7 +19,7 @@
 // from the residuals rather than transcribed). Relax R_i^T R_i = I with symmetric multipliers Lambda_i. First-order
 // stationarity X (M - Lambda~) = 0, Lambda~ = blkdiag(0 on translations, Lambda_i on rotations), gives
 //     Lambda_i = sym( (M X^T)_{R_i} R_i ),    S = M - Lambda~   (SE-Sync's sign, eq. 119 / Thm 7; arch §14.8's
-// "Lambda - Q~" is the other sign, corrected per PHASE2_PLAN §4 and fixed by the noise-free test).
+// "Lambda - Q~" is the other sign, corrected per local-slam.md#estimator-plan §4 and fixed by the noise-free test).
 // If S >= 0 at a stationary point, X is a global minimiser of the O(3) relaxation, hence of the SE(3) problem.
 //
 // THE TEST (§49 substitution: arch §14.8 says shifted Lanczos; SE-Sync's own practice is a Cholesky). Ground one

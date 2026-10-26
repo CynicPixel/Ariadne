@@ -1,4 +1,4 @@
-// 1.6 protocol pieces (design COLLAB_1.6): the three new payloads round-trip
+// 1.6 protocol pieces (design collaboration.md#first-collaboration-loop): the three new payloads round-trip
 // through the one serializer boundary, malformed responses are rejected, and the
 // inbox is idempotent and order-restoring (§15.3; Phase 1 exit protocol test).
 #include "collaboration/protocol/inbox.hpp"

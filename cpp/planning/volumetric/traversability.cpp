@@ -58,7 +58,7 @@ TraversabilityMaps ComputeTraversability(const TsdfMap& map, const Esdf& esdf, c
                 any_occ |= st == kOccupied;
             }
             m.slab.at<uint8_t>(r, c) = any_occ ? kOccupied : (any_free ? kFree : kUnknown);
-            // Risk counts for this column. "Open beneath" (measured fix, TRAVERSABILITY_4.2 §6): no occupied voxel
+            // Risk counts for this column. "Open beneath" (measured fix, traversability-risk.md §6): no occupied voxel
             // below the band within +-2 voxels (a thin wall's voxels jitter by one between heights), and the column
             // itself observed free somewhere below the band (unobserved is not "open").
             bool open_below = true, seen_free = false;

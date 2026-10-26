@@ -1,4 +1,4 @@
-"""4.3 / 4.6 planner gate (NBV_4.3 §5, amended 2026-10-23 before any gate run; D114, D116): coverage vs mission time.
+"""4.3 / 4.6 planner gate (next-best-view.md §5, amended 2026-10-23 before any gate run; D114, D116): coverage vs mission time.
 
 Every row is scored from the SAME Phase 4 map: the run's shadow-map snapshots `snapshots/p4slab_<ms>.png` (B's
 7916ee7), 4.1's metric (GT-free cells the map observed free / GT-free cells; volumetric_eval.py). Primary x: mission
@@ -27,7 +27,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from volumetric_eval import FREE, read_png_u8  # noqa: E402  (the 4.1 reader and slab codes, one implementation)
 
-T_GRID_S = [20 * k for k in range(1, 11)]   # pre-registered (NBV_4.3 §5 amendment)
+T_GRID_S = [20 * k for k in range(1, 11)]   # pre-registered (next-best-view.md §5 amendment)
 
 
 def run_identity(run: Path) -> dict:
@@ -98,7 +98,7 @@ def summarise(rows: list[dict]) -> dict:
             losses = [{"t_s": c["t_s"], "vs": b, "ariadne": c["mean"], "baseline": pols[b]["curve"][i]["mean"]}
                       for b in base for i, c in enumerate(pols["ariadne"]["curve"]) if c["mean"] < pols[b]["curve"][i]["mean"]]
             s["claim_ariadne_ge_every_baseline_every_T"] = not losses
-            s["losses"] = losses   # reported, never hidden (NBV_4.3 §5)
+            s["losses"] = losses   # reported, never hidden (next-best-view.md §5)
     return out
 
 
@@ -117,7 +117,7 @@ def main(argv=None) -> int:
         for r in rows:
             f.write(json.dumps(r) + "\n")
     summ = summarise(rows)
-    (a.out / "gate_summary.yaml").write_text("# gate_coverage.py (NBV_4.3 §5 amended, D114/D116). Generated.\n"
+    (a.out / "gate_summary.yaml").write_text("# gate_coverage.py (next-best-view.md §5 amended, D114/D116). Generated.\n"
                                              + yaml.safe_dump(summ, sort_keys=False))
     for scene, s in summ.items():
         print(scene, {p: round(v["auc_mean"], 4) for p, v in s["policies"].items()},

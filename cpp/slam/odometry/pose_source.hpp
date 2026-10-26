@@ -1,5 +1,5 @@
 #pragma once
-// Where a keyframe's / frame's pose came from (LOST_FRAMES.md, D56). OpenCV-free, so keyframe records and the wire
+// Where a keyframe's / frame's pose came from (local-slam.md#lost-frames, D56). OpenCV-free, so keyframe records and the wire
 // side can carry it without the VO.
 #include <cstdint>
 

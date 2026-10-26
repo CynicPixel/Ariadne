@@ -7,7 +7,7 @@
 # (ariadne_sim_vo --imu-noise configs/sim/imu_noise_v1.yaml; without it the runner refuses: no IMU). The imu section
 # is euroc_v2's with the noise inflation 1 (the injected model IS the estimator's model). The visual-only v2 path
 # is sim_v2_vo.
-# 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
+# 2.3 windowed BA (local-slam.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder SLAM for the simulated rig: euroc.yaml with the depth floor of sim_v1.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: sim_v2_loops
@@ -46,7 +46,7 @@ ba:
   step_norm_tolerance: 1.0e-8
   min_gradient_tolerance: 1.0e-8
 
-lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+lost:                           # lost-frame handling (local-slam.md#lost-frames, D56); absent = coast / every_frame (the 1.5 baseline)
   motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
   reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
   bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
@@ -57,10 +57,10 @@ lost:                           # lost-frame handling (LOST_FRAMES.md, D56); abs
   reanchor_min_points: 30       # gated only: 2 x pnp.min_correspondences
 
 imu:                            # D59 full (attitude_only behaviour until initialised). Absent = none.
-  mode: full                    # velocity + biases in the window BA (INERTIAL_2.4 §4)
+  mode: full                    # velocity + biases in the window BA (inertial.md §4)
   seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
   bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
-  stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
+  stationary_s: 2.0             # local-slam.md#estimator-plan §3 stationary-start test
   kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
   ki: 0.3
   full:
@@ -76,7 +76,7 @@ imu:                            # D59 full (attitude_only behaviour until initia
     repropagate_gyro: 0.01      # rad/s (VINS-Mono)
     repropagate_accel: 0.1      # m/s^2 (VINS-Mono)
     lost_motion: decay          # §4.4: decay | propagate, decided on held-out fake outages
-  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+  gravity_prior:                # GRAVITY_PRIOR edges (inertial.md §4.10), consumed by the pose graph (2.5)
     stride_keyframes: 10        # one per window length: non-overlapping data
     source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
     attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)
@@ -88,7 +88,7 @@ loop_closure:
   exclude_seconds: 10.0        # ... nor keyframes within 10 s
   min_score: 0.5               # cosine, mean-bit PLACEHOLDER descriptor (1.6's retrieval_threshold) [ASSUMPTION]
   top_k: 3
-  # Edge noise model (ROBUST_BACKEND_2.5.md §8): var = k sigma_PnP^2 + floor^2 per block. Fitted 2026-10-21 by maximum
+  # Edge noise model (robust-backend.md §8): var = k sigma_PnP^2 + floor^2 per block. Fitted 2026-10-21 by maximum
   # likelihood on the ground-truth-good loops of MH_01_easy + V1_01_easy (euroc_v2_loops runs, nearest-sample GT);
   # held-out validation pending [ASSUMPTION until then]. MH_01-only fit failed held-out V1_01 (mean NEES 9.5).
   noise_model: true

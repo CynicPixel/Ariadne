@@ -19,7 +19,7 @@
 // transformation for Poisson-Gaussian noise", IEEE TIP 22(1), 2013; equations
 // as numbered in M. Mäkitalo's doctoral thesis (Tampere UT, 2013), ch. 3-4.
 // Implemented from the paper. The authors' Matlab package (invansc) is under a
-// non-commercial licence and none of it is used or shipped (ALGORITHMS §14.6).
+// non-commercial licence and none of it is used or shipped (algorithms.md §14.6).
 // ---------------------------------------------------------------------------
 #include <algorithm>
 #include <cmath>

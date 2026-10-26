@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// D175 (MULTIAGENT_PIPELINE §1-§3): the planning side of agents that coordinate through the radio. Each agent runs
+// D175 (live-runtime.md#multi-agent-pipeline §1-§3): the planning side of agents that coordinate through the radio. Each agent runs
 // its own Phase4Planner on its OWN keyframes (Phase4Planner::PlanOwn); what it knows of its peers it RECEIVED:
 //   SubmapPatch   (SUBMAP_PATCH, class 8)  the sender's own slab + rho_responder bit, changed 32x32 blocks, 2 bits/cell
 //   TaskBid       (TASK_BID, class 9)      the sender's top-M options with BuildAuction's raw terms

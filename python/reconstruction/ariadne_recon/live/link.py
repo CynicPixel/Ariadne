@@ -1,4 +1,4 @@
-"""The live keyframe tee's wire format (RECON_6 §3; contract agreed with B 2026-10-24, D231). numpy + stdlib only.
+"""The live keyframe tee's wire format (reconstruction.md §3; contract agreed with B 2026-10-24, D231). numpy + stdlib only.
 
 Framing = B's LinkFrame (cpp/runtime/live/link_frame.hpp, D150), little-endian:
   frame = u32 magic "ARL1" | u32 topic_len | topic | u32 payload_len | payload

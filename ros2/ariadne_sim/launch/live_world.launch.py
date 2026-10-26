@@ -1,4 +1,4 @@
-"""The live world: gz sim server + the runtime link (design LIVE_RUNTIME_L1 D150/D155).
+"""The live world: gz sim server + the runtime link (design live-runtime.md D150/D155).
 
   ros2 launch ariadne_sim live_world.launch.py scene_dir:=<scene> run_dir:=<run>
 

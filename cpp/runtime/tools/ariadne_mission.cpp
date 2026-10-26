@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_mission: 1.8 placeholder mission layer in replay (design MISSION_1.8).
+// ariadne_mission: 1.8 placeholder mission layer in replay (design mission.md).
 // Reads the 1.7 spool (keyframe depth + sigma + poses, the 1.6 merge) and the
 // mission briefing (entrances = exits, target, rig extrinsic), integrates depth
 // into an OctoMap-model voxel grid in the world frame, and every replan period
@@ -13,7 +13,7 @@
 // --agents 0 / 1: that agent alone, anchored by ITS OWN briefed entry pose (the comparator rows of
 // the collaboration ablation; the merged run never uses agent 1's entry pose).
 // The mapping, routing and frontier logic lives in planning/mission/frontier_mission.hpp (shared with the live
-// runtime, design LIVE_RUNTIME_L1 D153); this tool is its batch caller over a spool.
+// runtime, design live-runtime.md D153); this tool is its batch caller over a spool.
 // Outputs: trace.jsonl (one record per decision, mode replay / executed false),
 // routes.jsonl (both routes at every replan), slab.png + support.png (final map),
 // results.yaml, manifest.yaml.
@@ -207,7 +207,7 @@ int main(int argc, char** argv) {
             const planning::mission::ReplanMaps maps = map.Replan();
             const cv::Mat& slab = maps.slab;
             const cv::Mat& support = maps.support;
-            // Console snapshot (design CONSOLE_1.10): the 2D tri-state map at this replan.
+            // Console snapshot (design live-runtime.md#operator-console): the 2D tri-state map at this replan.
             cv::imwrite((run_dir / "snapshots" / ("slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png")).string(),
                         slab);
 
@@ -290,7 +290,7 @@ int main(int argc, char** argv) {
 
         std::ofstream res(run_dir / "results.yaml");
         res.precision(10);
-        res << "# ariadne_mission results (design MISSION_1.8). Generated; do not hand-edit.\n"
+        res << "# ariadne_mission results (design mission.md). Generated; do not hand-edit.\n"
             << "scene_id: " << scene_id << "\nconfig: " << cfg.name << "\nagents: " << agents
             << "\nanchor_agent: " << anchor_agent << "\n"
             << "keyframes_integrated: {agent0: " << integrated[0] << ", agent1: " << integrated[1] << "}\n"

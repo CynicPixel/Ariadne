@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// PGO assembly digest (design POSE_GRAPH_2.md §5): FNV-1a over the raw IEEE
+// PGO assembly digest (design pose-graph.md §5): FNV-1a over the raw IEEE
 // bits of the energy, H and g of ONE fixed pose graph, assembled at a fixed
 // point. Measured into every run manifest (D21 pattern), so a result produced
 // by drifted pose-graph numerics is identifiable after the fact.

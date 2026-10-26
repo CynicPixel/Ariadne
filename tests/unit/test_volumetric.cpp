@@ -1,4 +1,4 @@
-// 4.1 volumetric stack (design VOLUMETRIC_4.1 §5, D110): FH 1D and the 3D ESDF against brute force (the §37.6
+// 4.1 volumetric stack (design volumetric.md §5, D110): FH 1D and the 3D ESDF against brute force (the §37.6
 // exit-gate oracle) and cv::distanceTransform, the incremental ESDF against a rebuild, the TSDF on a known room and
 // against OpenCV's HashTSDF (the §20.1 oracle), frontiers against brute force and incremental against full,
 // determinism, and the coarse RLE codec.
@@ -250,7 +250,7 @@ TEST(Volumetric, TsdfOnAKnownRoomCarvesFreeAndPlacesSurfacesWithinAVoxel) {
     EXPECT_LE(double(occ_bleed), 0.002 * occ);   // the bleed the 5 cm voxel (D110) was sized to survive
     EXPECT_EQ(free_bad, 0u) << "free voxels more than half a voxel inside structure";
     // Along-ray SDF >= perpendicular distance, so at grazing incidence a voxel that contains the wall can read free:
-    // clearance is then optimistic by at most one voxel. Measured, bounded here, and stated in VOLUMETRIC_4.1 §7.
+    // clearance is then optimistic by at most one voxel. Measured, bounded here, and stated in volumetric.md §7.
     EXPECT_LE(double(free_near), 0.03 * free);
     EXPECT_EQ(map.State(map.ToVoxel({0.813, 0.821, 1.107})), kFree);         // the camera's own voxel was carved
     EXPECT_EQ(map.State(map.ToVoxel(core::Vec3(-0.5, 1.5, 1.2) + kOff)), kUnknown);     // behind a wall by more than tau

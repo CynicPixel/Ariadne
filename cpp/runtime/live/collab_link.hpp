@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The live collaboration's messages (design LIVE_COLLAB §2, D174) between three processes per agent k:
+// The live collaboration's messages (design live-collaboration.md §2, D174) between three processes per agent k:
 //   estimator worker k  -> ariadne_collab_worker k   #hello, #ckin (a keyframe at creation), #crel (its release)
 //   ariadne_collab_worker k -> parent                #ckf (a released keyframe's record), #fresp, #cwm (watermark)
 //   parent -> ariadne_collab_worker k                #hello, #freq (local features of a keyframe, please)

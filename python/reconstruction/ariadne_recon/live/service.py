@@ -1,4 +1,4 @@
-"""The reconstruction service loop (RECON_6 §1/§3; D190, D194, D195): keyframes in -> submap chunks + table out.
+"""The reconstruction service loop (reconstruction.md §1/§3; D190, D194, D195): keyframes in -> submap chunks + table out.
 
   python -m ariadne_recon.live.service --spool DIR [DIR ...] --out SPLAT_DIR [--scene DIR] [--placement briefing|merges]
   python -m ariadne_recon.live.service --listen SOCK --out SPLAT_DIR [--scene DIR]      # live: B's tee (link.py) [--backend gpu|cpu_init]

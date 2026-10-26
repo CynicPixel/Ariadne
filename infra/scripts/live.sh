@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The live closed-loop run (design docs/design/LIVE_RUNTIME_L1.md, D150-D155).
+# The live closed-loop run (design docs/design/live-runtime.md, D150-D155).
 #
 #   infra/scripts/live.sh build                    sim side: the mover plugin + ros2/ (colcon) in ariadne/sim
 #   infra/scripts/live.sh compose PRESET SEED RTF  scene + mission_live.* -> build/live/scenes/<preset>_<seed>
@@ -20,7 +20,7 @@
 #                              RuntimeLink in one component container; unpaused here once <run>/link.ready exists
 #   console  ariadne-console   ARIADNE_LIVE=<run>:<scene> uvicorn, 127.0.0.1:${ARIADNE_CONSOLE_PORT:-8080};
 #                              a probe client keeps a WebSocket open so frames are served (and logged) during the run
-#   orch     ariadne-orchestrator  only with `chooser: llm` (AGENTIC_7 D156): the Bedrock tool loop + MCP servers,
+#   orch     ariadne-orchestrator  only with `chooser: llm` (agentic.md D156): the Bedrock tool loop + MCP servers,
 #                              listening on <run>/chooser.sock BEFORE the runtime starts (it connects, waiting <= 60 s).
 #                              Credentials: the current session exported to a mode-600 env file that is deleted as
 #                              soon as docker has read it (aws.sh's pattern for Terraform); short-lived, never logged.
@@ -348,7 +348,7 @@ cmd_replay() {
   if [ -f "$REPO_ROOT/$run/imu_noise_config.yaml" ]; then imu_noise_arg=(--imu-noise-config "$run/imu_noise_config.yaml"); fi
   local live_dir; live_dir="$(cd "$REPO_ROOT/$run" && ls -d */inputs.mcap | head -1 | xargs dirname)"
   # The recorded inputs beyond the sensors: operator directives always; the LLM's choices when chooser is llm (the
-  # model is never called in replay, AGENTIC_7 D161).
+  # model is never called in replay, agentic.md D161).
   local extra=(--directives "$run/$live_dir/directives.jsonl")
   grep -q '^chooser: *llm' "$REPO_ROOT/$cfg" && extra+=(--decisions "$run/$live_dir/trace.jsonl")
   [ -f "$REPO_ROOT/$run/planner_config.yaml" ] && extra+=(--planner-config "$run/planner_config.yaml")

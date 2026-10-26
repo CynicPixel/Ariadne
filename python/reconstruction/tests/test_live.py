@@ -1,4 +1,4 @@
-"""Phase 6 live path, CPU parts (RECON_6, D190/D193): submap frames and re-anchoring (exit-gate bullet 2's algebra),
+"""Phase 6 live path, CPU parts (reconstruction.md, D190/D193): submap frames and re-anchoring (exit-gate bullet 2's algebra),
 depth seeding, chunk export. No GPU, no torch."""
 import json
 

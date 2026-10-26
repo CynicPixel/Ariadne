@@ -1,14 +1,14 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The production broker solve (design COLLAB_3.2 §5): adapts the protocol's
+// The production broker solve (design collaboration.md §5): adapts the protocol's
 // SolveInput (wire values, float32, frame-tagged) to the multi-agent pose graph
 // (slam/pose_graph/multi_agent.hpp) and back. Plugged into NodeHooks::solve by
 // the runtime; links slam_opencv. The protocol tests use an oracle instead.
 //
-// The robust stage (D171, COLLAB_3.2 §5): RobustMultiAgentSolve runs 2.5's
+// The robust stage (D171, collaboration.md §5): RobustMultiAgentSolve runs 2.5's
 // joint-graph entry (slam/robust/joint_robust.hpp, D76: PCM -> chordal re-init
 // -> GNC-TLS) in place of the plain PGO. The D71 degeneracy gate runs earlier,
-// in the verifier that holds the geometry (COLLAB_3.2 §11). An agent whose
+// in the verifier that holds the geometry (collaboration.md §11). An agent whose
 // inter-agent edges were all rejected is reported unplaced, never placed on
 // them. MultiAgentSolve (no robust stage) stays as the ablation row.
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ struct FalloffParams {
     int normal_window_px = 7;   // RgbdNormals window size (1, 3, 5 or 7); 7 beat 5 for FALS (3.9 % vs 7.9 %)
     /// LINEMOD's depth-difference threshold, in the depth's units (metres here). OpenCV's default 50 assumes millimetres.
     double linemod_diff_threshold_m = 0.05;
-    /// Pixels within this distance of an invalid pixel are excluded from feature_mask (D140, ALGORITHMS §17.4): the
+    /// Pixels within this distance of an invalid pixel are excluded from feature_mask (D140, algorithms.md §17.4): the
     /// boundary of the valid region (lobe edge, depth holes) moves WITH the camera, and a detector firing on it makes
     /// lamp-anchored keypoints that track perfectly and describe nothing in the world.
     int feature_margin_px = 8;

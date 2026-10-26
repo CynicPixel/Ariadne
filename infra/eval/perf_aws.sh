@@ -116,7 +116,7 @@ if [[ " $STAGES " == *" timing "* ]]; then
   step "T ORT $ORT_VERSION"
   python3 -m venv /opt/ortvenv && /opt/ortvenv/bin/pip install -q "onnxruntime==$ORT_VERSION" > "$R/ort/pip.log" 2>&1 \
     && /opt/ortvenv/bin/pip freeze > "$R/ort/freeze.txt"
-  ORTB() { /opt/ortvenv/bin/python -I "$SRC/evaluation/runs/perf/pipeline_profile_20261024/scripts/ort_bench.py" \
+  ORTB() { /opt/ortvenv/bin/python -I "$SRC/evaluation/runs/performance/pipeline_profile_20261024/scripts/ort_bench.py" \
            --models-dir "$SRC/.cache/models" --threads "$1" --reps "$2" --label "$3" --out "$R/ort/$3.csv" >> "$R/ort/ort.log" 2>&1; }
   if [ -x /opt/ortvenv/bin/python ]; then
     for t in 1 4 16; do mpstat_on "ort_t$t"; ORTB "$t" 10 "ort_single_t$t"; mpstat_off; done
@@ -137,7 +137,7 @@ if [[ " $STAGES " == *" knobs "* ]]; then
       | xargs -P 8 -I{} sh -c 'mkdir -p "$(dirname "{}")" && aws s3 cp "'"$1"'/{}" "{}" --only-show-errors') || return 1
     (cd "$2" && sha256sum -c --quiet "$3")
   }
-  PI=evaluation/runs/perf/pipeline_profile_20261024/inputs
+  PI=evaluation/runs/performance/pipeline_profile_20261024/inputs
   REC0=$(cat "$SRC/$PI/rec0.txt") REC1=$(cat "$SRC/$PI/rec1.txt")
   fetch "$DATA0" "$SRC/$REC0" "$SRC/$PI/rec0.SHA256SUMS" > "$R/knobs/rec0_check.txt" 2>&1 || fail "recording 0"
   fetch "$DATA1" "$SRC/$REC1" "$SRC/$PI/rec1.SHA256SUMS" > "$R/knobs/rec1_check.txt" 2>&1 || fail "recording 1"
@@ -207,7 +207,7 @@ DOCKERFILE
   mpstat_on adaptive
   for sc in 0 1; do
     docker run --rm --network none -u 1000:1000 -v "$SRC:/work:ro" -v "$W:/w" -v "$UPL:/up:ro" ariadne-model-ref:1 \
-      python -I /work/evaluation/runs/perf/pipeline_profile_20261024/scripts/lg_adaptive.py --upstream /up/lg \
+      python -I /work/evaluation/runs/performance/pipeline_profile_20261024/scripts/lg_adaptive.py --upstream /up/lg \
       --weights /up/weights --exporter /work/python/model_tools --feat-dir "/w/feat/s$sc" \
       --pairs "/work/$PI/pairs_s$sc.csv" --threads 16 --out "/w/adaptive_s$sc.csv" > "$W/adaptive_s$sc.log" 2>&1 \
       || { cp "$W/adaptive_s$sc.log" "$R/knobs/"; fail "lg_adaptive scene $sc"; }

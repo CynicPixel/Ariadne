@@ -4,7 +4,7 @@
 // deterministic transcendentals.
 //
 // Every sampler here is bit-identical across machines, which rules out the
-// std:: distributions: their ALGORITHMS are implementation-defined, so
+// std:: distributions: their algorithms.md are implementation-defined, so
 // libstdc++ and libc++ produce different values from the same bits. Nothing in
 // <random> may be used inside the degradation operator.
 //

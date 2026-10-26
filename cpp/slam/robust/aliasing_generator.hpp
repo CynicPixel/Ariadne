@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Perceptual-aliasing outlier generator (D75; design ROBUST_BACKEND_2.5.md §6). Test and evaluation support:
+// Perceptual-aliasing outlier generator (D75; design robust-backend.md §6). Test and evaluation support:
 // header-only, never linked into a runtime target. Reused by 3.5 for inter-agent groups (JointId nodes, chains =
 // one per agent, type = kInterAgentLoop).
 //

@@ -1,5 +1,5 @@
 #pragma once
-// A visual-inertial BA window with a known truth (INERTIAL_2.4.md §4.5), shared by the numerical and OpenCV tests:
+// A visual-inertial BA window with a known truth (inertial.md §4.5), shared by the numerical and OpenCV tests:
 // a closed-form body trajectory, a camera rigidly mounted with a lever arm (T_C_B), ideal biased IMU samples at
 // 1 kHz preintegrated between keyframes 0.25 s apart, and landmarks in front of the cameras observed in stereo.
 #include "slam/bundle_adjustment/window_ba.hpp"

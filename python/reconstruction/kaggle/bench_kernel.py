@@ -1,10 +1,10 @@
-"""Phase 6 T4 microbenchmark (RECON_6 §1, D190): runs as a Kaggle GPU kernel. Self-contained.
+"""Phase 6 T4 microbenchmark (reconstruction.md §1, D190): runs as a Kaggle GPU kernel. Self-contained.
 
 Why: the live trainer's iterations per keyframe must be derived from the measured ms/iteration on the target GPU,
-and no T4 number for gsplat is published (RECON_6 Appendix A.4). This kernel measures, on whatever GPU Kaggle gives:
+and no T4 number for gsplat is published (reconstruction.md Appendix A.4). This kernel measures, on whatever GPU Kaggle gives:
 
   train   forward + backward + Adam step of gsplat.rasterization (render_mode "RGB+ED": colour and expected depth,
-          the live loss), 0.8 L1 + 0.2 D-SSIM + 0.1 depth L1 (RECON_6 §2), for N in {50k, 100k, 250k, 500k} Gaussians at
+          the live loss), 0.8 L1 + 0.2 D-SSIM + 0.1 depth L1 (reconstruction.md §2), for N in {50k, 100k, 250k, 500k} Gaussians at
           320x180 and 640x360, packed False/True, SH degree 0 (the .splat export is SH0)
   render  the forward pass alone at the same points (no_grad)
   sh3     one train point at SH degree 3, for the cost of view-dependent colour
@@ -142,7 +142,7 @@ def main():
                 opt = torch.optim.Adam([{"params": [v], "lr": 1e-3} for v in p.values()])
                 torch.cuda.reset_peak_memory_stats()
 
-                def step():   # the RECON_6 §2 live loss: 0.8 L1 + 0.2 D-SSIM + depth L1
+                def step():   # the reconstruction.md §2 live loss: 0.8 L1 + 0.2 D-SSIM + depth L1
                     img, _, _ = render(p, w, h, packed)
                     rgb = img[..., :3]
                     loss = (0.8 * (rgb - tgt_rgb).abs().mean() + 0.2 * (1.0 - ssim(torch, rgb, tgt_rgb))

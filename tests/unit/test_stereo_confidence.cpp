@@ -1,4 +1,4 @@
-// 2.1 §9.3 confidence (PERCEPTION_2.1.md §10): the DisparityWLSFilter map in StereoDepth, and the §9.4 validator's
+// 2.1 §9.3 confidence (perception.md §10): the DisparityWLSFilter map in StereoDepth, and the §9.4 validator's
 // remaining refusals. Synthetic stereo with known geometry, so every expectation is exact by construction.
 #include "core/random/philox.hpp"
 #include "perception/perception_config.hpp"

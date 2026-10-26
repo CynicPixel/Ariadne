@@ -3,7 +3,7 @@ ORB), PCM's consistency clique, and GNC-TLS letting the false matches go.
 
 Real data (recorded run collab60d, gate OFF, B's pack): the aliased keyframe pair agent 0 @ 44.1 s / agent 1 @ 45.1 s
 (frames f880 / f900, true-colour PNGs), its verify counts and its GT error from collab/edges.csv; the funnel = the verify
-reasons over all candidate edges of that run. Results: RESULTS_INDEX §1 (D63) and §5 (D75). The two-view figure, the
+reasons over all candidate edges of that run. Results: docs/results/index.md §1 (D63) and §5 (D75). The two-view figure, the
 PCM graph and the GNC line fit are illustrative (the GNC weights are computed here with the TLS rule on toy data).
 
   python/video/render.sh scenes/s06a_verify.py Verify

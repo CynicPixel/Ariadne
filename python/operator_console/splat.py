@@ -1,4 +1,4 @@
-"""The splat panel's backend (6.4; RECON_6 §1/§3, D190/D197): serves what the reconstruction service writes.
+"""The splat panel's backend (6.4; reconstruction.md §1/§3, D190/D197): serves what the reconstruction service writes.
 
 The service (python/reconstruction/ariadne_recon/live/service.py) keeps, in ARIADNE_SPLAT_DIR:
   table.json            {"label", "version", "submaps": [{sid, agent, chunk, T_W_anchor (row-major 4x4), ...}]}

@@ -8,7 +8,7 @@ Facts and numbers: M, 2026-10-25, each checked against its file (configs/collab/
    the file, dropped), 32 of 32 geometry-passing loops false; robot 2's estimate vs ground truth from the pack's paths,
    the merge at t = 40 s from merge_events.csv (read here).
 3. The known-start test: d2 = r' Sigma^-1 r, r = Log(prior^-1 * implied), cut chi2_6(0.999) = 22.46. Separation derived
-   here by joining evaluation/runs/collab_d178/logged_4ec3f6/*/entry_gate.csv to edges.csv (true = pose error <= 10 deg):
+   here by joining evaluation/runs/collaboration/known_entry_gate/logged_4ec3f6/*/entry_gate.csv to edges.csv (true = pose error <= 10 deg):
    560 true <= 1.1, 1,164 false >= 6,175. Pre-registered sweep result: 3.78 m -> <= 1.5 cm, 0/560 true lost, 0/7 worse.
 4. Gate on, recorded run collab60e (data/gate_report_collab60e.json): 8 tested, 8 refused, 0 kept; every robot <= 7.5 cm.
    Not shown as an A/B with 2 (scene/seed match unconfirmed); "the 8 were false" is NOT claimed (no per-edge GT in file).
@@ -40,7 +40,7 @@ from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, Ca
 
 GOOD = "#56d364"
 PACK = DATA / "pack_collab60d"
-SWEEP = REPO / "evaluation/runs/collab_d178/logged_4ec3f6"
+SWEEP = REPO / "evaluation/runs/collaboration/known_entry_gate/logged_4ec3f6"
 CUT = 22.46
 SUP = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
 CHIP_BOTTOM, CAP2, CAP1 = 3.4, -2.93, -3.09  # bottom of the top chip; top of a two-line / one-line subtitle

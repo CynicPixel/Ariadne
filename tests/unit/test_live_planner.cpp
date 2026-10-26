@@ -1,4 +1,4 @@
-// The live runtime's command path (runtime/live/planner.hpp CommandPath; design LIVE_RUNTIME_L1 D153, fixed 2026-10-23):
+// The live runtime's command path (runtime/live/planner.hpp CommandPath; design live-runtime.md D153, fixed 2026-10-23):
 //   - on random obstacle fields, every chord of the command is traversable (the safety rule the old code enforced by
 //     falling back to the raw A* cells), the last waypoint is the goal's centre, and the command is short: far fewer
 //     waypoints than A* cells, even where approxPolyDP's own chords clip an obstacle (the old code then sent one

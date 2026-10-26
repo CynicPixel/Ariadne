@@ -1,4 +1,4 @@
-"""Fused stereo point cloud (arch §18.1 "local point cloud"; design RECON_1.7).
+"""Fused stereo point cloud (arch §18.1 "local point cloud"; design reconstruction.md#first-reconstruction-loop).
 
 Every keyframe's depth is back-projected through its rectified pinhole K,
 moved into agent 0's odometry frame (agent 1 through the 1.6 merge T_O0_O1),

@@ -1,4 +1,4 @@
-# Kinematic-mover and bag-size smoke probes (SMOKE_TEST_RESULTS §4g)
+# Kinematic-mover and bag-size smoke probes (validation.md §4g)
 
 Throwaway probes that decided the 1.1-1.3 sim design. Not production code.
 

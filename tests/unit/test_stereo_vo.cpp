@@ -113,7 +113,7 @@ struct VoRun {
 /// `blackout_frame` delivers no tracks at all (lamp failure, lens occlusion), and so do the
 /// `blackout_frames - 1` frames after it. Inside the blackout only every `blackout_stride`-th frame is FED at all
 /// (the others are dropped input: their timestamps never reach the VO).
-/// A dark stretch (LOST_FRAMES.md): from `frame` for `frames` frames the 2-D tracks continue but carry ids no landmark
+/// A dark stretch (local-slam.md#lost-frames): from `frame` for `frames` frames the 2-D tracks continue but carry ids no landmark
 /// has (the map's tracks died) and no stereo (too dark for the right image); afterwards the tracks are a FRESH id set
 /// with stereo, as after a real loss with no re-association.
 struct DarkStretch {
@@ -405,7 +405,7 @@ TEST(StereoVo, CoastingPredictsByElapsedTimeAcrossDroppedFrames) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Lost-frame handling (LOST_FRAMES.md, D56).
+// Lost-frame handling (local-slam.md#lost-frames, D56).
 
 namespace {
 
@@ -635,7 +635,7 @@ TEST(Attitude, MahonyConvergesToGravity) {
     EXPECT_LT(std::acos(std::min(1.0, f.GravityInBody().dot(g_true))) * 180 / M_PI, 0.05);
 }
 
-// --- imu_mode full (D59, INERTIAL_2.4 §4.5) ---------------------------------------------------------------------------
+// --- imu_mode full (D59, inertial.md §4.5) ---------------------------------------------------------------------------
 namespace {
 
 SlamConfig FullConfig(const std::string& lost_motion) {

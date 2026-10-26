@@ -1,4 +1,4 @@
-"""Browser preview of the reconstruction (design RECON_1.7): a self-contained HTML page
+"""Browser preview of the reconstruction (design reconstruction.md#first-reconstruction-loop): a self-contained HTML page
 with the Gaussians as an embedded standard `.splat` (32 B each: position f32x3, scale
 f32x3 linear, RGBA u8, quaternion wxyz u8 as q*128+128) and both agents' ESTIMATED
 paths, all in the world frame (z up) through the evaluation record's T_W_O0.

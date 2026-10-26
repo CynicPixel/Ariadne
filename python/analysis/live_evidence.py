@@ -1,8 +1,8 @@
-"""Collect a live run's committable evidence (design LIVE_RUNTIME_L1 §3; CLAUDE.md §5 "manifests or it didn't happen").
+"""Collect a live run's committable evidence (design live-runtime.md §3; arch §0.2 "manifests or it didn't happen").
 
   python3 python/analysis/live_evidence.py RUN OUT
 
-RUN = live.sh's live-<id> directory (after `live.sh replay`); OUT = evaluation/runs/L1/<name>. Copies the small files
+RUN = live.sh's live-<id> directory (after `live.sh replay`); OUT = evaluation/runs/live-agentic/live_loop/<name>. Copies the small files
 (trace, mover answers and executed scripts, telemetry, console frame log, link log, results, manifest, replay check,
 per-agent estimates, snapshots, logs) and records inputs.mcap by sha256 and size only (it is tens to hundreds of MB).
 Writes loop.json: per decision, the command, the mover's answer, and the agent's ESTIMATED distance to its goal at the

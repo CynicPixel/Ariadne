@@ -1,4 +1,4 @@
-# The live closed-loop runtime (design LIVE_RUNTIME_L1 D152-D154). The mapping / frontier / routing values are
+# The live closed-loop runtime (design live-runtime.md D152-D154). The mapping / frontier / routing values are
 # configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
 name: live_v1
 end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()

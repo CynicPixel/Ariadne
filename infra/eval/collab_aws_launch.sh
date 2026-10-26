@@ -1,5 +1,5 @@
 #!/bin/bash
-# Host side of the 3.2/3.4 gate sweep (infra/eval/collab_aws.sh; design SIMCOLLAB_3.2, D171): stage the inputs,
+# Host side of the 3.2/3.4 gate sweep (infra/eval/collab_aws.sh; design collaboration.md#simulated-collaboration, D171): stage the inputs,
 # launch through spinup.sh, tear down what this run staged. Runs from the repo root on a clean HEAD.
 #   infra/eval/collab_aws_launch.sh stage      git bundle, inputs.tar, both recordings (persistent), image to ECR
 #   infra/eval/collab_aws_launch.sh run [STAGES]   spinup.sh (cpux86, 240 min cap: spinup.sh's limit) -> build/runs/<id>/
@@ -13,8 +13,8 @@ ACCT=836505524290 REGION=eu-north-1
 REG=$ACCT.dkr.ecr.$REGION.amazonaws.com REPO_ECR=ariadne/ariadne-core
 BUCKET=s3://ariadne-$ACCT-eun1
 STAGE=$BUCKET/runs/_staging/collab
-REC0=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
-REC1=evaluation/runs/phase1/sim_record/ci_tiny_1-20261001T143351Z/raw
+REC0=evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_0-20261001T133914Z/raw
+REC1=evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_1-20261001T143351Z/raw
 DATA0=$BUCKET/runs/_datasets/phase1_sim_record/ci_tiny_0-20261001T133914Z/raw
 DATA1=$BUCKET/runs/_datasets/phase1_sim_record/ci_tiny_1-20261001T143351Z/raw
 W=build/collab_aws
@@ -25,7 +25,7 @@ sums() {   # $1 = recording dir, $2 = cached checksum list (computed once per re
 }
 
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- .)" ] || { log "dirty tree"; exit 1; }
   rm -rf "$W"; mkdir -p "$W"
   local commit; commit=$(git rev-parse HEAD); echo "$commit" > "$W/commit"
   git bundle create "$W/repo.bundle" HEAD 2>/dev/null

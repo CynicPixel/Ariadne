@@ -1,4 +1,4 @@
-"""GTSAM oracle for Ariadne's pose-graph solver (arch §11.6 / §37.5; design POSE_GRAPH_2.md §5). TEST ONLY.
+"""GTSAM oracle for Ariadne's pose-graph solver (arch §11.6 / §37.5; design pose-graph.md §5). TEST ONLY.
 
   python -m oracle.pgo_gtsam --out DIR [--random 100] [--g2o NAME=PATH ...] [--init file|dr|chordal]
 
@@ -171,7 +171,7 @@ def chordal_rotations(n, edges) -> gtsam.Values:
 
 
 def gtsam_chordal(n, edges) -> tuple[gtsam.Values, str]:
-    """GTSAM's chordal initialisation (2.5 reference, design ROBUST_BACKEND_2.5.md §3, §9). InitializePose3 links its
+    """GTSAM's chordal initialisation (2.5 reference, design robust-backend.md §3, §9). InitializePose3 links its
     internal anchor ONLY through PriorFactorPose3 (NonlinearEqualityPose3 is dropped, so without a prior it always
     throws); its one Gauss-Newton translation step can throw a false 'indeterminate' in multifrontal Cholesky on a
     positive-definite system, and then the fallback is its own chordal rotations with zero translations."""

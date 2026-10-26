@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The pose-graph least-squares problem (arch §12.2, design POSE_GRAPH_2.md),
+// The pose-graph least-squares problem (arch §12.2, design pose-graph.md),
 // OpenCV-free: residuals, exact Jacobians, sparse normal equations, a guarded
 // sparse LDLT, and marginal covariances. The LM loop that drives it is OpenCV
 // 5's cv::detail::LevMarqBase (D51), through the thin adapter in
@@ -58,7 +58,7 @@ inline EdgeLinearization LinearizeEdge(const PoseEdge& e, const SE3& Xi, const S
 
 using SparseMat = Eigen::SparseMatrix<double, Eigen::ColMajor, int>;
 
-/// GRAVITY_PRIOR consumption (D73 part 2c; design ROBUST_BACKEND_2.5.md §8, the D59 handoff). Off by default.
+/// GRAVITY_PRIOR consumption (D73 part 2c; design robust-backend.md §8, the D59 handoff). Off by default.
 /// Each agent with priors gets a 2-DoF gravity-direction variable ĝ_W (initialised at its priors' common g_ref_W,
 /// updated on the sphere along GravityTangentBasis(ĝ)), shared by every prior of that agent; each prior costs a
 /// Huber-robustified 1/2 rho(s), s = r^T (scale Lambda) r, r = B(g_C)^T R_WC^T ĝ_W. Not in GNC (§12.1: loops only).

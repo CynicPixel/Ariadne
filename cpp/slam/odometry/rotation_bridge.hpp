@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Visual rotation bridge (LOST_FRAMES.md, D56): the camera's rotation between two consecutive frames, measured from
+// Visual rotation bridge (local-slam.md#lost-frames, D56): the camera's rotation between two consecutive frames, measured from
 // the 2-D tracks alone -- no landmarks, no depth.
 //
 // Why it exists. When PnP fails (too few tracked LANDMARKS: dark stereo, blur), the LK tracker usually still holds
@@ -18,7 +18,7 @@
 // R_H = S_H / (S_H + S_F) > 0.45, with S_M the chi^2-truncated transfer-error scores (rotation_bridge.cpp). H wins at
 // small parallax, where its translation bias is small in ABSOLUTE terms; E wins once parallax is real. This holds
 // because the caller measures from an ANCHOR frame (stereo_vo.cpp): the error at any frame is ONE two-view estimate,
-// so a small H bias never accumulates. Rejected on the way (LOST_FRAMES.md §4): counting inliers instead of scoring
+// so a small H bias never accumulates. Rejected on the way (local-slam.md#lost-frames §4): counting inliers instead of scoring
 // (blind to sub-pixel parallax: 0.1 deg/frame H bias, chained); "E unless it disagrees with H by > 5 deg" (fails at
 // large baselines, where H's bias itself exceeds 5 deg: 20 deg jumps); ReconstructF's ">= 90% in front" (recoverPose
 // ignores points beyond 50 baselines: all of them at 1-2 cm per frame). A rotation larger than half the horizontal field of view

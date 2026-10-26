@@ -134,11 +134,11 @@ struct StereoVoArgs {
     std::function<void(const KeyframeView&)> on_keyframe;   // optional; never changes the run
     std::function<void(int64_t, const core::SE3&)> on_body_pose;   // every frame's T_O_B; optional
     std::function<void(const FrameView&)> on_frame;                 // every frame; optional; never changes the run
-    /// Fake outages (INERTIAL_2.4 §4.4, deciding imu.full.lost_motion): [start, start + length) seconds from the first
+    /// Fake outages (inertial.md §4.4, deciding imu.full.lost_motion): [start, start + length) seconds from the first
     /// frame, the VO receives no tracks (as in a lamp failure); after each one the tracks return under FRESH ids, as
     /// after a real loss with no re-association. The tracker itself runs on, so later frames are unaffected otherwise.
     std::vector<std::pair<double, double>> outages;
-    /// Live sources (design LIVE_RUNTIME_L1 D152) receive their ground truth during the run: when set, scoring uses
+    /// Live sources (design live-runtime.md D152) receive their ground truth during the run: when set, scoring uses
     /// what this returns after the last frame instead of GroundTruth() at the start. GT never reaches the estimator.
     std::function<std::vector<runtime::TimedPose>()> late_ground_truth;
 };
@@ -224,7 +224,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     slam::VoTrackResult prev_tr;
     long gyro_seeded = 0;
     std::vector<double> gravity_err_deg;   // at keyframes: Mahony gravity vs ground truth (EuRoC world z is up)
-    // imu_mode full (D59): solve and initialisation counters, the initialisation against ground truth (INERTIAL_2.4
+    // imu_mode full (D59): solve and initialisation counters, the initialisation against ground truth (inertial.md
     // §4.3), and a per-keyframe trace of the solved velocity and biases next to ground truth (imu_trace.csv).
     const bool full_imu = scfg.imu.mode == "full";
     const std::vector<runtime::GroundTruthInertial> gt_inertial = full_imu ? source.GroundTruthInertialStates()
@@ -263,13 +263,13 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     std::vector<runtime::TimedPose> est_body;
     // ORB-SLAM's trajectory protocol (System::SaveTrajectoryEuRoC): each frame is stored relative to its reference
     // keyframe and re-composed at the end from that keyframe's FINAL (window-refined) pose. Window backend only, next
-    // to the causal per-frame score, which stays the primary number (LOCAL_SLAM_2.3 §10 protocol caveat).
+    // to the causal per-frame score, which stays the primary number (local-slam.md §10 protocol caveat).
     struct FrameRef { uint64_t kf; core::SE3 T_kf_c; };
     std::vector<FrameRef> frame_ref;
     std::vector<double> t_track, t_vo, t_kf;
     int lost = 0, keyframes = 0, ba_runs = 0;
     int lost_run = 0;            // consecutive lost frames (diagnostic)
-    // Lost-frame handling (LOST_FRAMES.md, D56): written to results.yaml only when the config has a `lost:` section.
+    // Lost-frame handling (local-slam.md#lost-frames, D56): written to results.yaml only when the config has a `lost:` section.
     long lost_bridged = 0, lost_coasted = 0, lost_rot_h = 0, lost_rot_e = 0, lost_rot_none = 0, bridge_retries = 0;
     long reanchor_probes = 0, reanchor_refused = 0, keyframes_lost = 0;
     uint32_t vo_segments = 0;   // loss onsets so far (StereoVo's segment counter)
@@ -433,7 +433,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
             } else {
                 // The stereo pair as matched: right exposure matched to the left (EuRoC per-camera auto-exposure),
                 // then, until it succeeds, the row-refinement estimate on THIS pair -- applied before the first real
-                // match, so a misaligned rig does not start out lost (AUDIT_2.3.md, D54).
+                // match, so a misaligned rig does not start out lost (local-slam.md#window-audit, D54).
                 const auto condition = [&](const cv::Mat& right) {
                     return pcfg.stereo_match.exposure_match ? MatchExposure(l, right) : right;
                 };
@@ -510,7 +510,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
                 }
                 if (attitude) vo.SetKeyframeGravity(attitude->GravityInCamera());   // GRAVITY_PRIOR (§4.10)
                 const slam::VoKeyframeResult kr = vo.AddKeyframe(st);
-                // GRAVITY_PRIOR candidates against ground truth (INERTIAL_2.4 §4.10): the 2-dof NEES of each candidate's
+                // GRAVITY_PRIOR candidates against ground truth (inertial.md §4.10): the 2-dof NEES of each candidate's
                 // down direction vs the true one in this keyframe's camera (EuRoC GT world: z up).
                 if (!kr.gravity_candidates.empty() && !gt_poses.empty()) {
                     const auto it = std::lower_bound(gt_poses.begin(), gt_poses.end(), frame.t_ns,
@@ -1016,7 +1016,7 @@ inline int RunStereoVo(runtime::StereoSource& inner_source, const StereoVoArgs& 
     if (!args.outages.empty()) {
         // Drift across each fake outage, against ground truth (translation m, rotation deg), from the last frame before
         // it to (1) the last frame inside it -- the prediction at the moment tracking resumes -- and (2) the frame
-        // 2.5 s after it ends, once re-anchoring and the window solves have acted: what persists (INERTIAL_2.4 §4.4).
+        // 2.5 s after it ends, once re-anchoring and the window solves have acted: what persists (inertial.md §4.4).
         // Frame poses are causal (as tracked), not re-refined afterwards.
         res << "outages: [";
         const auto drift = [&](int a, int b, double& dt_m, double& dr_deg) {

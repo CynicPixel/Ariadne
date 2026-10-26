@@ -54,15 +54,15 @@ if(OpenCV_FOUND)
     ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
   install(TARGETS ariadne_comms_probe RUNTIME DESTINATION bin COMPONENT ariadne)
 
-  # 2.1 retrieval evaluation dump (design PERCEPTION_2.1 §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
-  # 4.1 volumetric evaluation on a 1.7 spool (VOLUMETRIC_4.1 §6, D110).
+  # 2.1 retrieval evaluation dump (design perception.md §11.5): EigenPlaces vs the mean-bit placeholder on EuRoC.
+  # 4.1 volumetric evaluation on a 1.7 spool (volumetric.md §6, D110).
   add_executable(ariadne_volumetric_eval tools/ariadne_volumetric_eval.cpp)
   target_link_libraries(ariadne_volumetric_eval PRIVATE ariadne::planning opencv_imgcodecs)
 
   add_executable(ariadne_place_eval tools/ariadne_place_eval.cpp)
   target_link_libraries(ariadne_place_eval PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
 
-  # Sim-rig reference frames for the RGB exports (PERCEPTION_2.1 §14): left_rgb as colour PNGs.
+  # Sim-rig reference frames for the RGB exports (perception.md §14): left_rgb as colour PNGs.
   add_executable(ariadne_frame_dump tools/ariadne_frame_dump.cpp)
   target_link_libraries(ariadne_frame_dump PRIVATE ariadne::runtime_opencv opencv_imgcodecs)
 
@@ -79,17 +79,17 @@ if(OpenCV_FOUND)
   target_link_libraries(ariadne_perf_bench PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
 
-  # 2.1 hard-pair evaluation: loop-candidate verification (PERCEPTION_2.1 §12.4). Offline, no runner hunk.
+  # 2.1 hard-pair evaluation: loop-candidate verification (perception.md §12.4). Offline, no runner hunk.
   add_executable(ariadne_loop_verify tools/ariadne_loop_verify.cpp)
   target_link_libraries(ariadne_loop_verify PRIVATE ariadne::runtime_opencv ariadne::perception_opencv opencv_imgcodecs)
 
-  # 1.6 placeholder collaboration over a sim recording (design COLLAB_1.6).
+  # 1.6 placeholder collaboration over a sim recording (design collaboration.md#first-collaboration-loop).
   add_executable(ariadne_sim_collab tools/ariadne_sim_collab.cpp)
   target_link_libraries(ariadne_sim_collab PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs opencv_features)
   install(TARGETS ariadne_sim_collab RUNTIME DESTINATION bin COMPONENT ariadne)
 
-  # 3.2 sim integration (design SIMCOLLAB_3.2, D171): pass A writes each agent's keyframe store; pass B runs the v2
+  # 3.2 sim integration (design collaboration.md#simulated-collaboration, D171): pass A writes each agent's keyframe store; pass B runs the v2
   # protocol over the comms node from the stores.
   add_executable(ariadne_collab_passa tools/ariadne_collab_passa.cpp)
   target_link_libraries(ariadne_collab_passa PRIVATE
@@ -102,19 +102,19 @@ if(OpenCV_FOUND)
   # D178 calibration of the known-entry gate (scene 1 only, pre-registered).
   add_executable(ariadne_entry_nees tools/ariadne_entry_nees.cpp)
   target_link_libraries(ariadne_entry_nees PRIVATE ariadne::runtime_opencv ariadne::slam_opencv)
-  # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (LIVE_COLLAB §1).
+  # D174 live collaboration: one agent's DNN work (EigenPlaces + lazy ALIKED) in its own process (live-collaboration.md §1).
   add_executable(ariadne_collab_worker tools/ariadne_collab_worker.cpp)
   target_link_libraries(ariadne_collab_worker PRIVATE
     ariadne::runtime_opencv ariadne::perception_opencv ariadne::slam_opencv opencv_imgcodecs)
   install(TARGETS ariadne_collab_worker RUNTIME DESTINATION bin COMPONENT ariadne)
 
-  # 1.9 the §30.2 report gate (design HARNESS_1.9): registry dump + MissingMetrics/UnknownMetrics.
+  # 1.9 the §30.2 report gate (design evaluation-harness.md): registry dump + MissingMetrics/UnknownMetrics.
   add_executable(ariadne_report_check tools/ariadne_report_check.cpp)
   target_link_libraries(ariadne_report_check PRIVATE ariadne::runtime_opencv)
   install(TARGETS ariadne_report_check RUNTIME DESTINATION bin COMPONENT ariadne)
 
-  # 1.8 placeholder mission layer over a 1.7 spool (design MISSION_1.8).
-  # L1 live closed-loop runtime (design LIVE_RUNTIME_L1): the sim_collab estimator path + the mission, over the
+  # 1.8 placeholder mission layer over a 1.7 spool (design mission.md).
+  # L1 live closed-loop runtime (design live-runtime.md): the sim_collab estimator path + the mission, over the
   # ROS edge's Unix socket or a recording of a live run. ROS-free.
   add_executable(ariadne_live tools/ariadne_live.cpp)
   target_link_libraries(ariadne_live PRIVATE

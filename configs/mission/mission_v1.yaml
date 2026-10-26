@@ -1,4 +1,4 @@
-# 1.8 placeholder mission layer (design MISSION_1.8). Every value fixed before the first measurement.
+# 1.8 placeholder mission layer (design mission.md). Every value fixed before the first measurement.
 name: mission_v1
 grid:                           # x/y origin, cell and extent come from the briefing (scene.json `esdf` block)
   z_max_m: 3.0                  # layers 0..z_max (walls are 2.75 m)

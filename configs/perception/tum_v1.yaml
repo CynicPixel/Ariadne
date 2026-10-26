@@ -59,11 +59,11 @@ stereo_match:                   # keyframe left->right LK correspondence (valida
   row_min_span: 0.5             # matches must span half the image to fit the slopes, else only the offset
   exposure_match: true          # left/right gain-bias match before stereo LK + SGBM (per-camera auto-exposure)
 
-reassociation:                  # 2.1 lost-mode re-association (PERCEPTION_2.1.md §4.3); absent = off
+reassociation:                  # 2.1 lost-mode re-association (perception.md §4.3); absent = off
   enabled: true
   trigger_correspondences: 30   # run before PnP when tracks holding a landmark < this (2 x pnp.min_correspondences)
   ratio: 0.75                   # ORB-SLAM2 Relocalization(): ORBmatcher(0.75)
   max_hamming: 50               # ORB-SLAM2 ORBmatcher::TH_LOW
   ransac_threshold_px: 2.0      # verifying PnP inlier threshold (slam pnp.ransac_threshold_px is the final word)
   min_inliers: 12               # = slam pnp.min_inliers
-  admit_bridged: false          # only landmarks born at MEASURED keyframes (AUDIT_2.3 §4); true = ablation A1b
+  admit_bridged: false          # only landmarks born at MEASURED keyframes (local-slam.md#window-audit §4); true = ablation A1b

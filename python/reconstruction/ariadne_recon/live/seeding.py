@@ -1,4 +1,4 @@
-"""Depth seeding of new Gaussians at a keyframe (RECON_6 §2, D190/D193/D198): the live path's only growth.
+"""Depth seeding of new Gaussians at a keyframe (reconstruction.md §2, D190/D193/D198): the live path's only growth.
 
 Gaussian-SLAM's recipe (Yugay et al., arXiv 2312.10070, §3.2 and the implementation details; the TUM-RGBD values,
 the real-sensor setting closest to stereo depth), transcribed rather than mixed with other systems (D198):
@@ -17,7 +17,7 @@ the real-sensor setting closest to stereo depth), transcribed rather than mixed 
 "High colour-gradient regions" is not defined further in the main text; here: pixels whose Sobel gradient magnitude of
 the training image is above that image's median over valid pixels, sampled uniformly [ASSUMPTION].
 
-Valid depth also passes RECON_1.7's fusion gates (sigma_Z <= max_sigma, Z <= max_depth). Pure numpy (scipy KD-tree),
+Valid depth also passes reconstruction.md#first-reconstruction-loop's fusion gates (sigma_Z <= max_sigma, Z <= max_depth). Pure numpy (scipy KD-tree),
 deterministic for a given seed.
 """
 from __future__ import annotations

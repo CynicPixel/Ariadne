@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // A1Planner: A1's Phase 4 planner (planning::Phase4Planner, feat/ph4-mission) behind the runtime's MissionPlanner seam
-// (AGENTIC_7 §0b, option B). A field copy in both directions, nothing decided here:
+// (agentic.md §0b, option B). A field copy in both directions, nothing decided here:
 //   Integrate  KeyframeInput -> planning::DepthFrame (the spool-scale depth and sigma, the camera pose in W)
 //   Plan       PlanContext -> Phase4AgentInput[2] (active, linked = true, position, flown_m, refused goals) and the
 //              region directives -> RegionDirective; Phase4Plan -> PlanOutput: TaskCandidate -> TaskOption (same
@@ -63,7 +63,7 @@ inline planning::Phase4Params LoadPhase4Params(const std::string& path, const mi
     p.nbv.frustum.grid = n["nbv"]["rays_grid"].as<int>();
     p.nbv.frustum.rank_grid = n["nbv"]["rank_grid"].as<int>();
     p.nbv.tare_subspace_m = n["nbv"]["tare_subspace_m"].as<double>();
-    // D117/D118/D120 keys (NBV_4.3 §15.6); absent = the gated behaviour (cost_time none, view_yaw target, no log).
+    // D117/D118/D120 keys (next-best-view.md §15.6); absent = the gated behaviour (cost_time none, view_yaw target, no log).
     const std::string ct = n["nbv"]["cost_time"] ? n["nbv"]["cost_time"].as<std::string>() : "none";
     if (ct == "exact_command") p.nbv.cost_time = true;
     else if (ct != "none") throw std::invalid_argument("planner config: nbv.cost_time " + ct);

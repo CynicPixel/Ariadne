@@ -1,4 +1,4 @@
-// Chordal initialisation, MST baseline (design ROBUST_BACKEND_2.5.md §3; the math is in the header).
+// Chordal initialisation, MST baseline (design robust-backend.md §3; the math is in the header).
 #include "slam/pose_graph/chordal_init.hpp"
 
 #include "slam/pose_graph/pgo_problem.hpp"

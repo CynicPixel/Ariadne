@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# ariadne-analysis (design HARNESS_1.9): the evaluation harness + its oracle.
+# ariadne-analysis (design evaluation-harness.md): the evaluation harness + its oracle.
 # The recon image's pinned stack plus evo 1.31.1, the trajectory oracle that
 # reproduced 1.5's ATE exactly (D36), and matplotlib for the report figures.
 # Pins: base by digest, every package by exact version. Repo at /work.

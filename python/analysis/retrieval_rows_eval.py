@@ -1,11 +1,11 @@
-"""Retrieval rows on EuRoC: 3.6 descriptor compression and the 3.1 CLAHE ablation (RETRIEVAL_3.1_3.6.md). numpy only.
+"""Retrieval rows on EuRoC: 3.6 descriptor compression and the 3.1 CLAHE ablation (retrieval.md). numpy only.
 
   python3 -I retrieval_rows_eval.py compression ROOT --out DIR     # §17.2 rows on the D62 dumps (ep376, ep752)
   python3 -I retrieval_rows_eval.py methods ROOT --base ep376 --methods ep376_clahe --out DIR   # 3.1 rows
-  python3 -I retrieval_rows_eval.py sim ROOT --base ep640 --methods ep1280 --out DIR   # D90 (RETRIEVAL_SIM_D90.md)
+  python3 -I retrieval_rows_eval.py sim ROOT --base ep640 --methods ep1280 --out DIR   # D90 (retrieval.md#sim-retrieval)
 
 ROOT holds one directory per flight from ariadne_place_eval (samples.csv, <method>.f32). The protocol is
-place_recall_eval.py's (PERCEPTION_2.1 §11.5): a positive is within --dist m and --angle deg, the database is the
+place_recall_eval.py's (perception.md §11.5): a positive is within --dist m and --angle deg, the database is the
 samples older than --exclude-s, exact cosine top-k, ties broken by index. Each row is scored on the SAME queries as
 its baseline; McNemar is the exact two-sided binomial test on the discordant R@1 queries. Writes DIR/rows.csv and
 DIR/rows.yaml.
@@ -148,7 +148,7 @@ def compression(a) -> int:
                           "r1": r1, "r5": r5, "d_r1": r1 - base[:, 0].mean(),
                           "mcnemar_p_r1": mcnemar_p(base[:, 0], h[:, 0]),
                           "admissible": bool(r1 >= base[:, 0].mean() - a.bar - 1e-12)})
-    return write(a, table, "compression (RETRIEVAL_3.1_3.6 §2, D93); PCA fit on the other environment (MH <-> V)")
+    return write(a, table, "compression (retrieval.md §2, D93); PCA fit on the other environment (MH <-> V)")
 
 
 def methods(a) -> int:
@@ -163,7 +163,7 @@ def methods(a) -> int:
     table = [{"method": m, "row": m, "bytes": 1024, "extra": False, "queries": len(h[m]), "r1": h[m][:, 0].mean(),
               "r5": h[m][:, 1].mean(), "d_r1": h[m][:, 0].mean() - h[a.base][:, 0].mean(),
               "mcnemar_p_r1": mcnemar_p(h[a.base][:, 0], h[m][:, 0]), "admissible": None} for m in ms]
-    return write(a, table, f"methods (RETRIEVAL_3.1_3.6 §3, D92), base {a.base}")
+    return write(a, table, f"methods (retrieval.md §3, D92), base {a.base}")
 
 
 def sim(a) -> int:
@@ -198,7 +198,7 @@ def sim(a) -> int:
                     "d_r1": float(h[:, 0].mean() - b[:, 0].mean()) if len(h) else float("nan"),
                     "mcnemar_p_r1": mcnemar_p(b[:, 0], h[:, 0]), "admissible": None})
     kept = ", ".join(f"{n} {len(agents[n][0])}" for n in names)
-    return write(a, out, f"sim (RETRIEVAL_SIM_D90.md, D90), base {a.base}; thinning {a.thin_m} m / {a.thin_deg} deg "
+    return write(a, out, f"sim (retrieval.md#sim-retrieval, D90), base {a.base}; thinning {a.thin_m} m / {a.thin_deg} deg "
                          f"kept {kept}")
 
 

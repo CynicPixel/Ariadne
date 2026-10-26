@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The live link's wire format (design LIVE_RUNTIME_L1 D150): one Unix stream
+// The live link's wire format (design live-runtime.md D150): one Unix stream
 // socket between the ROS edge (ros2/ariadne_bridge RuntimeLink, sim image) and the
 // ROS-free runtime (ariadne_live, core image). std + POSIX only, so both images
 // compile the SAME definition.

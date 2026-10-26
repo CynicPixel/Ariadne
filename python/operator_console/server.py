@@ -1,8 +1,8 @@
-"""Operator console stub backend (arch §29.3; design CONSOLE_1.10): FastAPI, WebSocket telemetry at 5 Hz, REST
+"""Operator console stub backend (arch §29.3; design live-runtime.md#operator-console): FastAPI, WebSocket telemetry at 5 Hz, REST
 for metadata and map snapshots. Two sources, one frame schema:
 
   ARIADNE_CHAIN=collab_run:mission_run:scene ...   replay of a committed run chain (Phase 1)
-  ARIADNE_LIVE=run_dir:scene ...                   a running ariadne_live (design LIVE_RUNTIME_L1 D154): tails its
+  ARIADNE_LIVE=run_dir:scene ...                   a running ariadne_live (design live-runtime.md D154): tails its
                                                    telemetry; every frame served is logged to console_frames.jsonl
   uvicorn operator_console.server:app --host 127.0.0.1 --port 8080
 """
@@ -206,7 +206,7 @@ async def telemetry(ws: WebSocket, speed: float = 10.0) -> None:
         return
 
 
-# --- operator authority, live runs only (design AGENTIC_7 §0b; arch §23, §29.3) --------------------------------------
+# --- operator authority, live runs only (design agentic.md §0b; arch §23, §29.3) --------------------------------------
 # Directives are written to the runtime's directives_inbox/; ariadne_live takes them at its next replan barrier, stamps
 # them and records them (directives.jsonl), so a replay applies the same ones. Approvals are written where the runtime
 # verifies them itself (approvals/<id>.json). LLM proposals wait in directives_proposed/ until a person confirms.

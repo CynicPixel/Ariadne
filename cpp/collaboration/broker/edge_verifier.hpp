@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 1.6 inter-agent loop verification (design COLLAB_1.6 §5): the broker holds its
+// 1.6 inter-agent loop verification (design collaboration.md#first-collaboration-loop §5): the broker holds its
 // own keyframe A (2D ORB keypoints + descriptors) and receives agent B's
 // FEATURE RESPONSE (keypoints, descriptors, 3D points in B's rectified-left
 // camera frame, camera metadata). Three stages, each a hard gate:

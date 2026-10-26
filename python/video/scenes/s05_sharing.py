@@ -6,11 +6,11 @@ Data and tags (M, 2026-10-24; every number checked against its file that day):
 - each robot's own-frame path: the collab60d pack's estimated tracks, re-expressed in each robot's start frame;
 - frames: collab60d pack (true-colour PNGs, read as-is). Stage 2's pair is NOT a true same-place pair (collab60d has
   none in its stored frames): labelled "illustrative pair"; the matches drawn on it are illustrative;
-- EuRoC retrieval, 297 queries, 11 flights, matched baselines (RESULTS_INDEX §4, D62): R@1 EigenPlaces 752 px 0.677,
+- EuRoC retrieval, 297 queries, 11 flights, matched baselines (docs/results/index.md §4, D62): R@1 EigenPlaces 752 px 0.677,
   376 px 0.626, mean-bit 0.444, random 0.167; compression (D93): fp16 and int8 change no query's top hit, 297/297;
 - detail stage on EuRoC, 4815 candidate pairs (D63): ALIKED + LightGlue pose AUC@10° 0.607 vs ORB 0.284, better on
   11/11 flights; AP_geom 0.807 vs 0.303; OpenCV-dnn exports match upstream (keypoints within 9.3e-5 px);
-- one gated run (evaluation/runs/collab_d178/gated_e31421/spectral_s0_p25_seed1, read here): the funnel, the 128 verify
+- one gated run (evaluation/runs/collaboration/known_entry_gate/gated_e31421/spectral_s0_p25_seed1, read here): the funnel, the 128 verify
   calls, bytes per class (1 = global descriptor, 4 = match response), merged-map RMSE;
 - λ₂ from that run's graph (odometry chains of the released keyframes + its verified edges in file order, κ = 1),
   computed here: derived; the toy graph's λ₂ is computed live (illustrative);
@@ -40,7 +40,7 @@ from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, Ca
 GOOD = "#56d364"
 ORB_C = "#7d8fa8"
 PACK = DATA / "pack_collab60d"
-RUN = REPO / "evaluation/runs/collab_d178/gated_e31421/spectral_s0_p25_seed1"
+RUN = REPO / "evaluation/runs/collaboration/known_entry_gate/gated_e31421/spectral_s0_p25_seed1"
 RECALL = [("EigenPlaces, 752 px", 0.677), ("EigenPlaces, 376 px", 0.626), ("mean-bit baseline", 0.444),
           ("random", 0.167)]
 AUC, AP = (0.607, 0.284), (0.807, 0.303)

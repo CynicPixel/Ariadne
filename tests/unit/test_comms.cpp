@@ -155,7 +155,7 @@ TEST(Comms, EveryShippedScenarioLoadsAndBuilds) {
     EXPECT_GE(n, 4);
 }
 
-// The ledger rule (COLLAB_3.2 §2): one ledger, written only by Endpoints. Over a lossy RF link with a scripted
+// The ledger rule (collaboration.md §2): one ledger, written only by Endpoints. Over a lossy RF link with a scripted
 // partition, every non-retransmit row is an Endpoint first transmission or immediate send, and draining the
 // network -- forwarding and dropping everything in flight -- adds no row.
 TEST(Comms, OneLedgerAndForwardedDatagramsAreNeverRecorded) {

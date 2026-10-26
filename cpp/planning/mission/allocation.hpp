@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.4 allocation (arch §21.7; design ALLOCATION_4.4, D115): CBBA (Choi, Brunet & How, T-RO 2009; ALGORITHMS
+// 4.4 allocation (arch §21.7; design allocation.md, D115): CBBA (Choi, Brunet & How, T-RO 2009; algorithms.md
 // §22.3.1: Algorithm 3, eqs. 3-6, Table I) and the broker's sequential greedy (SGA, the paper's Theorem 1
 // comparator), over one abstract instance, with exact optima for grading.
 //
@@ -95,10 +95,10 @@ Allocation RunCbba(const AuctionInstance& in, const std::function<std::vector<st
 /// instances only (tests).
 double BruteForceOptimum(const AuctionInstance& in);
 
-/// Exact optimum for 2 agents (any L_t <= 2) by the sorted disjoint scan (ALLOCATION_4.4 §6).
+/// Exact optimum for 2 agents (any L_t <= 2) by the sorted disjoint scan (allocation.md §6).
 double TwoAgentOptimum(const AuctionInstance& in);
 
-/// The exact test codec of ALLOCATION_4.4 §5: per task 8 (id) + 4 (y) + 1 (z), per agent 8 (s), 16 framing.
+/// The exact test codec of allocation.md §5: per task 8 (id) + 4 (y) + 1 (z), per agent 8 (s), 16 framing.
 size_t TestCodecBytes(const CbbaMessage& m);
 
 }  // namespace ariadne::planning

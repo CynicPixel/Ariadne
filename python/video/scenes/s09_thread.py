@@ -3,7 +3,7 @@ tools/dstar_trace.cpp) on maze_demo_0's person-width lattice (scene_gt.npz trav_
 the cells the first search settled appear in order of their cost-to-exit g, a wave from every exit at once; the thread
 is the route read from the casualty; rubble closes the tightest stretch of it; Update() repairs, and the cells whose g
 changed light up in order of their new g; the new thread runs to a different exit. Counts are the C++'s own
-(expansions: first search, repair, a fresh search on the blocked grid). Measured rows: RESULTS_INDEX §8 (replay
+(expansions: first search, repair, a fresh search on the blocked grid). Measured rows: docs/results/index.md §8 (replay
 spool ci_tiny via evidence.egress(); D113's unit test).
 
   python3 python/video/tools/dstar_replay.py   # regenerates data/dstar/

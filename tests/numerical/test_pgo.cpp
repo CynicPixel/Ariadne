@@ -1,4 +1,4 @@
-// Pose-graph problem, OpenCV-free (design POSE_GRAPH_2.md §2, §5): finite-difference Jacobians, the gauge null
+// Pose-graph problem, OpenCV-free (design pose-graph.md §2, §5): finite-difference Jacobians, the gauge null
 // space in OUR (left, T_W_C) convention, the gradient, and marginal covariances. Runs in GitHub CI (no OpenCV).
 #include "slam/pose_graph/pgo_problem.hpp"
 

@@ -21,14 +21,14 @@ BUCKET=s3://ariadne-$ACCT-eun1
 # least privilege; maintainer kept it, 2026-10-23). runs/ has no expiry (IA transition only), so the copy persists.
 STAGE=$BUCKET/runs/_staging/premerge
 DATA=$BUCKET/runs/_datasets/phase1_sim_record/ci_tiny_0-20261001T133914Z/raw
-REC=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
+REC=evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_0-20261001T133914Z/raw
 W=build/premerge_aws
 IMAGES=("ariadne/core-dev:m-premerge ariadne/core-dev:dev" "ariadne-recon:1 ariadne-recon:1"
         "ariadne-analysis:1 ariadne-analysis:1" "ariadne-console:1 ariadne-console:1")
 log() { echo "[launch $(date -u +%H:%M:%S)] $*" >&2; }
 
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- .)" ] || { log "dirty tree"; exit 1; }
   local mode="${1:-premerge}"; [ "$mode" = premerge ] || [ "$mode" = full ] || { log "mode: premerge | full"; exit 1; }
   rm -rf "$W"; mkdir -p "$W"
   local commit; commit=$(git rev-parse HEAD); echo "$commit" > "$W/commit"; echo "$mode" > "$W/mode"

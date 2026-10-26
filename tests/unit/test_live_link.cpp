@@ -1,4 +1,4 @@
-// The live runtime's input side (design LIVE_RUNTIME_L1 D150-D152): runtime/live/{link_frame,live_source}.hpp.
+// The live runtime's input side (design live-runtime.md D150-D152): runtime/live/{link_frame,live_source}.hpp.
 //   - link frames round-trip over a socketpair, control frames included; a bad magic throws;
 //   - PoseArray (the command) and String (mover state) CDR round-trip through the runtime's own codec;
 //   - PeekStamp reads the header stamp without a full decode;

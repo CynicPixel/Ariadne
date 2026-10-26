@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The remote (CUDA) render step on Kaggle (D44, design RECON_1.7): the Kaggle
+# The remote (CUDA) render step on Kaggle (D44, design reconstruction.md#first-reconstruction-loop): the Kaggle
 # CLI runs in a pinned container; the token comes from the host's ~/.kaggle
 # (access_token, or a legacy kaggle.json), mounted read-only. Nothing is
 # installed on the host.
@@ -9,7 +9,7 @@
 #   infra/scripts/kaggle.sh smoke OUT              [SMOKE-TEST]: install gsplat on a Kaggle
 #                                                  GPU, render 1000 random Gaussians, pull
 #                                                  remote.json (versions, install mode) to OUT
-#   infra/scripts/kaggle.sh bench OUT              Phase 6 (RECON_6 §1): gsplat 1.5.3 train/render ms per
+#   infra/scripts/kaggle.sh bench OUT              Phase 6 (reconstruction.md §1): gsplat 1.5.3 train/render ms per
 #                                                  iteration vs N, resolution, packed; SH3; the append path
 #   infra/scripts/kaggle.sh train-smoke OUT        Phase 6: the live trainer on a synthetic corridor (exact depth
 #                                                  and albedo): per-KF cost, held-out PSNR, GPU re-anchoring check

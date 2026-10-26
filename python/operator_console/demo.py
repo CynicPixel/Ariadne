@@ -182,7 +182,7 @@ class Demo:
                     "controller_remaining_s": max(0, 30 - (time.monotonic() - self.heartbeat)) if self.token else 0,
                     "reconstruction": self.recon_state,
                     "links": {"github": "https://github.com/CynicPixel/Ariadne",
-                              "paper": "/api/demo/paper" if (self.root / "docs/Latex/main.pdf").is_file() else None,
+                              "paper": "/api/demo/paper" if (self.root / "docs/report/main.pdf").is_file() else None,
                               "video": os.environ.get("ARIADNE_DEMO_VIDEO_URL")},
                     "frame": self.snapshot, "commands": list(self.commands.values())[-20:]}
 
@@ -652,7 +652,7 @@ def chunk(name: str, backend: str = "cpu_init", session: str | None = None):
 
 @router.get("/paper")
 def paper():
-    p = ROOT / "docs/Latex/main.pdf"
+    p = ROOT / "docs/report/main.pdf"
     if not p.is_file():
         raise HTTPException(404, "Paper not published")
     return FileResponse(p, media_type="application/pdf")

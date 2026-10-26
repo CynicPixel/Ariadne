@@ -111,7 +111,7 @@ double TourLength(const std::vector<std::vector<double>>& D, const std::vector<i
 
 namespace {
 
-// 4.6 TARE-style scheduling (EXPLORATION_4.6 §1, D116): local horizon first (best view per target inside a box of
+// 4.6 TARE-style scheduling (exploration.md §1, D116): local horizon first (best view per target inside a box of
 // half-width = the depth gate around the agent, open tour on geodesics within that box), else the global tour over
 // exploring subspaces (best view per subspace as its representative, geodesics on the full plan space). The scheduled
 // view moves to the front; the rest keep their Ariadne order.
@@ -411,7 +411,7 @@ NbvPlan PlanNbv(const NbvInputs& in, int agent, const AgentState& st, const NbvP
     // Scored at the commanded cell itself (rad 0): with the known-free plan space every commanded goal has the agent's
     // body clear, the practice of FUEL / NBVP / GBPlanner2, and the score belongs to the pose the agent is sent to.
     // D158's max over the goal's escape disc compensated for goals in unknown space (unknown-as-passable trav_a); it
-    // could score a goal by a cell the agent is never sent to, with no precedent in the literature read (NBV_4.3 §13).
+    // could score a goal by a cell the agent is never sent to, with no precedent in the literature read (next-best-view.md §13).
     const int arrive = 0;
     auto Risk = [&](const Cell& c, TaskCandidate* t, const cv::Mat& B) {
         const double b = ArrivalBottleneck(B, c, arrive);

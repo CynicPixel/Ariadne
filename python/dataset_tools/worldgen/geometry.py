@@ -176,7 +176,7 @@ BOARD_OFFSET_M = 0.002    # proud of the wall: no z-fighting with the wall quad 
 
 def hazard_surfaces(hazards, g: float, px_per_m: int):
     """Six outward faces per hazard box, the BOTTOM included: the underside is what a rescuer must see and what the
-    risk proxy's overhang term looks for (design RISK_ZONES_4.2)."""
+    risk proxy's overhang term looks for (design traversability-risk.md#risk-zones)."""
     out = []
     for hi, h in enumerate(hazards):
         x0, y0, x1, y1 = h.rect.x0 * g, h.rect.y0 * g, h.rect.x1 * g, h.rect.y1 * g

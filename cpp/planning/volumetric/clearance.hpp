@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 2D clearance (arch §20.3/§20.5 placeholder; design MISSION_1.8): distance from
+// 2D clearance (arch §20.3/§20.5 placeholder; design mission.md): distance from
 // every cell CENTRE to the nearest EDGE of a blocked square, the convention of the
 // scene ground truth (python/dataset_tools/worldgen/raster.py `_edt_to` / `esdf` /
 // `traversable`), so a perfect map reproduces GT traversability cell for cell:

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Two-view geometry of the loop-verification evaluation (PERCEPTION_2.1.md
+// Two-view geometry of the loop-verification evaluation (perception.md
 // §12.4), shared by ariadne_loop_verify and its convention test.
 //
 // EstimateRelPose: raw (distorted) pixel matches a -> b, undistorted with the

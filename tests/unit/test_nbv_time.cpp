@@ -1,4 +1,4 @@
-// 4.3's time-axis fixes (NBV_4.3 §15.4):
+// 4.3's time-axis fixes (next-best-view.md §15.4):
 //   - D125: an at-cell view (its goal in the agent's own cell) routes as ONE "turn here" waypoint (NaN x, y) with the
 //     view's yaw, not as an empty path (which the live loop sends as hold: the ci_tiny seed-2 livelock, t = 20-45 s);
 //     PlanCommand turns it into exactly one turn from any nearby pose, and executing that turn collects the view's

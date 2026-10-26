@@ -1,4 +1,4 @@
-"""Loop-candidate verification scores (design PERCEPTION_2.1 §12.4-12.5). numpy only.
+"""Loop-candidate verification scores (design perception.md §12.4-12.5). numpy only.
 
   python3 -I loop_verify_eval.py ROOT                     # score rows A-E, check the §12.5 bars
   python3 -I loop_verify_eval.py ROOT --select-e 500       # write <flight>/e_pairs.csv (row E's declared subset)
@@ -181,7 +181,7 @@ def main() -> int:
               f"{'/'.join(f'{x:.3f}' for x in m['auc_rot']):>20s} {m['tau_mh']:7.0f} "
               f"{m['v_precision']:6.3f}/{m['v_recall']:.3f} ({m['v_false_accepts']})")
 
-    out = ["# loop_verify_eval (PERCEPTION_2.1 §12.4-12.5). Generated.", "rows:"]
+    out = ["# loop_verify_eval (perception.md §12.4-12.5). Generated.", "rows:"]
     for r, m in res.items():
         if m:
             out.append(f"  {r}: {m}")

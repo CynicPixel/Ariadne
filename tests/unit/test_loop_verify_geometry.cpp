@@ -1,4 +1,4 @@
-// PERCEPTION_2.1.md §12.4 convention test: a synthetic pair with KNOWN T_Cb_Ca through the exact evaluation pipeline
+// perception.md §12.4 convention test: a synthetic pair with KNOWN T_Cb_Ca through the exact evaluation pipeline
 // (radtan distortion -> undistort -> RANSAC E -> recoverPose -> glue-factory error). An inverted R or a swapped point
 // order would otherwise surface on EuRoC as a "bad pose AUC" for every method.
 #include "core/random/philox.hpp"

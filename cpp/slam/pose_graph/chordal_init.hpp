@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Global initialisation of a pose graph (arch §13.1; design ROBUST_BACKEND_2.5.md §3; D70).
+// Global initialisation of a pose graph (arch §13.1; design robust-backend.md §3; D70).
 //
 // WHY. LM only finds the minimum whose basin it starts in. Starting from the
 // current node poses (dead reckoning) carries the accumulated odometry drift;

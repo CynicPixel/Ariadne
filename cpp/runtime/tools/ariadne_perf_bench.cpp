@@ -35,7 +35,7 @@
 //   reference per keyframe (keypoints/scores bitwise, descriptor max diff). DIR/fidelity.csv (with --stores): per keyframe, the 1280x720 K=1024 features recomputed
 //   here vs the store's: count, matched within 1e-3 px, max px distance.
 //
-// BYTES (Phase 3.6, docs/design/BYTES_3.6.md, pre-registered rule D233): local-feature wire codings on the real verify
+// BYTES (Phase 3.6, docs/design/wire-coding.md, pre-registered rule D233): local-feature wire codings on the real verify
 // pairs, from the pass-A stores (production's exact features; ALIKED never runs):
 //   ariadne_perf_bench bytes --stores-root DIR --pairs-dir DIR --collab-config YAML --seed S --aliked 1280x720=ONNX
 //       --lightglue ONNX [--pca-fit-scene 1] [--reseeds 4] --out DIR
@@ -684,7 +684,7 @@ int Knobs(std::map<std::string, std::vector<std::string>>& a) {
     return 0;
 }
 
-// ---------------------------------------------------------------- bytes (3.6, docs/design/BYTES_3.6.md, D233)
+// ---------------------------------------------------------------- bytes (3.6, docs/design/wire-coding.md, D233)
 
 // The candidate wire codings. The codecs live here, in the measurement tool: one moves into
 // collaboration/retrieval/local_descriptor_codec.hpp only if D233 adopts it.

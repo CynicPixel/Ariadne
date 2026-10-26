@@ -1,5 +1,5 @@
 """The render package: the small, self-contained input of the remote (CUDA) render
-step (D44, design RECON_1.7). Initialized Gaussians + the held-out cameras
+step (D44, design reconstruction.md#first-reconstruction-loop). Initialized Gaussians + the held-out cameras
 (world-to-camera view matrices in agent 0's odometry frame, K, size) + their
 captured RGB (render targets, for LPIPS remotely; PSNR/SSIM are computed locally
 from the returned renders). No spool, no depth, no GT.

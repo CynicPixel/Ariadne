@@ -1,4 +1,4 @@
-// Loop-closure degeneracy gate (design ROBUST_BACKEND_2.5.md §4, D71):
+// Loop-closure degeneracy gate (design robust-backend.md §4, D71):
 //   - finite differences for the one new analytic Jacobian (stereo back-projection);
 //   - the edge information uses OdometryEdge's conversion exactly;
 //   - Monte Carlo: NEES of the refined edge in the residual tangent ~ chi^2_6 when pixels AND disparities are noisy;

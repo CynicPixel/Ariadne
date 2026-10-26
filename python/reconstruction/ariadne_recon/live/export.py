@@ -1,4 +1,4 @@
-"""Submap chunks for the console (RECON_6 §1/§3, D190): one .splat per submap, in its ANCHOR frame, plus a table of
+"""Submap chunks for the console (reconstruction.md §1/§3, D190): one .splat per submap, in its ANCHOR frame, plus a table of
 placements. The browser renderer (Spark, per-object transform) draws chunk i at table[i].T_W_anchor, so re-anchoring
 re-sends a 4x4, never the chunk.
 

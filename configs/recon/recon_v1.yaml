@@ -1,4 +1,4 @@
-# 1.7 placeholder reconstruction (design RECON_1.7). Set before the first measurement.
+# 1.7 placeholder reconstruction (design reconstruction.md#first-reconstruction-loop). Set before the first measurement.
 name: recon_v1
 spool:                          # C++ side (ariadne_sim_collab --spool)
   scale: 0.5                    # 1280x720 -> 640x360: spool volume and render cost; K scaled with it

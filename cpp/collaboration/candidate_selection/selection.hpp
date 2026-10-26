@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Candidate selection types (design SPECTRAL_3.4, D170): the problem the broker hands a selection policy, the report
+// Candidate selection types (design spectral-selection.md, D170): the problem the broker hands a selection policy, the report
 // it gets back, and the "greedy" baseline (highest similarity per marginal byte). No OpenCV or Eigen here: the
 // protocol (collab_node.hpp) builds without OpenCV, and the spectral policy (spectral_selector.hpp) plugs in through
 // NodeHooks::select.

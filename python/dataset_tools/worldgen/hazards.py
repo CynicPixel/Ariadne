@@ -1,4 +1,4 @@
-"""Structural hazards above a standing responder (design RISK_ZONES_4.2, D112). All in integer grid units, except
+"""Structural hazards above a standing responder (design traversability-risk.md#risk-zones, D112). All in integer grid units, except
 heights (m).
 
 Two kinds, from the US&R collapse patterns a rescuer is trained to fear (design §1):

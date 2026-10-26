@@ -51,7 +51,7 @@ StereoVo::StereoVo(const SlamConfig& config, const RectifiedStereo& rig, uint64_
         full_imu_ = true;
         imu_rig_ = *imu;
         T_C_B_ = imu->T_B_C.inverse();
-        // INERTIAL_2.4 §4.1: one inflation per sensor, on the white noise and the random walk alike.
+        // inertial.md §4.1: one inflation per sensor, on the white noise and the random walk alike.
         const double ig = cfg_.imu.full.noise_inflation_gyro, ia = cfg_.imu.full.noise_inflation_accel;
         pre_noise_ = {n.gyro_noise_density * ig, n.accel_noise_density * ia};
         gyro_rw_ = n.gyro_random_walk * ig;
@@ -206,7 +206,7 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
         res.T_W_C = bridge ? BridgePrediction(frame, res) : predicted;
         if (gyro) res.T_W_C.R = prev_T_W_C_.R * frame.R_prev_cur_prior;
         res.source = gyro ? PoseSource::kGyro : bridge ? PoseSource::kBridged : PoseSource::kCoasted;
-        // imu_mode full, initialised, lost_motion propagate (INERTIAL_2.4 §4.4): the whole pose from the IMU.
+        // imu_mode full, initialised, lost_motion propagate (inertial.md §4.4): the whole pose from the IMU.
         if (full_imu_ && inertial_ready_ && cfg_.imu.full.lost_motion == "propagate") {
             res.T_W_C = PropagateFromLastKeyframe(frame.t_ns);
             res.source = PoseSource::kInertial;
@@ -239,7 +239,7 @@ VoTrackResult StereoVo::Track(const VoFrame& frame) {
 }
 
 core::Mat6 StereoVo::NextBiasPrior(const core::Mat6& marginal, double dt) const {
-    // The next window[0]'s bias prior (INERTIAL_2.4 §4.2, D59 part 3). The current prior, carried over dt by the bias
+    // The next window[0]'s bias prior (inertial.md §4.2, D59 part 3). The current prior, carried over dt by the bias
     // random walk, is information the next window must keep; the marginal adds the window's data on top of it, and
     // ONLY that addition is deflated by imu.full.bias_prior_inflation (the overlapping windows count the same data
     // again). Deflating the whole marginal instead (part 2) loses the prior's own information on every direction the
@@ -386,7 +386,7 @@ void StereoVo::FillInertial(BaWindow& w, size_t first, VoKeyframeResult& out) {
 }
 
 void StereoVo::TryInitializeInertial(size_t first, VoKeyframeResult& out) {
-    // INERTIAL_2.4 §4.3: the newest init_keyframes window keyframes, every one MEASURED (MH_04 and MH_05 start dark:
+    // inertial.md §4.3: the newest init_keyframes window keyframes, every one MEASURED (MH_04 and MH_05 start dark:
     // predicted poses never feed it), with their window-refined poses.
     const size_t N = size_t(cfg_.imu.full.init_keyframes);
     if (keyframes_.size() - first < N) return;
@@ -584,7 +584,7 @@ std::vector<std::pair<size_t, core::Vec3>> StereoVo::TriangulateNew(const VoFram
                             X4.at<double>(2, static_cast<int>(k)) / w);
         // No far cap: ORB-SLAM2 (§III-A) classifies points beyond ~40 baselines as "far" and KEEPS them (accurate
         // rotation, weak translation). Removing our 60-baseline discard took MH_04 from 411 lost frames to 30
-        // (AUDIT_2.3.md). The relative-sigma test below is the depth bound: Z <= max_relative_sigma * fB /
+        // (local-slam.md#window-audit). The relative-sigma test below is the depth bound: Z <= max_relative_sigma * fB /
         // disparity_sigma_px (~9.6 m on EuRoC). Multi-view triangulation of points beyond it is not done here.
         if (!(Xc.z() >= cfg_.triangulation.min_depth_m)) { ++stats.depth_range; continue; }
         const core::Vec2 el = core::Project(rig_.cam, Xc) - core::Vec2(pl[k].x, pl[k].y);
@@ -747,7 +747,7 @@ VoKeyframeResult StereoVo::AddKeyframe(const VoStereo& st) {
     return out;
 }
 
-// --- 2.3 windowed BA (LOCAL_SLAM_2.3.md) --------------------------------------------------------------------------
+// --- 2.3 windowed BA (local-slam.md) --------------------------------------------------------------------------
 VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult out, int64_t t_ns) {
     const size_t N = size_t(cfg_.ba.window_size);
     // The keyframe leaving the window (it was window[0] of the previous solve, the gauge): freeze its exit edge to
@@ -906,7 +906,7 @@ VoKeyframeResult StereoVo::AddKeyframeWindow(KeyframeState kf, VoKeyframeResult 
             // become uninformative below -- and it is counted (results.yaml ba_window.marginal_degenerate).
             std::map<int, core::Mat6> marg, bias_marg;
             // Inertial and the window full: window[1] is the next solve's window[0]; its bias marginal is that
-            // solve's prior (INERTIAL_2.4 §4.2), from the same factorization.
+            // solve's prior (inertial.md §4.2), from the same factorization.
             const std::vector<int> bias_want = w.inertial() && K == N ? std::vector<int>{1} : std::vector<int>{};
             const bool want_g = !bias_want.empty() && w.imu.estimate_gravity;   // the next window's gravity prior
             Eigen::Matrix2d g_marg = Eigen::Matrix2d::Zero();

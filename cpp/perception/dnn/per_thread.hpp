@@ -10,7 +10,7 @@
 // WHY NOT A MUTEX AROUND ONE NET. That is safe too, but it serialises the
 // pool. Why not Net copies: cv::dnn::Net is a ref-counted handle (copying shares
 // the graph and its buffers), and LightGlueMatcher::clone() shares its Net as
-// well (PERCEPTION_2.1 §12.3), so a "copy" is not an instance.
+// well (perception.md §12.3), so a "copy" is not an instance.
 //
 // MECHANICS. Local() returns the calling thread's T, building it on that
 // thread's first call with the factory (an ONNX load: slow, once per thread).

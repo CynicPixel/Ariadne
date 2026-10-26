@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Membership, broker election and epochs (design COLLAB_3.2 §4).
+// Membership, broker election and epochs (design collaboration.md §4).
 //
 // WHAT IT IS. A per-agent state machine fed by heartbeats. It answers three
 // questions on every tick:

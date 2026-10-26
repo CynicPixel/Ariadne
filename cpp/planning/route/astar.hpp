@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Grid A* (arch §22.1 placeholder until D* Lite; design MISSION_1.8): 8-connected
+// Grid A* (arch §22.1 placeholder until D* Lite; design mission.md): 8-connected
 // over a traversable mask, step costs 1 and sqrt(2) cells, a diagonal step only if
 // both orthogonal neighbours are traversable (worldgen's "no squeezing between two
 // corners", so lengths match the GT geodesic). Multi-goal: the heuristic is the

@@ -30,7 +30,7 @@ tracker:
   min_track_distance_px: 25.0
   replenish_request_factor: 4
   replenish: keyframe           # D146 features row: detection only at keyframes, where the proxy exists
-  replenish_min_tracks: 375     # 75 % of target_tracks, the euroc_v2_xfeat convention (PERCEPTION_2.1 §9.10)
+  replenish_min_tracks: 375     # 75 % of target_tracks, the euroc_v2_xfeat convention (perception.md §9.10)
   f_ransac_threshold_px: 1.0
   f_confidence: 0.99
   f_max_iterations: 1000

@@ -200,7 +200,7 @@ TEST(SE3, NormalizeRemovesAccumulatedDrift) {
     EXPECT_NEAR(acc.R.determinant(), 1.0, 1e-14);
 }
 
-// --- SE(3) left Jacobian and its inverse (Phase 2 pose graph, POSE_GRAPH_2.md §2) -----------------------------
+// --- SE(3) left Jacobian and its inverse (Phase 2 pose graph, pose-graph.md §2) -----------------------------
 // The DEFINITION, by central differences: Log(Exp(a) * Exp(xi)) ~ xi + J_l^-1(xi) a. Cases straddle the series
 // switch at |phi| = 0.1, include tiny and near-pi rotations, and large translations (Q's rho dependence).
 namespace {

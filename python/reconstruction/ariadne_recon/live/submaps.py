@@ -1,4 +1,4 @@
-"""Keyframe-anchored submaps (arch §18.6; RECON_6 §2, D190).
+"""Keyframe-anchored submaps (arch §18.6; reconstruction.md §2, D190).
 
 Each submap is anchored to its FIRST keyframe. Its Gaussians live in that keyframe's camera frame ("anchor frame")
 and are never rewritten by a pose update: a pose-graph update changes only T_O_anchor, so the whole submap moves
@@ -6,7 +6,7 @@ rigidly. The console places a submap at T_W_O[agent] @ T_O_anchor (B's tee sends
 or an O -> W change is one 4x4 per submap: no retraining, no re-download (exit-gate bullet 2).
 
 Intra-submap drift is deliberately not corrected (arch §18.6); submaps are kept short instead: a submap closes after
-`max_keyframes` keyframes (arch: 20-40; RECON_6 uses 30) or when told a loop closure bent the trajectory.
+`max_keyframes` keyframes (arch: 20-40; reconstruction.md uses 30) or when told a loop closure bent the trajectory.
 
 Pure numpy: no torch, no GPU. The trainer holds the Gaussian tensors; this module holds the frames.
 """

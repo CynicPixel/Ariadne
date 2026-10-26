@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_live: the live closed-loop runtime (design LIVE_RUNTIME_L1, D150-D154). ROS-free.
+// ariadne_live: the live closed-loop runtime (design live-runtime.md, D150-D154). ROS-free.
 //
 //   ariadne_live --scene DIR --perception-config P --slam-config S --mission-config M --live-config L --out DIR
 //                (--link SOCKET | --replay INPUTS.mcap)
@@ -71,7 +71,7 @@ struct LiveConfig {
     std::string name, chooser;
     double end_s = 0, max_command_m = 0, eps_cells = 1, telemetry_hz = 5, min_goal_m = 0, escape_m = 0,
            max_standoff_m = 0, refused_radius_m = 0;
-    double autonomous_threshold = 1.01;   // §23 risk gate (AGENTIC_7 D158); > 1 = no gate
+    double autonomous_threshold = 1.01;   // §23 risk gate (agentic.md D158); > 1 = no gate
     double llm_timeout_s = 0;              // chooser llm: wall seconds to wait for the orchestrator
     bool face_frontier = true;
     bool lockstep = false;                 // D165: gz paused at every barrier until the commands are applied
@@ -87,12 +87,12 @@ struct LiveConfig {
                                            // lens. OFF by default for every live/demo/POC run - A2 measured it at
                                            // ~58 ms/frame, about half the lane - and the calibration then reports
                                            // the render pinhole with D = 0. `lens: true` restores the D41 operator.
-    bool demo = false;                     // D169 (AGENTIC_7 §4): judges-live mode. No lockstep, keyframes integrate
+    bool demo = false;                     // D169 (agentic.md §4): judges-live mode. No lockstep, keyframes integrate
                                            // on a background thread, no per-replan PNGs, and the LLM is supervisory
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
                                            // answer applies at the next horizon or expires. Not an evidence mode.
     int hold_back_ms = 3000;
-    // D175 item 4 (MULTIAGENT_PIPELINE): per-agent planners fed only through the radio. false = the centralised
+    // D175 item 4 (live-runtime.md#multi-agent-pipeline): per-agent planners fed only through the radio. false = the centralised
     // loop, byte-identical to before this feature existed (the oracle row).
     struct Multiagent {
         bool enabled = false;
@@ -103,7 +103,7 @@ struct LiveConfig {
         double discount_tau_s = 10.0;         // R2 cut-off age constant [ASSUMPTION, logged]
         int max_bid_options = 8;              // top-M options per bid (D175 wire table cap)
     } multiagent;
-    // D174 (LIVE_COLLAB): the live SLAM collaboration. The DNN work runs in per-agent ariadne_collab_worker
+    // D174 (live-collaboration.md): the live SLAM collaboration. The DNN work runs in per-agent ariadne_collab_worker
     // processes (cv::ALIKED output depends on the thread count; inside the estimator it would break the D168
     // digests); the estimator only TEES. false = D168 digests unchanged. Requires multiagent.enabled: SLAM and
     // coordination share one radio and one ledger.
@@ -495,7 +495,7 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
         PutMat(o, b.rgb);
-        // Phase 6 training image (RECON_6, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
+        // Phase 6 training image (reconstruction.md, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
         // fp16-rounded) + albedo_valid (half-res CV_8U) from KeyframeFalloff::Normalize. That code lives on
         // feat/ph5-dve (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
         // says "none" and the recon service refuses to train live unless the run is the RGB ablation - nothing
@@ -545,7 +545,7 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     return rc;
 }
 
-/// chooser: llm, live (AGENTIC_7 D156): one JSON line per decision request to the orchestrator's Unix socket; answers
+/// chooser: llm, live (agentic.md D156): one JSON line per decision request to the orchestrator's Unix socket; answers
 /// come back as JSON lines keyed by decision_id, in any order.
 class ChooserLink {
 public:
@@ -601,7 +601,7 @@ private:
     bool closed_ = false;
 };
 
-/// chooser: llm, replay (AGENTIC_7 D161): the live trace's choices, keyed by (t_s text, agent): the chosen index and the
+/// chooser: llm, replay (agentic.md D161): the live trace's choices, keyed by (t_s text, agent): the chosen index and the
 /// raw `"choice":{...}` tail, re-emitted verbatim. The model is never called in replay.
 std::map<std::pair<std::string, int>, std::pair<int, std::string>> LoadRecordedChoices(const std::string& trace) {
     std::map<std::pair<std::string, int>, std::pair<int, std::string>> out;
@@ -715,9 +715,9 @@ int main(int argc, char** argv) {
             planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold, NA);
             planner_name = "a1_phase4:" + policy;
         }
-        // --- D175 item 4: the per-agent pipeline (MULTIAGENT_PIPELINE) -------------------------------------------
+        // --- D175 item 4: the per-agent pipeline (live-runtime.md#multi-agent-pipeline) -------------------------------------------
         // One planner, exporter and received-layers set per agent plus the operator node, all share-nothing; one
-        // CollabNode per participant (coordination-only: no SLAM hooks until LIVE_COLLAB) over a seeded CommsNode.
+        // CollabNode per participant (coordination-only: no SLAM hooks until live-collaboration.md) over a seeded CommsNode.
         // Nothing here exists unless multiagent.enabled - the centralised loop above is D175's oracle row, untouched.
         namespace ac = ariadne::collaboration;
         namespace multi = planning::multi;
@@ -812,7 +812,7 @@ int main(int argc, char** argv) {
             if (!splat->on()) std::fprintf(stderr, "ariadne_live: splat tee: %s absent or refused; tee off\n", sp);
         }
 
-        // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
+        // The shadow map (next-best-view.md §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
         // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
         std::unique_ptr<planning::Phase4Planner> shadow;
@@ -1399,7 +1399,7 @@ int main(int argc, char** argv) {
             chooser = std::make_unique<ChooserLink>(chooser_socket);
         }
         int replans = 0, commands_sent = 0, answer_timeouts = 0;
-        // Operator directives (AGENTIC_7 §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
+        // Operator directives (agentic.md §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
         // replan barrier in name order, stamped and appended to directives.jsonl. Replay: that file, verbatim.
         std::vector<mis::Directive> directives;
         if (!directives_path.empty()) {
@@ -1415,7 +1415,7 @@ int main(int argc, char** argv) {
         size_t rays = 0;
         std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
-        // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
+        // Per agent, the task its last command serves (agentic.md D164): the chooser's memory across replans. A new pick
         // whose goal lies within refused_radius_m of it CONTINUES it (since_ns kept); anything else starts a new one.
         struct CurrentTask {
             bool set = false;
@@ -1708,7 +1708,7 @@ int main(int argc, char** argv) {
                 }
                 pmark(2);   // radio ladder (+ snapshot) done
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
-                // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
+                // W = G under the known entry poses (D175 SS2 Frames; live-collaboration.md's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
                     // D179: with the async fleet, deliveries come from its logged drain (my mailboxes stay empty);
                     // ticks in order, FIFO per sender, identical in replay (invariant 1).
@@ -1968,7 +1968,7 @@ int main(int argc, char** argv) {
                 Pending& pd = P[k];
                 pd.active = true;
                 pd.ac = ac;
-                // The planner's options (seam: AGENTIC_7 §0b), rendered into the trace and the LLM request.
+                // The planner's options (seam: agentic.md §0b), rendered into the trace and the LLM request.
                 const live::AgentOptions& ao = plan_out.agents[k];
                 pd.plan = ao.plan;
                 pd.classical = ao.classical;
@@ -2045,7 +2045,7 @@ int main(int argc, char** argv) {
                     pd.agent_json = q.str();
                 }
             }
-            // Phase 2: choose, jointly for both agents (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
+            // Phase 2: choose, jointly for both agents (agentic.md §0: Co-NavGPT's joint assignment; exactly-once).
             std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
             std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
@@ -2487,7 +2487,7 @@ int main(int argc, char** argv) {
         std::ofstream res(run_dir / "results.yaml");
         if (operator_stopped) res << "operator_stopped: true\nactual_end_s: " << terminal_ns * 1e-9 << "\n";
         if (mission_err) res << "mission_error: true   # the loop failed; see stderr - artifacts above the failure are valid\n";
-        res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
+        res << "# ariadne_live results (design live-runtime.md). Generated; do not hand-edit.\n"
             << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec

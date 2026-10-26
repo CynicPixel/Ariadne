@@ -1,4 +1,4 @@
-"""Where each agent's submaps go in the mission world W: T_W_O per agent (RECON_6 §3; D230).
+"""Where each agent's submaps go in the mission world W: T_W_O per agent (reconstruction.md §3; D230).
 
 O_k is agent k's odometry frame = its rectified-left camera at the first frame. Two sources, both briefing-based (no
 ground truth):
@@ -9,7 +9,7 @@ ground truth):
             first: its live.demo.entrances[k] names the WORLD entrance mission agent k ran (worldgen mission.py; B,
             2026-10-24), and that entrance's route gives z; without the block, agent k = entrance k.
             The live demo's known-starts rule (B, D216):
-            what B's tee sends until LIVE_COLLAB's adopted estimates move it. Transcribed from ariadne_mission.cpp's
+            what B's tee sends until live-collaboration.md's adopted estimates move it. Transcribed from ariadne_mission.cpp's
             world anchor (T_W_Oa = T_W_B0 * T_B_C), generalised from the anchor agent to agent k.
   merges    agent 0 from the briefing, agent k through the spool's merge into agent 0's frame:
             T_W_Ok = T_W_O0 x T_O0_Ok (schema 3 `merges:`, or schema < 3's agent-1 `merge:`). Agent k's own entrance

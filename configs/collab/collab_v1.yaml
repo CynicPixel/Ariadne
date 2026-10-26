@@ -1,4 +1,4 @@
-# 1.6 placeholder collaboration (design COLLAB_1.6). Starting values, set before
+# 1.6 placeholder collaboration (design collaboration.md#first-collaboration-loop). Starting values, set before
 # the first measurement; results.yaml reports what each gate did.
 name: collab_v1
 orb_features: 1000              # per keyframe, left rectified image

@@ -1,4 +1,4 @@
-// SMOKE §4r (PERCEPTION_2.1.md §11.4): EigenPlaces R50-256 exported to ONNX and run by cv::dnn, against upstream's
+// SMOKE §4r (perception.md §11.4): EigenPlaces R50-256 exported to ONNX and run by cv::dnn, against upstream's
 // own PyTorch descriptors on the same preprocessed input tensors.
 //
 // Needs the export (python/model_tools/eigenplaces_reference.py) in $ARIADNE_EIGENPLACES_REF: SKIPPED without it,

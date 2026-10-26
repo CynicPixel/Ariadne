@@ -1,4 +1,4 @@
-// Phase 2 exit-gate item (arch §11.6, §37.5; POSE_GRAPH_2.md §5): Ariadne's PGO (OpenCV LevMarqBase + our backend)
+// Phase 2 exit-gate item (arch §11.6, §37.5; pose-graph.md §5): Ariadne's PGO (OpenCV LevMarqBase + our backend)
 // vs GTSAM 4.3 LM on the cases python/oracle/pgo_gtsam.py writes to $ARIADNE_PGO_ORACLE (same graph, same
 // information, same anchor, same initial estimate; half the graphs with full correlated information). Agreement:
 // final energy within 1e-6 relative, and every pose within 1e-6 absolute OR within 1e-6 Mahalanobis^2 of the
@@ -146,7 +146,7 @@ TEST(PgoOracle, AgreesWithGtsamOnEveryCase) {
 }
 
 // The SE-Sync benchmark graphs (models.sh pgo-sesync; NOT in the pre-merge gate: rim and grid3D are slow), from the
-// files' own odometry vertices. Criterion (POSE_GRAPH_2.md §5, revised 2026-10-16 with the evidence there):
+// files' own odometry vertices. Criterion (pose-graph.md §5, revised 2026-10-16 with the evidence there):
 //  - a file whose information matrices are not all PSD is EXCLUDED, by name: the cost is unbounded below and
 //    PoseGraph::AddEdge refuses it (GTSAM's Information() Cholesky does not check, so its number is for a different
 //    problem). Exactly cubicle and rim are expected; any other exclusion fails the test.
@@ -319,7 +319,7 @@ TEST(PgoOracle, DampingAblation) {
     }
 }
 
-// The 2.5 init gate (design ROBUST_BACKEND_2.5.md §9, D70), fixed before measuring:
+// The 2.5 init gate (design robust-backend.md §9, D70), fixed before measuring:
 //  - start from DEAD RECKONING ($ARIADNE_PGO_SESYNC_DR: pgo_gtsam.py --init dr, NODE lines = the chain composition);
 //  - reference minimum = GTSAM LM from GTSAM's chordal init ($ARIADNE_PGO_SESYNC_CHORDAL: --init chordal);
 //  - failure set S = graphs where OUR LM from dead reckoning ends stationary but > 1e-6 relative above the reference;
@@ -395,7 +395,7 @@ TEST(PgoInit, SeSyncDeadReckoningGate) {
     std::printf("failure set S (dead reckoning ends > 1e-6 above the reference):%s\n", s.empty() ? " EMPTY" : s.c_str());
 }
 
-// Our chordal rotation stage vs GTSAM's computeOrientationsChordal (design ROBUST_BACKEND_2.5.md §3). GTSAM weights an
+// Our chordal rotation stage vs GTSAM's computeOrientationsChordal (design robust-backend.md §3). GTSAM weights an
 // edge by whiten(e1)[0] (sqrt of ONE axis's precision), we by SE-Sync's kappa: the two least-squares problems coincide
 // only when every edge carries the same isotropic rotation noise, i.e. the even (diagonal-information) cases, which are
 // gated; the odd (full correlated) cases are reported. Needs the 2.5 oracle files (CHORDAL_R lines).

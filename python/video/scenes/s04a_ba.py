@@ -8,7 +8,7 @@ forward-backward and epipolar rejects from an OFFLINE replay of the front end's 
 (tools/track_replay.py -> data/tracks/): illustrative. The diagrams are illustrative. Facts: M, 2026-10-24 (front end:
 FAST + ORB, pyramidal LK 21 px / 4 levels, forward-backward 0.5 px, F-RANSAC 1 px, left-right LK triangulation with an
 SGBM 3-sigma check; back end: 10-keyframe window with Forster IMU preintegration, LM with the Schur complement as in
-docs/design/LOCAL_SLAM_2.3.md §3: invert each landmark's 3x3 block, S = H_cc - sum H_cl H_ll^-1 H_lc, dense LDLT for
+docs/design/local-slam.md §3: invert each landmark's 3x3 block, S = H_cc - sum H_cl H_ll^-1 H_lc, dense LDLT for
 the keyframes, back-substitute each landmark; drop plus odometry edge on exit). The demo runs the front end + PnP +
 2-keyframe BA; the IMU window is the full stack, measured on EuRoC, and is drawn only in its own panel, never over demo
 frames. Results: EuRoC wins counted from evidence.euroc() (D87) at ORB-SLAM3's published 3-dp precision, no mean
@@ -300,7 +300,7 @@ class BundleAdjust(CaptionedScene):
         ).arrange(RIGHT, buff=0.3).move_to(LC + DOWN * 1.7)
         err_lbl = note("red rays: reprojection error", LC + UP * 1.75 + RIGHT * 1.2, 13, TARGET)
 
-        # the solve (LOCAL_SLAM_2.3 §3): H in block form -> invert each landmark's tiny block -> fold them into the
+        # the solve (local-slam.md §3): H in block form -> invert each landmark's tiny block -> fold them into the
         # keyframes (Schur complement) -> solve the small dense keyframe system -> back-substitute each landmark
         lw = [j for j in seen if any(n in win for n in seen[j])]
         nt, nx = WIN, len(lw)

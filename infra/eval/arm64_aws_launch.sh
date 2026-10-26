@@ -13,7 +13,7 @@ cd "$(dirname "$0")/../.."
 instance_cmd() {
   local commit dirty tag
   commit=$(git rev-parse HEAD)
-  if [ -n "$(git status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ]; then
+  if [ -n "$(git status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs')" ]; then
     dirty=true; else dirty=false; fi
   # The one OpenCV pin lives in opencv-base.Dockerfile; read it rather than repeat it.
   tag=$(sed -n 's/^ARG OPENCV_TAG=//p' infra/docker/opencv-base.Dockerfile)

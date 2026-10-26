@@ -1,4 +1,4 @@
-"""The console fed live (design LIVE_RUNTIME_L1 D154): tail a running ariadne_live run directory.
+"""The console fed live (design live-runtime.md D154): tail a running ariadne_live run directory.
 
 ariadne_live appends telemetry.jsonl (estimated poses at 5 Hz of sim time, every decision, every mover answer, a line
 per map snapshot) and writes snapshots/slab_<ms>.png at each replan. LiveRun.poll() reads whatever was appended since

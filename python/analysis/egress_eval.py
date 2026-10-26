@@ -1,4 +1,4 @@
-"""4.5 egress scoring (design EGRESS_4.5 §5/§7, D113): ariadne_volumetric_eval --egress 1's egress_routes.jsonl
+"""4.5 egress scoring (design egress.md §5/§7, D113): ariadne_volumetric_eval --egress 1's egress_routes.jsonl
 against the scene ground truth (scene_gt.npz), with the 1.8 baseline's routes.jsonl on the same spool beside it.
 
 Per replan: route found, length vs the GT responder geodesic from the route's exit, the fraction of route cells in GT
@@ -78,7 +78,7 @@ def main(argv=None) -> int:
         res["baseline_1.8_astar"] = score([r for r in b if r["kind"] == "egress"], gt, target, "support_p5")
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "egress_vs_gt.yaml").write_text(
-        "# python/analysis/egress_eval.py (EGRESS_4.5 §5, D113). Generated.\n"
+        "# python/analysis/egress_eval.py (egress.md §5, D113). Generated.\n"
         + yaml.safe_dump({k: v["summary"] for k, v in res.items()}, sort_keys=False))
     with (a.out / "egress_vs_gt_rows.jsonl").open("w") as f:
         for k, v in res.items():

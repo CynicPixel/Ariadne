@@ -10,7 +10,7 @@
 #       tool and pins the canonical IMU/GT streams of ci_tiny seed 0 (D39)
 #   infra/scripts/worldgen.sh census PRESET [SEEDS=0:1000]
 #   infra/scripts/worldgen.sh accept PRESET [SEEDS=0:1000]
-#       seed sweeps -> evaluation/runs/phase1/worldgen_<cmd>/<preset>-<UTC>/
+#       seed sweeps -> evaluation/runs/gates/phase1_thin_e2e/worldgen_<cmd>/<preset>-<UTC>/
 #   infra/scripts/worldgen.sh preview PRESET SEED [OUT=build/worldgen/<preset>_<seed>.png]
 #   infra/scripts/worldgen.sh generate PRESET SEED [OUT=build/worldgen/scenes/<preset>_<seed>]
 #       full scene directory (model.sdf, meshes, textures, world.sdf, scene_gt.npz,
@@ -27,7 +27,7 @@ IMAGE="${ARIADNE_SIM_IMAGE:-ariadne/sim:dev}"
 
 # Same exclusions as core.sh: paths that cannot change what runs here.
 git_dirty() {
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ]; then
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs')" ]; then
     echo true
   else
     echo false
@@ -61,7 +61,7 @@ case "${1:-}" in
   census|accept)
     cmd="$1"; preset="${2:?preset name}"; seeds="${3:-0:1000}"
     path="$(preset_path "$preset")"      # assignment: a failed lookup stops the script
-    out="evaluation/runs/phase1/worldgen_${cmd}/${preset}-$(date -u +%Y%m%dT%H%M%SZ)"
+    out="evaluation/runs/gates/phase1_thin_e2e/worldgen_${cmd}/${preset}-$(date -u +%Y%m%dT%H%M%SZ)"
     run -m dataset_tools.worldgen "$cmd" --preset "$path" --seeds "$seeds" --out "$out"
     echo "wrote $out"
     ;;

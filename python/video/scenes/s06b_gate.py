@@ -3,7 +3,7 @@ and the measured result (D178).
 
 Part A is illustrative (tagged): the real maze_demo_0 walls and GT routes stand in for two agents' maps; the
 alias, the drag and the uncertainty ellipse are schematic. Part B draws only evidence.d178() numbers
-(evaluation/runs/collab_d178/verdict/: cells.csv, true_edges.csv): merged ATE per sweep cell, gated vs ungated.
+(evaluation/runs/collaboration/known_entry_gate/verdict/: cells.csv, true_edges.csv): merged ATE per sweep cell, gated vs ungated.
 
   python/video/render.sh scenes/s06b_gate.py FalseLoop
 """

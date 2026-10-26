@@ -1,4 +1,4 @@
-// COLLAB_3.2 §4: membership with hysteresis, Swarm-SLAM's election, epochs.
+// collaboration.md §4: membership with hysteresis, Swarm-SLAM's election, epochs.
 #include "collaboration/protocol/membership.hpp"
 #include "collaboration/protocol/transport.hpp"
 

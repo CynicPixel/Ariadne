@@ -1,6 +1,6 @@
 # D58 baseline, kept as the ablation since D59 (2026-10-19): euroc_v2 with imu.mode attitude_only. euroc_v2 itself
 # switched to imu.mode full (maintainer). Every other value is euroc_v2's.
-# 2.3 windowed BA (LOCAL_SLAM_2.3.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
+# 2.3 windowed BA (local-slam.md): the v1 values plus the window backend. v1 stays the 1.5 baseline.
 # Placeholder stereo VO on EuRoC (rectified fB ~48 px; perception euroc.yaml Z_min 0.505 m).
 name: euroc_v2_attitude
 
@@ -28,7 +28,7 @@ keyframe:
 ba:
   huber_delta: 2.0
   max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
-  sigma_px: 0.46                # calibrated (LOCAL_SLAM_2.3.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
+  sigma_px: 0.46                # calibrated (local-slam.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
   backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
   window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
   chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
@@ -38,7 +38,7 @@ ba:
   step_norm_tolerance: 1.0e-8
   min_gradient_tolerance: 1.0e-8
 
-lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+lost:                           # lost-frame handling (local-slam.md#lost-frames, D56); absent = coast / every_frame (the 1.5 baseline)
   motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
   reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
   bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px
@@ -52,10 +52,10 @@ imu:                            # 2.4 attitude_only (slam/inertial/attitude.hpp;
   mode: attitude_only           # gyro rotation while lost (beats the visual bridge), gravity on keyframes
   seed_lk: false                # gyro-seeded LK tested: lost frames -4% only, V1_03 0.42 -> 0.82 m; off (D58)
   bias_window: 200              # VO-aided gyro-bias median over 200 tracked pairs (10 s at 20 Hz)
-  stationary_s: 2.0             # PHASE2_PLAN §3 stationary-start test
+  stationary_s: 2.0             # local-slam.md#estimator-plan §3 stationary-start test
   kp: 1.0                       # Mahony et al., IEEE TAC 2008 §VI
   ki: 0.3
-  gravity_prior:                # GRAVITY_PRIOR edges (INERTIAL_2.4 §4.10), consumed by the pose graph (2.5)
+  gravity_prior:                # GRAVITY_PRIOR edges (inertial.md §4.10), consumed by the pose graph (2.5)
     stride_keyframes: 10        # one per window length: non-overlapping data
     source: attitude            # Mahony: the only NEES-consistent candidate (VIO-derived ones inherit g_W's error)
     attitude_sigma_deg: 2.3     # calibrated on MH (pooled NEES 2.00), held-out V NEES 3.0; heavy tail (p99 ~18)

@@ -1,4 +1,4 @@
-"""4.2 risk-proxy calibration against GT risk zones (design RISK_ZONES_4.2 §3, D112). numpy only.
+"""4.2 risk-proxy calibration against GT risk zones (design traversability-risk.md#risk-zones §3, D112). numpy only.
 
   python3 -I risk_calibration.py --seed-dir 0=MAP0:SCENE0 --seed-dir 1=MAP1:SCENE1 --seed-dir 2=MAP2:SCENE2 \\
       [--control MAPC:SCENEC] --out DIR
@@ -115,7 +115,7 @@ def main() -> int:
                      f"{row.get('eval_pooled', {}).get('fpr', float('nan')):.3f} | control FPR {row.get('control_fpr', float('nan')):.3f}")
     a.out.mkdir(parents=True, exist_ok=True)
     import json
-    (a.out / "calibration.yaml").write_text("# risk_calibration (RISK_ZONES_4.2 §3, D112). Generated.\n" +
+    (a.out / "calibration.yaml").write_text("# risk_calibration (traversability-risk.md#risk-zones §3, D112). Generated.\n" +
                                             json.dumps(out, indent=1) + "\n")
     print("\n".join(lines))
     return 0

@@ -1,16 +1,16 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// CollabFleet: the fleet side of the 3.x collaboration (design LIVE_COLLAB §1, D174). One CollabNode per agent over one
+// CollabFleet: the fleet side of the 3.x collaboration (design live-collaboration.md §1, D174). One CollabNode per agent over one
 // CommsNode, with the 3.2 hooks: retrieval, similarity, features, verification, the robust broker solve and the
 // selection arm. It also plants false closures (§42 item 7) and keeps the merge evidence. Extracted from
-// ariadne_collab_sim (pass B, SIMCOLLAB_3.2 / D171 / D173), so the replay and the live parent run the same code.
+// ariadne_collab_sim (pass B, collaboration.md#simulated-collaboration / D171 / D173), so the replay and the live parent run the same code.
 //
 // The driver owns the clock. Each step at sim time `now`: Deliver(now) (the network up to now), Release() every
 // keyframe whose t_final <= now, then Tick(now) (every node, then the scheduled injections). Features come from a
 // FeatureSource: the pass-A store in replay (always ready), the estimator worker in live (nullopt = not ready yet,
 // answered on a later tick: CollabNode's deferred answers).
 //
-// Hooks (SIMCOLLAB_3.2 §2):
+// Hooks (collaboration.md#simulated-collaboration §2):
 //   retrieve    cosine over the broker's RECEIVED global descriptors (EigenPlaces R50-256), other agents only,
 //               >= retrieval.min_score, top retrieval.top_k by score; the scores are cached for `similarity`
 //   features    FeatureSource -> MATCH_RESPONSE: ALIKED-n16 keypoints, descriptors int8 + per-keyframe scale (arch
@@ -297,7 +297,7 @@ public:
         }
     }
 
-    /// D174 panel "inject false closure" (LIVE_COLLAB §5): plant one NOW on the agent pair with the most kept true
+    /// D174 panel "inject false closure" (live-collaboration.md §5): plant one NOW on the agent pair with the most kept true
     /// loops, between each agent's latest released keyframe, offset `offset_m` and `yaw_deg` (fixed by the caller:
     /// every press is the same experiment). Armed only when that pair has a kept true loop and both keyframes have
     /// ground truth. Returns the injection's index in injections(), or nullopt when not armed.

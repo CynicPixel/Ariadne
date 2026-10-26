@@ -1,4 +1,4 @@
-// D174 (LIVE_COLLAB §2): the features hook may answer "not ready". The node keeps the request and answers it on a later
+// D174 (live-collaboration.md §2): the features hook may answer "not ready". The node keeps the request and answers it on a later
 // Tick (a peer's MATCH_REQUEST, or the broker's own keyframe), so a slow, lazy extraction in the live worker never
 // blocks a tick; a request never ready by the TTL is dropped and counted, and the run still never ends corrupt.
 #include "collab_scenario.hpp"

@@ -1,0 +1,312 @@
+# 4.4 Allocation: event-triggered CBBA (bundles 1–2) and broker sequential greedy, logged identically (A1)
+
+Status: **reviewed** (advisor 2026-10-23, §9), before any code. The wire table waits on the master session (§5). Decision: D115. Arch §21.7; algorithms.md §22.3/§22.3.1
+(CBBA, transcribed from the paper: Algorithm 3, eqs. 3–6, Table I, Theorems 1–2). Consumes D114's per-agent
+`TaskCandidate` sets. Replaces `Phase4Planner`'s greedy joint pick, which stays as the ablation's simplest row.
+
+## 1. What the paper gives us, and what it means here
+
+- **Theorem 1:** under a DMG score, with synchronized conflict resolution, **CBBA's assignment equals sequential
+  greedy's (SGA)**. It converges within N_min·D iterations, with N_min = min{N_t, N_u·L_t}.
+  **Theorem 2:** under DMG, M_OPT ≤ 2·CBBA.
+- **Consequence for the arch's "auction vs broker-greedy" row:** with a DMG score the two give the **same
+  assignment**. The row measures what decentralization costs in **messages, bytes and rounds** (and robustness when
+  the broker is lost), not solution quality.
+  - "Logged identically" becomes an exact test: same (agent, task, bid) set, every round.
+  - A difference in assignment is a bug, or a score that is not DMG.
+- **N_u = 2 in our missions.** Consensus is one hop when the pair is connected, so CBBA's interesting regimes are
+  disconnection, reconnection and stale timestamps. The unit tests run N_u up to 8 on random graphs so that Table
+  I's m/n rows are exercised.
+
+## 2. Tasks (§21.7 steps 1–2)
+
+- **A task is a 4.3 target.** Its `task_id` is stable across replans.
+- **§21.7's spatial clustering is 4.3's targets.** Frontier clusters split along their PCA axis, and coarse 0.5 m
+  cells, are already spatial clusters.
+- **No second clustering pass** (advisor review):
+  - `cv::partition` is a transitive closure, so it would chain together the pieces that generator A's PCA split
+    just separated;
+  - a "smallest member" id changes whenever membership changes, which breaks exactly-once across replans.
+  - If adjacent bottom-decile B cells should merge, that belongs inside generator B, with a stable anchor.
+- **Per agent, per task:** the agent's best view of it (the highest D114 utility). Each agent has its own view,
+  because the goal depends on the agent's reachable space.
+
+## 3. The score must be DMG (eq. 7): time-discounted, per eq. 11
+
+- **D114's U = G − λ_path·C_path − C_b − C_r is not DMG once bundles hold two tasks.**
+  - With an additive path cost, the marginal of task j is G_j minus the cheapest insertion detour.
+  - Adding a task k next to j **shrinks** j's detour and raises its marginal.
+  - That breaks eq. 7 and, with it, Theorem 1's equality.
+- **Adopted:** the paper's DMG form (eq. 11), with our terms:
+
+  `S_i(p) = Σ_{j ∈ p} c̄_ij · exp(−λ_path · d_ij(p) / P_path)`
+
+  - c̄_ij = max(0, G_ij − C_b,ij/P_b − C_r,ij/P_r) > 0: the task's value net of its non-path costs;
+  - **G_ij is recomputed on the auction's common scales P:** Σ_k raw_k / P_k, with P_k the max over agents of each
+    agent's p90 scale for term k. The scales are exchanged in the first message of an allocation event and frozen
+    for its rounds (advisor review).
+    - With per-agent p90s, an agent with a sparse candidate set would bid on an inflated scale. Every Table I
+      y-comparison would then be meaningless, and CBBA = SGA would still hold, on wrong inputs.
+    - The max is a max-consensus: idempotent and order-free, so it settles within D hops, like CBBA itself.
+  - d_ij(p) = the agent's ρ_agent path distance to j **along p**: from its position through the earlier tasks'
+    goals;
+  - the discount's rate is D114's λ_path over the same p90 path scale, so no new constant enters.
+- **This is DMG**, by the paper's own argument (eqs. 11–12): an insertion can only lengthen the distance to every
+  later task (triangle inequality on geodesics), and c̄ > 0.
+- **With L_t = 1** the bid is c̄·exp(−λ·d/p90), monotone in the same direction as D114's linear U. The ranking can
+  differ, which is stated; D114's ranking is what the runtime shows the operator.
+- **Leg distances:**
+  - agent → goal: 4.3's geodesic;
+  - goal → goal: a Dijkstra from each candidate goal on the agent's plan space. That's N_t Dijkstras per agent per
+    event. Its cost is **measured on the spool** (§8) before it is relied on. The fallback, if too slow, is to
+    compute legs only for tasks that can enter a bundle (h_ij = 1 against the current y), stated if used.
+- **One comparator** everywhere: Table I's y-comparisons, BuildBundle's argmax, SGA's argmax and the oracle.
+  Compare by bid, then lexicographic (agent id, task id) (§III-B's tie-break). Otherwise ties would break test 2's
+  equality for spurious reasons.
+- **Timestamps s:** round indices in replay and tests, sim time live. Never the wall clock (B's determinism
+  requirement).
+
+## 4. Two allocators, one log format
+
+- **CBBA:** each agent runs BuildBundle (Algorithm 3, L_t = 2) and exchanges (y, z, s). The receiver applies Table I
+  task by task, then eq. 6's release. Iterate until no change.
+  - Event-triggered (§21.7): a round starts only on a new task cluster, a completed task, or a topology change. A
+    replan where none occurred reuses the last assignment and sends nothing.
+- **Broker SGA:** the broker holds every agent's c̄ and distances, and repeats "pick the (agent, task) with the
+  largest marginal bid, insert it at its best position" until bundles fill or bids run out. That is the paper's SGA
+  (Theorem 1's comparator), computed in one place.
+- **Logged identically**, one record per allocation event:
+  - trigger, t_s, rounds (CBBA iterations; 1 for SGA);
+  - per agent: bundle, path, bids;
+  - bytes, per message and in total, counted at the serializer (invariant 6).
+- **Ablation rows:** greedy-joint (`Phase4Planner`), SGA, CBBA. Each reports assignment, total score, the exact
+  optimum, rounds and bytes.
+
+## 5. Bytes, at the serializer (invariant 6)
+
+- **The wire already has the classes:** `wire.fbs` defines `MessageClass` TASK_BID (9) and TASK_CONSENSUS (10).
+  `WireCodec` and `ByteLedger` are on this branch.
+- **A CBBA message needs one table and one field:**
+  - `TaskConsensus { tasks:[ulong]; y:[float]; z:[byte]; s:[long]; scales:[float]; }`
+  - one field appended to `Envelope` (`task_consensus:TaskConsensus`), plus `WireCodec::EncodeTaskConsensus` and
+    `DecodeTaskConsensus`.
+- **Coordination:** the master session has uncommitted 3.4 edits to `wire.fbs` and `serializer.hpp`, at exactly
+  that append point. I've asked it how it wants the table added. The CBBA core takes encode/decode as two function
+  objects, so the codec plugs in without the core depending on FlatBuffers.
+- **Until the table lands:**
+  - unit tests use an exact test codec;
+  - any byte column is labelled "test codec" and is never a claim.
+  - Invariant 6's bytes are counted only once the FlatBuffers path exists.
+
+## 6. Exact optimum oracle
+
+- **L_t = 1:** the assignment LP is integral (total unimodularity), so `cv::solveLP` gives the optimum (algorithms.md
+  §22.3).
+- **L_t = 2, N_u = 2, the missions:** a sorted scan, exact without enumerating every combination (advisor review):
+  - each agent's bundles are ≤ 2 tasks, scored at their best order, about N_t²/2 per agent;
+  - sort agent 1's bundles by score;
+  - for each agent-0 bundle, take the first disjoint agent-1 bundle. Only bundles sharing one of agent 0's ≤ 2
+    tasks are skipped, so the scan is O(B log B).
+  - Exact by construction, and run on every logged round.
+  - About 170 targets per replan (4.3 log) gives about 14.5k bundles per agent.
+- **L_t = 2, N_u ≤ 4 (tests):** brute force over small instances (N_t ≤ 8).
+
+## 7. Tests
+
+1. **Table I, row by row:** the 17 rows (one cell per (z_kj, z_ij) pair, including n ∉ {i,k,m}), each with the
+   condition true and false. Expected actions are written from §22.3.1, not from the code.
+2. **CBBA = SGA under DMG:** random DMG instances, N_u ∈ {2..8}, N_t ≤ 12, L_t ∈ {1, 2}, on random connected graphs
+   with synchronous rounds. The assignments are equal, and the rounds are ≤ N_min·D.
+   - That's Theorem 1(2), unmodified for DMG scores. The paper's "slight modification", Lemma 4's
+     c_ij(t) = min(c°_ij(t), c_ij(t−1)), is for scores that are not DMG, and is checked as not needed here.
+3. **Conflict-free** at convergence on dynamic graphs whose ρ-windows are jointly connected. The rounds are
+   ≤ ρ·N_min.
+4. **50 % bound:** total score ≥ ½ of the brute-force optimum on every instance (Theorem 2). The empirical ratio is
+   reported.
+5. **The DMG check itself:** eq. 7 holds numerically on the time-discounted score over random paths. The additive
+   score fails it on a constructed counterexample (the reason for §3).
+6. **Event triggering:** with no trigger, no message is sent and the assignment is unchanged.
+7. **Release (eq. 6):** an outbid first task releases the second one too.
+8. **Common scales:** an agent with extra weak candidates bids exactly what a peer with the same view of a shared
+   task bids. With per-agent p90s they would differ, and this test would catch it.
+
+## 8. Evaluation
+
+- **Replay:** run on the 4.3 decision log's per-agent candidate sets at each replan. The two agents are connected
+  after the merge and disconnected before it, which is the spool's real topology.
+  - **What replay can't show** (advisor review): agent 1's keyframes are held until the merge, so it has no
+    candidates before it. Replay exercises only the connected N_u = 2 case, 1–2 rounds.
+  - The interesting regimes (disconnection, reconnection, stale timestamps) are covered by the synthetic tests
+    (2, 3) and by live L1. They're never claimed from replay.
+  - Rows: greedy-joint, SGA, CBBA, plus the exact optimum.
+  - Columns: score, optimum ratio, rounds, messages, bytes (test codec).
+- **Live (lockstep L1):** the gate ablation uses Ariadne with CBBA. The broker-SGA row reuses the same runs'
+  logged inputs, so it needs no extra live runs.
+
+## 9. Review (advisor, 2026-10-23)
+
+Blocking points, all adopted:
+1. Common auction scales: the max of the agents' p90s, frozen per event. Test 8 (§3).
+2. No `cv::partition` second pass: 4.3's targets are the spatial clusters, and their ids stay stable (§2).
+3. An exact, feasible oracle: the sorted disjoint scan; the cost of the leg distances measured before it is
+   relied on (§3, §6).
+
+Sharpening points, all adopted:
+- one comparator; timestamps from rounds or sim time;
+- Theorem 1(2) needs no modification for DMG (Lemma 4 is for scores that are not DMG);
+- replay's limits stated;
+- the wire table coordinated with the master session.
+
+The remaining choice is the time-discounted DMG score itself (§3). It is the paper's own form, with D114's λ_path
+and the common scales: no new constant.
+
+## 10. Correction (2026-10-23, measured before any commit of code)
+
+- **[SUPERSEDED by §15: the cause is a non-DMG score, not L_t]** **§1's "CBBA = SGA" holds exactly at L_t = 1 only.** At L_t = 2 a stale second-slot bid can make them differ
+  (algorithms.md §22.3.1, correction). The first test sweep found it on 1 of 60 instances. The advisor's three
+  separating checks then confirmed the mechanism:
+  - L_t = 1: 2000 / 2000 equal, no tail release;
+  - L_t = 2: 5 / 1000 diverge, all with eq. 6 tail releases;
+  - a hand-built B–A–C instance reproduces the worked outcome.
+- **Default L_t = 1** (inside arch §21.7's 1–2):
+  - CBBA then equals SGA exactly, so the "auction vs broker-greedy" row measures communication only;
+  - Theorems 1–2 apply as stated.
+- **L_t = 2 is a reported row:** divergence rate, and score against SGA and against the optimum.
+- **Tests split by what is provable:**
+  - L_t = 1: exact equality and the N_min·D bound;
+  - L_t = 2: converged, conflict-free, divergence only with tail releases, and ≥ 50 % of brute force, labelled
+    empirical.
+
+## 11. Wire (2026-10-23, master session's option (b))
+
+- **Schema:** `TaskConsensus { tasks:[ulong]; y:[float]; z:[byte]; s:[long]; scales:[float] }` in `wire.fbs`,
+  appended last in `Envelope`.
+- **Encoding:** `WireCodec::EncodeTaskConsensus` goes through `FinishEnvelope`, so the `ByteLedger` counts class
+  TASK_CONSENSUS (10) like every class. It is **not compressed** (§15.7 compresses classes 4–5 only).
+- **Unequal per-task vectors decode as malformed.**
+- **Existing bytes unchanged, proven:** `Serialization.PreTaskConsensusBytesUnchanged` pins the size and FNV-1a of
+  a fixed heartbeat, loop edge, pose graph and ack, recorded with the pre-change tree (= main's). All 59 protocol
+  tests pass.
+- **CBBA counts real wire bytes:** `allocation_wire.hpp` measures each message as its envelope's `wire_bytes`.
+  - A 6-task, 2-agent message is 274 B on the wire, against 110 B from the test codec, which is a 2.5×
+    undercount. That's why the test codec was never a claim.
+  - If CBBA bytes ever feed a predicted-vs-measured claim, collaboration.md §7's rules apply: first transmission only,
+    overhead as separate rows.
+
+## 12. Replay rows, as measured (2026-10-23; `evaluation/runs/planning/allocation_replay/`)
+
+The real `Phase4Planner` on the evidence spool, 40 replans. Agent 1 is active only after the merge (12 linked
+replans).
+
+| | value |
+|---|---|
+| CBBA = SGA (L_t = 1) | **40 / 40** |
+| CBBA / optimum, linked replans | mean 0.994, worst 0.983 |
+| greedy joint pick / optimum, linked replans | mean 0.985, worst 0.900 |
+| CBBA rounds: single agent / linked | ≤ 2 (no messages) / 2–3 |
+| TASK_CONSENSUS per message, linked | 2.4 KB (≈ 160 tasks × 13 B + scales + framing) |
+| per linked event | 13.9 KB |
+| events triggered | 32 / 40 (31 by "tasks", 1 "first"); 8 reused the last assignment |
+| bytes, event-triggered vs every replan | 123.4 KB vs 166.3 KB (−26 %) |
+| Plan() per replan, both agents | p50 2.9 s, max 9.5 s (fine under lockstep) |
+
+**Reported as measured, not tuned:**
+- **Event triggering saves only 26 %.** 4.3's target set churns on nearly every replan, as the map grows, so "new
+  task" fires.
+- **A message carries every task (≈ 160).** At 2.4 KB that undercuts §21.7's byte rationale on this spool.
+- **The obvious remedies are design changes, not knobs:**
+  - announce only the tasks an agent can bid on (the top-K by its own c̄);
+  - send deltas against the last acknowledged state.
+  - Each would need its own review and a byte-table row; none is applied here.
+- **The first replay exposed a convergence bug,** fixed in `63fdbee`: single-agent events ran to the 1000-round cap
+  because "converged" required agreement across disconnected agents.
+
+## 13. Sparse TASK_CONSENSUS (D115a, 2026-10-23)
+
+- **The cause:** §12 measured 2.4 KB per message, because every task (≈ 160) travelled with its (y, z), almost all
+  of them (0, none). Every CBBA event starts from y = 0, z = none, and with L_t = 1 only a handful of tasks ever
+  have a winner.
+- **The change: only tasks with a winner are sent.** The receiver expands every missing task to (0, none), which is
+  literally the sender's state, so Table I gets identical inputs. Bids travel as **doubles** (`y:[double]`), so the
+  wire never rounds a comparison.
+- **Proven end to end, not argued:**
+  - `CbbaParams.transport` delivers each message through encode → decode → expand;
+  - on 300 random instances (N_u 2–6, N_t 3–14, L_t 1–2) the assignment, the bids and the round count are
+    identical with and without the wire (`Cbba.WireTransportLeavesTheAssignmentUnchanged`).
+  - `Phase4Planner` and the replay evaluator now run CBBA through the wire transport.
+- **Size:** a 160-task event with 2 winners is 234 B on the wire. The run-level row is in §14.
+- **Not done, because it would change the algorithm, not the encoding:** announcing only top-K tasks, or deltas
+  against an acknowledged state. Neither is needed at this size.
+
+## 14. Replay rows with sparse messages and the L_t = 2 row (2026-10-23; `evaluation/runs/planning/allocation_replay/`, binary 146e769)
+
+| | L_t = 1 (default) | L_t = 2 (§31.7 reported row) |
+|---|---|---|
+| CBBA = SGA | 40 / 40 | 40 / 40 (20 eq. 6 tail releases, none diverged here) |
+| CBBA / optimum, linked replans | mean 0.994, worst 0.983 | mean 0.994, worst 0.984 |
+| TASK_CONSENSUS wire bytes per message | **226 B** (dense: 2.4 KB) | 250 B |
+| rounds, linked | 2–3 | 2–4 |
+| bytes over the spool, event-triggered | **11.8 KB** (dense: 123.4 KB, 10.5× more) | — |
+| extra planner time | — | goal → goal legs: mean 1.4 s, max 4.4 s per replan |
+
+- **The byte rationale of §21.7 now holds on this spool:** about 1.3 KB per linked event, with the same assignments
+  as dense (proved by the wire-transport test, and CBBA = SGA here too).
+- **L_t = 2 buys nothing measurable on this spool:** the same optimum ratio. It costs 1.4 s of leg Dijkstras per
+  replan, and it carries the stale-bid divergence risk (§10). L_t = 1 stays the default.
+
+## 15. Literature review: §10's reason was wrong; bid warping (2026-10-23)
+
+This is the primary-text review the maintainer asked for (`docs/design/lit/phase4_fixes_route_cbba.md`).
+
+**§10 said "CBBA = SGA holds exactly at L_t = 1 only". That is wrong as a statement about the paper.**
+- Theorem 1 (Choi et al., T-RO 2009, §V-B, p. 919) holds for any L_t, through N_min = min{N_t, N_u·L_t}. Its
+  precondition is a DMG score.
+- **Our score is not DMG.** Eqs. 11–12 argue that the time-discounted path score is DMG: each task arrives later on a
+  longer path. Eq. 7, though, constrains the insertion marginal, and that can rise. A task inserted next to a later
+  one shortens the detour another task needs. Sources of the measurement:
+  - a Python port of `PathScore`/`Marginal` on Euclidean legs: eq. 7 fails on 37 277 of ~480 000 (j, k, b) triples
+    (7.8 %), with |b| = 1, 4 tasks and random positions;
+  - the §10 hand-built instance itself, which is not DMG for agent A: c_Y[{W}] = 0.275 < c_Y[{X, W}] = 1.686;
+  - the C++ pin, `Cbba.DiscountedInsertionMarginalIsNotDmg`.
+  - `DiscountedScoreIsDmgAdditiveIsNot` checks only b = {} against {k}, where eq. 7 does hold.
+- So the L_t = 2 divergence is a Theorem 1 precondition failure. The "stale second-slot bid" was the symptom. The same
+  group's later paper names the issue: Johnson, Choi, Ponda & How, CDC 2012, eq. 3 and Example 2. Insertion scores
+  are non-submodular, which "can easily lead to cycling".
+
+**The fix, from the paper: bid warping (Johnson et al. 2012, §III-B, eq. 6, Algorithm 2).**
+- The true marginal c ranks the tasks. The warped bid c̄ = min(c, every bid already in the bundle) is used in the
+  outbid test and shared as y.
+- Bids then never increase along a bundle, which is Choi's eq. 9. To the fleet the bids look like they come from a DMG
+  score (Johnson Theorems 2–3), so conflict-free convergence within N_min·D follows.
+- Choi's own Lemma 4 (eq. 34, a clamp over iterations) is the alternative. We use Johnson's, since it targets exactly
+  insertion scores.
+- **Deviation `[DESIGN]`:** Johnson's Algorithm 2 rebuilds the bundle from scratch each phase; we keep Choi's
+  incremental Algorithm 3.
+- **At L_t = 1 the warp is the identity** (empty bundle), so the default, the gate, and §14's L_t = 1 column are
+  unchanged.
+
+**Tests (all pass):**
+- `BundleTwoWithBidWarping` asserts, over 1000 random instances:
+  - eq. 9 on every bundle;
+  - conflict-free;
+  - rounds ≤ N_min·D + 1.
+- Result: 5 / 1000 still differ from raw-score SGA, worst CBBA/optimum 0.618; the ≥ 50 % bound is labelled empirical.
+  Raw-score SGA is not the reference here: Johnson's equivalence is to the warped DMG surrogate, not to SGA on the
+  true score.
+- `StaleSecondSlotBidRegression` is unchanged; its bids are already monotone.
+
+**L_t = 1 stays the default, for the corrected reason:**
+- at L_t = 1 every bid is c_ij[∅], DMG holds trivially, and Theorem 1 applies. That is the 40 / 40;
+- the planner executes only `path.front()` per replan (receding horizon), so a second slot is never flown before the
+  next auction;
+- L_t = 2 bought nothing on the spool and cost 1.4 s of legs per replan (§14).
+- L_t = 1 is CBAA (Choi p. 916). With N_t > N_u it leaves tasks unassigned per auction, which costs nothing here
+  because each agent flies one task per replan.
+- The L_t = 2 replay row (§14) was measured before warping. Re-measuring it is an evaluation run and waits for the
+  maintainer.
+
+**Convergence (§`63fdbee`): supported, one correction.**
+- Theorem 1's bound is N_min·D; the "2 N_t D" written earlier is not in the paper.
+- ACBBA (2011) also calls the network converged once it "goes quiet".
+- Our quiet-round test compares (y, z, b) and excludes s, which is correct: eq. 5 advances s every message.
+- At L_t = 2 the N_min·D bound is now asserted.

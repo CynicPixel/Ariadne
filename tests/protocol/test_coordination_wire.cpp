@@ -1,4 +1,4 @@
-// D175 coordination messages (MULTIAGENT_PIPELINE): SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS round-trip through the one
+// D175 coordination messages (live-runtime.md#multi-agent-pipeline): SUBMAP_PATCH, TASK_BID, TASK_CONSENSUS round-trip through the one
 // serializer boundary, cells pack at 2 bits, frames are mandatory, and malformed payloads are refused.
 #include "core/serialization/serializer.hpp"
 

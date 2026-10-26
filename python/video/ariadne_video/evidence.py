@@ -1,4 +1,4 @@
-"""Numbers for the film read straight from committed evidence dirs (never retyped from DECISIONS.md tables).
+"""Numbers for the film read straight from committed evidence dirs (never retyped from decisions.md tables).
 
   python3 python/video/ariadne_video/evidence.py   (prints every number the scenes will draw, with its source)
 
@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-EUROC_RUN = REPO / "evaluation/runs/2.6/euroc_full_aws/20261022T193510Z-cpux86-655144"  # D87 run 2 (loop fix)
+EUROC_RUN = REPO / "evaluation/runs/vio/euroc_full_aws/20261022T193510Z-cpux86-655144"  # D87 run 2 (loop fix)
 FLIGHTS = ["MH_01_easy", "MH_02_easy", "MH_03_medium", "MH_04_difficult", "MH_05_difficult", "V1_01_easy",
            "V1_02_medium", "V1_03_difficult", "V2_01_easy", "V2_02_medium", "V2_03_difficult"]
 # ORB-SLAM3 stereo-inertial ATE (m), Campos et al., T-RO 2021, Table II; same order as FLIGHTS
@@ -30,7 +30,7 @@ def euroc() -> list[dict]:
     return out
 
 
-D178 = REPO / "evaluation/runs/collab_d178/verdict"
+D178 = REPO / "evaluation/runs/collaboration/known_entry_gate/verdict"
 
 
 def d178() -> dict:
@@ -51,7 +51,7 @@ def d178() -> dict:
     return {"cells": cells, "true_edges": edges}
 
 
-EGRESS = REPO / "evaluation/runs/egress_4.5/egress_vs_gt.yaml"
+EGRESS = REPO / "evaluation/runs/egress/routes/egress_vs_gt.yaml"
 
 
 def egress() -> dict:
@@ -62,7 +62,7 @@ def egress() -> dict:
             "first_route_s": get("time_to_first_route_s"), "length_ratio": get("length_ratio")}
 
 
-MAP_VS_GT = REPO / "evaluation/runs/traversability_4.2/map_vs_gt.yaml"
+MAP_VS_GT = REPO / "evaluation/runs/mapping/traversability/map_vs_gt.yaml"
 
 
 def mapping() -> dict:

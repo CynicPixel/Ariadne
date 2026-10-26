@@ -1,6 +1,6 @@
 // THE PHASE 0 EXIT GATE.
 //
-// From ARIADNE_PHASED_PLAN.md:
+// From arch §2:
 //   "a synthetic trajectory is generated, serialized, replayed, and scored
 //    bit-identically twice"
 // and from arch §33 Iteration 0:

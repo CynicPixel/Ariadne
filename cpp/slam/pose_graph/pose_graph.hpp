@@ -100,7 +100,7 @@ public:
             throw std::invalid_argument("PoseGraph: ODOMETRY edges always carry GNC weight 1 (§12.1)");
         }
         // The cost is 1/2 r^T I r: an information that is not symmetric PSD makes it unbounded below and the normal
-        // equations indefinite (the SE-Sync cubicle / rim files carry such matrices, POSE_GRAPH_2.md §5). Refuse it
+        // equations indefinite (the SE-Sync cubicle / rim files carry such matrices, pose-graph.md §5). Refuse it
         // here, where it enters, rather than as a failed factorisation far downstream.
         const double scale = e.information.cwiseAbs().maxCoeff();
         if (!e.information.allFinite() || !(scale > 0.0) ||

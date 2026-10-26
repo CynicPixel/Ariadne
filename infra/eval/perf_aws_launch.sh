@@ -29,7 +29,7 @@ INPUTS=(
   .cache/models/eigenplaces_sim_ref/manifest.yaml
 )
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- .)" ] || { log "dirty tree"; exit 1; }
   rm -rf "$W"; mkdir -p "$W"
   git rev-parse HEAD > "$W/commit"
   find "${INPUTS[@]}" -type f -print0 | sort -z | xargs -0 sha256sum > "$W/inputs.SHA256SUMS"

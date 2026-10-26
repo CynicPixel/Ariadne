@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The pass-A keyframe store of the 3.2 sim integration (design SIMCOLLAB_3.2 §1, D171).
+// The pass-A keyframe store of the 3.2 sim integration (design collaboration.md#simulated-collaboration §1, D171).
 //
 // Pass A runs one agent's shipped front-end over its recording and writes one record per keyframe whose odometry
 // became FINAL (it left the BA window: the LoopBackend mirror took it). Pass B releases each record whole at

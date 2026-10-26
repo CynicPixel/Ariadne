@@ -1,4 +1,4 @@
-// 1.8 planning placeholders (design MISSION_1.8): exact voxel traversal, OctoMap
+// 1.8 planning placeholders (design mission.md): exact voxel traversal, OctoMap
 // tri-state carving, GT-convention clearance, A* optimality and frontier clusters,
 // each against a brute-force or hand-computed answer.
 #include "planning/frontier/frontiers.hpp"

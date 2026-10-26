@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.1 voxel-hash TSDF (arch §20.1-§20.2; design VOLUMETRIC_4.1 §3.1-§3.2, D110).
+// 4.1 voxel-hash TSDF (arch §20.1-§20.2; design volumetric.md §3.1-§3.2, D110).
 //
 // Why from scratch: OpenCV 5's cv::Volume(HashTSDF) integrates and raycasts but
 // exposes no voxel value or weight and takes no per-pixel weight (SMOKE §4u), so

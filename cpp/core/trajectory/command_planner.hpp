@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Commanded motion -> script segments (design LIVE_RUNTIME_L1 D151; arch §5.8).
+// Commanded motion -> script segments (design live-runtime.md D151; arch §5.8).
 //
 // The live kinematic mover turns goto(pose) / follow(path) into the SAME segment
 // family the worldgen scripts use (python/dataset_tools/worldgen/{motion,routes}.py):

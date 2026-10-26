@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # The reconstruction service's LOCAL (CPU) stages in the pinned ariadne-recon
-# image (infra/docker/recon.Dockerfile; design RECON_1.7). Repo at /work.
+# image (infra/docker/recon.Dockerfile; design reconstruction.md#first-reconstruction-loop). Repo at /work.
 #
 #   infra/scripts/recon.sh test                         python unit tests
 #   infra/scripts/recon.sh prepare SPOOL SCENE EVALREC OUT   fuse + init + geometry + render package
@@ -18,7 +18,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE=ariadne-recon:1
 docker image inspect "$IMAGE" >/dev/null 2>&1 \
   || docker build -q -t "$IMAGE" -f "$REPO_ROOT/infra/docker/recon.Dockerfile" "$REPO_ROOT/infra/docker" >/dev/null
-dirty="$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs' \
+dirty="$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs' \
   | grep -q . && echo true || echo false)"
 run() {
   docker run --rm -u "$(id -u):$(id -g)" -v "$REPO_ROOT:/work" \

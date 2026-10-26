@@ -1,4 +1,4 @@
-// 2.1 re-association (PERCEPTION_2.1.md §4.3): the appearance matcher, the geometric verifier, the tracker rename,
+// 2.1 re-association (perception.md §4.3): the appearance matcher, the geometric verifier, the tracker rename,
 // the ORB Describe() contract, and the config section.
 #include "core/random/philox.hpp"
 #include "perception/association/landmark_reassociation.hpp"

@@ -1,4 +1,4 @@
-"""The MCP tool surface over Ariadne's deterministic core (design AGENTIC_7 §0, D157; arch §25.2). mcp 2.3.0, stdio.
+"""The MCP tool surface over Ariadne's deterministic core (design agentic.md §0, D157; arch §25.2). mcp 2.3.0, stdio.
 
   python -m orchestration.mcp_server DECISION_DIR [--text-only]
 

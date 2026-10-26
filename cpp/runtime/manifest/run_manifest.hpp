@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Run manifest (arch §28.2, §36; CLAUDE.md "manifests or it didn't happen").
+// Run manifest (arch §28.2, §36; arch §0.2 "manifests or it didn't happen").
 //
 // Every run records what produced it. This is what makes a figure reproducible
 // six weeks later and what lets a reviewer rebuild one result from the written
@@ -92,7 +92,7 @@ struct RunManifest {
     std::string philox_digest = kUnknownField;
     std::string degradation_digest = kUnknownField;
     std::string lens_digest = kUnknownField;          // read-time lens operator (D41)
-    std::string pgo_digest = kUnknownField;           // pose-graph assembly, same-arch only (POSE_GRAPH_2.md §5)
+    std::string pgo_digest = kUnknownField;           // pose-graph assembly, same-arch only (pose-graph.md §5)
     /// Online stereo row refinement (D54): "a=<px> b=<px/px> c=<px/px> matches=<n> keyframe=<k>" when applied,
     /// "off" when disabled by config, "not_estimated: <why>" when it never succeeded. A correction estimated from
     /// the evaluated data itself: disclosed here, not hidden.

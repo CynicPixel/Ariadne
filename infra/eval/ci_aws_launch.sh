@@ -55,7 +55,7 @@ NAME="${2:-}"
 W=build/ci_aws/$NAME
 
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- .)" ] || { log "dirty tree"; exit 1; }
   # A second stage under the same NAME would orphan the first one's ECR tag and prefix (and could pull them from
   # under a queued run): refuse.
   [ ! -e "$W/ecr_tags.txt" ] || { log "$W is staged: teardown $NAME first, or pick another NAME"; exit 1; }

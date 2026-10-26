@@ -1,4 +1,4 @@
-"""Phase 6 GPU training on real spools (Kaggle T4; RECON_6, D190/D198/D199/D230). Needs the ariadne_recon package next
+"""Phase 6 GPU training on real spools (Kaggle T4; reconstruction.md, D190/D198/D199/D230). Needs the ariadne_recon package next
 to it (kaggle.sh train embeds it) and the private dataset kaggle.sh train uploads: data.tar holding
   spools/<name>/spool.yaml ...   one spool per agent (ariadne_sim_vo --spool, recon_v1.yaml)
   scene/scene.json, mission_*.json   the worldgen scene (briefing placement in the mission world W, D230)

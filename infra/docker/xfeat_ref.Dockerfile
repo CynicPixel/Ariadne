@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# ariadne-xfeat-ref (D15, design PERCEPTION_2.1): the PyTorch REFERENCE for the
+# ariadne-xfeat-ref (D15, design perception.md): the PyTorch REFERENCE for the
 # XFeat port. Offline tool only, never runtime: it (1) exports upstream's
 # weights (verlab/accelerated_features, Apache-2.0) to Ariadne's tensor blob and
 # (2) runs upstream's own model on fixed inputs so the OpenCV-primitive forward

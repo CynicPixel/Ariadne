@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Windowed stereo bundle adjustment (arch §11.3-§11.6; design LOCAL_SLAM_2.3.md),
+// Windowed stereo bundle adjustment (arch §11.3-§11.6; design local-slam.md),
 // OpenCV-free: residuals, analytic Jacobians, Huber/IRLS assembly, and the
 // Schur elimination of landmarks. OpenCV 5's cv::detail::LevMarqBase drives
 // it through window_ba_levmarq.hpp (D51), exactly as for the pose graph.
@@ -33,7 +33,7 @@
 // enormous (finite), so the driver rejects that step and raises lambda,
 // instead of evaluating pi at a singularity.
 //
-// INERTIAL (imu.mode full, INERTIAL_2.4.md §4.2). When BaWindow::imu holds
+// INERTIAL (imu.mode full, inertial.md §4.2). When BaWindow::imu holds
 // preintegrations, every window keyframe also carries its body velocity v_W
 // and biases b_g, b_a (a 9-vector, additive), and the energy gains
 //     sum_k ½ r_k^T Σ_k^-1 r_k        Forster's inertial factor k -> k+1
@@ -95,9 +95,9 @@ struct BaInertial {
     Mat6 prior_info = Mat6::Zero();
     /// v_0 is not a variable (held at its value): set by AnchorWindow when window[0] is the only pose-determined
     /// keyframe of its group, the one case where the IMU's Galilean null space is not removed by vision (maintainer
-    /// decision 2026-10-18; INERTIAL_2.4 §4.2). Otherwise false: v_0 is free, biases carry the only prior.
+    /// decision 2026-10-18; inertial.md §4.2). Otherwise false: v_0 is free, biases carry the only prior.
     bool hold_v0 = false;
-    /// Gravity's DIRECTION is a variable (2 tilt parameters, |g| fixed; INERTIAL_2.4 §4.8): with window[0]'s 6-DoF pose
+    /// Gravity's DIRECTION is a variable (2 tilt parameters, |g| fixed; inertial.md §4.8): with window[0]'s 6-DoF pose
     /// as the gauge, this is what lets the accelerometer observe the window's roll and pitch. Prior on the tilt of
     /// g_W from g_prior: r = B_pᵀ ĝ (B_p = GravityTangentBasis(ĝ_prior)), information g_prior_info (rad^-2).
     bool estimate_gravity = false;
@@ -168,7 +168,7 @@ inline void Huber(double s, double delta, double& cost, double& weight) {
     }
 }
 
-// --- Observability guards (LOCAL_SLAM_2.3.md §5) -----------------------------------------------------------------
+// --- Observability guards (local-slam.md §5) -----------------------------------------------------------------
 // A ray count is not observability. Two failure modes seen on EuRoC (MH_02, MH_04, MH_05, V1_03, V2_0x):
 //   1. a landmark whose rays are near-parallel (hover, lost tracking): its own 3x3 information is singular;
 //   2. a keyframe, or a group of keyframes, not tied to a fixed keyframe through shared landmarks: the window has

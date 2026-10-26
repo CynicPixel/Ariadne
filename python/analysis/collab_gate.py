@@ -1,4 +1,4 @@
-"""The Phase 3 gate rows from a 3.2/3.4 sweep (design SIMCOLLAB_3.2 §4-§6, D171; COLLAB_3.2 §6-§7).
+"""The Phase 3 gate rows from a 3.2/3.4 sweep (design collaboration.md#simulated-collaboration §4-§6, D171; collaboration.md §6-§7).
 
   python3 -I collab_gate.py SWEEP --out DIR
 
@@ -38,7 +38,7 @@ ARM = {"similarity": "#9a9990", "greedy": "#eb6834", "spectral": "#2a78d6"}
 CLASS = {0: "heartbeat", 1: "global_descriptor", 3: "match_request", 4: "match_response", 5: "pose_edge",
          6: "pose_graph", 12: "ack"}
 POLICY = {3: "match_request", 4: "match_response"}   # priced by the selection policy (D170): aggregate per run
-GATED = (1, 3, 4, 5, 6)                              # COLLAB_3.2 §7 classes; heartbeats and acks are overhead rows
+GATED = (1, 3, 4, 5, 6)                              # collaboration.md §7 classes; heartbeats and acks are overhead rows
 GATE = 0.15
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Live runs on AWS GPU (design LIVE_RUNTIME_L1 D155): one g4dn.xlarge SPOT (T4, 4 vCPU: the whole D84 quota) through
+# Live runs on AWS GPU (design live-runtime.md D155): one g4dn.xlarge SPOT (T4, 4 vCPU: the whole D84 quota) through
 # infra/scripts/spinup.sh, with its three brakes (shutdown timer on the instance, trap here, sweep).
 #
 #   infra/scripts/live_aws.sh push                 local images -> ECR, tag live-<image id 12>; prints the refs

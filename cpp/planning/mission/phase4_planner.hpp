@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Phase 4's planner behind B's seam (runtime/live/planner.hpp MissionPlanner, AGENTIC_7 §0b option B), at the
+// Phase 4's planner behind B's seam (runtime/live/planner.hpp MissionPlanner, agentic.md §0b option B), at the
 // planning level: no runtime, ROS or AWS type, so replay and live drive the same object. B's MissionPlanner adapter
 // copies KeyframeInput -> DepthFrame, TaskCandidate -> TaskOption and these maps -> ReplanMaps, field by field.
 //

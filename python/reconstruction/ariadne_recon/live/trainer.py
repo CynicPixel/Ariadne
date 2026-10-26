@@ -1,4 +1,4 @@
-"""The incremental trainer (RECON_6 §2; D190-D193, D195): one keyframe at a time, only the active submap.
+"""The incremental trainer (reconstruction.md §2; D190-D193, D195): one keyframe at a time, only the active submap.
 
 Per keyframe of agent k:
   1. assign it to k's active submap (SubmapManager); a new submap starts with no Gaussians
@@ -52,7 +52,7 @@ class TrainParams:
     prune_opacity: float = 0.5    # Gaussian-SLAM o_thre (TUM / real data; 0.1 on synthetic Replica)
     init_opacity: float = 0.5     # Gaussian-SLAM
     exposure_after_steps: int = 5000   # arch §18.7 / D192
-    max_keyframes: int = 30       # RECON_6: arch 20-40
+    max_keyframes: int = 30       # reconstruction.md: arch 20-40
     lr_means: float = 1.6e-4      # gsplat simple_trainer defaults (means lr scaled by scene scale 1)
     lr_scales: float = 5e-3
     lr_quats: float = 1e-3

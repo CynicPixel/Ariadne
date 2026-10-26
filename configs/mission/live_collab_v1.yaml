@@ -1,4 +1,4 @@
-# The live closed-loop runtime (design LIVE_RUNTIME_L1 D152-D154). The mapping / frontier / routing values are
+# The live closed-loop runtime (design live-runtime.md D152-D154). The mapping / frontier / routing values are
 # configs/mission/mission_v1.yaml's (the 1.8 layer, unchanged); these are the live-only knobs.
 name: live_collab_v1
 end_s: 90.0                  # sim seconds: frames stamped later are not consumed; then every agent is told hold()
@@ -33,7 +33,7 @@ reorder:
   hold_back_ms: 3000         # a timed topic silent for this long stops holding the watermark (logged)
 telemetry_hz: 20.0           # console pose rate, in sim time: every camera frame (the page interpolates between them)
 
-# D175 item 4 (MULTIAGENT_PIPELINE): per-agent planners fed only through the radio. One planner, exporter and
+# D175 item 4 (live-runtime.md#multi-agent-pipeline): per-agent planners fed only through the radio. One planner, exporter and
 # received-layer set per agent plus the operator node, over the 3.3 CommsNode on the scenario below. false in
 # live_v1 keeps the centralised loop byte-identical (the oracle row); this config is the POC row.
 multiagent:

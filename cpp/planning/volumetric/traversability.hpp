@@ -1,9 +1,9 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.2 traversability and structural risk (arch §20.5; design TRAVERSABILITY_4.2, D111).
+// 4.2 traversability and structural risk (arch §20.5; design traversability-risk.md, D111).
 //
 // Egress at rho_responder (the product, invariant 4) is the INTERSECTION of two
-// tests (D111, measured on the evidence spool, TRAVERSABILITY_4.2 §6):
+// tests (D111, measured on the evidence spool, traversability-risk.md §6):
 //   observed  D45's accepted rule on 4.1's TSDF: the column is free in the body
 //             band (some voxel in [0.15, 1.90] m observed free, none occupied) and
 //             its 2D edge clearance to non-free columns is >= rho;

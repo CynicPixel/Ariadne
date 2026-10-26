@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# ariadne-recon-gpu: the live splat service's GPU backend (RECON_6 §1, D190/D196/D231) for the judge box. The CPU
+# ariadne-recon-gpu: the live splat service's GPU backend (reconstruction.md §1, D190/D196/D231) for the judge box. The CPU
 # recon image's packages (recon.Dockerfile) plus torch + gsplat, with gsplat's CUDA kernels COMPILED AHEAD OF TIME.
 # gsplat's PyPI wheel is pure Python and JIT-compiles its kernels on first use (what the Kaggle smokes did:
 # "pypi source (JIT CUDA build)"); a judge box must not compile at every start. Built from the 1.5.3 sdist, whose

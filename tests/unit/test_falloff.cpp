@@ -171,7 +171,7 @@ TEST(Falloff, NoisyStereoDepthNormalsAndTheIncidenceOption) {
     for (const auto& [k, v] : err) EXPECT_LE(err["rgbd_fals_w7"], v + 1e-6) << k;
 }
 
-// D140 (ALGORITHMS §17.4): no camera-fixed step at the valid boundary, and a feature mask that keeps detectors off it.
+// D140 (algorithms.md §17.4): no camera-fixed step at the valid boundary, and a feature mask that keeps detectors off it.
 TEST(Falloff, InvalidPixelsAreFilledAndTheFeatureMaskKeepsClearOfThem) {
     const auto lamp = Lamp(true);
     auto s = Plane(2.0, 0.0, lamp, 1.0);

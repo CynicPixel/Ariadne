@@ -9,7 +9,7 @@
 # inside one overall budget, so brake 1 (shutdown at --max-minutes) never cuts off the result upload):
 #   1 docker.io + docker-buildx (BuildKit: core.Dockerfile uses RUN --mount), zstd, 8 GB swap
 #   2 opencv-base for linux/arm64, native, BUILD_JOBS=nproc        -> ariadne/opencv-base:<tag>-arm64
-#   3 0.2 smoke test (infra/scripts/smoke_test.cpp, SMOKE_TEST_RESULTS §4b recipe) + cv::getBuildInformation()
+#   3 0.2 smoke test (infra/scripts/smoke_test.cpp, validation.md §4b recipe) + cv::getBuildInformation()
 #     straight from the base image, so the OpenCV evidence survives a later core/test failure
 #   4 core `dev` stage, then the repo built and the FULL ctest run inside it (Release, OpenCV required, no RPATH),
 #     with a JUnit report: the per-test arm64 evidence, and it does not stop at the first failing test

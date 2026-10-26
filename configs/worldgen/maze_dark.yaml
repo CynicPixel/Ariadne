@@ -1,7 +1,7 @@
-# Procedural room-maze preset (docs/design/SIM_1.1-1.3_WORLDGEN.md §2).
+# Procedural room-maze preset (docs/design/simulation.md §2).
 # Fields not listed take the defaults in python/dataset_tools/worldgen/params.py,
 # which are part of the preset digest recorded in every manifest.
-# target.path_length_m: set from the 1000-seed census (evaluation/runs/phase1/worldgen_census/).
+# target.path_length_m: set from the 1000-seed census (evaluation/runs/gates/phase1_thin_e2e/worldgen_census/).
 name: maze_dark
 lattice: {nx: 3, ny: 3, cell_m: 6.0}
 rooms: {count: [4, 5], size_m: [3.5, 5.0]}   # P8 D212: 3 entrance rooms + a separate target room

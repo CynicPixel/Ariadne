@@ -7,7 +7,7 @@ trap 'echo "[final-e2e] FAILED (exit $?) at line $LINENO: $BASH_COMMAND" >&2' ER
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-EVIDENCE="evaluation/runs/final_stack_e2e/$STAMP"
+EVIDENCE="evaluation/runs/live-agentic/final_stack_e2e/$STAMP"
 mkdir -p "$EVIDENCE"
 exec > >(tee -a "$EVIDENCE/campaign.log") 2>&1
 
@@ -80,7 +80,7 @@ export ARIADNE_RECON_IMAGE="${ARIADNE_RECON_IMAGE:-ariadne-recon-gpu:1}"
 export ARIADNE_RECON_GPU_URI="${ARIADNE_RECON_GPU_URI:-s3://ariadne-836505524290-eun1/runs/images/ariadne-recon-gpu-a827de5514fe.tar.zst}"
 export ARIADNE_RECON_ITERS="${ARIADNE_RECON_ITERS:-100}"
 export ARIADNE_ARCHIVE_RECORDING=separate
-export ARIADNE_SNAPSHOT_EXCLUDE='evaluation/runs/final_stack_e2e/*'
+export ARIADNE_SNAPSHOT_EXCLUDE='evaluation/runs/live-agentic/final_stack_e2e/*'
 export ARIADNE_ROOT_GB=120
 export ARIADNE_RT_MEM="${ARIADNE_RT_MEM:-10g}"
 

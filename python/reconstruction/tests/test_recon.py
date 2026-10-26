@@ -1,4 +1,4 @@
-"""Unit tests for the 1.7 reconstruction service's local stages (design RECON_1.7).
+"""Unit tests for the 1.7 reconstruction service's local stages (design reconstruction.md#first-reconstruction-loop).
 
 Synthetic spools in the C++ writer's exact format (spool.yaml + RGB/fp16 PNGs):
 a fronto-parallel plane seen by two agents whose odometry frames differ by a known

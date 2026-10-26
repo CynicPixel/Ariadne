@@ -7,7 +7,7 @@ lattice; bid = value · exp(-distance / p90 distance), the marginal of the path 
 recorded snapshots (y, z after each robot's build): build (bids added in bundle order, drawn at their best insertion),
 broadcast, resolve (the higher bid keeps; Table I on an all-to-all link), release (eq. 6). Round 1: rooms A and C are
 claimed twice; round 2: both losers bid for D (0.4220 vs 0.4234); round 3: no change. The converged allocation equals
-the brute-force optimum on this instance (derived). Measured row: RESULTS_INDEX §7, the recorded-mission replay
+the brute-force optimum on this instance (derived). Measured row: docs/results/index.md §7, the recorded-mission replay
 (2 robots, one room each); guarantee: Choi, Brunet & How 2009, Theorem 2.
 
   python3 python/video/tools/cbba_replay.py   # regenerates data/cbba/trace.json
@@ -37,7 +37,7 @@ CHIP_BOTTOM, CAP2 = 3.4, -2.93  # bottom of the top chip; top of a two-line subt
 GAP, STRIP_H, MH = 0.3, 0.62, 4.5  # strip-to-content gap; strip height; maze drawing height
 GAPX, RW = 0.8, 5.2  # maze-to-column gap; the right column's width
 SW, SH = 1.6, 0.46  # a bundle slot
-# RESULTS_INDEX §7, the recorded-mission replay: CBBA = central greedy (SGA) 40/40; CBBA / exact optimum mean, worst
+# docs/results/index.md §7, the recorded-mission replay: CBBA = central greedy (SGA) 40/40; CBBA / exact optimum mean, worst
 REPLAY_EQ, REPLAY_N, CBBA_MEAN, CBBA_WORST = 40, 40, 0.994, 0.983
 STEPS = [("build", "add the best bid while there is room"), ("broadcast", "winning bids and winners"),
          ("resolve", "higher bid keeps · loser releases")]

@@ -18,7 +18,7 @@ tool: ariadne_euroc_vo   # EuRoC-layout source; no dense GT -> results.yaml dens
 seed: 1
 rows:   # perception + slam, unchanged from their own tuning: this is a transfer test, nothing is re-tuned for Hilti
   sim_tuned: {perception: sim_v1, slam: sim_v2}            # D69's lit-sim rows
-  euroc_tuned: {perception: euroc_v2, slam: euroc_v2}      # LOCAL_SLAM_2.3 §10 rows
+  euroc_tuned: {perception: euroc_v2, slam: euroc_v2}      # local-slam.md §10 rows
   euroc_tuned_radiometric: {perception: euroc_rad_auto, slam: euroc_v2}   # 2.2 gate decides on real dark noise
 
 scoring:   # python -m analysis.hilti_score estimate_body.tum site2_robot_3_gt.txt --gcp gcp.csv --calib calibration_robot

@@ -1,4 +1,4 @@
-"""Evaluation harness v1 (design HARNESS_1.9): one report per Phase 1 run chain.
+"""Evaluation harness v1 (design evaluation-harness.md): one report per Phase 1 run chain.
 
   python -m analysis.report compute --collab-run C --recon-run R --mission-run M --mission-compare A0 A1 \
       --scene S --registry REGISTRY.yaml --out OUT [--allow-dirty]
@@ -28,7 +28,7 @@ CORRECT_T_M, CORRECT_R_DEG = 0.05, 1.0       # 1.6 edge correctness (collab_v1 e
 ENERGY_M_PER_RAD = 0.25                      # [PROXY] energy: 1 rad of turning ~ 0.25 m of travel
 ORACLE_REL_TOL = 1e-6
 
-# The definitions fixed in docs/design/HARNESS_1.9.md (shown beside every number in the report).
+# The definitions fixed in docs/design/evaluation-harness.md (shown beside every number in the report).
 DEFINITIONS = {
     "ate_rmse_m": "merged two-agent trajectory, one SE(3) Umeyama alignment, position RMSE (evo APE)",
     "ate_rotation_rmse_rad": "same alignment; RMSE of angle(R_gt^T R_align R_est)",
@@ -278,9 +278,9 @@ def compute(a) -> int:
     }
     out = Path(a.out)
     (out / "figures").mkdir(parents=True, exist_ok=True)
-    (out / "report.yaml").write_text("# Ariadne evaluation report (design HARNESS_1.9). Generated.\n" +
+    (out / "report.yaml").write_text("# Ariadne evaluation report (design evaluation-harness.md). Generated.\n" +
                                      yaml.safe_dump(report, sort_keys=False))
-    (out / "oracle.yaml").write_text("# Oracles (design HARNESS_1.9). Generated.\n" + yaml.safe_dump(oracle, sort_keys=False))
+    (out / "oracle.yaml").write_text("# Oracles (design evaluation-harness.md). Generated.\n" + yaml.safe_dump(oracle, sort_keys=False))
     reg = ly(inp.use(Path(a.registry)))
     (out / "registry.yaml").write_text(Path(a.registry).read_text())
     inputs = {"files": inp.files, "input_manifests_git_dirty": dirty,

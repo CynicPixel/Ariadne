@@ -272,7 +272,7 @@ inline double RadianceEventFactor(const std::optional<RadianceEvent>& e, int64_t
 // --- Simulator recording ---------------------------------------------------------
 
 /// Raw stereo frame assembly from the sim's CDR images, shared by the bag replay (SimSource) and the live runtime
-/// (live/live_source.hpp, design LIVE_RUNTIME_L1 D152): decode -> lens (D41; map null = lens off, the frame stays
+/// (live/live_source.hpp, design live-runtime.md D152): decode -> lens (D41; map null = lens off, the frame stays
 /// the clean pinhole render - the live runtime's default since the D41 amendment, D227) -> D (2.2, when set) ->
 /// gray, then pair
 /// left/right by header stamp. Feed() one image message at a time, in delivery order.

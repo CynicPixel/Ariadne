@@ -91,7 +91,7 @@ TEST(NoiseEstimate, GainScalesA) {
 
 // [MEASURED 2026-10-21] The intercept b is the weak part of the fit: at dark3 x gain 16 it comes out
 // 0.82 DN^2 against D's 1.12 (a within 1%). sigma_z is still 1.01 -- the forward GAT and the inverse use
-// the same b, so the error cancels above the lowest counts. Recorded, not hidden (RADIOMETRIC_2.2.md §5).
+// the same b, so the error cancels above the lowest counts. Recorded, not hidden (radiometric.md §5).
 TEST(NoiseEstimate, InterceptBiasAtDeepDarknessIsBoundedAndHarmless) {
     const DegradationParams p = Sensor(0.015, 16.0);
     const Frames f = Degraded(p, 2);

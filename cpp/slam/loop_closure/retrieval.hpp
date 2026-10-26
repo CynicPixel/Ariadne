@@ -1,11 +1,11 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Intra-agent loop-candidate retrieval (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): which past keyframes might
+// Intra-agent loop-candidate retrieval (D73 part 2b; design robust-backend.md §8): which past keyframes might
 // show the same place as the current one. A global descriptor per keyframe (one float vector; the runtime adapter
 // fills it, today with 1.6's mean-bit descriptor, a labelled PLACEHOLDER until 2.1's EigenPlaces), cosine
 // similarity, and a temporal exclusion window: the keyframes just before the query look alike because they ARE
 // adjacent, and odometry already relates them. Retrieval only proposes; geometry (verifier -> degeneracy gate ->
-// PCM -> GNC) decides. Plain types only: slam may not include collaboration or runtime (CLAUDE.md §3).
+// PCM -> GNC) decides. Plain types only: slam may not include collaboration or runtime (arch §3).
 // ---------------------------------------------------------------------------
 #include <algorithm>
 #include <cmath>

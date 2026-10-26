@@ -1,4 +1,4 @@
-"""Procedural world generation (arch §5.5); design: docs/design/SIM_1.1-1.3_WORLDGEN.md.
+"""Procedural world generation (arch §5.5); design: docs/design/simulation.md.
 
 Pure numpy + pyyaml so it runs unchanged in the pinned ariadne-sim image, which is
 the authoritative place worlds are generated.

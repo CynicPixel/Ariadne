@@ -1,4 +1,4 @@
-// 2.1 retrieval (PERCEPTION_2.1.md §11): PlaceIndex (exact + cv::ANNIndex) and PlaceRecognizer end to end against
+// 2.1 retrieval (perception.md §11): PlaceIndex (exact + cv::ANNIndex) and PlaceRecognizer end to end against
 // the EigenPlaces reference export (SMOKE §4r). The reference tests SKIP without $ARIADNE_EIGENPLACES_REF and FAIL
 // without it under ARIADNE_REQUIRE_MODELS=1.
 #include "core/random/philox.hpp"

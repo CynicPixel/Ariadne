@@ -1,4 +1,4 @@
-"""D112 structural hazards (design RISK_ZONES_4.2 §4): opt-in without moving any existing digest, GT traversability
+"""D112 structural hazards (design traversability-risk.md#risk-zones §4): opt-in without moving any existing digest, GT traversability
 unchanged (a hazard threatens a route, never blocks it), placement constraints, geometry, GT risk layers."""
 from pathlib import Path
 

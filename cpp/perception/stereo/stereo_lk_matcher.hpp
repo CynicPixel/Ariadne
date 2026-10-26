@@ -12,7 +12,7 @@
 // Feeds landmark triangulation (§11.2) at keyframes.
 //
 // The row test is only as good as the rectification. On EuRoC V2 the published
-// calibration leaves |dy| ~ 1.7 px (AUDIT_2.3.md): 97% of correct matches fail
+// calibration leaves |dy| ~ 1.7 px (local-slam.md#window-audit): 97% of correct matches fail
 // it. EstimateRowCorrection measures that residual (dy = a + b x + c y over
 // round-trip-consistent matches, no row test), and the rectifier folds the
 // correction into the right map (StereoRectifier::RefineRightRows), so every

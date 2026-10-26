@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Loop-closure degeneracy gate (arch §14.4, D71; design ROBUST_BACKEND_2.5.md §4). Runs BEFORE PCM (§14.5).
+// Loop-closure degeneracy gate (arch §14.4, D71; design robust-backend.md §4). Runs BEFORE PCM (§14.5).
 //
 // A verified loop A <- B is a PnP problem: B's stereo 3D points, seen as pixels in A, fix T_A_B (p_A = T_A_B p_B).
 // When the scene cannot constrain all six degrees of freedom, PnP still returns a pose, and a degenerate edge with an

@@ -1,4 +1,4 @@
-// COLLAB_3.2 §3: the 3.2 transport (fragments, per-class delivery, outbox, selective ARQ).
+// collaboration.md §3: the 3.2 transport (fragments, per-class delivery, outbox, selective ARQ).
 #include "collaboration/protocol/transport.hpp"
 
 #include <gtest/gtest.h>

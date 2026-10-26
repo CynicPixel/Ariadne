@@ -328,7 +328,7 @@ TEST(Serialization, MeasuredSizesAreReportedAgainstTheSection157Table) {
               << ", §15.7 predicts ~12 KB total)\n";
 
     // Per-element cost, isolated by differencing against an empty graph so the
-    // envelope overhead does not contaminate the figure. See DECISIONS.md D12.
+    // envelope overhead does not contaminate the figure. See decisions.md D12.
     const auto empty = codec.EncodePoseGraph(MakeGraph(0, 0), 0, 1,
                                              Timestamp::Nanoseconds(1), 1);
     const auto nodes_only = codec.EncodePoseGraph(MakeGraph(200, 0), 0, 1,
@@ -343,7 +343,7 @@ TEST(Serialization, MeasuredSizesAreReportedAgainstTheSection157Table) {
               << ", per edge=" << per_edge_b << " B (§15.7: 150 B)"
               << ", envelope=" << empty.record.payload_bytes << " B\n";
 
-    // Both elements exceed the §15.7 prediction; DECISIONS.md D12 records the
+    // Both elements exceed the §15.7 prediction; decisions.md D12 records the
     // measured values and why the node figure is unreachable under §15.5.
     // These bounds hold the MEASURED values so a further regression is caught,
     // and must be revisited together with §15.7 when D12 is decided.

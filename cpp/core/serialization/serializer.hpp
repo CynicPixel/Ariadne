@@ -21,7 +21,7 @@
 // payload fragments and pays the header again.
 //
 // Compression covers MATCH_RESPONSE and POSE_EDGE (§15.7's classes 4-5) plus
-// POSE_GRAPH, which §15.7 leaves uncompressed. See DECISIONS.md D14: pose
+// POSE_GRAPH, which §15.7 leaves uncompressed. See decisions.md D14: pose
 // graphs measure 4.93x under zstd-3 because keyframe ids, timestamps and poses
 // are near-sequential, and compressing them takes a 200-node/40-edge batch from
 // 21.0 KB to ~4.3 KB against §15.7's 12 KB prediction.
@@ -77,7 +77,7 @@ inline constexpr uint64_t DatagramCount(uint64_t on_wire) {
                               kDatagramPayloadBytes;
 }
 
-/// COLLAB_3.2 §3.2: the 3.2 transport splits a framed message into datagrams,
+/// collaboration.md §3.2: the 3.2 transport splits a framed message into datagrams,
 /// each carrying a 6 B fragment header (msg_id u32, index u8, count u8) inside
 /// the 1472 B datagram payload. Selective retransmission needs it; the Phase-1
 /// exchange sends whole messages and is charged without it (`Framing`).
@@ -112,7 +112,7 @@ inline constexpr int kCompressionLevel = 3;
 
 /// Which classes are compressed. Stated once, here, rather than as a scattered
 /// condition, so the policy is auditable and appears in one place in the byte
-/// table. POSE_GRAPH extends §15.7 deliberately; see DECISIONS.md D14.
+/// table. POSE_GRAPH extends §15.7 deliberately; see decisions.md D14.
 inline bool IsCompressedClass(MessageClass cls) {
     return cls == MessageClass::MATCH_RESPONSE ||
            cls == MessageClass::POSE_EDGE ||
@@ -132,8 +132,8 @@ struct ByteRecord {
     uint64_t wire_bytes = 0;         // transmitted + framing
     uint64_t cumulative_bytes = 0;   // running total on this ledger
     bool compressed = false;
-    bool retransmit = false;         // 3.2 ARQ: resent fragments; not "first transmission" (COLLAB_3.2 §7)
-    // Ledger-only (never on the wire; D171, COLLAB_3.2 §7): the sender's plan-time prediction of this message's first
+    bool retransmit = false;         // 3.2 ARQ: resent fragments; not "first transmission" (collaboration.md §7)
+    // Ledger-only (never on the wire; D171, collaboration.md §7): the sender's plan-time prediction of this message's first
     // transmission (-1 = none), and whether it is a resend after an election (broker state is soft): an overhead row.
     double predicted_wire_bytes = -1.0;
     bool resync = false;
@@ -253,7 +253,7 @@ struct LoopEdgeValue {
     bool degeneracy_flag = false;
 };
 
-/// COLLAB_3.2 §4: a broker solve's identity; the full triple identifies it.
+/// collaboration.md §4: a broker solve's identity; the full triple identifies it.
 struct EpochValue {
     uint64_t counter = 0;
     uint64_t members_hash = 0;
@@ -280,7 +280,7 @@ struct PoseGraphValue {
     std::vector<AgentFrameValue> agent_frames;
 };
 
-/// COLLAB_3.2 §3.2: transport acks by message id.
+/// collaboration.md §3.2: transport acks by message id.
 struct PartialAckValue {
     uint32_t msg_id = 0;
     std::vector<uint8_t> received;   // bitmap, bit i = fragment i
@@ -291,7 +291,7 @@ struct AckValue {
     bool empty() const { return done.empty() && partial.empty(); }
 };
 
-/// §15.2 heartbeat plus the 3.2 membership fields (COLLAB_3.2 §4).
+/// §15.2 heartbeat plus the 3.2 membership fields (collaboration.md §4).
 struct HeartbeatValue {
     AgentId agent = 0;
     int64_t stamp_ns = 0;
