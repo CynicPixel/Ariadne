@@ -31,9 +31,9 @@ These are cut from the film's 480p renders (`python/video/media/videos/*/480p15/
 |---|---|
 | `fig_tracking.png` | `python/video/data/tracks/tracks.json` drawn on recorded agent-0 frame 360 (run c51ab2) |
 | `fig_premerge_*.png` | AWS pre-merge gate run `20261024T083919Z-cpux86-73e3fa` |
-| `fig_slabs.png`, `fig_decision.png` | final-stack recorded run, 2 agents, 200 s: `/data/code/Ariadne-e2e-final/evaluation/runs/final_stack_e2e/20261026T000432Z/` |
+| `fig_slabs.png`, `fig_decision.png` | final-stack recorded run, 2 agents, 200 s: `evaluation/runs/final_stack_e2e/20261026T000432Z/` |
 | `fig_splat.png`, `splat_626abe_still_*.png` | GPU training `20261024T121121Z-gpu-ae604c`, render `20261024T132853Z-gpu-1e9c60` |
-| `fig_worldgen_heldout.png` | `evaluation/runs/ph6/worldgen_gsplat_20261026T211816Z` (branch `feat/ph5-dve`) |
+| `fig_worldgen_heldout.png` | `evaluation/runs/ph6/worldgen_gsplat_20261026T211816Z` |
 | `fig_outlier_ramp.png` | `evaluation/runs/2.5/outlier_ramp/` (synthetic) |
 | `fig_nbv_coverage_time.png` | `evaluation/runs/nbv_4.3_gate/` |
 | `fig_bytes_3_6.png` | `evaluation/runs/ph3/bytes_3.6_20261024/` |

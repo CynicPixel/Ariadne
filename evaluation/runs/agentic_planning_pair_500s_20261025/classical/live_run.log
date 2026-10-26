@@ -1,0 +1,7 @@
+[live 11:43:47] run 20261025T114347Z-fe48: scene build/live/scenes/maze_short_6, world 'scene_89e61fecbb277f69', end 500 s, config build/live/runs/live-20261025T114347Z-fe48/live_config.yaml, render: -e ARIADNE_RENDER_MODE=mesa-llvmpipe
+[live 11:44:12] link ready: {"forwarded":["/ariadne/agent_0/left/image_raw","/ariadne/agent_0/left/camera_info","/ariadne/agent_0/right/image_raw","/ariadne/agent_0/right/camera_info","/ariadne/agent_0/imu","/ariadne/agent_0/gt/pose","/ariadne/agent_0/mover_state","/ariadne/agent_1/left/image_raw","/ariadne/agent_1/left/camera_info","/ariadne/agent_1/right/image_raw","/ariadne/agent_1/right/camera_info","/ariadne/agent_1/imu","/ariadne/agent_1/gt/pose","/ariadne/agent_1/mover_state"],"commands":["/ariadne/agent_0/cmd","/ariadne/agent_1/cmd"]}
+[live 11:44:14] renderer: 11:44:11: GL_VENDOR = Mesa
+data: true
+
+[live 11:44:15] world running
+[live 12:40:22] runtime exit 0; run dir build/live/runs/live-20261025T114347Z-fe48

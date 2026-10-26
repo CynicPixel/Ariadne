@@ -1,0 +1,39 @@
+{
+  "pair_id": "task_delegation_maze_short_seed6_90s",
+  "source_commit": "c143db14eb9dfbd7ffef003cf80ab3c344c64dec",
+  "region": "eu-north-1",
+  "instance_profile": "cpux86 / c7i.4xlarge Spot",
+  "scene": {
+    "preset": "maze_short",
+    "seed": 6,
+    "generator_version": 1,
+    "scene_id": "89e61fecbb277f69",
+    "tree_sha256": "9d2c9176d8581d07b11667451c6ce085a3780ab9e22782cd915021d2729b07b3"
+  },
+  "mission_duration_s": 90,
+  "lockstep": false,
+  "planner_config": "configs/mission/mission_v2.yaml",
+  "arms": {
+    "classical": {
+      "live_config": "configs/mission/live_pair_classical.yaml"
+    },
+    "bedrock": {
+      "live_config": "configs/mission/live_pair_bedrock.yaml",
+      "model": "eu.amazon.nova-2-lite-v1:0"
+    }
+  },
+  "controlled_difference": "chooser field only; same source commit, scene, runtime, sim bridge, mission planner, duration, renderer class, and other live settings",
+  "logging": [
+    "trace.jsonl",
+    "decisions/*.request.json",
+    "runtime.log",
+    "sim.log",
+    "console.log",
+    "orchestrator.log",
+    "mover_state.jsonl",
+    "commands.jsonl",
+    "replay_check.json",
+    "replay1 and replay2 outputs",
+    "full inputs.mcap retained in S3 run archive"
+  ]
+}

@@ -1,0 +1,4537 @@
+{
+  "classical": {
+    "live_dir": "/tmp/ariadne-planning-pair/evidence/classical/build/live/runs/live-20261025T001308Z-a688/89e61fecbb277f69-live-20261025T001327Z",
+    "trace_rows": 36,
+    "records_per_agent": {
+      "0": 18,
+      "1": 18
+    },
+    "sim_time_last_s": 90,
+    "commands": 36,
+    "decisions": 36,
+    "wall_s": 611.251,
+    "rtf": 0.147239,
+    "replans": 18,
+    "frames": {
+      "0": 1801,
+      "1": 1801
+    },
+    "keyframes_integrated": {
+      "0": 154,
+      "1": 134
+    },
+    "track_mean_ms": {
+      "0": 39.8892,
+      "1": 38.2256
+    },
+    "queue_wait_mean_ms": {
+      "0": 294.48,
+      "1": 295.992
+    },
+    "rays": 54428,
+    "flown_m_last": {
+      "0": [
+        6.011841219,
+        6.460559489
+      ],
+      "1": [
+        6.011841219,
+        6.460559489
+      ]
+    },
+    "go_results": 36,
+    "mover_accepted": 34,
+    "mover_refused": 0,
+    "mover_unanswered": 2,
+    "selected_rank_counts": {
+      "0": 26,
+      "1": 4,
+      "2": 3,
+      "3": 1,
+      "5": 2
+    },
+    "chosen_differs_classical": 0,
+    "rows_with_prior_task": 34,
+    "continued_when_prior_candidate_available": 11,
+    "switch_when_prior_candidate_available": 19,
+    "prior_task_unmatched": 4,
+    "same_candidate_index_by_agents_times": [
+      20,
+      25,
+      35,
+      45,
+      55,
+      60,
+      65,
+      75,
+      80
+    ],
+    "same_cluster_by_agents_times": [],
+    "selected_goals_within_0_5m_times": [],
+    "turns": {
+      "5": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "10": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "15": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "20": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "25": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "30": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "35": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "40": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "45": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "50": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "55": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "60": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "65": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "70": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "75": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "80": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "85": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      },
+      "90": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "latency_s": 0,
+        "fallback": false,
+        "validation": null,
+        "tool_calls": [],
+        "answer": {}
+      }
+    },
+    "tools": {},
+    "tool_fail_count": 0,
+    "tool_total": 0,
+    "tool_errors": [],
+    "approval_tool_calls": 0,
+    "assignments_by_time": [],
+    "first_route_found_s": null
+  },
+  "bedrock": {
+    "live_dir": "/tmp/ariadne-planning-pair/evidence/bedrock/build/live/runs/live-20261025T001411Z-5ccc/89e61fecbb277f69-live-20261025T001435Z",
+    "trace_rows": 36,
+    "records_per_agent": {
+      "0": 18,
+      "1": 18
+    },
+    "sim_time_last_s": 90,
+    "commands": 36,
+    "decisions": 36,
+    "wall_s": 615.905,
+    "rtf": 0.146127,
+    "replans": 18,
+    "frames": {
+      "0": 1801,
+      "1": 1801
+    },
+    "keyframes_integrated": {
+      "0": 119,
+      "1": 138
+    },
+    "track_mean_ms": {
+      "0": 33.147,
+      "1": 35.3897
+    },
+    "queue_wait_mean_ms": {
+      "0": 301.114,
+      "1": 298.878
+    },
+    "rays": 50959,
+    "flown_m_last": {
+      "0": [
+        9.801290616,
+        5.562165053
+      ],
+      "1": [
+        9.801290616,
+        5.562165053
+      ]
+    },
+    "go_results": 36,
+    "mover_accepted": 34,
+    "mover_refused": 0,
+    "mover_unanswered": 2,
+    "selected_rank_counts": {
+      "0": 31,
+      "1": 3,
+      "2": 1,
+      "5": 1
+    },
+    "chosen_differs_classical": 6,
+    "rows_with_prior_task": 34,
+    "continued_when_prior_candidate_available": 15,
+    "switch_when_prior_candidate_available": 15,
+    "prior_task_unmatched": 4,
+    "same_candidate_index_by_agents_times": [
+      5,
+      10,
+      15,
+      20,
+      25,
+      30,
+      35,
+      40,
+      45,
+      50,
+      60,
+      70,
+      75
+    ],
+    "same_cluster_by_agents_times": [],
+    "selected_goals_within_0_5m_times": [],
+    "turns": {
+      "5": {
+        "calls": 10,
+        "input_tokens": 68820,
+        "output_tokens": 442,
+        "latency_s": 7.185,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": null,\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 0.836396,\n          \"cluster\": 1584253228616577164,\n          \"path_m\": 1.78284,\n          \"goal_xy_m\": [\n            -0.1738795325,\n            2.867316568\n          ],\n          \"standoff_m\": 1,\n          \"centroid_xy_m\": [\n            0.75,\n            3.25\n          ],\n          \"cells\": 1,\n          \"risk\": 0.40901,\n          \"risk_reason\": \"bottleneck 0.32 m (D158); s",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    5,\n    5\n  ],\n  \"rays\": 1515,\n  \"free_cells\": 1990,\n  \"occupied_cells\": 378,\n  \"unknown_cells\": 145936,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_5000.png\",\n  \"agent_xy_m\": [\n    -1.870001431,\n    3.050010226\n  ],\n  \"agent_cell\": [\n    60,\n    32\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    5,\n    5\n  ],\n  \"rays\": 1515,\n  \"free_cells\": 1990,\n  \"occupied_cells\": 378,\n  \"unknown_cells\": 145936,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_5000.png\",\n  \"agent_xy_m\": [\n    -1.870002051,\n    15.05002064\n  ],\n  \"agent_cell\": [\n    300,\n    32\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 100,\n  \"keyframes\": 5,\n  \"since_last_keyframe_s\": 1\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 100,\n  \"keyframes\": 5,\n  \"since_last_keyframe_s\": 1\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "7dfbaf22ed552b1b4a98bec559da64fad6c0b44e584b85b89bec268b395fdac8",
+                "bytes": 26197,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "keyframe",
+              "agent": 0
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "4707978bb4b9adf5397f57762a6001905469829be272b60b842da008752f6545",
+                "bytes": 219862,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "agent": 1,
+              "what": "keyframe"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "f7cb7839a31cf40b0702ba7d7201d9e6b569bdba6bc62bad3891ec152a705e29",
+                "bytes": 215515,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t5000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 10,
+            "latency_s": 7.185,
+            "input_tokens": 68820,
+            "output_tokens": 442,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": null,\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 0.836396,\n          \"cluster\": 1584253228616577164,\n          \"path_m\": 1.78284,\n          \"goal_xy_m\": [\n            -0.1738795325,\n            2.867316568\n          ],\n          \"standoff_m\": 1,\n          \"centroid_xy_m\": [\n            0.75,\n            3.25\n          ],\n          \"cells\": 1,\n          \"risk\": 0.40901,\n          \"risk_reason\": \"bottleneck 0.32 m (D158); s",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    5,\n    5\n  ],\n  \"rays\": 1515,\n  \"free_cells\": 1990,\n  \"occupied_cells\": 378,\n  \"unknown_cells\": 145936,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_5000.png\",\n  \"agent_xy_m\": [\n    -1.870001431,\n    3.050010226\n  ],\n  \"agent_cell\": [\n    60,\n    32\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    5,\n    5\n  ],\n  \"rays\": 1515,\n  \"free_cells\": 1990,\n  \"occupied_cells\": 378,\n  \"unknown_cells\": 145936,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_5000.png\",\n  \"agent_xy_m\": [\n    -1.870002051,\n    15.05002064\n  ],\n  \"agent_cell\": [\n    300,\n    32\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 100,\n  \"keyframes\": 5,\n  \"since_last_keyframe_s\": 1\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 100,\n  \"keyframes\": 5,\n  \"since_last_keyframe_s\": 1\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "7dfbaf22ed552b1b4a98bec559da64fad6c0b44e584b85b89bec268b395fdac8",
+                    "bytes": 26197,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "keyframe",
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "4707978bb4b9adf5397f57762a6001905469829be272b60b842da008752f6545",
+                    "bytes": 219862,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "agent": 1,
+                  "what": "keyframe"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "f7cb7839a31cf40b0702ba7d7201d9e6b569bdba6bc62bad3891ec152a705e29",
+                    "bytes": 215515,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "10": {
+        "calls": 3,
+        "input_tokens": 21877,
+        "output_tokens": 318,
+        "latency_s": 2.42,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          -0.1738795325,\n          2.867316568\n        ],\n        \"since_t_s\": 5,\n        \"straight_line_m\": 1.10665,\n        \"candidate\": 4,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.23346,\n          \"cluster\": 6771333051549978161,\n          \"path_m\": 1.64142,\n          \"goal_xy_m\": [\n            0.3261204675,\n            3.1326834",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    12,\n    12\n  ],\n  \"rays\": 3494,\n  \"free_cells\": 2583,\n  \"occupied_cells\": 532,\n  \"unknown_cells\": 145189,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_10000.png\",\n  \"agent_xy_m\": [\n    -1.271969631,\n    3.004718036\n  ],\n  \"agent_cell\": [\n    59,\n    44\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    12,\n    12\n  ],\n  \"rays\": 3494,\n  \"free_cells\": 2583,\n  \"occupied_cells\": 532,\n  \"unknown_cells\": 145189,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_10000.png\",\n  \"agent_xy_m\": [\n    -1.247898877,\n    15.09724738\n  ],\n  \"agent_cell\": [\n    300,\n    45\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 200,\n  \"keyframes\": 12,\n  \"since_last_keyframe_s\": 0.05\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 200,\n  \"keyframes\": 12,\n  \"since_last_keyframe_s\": 0.2\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "711affda8742e817af9714cf11bbb8efe13f8d01d6d2ef121927209b504c9690",
+                "bytes": 31569,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t10000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 3,
+            "latency_s": 2.42,
+            "input_tokens": 21877,
+            "output_tokens": 318,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          -0.1738795325,\n          2.867316568\n        ],\n        \"since_t_s\": 5,\n        \"straight_line_m\": 1.10665,\n        \"candidate\": 4,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.23346,\n          \"cluster\": 6771333051549978161,\n          \"path_m\": 1.64142,\n          \"goal_xy_m\": [\n            0.3261204675,\n            3.1326834",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    12,\n    12\n  ],\n  \"rays\": 3494,\n  \"free_cells\": 2583,\n  \"occupied_cells\": 532,\n  \"unknown_cells\": 145189,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_10000.png\",\n  \"agent_xy_m\": [\n    -1.271969631,\n    3.004718036\n  ],\n  \"agent_cell\": [\n    59,\n    44\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    12,\n    12\n  ],\n  \"rays\": 3494,\n  \"free_cells\": 2583,\n  \"occupied_cells\": 532,\n  \"unknown_cells\": 145189,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_10000.png\",\n  \"agent_xy_m\": [\n    -1.247898877,\n    15.09724738\n  ],\n  \"agent_cell\": [\n    300,\n    45\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 200,\n  \"keyframes\": 12,\n  \"since_last_keyframe_s\": 0.05\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 200,\n  \"keyframes\": 12,\n  \"since_last_keyframe_s\": 0.2\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "711affda8742e817af9714cf11bbb8efe13f8d01d6d2ef121927209b504c9690",
+                    "bytes": 31569,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "15": {
+        "calls": 8,
+        "input_tokens": 107730,
+        "output_tokens": 338,
+        "latency_s": 5.322,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          0.3261204675,\n          3.132683432\n        ],\n        \"since_t_s\": 10,\n        \"straight_line_m\": 0.522379,\n        \"candidate\": 14,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.28547,\n          \"cluster\": 5086245876688898467,\n          \"path_m\": 1.51213,\n          \"goal_xy_m\": [\n            1.266773089,\n            3.063620",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    19,\n    18\n  ],\n  \"rays\": 5065,\n  \"free_cells\": 5153,\n  \"occupied_cells\": 697,\n  \"unknown_cells\": 142454,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_15000.png\",\n  \"agent_xy_m\": [\n    -0.1550562047,\n    2.929340443\n  ],\n  \"agent_cell\": [\n    57,\n    66\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    19,\n    18\n  ],\n  \"rays\": 5065,\n  \"free_cells\": 5153,\n  \"occupied_cells\": 697,\n  \"unknown_cells\": 142454,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_15000.png\",\n  \"agent_xy_m\": [\n    -0.1236526562,\n    15.1746018\n  ],\n  \"agent_cell\": [\n    302,\n    67\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 300,\n  \"keyframes\": 19,\n  \"since_last_keyframe_s\": 0.2\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 300,\n  \"keyframes\": 18,\n  \"since_last_keyframe_s\": 0.9\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "13ca8ae2c3a1c1c0fcc581afe50a19f074104923c4065e2d854afd87299b1e95",
+                "bytes": 49779,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t15000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 5.322,
+            "input_tokens": 107730,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          0.3261204675,\n          3.132683432\n        ],\n        \"since_t_s\": 10,\n        \"straight_line_m\": 0.522379,\n        \"candidate\": 14,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.28547,\n          \"cluster\": 5086245876688898467,\n          \"path_m\": 1.51213,\n          \"goal_xy_m\": [\n            1.266773089,\n            3.063620",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    19,\n    18\n  ],\n  \"rays\": 5065,\n  \"free_cells\": 5153,\n  \"occupied_cells\": 697,\n  \"unknown_cells\": 142454,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_15000.png\",\n  \"agent_xy_m\": [\n    -0.1550562047,\n    2.929340443\n  ],\n  \"agent_cell\": [\n    57,\n    66\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    19,\n    18\n  ],\n  \"rays\": 5065,\n  \"free_cells\": 5153,\n  \"occupied_cells\": 697,\n  \"unknown_cells\": 142454,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_15000.png\",\n  \"agent_xy_m\": [\n    -0.1236526562,\n    15.1746018\n  ],\n  \"agent_cell\": [\n    302,\n    67\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 300,\n  \"keyframes\": 19,\n  \"since_last_keyframe_s\": 0.2\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 300,\n  \"keyframes\": 18,\n  \"since_last_keyframe_s\": 0.9\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "13ca8ae2c3a1c1c0fcc581afe50a19f074104923c4065e2d854afd87299b1e95",
+                    "bytes": 49779,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "20": {
+        "calls": 8,
+        "input_tokens": 124647,
+        "output_tokens": 338,
+        "latency_s": 4.762,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.266773089,\n          3.063620467\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 1.15561,\n        \"candidate\": 1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.46038,\n          \"cluster\": 7855477797440623117,\n          \"path_m\": 1.26213,\n          \"goal_xy_m\": [\n            1.312202931,\n            3.123311351",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    24,\n    23\n  ],\n  \"rays\": 6396,\n  \"free_cells\": 6634,\n  \"occupied_cells\": 736,\n  \"unknown_cells\": 140934,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_20000.png\",\n  \"agent_xy_m\": [\n    0.1153015868,\n    2.965938482\n  ],\n  \"agent_cell\": [\n    58,\n    72\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    24,\n    23\n  ],\n  \"rays\": 6396,\n  \"free_cells\": 6634,\n  \"occupied_cells\": 736,\n  \"unknown_cells\": 140934,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_20000.png\",\n  \"agent_xy_m\": [\n    1.0226711,\n    15.17247964\n  ],\n  \"agent_cell\": [\n    302,\n    90\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 400,\n  \"keyframes\": 24,\n  \"since_last_keyframe_s\": 0.5\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 400,\n  \"keyframes\": 23,\n  \"since_last_keyframe_s\": 0.9\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "fae3c02622a51d50e6bcfe701c061d4e02c7342c99f6e2c23f05022e364e6f37",
+                "bytes": 60235,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t20000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 4.762,
+            "input_tokens": 124647,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.266773089,\n          3.063620467\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 1.15561,\n        \"candidate\": 1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.46038,\n          \"cluster\": 7855477797440623117,\n          \"path_m\": 1.26213,\n          \"goal_xy_m\": [\n            1.312202931,\n            3.123311351",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    24,\n    23\n  ],\n  \"rays\": 6396,\n  \"free_cells\": 6634,\n  \"occupied_cells\": 736,\n  \"unknown_cells\": 140934,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_20000.png\",\n  \"agent_xy_m\": [\n    0.1153015868,\n    2.965938482\n  ],\n  \"agent_cell\": [\n    58,\n    72\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    24,\n    23\n  ],\n  \"rays\": 6396,\n  \"free_cells\": 6634,\n  \"occupied_cells\": 736,\n  \"unknown_cells\": 140934,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_20000.png\",\n  \"agent_xy_m\": [\n    1.0226711,\n    15.17247964\n  ],\n  \"agent_cell\": [\n    302,\n    90\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 400,\n  \"keyframes\": 24,\n  \"since_last_keyframe_s\": 0.5\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 400,\n  \"keyframes\": 23,\n  \"since_last_keyframe_s\": 0.9\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "fae3c02622a51d50e6bcfe701c061d4e02c7342c99f6e2c23f05022e364e6f37",
+                    "bytes": 60235,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "25": {
+        "calls": 2,
+        "input_tokens": 25456,
+        "output_tokens": 278,
+        "latency_s": 2.16,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.312202931,\n          3.123311351\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 0.0271058,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.87155,\n          \"cluster\": 8656411317463560884,\n          \"path_m\": 0.05,\n          \"goal_xy_m\": [\n            1.257649901,\n            3.059120467\n",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    29,\n    31\n  ],\n  \"rays\": 8660,\n  \"free_cells\": 9990,\n  \"occupied_cells\": 1104,\n  \"unknown_cells\": 137210,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_25000.png\",\n  \"agent_xy_m\": [\n    1.285987609,\n    3.130201986\n  ],\n  \"agent_cell\": [\n    61,\n    95\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    29,\n    31\n  ],\n  \"rays\": 8660,\n  \"free_cells\": 9990,\n  \"occupied_cells\": 1104,\n  \"unknown_cells\": 137210,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_25000.png\",\n  \"agent_xy_m\": [\n    1.23033961,\n    15.12748556\n  ],\n  \"agent_cell\": [\n    301,\n    94\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 500,\n  \"keyframes\": 29,\n  \"since_last_keyframe_s\": 0.5\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 500,\n  \"keyframes\": 31,\n  \"since_last_keyframe_s\": 0.9\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t25000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 2,
+            "latency_s": 2.16,
+            "input_tokens": 25456,
+            "output_tokens": 278,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.312202931,\n          3.123311351\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 0.0271058,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.87155,\n          \"cluster\": 8656411317463560884,\n          \"path_m\": 0.05,\n          \"goal_xy_m\": [\n            1.257649901,\n            3.059120467\n",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    29,\n    31\n  ],\n  \"rays\": 8660,\n  \"free_cells\": 9990,\n  \"occupied_cells\": 1104,\n  \"unknown_cells\": 137210,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_25000.png\",\n  \"agent_xy_m\": [\n    1.285987609,\n    3.130201986\n  ],\n  \"agent_cell\": [\n    61,\n    95\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    29,\n    31\n  ],\n  \"rays\": 8660,\n  \"free_cells\": 9990,\n  \"occupied_cells\": 1104,\n  \"unknown_cells\": 137210,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_25000.png\",\n  \"agent_xy_m\": [\n    1.23033961,\n    15.12748556\n  ],\n  \"agent_cell\": [\n    301,\n    94\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 500,\n  \"keyframes\": 29,\n  \"since_last_keyframe_s\": 0.5\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 500,\n  \"keyframes\": 31,\n  \"since_last_keyframe_s\": 0.9\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "30": {
+        "calls": 10,
+        "input_tokens": 223202,
+        "output_tokens": 442,
+        "latency_s": 7.164,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.257649901,\n          3.059120467\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 0.0642783,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.49638,\n          \"cluster\": 3036615666318539640,\n          \"path_m\": 0.998528,\n          \"goal_xy_m\": [\n            1.826120467,\n            3.86731",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    36,\n    38\n  ],\n  \"rays\": 10837,\n  \"free_cells\": 11691,\n  \"occupied_cells\": 1263,\n  \"unknown_cells\": 135350,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_30000.png\",\n  \"agent_xy_m\": [\n    1.238480744,\n    3.120473937\n  ],\n  \"agent_cell\": [\n    61,\n    94\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    36,\n    38\n  ],\n  \"rays\": 10837,\n  \"free_cells\": 11691,\n  \"occupied_cells\": 1263,\n  \"unknown_cells\": 135350,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_30000.png\",\n  \"agent_xy_m\": [\n    1.413208057,\n    14.86807658\n  ],\n  \"agent_cell\": [\n    296,\n    98\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 600,\n  \"keyframes\": 36,\n  \"since_last_keyframe_s\": 0.75\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 600,\n  \"keyframes\": 38,\n  \"since_last_keyframe_s\": 0.25\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "7ca8653eb47b334c3e1f39a4ca5b12558265a321801570a93ce08b45fe81c08a",
+                "bytes": 81139,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "keyframe",
+              "agent": 0
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "6004a1fb79b2bd3518eb21d2ffce13bb358fe89f5424bcc8bb58d7c9eba7d837",
+                "bytes": 264552,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "agent": 1,
+              "what": "keyframe"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "f7c43361a5b50af2ff142d3d2b922481fa8509cc27a164fa3c5a90abe390a849",
+                "bytes": 279326,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t30000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 10,
+            "latency_s": 7.164,
+            "input_tokens": 223202,
+            "output_tokens": 442,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.257649901,\n          3.059120467\n        ],\n        \"since_t_s\": 15,\n        \"straight_line_m\": 0.0642783,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.49638,\n          \"cluster\": 3036615666318539640,\n          \"path_m\": 0.998528,\n          \"goal_xy_m\": [\n            1.826120467,\n            3.86731",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    36,\n    38\n  ],\n  \"rays\": 10837,\n  \"free_cells\": 11691,\n  \"occupied_cells\": 1263,\n  \"unknown_cells\": 135350,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_30000.png\",\n  \"agent_xy_m\": [\n    1.238480744,\n    3.120473937\n  ],\n  \"agent_cell\": [\n    61,\n    94\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    36,\n    38\n  ],\n  \"rays\": 10837,\n  \"free_cells\": 11691,\n  \"occupied_cells\": 1263,\n  \"unknown_cells\": 135350,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_30000.png\",\n  \"agent_xy_m\": [\n    1.413208057,\n    14.86807658\n  ],\n  \"agent_cell\": [\n    296,\n    98\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 600,\n  \"keyframes\": 36,\n  \"since_last_keyframe_s\": 0.75\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 600,\n  \"keyframes\": 38,\n  \"since_last_keyframe_s\": 0.25\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "7ca8653eb47b334c3e1f39a4ca5b12558265a321801570a93ce08b45fe81c08a",
+                    "bytes": 81139,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "keyframe",
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "6004a1fb79b2bd3518eb21d2ffce13bb358fe89f5424bcc8bb58d7c9eba7d837",
+                    "bytes": 264552,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "agent": 1,
+                  "what": "keyframe"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "f7c43361a5b50af2ff142d3d2b922481fa8509cc27a164fa3c5a90abe390a849",
+                    "bytes": 279326,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "35": {
+        "calls": 2,
+        "input_tokens": 29527,
+        "output_tokens": 278,
+        "latency_s": 2.352,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.826120467,\n          3.867316568\n        ],\n        \"since_t_s\": 30,\n        \"straight_line_m\": 0.625343,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.60779,\n          \"cluster\": 3036615666318539640,\n          \"path_m\": 0.665685,\n          \"goal_xy_m\": [\n            1.826120467,\n            3.8673165",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    41,\n    47\n  ],\n  \"rays\": 13380,\n  \"free_cells\": 12670,\n  \"occupied_cells\": 1539,\n  \"unknown_cells\": 134095,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_35000.png\",\n  \"agent_xy_m\": [\n    1.427325593,\n    3.385636056\n  ],\n  \"agent_cell\": [\n    66,\n    98\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    41,\n    47\n  ],\n  \"rays\": 13380,\n  \"free_cells\": 12670,\n  \"occupied_cells\": 1539,\n  \"unknown_cells\": 134095,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_35000.png\",\n  \"agent_xy_m\": [\n    1.391472183,\n    14.88015417\n  ],\n  \"agent_cell\": [\n    296,\n    97\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 700,\n  \"keyframes\": 41,\n  \"since_last_keyframe_s\": 0.75\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 700,\n  \"keyframes\": 47,\n  \"since_last_keyframe_s\": 0.15\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t35000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 2,
+            "latency_s": 2.352,
+            "input_tokens": 29527,
+            "output_tokens": 278,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.826120467,\n          3.867316568\n        ],\n        \"since_t_s\": 30,\n        \"straight_line_m\": 0.625343,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.60779,\n          \"cluster\": 3036615666318539640,\n          \"path_m\": 0.665685,\n          \"goal_xy_m\": [\n            1.826120467,\n            3.8673165",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    41,\n    47\n  ],\n  \"rays\": 13380,\n  \"free_cells\": 12670,\n  \"occupied_cells\": 1539,\n  \"unknown_cells\": 134095,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_35000.png\",\n  \"agent_xy_m\": [\n    1.427325593,\n    3.385636056\n  ],\n  \"agent_cell\": [\n    66,\n    98\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    41,\n    47\n  ],\n  \"rays\": 13380,\n  \"free_cells\": 12670,\n  \"occupied_cells\": 1539,\n  \"unknown_cells\": 134095,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_35000.png\",\n  \"agent_xy_m\": [\n    1.391472183,\n    14.88015417\n  ],\n  \"agent_cell\": [\n    296,\n    97\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 700,\n  \"keyframes\": 41,\n  \"since_last_keyframe_s\": 0.75\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 700,\n  \"keyframes\": 47,\n  \"since_last_keyframe_s\": 0.15\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "40": {
+        "calls": 2,
+        "input_tokens": 34939,
+        "output_tokens": 278,
+        "latency_s": 2.446,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.826120467,\n          3.867316568\n        ],\n        \"since_t_s\": 30,\n        \"straight_line_m\": 0.0649047,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.48579,\n          \"cluster\": 4005913420059303363,\n          \"path_m\": 0.974264,\n          \"goal_xy_m\": [\n            2.675974851,\n            3.63581",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    47,\n    53\n  ],\n  \"rays\": 16012,\n  \"free_cells\": 13934,\n  \"occupied_cells\": 1894,\n  \"unknown_cells\": 132476,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_40000.png\",\n  \"agent_xy_m\": [\n    1.831209091,\n    3.932021438\n  ],\n  \"agent_cell\": [\n    77,\n    106\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    47,\n    53\n  ],\n  \"rays\": 16012,\n  \"free_cells\": 13934,\n  \"occupied_cells\": 1894,\n  \"unknown_cells\": 132476,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_40000.png\",\n  \"agent_xy_m\": [\n    1.709297256,\n    14.81936497\n  ],\n  \"agent_cell\": [\n    295,\n    104\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 800,\n  \"keyframes\": 47,\n  \"since_last_keyframe_s\": 0.65\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 800,\n  \"keyframes\": 53,\n  \"since_last_keyframe_s\": 0.3\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t40000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 2,
+            "latency_s": 2.446,
+            "input_tokens": 34939,
+            "output_tokens": 278,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          1.826120467,\n          3.867316568\n        ],\n        \"since_t_s\": 30,\n        \"straight_line_m\": 0.0649047,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.48579,\n          \"cluster\": 4005913420059303363,\n          \"path_m\": 0.974264,\n          \"goal_xy_m\": [\n            2.675974851,\n            3.63581",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    47,\n    53\n  ],\n  \"rays\": 16012,\n  \"free_cells\": 13934,\n  \"occupied_cells\": 1894,\n  \"unknown_cells\": 132476,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_40000.png\",\n  \"agent_xy_m\": [\n    1.831209091,\n    3.932021438\n  ],\n  \"agent_cell\": [\n    77,\n    106\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    47,\n    53\n  ],\n  \"rays\": 16012,\n  \"free_cells\": 13934,\n  \"occupied_cells\": 1894,\n  \"unknown_cells\": 132476,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_40000.png\",\n  \"agent_xy_m\": [\n    1.709297256,\n    14.81936497\n  ],\n  \"agent_cell\": [\n    295,\n    104\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 800,\n  \"keyframes\": 47,\n  \"since_last_keyframe_s\": 0.65\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 800,\n  \"keyframes\": 53,\n  \"since_last_keyframe_s\": 0.3\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "45": {
+        "calls": 10,
+        "input_tokens": 327989,
+        "output_tokens": 442,
+        "latency_s": 9.03,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.675974851,\n          3.635819299\n        ],\n        \"since_t_s\": 40,\n        \"straight_line_m\": 0.765038,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.42506,\n          \"cluster\": 8896691109216842010,\n          \"path_m\": 0.982843,\n          \"goal_xy_m\": [\n            2.867316568,\n            3.6738795",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    54,\n    63\n  ],\n  \"rays\": 19741,\n  \"free_cells\": 15406,\n  \"occupied_cells\": 2331,\n  \"unknown_cells\": 130567,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_45000.png\",\n  \"agent_xy_m\": [\n    1.954242167,\n    3.889560205\n  ],\n  \"agent_cell\": [\n    76,\n    109\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    54,\n    63\n  ],\n  \"rays\": 19741,\n  \"free_cells\": 15406,\n  \"occupied_cells\": 2331,\n  \"unknown_cells\": 130567,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_45000.png\",\n  \"agent_xy_m\": [\n    1.621230626,\n    14.80411227\n  ],\n  \"agent_cell\": [\n    295,\n    102\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 900,\n  \"keyframes\": 54,\n  \"since_last_keyframe_s\": 0.2\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 900,\n  \"keyframes\": 63,\n  \"since_last_keyframe_s\": 0.15\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "49b82e9bd4daf832d9b10d9135d05863fd6ef2c33e868e2093e4a7b5b9b1fb54",
+                "bytes": 110378,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "keyframe",
+              "agent": 0
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "ee6ea24eab8fcac94bbce8b2c2e3f51cbb8ab11deab65aaab848eb1fe54a194f",
+                "bytes": 280045,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "agent": 1,
+              "what": "keyframe"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "eee5e52f6ed5d77baf6de234118b4a5fe0d4d344a108e0256627f6e1c7c0908e",
+                "bytes": 248589,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t45000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 10,
+            "latency_s": 9.03,
+            "input_tokens": 327989,
+            "output_tokens": 442,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.675974851,\n          3.635819299\n        ],\n        \"since_t_s\": 40,\n        \"straight_line_m\": 0.765038,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.42506,\n          \"cluster\": 8896691109216842010,\n          \"path_m\": 0.982843,\n          \"goal_xy_m\": [\n            2.867316568,\n            3.6738795",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    54,\n    63\n  ],\n  \"rays\": 19741,\n  \"free_cells\": 15406,\n  \"occupied_cells\": 2331,\n  \"unknown_cells\": 130567,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_45000.png\",\n  \"agent_xy_m\": [\n    1.954242167,\n    3.889560205\n  ],\n  \"agent_cell\": [\n    76,\n    109\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    54,\n    63\n  ],\n  \"rays\": 19741,\n  \"free_cells\": 15406,\n  \"occupied_cells\": 2331,\n  \"unknown_cells\": 130567,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_45000.png\",\n  \"agent_xy_m\": [\n    1.621230626,\n    14.80411227\n  ],\n  \"agent_cell\": [\n    295,\n    102\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 900,\n  \"keyframes\": 54,\n  \"since_last_keyframe_s\": 0.2\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 900,\n  \"keyframes\": 63,\n  \"since_last_keyframe_s\": 0.15\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "49b82e9bd4daf832d9b10d9135d05863fd6ef2c33e868e2093e4a7b5b9b1fb54",
+                    "bytes": 110378,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "keyframe",
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "ee6ea24eab8fcac94bbce8b2c2e3f51cbb8ab11deab65aaab848eb1fe54a194f",
+                    "bytes": 280045,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "agent": 1,
+                  "what": "keyframe"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "eee5e52f6ed5d77baf6de234118b4a5fe0d4d344a108e0256627f6e1c7c0908e",
+                    "bytes": 248589,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "50": {
+        "calls": 8,
+        "input_tokens": 247173,
+        "output_tokens": 338,
+        "latency_s": 5.912,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.867316568,\n          3.673879533\n        ],\n        \"since_t_s\": 40,\n        \"straight_line_m\": 0.17864,\n        \"candidate\": 1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.53655,\n          \"cluster\": 3989240909902795415,\n          \"path_m\": 0.686396,\n          \"goal_xy_m\": [\n            2.244523755,\n            3.18572301",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    60,\n    72\n  ],\n  \"rays\": 23443,\n  \"free_cells\": 16073,\n  \"occupied_cells\": 2558,\n  \"unknown_cells\": 129673,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_50000.png\",\n  \"agent_xy_m\": [\n    2.688800558,\n    3.680534926\n  ],\n  \"agent_cell\": [\n    72,\n    123\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    60,\n    72\n  ],\n  \"rays\": 23443,\n  \"free_cells\": 16073,\n  \"occupied_cells\": 2558,\n  \"unknown_cells\": 129673,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_50000.png\",\n  \"agent_xy_m\": [\n    1.708377316,\n    14.81775812\n  ],\n  \"agent_cell\": [\n    295,\n    104\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1000,\n  \"keyframes\": 60,\n  \"since_last_keyframe_s\": 0.25\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1000,\n  \"keyframes\": 72,\n  \"since_last_keyframe_s\": 0.1\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "92099a67959cea6bf264d0e15a906c9109a80d9b5280bbc14ddcd1395ae1708c",
+                "bytes": 117977,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t50000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 5.912,
+            "input_tokens": 247173,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.867316568,\n          3.673879533\n        ],\n        \"since_t_s\": 40,\n        \"straight_line_m\": 0.17864,\n        \"candidate\": 1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.53655,\n          \"cluster\": 3989240909902795415,\n          \"path_m\": 0.686396,\n          \"goal_xy_m\": [\n            2.244523755,\n            3.18572301",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    60,\n    72\n  ],\n  \"rays\": 23443,\n  \"free_cells\": 16073,\n  \"occupied_cells\": 2558,\n  \"unknown_cells\": 129673,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_50000.png\",\n  \"agent_xy_m\": [\n    2.688800558,\n    3.680534926\n  ],\n  \"agent_cell\": [\n    72,\n    123\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    60,\n    72\n  ],\n  \"rays\": 23443,\n  \"free_cells\": 16073,\n  \"occupied_cells\": 2558,\n  \"unknown_cells\": 129673,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_50000.png\",\n  \"agent_xy_m\": [\n    1.708377316,\n    14.81775812\n  ],\n  \"agent_cell\": [\n    295,\n    104\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1000,\n  \"keyframes\": 60,\n  \"since_last_keyframe_s\": 0.25\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1000,\n  \"keyframes\": 72,\n  \"since_last_keyframe_s\": 0.1\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "92099a67959cea6bf264d0e15a906c9109a80d9b5280bbc14ddcd1395ae1708c",
+                    "bytes": 117977,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "55": {
+        "calls": 8,
+        "input_tokens": 243561,
+        "output_tokens": 338,
+        "latency_s": 6.018,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.244523755,\n          3.185723017\n        ],\n        \"since_t_s\": 50,\n        \"straight_line_m\": 0.850942,\n        \"candidate\": 2,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.74416,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 2.18284,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.82612046",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    66,\n    78\n  ],\n  \"rays\": 26339,\n  \"free_cells\": 16311,\n  \"occupied_cells\": 2625,\n  \"unknown_cells\": 129368,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_55000.png\",\n  \"agent_xy_m\": [\n    2.920977554,\n    3.701970749\n  ],\n  \"agent_cell\": [\n    73,\n    128\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    66,\n    78\n  ],\n  \"rays\": 26339,\n  \"free_cells\": 16311,\n  \"occupied_cells\": 2625,\n  \"unknown_cells\": 129368,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_55000.png\",\n  \"agent_xy_m\": [\n    1.684775539,\n    14.82863635\n  ],\n  \"agent_cell\": [\n    295,\n    103\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1100,\n  \"keyframes\": 66,\n  \"since_last_keyframe_s\": 0.35\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1100,\n  \"keyframes\": 78,\n  \"since_last_keyframe_s\": 0.85\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "1307767accc85c5ad6bdf39553e2ebe9845d354fb3d5f69ce6edb78b417e1fc4",
+                "bytes": 120263,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 2,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t55000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 2,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 6.018,
+            "input_tokens": 243561,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.244523755,\n          3.185723017\n        ],\n        \"since_t_s\": 50,\n        \"straight_line_m\": 0.850942,\n        \"candidate\": 2,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.74416,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 2.18284,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.82612046",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    66,\n    78\n  ],\n  \"rays\": 26339,\n  \"free_cells\": 16311,\n  \"occupied_cells\": 2625,\n  \"unknown_cells\": 129368,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_55000.png\",\n  \"agent_xy_m\": [\n    2.920977554,\n    3.701970749\n  ],\n  \"agent_cell\": [\n    73,\n    128\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    66,\n    78\n  ],\n  \"rays\": 26339,\n  \"free_cells\": 16311,\n  \"occupied_cells\": 2625,\n  \"unknown_cells\": 129368,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_55000.png\",\n  \"agent_xy_m\": [\n    1.684775539,\n    14.82863635\n  ],\n  \"agent_cell\": [\n    295,\n    103\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1100,\n  \"keyframes\": 66,\n  \"since_last_keyframe_s\": 0.35\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1100,\n  \"keyframes\": 78,\n  \"since_last_keyframe_s\": 0.85\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "1307767accc85c5ad6bdf39553e2ebe9845d354fb3d5f69ce6edb78b417e1fc4",
+                    "bytes": 120263,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 2,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "60": {
+        "calls": 8,
+        "input_tokens": 249805,
+        "output_tokens": 338,
+        "latency_s": 6.014,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.225544281,\n          3.116773448\n        ],\n        \"since_t_s\": 50,\n        \"straight_line_m\": 0.824246,\n        \"candidate\": 24,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.9962,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 2.30355,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.82612046",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    77,\n    84\n  ],\n  \"rays\": 30798,\n  \"free_cells\": 16843,\n  \"occupied_cells\": 2929,\n  \"unknown_cells\": 128532,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_60000.png\",\n  \"agent_xy_m\": [\n    2.876693324,\n    3.62213163\n  ],\n  \"agent_cell\": [\n    71,\n    127\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    77,\n    84\n  ],\n  \"rays\": 30798,\n  \"free_cells\": 16843,\n  \"occupied_cells\": 2929,\n  \"unknown_cells\": 128532,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_60000.png\",\n  \"agent_xy_m\": [\n    2.101311569,\n    14.97247207\n  ],\n  \"agent_cell\": [\n    298,\n    112\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1200,\n  \"keyframes\": 77,\n  \"since_last_keyframe_s\": 0.45\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1200,\n  \"keyframes\": 84,\n  \"since_last_keyframe_s\": 0.3\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "e6d619fe68349bf98ca884913faa7174246bb83600c1f5428ac96fd98349886b",
+                "bytes": 119422,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t60000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 6.014,
+            "input_tokens": 249805,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.225544281,\n          3.116773448\n        ],\n        \"since_t_s\": 50,\n        \"straight_line_m\": 0.824246,\n        \"candidate\": 24,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.9962,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 2.30355,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.82612046",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    77,\n    84\n  ],\n  \"rays\": 30798,\n  \"free_cells\": 16843,\n  \"occupied_cells\": 2929,\n  \"unknown_cells\": 128532,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_60000.png\",\n  \"agent_xy_m\": [\n    2.876693324,\n    3.62213163\n  ],\n  \"agent_cell\": [\n    71,\n    127\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    77,\n    84\n  ],\n  \"rays\": 30798,\n  \"free_cells\": 16843,\n  \"occupied_cells\": 2929,\n  \"unknown_cells\": 128532,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_60000.png\",\n  \"agent_xy_m\": [\n    2.101311569,\n    14.97247207\n  ],\n  \"agent_cell\": [\n    298,\n    112\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1200,\n  \"keyframes\": 77,\n  \"since_last_keyframe_s\": 0.45\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1200,\n  \"keyframes\": 84,\n  \"since_last_keyframe_s\": 0.3\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "e6d619fe68349bf98ca884913faa7174246bb83600c1f5428ac96fd98349886b",
+                    "bytes": 119422,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "65": {
+        "calls": 8,
+        "input_tokens": 250050,
+        "output_tokens": 338,
+        "latency_s": 6.351,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.132683432,\n          5.826120467\n        ],\n        \"since_t_s\": 60,\n        \"straight_line_m\": 2.8977,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.44752,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 3.12279,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.826120467\n",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    82,\n    92\n  ],\n  \"rays\": 34227,\n  \"free_cells\": 16947,\n  \"occupied_cells\": 2935,\n  \"unknown_cells\": 128422,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_65000.png\",\n  \"agent_xy_m\": [\n    2.228902306,\n    3.072966214\n  ],\n  \"agent_cell\": [\n    60,\n    114\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    82,\n    92\n  ],\n  \"rays\": 34227,\n  \"free_cells\": 16947,\n  \"occupied_cells\": 2935,\n  \"unknown_cells\": 128422,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_65000.png\",\n  \"agent_xy_m\": [\n    2.178213102,\n    14.86968686\n  ],\n  \"agent_cell\": [\n    296,\n    113\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1300,\n  \"keyframes\": 82,\n  \"since_last_keyframe_s\": 0.45\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1300,\n  \"keyframes\": 92,\n  \"since_last_keyframe_s\": 0.35\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "ad3d2466360dfbb31cfb77a021f069ab8053605c23ba039cfced60cfb3781221",
+                "bytes": 122262,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 1,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t65000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 1,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 6.351,
+            "input_tokens": 250050,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.132683432,\n          5.826120467\n        ],\n        \"since_t_s\": 60,\n        \"straight_line_m\": 2.8977,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.44752,\n          \"cluster\": 4167038357775273789,\n          \"path_m\": 3.12279,\n          \"goal_xy_m\": [\n            3.132683432,\n            5.826120467\n",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    82,\n    92\n  ],\n  \"rays\": 34227,\n  \"free_cells\": 16947,\n  \"occupied_cells\": 2935,\n  \"unknown_cells\": 128422,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_65000.png\",\n  \"agent_xy_m\": [\n    2.228902306,\n    3.072966214\n  ],\n  \"agent_cell\": [\n    60,\n    114\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    82,\n    92\n  ],\n  \"rays\": 34227,\n  \"free_cells\": 16947,\n  \"occupied_cells\": 2935,\n  \"unknown_cells\": 128422,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_65000.png\",\n  \"agent_xy_m\": [\n    2.178213102,\n    14.86968686\n  ],\n  \"agent_cell\": [\n    296,\n    113\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1300,\n  \"keyframes\": 82,\n  \"since_last_keyframe_s\": 0.45\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1300,\n  \"keyframes\": 92,\n  \"since_last_keyframe_s\": 0.35\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "ad3d2466360dfbb31cfb77a021f069ab8053605c23ba039cfced60cfb3781221",
+                    "bytes": 122262,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 1,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "70": {
+        "calls": 2,
+        "input_tokens": 37671,
+        "output_tokens": 278,
+        "latency_s": 2.559,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.132683432,\n          5.826120467\n        ],\n        \"since_t_s\": 60,\n        \"straight_line_m\": 2.85293,\n        \"candidate\": 3,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.45216,\n          \"cluster\": 2486977695893384836,\n          \"path_m\": 2.51924,\n          \"goal_xy_m\": [\n            2.824025149,\n            5.364180701",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    93,\n    104\n  ],\n  \"rays\": 39004,\n  \"free_cells\": 17373,\n  \"occupied_cells\": 3208,\n  \"unknown_cells\": 127723,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_70000.png\",\n  \"agent_xy_m\": [\n    2.164382565,\n    3.142535839\n  ],\n  \"agent_cell\": [\n    61,\n    113\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    93,\n    104\n  ],\n  \"rays\": 39004,\n  \"free_cells\": 17373,\n  \"occupied_cells\": 3208,\n  \"unknown_cells\": 127723,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_70000.png\",\n  \"agent_xy_m\": [\n    2.091616562,\n    14.82547947\n  ],\n  \"agent_cell\": [\n    295,\n    111\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1400,\n  \"keyframes\": 93,\n  \"since_last_keyframe_s\": 0.25\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1400,\n  \"keyframes\": 104,\n  \"since_last_keyframe_s\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t70000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 2,
+            "latency_s": 2.559,
+            "input_tokens": 37671,
+            "output_tokens": 278,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.132683432,\n          5.826120467\n        ],\n        \"since_t_s\": 60,\n        \"straight_line_m\": 2.85293,\n        \"candidate\": 3,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.45216,\n          \"cluster\": 2486977695893384836,\n          \"path_m\": 2.51924,\n          \"goal_xy_m\": [\n            2.824025149,\n            5.364180701",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    93,\n    104\n  ],\n  \"rays\": 39004,\n  \"free_cells\": 17373,\n  \"occupied_cells\": 3208,\n  \"unknown_cells\": 127723,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_70000.png\",\n  \"agent_xy_m\": [\n    2.164382565,\n    3.142535839\n  ],\n  \"agent_cell\": [\n    61,\n    113\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    93,\n    104\n  ],\n  \"rays\": 39004,\n  \"free_cells\": 17373,\n  \"occupied_cells\": 3208,\n  \"unknown_cells\": 127723,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_70000.png\",\n  \"agent_xy_m\": [\n    2.091616562,\n    14.82547947\n  ],\n  \"agent_cell\": [\n    295,\n    111\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1400,\n  \"keyframes\": 93,\n  \"since_last_keyframe_s\": 0.25\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1400,\n  \"keyframes\": 104,\n  \"since_last_keyframe_s\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "75": {
+        "calls": 6,
+        "input_tokens": 181755,
+        "output_tokens": 258,
+        "latency_s": 6.002,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.824025149,\n          5.364180701\n        ],\n        \"since_t_s\": 70,\n        \"straight_line_m\": 1.85542,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.66568,\n          \"cluster\": 2486977695893384836,\n          \"path_m\": 2.02782,\n          \"goal_xy_m\": [\n            2.824025149,\n            5.364180701",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "f34b04521b0a007a014addf00d1f5784815eb20d9ebac2957d7561c89ae9ebfd",
+                "bytes": 112911,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1500,\n  \"keyframes\": 100,\n  \"since_last_keyframe_s\": 0.45\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1500,\n  \"keyframes\": 113,\n  \"since_last_keyframe_s\": 0.05\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t75000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 6,
+            "latency_s": 6.002,
+            "input_tokens": 181755,
+            "output_tokens": 258,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.824025149,\n          5.364180701\n        ],\n        \"since_t_s\": 70,\n        \"straight_line_m\": 1.85542,\n        \"candidate\": 0,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.66568,\n          \"cluster\": 2486977695893384836,\n          \"path_m\": 2.02782,\n          \"goal_xy_m\": [\n            2.824025149,\n            5.364180701",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "f34b04521b0a007a014addf00d1f5784815eb20d9ebac2957d7561c89ae9ebfd",
+                    "bytes": 112911,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1500,\n  \"keyframes\": 100,\n  \"since_last_keyframe_s\": 0.45\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1500,\n  \"keyframes\": 113,\n  \"since_last_keyframe_s\": 0.05\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "80": {
+        "calls": 5,
+        "input_tokens": 139133,
+        "output_tokens": 326,
+        "latency_s": 4.377,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.824025149,\n          5.364180701\n        ],\n        \"since_t_s\": 70,\n        \"straight_line_m\": 0.0565041,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.7361,\n          \"cluster\": 8570004048249474106,\n          \"path_m\": 1.4,\n          \"goal_xy_m\": [\n            2.75,\n            6.75\n          ],\n  ",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    108,\n    123\n  ],\n  \"rays\": 46753,\n  \"free_cells\": 18714,\n  \"occupied_cells\": 3451,\n  \"unknown_cells\": 126139,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_80000.png\",\n  \"agent_xy_m\": [\n    2.777727457,\n    5.396572546\n  ],\n  \"agent_cell\": [\n    106,\n    125\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    108,\n    123\n  ],\n  \"rays\": 46753,\n  \"free_cells\": 18714,\n  \"occupied_cells\": 3451,\n  \"unknown_cells\": 126139,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_80000.png\",\n  \"agent_xy_m\": [\n    2.157960389,\n    14.91614275\n  ],\n  \"agent_cell\": [\n    297,\n    113\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "7dc7fbd283df664cd6ed0a48e7c633e0d2b9b086942fbc433cc53910235ccaeb",
+                "bytes": 116252,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1600,\n  \"keyframes\": 108,\n  \"since_last_keyframe_s\": 0.3\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1600,\n  \"keyframes\": 123,\n  \"since_last_keyframe_s\": 0.2\n}",
+            "images": []
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 1,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t80000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 1,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 5,
+            "latency_s": 4.377,
+            "input_tokens": 139133,
+            "output_tokens": 326,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.824025149,\n          5.364180701\n        ],\n        \"since_t_s\": 70,\n        \"straight_line_m\": 0.0565041,\n        \"candidate\": -1,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.7361,\n          \"cluster\": 8570004048249474106,\n          \"path_m\": 1.4,\n          \"goal_xy_m\": [\n            2.75,\n            6.75\n          ],\n  ",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    108,\n    123\n  ],\n  \"rays\": 46753,\n  \"free_cells\": 18714,\n  \"occupied_cells\": 3451,\n  \"unknown_cells\": 126139,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_80000.png\",\n  \"agent_xy_m\": [\n    2.777727457,\n    5.396572546\n  ],\n  \"agent_cell\": [\n    106,\n    125\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    108,\n    123\n  ],\n  \"rays\": 46753,\n  \"free_cells\": 18714,\n  \"occupied_cells\": 3451,\n  \"unknown_cells\": 126139,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_80000.png\",\n  \"agent_xy_m\": [\n    2.157960389,\n    14.91614275\n  ],\n  \"agent_cell\": [\n    297,\n    113\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "7dc7fbd283df664cd6ed0a48e7c633e0d2b9b086942fbc433cc53910235ccaeb",
+                    "bytes": 116252,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1600,\n  \"keyframes\": 108,\n  \"since_last_keyframe_s\": 0.3\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1600,\n  \"keyframes\": 123,\n  \"since_last_keyframe_s\": 0.2\n}",
+                "images": []
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 1,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "85": {
+        "calls": 10,
+        "input_tokens": 330115,
+        "output_tokens": 442,
+        "latency_s": 7.453,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.75,\n          6.75\n        ],\n        \"since_t_s\": 80,\n        \"straight_line_m\": 1.34939,\n        \"candidate\": 14,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.60754,\n          \"cluster\": 6902890853193771409,\n          \"path_m\": 2.05711,\n          \"goal_xy_m\": [\n            3.25,\n            7.25\n          ],\n          \"st",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    114,\n    129\n  ],\n  \"rays\": 49167,\n  \"free_cells\": 19226,\n  \"occupied_cells\": 3517,\n  \"unknown_cells\": 125561,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_85000.png\",\n  \"agent_xy_m\": [\n    2.771756498,\n    5.400789663\n  ],\n  \"agent_cell\": [\n    107,\n    125\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    114,\n    129\n  ],\n  \"rays\": 49167,\n  \"free_cells\": 19226,\n  \"occupied_cells\": 3517,\n  \"unknown_cells\": 125561,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_85000.png\",\n  \"agent_xy_m\": [\n    2.791341065,\n    14.61761486\n  ],\n  \"agent_cell\": [\n    291,\n    125\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1700,\n  \"keyframes\": 114,\n  \"since_last_keyframe_s\": 0.15\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1700,\n  \"keyframes\": 129,\n  \"since_last_keyframe_s\": 0.5\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "4017b0f21b9da3efc1b091c63a1bbb90bbe9e6761596819bfcafcda7d325d54e",
+                "bytes": 121651,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "keyframe",
+              "agent": 0
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "1a0799a169f7fb5cbf39fc8b6d3a52e3e9d54647ea42e82527ccf809717bcb4f",
+                "bytes": 236633,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "agent": 1,
+              "what": "keyframe"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "073f3b50496ac01af901a667bd9609f2e371f8326b3e957b2b798a1908d13adf",
+                "bytes": 271456,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 1,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t85000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 1,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 10,
+            "latency_s": 7.453,
+            "input_tokens": 330115,
+            "output_tokens": 442,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          2.75,\n          6.75\n        ],\n        \"since_t_s\": 80,\n        \"straight_line_m\": 1.34939,\n        \"candidate\": 14,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.60754,\n          \"cluster\": 6902890853193771409,\n          \"path_m\": 2.05711,\n          \"goal_xy_m\": [\n            3.25,\n            7.25\n          ],\n          \"st",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    114,\n    129\n  ],\n  \"rays\": 49167,\n  \"free_cells\": 19226,\n  \"occupied_cells\": 3517,\n  \"unknown_cells\": 125561,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_85000.png\",\n  \"agent_xy_m\": [\n    2.771756498,\n    5.400789663\n  ],\n  \"agent_cell\": [\n    107,\n    125\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    114,\n    129\n  ],\n  \"rays\": 49167,\n  \"free_cells\": 19226,\n  \"occupied_cells\": 3517,\n  \"unknown_cells\": 125561,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_85000.png\",\n  \"agent_xy_m\": [\n    2.791341065,\n    14.61761486\n  ],\n  \"agent_cell\": [\n    291,\n    125\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1700,\n  \"keyframes\": 114,\n  \"since_last_keyframe_s\": 0.15\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1700,\n  \"keyframes\": 129,\n  \"since_last_keyframe_s\": 0.5\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "4017b0f21b9da3efc1b091c63a1bbb90bbe9e6761596819bfcafcda7d325d54e",
+                    "bytes": 121651,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "keyframe",
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "1a0799a169f7fb5cbf39fc8b6d3a52e3e9d54647ea42e82527ccf809717bcb4f",
+                    "bytes": 236633,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "agent": 1,
+                  "what": "keyframe"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "073f3b50496ac01af901a667bd9609f2e371f8326b3e957b2b798a1908d13adf",
+                    "bytes": 271456,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 1,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      },
+      "90": {
+        "calls": 8,
+        "input_tokens": 292974,
+        "output_tokens": 338,
+        "latency_s": 5.688,
+        "fallback": false,
+        "validation": "ok",
+        "tool_calls": [
+          {
+            "tool": "list_candidates",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.25,\n          7.25\n        ],\n        \"since_t_s\": 85,\n        \"straight_line_m\": 0.718361,\n        \"candidate\": 5,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.72095,\n          \"cluster\": 1748853536476165363,\n          \"path_m\": 1.67782,\n          \"goal_xy_m\": [\n            3.25,\n            8.25\n          ],\n          \"st",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    119,\n    138\n  ],\n  \"rays\": 50959,\n  \"free_cells\": 21170,\n  \"occupied_cells\": 3671,\n  \"unknown_cells\": 123463,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_90000.png\",\n  \"agent_xy_m\": [\n    2.725681634,\n    6.758947213\n  ],\n  \"agent_cell\": [\n    134,\n    124\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_map",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"keyframes_integrated\": [\n    119,\n    138\n  ],\n  \"rays\": 50959,\n  \"free_cells\": 21170,\n  \"occupied_cells\": 3671,\n  \"unknown_cells\": 123463,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_90000.png\",\n  \"agent_xy_m\": [\n    3.323720247,\n    14.37731943\n  ],\n  \"agent_cell\": [\n    286,\n    136\n  ]\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 0
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1800,\n  \"keyframes\": 119,\n  \"since_last_keyframe_s\": 0.25\n}",
+            "images": []
+          },
+          {
+            "tool": "query_uncertainty",
+            "input": {
+              "agent": 1
+            },
+            "status": "success",
+            "result": "{\n  \"frames\": 1800,\n  \"keyframes\": 138,\n  \"since_last_keyframe_s\": 0.05\n}",
+            "images": []
+          },
+          {
+            "tool": "query_route",
+            "input": {},
+            "status": "success",
+            "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+            "images": []
+          },
+          {
+            "tool": "observe_image",
+            "input": {
+              "what": "map"
+            },
+            "status": "success",
+            "result": "",
+            "images": [
+              {
+                "sha256": "d9f0ee43cd66e8ae418caf3e9b7095839a8a3bf62b26d60127eb6aa4c193ee54",
+                "bytes": 134334,
+                "format": "png"
+              }
+            ]
+          },
+          {
+            "tool": "assign",
+            "input": {
+              "assignments": [
+                {
+                  "agent": 0,
+                  "candidate": 5,
+                  "reason": "top-ranked, reveals unknown space"
+                },
+                {
+                  "agent": 1,
+                  "candidate": 0,
+                  "reason": "top-ranked, reveals unknown space"
+                }
+              ]
+            },
+            "status": "success",
+            "result": "{\n  \"recorded\": true\n}",
+            "images": []
+          }
+        ],
+        "answer": {
+          "decision_id": "t90000ms",
+          "assignments": [
+            {
+              "agent": 0,
+              "candidate": 5,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            },
+            {
+              "agent": 1,
+              "candidate": 0,
+              "reason": "top-ranked, reveals unknown space",
+              "approval_id": ""
+            }
+          ],
+          "orchestrator": {
+            "model": "eu.amazon.nova-2-lite-v1:0",
+            "fallback_used": false,
+            "calls": 8,
+            "latency_s": 5.688,
+            "input_tokens": 292974,
+            "output_tokens": 338,
+            "tool_calls": [
+              {
+                "tool": "list_candidates",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"autonomous_threshold\": 0.5,\n  \"operator_directives\": [],\n  \"agents\": [\n    {\n      \"agent\": 0,\n      \"current_task\": {\n        \"goal_xy_m\": [\n          3.25,\n          7.25\n        ],\n        \"since_t_s\": 85,\n        \"straight_line_m\": 0.718361,\n        \"candidate\": 5,\n        \"reason\": \"top-ranked, reveals unknown space\"\n      },\n      \"candidates\": [\n        {\n          \"index\": 0,\n          \"rank\": 0,\n          \"utility\": 1.72095,\n          \"cluster\": 1748853536476165363,\n          \"path_m\": 1.67782,\n          \"goal_xy_m\": [\n            3.25,\n            8.25\n          ],\n          \"st",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    119,\n    138\n  ],\n  \"rays\": 50959,\n  \"free_cells\": 21170,\n  \"occupied_cells\": 3671,\n  \"unknown_cells\": 123463,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_90000.png\",\n  \"agent_xy_m\": [\n    2.725681634,\n    6.758947213\n  ],\n  \"agent_cell\": [\n    134,\n    124\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_map",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"keyframes_integrated\": [\n    119,\n    138\n  ],\n  \"rays\": 50959,\n  \"free_cells\": 21170,\n  \"occupied_cells\": 3671,\n  \"unknown_cells\": 123463,\n  \"frontier_clusters\": 0,\n  \"rejected_small\": 0,\n  \"egress_found\": false,\n  \"snapshot_png\": \"snapshots/slab_90000.png\",\n  \"agent_xy_m\": [\n    3.323720247,\n    14.37731943\n  ],\n  \"agent_cell\": [\n    286,\n    136\n  ]\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 0
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1800,\n  \"keyframes\": 119,\n  \"since_last_keyframe_s\": 0.25\n}",
+                "images": []
+              },
+              {
+                "tool": "query_uncertainty",
+                "input": {
+                  "agent": 1
+                },
+                "status": "success",
+                "result": "{\n  \"frames\": 1800,\n  \"keyframes\": 138,\n  \"since_last_keyframe_s\": 0.05\n}",
+                "images": []
+              },
+              {
+                "tool": "query_route",
+                "input": {},
+                "status": "success",
+                "result": "{\n  \"found\": false,\n  \"length_m\": 0,\n  \"exit\": -1,\n  \"clearance_m\": 0.4\n}",
+                "images": []
+              },
+              {
+                "tool": "observe_image",
+                "input": {
+                  "what": "map"
+                },
+                "status": "success",
+                "result": "",
+                "images": [
+                  {
+                    "sha256": "d9f0ee43cd66e8ae418caf3e9b7095839a8a3bf62b26d60127eb6aa4c193ee54",
+                    "bytes": 134334,
+                    "format": "png"
+                  }
+                ]
+              },
+              {
+                "tool": "assign",
+                "input": {
+                  "assignments": [
+                    {
+                      "agent": 0,
+                      "candidate": 5,
+                      "reason": "top-ranked, reveals unknown space"
+                    },
+                    {
+                      "agent": 1,
+                      "candidate": 0,
+                      "reason": "top-ranked, reveals unknown space"
+                    }
+                  ]
+                },
+                "status": "success",
+                "result": "{\n  \"recorded\": true\n}",
+                "images": []
+              }
+            ],
+            "model_text": [],
+            "stop": "tool_use",
+            "errors": []
+          }
+        }
+      }
+    },
+    "tools": {
+      "list_candidates": 18,
+      "query_route": 18,
+      "observe_map": 34,
+      "query_uncertainty": 36,
+      "observe_image": 22,
+      "assign": 18
+    },
+    "tool_fail_count": 0,
+    "tool_total": 146,
+    "tool_errors": [],
+    "approval_tool_calls": 0,
+    "assignments_by_time": [
+      [
+        5,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        10,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        15,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        20,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        25,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        30,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        35,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        40,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        45,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        50,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        55,
+        [
+          {
+            "agent": 0,
+            "candidate": 2,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        60,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        65,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 1,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        70,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        75,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        80,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 1,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        85,
+        [
+          {
+            "agent": 0,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 1,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ],
+      [
+        90,
+        [
+          {
+            "agent": 0,
+            "candidate": 5,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          },
+          {
+            "agent": 1,
+            "candidate": 0,
+            "reason": "top-ranked, reveals unknown space",
+            "approval_id": ""
+          }
+        ]
+      ]
+    ],
+    "first_route_found_s": null
+  }
+}

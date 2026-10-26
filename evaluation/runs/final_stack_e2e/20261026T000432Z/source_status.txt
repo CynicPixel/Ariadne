@@ -1,0 +1,23 @@
+ M cpp/core/inertial/imu_noise_operator.hpp
+ M cpp/runtime/datasets/radiometric_source.hpp
+ M cpp/runtime/datasets/stereo_source.hpp
+ M cpp/runtime/live/collab_live.hpp
+ M cpp/runtime/live/live_source.hpp
+ M cpp/runtime/tools/ariadne_live.cpp
+ M cpp/runtime/tools/ariadne_live_canonical.cpp
+ M cpp/runtime/tools/stereo_vo_runner.hpp
+ M infra/scripts/live.sh
+ M infra/scripts/live_aws.sh
+ M infra/scripts/spinup.sh
+ M python/reconstruction/ariadne_recon/live/trainer.py
+ M python/reconstruction/tests/test_live.py
+ M tests/CMakeLists.txt
+ M tests/unit/test_imu_noise.cpp
+?? configs/collab/collab_final_e2e.yaml
+?? configs/mission/live_final_e2e.yaml
+?? evaluation/audits/
+?? evaluation/runs/final_stack_e2e/
+?? infra/eval/final_stack_e2e.sh
+?? infra/eval/validate_final_stack_e2e.py
+?? infra/scripts/live_identity.py
+?? tests/unit/test_collab_snapshot.cpp

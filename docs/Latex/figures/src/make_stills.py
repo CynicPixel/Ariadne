@@ -22,11 +22,10 @@ FIG = os.path.join(ROOT, "docs/Latex/figures")
 DATA = os.path.join(FIG, "data")
 DEV = os.path.join(ROOT, "submission/media/stills")
 PACK = os.path.join(ROOT, "python/video/data/pack_collab60d")
-FINAL = ("/data/code/Ariadne-e2e-final/evaluation/runs/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/"
-         "live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z")
+FINAL = os.path.join(ROOT, "evaluation/runs/final_stack_e2e/20261026T000432Z/run")
 PREMERGE = glob.glob(os.path.join(ROOT, "evaluation/runs/premerge_aws/20261024T083919Z-cpux86-73e3fa/gate/report/*/figures"))[0]
 SPLAT = os.path.join(ROOT, "build/video_assets/splat_626abe_render_20261024")
-WORLDGEN = "/data/code/Ariadne-2.2-radiometric/evaluation/runs/ph6/worldgen_gsplat_20261026T211816Z"
+WORLDGEN = os.path.join(ROOT, "evaluation/runs/ph6/worldgen_gsplat_20261026T211816Z")
 
 
 def font(size):

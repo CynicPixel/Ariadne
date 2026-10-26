@@ -1,0 +1,8 @@
+perception=configs/perception/sim_v1_rad_flat.yaml
+slam=configs/slam/sim_v2_loops.yaml
+imu_noise=configs/sim/imu_noise_v1.yaml
+mission=configs/mission/mission_v1.yaml
+live=configs/mission/live_final_e2e.yaml
+planner=configs/mission/mission_v2.yaml
+scene=build/live/scenes/maze_short_6
+end_s=200
