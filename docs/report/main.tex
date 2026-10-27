@@ -2215,10 +2215,11 @@ communication opportunities are unreliable.
 
 \section{AWS deployment, accelerated vision, and reproducibility}
 
-Ariadne connects its multi-agent mapping pipeline to an AWS-hosted
-operator interface at \url{https://www.ariadne.cynicpixel.xyz/},
-with Cloudflare routing through Amazon CloudFront to the application
-origin. The deployment brings together OpenCV-based estimation,
+Ariadne's operator console frontend is hosted on AWS at
+\url{https://www.ariadne.cynicpixel.xyz/} (Cloudflare DNS, Amazon CloudFront,
+S3 origin). The hosted page serves the console with a generated scene; the
+live simulation worker is not attached to it, and a live run is
+demonstrated by screen share on request. The deployment brings together OpenCV-based estimation,
 collaborative mapping, Amazon Bedrock task decisions, and Gaussian
 reconstruction. The same software can consume live simulator streams
 or recorded MCAP observations, allowing an operator-visible mission

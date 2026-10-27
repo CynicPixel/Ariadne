@@ -17,7 +17,7 @@
 **Autonomous multi-agent visual SLAM, collaborative mapping and 3D reconstruction for GPS-denied,
 communication-constrained disaster environments, and a route a person can follow back out.**
 
-[**Live operator console**](https://www.ariadne.cynicpixel.xyz/) · [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf)
+[**Operator console**](https://www.ariadne.cynicpixel.xyz/) · [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf)
 · [**Video**](submission/video/) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
 · [**Docs map**](docs/README.md)
 
@@ -121,7 +121,7 @@ manifest. Details: [report §OpenCV 5](submission/report/ariadne_technical_repor
 | Amazon Bedrock | Nova 2 Lite task chooser (EU inference profile), DeepSeek fallback in-region; tools exposed over MCP |
 | S3 · ECR · IAM · SSM | run inputs and outputs (`runs/<id>/`), image registry, least-privilege runner role, no SSH |
 | Terraform · Budgets | the whole account as code (`infra/aws/terraform`), with a credits budget and alerts |
-| CloudFront | the hosted operator console |
+| CloudFront · S3 | the hosted operator console frontend |
 
 ## Quick start
 

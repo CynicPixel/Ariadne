@@ -49,13 +49,19 @@ async function receive(d){state=d;latestAt=performance.now();$('connection').tex
  const commands=(d.commands||[]).filter(c=>c.kind);const last=commands.at(-1);$('command-status').textContent=last?`${last.kind.replaceAll('_',' ')} · ${last.state}${last.detail?.error?` · ${last.detail.error}`:''}`:'No pending commands';
 }
 function renderFrame(){const agents=frame.agents||[];updateSelect('agent',Math.max(agents.length,selected.length,1));updateSelect('camera-agent',Math.max(agents.length,selected.length,1));$('clock').textContent=time(frame.t_s);renderDecision();drawMap();refreshCameras();if(frame.reconstruction)view?.offer(frame.reconstruction);$('metric').textContent=`${((frame.bytes?.total||0)/1024).toFixed(1)} KiB exchanged · ${state.reconstruction||'waiting'}`;}
-let socket;
-function connect(){socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/demo/stream`);let processing=false,pending;
+let socket,offline=false;
+function connect(){socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/api/demo/stream`);let processing=false,pending,opened=false;
+ socket.onopen=()=>{opened=true;offline=false;$('claim').disabled=false;};
  socket.onmessage=e=>{pending=JSON.parse(e.data);if(processing)return;processing=true;(async()=>{try{while(pending){const d=pending;pending=null;await receive(d);}}catch(e){notice(e.message);}finally{processing=false;}})();};
- socket.onclose=()=>{$('connection').textContent='Reconnecting…';setTimeout(connect,1500);};}
+ socket.onclose=()=>{if(!opened&&!sessionKey&&!sceneKey){goOffline();return;}$('connection').textContent='Reconnecting…';setTimeout(connect,1500);};}
+// Static hosting (no live worker behind the endpoint): one status snapshot, controls off, no reconnect loop.
+async function goOffline(){try{const r=await fetch('/api/demo/status');const d=r.ok&&(r.headers.get('content-type')||'').includes('json')?await r.json():null;
+ if(d?.enabled){setTimeout(connect,1500);return;}offline=true;$('claim').disabled=true;if(d)await receive(d);
+ $('connection').textContent='Live worker offline · generated scene shown';notice('The live simulation worker is offline. This shows a generated scene; a live run is available on request.');}
+ catch(e){offline=true;$('claim').disabled=true;$('connection').textContent='Live worker offline';}}
 connect();
 if(token)api('heartbeat').then(()=>{controlled=true;updateControls();claimLabel();}).catch(()=>{token='';sessionStorage.removeItem('ariadne-controller');});
-setInterval(()=>{if(performance.now()-latestAt>2000)$('connection').textContent='Telemetry stale · reconnecting';refreshCameras();},1000);
+setInterval(()=>{if(!offline&&performance.now()-latestAt>2000)$('connection').textContent='Telemetry stale · reconnecting';refreshCameras();},1000);
 function mapRect(){const c=$('map'),g=state.meta?.grid;if(!g)return null;const w=c.clientWidth,h=c.clientHeight,s=Math.min(w/g.cols,h/g.rows);return {x:(w-g.cols*s)/2,y:(h-g.rows*s)/2,w:g.cols*s,h:g.rows*s,s,g};}
 function point(x,y){const r=mapRect();return [r.x+(x-r.g.origin_m[0])/r.g.cell_m*r.s,r.y+r.h-(y-r.g.origin_m[1])/r.g.cell_m*r.s];}
 function drawMap(){const c=$('map'),ctx=c.getContext('2d'),r=mapRect();const dpr=Math.min(devicePixelRatio,2);c.width=c.clientWidth*dpr;c.height=c.clientHeight*dpr;ctx.scale(dpr,dpr);ctx.fillStyle='#0c141b';ctx.fillRect(0,0,c.clientWidth,c.clientHeight);if(!r)return;

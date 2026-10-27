@@ -10,7 +10,7 @@ This folder maps every deliverable required by the OpenCV AI Competition 2026 (p
 | Judge-accessible code repository | https://github.com/CynicPixel/Ariadne (this repository) |
 | Pinned dependencies; build, deployment and test instructions | [`docs/build.md`](../docs/build.md) and the [`ariadne`](../ariadne) command (`./ariadne build`, `test`, `gate`, `run`, `replay`, `demo`, `cloud …`) |
 | Architecture diagram: OpenCV 5, AWS, agent components | [`architecture/ariadne_architecture.png`](architecture/ariadne_architecture.png); detailed system diagram [`architecture/ariadne_system_diagram.pdf`](architecture/ariadne_system_diagram.pdf) |
-| Working web endpoint or arranged live screen share | https://www.ariadne.cynicpixel.xyz/ (operator console). A live screen-share demonstration is available on request |
+| Working web endpoint or arranged live screen share | https://www.ariadne.cynicpixel.xyz/: the operator console frontend on CloudFront, showing a generated scene (the live simulation worker is not attached). A live run is demonstrated by screen share on request |
 | Video, at most 5 minutes: team, application working, architecture, principal results | [`video/`](video/) |
 | Evaluation evidence, including failure cases and limitations | [`docs/results/index.md`](../docs/results/index.md) (best result per subsystem, with the do-not-claim list); [`docs/failure-cases.md`](../docs/failure-cases.md); every AWS run in [`runs/`](runs/); run directories under [`evaluation/runs/`](../evaluation/runs/) |
 

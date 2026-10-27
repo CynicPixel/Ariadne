@@ -14,7 +14,7 @@
 #   ./ariadne replay RUN_DIR SCENE     replay a recorded live run twice and compare the digests
 #   ./ariadne eval COLLAB RECON MISSION SCENE OUT   evaluation report over a run chain (trajectory, map,
 #                                      bytes, every registered metric and gate, figures, report.html)
-#   ./ariadne demo [PORT]              the web operator console (https://www.ariadne.cynicpixel.xyz/ runs this)
+#   ./ariadne demo [PORT]              the web operator console (its frontend is hosted at https://www.ariadne.cynicpixel.xyz/)
 #   ./ariadne cloud e2e                the final integrated stack on an AWS GPU instance (full evidence bundle)
 #   ./ariadne cloud premerge           the replay gate on an AWS spot instance (stage, run, teardown)
 #   ./ariadne cloud arm64              native Graviton4 build + full test suite

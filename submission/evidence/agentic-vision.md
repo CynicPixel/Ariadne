@@ -67,7 +67,7 @@ The run's decision map and keyframes are in `docs/report/figures/fig_decision.pn
   - per-decision map and keyframe PNGs;
   - `mover_state.jsonl`;
   - live-vs-replay digests;
-  - the hosted console (https://www.ariadne.cynicpixel.xyz/), with camera feature overlays, trajectories, task assignments, link traffic, responder routes, and operator actions (link cut/restore, false-edge injection).
+  - the operator console (`./ariadne demo`; its frontend is hosted at https://www.ariadne.cynicpixel.xyz/ with a generated scene, the live worker by screen share on request), with camera feature overlays, trajectories, task assignments, link traffic, responder routes, and operator actions (link cut/restore, false-edge injection).
 - **Human authority:**
   - The operator sends directives through the console.
   - Any candidate above risk 0.5 needs an approval packet.
