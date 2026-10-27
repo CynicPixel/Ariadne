@@ -14,12 +14,45 @@
 
 ```
 
-**Autonomous multi-agent visual SLAM, collaborative mapping and 3D reconstruction for GPS-denied,
-communication-constrained disaster environments, and a route a person can follow back out.**
+<h3 align="center">Autonomous Multi-Agent Visual SLAM, Collaborative 3D Reconstruction &amp; Responder-Safe Egress<br/>for GPS-Denied, Communication-Constrained Disaster Sites</h3>
 
-[**Operator console**](https://www.ariadne.cynicpixel.xyz/) · [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf)
-· [**Video**](https://youtu.be/yrbcvQKnfkA) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
-· [**Docs map**](docs/README.md)
+<p align="center">
+  <img src="https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus" alt="C++17"/>
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/OpenCV-5.0.0-5C3EE8?logo=opencv&amp;logoColor=white" alt="OpenCV 5"/>
+  <img src="https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros&amp;logoColor=white" alt="ROS 2 Jazzy"/>
+  <img src="https://img.shields.io/badge/Gazebo-Harmonic-F58113" alt="Gazebo Harmonic"/>
+  <img src="https://img.shields.io/badge/Gaussian%20Splatting-gsplat-8A2BE2" alt="gsplat"/>
+  <img src="https://img.shields.io/badge/AWS-EC2%20%C2%B7%20Bedrock%20%C2%B7%20S3%20%C2%B7%20CloudFront-FF9900" alt="AWS"/>
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="License MIT"/>
+</p>
+
+<p align="center">
+  <a href="#demo">Demo</a> •
+  <a href="#papers">Papers</a> •
+  <a href="#what-ariadne-is">Overview</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#headline-results-measured-every-number-links-to-its-run">Results</a> •
+  <a href="#opencv-5-in-the-working-path">OpenCV 5</a> •
+  <a href="#aws">AWS</a> •
+  <a href="#quick-start">Quick start</a> •
+  <a href="https://www.ariadne.cynicpixel.xyz/">Operator console</a>
+</p>
+
+---
+
+## Demo
+
+<p align="center">
+  <a href="https://youtu.be/yrbcvQKnfkA">
+    <img src="docs/me/Ariadne_thumbnail.png" alt="Ariadne demo video" width="720"/>
+  </a>
+  <br/>
+  <em>Click to watch the 5-minute demo on YouTube</em>
+</p>
+
+Also: [operator console](https://www.ariadne.cynicpixel.xyz/) · [submission package](submission/README.md) ·
+[results](docs/results/index.md) · [docs map](docs/README.md)
 
 ## Papers
 
