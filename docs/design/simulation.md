@@ -4,8 +4,8 @@ Status: **worldgen implemented and frozen (GENERATOR_VERSION 1); mover, CDR deco
 (2026-09-30). Implements arch §5.3–§5.5, §5.8, §5.9 and plan items 1.1–1.3. Deviations from the arch text are
 listed in §8 and recorded as DECISIONS D37.
 
-Evidence: `validation.md` §4f–§4j (measured in the pinned image); census runs in
-`evaluation/runs/gates/phase1_thin_e2e/worldgen_census/`; research list in §10. Code: `python/dataset_tools/worldgen/`,
+Evidence: `validation.md` §4f–§4j (measured in the pinned image); the 1000-seed length census is in
+D37; research list in §10. Code: `python/dataset_tools/worldgen/`,
 tests `python/tests/worldgen/` (run `infra/scripts/worldgen.sh test`), presets `configs/worldgen/`.
 
 ---
@@ -205,7 +205,7 @@ stages; its focal length (680) exceeds the render's (640) so barrel distortion n
 
 **IMU — synthesized, not gz's** (gz's is blind under kinematic motion, §4g): clean ω_B and f_B at 200 Hz from the
 §4.2 closed forms at the same `simTime`, header-stamped explicitly. Noise and bias random walk are a seeded
-consumption-time operator reading the same `configs/sensors/imu_*.yaml` the estimator reads (D37).
+consumption-time operator reading the same `configs/sim/imu_noise_v1.yaml` noise model the estimator reads (D37).
 Zero camera–IMU offset is *claimed only after* §6 re-checks render timing on RGB under full two-agent load.
 
 **GT pose** from the mover at 200 Hz (exact), plus static camera extrinsics. **Bridge** (§5.4): one

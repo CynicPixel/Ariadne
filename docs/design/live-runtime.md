@@ -342,7 +342,7 @@ Fallback order if the time runs out: rows oracle / independent / ariadne first, 
 - **catalogue:** no new algorithm (CBBA / SGA per arch §21.7; coarse coverage summaries per §20.6 and §15.3).
 - **arch:** an as-built note for §21.7 and §15.3: classes 7–10 implemented, the task key deviation.
 - **ablation:** the §4 rows.
-- **benchmark config:** `configs/benchmark/multiagent_v1.yaml`.
+- **benchmark config:** `configs/mission/live_multiagent_v1.yaml`.
 - **manifest:** row, budget, scenario, per-class bytes, task-key radius.
 
 ### 8. Planner-side decisions (2026-10-23)

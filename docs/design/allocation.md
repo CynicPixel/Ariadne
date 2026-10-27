@@ -256,7 +256,7 @@ replans).
 
 ## 15. Literature review: §10's reason was wrong; bid warping (2026-10-23)
 
-This is the requested primary-text review (`docs/design/lit/phase4_fixes_route_cbba.md`).
+This is the requested primary-text review (the literature notes `phase4_fixes_route_cbba` (archive/dev-history branch)).
 
 **§10 said "CBBA = SGA holds exactly at L_t = 1 only". That is wrong as a statement about the paper.**
 - Theorem 1 (Choi et al., T-RO 2009, §V-B, p. 919) holds for any L_t, through N_min = min{N_t, N_u·L_t}. Its

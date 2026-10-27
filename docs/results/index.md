@@ -2,9 +2,9 @@
 # Ariadne: best stand-behind result per subsystem (for demo video + technical report)
 
 Compiled 2026-10-24 from `main` (post-consolidation 59fe978 + video commits). Read-only pass over
-`docs/decisions.md`, `docs/results/index.md`, `the development log (archive/dev-history branch)`, `docs/report/*.md`,
-`docs/results/index.md` and the `evaluation/runs/**` files named below. Numbers are quoted as written. Where I
-re-derived a number from a run file, the row says "derived here".
+`docs/decisions.md`, `docs/results/*.md`,
+and the `evaluation/runs/**` files named below. Numbers are quoted as written. Where a number
+was re-derived from a run file, the row says "derived here".
 
 **Tags:** `measured` = a run file or a D-entry result we can point to; `published` = a number taken from a paper
 table as cited in the repo (not re-run by us); `design` = built and unit-tested only, or a projection;

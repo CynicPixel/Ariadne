@@ -1,4 +1,4 @@
-# Visual front end: XFeat keyframes + LK, re-association, SGBM/WLS, retrieval, hard-pair path
+# Visual front end: ORB/FAST + LK tracking (shipped), XFeat (cv::dnn, ablation), re-association, SGBM/WLS, retrieval, hard-pair path
 
 DRAFT 2026-10-17, rev 2.
 - **rev 1** was written as a draft before the 2.1 branch existed. It was recovered verbatim
@@ -1085,7 +1085,7 @@ frame of the GT poses).
 - **Tools:**
   - a C++ dump tool writes per frame: rectified disparity (CV_16S), confidence and support density, plus intrinsics,
     R1 and timestamp, as raw binaries;
-  - a Python script (`python/analysis/stereo_confidence_eval.py`, numpy only) renders GT and computes the curves.
+  - a Python script (numpy only) renders GT and computes the curves. [DESIGN] This evaluation was specified but not run; no result is claimed.
   - A manifest goes with the figure directory (§36).
 
 ### 10.6b Design review (2026-10-19), folded in before any code

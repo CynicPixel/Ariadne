@@ -2019,7 +2019,7 @@ Two consumers depend on this contract precisely:
 
 # 10. Inertial layer
 
-New module: `cpp/slam/imu/`. This section exists because v1 claimed a stereo-inertial system and specified no
+New module: `cpp/slam/inertial/`. This section exists because v1 claimed a stereo-inertial system and specified no
 inertial estimator anywhere (C1).
 
 ## 10.1 Scope decision
@@ -2538,7 +2538,7 @@ and of the rotation marginal [rad] separately. Both come from the loop's covaria
 with B's stereo depth noise propagated, and the within-block ratios are reported. Parallax becomes "too few inliers
 with a stereo triangulation angle ≥ θ_min". Collinearity means the **3D** inliers lie on a line; collinear pixels
 alone (a planar fan through the camera centre) are well conditioned with stereo depth. Pixel spread, planarity and
-the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy`; design
+the corridor score are reported, not gated. Implemented in `cpp/slam/robust/degeneracy.{hpp,cpp}`; design
 `docs/design/robust-backend.md` §4; algorithms.md §7.8a.
 
 **Update 2026-10-21 (D73 part 2b):** on real data (EuRoC) the PnP-Hessian loop covariance is about 100–1000×
@@ -2613,7 +2613,7 @@ that ordering inviolable.** A refactor that reorders these stages for convenienc
   of 1 pass nothing.
 - **Clique:** the default is the greedy CLIQUEHEU heuristic. Exact Bron–Kerbosch runs behind a flag for ≤ 25.
 - **Odometry legs** come from the odometry-only chain, with shared edges counted once.
-- Implemented in `cpp/slam/robust/pcm`; design `robust-backend.md` §5.
+- Implemented in `cpp/slam/robust/pcm.{hpp,cpp}`; design `robust-backend.md` §5.
 
 ---
 
@@ -2664,7 +2664,7 @@ which uses barcSq = ε²/2 because its error carries ½. Two additions:
   `SolvePoseGraph` itself: pgo_v2 has no damping floor to hide a singular system.
 - **Limitation, measured.** A lone loop between two otherwise unconnected agents fits exactly, so GNC cannot reject
   it. PCM's no-consensus rule is the defence when several such loops disagree; a single one passes as "untested".
-- Implemented in `cpp/slam/robust/gnc`; design `robust-backend.md` §6.
+- Implemented in `cpp/slam/robust/gnc.{hpp,cpp}`; design `robust-backend.md` §6.
 
 ---
 

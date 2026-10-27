@@ -200,7 +200,7 @@ ones, and every route is valid (each segment re-checked by symmetric line of sig
   - **Open bug, to fix with a regression test made from this map** (the run's `trav_responder.png`).
   - The gate rows are unaffected: `Route` uses A\* plus string-pulling, not FAR.
 
-## 11. Literature review of the post-design fixes (2026-10-23; `docs/design/lit/phase4_fixes_route_cbba.md`)
+## 11. Literature review of the post-design fixes (2026-10-23; the literature notes `phase4_fixes_route_cbba` (archive/dev-history branch))
 
 **Amended 2026-10-24 (D123, D116): "FAR ≤ string-pulled lattice" is FALSE in general.** It holds on the 12
 evidence-spool routes above. On the unit test's random maps, once their draws are sequenced (D123), trial #9 gives

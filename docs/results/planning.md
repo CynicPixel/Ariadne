@@ -140,7 +140,7 @@ next-best-view.md §15.1 has the full analysis.
 
 ## 4.4 The fix, through the §49 ritual (implemented 2026-10-24; not yet run)
 
-Before any code: a primary-source literature pass (`docs/design/lit/early_coverage.md`: FUEL, TARE, Schmid et al.,
+Before any code: a primary-source literature pass (the literature notes `early_coverage` (archive/dev-history branch): FUEL, TARE, Schmid et al.,
 AEP, NBVP, Cieslewski et al.), the OpenCV-native check, and pre-registration (next-best-view.md §15). The decisions:
 
 - **D125 (defect, every row): an at-cell view runs as an in-place turn.**

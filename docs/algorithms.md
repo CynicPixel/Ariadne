@@ -2,7 +2,7 @@
 
 Reference catalogue for reimplementation. Sourced from five parallel deep-research passes, with key claims independently re-verified against primary sources.
 
-**Setting:** multi-agent visual SLAM + collaborative reconstruction in post-disaster, human-inaccessible structures — darkness under self-carried illumination, texture-poor rubble, dust, GPS-denied, bandwidth-constrained. Fire/smoke is a **stretch goal** ([positioning doc](./docs/architecture.md) §2.3).
+**Setting:** multi-agent visual SLAM + collaborative reconstruction in post-disaster, human-inaccessible structures — darkness under self-carried illumination, texture-poor rubble, dust, GPS-denied, bandwidth-constrained. Fire/smoke is a **stretch goal** ([positioning doc](architecture.md) §2.3).
 
 **Status:** Domains 1, 2, 4, 4b, 5 complete (§1–§21). **Domain 3 — active perception, next-best-view, multi-robot task allocation — is the only one still owed**; its research pass hit API rate limits on both attempts. Re-run when the limit resets. (§20.2 notes that TARE and FAR Planner, the two most reusable SubT exploration planners, belong to that domain.)
 
@@ -3354,7 +3354,7 @@ the domain owed since the start (rate-limited twice) and since D45.
 | **Delmerico et al.**, *A Comparison of Volumetric Information Gain Metrics for Active 3D Object Reconstruction* | Auton. Robots 42(2), 2018, DOI 10.1007/s10514-017-9634-0 (*secondary*: abstract and summaries; no open PDF) | the first comparative study. Counting unobserved voxels, and weighting unobserved voxels near observed surfaces, did best | supports §21.3's choice of an unknown-count term over a pure-entropy term; Ariadne self-normalises per term (p90), so the terms are never compared in raw units |
 | **SEE** (Border & Gammell) | IJRR 2023, [arXiv:2207.13684](https://arxiv.org/abs/2207.13684) | measurement-direct NBV on a density representation; frontier points with shared visibility; also the field's own survey: raycast visibility evaluation is the cost bottleneck | the ray budget per candidate (200–500) is §21.3's answer to that cost |
 
-#### 22.1.1 The motion cost is time, with yaw (4.3, D117/D118; read 2026-10-24, quotes in `docs/design/lit/early_coverage.md`)
+#### 22.1.1 The motion cost is time, with yaw (4.3, D117/D118; read 2026-10-24, quotes in the literature notes `early_coverage` (archive/dev-history branch))
 
 | Method | Source | Content (as read) | Ariadne |
 |---|---|---|---|

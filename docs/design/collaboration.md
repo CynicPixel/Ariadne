@@ -261,7 +261,7 @@ The 1.6 tool sends no heartbeats, so the pinned `figures/bytes.json` is unaffect
   - A component that never had an anchor (first contact) anchors at its own lowest member, as in §15.5.
 - **Robust stage.** The solve uses 2.5's robust pipeline (`cpp/slam/robust/`: degeneracy gate → PCM → GNC-TLS) once
   2.5 merges. Until then it uses chordal initialisation plus PGO, which are on this branch already.
-  - The empty `cpp/collaboration/{pcm,gnc}` directories are stale placeholders. They will not be filled.
+  - PCM and GNC are not duplicated under `cpp/collaboration/`: inter-agent edges use `cpp/slam/robust/{pcm,gnc}.hpp`.
 
 ## 6. Run outcome: `consistent` | `explicitly incomplete` | `corrupt`
 

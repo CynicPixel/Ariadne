@@ -3417,7 +3417,7 @@ sha-identical `estimate_body.tum` for both agents, old binary vs new.
   - The L_t = 2 row: CBBA = SGA 40 / 40, the same optimum ratio (0.994), +1.4 s per replan. **L_t = 1 stays the
     default.**
 - **Phase 4 literature review of every post-design fix (2026-10-23, before any gate run).**
-  Primary-text reports: `docs/design/lit/phase4_fixes_{nbv,route_cbba}.md`.
+  Primary-text reports: the literature notes `phase4_fixes_nbv` and `phase4_fixes_route_cbba` (archive/dev-history branch).
   - **D114, plan space: supported.** Known-free viewpoints and paths match FUEL (code), NBVP 2018 §3 and GBPlanner2
     §IV-A. Optimistic planning through unknown space appears only for goal-directed navigation.
   - **D114 / D158, goal risk: the max over the escape disc has no precedent.** It is replaced by the bottleneck at
@@ -4707,7 +4707,7 @@ Plan item 3.4.
 - catalogue: algorithms.md (COSMO-Bench, Tian et al.);
 - arch: §5.7/§15.6 as-built note at merge;
 - ablation matrix: §31.1 rows mapped;
-- benchmark config: `configs/benchmark/collab_3.x.yaml` with the sweep;
+- benchmark config: the sweep settings, recorded in each run's manifest (no separate benchmark file);
 - manifest: protocol, arm, budget level and its derivation run, comms scenario, seed, pass-A cache sha.
 
 ## 2026-10-23 — D172: Phase 2 full gate on AWS — 53/54; the 54th was the D55 reference's own dirty flag; `report.yaml` re-pinned
@@ -5035,7 +5035,7 @@ frame, a third agent was not handled, and a live T_W_O change would have meant r
 
 **Not decided here.** Cross-agent overlap pruning (6.3, double walls) is unchanged: each agent's submaps are separate.
 
-**Tests.** `tests/test_live.py` 12/12: the briefing transform on a yawed entrance, the live.demo entrance choice, both modes on a 2-agent schema-3
+**Tests.** `python/reconstruction/tests/test_live.py` 12/12: the briefing transform on a yawed entrance, the live.demo entrance choice, both modes on a 2-agent schema-3
 spool, an unmerged agent never drawn, and set_placement moving the table without new chunks. All reconstruction
 python tests 23/23 (ariadne-recon:1).
 
@@ -5065,7 +5065,7 @@ confirmed with amendments by the runtime side (2026-10-24).
 - **Image.** `ariadne-recon:1` for `cpu_init`; the console image lacks scipy and cv2, which seeding and the spool
   reader need. The GPU backend is the gsplat image (Kaggle kernel image today; a judge-box image is open).
 
-**Tests.** `tests/test_link.py` 13/13 (bit-exact half_rgb, #kf round trip and short payload, qw-last quaternion,
+**Tests.** `python/reconstruction/tests/test_link.py` 13/13 (bit-exact half_rgb, #kf round trip and short payload, qw-last quaternion,
 Shepperd round trip at every entrance heading incl. 180°, live == replay chunks, placement by #t_w_o and the drop
 counters, briefing until #t_w_o, a bad #t_w_o not fatal); all reconstruction python tests 38/38. The mock caught two
 bugs before the runtime tee existed: a naive quaternion at 180° (norm 5e-7), and a service crash on a bad header.
@@ -5322,7 +5322,7 @@ form was approved; the Bar-Shalom test, as in D178.
   - Local x86: mean NEES **2.526** in [1.347, 2.803] (validated 2.53); tilt RMS 8.47 → 3.78°, reduced on 46/50.
 ## 2026-10-24 — D117–D122 (proposed; §49 preflight, docs only): the 4.3 time-axis loss is turning — charge the mover's executed time
 
-Full record: `docs/design/next-best-view.md` §15; literature `docs/design/lit/early_coverage.md`; evidence
+Full record: `docs/design/next-best-view.md` §15; literature the literature notes `early_coverage` (archive/dev-history branch); evidence
 `evaluation/runs/planning/nbv_gate/{time_budget,turn_back,turn_episodes}.{py,txt}` (the 36 gate runs' GT; no new run).
 
 **Cause, measured.**

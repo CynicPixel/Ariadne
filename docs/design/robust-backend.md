@@ -63,7 +63,7 @@ eigenvalue ratio (pose-graph.md §5), so the hypothesis is that the absolute flo
 **Protocol (fixed before measuring).** `PgoOracle.DampingAblation` (tests/unit/test_pgo_oracle.cpp, env-gated): same
 dead-reckoning start, same tolerances as `SeSyncBenchmarkGraphs`, one setting changed at a time — baseline / clamp off /
 Jacobi on / both. Report iterations, linearisations, failed factorisations, final energy vs GTSAM, max|grad|. Fix = a
-config change in `configs/slam/pgo_v1.yaml` (→ `pgo_v2`) only if it wins on garage **and does not regress** the other
+settings change from pgo_v1 to `pgo_v2` only if it wins on garage **and does not regress** the other
 SE-Sync graphs and the 100-case oracle. Honest `λI` damping is not available: the driver predicts the cost change from
 its own `lmDiag`, so faking it in the backend would corrupt the step-quality test (recorded, not attempted).
 
@@ -97,7 +97,7 @@ its own `lmDiag`, so faking it in the backend would corrupt the step-quality tes
   wrapper therefore anchors every connected component of the *active* graph explicitly, and a disconnection test is in
   the no-regression set. The OpenCV floor is a hard-coded constant, so it cannot be made relative instead.
 
-**As built (2026-10-19).** There is no `configs/slam/pgo_v1.yaml`: the protocol above assumed one, but pgo_v1 has only
+**As built (2026-10-19).** There is no pgo_v1 config file: the protocol above assumed one, but pgo_v1 has only
 ever been the `PgoSettings` defaults, and nothing at runtime calls `SolvePoseGraph` yet. pgo_v2 is therefore the preset
 `PgoV2()` (`pgo_levmarq.hpp`) and the default argument of `SolvePoseGraph`. The struct defaults stay pgo_v1, because the
 windowed BA (`stereo_vo.cpp`) builds its settings from them: changing them would have silently changed odometry, which

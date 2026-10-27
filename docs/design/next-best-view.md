@@ -308,7 +308,7 @@ the gate starts. The gate waits on it (YIELD set).
 ## 13. Literature review of every post-design fix, and the return space (2026-10-23, before any gate run)
 
 A primary-text review was requested for every fix made after a measurement. The full reports, with quotes,
-pages and the URLs read, are in `docs/design/lit/phase4_fixes_nbv.md` and `phase4_fixes_route_cbba.md`. The
+pages and the URLs read, are in the literature notes `phase4_fixes_nbv` (archive/dev-history branch) and `phase4_fixes_route_cbba.md`. The
 findings that change this item:
 
 **Known-free plan space (§12): supported.**
@@ -551,7 +551,7 @@ trajectories (200 Hz, every run, both agents) answer the question directly: wher
   - The five IG terms per candidate are not logged, so "Δentropy dilutes Δcoverage" is still untested. D120 adds the
     log.
 
-### 15.2 SOTA (primary text; `docs/design/lit/early_coverage.md`)
+### 15.2 SOTA (primary text; the literature notes `early_coverage` (archive/dev-history branch))
 
 This was read in the primary texts and pinned code, 2026-10-24. Quotes and line numbers are in the lit file.
 

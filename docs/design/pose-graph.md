@@ -68,7 +68,7 @@ OpenCV-free `cpp/slam/pose_graph/`. Only the thin `LevMarqBackend` adapter lives
 architectures. The full-solve digest runs in the core image only.
 
 **Settings are config + manifest, never defaults.** OpenCV's defaults (`relEnergyDeltaTolerance` 1e-6, `maxIterations`
-500, step quality on, clamp on, Jacobi scaling off) are written out explicitly in `configs/slam/pgo_v1.yaml`. The oracle
+500, step quality on, clamp on, Jacobi scaling off) are written out explicitly as the `PgoSettings` defaults in `cpp/slam/pose_graph/pgo_levmarq.hpp`. The oracle
 test uses tighter tolerances.
 
 **Placeholder BA unchanged.** The two-frame BA stub keeps its own §11.6 LM, because Phase 1 outputs must stay
