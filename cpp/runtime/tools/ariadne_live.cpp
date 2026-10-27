@@ -1525,8 +1525,10 @@ int main(int argc, char** argv) {
         // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
         // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
         // mission_err + the loud-fail try open EARLIER on this branch (above collab init, diag4 8bab46), and
-        // operator_stopped/terminal_ns are declared up there too (the teardown reads them after the catch);
-        // main's deferred start_reader() is NOT ported - this branch still starts the reader at its definition.
+        // operator_stopped/terminal_ns are declared up there too (the teardown reads them after the catch).
+        // Deferred ingestion start (main 714924a): the reader thread begins only now, after model/config
+        // validation and the worker sockets exist - replay could otherwise race startup and lose early GT.
+        start_reader();
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             if (is_live && lc.demo && fs::exists(run_dir / "stop.request.json")) {
                 operator_stopped = true;
