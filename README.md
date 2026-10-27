@@ -18,7 +18,7 @@
 communication-constrained disaster environments, and a route a person can follow back out.**
 
 [**Operator console**](https://www.ariadne.cynicpixel.xyz/) · [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf)
-· [**Video**](submission/video/) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
+· [**Video**](https://youtu.be/yrbcvQKnfkA) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
 · [**Docs map**](docs/README.md)
 
 ## Papers

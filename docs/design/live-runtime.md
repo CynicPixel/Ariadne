@@ -604,7 +604,7 @@ ARIADNE_DEMO_PYTHON=/tmp/ariadne-demo/bin/python bash infra/scripts/demo.sh 8080
 Deployment settings:
 
 - `ARIADNE_DEMO_MAX_AGENTS=2` (1–3): hardware-qualified fleet size.
-- `ARIADNE_DEMO_VIDEO_URL`: published demo video URL; no guessed/placeholder link.
+- `ARIADNE_DEMO_VIDEO_URL`: the demo video URL; defaults to the published film (https://youtu.be/yrbcvQKnfkA).
 - `ARIADNE_RECON_GPU_IMAGE`: installed CUDA trainer image; default
   `ariadne/recon-gpu:build`. CPU reconstruction uses `ARIADNE_RECON_IMAGE` as before.
 - `ARIADNE_LIVE_BINARY`: optional runtime binary path relative to the repository;

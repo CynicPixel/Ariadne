@@ -32,7 +32,7 @@ ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 ACTIVE = {"starting", "running", "stopping", "recovering"}
 PRESETS = ("maze_demo", "maze_short", "ci_tiny")
 router = APIRouter(prefix="/api/demo")
-VIDEO_URL = "https://youtu.be/VIDEO_ID_TBD"   # placeholder until the film is published
+VIDEO_URL = "https://youtu.be/yrbcvQKnfkA"
 
 
 def atomic(path: Path, value):
