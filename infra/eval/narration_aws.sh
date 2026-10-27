@@ -1,7 +1,7 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
 # Demo-film narration on one AWS GPU (2026-10-27): Ming-3.0-tts-0.5b, built-in voice US_James, the same image, venv
-# and pins as the listening test (tts_bakeoff_aws.sh) so the voice matches the take the maintainer picked.
+# and pins as the listening test (tts_bakeoff_aws.sh) so the voice matches the take picked in the listening test.
 # Runs as root on the instance (spinup.sh --profile gpu):
 #
 #   CUES=s3://.../cues.jsonl bash infra/eval/narration_aws.sh

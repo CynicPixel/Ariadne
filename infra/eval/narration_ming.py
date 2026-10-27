@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Demo-film narration with Ming-3.0-tts-0.5b's built-in voice US_James (picked by the maintainer from the listening
+"""Demo-film narration with Ming-3.0-tts-0.5b's built-in voice US_James (picked from the listening
 test, infra/eval/tts_bakeoff.py), driven by infra/eval/narration_aws.sh:
 
   python3 narration_ming.py --cues cues.jsonl --repo DIR --model DIR --out DIR
