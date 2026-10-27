@@ -165,3 +165,7 @@ from observed 3D clearance independent of the model. Ariadne does not replace st
 ## Team
 
 Suvojit Das: design, engineering, evaluation. Built for the OpenCV AI Competition 2026 (powered by AWS).
+
+## License
+
+Ariadne's own code and documentation are released under the [MIT License](LICENSE). Third-party components keep their own licences: OpenCV (Apache 2.0), gsplat (Apache 2.0), and the pretrained models XFeat, ALIKED, LightGlue and EigenPlaces under their upstream licences (see [docs/algorithms.md](docs/algorithms.md)).
