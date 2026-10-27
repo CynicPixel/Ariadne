@@ -4,7 +4,8 @@ test, infra/eval/tts_bakeoff.py), driven by infra/eval/narration_aws.sh:
 
   python3 narration_ming.py --cues cues.jsonl --repo DIR --model DIR --out DIR
 
-Every cue's `spoken` text gets the bake-off's exact call (task IP, controls {"ip": "US_James"}, zero speaker
+Cues sharing a `take` (the first cue id of their sentence) are joined with single spaces in id order into one take,
+written as DIR/wav/<take>.wav. Every take's text gets the bake-off's exact call (task IP, controls {"ip": "US_James"}, zero speaker
 embedding), with no speed control. Each take is checked, because nobody listens on the instance:
   intelligible  Whisper (small.en) transcript vs the spoken text, character error rate on letters and digits only,
                 so "Open C V" and "OpenCV" match; CER > MAX_CER is a failed take
@@ -93,7 +94,14 @@ def main() -> int:
     sys.path.insert(0, str(a.repo))
     from ming_tts import MingTTS
 
-    cues = [json.loads(s) for s in a.cues.read_text().splitlines() if s.strip()]
+    lines = sorted((json.loads(s) for s in a.cues.read_text().splitlines() if s.strip()), key=lambda c: c["id"])
+    cues = {}                       # one take per sentence: a cue's `take` is its sentence's first cue id
+    for c in lines:
+        t = cues.setdefault(c.get("take", c["id"]), {"id": c.get("take", c["id"]), "beat": c.get("beat"), "cues": [],
+                                                     "spoken": ""})
+        t["cues"].append(c["id"])
+        t["spoken"] = (t["spoken"] + " " + c["spoken"]).strip()
+    cues = list(cues.values())
     (a.out / "wav").mkdir(parents=True, exist_ok=True)
     (a.out / "takes").mkdir(exist_ok=True)
     tts = MingTTS(str(a.model))
@@ -128,7 +136,7 @@ def main() -> int:
                 break
         best, y = min(takes, key=lambda ty: (not ty[0]["ok"], ty[0]["cer"]))
         sf.write(str(a.out / "wav" / f"{c['id']}.wav"), y.astype(np.float32), 44100, subtype="PCM_16")
-        rows.append(dict(id=c["id"], beat=c.get("beat"), spoken=c["spoken"], words=words(c["spoken"]),
+        rows.append(dict(id=c["id"], cues=c["cues"], beat=c.get("beat"), spoken=c["spoken"], words=words(c["spoken"]),
                          **{q: best[q] for q in ("duration_s", "wpm", "cer", "heard", "seed", "clipped_samples", "ok")},
                          attempts=len(takes), takes=[t for t, _ in takes]))
     bad = [r["id"] for r in rows if not r["ok"]]
