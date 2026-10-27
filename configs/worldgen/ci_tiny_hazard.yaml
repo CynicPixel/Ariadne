@@ -1,4 +1,4 @@
-# ci_tiny plus structural hazards for the 4.2 risk-proxy calibration (design RISK_ZONES_4.2, D112). Seeds 0 (the
+# ci_tiny plus structural hazards for the 4.2 risk-proxy calibration (design traversability-risk.md#risk-zones, D112). Seeds 0 (the
 # threshold), 1 and 2 (evaluation). Everything except `hazards` is ci_tiny's.
 name: ci_tiny_hazard
 lattice: {nx: 2, ny: 1, cell_m: 6.0}

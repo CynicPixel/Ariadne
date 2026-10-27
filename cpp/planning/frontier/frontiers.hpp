@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Frontiers (arch §20.4 placeholder; Yamauchi 1997, design MISSION_1.8): FREE
+// Frontiers (arch §20.4 placeholder; Yamauchi 1997, design mission.md): FREE
 // cells 4-adjacent to UNKNOWN, grouped by 8-connected components
 // (cv::connectedComponentsWithStats). Clusters smaller than `min_cells` are
 // dropped (pinholes left by the ray stride) and counted. The nearest-frontier

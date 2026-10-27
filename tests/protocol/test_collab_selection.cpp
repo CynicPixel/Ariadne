@@ -1,7 +1,7 @@
-// 3.4 selection in the protocol (design SPECTRAL_3.4 §5-§6, D170), seeded discrete-event runs on the sim clock:
+// 3.4 selection in the protocol (design spectral-selection.md §5-§6, D170), seeded discrete-event runs on the sim clock:
 //   - the token bucket caps the fetch bytes actually sent (first transmission, as the ledger counts them);
 //   - the byte prediction meets the I6 gate (<= 15% per class) on a scene DISJOINT from the one its compression ratio
-//     was calibrated on (COLLAB_3.2 §7);
+//     was calibrated on (collaboration.md §7);
 //   - a run under selection still ends consistent.
 // The policy here is SelectBySimilarity (OpenCV-free); the spectral policy in the swarm is in test_opencv.
 #include "collab_scenario.hpp"
@@ -145,7 +145,7 @@ TEST(CollabSelection, V1DescriptorBytesUnchangedAndNewFieldsRoundTrip) {
 }
 
 TEST(CollabSelection, GraphStartsAtTheFirstReleasedKeyframe) {
-    // A VO startup prefix is never released (SIMCOLLAB_3.2 §1), so ids start above 0. The selection graph spans the
+    // A VO startup prefix is never released (collaboration.md#simulated-collaboration §1), so ids start above 0. The selection graph spans the
     // ids seen (min..max per agent), not 0..max: no phantom chain for keyframes no member ever had.
     act::Scenario sc;
     sc.advertise_features = true;

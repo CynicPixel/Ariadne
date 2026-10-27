@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# ariadne-console (arch §29.3, design CONSOLE_1.10): the operator console stub's
+# ariadne-console (arch §29.3, design live-runtime.md#operator-console): the operator console stub's
 # FastAPI backend + static frontend. Pins: base by digest, every package exact.
 # The repo is bind-mounted at /work (read-only is enough).
 # ---------------------------------------------------------------------------

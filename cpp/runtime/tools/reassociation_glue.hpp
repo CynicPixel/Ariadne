@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 2.1 re-association glue (PERCEPTION_2.1.md §4.3): between the tracker and
+// 2.1 re-association glue (perception.md §4.3): between the tracker and
 // StereoVo, owned by the runtime because it reads both. Kept out of
 // stereo_vo_runner.hpp so that shared file only gains call sites.
 //

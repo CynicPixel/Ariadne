@@ -10,7 +10,7 @@
 // resolve it in the installed libraries. A missing class is a build error, not
 // a runtime surprise.
 //
-// Output is machine-greppable `KEY=VALUE` so SMOKE_TEST_RESULTS.md rows can be
+// Output is machine-greppable `KEY=VALUE` so validation.md rows can be
 // regenerated rather than hand-copied.
 // ---------------------------------------------------------------------------
 #include <opencv2/core.hpp>
@@ -60,7 +60,7 @@ int main() {
 
     // --- Feature classes (arch §0.2 gate list, §7.2) ---------------------
     // XFeat is deliberately absent from this list: it does not exist in
-    // OpenCV 5.0.0. See DECISIONS.md D6. Adding it here would not compile,
+    // OpenCV 5.0.0. See decisions.md D6. Adding it here would not compile,
     // which is itself the cleanest possible proof.
     Report("features_ALIKED", TypePresent<cv::ALIKED>());
     Report("features_DISK", TypePresent<cv::DISK>());

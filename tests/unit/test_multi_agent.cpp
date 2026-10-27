@@ -1,4 +1,4 @@
-// COLLAB_3.2 §5: the broker's multi-agent pose-graph solve and its protocol adapter.
+// collaboration.md §5: the broker's multi-agent pose-graph solve and its protocol adapter.
 #include "collaboration/broker/broker_solve.hpp"
 #include "slam/pose_graph/multi_agent.hpp"
 

@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The estimator worker's side of the live collaboration (design LIVE_COLLAB §2, D174): a tee, no DNN. With
+// The estimator worker's side of the live collaboration (design live-collaboration.md §2, D174): a tee, no DNN. With
 // `collab: true` the worker (ariadne_live, D168) connects to its agent's ariadne_collab_worker and calls
 //   OnKeyframe(kv, gt)  in on_keyframe: #ckin (id, t, rgb, the bundle's CV_16F depth + mask, pinhole, T_B_C, gt), then
 //                       the release tracker (the LoopBackend mirror: cheap, no OpenCV parallel work) and one #crel per

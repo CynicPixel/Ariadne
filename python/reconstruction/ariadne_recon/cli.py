@@ -1,4 +1,4 @@
-"""Reconstruction service entry point (design RECON_1.7).
+"""Reconstruction service entry point (design reconstruction.md#first-reconstruction-loop).
 
   python -m ariadne_recon.cli prepare --spool SPOOL --config recon_v1.yaml --scene SCENE \
         --eval-record RUN/recon_eval.yaml --out OUT [--seed 1]
@@ -77,7 +77,7 @@ def prepare(a) -> dict:
     (out / "manifest_prepare.yaml").write_text(yaml.safe_dump(_manifest("prepare", {
         "config": cfg["name"], "seed": a.seed, "spool_sha256": res["spool_sha256"], "splat_backend": "none (local)",
         "command": res["command"]}), sort_keys=False))
-    (out / "prepare.yaml").write_text("# ariadne_recon prepare (design RECON_1.7). Generated.\n" +
+    (out / "prepare.yaml").write_text("# ariadne_recon prepare (design reconstruction.md#first-reconstruction-loop). Generated.\n" +
                                       yaml.safe_dump(res, sort_keys=False))
     return res
 
@@ -106,7 +106,7 @@ def score(a) -> dict:
     (out / "manifest_score.yaml").write_text(yaml.safe_dump(_manifest("score", {
         "splat_backend": "gsplat_cuda@kaggle", "remote_env": rj["env"], "package_sha256": prep["package"]["sha256"],
         "renders_sha256": res["renders_sha256"], "command": res["command"]}), sort_keys=False))
-    (out / "score.yaml").write_text("# ariadne_recon score (design RECON_1.7). Generated.\n" +
+    (out / "score.yaml").write_text("# ariadne_recon score (design reconstruction.md#first-reconstruction-loop). Generated.\n" +
                                     yaml.safe_dump(res, sort_keys=False))
     return res
 

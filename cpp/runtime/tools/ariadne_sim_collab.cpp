@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // ariadne_sim_collab: 1.6 placeholder collaboration over a sim recording (design
-// COLLAB_1.6): both agents run the 1.4/1.5 VO in replay; agent 1 sends a global
+// collaboration.md#first-collaboration-loop): both agents run the 1.4/1.5 VO in replay; agent 1 sends a global
 // descriptor per keyframe to the broker (agent 0, the lowest AgentId, §15.4);
 // the broker retrieves candidates, requests local features, verifies with
 // findEssentialMat + PnP, emits SE(3) POSE_EDGEs, and merges agent 1 into its
@@ -90,14 +90,14 @@ core::PoseValue ToPoseValue(const core::SE3& T) {
     return {float(q.w()), float(q.x()), float(q.y()), float(q.z()), float(T.t.x()), float(T.t.y()), float(T.t.z())};
 }
 
-/// ledger.csv (design CONSOLE_1.10): one row per message the ByteLedger counted, with the wire stamp
+/// ledger.csv (design live-runtime.md#operator-console): one row per message the ByteLedger counted, with the wire stamp
 /// (a keyframe time, NOT causal) and the causal send time the console replays on.
 struct LedgerLog {
     std::ofstream csv;
     uint64_t seq = 0;
 };
 
-/// contracts.yaml (Phase 1 exit gate, design PHASE1_GATE): every §4/§18.2 record counted at each hop it
+/// contracts.yaml (Phase 1 exit gate, design evaluation-harness.md#end-to-end-gate): every §4/§18.2 record counted at each hop it
 /// crosses in this run. Counted, never asserted from the code's shape: a zero means the hop did not happen.
 struct ContractCounts {
     uint64_t frames[2] = {0, 0};                 // §4.1 StereoFrame delivered to the VO (via on_frame)
@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
         tools::StereoVoArgs va;
         std::string rec, scene, collab_path, out;
         bool faults = false;
-        std::string spool_dir, recon_path;   // 1.7: optional reconstruction spool (design RECON_1.7)
+        std::string spool_dir, recon_path;   // 1.7: optional reconstruction spool (design reconstruction.md#first-reconstruction-loop)
         for (int i = 1; i < argc; ++i) {
             const std::string k = argv[i];
             if (i + 1 >= argc) throw std::invalid_argument("missing value for " + k);
@@ -603,7 +603,7 @@ int main(int argc, char** argv) {
         if (sorted_scores.empty()) throw std::runtime_error("broker: no global descriptors received");
         std::sort(sorted_scores.begin(), sorted_scores.end());
         std::ofstream res(run_dir / "results.yaml");
-        res << "# ariadne_sim_collab results (design COLLAB_1.6). Generated; do not hand-edit.\n"
+        res << "# ariadne_sim_collab results (design collaboration.md#first-collaboration-loop). Generated; do not hand-edit.\n"
             << "scene_id: " << scene_id << "\ncollab_config: " << cc.name << "\ninject_faults: " << faults << "\n"
             << "keyframes: {agent0: " << runs[0].kfs.size() << ", agent1: " << runs[1].kfs.size() << "}\n"
             << "retrieval: {candidates: " << cands.size() << ", true_opportunities: " << n_true
@@ -641,7 +641,7 @@ int main(int argc, char** argv) {
                 classes_used += ledger.CountForClass(cls) > 0;
             }
             std::ofstream c(run_dir / "contracts.yaml");
-            c << "# §4 / §18.2 data contracts exercised by this run (design PHASE1_GATE). Generated; do not hand-edit.\n";
+            c << "# §4 / §18.2 data contracts exercised by this run (design evaluation-harness.md#end-to-end-gate). Generated; do not hand-edit.\n";
             for (uint32_t k = 0; k < 2; ++k) {
                 c << "agent" << k << ":\n"
                   << "  frame_4_1: {delivered: " << cc_count.frames[k] << "}\n"

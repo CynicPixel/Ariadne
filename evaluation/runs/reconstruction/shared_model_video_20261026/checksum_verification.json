@@ -1,0 +1,6 @@
+{
+  "method": "S3 ETag matched to whole-object MD5 (single-part objects)",
+  "downloaded_and_verified": 163,
+  "verified_cache_reused": 117,
+  "missing": []
+}

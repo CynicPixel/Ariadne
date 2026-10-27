@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.1 ESDF for clearance (arch §20.3; design VOLUMETRIC_4.1 §3.3, D110).
+// 4.1 ESDF for clearance (arch §20.3; design volumetric.md §3.3, D110).
 //
 // Clearance = distance from a voxel centre to the NEAREST POINT of a blocked voxel
 // (its cube), the convention of the scene GT and of 1.8 (worldgen raster._edt_to,

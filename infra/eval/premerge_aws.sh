@@ -6,20 +6,20 @@
 #   repo.bundle      git bundle of COMMIT (phase1.sh needs a real checkout: commit id, dirty check)
 #   inputs.tar       the ignored inputs the gate reads, with SHA256SUMS: .cache/models/{xfeat_ref,eigenplaces_ref,
 #                    aliked_lg_ref}, .cache/oracle/pgo, build/render_cache
-#   $DATA            the Phase 1 sim recording (evaluation/runs/phase1/sim_record/<id>/raw): a persistent S3
+#   $DATA            the Phase 1 sim recording (evaluation/runs/gates/phase1_thin_e2e/sim_record/<id>/raw): a persistent S3
 #                    dataset, not staged per run
 #   images.txt       "<ecr ref> <local name> <image id>" per line: pulled, retagged to the names the scripts use,
 #                    and their ids checked. core.sh is told not to rebuild the dev image (ARIADNE_SKIP_DEV_BUILD).
 # Each step is logged to $ARIADNE_RESULTS/steps.txt as it happens. The gate directory, the ctest log and every stage
-# log come back. JOBS defaults to 8 (16 vCPU host; the 2-job cap is the maintainer's workstation's).
-# MODE=full runs the FULL gate (phase1.sh without --premerge) into evaluation/runs/phase2/exit_gate: its fresh Kaggle
+# log come back. JOBS defaults to 8 (16 vCPU host; the 2-job cap is the dev workstation's).
+# MODE=full runs the FULL gate (phase1.sh without --premerge) into evaluation/runs/gates/phase2_exit/exit_gate: its fresh Kaggle
 # render is relayed to the launching host through $STAGE/relay (infra/eval/render_relay.sh), whose token stays there.
 set -uo pipefail
 R="${ARIADNE_RESULTS:?}"
 : "${STAGE:?}" "${DATA:?}" "${COMMIT:?}" "${REG:?}"
 JOBS="${JOBS:-8}"
 MODE="${MODE:-premerge}"
-case "$MODE" in premerge) args=--premerge out=build/premerge ;; full) args=evaluation/runs/phase2/exit_gate out=evaluation/runs/phase2/exit_gate ;;
+case "$MODE" in premerge) args=--premerge out=build/premerge ;; full) args=evaluation/runs/gates/phase2_exit/exit_gate out=evaluation/runs/gates/phase2_exit/exit_gate ;;
   *) echo "MODE: premerge | full" >&2; exit 1 ;; esac
 REPO=/opt/ariadne/repo
 step() { echo "=== $(date -u +%FT%TZ) $*" | tee -a "$R/steps.txt"; }

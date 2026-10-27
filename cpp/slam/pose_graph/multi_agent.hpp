@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The broker's multi-agent pose-graph solve (arch §15.4, design COLLAB_3.2 §5).
+// The broker's multi-agent pose-graph solve (arch §15.4, design collaboration.md §5).
 //
 // WHAT IT IS. Each member agent contributes its own subgraph in its odometry
 // frame W_a (keyframe nodes + intra-agent odometry edges with information).

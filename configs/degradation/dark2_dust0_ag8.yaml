@@ -8,7 +8,7 @@
 # scene (the 2.2 preflight measured dark2 at sigma 0.2-0.7 DN, mostly rounding),
 # so the shipped dark2_dust0 carries no measurable sensor noise and cannot
 # exercise the VST denoise; here the noise follows var = a*mean + b to within
-# 0.5% (RADIOMETRIC_2.2.md §2). Same sensor and scene radiance as dark2_dust0;
+# 0.5% (radiometric.md §2). Same sensor and scene radiance as dark2_dust0;
 # only the gain differs. The 16 shipped configs are unchanged.
 
 name: dark2_dust0_ag8

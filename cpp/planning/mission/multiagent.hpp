@@ -1,11 +1,11 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// D175 (MULTIAGENT_PIPELINE §1-§3): the planning side of agents that coordinate through the radio. Each agent runs
+// D175 (live-runtime.md#multi-agent-pipeline §1-§3): the planning side of agents that coordinate through the radio. Each agent runs
 // its own Phase4Planner on its OWN keyframes (Phase4Planner::PlanOwn); what it knows of its peers it RECEIVED:
 //   SubmapPatch   (SUBMAP_PATCH, class 8)  the sender's own slab + rho_responder bit, changed 32x32 blocks, 2 bits/cell
 //   TaskBid       (TASK_BID, class 9)      the sender's top-M options with BuildAuction's raw terms
 //   TaskConsensus (TASK_CONSENSUS, 10)     the component broker's sequential-greedy assignment
-// Plain structs, no comms type: M's wire tables mirror them field for field and CommsNode carries them, lossy,
+// Plain structs, no comms type: the wire tables mirror them field for field and CommsNode carries them, lossy,
 // budgeted and partitionable; every byte is counted at the serializer (invariant 6), not here.
 //   SlabExporter     own maps -> versioned blocks -> SubmapPatch (only blocks changed after the receiver's ack)
 //   ReceivedLayers   peers' patches placed at T_G_W(j) -> the known mask (NBV gain, PeerKnown) and the merged layer

@@ -1,11 +1,11 @@
-# 2.2 radiometric ablation matrix (D67; docs/design/RADIOMETRIC_2.2.md §6). Fixed 2026-10-21, BEFORE any VO
+# 2.2 radiometric ablation matrix (D67; docs/design/radiometric.md §6). Fixed 2026-10-21, BEFORE any VO
 # measurement. Every row consumes identical pixels: the same recording, agent, frames, seed and degradation config;
 # rows differ only in the perception config's radiometric: section.
 name: radiometric_2_2_v1
 
 sim:
   tool: ariadne_sim_vo
-  recording: evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw   # rec/ + scene/
+  recording: evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_0-20261001T133914Z/raw   # rec/ + scene/
   agent: 0
   frames: 1000            # ~50 s of the recording
   seed: 1
@@ -19,13 +19,13 @@ sim:
     flat_vst_gaussian_gated: sim_v1_rad_auto     # the proposal (realtime: 0.8 ms denoise)
     flat_vst_nlm_gated: sim_v1_rad_nlm           # NOT RUN. ablation; ~360 ms per image, not realtime
     flat_vst_gaussian_algebraic_forced: sim_v1_rad_alg  # NOT RUN. expected null on the 8-bit hand-off (design §5)
-  # 2026-10-21, maintainer: run only what cannot be done without. MEASURED: dark3_dust0_ag16 x {off, flat_vst_gaussian_gated}.
+  # 2026-10-21, decision: run only what cannot be done without. MEASURED: dark3_dust0_ag16 x {off, flat_vst_gaussian_gated}.
   # The other rows are defined but not run.
 
 euroc:
   tool: ariadne_euroc_vo
   slam_config: configs/slam/euroc_v2.yaml
-  default_configs_unchanged: true   # no radiometric: section -> call-through; LOCAL_SLAM_2.3 §10 table stands
+  default_configs_unchanged: true   # no radiometric: section -> call-through; local-slam.md §10 table stands
   gate_decision: {perception: euroc_rad_auto, frames: 12, flights: all 11}
   forced_on: {status: NOT_RUN, perception: euroc_rad_on, baseline: euroc, flights: [MH_01_easy, V1_03_difficult, V2_03_difficult]}
 

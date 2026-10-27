@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // The C++ -> Python reconstruction boundary (arch §18.2 "KeyframeBundle records
-// over gRPC or spooled files"; design RECON_1.7). One directory per run, written
+// over gRPC or spooled files"; design reconstruction.md#first-reconstruction-loop). One directory per run, written
 // here, read only by python/reconstruction:
 //
 //   spool.yaml                      schema_version 1, run ids, merge record, index
@@ -199,7 +199,7 @@ public:
         }
         y << YAML::EndSeq << YAML::EndMap;
         if (!y.good()) throw std::runtime_error("spool: yaml emitter: " + y.GetLastError());
-        std::ofstream(dir_ / "spool.yaml") << "# Ariadne reconstruction spool (design RECON_1.7). Generated.\n"
+        std::ofstream(dir_ / "spool.yaml") << "# Ariadne reconstruction spool (design reconstruction.md#first-reconstruction-loop). Generated.\n"
                                            << y.c_str() << "\n";
     }
 

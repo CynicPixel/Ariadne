@@ -33,7 +33,7 @@ using core::Vec3;
 
 struct AttitudeParams {
     int bias_window = 200;          // tracked pairs in the bias median (10 s at 20 Hz)
-    double stationary_s = 2.0;      // PHASE2_PLAN §3: the first 2 s decide whether the start is at rest
+    double stationary_s = 2.0;      // local-slam.md#estimator-plan §3: the first 2 s decide whether the start is at rest
     double kp = 1.0;                // Mahony et al. 2008 §VI: kP = 1 rad/s (filter crossover)
     double ki = 0.3;                // kI = 0.3 rad/s
 };
@@ -70,7 +70,7 @@ private:
     std::deque<Vec3> samples_;
 };
 
-/// The stationary test of PHASE2_PLAN §3: over the first `seconds`, every gyro axis's std below 3x the white-noise
+/// The stationary test of local-slam.md#estimator-plan §3: over the first `seconds`, every gyro axis's std below 3x the white-noise
 /// std at the sample rate (Kalibr density * sqrt(rate)). Returns the mean gyro if at rest.
 inline bool StationaryGyroMean(const std::vector<core::ImuMeasurement>& imu, const core::ImuNoise& noise, double seconds,
                                Vec3& mean) {

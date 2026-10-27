@@ -1,4 +1,4 @@
-// COLLAB_3.2 §6, §8: the I5 exit — every run ends consistent or explicitly
+// collaboration.md §6, §8: the I5 exit — every run ends consistent or explicitly
 // incomplete, never corrupt; split-brain merges under a new epoch; frames.
 #include "collab_scenario.hpp"
 

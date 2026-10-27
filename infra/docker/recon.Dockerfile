@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# ariadne-recon (arch §18.2, design RECON_1.7): the Python reconstruction
+# ariadne-recon (arch §18.2, design reconstruction.md#first-reconstruction-loop): the Python reconstruction
 # service's LOCAL (CPU) stages — spool validation, fusion, Gaussian init,
 # geometry metrics, tests. No torch and no gsplat here: rasterization needs
 # CUDA (SMOKE §4o) and runs remotely (Kaggle now, AWS GPU later, D44), from a

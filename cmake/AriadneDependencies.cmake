@@ -5,7 +5,7 @@ include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
 # Eigen 3.4.1 — latest 3.4.x, which is what arch §27.1's "Eigen 3.4" pins.
-# (Eigen 5.0.1 exists upstream; deliberately NOT taken — see docs/DECISIONS.md.)
+# (Eigen 5.0.1 exists upstream; deliberately NOT taken — see docs/decisions.md.)
 # SOURCE_SUBDIR names a directory with no CMakeLists.txt on purpose: that makes
 # FetchContent populate the sources WITHOUT running Eigen's own build system,
 # which we do not need (Eigen is header-only) and do not want polluting our cache.
@@ -23,7 +23,7 @@ target_include_directories(ariadne_eigen SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 # something we assert. The competition checks component licences individually.
 target_compile_definitions(ariadne_eigen INTERFACE EIGEN_MPL2_ONLY)
 
-# FlatBuffers is the locked serializer (CLAUDE.md §1): schema-versioned,
+# FlatBuffers is the locked serializer (arch §0.2): schema-versioned,
 # zero-copy read, and deterministic size accounting at the single serialization
 # boundary §4.4 requires. Building it here also builds `flatc`, which generates
 # headers from the .fbs schemas at build time, so no generated code is committed

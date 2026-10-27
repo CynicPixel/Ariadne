@@ -1,4 +1,4 @@
-"""Phase 6 trainer smoke on a Kaggle GPU (RECON_6, D190-D196). Needs the ariadne_recon package next to it (kaggle.sh
+"""Phase 6 trainer smoke on a Kaggle GPU (reconstruction.md, D190-D196). Needs the ariadne_recon package next to it (kaggle.sh
 train-smoke embeds it). Self-generated input, so the answer is known exactly:
 
   scene   a corridor 1.2 m wide x 2.0 m high, walls/floor/ceiling with an analytic albedo texture in [0.15, 0.85]

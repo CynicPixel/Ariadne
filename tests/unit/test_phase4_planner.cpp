@@ -1,6 +1,6 @@
-// Phase4Planner (the planning side of B's MissionPlanner seam): string pulling never cuts a blocked cell and keeps few
+// Phase4Planner (the planning side of the runtime's MissionPlanner seam): string pulling never cuts a blocked cell and keeps few
 // waypoints; directives (keep_out drops, assign restricts, priority_region scales G and reorders) and refusals; the
-// keep_out masks paths, not only goals (B's review); the joint pick is exactly-once and the higher-utility agent
+// keep_out masks paths, not only goals (seam review); the joint pick is exactly-once and the higher-utility agent
 // picks first (also at N = 3: in descending best utility); an Integrate -> Plan -> Route smoke on a synthetic wall,
 // deterministic across two planners; a 3-agent Plan (sizes, exactly-once picks, the CBBA graph's topology trigger).
 #include "planning/mission/phase4_planner.hpp"
@@ -67,7 +67,7 @@ TEST(Phase4Planner, DirectivesAndRefusals) {
     ApplyDirectives(1, {RegionDirective{"a1", "assign", 1, {{4, 4}, {6, 4}, {6, 6}, {4, 6}}, 1.0}}, {}, 0.5, 0.0, &as);
     ASSERT_EQ(as.nbv.options.size(), 1u);
     EXPECT_EQ(as.nbv.options[0].task_id, 2);
-    Phase4AgentPlan none;   // an assign region holding no option restricts nothing (B's semantics)
+    Phase4AgentPlan none;   // an assign region holding no option restricts nothing (the seam's semantics)
     none.nbv.options = {Opt(1, 1, 1, 1, 0.9)};
     ApplyDirectives(1, {RegionDirective{"a2", "assign", 1, {{4, 4}, {6, 4}, {6, 6}, {4, 6}}, 1.0}}, {}, 0.5, 0.0, &none);
     EXPECT_EQ(none.nbv.options.size(), 1u);

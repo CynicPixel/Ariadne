@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Spectral prioritisation of feature requests (design SPECTRAL_3.4, arch §16, D170).
+// Spectral prioritisation of feature requests (design spectral-selection.md, arch §16, D170).
 //
 // The broker holds a graph of every keyframe it knows of: odometry, intra-agent loops and accepted inter-agent edges
 // (fixed, kappa = 1), plus retrieval candidates (kappa = similarity). Verifying a candidate costs the feature

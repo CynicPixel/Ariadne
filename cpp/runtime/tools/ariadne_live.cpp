@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_live: the live closed-loop runtime (design LIVE_RUNTIME_L1, D150-D154). ROS-free.
+// ariadne_live: the live closed-loop runtime (design live-runtime.md, D150-D154). ROS-free.
 //
 //   ariadne_live --scene DIR --perception-config P --slam-config S --mission-config M --live-config L --out DIR
 //                (--link SOCKET | --replay INPUTS.mcap)
@@ -37,6 +37,7 @@
 #include "runtime/manifest/run_manifest.hpp"
 #include "runtime/replay/ros_cdr_writer.hpp"
 #include "runtime/tools/stereo_vo_runner.hpp"
+#include "runtime/live/demo_camera.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -70,7 +71,7 @@ struct LiveConfig {
     std::string name, chooser;
     double end_s = 0, max_command_m = 0, eps_cells = 1, telemetry_hz = 5, min_goal_m = 0, escape_m = 0,
            max_standoff_m = 0, refused_radius_m = 0;
-    double autonomous_threshold = 1.01;   // §23 risk gate (AGENTIC_7 D158); > 1 = no gate
+    double autonomous_threshold = 1.01;   // §23 risk gate (agentic.md D158); > 1 = no gate
     double llm_timeout_s = 0;              // chooser llm: wall seconds to wait for the orchestrator
     bool face_frontier = true;
     bool lockstep = false;                 // D165: gz paused at every barrier until the commands are applied
@@ -82,27 +83,27 @@ struct LiveConfig {
     bool estimator_processes = false;      // D168: one estimator PROCESS per agent (its own OpenCV pool) instead of
                                            // the D152a turn lock (which costs 109-126 ms/frame of waiting at 2
                                            // agents). false until the acceptance (live + 3 equal replays) passes.
-    bool lens = false;                     // D227 (the D41 amendment, maintainer-directed): the read-time synthetic
-                                           // lens. OFF by default for every live/demo/POC run - A2 measured it at
+    bool lens = false;                     // D227 (the D41 amendment): the read-time synthetic
+                                           // lens. OFF by default for every live/demo/POC run - measured at
                                            // ~58 ms/frame, about half the lane - and the calibration then reports
                                            // the render pinhole with D = 0. `lens: true` restores the D41 operator.
-    bool demo = false;                     // D169 (AGENTIC_7 §4): judges-live mode. No lockstep, keyframes integrate
+    bool demo = false;                     // D169 (agentic.md §4): judges-live mode. No lockstep, keyframes integrate
                                            // on a background thread, no per-replan PNGs, and the LLM is supervisory
                                            // and NON-BLOCKING: the deterministic pick is commanded immediately, the
                                            // answer applies at the next horizon or expires. Not an evidence mode.
     int hold_back_ms = 3000;
-    // D175 item 4 (MULTIAGENT_PIPELINE): per-agent planners fed only through the radio. false = the centralised
+    // D175 item 4 (live-runtime.md#multi-agent-pipeline): per-agent planners fed only through the radio. false = the centralised
     // loop, byte-identical to before this feature existed (the oracle row).
     struct Multiagent {
         bool enabled = false;
         std::string scenario;                 // comms scenario yaml (3.3); live runs need mode: ideal (RF needs tracks)
-        std::string broker_mode = "plain";    // plain | discount | overlap (A1 R1/R2)
+        std::string broker_mode = "plain";    // plain | discount | overlap (R1/R2)
         double consensus_timeout_s = 10.0;    // older consensus than this = uncoordinated
         double discount_range_m = 4.0;        // R2 P(d) range (broker_mode discount)
         double discount_tau_s = 10.0;         // R2 cut-off age constant [ASSUMPTION, logged]
         int max_bid_options = 8;              // top-M options per bid (D175 wire table cap)
     } multiagent;
-    // D174 (LIVE_COLLAB): the live SLAM collaboration. The DNN work runs in per-agent ariadne_collab_worker
+    // D174 (live-collaboration.md): the live SLAM collaboration. The DNN work runs in per-agent ariadne_collab_worker
     // processes (cv::ALIKED output depends on the thread count; inside the estimator it would break the D168
     // digests); the estimator only TEES. false = D168 digests unchanged. Requires multiagent.enabled: SLAM and
     // coordination share one radio and one ledger.
@@ -194,7 +195,7 @@ cv::Mat HalfAsSpool(const cv::Mat& f32) {   // KeyframeSpool::WriteHalf + ReadHa
     return back;
 }
 
-// --- A2's live splat tee (D220; service contract D231) -----------------------------------------------------------
+// --- The live splat tee (D220; service contract D231) -----------------------------------------------------------
 // ariadne_live CONNECTS to the recon service's Unix socket (env ARIADNE_RECON_SOCK) and tees every delivered
 // keyframe: topic "#kf" = u32 LE json_len | JSON | Z fp16 | S fp16 | RGB rgb8 (JSON carries both intrinsics: K
 // full-res for the RGB, Kz spool-scale matching Z/S; invalid depth is 0, the spool convention), topic "#t_w_o" =
@@ -332,6 +333,8 @@ private:
 
 struct AgentLane {
     live::MessageQueue images{64};   // ~64 x 2.8 MB per agent at most (bounded: see MessageQueue)
+    live::MessageQueue imus{512};    // 2.5 s at 200 Hz; preserves timestamp order and bounds backlog
+    live::MessageQueue worker_inputs{128};  // bounded release-order FIFO keeps image/IMU transport ordered
     live::GtStore gt;
     std::mutex mu;
     std::deque<KfRec> kfs;                               // delivered by the VO thread, consumed by the mission
@@ -418,7 +421,7 @@ core::SE3 GetSe3(const uint8_t*& q) {
 int RunEstimatorWorker(const std::string& scene, int agent, const std::string& socket_path,
                        const std::string& collab_socket, bool lens_on, tools::StereoVoArgs va, const std::string& out,
                        int argc, char** argv) {
-    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (A2: 16/5/2 bit-identical) and a
+    // D228: 5 OpenCV threads per worker. The estimator is thread-count-invariant (16/5/2 bit-identical) and a
     // 3-worker fleet at the default pool thrashes the box (cpu PSI 26 % -> 1.2 % at 5 on c7i.4xlarge, job 46).
     {
         int n = 5;
@@ -431,15 +434,16 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     std::optional<live::CollabTee> tee;
     if (!collab_socket.empty()) tee.emplace(live::Connect(collab_socket, std::chrono::seconds(60)), uint32_t(agent));
     live::MessageQueue images{64};
+    live::MessageQueue imus{512};
     live::GtStore gt;
     std::mutex turn;   // never contended: one estimator per process is the point
-    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (A2 job 15: 0.833 vs 0.839; the lane is
-    // track/keyframe compute, not ingest), so the default is OFF (M: an unmeasured extra thread does not belong
+    // D229: the lane ingest pipeline - measured NO RTF gain lens-off (job 15: 0.833 vs 0.839; the lane is
+    // track/keyframe compute, not ingest), so the default is OFF (an unmeasured extra thread does not belong
     // on the demo path). ARIADNE_LANE_PIPELINE=1 enables it; its payoff case is a live path with heavy ingest
     // (lens-on or degradation rows).
     const char* lp = std::getenv("ARIADNE_LANE_PIPELINE");
     const bool pipelined = lp && std::string(lp) == "1";
-    live::LiveSimSource src(scene, agent, images, gt, turn, "live", lens_on, pipelined);
+    live::LiveSimSource src(scene, agent, images, imus, gt, turn, "live", lens_on, pipelined);
     std::mutex send_mu;
     auto send = [&](const char* topic, const std::vector<uint8_t>& b) {
         std::lock_guard<std::mutex> lk(send_mu);
@@ -453,6 +457,11 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
                 m.topic = f.topic;
                 m.data = std::make_shared<const std::vector<uint8_t>>(std::move(f.payload));
                 images.Push(std::move(m));
+            } else if (f.topic == src.imu_topic()) {
+                live::StreamMessage m;
+                m.topic = f.topic;
+                m.data = std::make_shared<const std::vector<uint8_t>>(std::move(f.payload));
+                imus.Push(std::move(m));
             } else {   // this agent's gt pose, raw CDR exactly as the link delivered it
                 const auto g = runtime::ros_cdr::DecodePoseStamped(f.payload.data(), f.payload.size());
                 runtime::TimedPose tp{g.header.stamp.ns(), {}};
@@ -464,6 +473,7 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
             }
         }
         images.Close();
+        imus.Close();
     });
     src.on_timing = [&](int64_t t_ns, double w, double l, double tr) {
         std::vector<uint8_t> b;
@@ -485,9 +495,9 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth, b.mask)));
         PutMat(o, HalfAsSpool(runtime::MaskedDepth32(b.depth_sigma, b.mask)));
         PutMat(o, b.rgb);
-        // Phase 6 training image (RECON_6, A2/M 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
+        // Phase 6 training image (reconstruction.md, 2026-10-23): a tag then, when not "none", albedo (half-res CV_32F,
         // fp16-rounded) + albedo_valid (half-res CV_8U) from KeyframeFalloff::Normalize. That code lives on
-        // feat/ph5-dve (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
+        // the DVE branch (FramePhoto, falloff_glue) and is wired here once it reaches main; until then every record
         // says "none" and the recon service refuses to train live unless the run is the RGB ablation - nothing
         // silently falls back.
         const std::string ti = "none";
@@ -507,7 +517,12 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
         PutMat(o, kv.track_px.empty() ? cv::Mat(0, 1, CV_32FC2) : cv::Mat(kv.track_px).reshape(2, 1));
         send("#kf", o);
     };
+    std::unique_ptr<live::DemoCamera> demo_camera;
+    if (const char* enabled = std::getenv("ARIADNE_DEMO_MEDIA"); enabled && std::string(enabled) == "1")
+        demo_camera = std::make_unique<live::DemoCamera>(fs::path(out).parent_path() / "snapshots", agent);
     a.on_frame = [&](const tools::FrameView& fv) {
+        if (demo_camera && demo_camera->Wants(fv.t_ns) && fv.track_px)
+            demo_camera->Put(fv.t_ns, fv.left_rect_rgb(), *fv.track_px);
         if (tee) tee->OnFrame(fv.t_ns);   // D174: the lockstep watermark source (#cprog)
         std::vector<uint8_t> o;
         PutPod(o, int64_t(fv.t_ns));
@@ -530,7 +545,7 @@ int RunEstimatorWorker(const std::string& scene, int agent, const std::string& s
     return rc;
 }
 
-/// chooser: llm, live (AGENTIC_7 D156): one JSON line per decision request to the orchestrator's Unix socket; answers
+/// chooser: llm, live (agentic.md D156): one JSON line per decision request to the orchestrator's Unix socket; answers
 /// come back as JSON lines keyed by decision_id, in any order.
 class ChooserLink {
 public:
@@ -586,7 +601,7 @@ private:
     bool closed_ = false;
 };
 
-/// chooser: llm, replay (AGENTIC_7 D161): the live trace's choices, keyed by (t_s text, agent): the chosen index and the
+/// chooser: llm, replay (agentic.md D161): the live trace's choices, keyed by (t_s text, agent): the chosen index and the
 /// raw `"choice":{...}` tail, re-emitted verbatim. The model is never called in replay.
 std::map<std::pair<std::string, int>, std::pair<int, std::string>> LoadRecordedChoices(const std::string& trace) {
     std::map<std::pair<std::string, int>, std::pair<int, std::string>> out;
@@ -662,6 +677,7 @@ int main(int argc, char** argv) {
             if (k == "--scene") scene = v;
             else if (k == "--perception-config") va.perception_config = v;
             else if (k == "--slam-config") va.slam_config = v;
+            else if (k == "--imu-noise-config") va.imu_noise_config = v;
             else if (k == "--mission-config") mission_cfg_path = v;
             else if (k == "--live-config") live_cfg_path = v;
             else if (k == "--out") out = v;
@@ -670,7 +686,7 @@ int main(int argc, char** argv) {
             else if (k == "--chooser-socket") chooser_socket = v;   // chooser llm, live
             else if (k == "--decisions") decisions_path = v;        // chooser llm, replay: the live trace.jsonl
             else if (k == "--directives") directives_path = v;      // replay: the live run's directives.jsonl
-            else if (k == "--planner-config") planner_cfg_path = v;  // A1's Phase 4 planner (mission_v2.yaml); else 1.8
+            else if (k == "--planner-config") planner_cfg_path = v;  // the Phase 4 planner (mission_v2.yaml); else 1.8
             else if (k == "--shadow-map-config") shadow_cfg_path = v;   // one map for every row: p4slab snapshots
             else if (k == "--seed") va.seed = std::stoull(v);
             else if (k == "--estimator-worker") worker_agent = std::stoi(v);   // D168: internal, spawned by the parent
@@ -716,7 +732,7 @@ int main(int argc, char** argv) {
         pp.min_goal_m = lc.min_goal_m, pp.escape_m = lc.escape_m, pp.max_standoff_m = lc.max_standoff_m;
         pp.refused_radius_m = lc.refused_radius_m, pp.autonomous_threshold = lc.autonomous_threshold;
         pp.eps_cells = lc.eps_cells, pp.max_command_m = lc.max_command_m;
-        // The mission planner behind the seam: A1's Phase 4 planner with --planner-config, else the 1.8 placeholder
+        // The mission planner behind the seam: the Phase 4 planner with --planner-config, else the 1.8 placeholder
         // (the ablation's row). The scene's worldgen seed is the run seed mixed into the random policy's seed.
         std::unique_ptr<live::MissionPlanner> planner;
         std::string planner_name = "placeholder_1.8";
@@ -730,9 +746,9 @@ int main(int argc, char** argv) {
             planner = std::make_unique<live::A1Planner>(mc, brief, p4, policy, lc.autonomous_threshold, NA);
             planner_name = "a1_phase4:" + policy;
         }
-        // --- D175 item 4: the per-agent pipeline (MULTIAGENT_PIPELINE) -------------------------------------------
+        // --- D175 item 4: the per-agent pipeline (live-runtime.md#multi-agent-pipeline) -------------------------------------------
         // One planner, exporter and received-layers set per agent plus the operator node, all share-nothing; one
-        // CollabNode per participant (coordination-only: no SLAM hooks until LIVE_COLLAB) over a seeded CommsNode.
+        // CollabNode per participant (coordination-only: no SLAM hooks until live-collaboration.md) over a seeded CommsNode.
         // Nothing here exists unless multiagent.enabled - the centralised loop above is D175's oracle row, untouched.
         namespace ac = ariadne::collaboration;
         namespace multi = planning::multi;
@@ -751,7 +767,7 @@ int main(int argc, char** argv) {
             std::vector<multi::Rigid2> T_G_W;                         // known entry poses: the 2D part of T_W_O[k]
             std::vector<uint64_t> kf_count, bid_seq, patch_seq, cons_seq;   // per agent counters
             std::vector<std::optional<std::pair<uint64_t, core::SE3>>> last_kf;  // for the odometry edge
-            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (A1 e82307f)
+            std::unique_ptr<multi::OperatorEgress> op_egress;   // D* Lite on what the operator RECEIVED (e82307f)
             // D174 (collab: true): the fleet OWNS the radio nodes; `nodes` stays empty then. The DNN runs in
             // per-agent ariadne_collab_worker processes; LightGlue verification runs in the parent (collab.Step).
             std::unique_ptr<perception::HardPairMatcher> lightglue;
@@ -759,7 +775,7 @@ int main(int argc, char** argv) {
             std::vector<pid_t> collab_pids;
             std::vector<std::string> collab_socks;
             std::ofstream edges_csv;
-            std::map<ac::AgentId, bool> linked;   // the fleet's comms state, for A1's linked[k]
+            std::map<ac::AgentId, bool> linked;   // the fleet's comms state, for the planner's linked[k]
             std::mutex two_mu;                    // brief.T_W_O: barrier writes vs the telemetry readers
             multi::BrokerParams broker;
             bool discounted = false;                                  // broker_mode discount: R2 ApplyConsensus
@@ -769,7 +785,7 @@ int main(int argc, char** argv) {
         };
         std::unique_ptr<MaState> ma;
         if (lc.multiagent.enabled) {
-            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (A1's planner)");
+            if (planner_cfg_path.empty()) throw std::invalid_argument("multiagent needs --planner-config (the Phase 4 planner)");
             ma = std::make_unique<MaState>();
             ma->scenario = ac::LoadCommsScenario(lc.multiagent.scenario);
             if (is_live && ma->scenario.mode != "ideal")
@@ -820,14 +836,14 @@ int main(int argc, char** argv) {
             ma->max_options = lc.multiagent.max_bid_options;
             planner_name += " +multiagent(" + lc.multiagent.broker_mode + "," + ma->scenario.name + ")";
         }
-        // A2's splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
+        // The splat tee (D220): on only when the recon service listens (env from live.sh under ARIADNE_SPLAT=1).
         std::unique_ptr<SplatTee> splat;
         if (const char* sp = std::getenv("ARIADNE_RECON_SOCK")) {
             splat = std::make_unique<SplatTee>(sp, brief.T_W_O);
             if (!splat->on()) std::fprintf(stderr, "ariadne_live: splat tee: %s absent or refused; tee off\n", sp);
         }
 
-        // The shadow map (NBV_4.3 §5 amendment, A1): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
+        // The shadow map (next-best-view.md §5 amendment): a Phase 4 TSDF fed the SAME keyframes as the planner, Integrate only,
         // whose slab is written at every barrier (snapshots/p4slab_<ms>.png), so every planner row is scored from one
         // mapper, not from its own (the 1.8 row's OccupancyGrid and the TSDF differ, D110). It never decides anything.
         std::unique_ptr<planning::Phase4Planner> shadow;
@@ -859,7 +875,7 @@ int main(int argc, char** argv) {
             link_log(run_dir / "link.jsonl"), lockstep_log(run_dir / "lockstep.jsonl"),
             timing_log(run_dir / "timing.jsonl");
         const auto wall_start = std::chrono::steady_clock::now();
-        // D224 (A2's profiling ask): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
+        // D224 (profiling): ARIADNE_PROFILE=1 writes profile.jsonl - one line per lockstep barrier, a
         // wall-clock decomposition of the barrier's stages. Default off; it only ADDS a file, never changes timing-
         // dependent behaviour, so digests are untouched either way.
         const bool profiling = std::getenv("ARIADNE_PROFILE") && std::string(std::getenv("ARIADNE_PROFILE")) == "1";
@@ -954,15 +970,19 @@ int main(int argc, char** argv) {
                 return;
             }
             const auto [agent, role] = it->second;
-            if (role == "image" && m.stamp_ns > end_ns) {   // the end of the run: identical cut live and in replay
+            if ((role == "image" || role == "imu") && m.stamp_ns > end_ns) {   // same live/replay mission boundary
                 past_end = true;
-                for (auto& l : lanes) l.images.Close();
+                for (auto& l : lanes) l.images.Close(), l.imus.Close(), l.worker_inputs.Close();
                 return;
             }
             m.seq = ++seq;
             rec.Write(m);
             if (role == "image") {
-                lanes[agent].images.Push(std::move(m));
+                if (lc.estimator_processes) lanes[agent].worker_inputs.Push(std::move(m));
+                else lanes[agent].images.Push(std::move(m));
+            } else if (role == "imu") {
+                if (lc.estimator_processes) lanes[agent].worker_inputs.Push(std::move(m));
+                else lanes[agent].imus.Push(std::move(m));
             } else if (role == "gt") {
                 const auto p = runtime::ros_cdr::DecodePoseStamped(m.data->data(), m.data->size());
                 runtime::TimedPose tp{p.header.stamp.ns(), {}};
@@ -1003,7 +1023,14 @@ int main(int argc, char** argv) {
         };
 
         std::thread reader;
+        // Keep failures from the replay producer on the owning thread. An
+        // exception escaping a std::thread entry point terminates the process
+        // and hides the MCAP/dispatch error that caused it.
+        std::exception_ptr replay_reader_error;
         long reorder_timeouts = 0, reorder_order_breaks = 0;
+        // Start ingestion only after model/config validation and worker sockets
+        // exist. Replay can otherwise race startup and lose early GT forwarding.
+        auto start_reader = [&] {
         if (is_live) {
             reader = std::thread([&] {
                 // D166: the wall-clock timeout skip made release order hardware-dependent under lockstep
@@ -1055,7 +1082,7 @@ int main(int argc, char** argv) {
                 }
                 reorder_timeouts = ro.released_on_timeout();
                 reorder_order_breaks = ro.released_out_of_order();
-                for (auto& l : lanes) l.images.Close();
+                for (auto& l : lanes) l.images.Close(), l.imus.Close(), l.worker_inputs.Close();
                 {
                     std::lock_guard<std::mutex> lk(progress_mu);
                     input_done = true;
@@ -1064,19 +1091,29 @@ int main(int argc, char** argv) {
             });
         } else {
             reader = std::thread([&] {
-                runtime::RosbagReader bag;
-                bag.Open(replay_path);
-                const auto types = bag.topics();
-                bag.Replay([&](const runtime::RosMessage& msg) {
-                    live::StreamMessage m;
-                    m.topic = std::string(msg.topic);
-                    m.type = types.at(m.topic);
-                    auto data = std::make_shared<std::vector<uint8_t>>(msg.data, msg.data + msg.size);
-                    m.stamp_ns = live::PeekStamp(m.type, *data);
-                    m.data = std::move(data);
-                    Dispatch(std::move(m));
-                });
-                for (auto& l : lanes) l.images.Close();
+                try {
+                    runtime::RosbagReader bag;
+                    bag.Open(replay_path);
+                    const auto types = bag.topics();
+                    bag.Replay([&](const runtime::RosMessage& msg) {
+                        live::StreamMessage m;
+                        m.topic = std::string(msg.topic);
+                        const auto type = types.find(m.topic);
+                        if (type == types.end()) throw std::runtime_error("rosbag: missing topic schema for " + m.topic);
+                        m.type = type->second;
+                        auto data = std::make_shared<std::vector<uint8_t>>(msg.data, msg.data + msg.size);
+                        m.stamp_ns = live::PeekStamp(m.type, *data);
+                        m.data = std::move(data);
+                        Dispatch(std::move(m));
+                    });
+                } catch (const std::exception& e) {
+                    std::fprintf(stderr, "ariadne_live: replay input reader: %s\n", e.what());
+                    replay_reader_error = std::current_exception();
+                } catch (...) {
+                    std::fprintf(stderr, "ariadne_live: replay input reader: unknown exception\n");
+                    replay_reader_error = std::current_exception();
+                }
+                for (auto& l : lanes) l.images.Close(), l.imus.Close(), l.worker_inputs.Close();
                 {
                     std::lock_guard<std::mutex> lk(progress_mu);
                     input_done = true;
@@ -1084,6 +1121,8 @@ int main(int argc, char** argv) {
                 progress_cv.notify_all();
             });
         }
+
+        };
 
         // --- per-agent estimators: the replay path, unchanged ---------------------------------------------------
         std::vector<std::thread> vo(static_cast<size_t>(NA));
@@ -1111,7 +1150,7 @@ int main(int argc, char** argv) {
             timing_log.Put(o.str());
         };
         auto deliver_kf = [&](int k, KfRec r, const cv::Mat& rgb) {
-            {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
+            if (!std::getenv("ARIADNE_DEMO_MEDIA") || std::string(std::getenv("ARIADNE_DEMO_MEDIA")) != "1") {   // P8: the camera window - the latest keyframe as /snapshots/cam_<k>.jpg (the console polls it)
                 cv::Mat bgr;
                 if (rgb.channels() == 3) cv::cvtColor(rgb, bgr, cv::COLOR_RGB2BGR);
                 else bgr = rgb;
@@ -1188,6 +1227,8 @@ int main(int argc, char** argv) {
         // lane threads and dies as terminate-without-exception with the reason lost. Everything from collab
         // init on is inside the try; the ONE teardown below always runs; results.yaml says mission_error.
         std::exception_ptr mission_err;
+        bool operator_stopped = false;   // demo stop.request.json (main 714924a); read by the results block
+        int64_t terminal_ns = end_ns;
         try {
         if (ma && lc.collab.enabled) {
             if (!lc.estimator_processes)
@@ -1320,6 +1361,7 @@ int main(int argc, char** argv) {
                                                     "--estimator-worker", ka.c_str(),
                                                     "--worker-socket", wsock.c_str(),
                                                     "--lens", lensa.c_str()};
+                    if (!va.imu_noise_config.empty()) cas.insert(cas.end(), {"--imu-noise-config", va.imu_noise_config.c_str()});
                     if (!csock.empty()) cas.insert(cas.end(), {"--collab-socket", csock.c_str()});
                     cas.push_back(nullptr);
                     ::execv(cas[0], const_cast<char**>(cas.data()));
@@ -1329,7 +1371,7 @@ int main(int argc, char** argv) {
                 worker_fd[k] = live::ListenAndAccept(wsock);
                 ::unlink(wsock.c_str());
                 feeders[k] = std::thread([&, k] {
-                    while (auto m = lanes[k].images.Pop()) {
+                    while (auto m = lanes[k].worker_inputs.Pop()) {
                         std::lock_guard<std::mutex> lk(worker_mu[k]);
                         if (!live::WriteFrame(worker_fd[k], m->topic, m->data->data(), m->data->size())) break;
                     }
@@ -1374,7 +1416,7 @@ int main(int argc, char** argv) {
                 });
                 continue;
             }
-            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].gt, estimator_turn,
+            sources[k] = std::make_unique<live::LiveSimSource>(scene, k, lanes[k].images, lanes[k].imus, lanes[k].gt, estimator_turn,
                                                                "live", lc.lens);
             sources[k]->on_timing = [&, k](int64_t t_ns, double w, double l, double tr) { deliver_timing(k, t_ns, w, l, tr); };
             vo[k] = std::thread([&, k] {
@@ -1415,8 +1457,8 @@ int main(int argc, char** argv) {
             fs::create_directories(run_dir / "approvals");
             chooser = std::make_unique<ChooserLink>(chooser_socket);
         }
-        // declared above the try: the results block in the teardown reads them
-        // Operator directives (AGENTIC_7 §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
+        // replans/commands_sent/answer_timeouts declared above the try: the results block in the teardown reads them
+        // Operator directives (agentic.md §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
         // replan barrier in name order, stamped and appended to directives.jsonl. Replay: that file, verbatim.
         std::vector<mis::Directive> directives;
         if (!directives_path.empty()) {
@@ -1430,7 +1472,7 @@ int main(int argc, char** argv) {
         if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
         // integrated/rays/refused_goals: declared above the try (the teardown's results block reads them)
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
-        // Per agent, the task its last command serves (AGENTIC_7 D164): the chooser's memory across replans. A new pick
+        // Per agent, the task its last command serves (agentic.md D164): the chooser's memory across replans. A new pick
         // whose goal lies within refused_radius_m of it CONTINUES it (since_ns kept); anything else starts a new one.
         struct CurrentTask {
             bool set = false;
@@ -1439,8 +1481,8 @@ int main(int argc, char** argv) {
             std::string reason;   // the chooser's words when it was picked (LLM request only: replay has no answer text)
         };
         std::vector<CurrentTask> current(static_cast<size_t>(NA));
-        // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu. A1
-        // (2026-10-23): Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
+        // D169 demo: keyframes integrate here as they arrive, serialized against Plan by planner_mu.
+        // As of 2026-10-23, Plan carries incremental egress state (D* Lite), so there is ONE Plan caller and the call
         // sequence is never reordered; per-agent keyframe order stays time order (each lane already is, and the
         // (t, agent, id) sort keeps it); cross-agent interleaving makes the demo map not bit-reproducible, which is
         // accepted - demo is not the evidence substrate.
@@ -1474,6 +1516,7 @@ int main(int argc, char** argv) {
                 }
             });
         }
+        std::chrono::steady_clock::time_point demo_request_started;
         std::string demo_prev_did;                                 // D169: the horizon whose answer we poll next
         std::vector<std::vector<std::pair<double, double>>> demo_prev_goals(static_cast<size_t>(NA));   // its candidate goals
         int64_t paced_to = substep_ns;   // the last run_to target issued (the reader sent it at #ready)
@@ -1481,7 +1524,16 @@ int main(int argc, char** argv) {
         // a replay arrival-wait runtime_error reached main, the std::thread members' dtors called terminate
         // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
         // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
+        // mission_err + the loud-fail try open EARLIER on this branch (above collab init, diag4 8bab46), and
+        // operator_stopped/terminal_ns are declared up there too (the teardown reads them after the catch);
+        // main's deferred start_reader() is NOT ported - this branch still starts the reader at its definition.
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
+            if (is_live && lc.demo && fs::exists(run_dir / "stop.request.json")) {
+                operator_stopped = true;
+                { std::lock_guard<std::mutex> lk(progress_mu);
+                  terminal_ns = std::min(end_ns, std::max<int64_t>(0, live::MinProgress(lanes))); }
+                break;
+            }
             {
                 std::unique_lock<std::mutex> lk(progress_mu);
                 // EVERY lane (D225: these checks were hardcoded to lanes 0 and 1 after the D213 N-lift - the
@@ -1710,7 +1762,7 @@ int main(int argc, char** argv) {
                 }
                 pmark(2);   // radio ladder (+ snapshot) done
                 // (2) Drain what arrived by T. Patches integrate at T_G_W(sender) = identity: own maps are kept in
-                // W = G under the known entry poses (D175 SS2 Frames; LIVE_COLLAB's adopted estimates re-anchor later).
+                // W = G under the known entry poses (D175 SS2 Frames; live-collaboration.md's adopted estimates re-anchor later).
                 for (int k = 0; k <= NA; ++k) {
                     // D179: with the async fleet, deliveries come from its logged drain (my mailboxes stay empty);
                     // ticks in order, FIFO per sender, identical in replay (invariant 1).
@@ -1833,7 +1885,7 @@ int main(int argc, char** argv) {
                 }
                 pmark(6);   // sends enqueued
                 // (7) Merge into the one PlanOutput the chooser/validation path reads; the auction pick replaces
-                // the centralised joint[k] (A1: "the equivalent of the old joint[k]").
+                // the centralised joint[k] ("the equivalent of the old joint[k]").
                 plan_out = live::PlanOutput(NA);
                 std::ostringstream mt;
                 mt.precision(10);
@@ -1849,14 +1901,16 @@ int main(int argc, char** argv) {
                        << JsonEscape(ma_picks[size_t(k)].why) << "\",\"broker\":" << int(comp.broker)
                        << ",\"members\":" << comp.members.size() << ",\"epoch\":" << comp.epoch.counter << "}";
                 }
-                const auto& lg = ma->comms->ledger();
-                mt << "],\"bytes\":{\"patch\":" << lg.TotalForClass(core::MessageClass::SUBMAP_PATCH)
-                   << ",\"bid\":" << lg.TotalForClass(core::MessageClass::TASK_BID)
-                   << ",\"consensus\":" << lg.TotalForClass(core::MessageClass::TASK_CONSENSUS)
-                   << ",\"heartbeat\":" << lg.TotalForClass(core::MessageClass::HEARTBEAT) << "}}";
+                const auto charged = [&](core::MessageClass cls) {
+                    return csnap ? csnap->Bytes(cls) : ma->comms->ledger().TotalForClass(cls);
+                };
+                mt << "],\"bytes\":{\"patch\":" << charged(core::MessageClass::SUBMAP_PATCH)
+                   << ",\"bid\":" << charged(core::MessageClass::TASK_BID)
+                   << ",\"consensus\":" << charged(core::MessageClass::TASK_CONSENSUS)
+                   << ",\"heartbeat\":" << charged(core::MessageClass::HEARTBEAT) << "}}";
                 plan_out.trace_json = mt.str();
                 // The console map and the return route are what the OPERATOR received over the radio (D175 SS8.2,
-                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and A1's
+                // the honest behaviour): the merged layer in the occupancy_grid slab convention, and the
                 // incremental D* Lite over it at rho_responder. Its confidence is NOT computed (support is not on
                 // the wire) - the console must not show one.
                 const cv::Mat merged = ma->layers[size_t(NA)].Merged();
@@ -1879,7 +1933,7 @@ int main(int argc, char** argv) {
             const mis::ReplanMaps& maps = plan_out.maps;
             const double ts = T * 1e-9;
             const std::string snap = "snapshots/slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
-            if (!lc.demo) cv::imwrite((run_dir / snap).string(), maps.slab);   // D169: no per-replan PNGs in demo
+            cv::imwrite((run_dir / snap).string(), maps.slab);   // operator map must exist when announced
             if (shadow) {
                 const std::string p4 = "snapshots/p4slab_" + std::to_string(int64_t(std::llround(ts * 1000))) + ".png";
                 cv::imwrite((run_dir / p4).string(),
@@ -1911,7 +1965,7 @@ int main(int argc, char** argv) {
                 cv::Mat plan;
                 std::vector<mis::Candidate> cands;   // ELIGIBLE only (path >= min_goal_m), nearest first
                 std::vector<double> risk;
-                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, maintainer 2026-10-23)
+                std::vector<bool> exempt;          // supervisor_return: never gated (§21.4, 2026-10-23)
                 int classical = -1;
                 std::string agent_json;            // this agent's part of the joint request (without the closing brace)
             };
@@ -1968,7 +2022,7 @@ int main(int argc, char** argv) {
                 Pending& pd = P[k];
                 pd.active = true;
                 pd.ac = ac;
-                // The planner's options (seam: AGENTIC_7 §0b), rendered into the trace and the LLM request.
+                // The planner's options (seam: agentic.md §0b), rendered into the trace and the LLM request.
                 const live::AgentOptions& ao = plan_out.agents[k];
                 pd.plan = ao.plan;
                 pd.classical = ao.classical;
@@ -1995,7 +2049,7 @@ int main(int argc, char** argv) {
                          << ",\"candidate\":" << continues;
                 }
                 for (size_t i = 0; i < ao.options.size(); ++i) {
-                    const auto& t = ao.options[i];   // the seam's fields only (A1's TaskCandidate names)
+                    const auto& t = ao.options[i];   // the seam's fields only (the TaskCandidate names)
                     const double r = t.risk;
                     pd.cands.push_back(t.c);
                     pd.risk.push_back(r);
@@ -2045,7 +2099,7 @@ int main(int argc, char** argv) {
                     pd.agent_json = q.str();
                 }
             }
-            // Phase 2: choose, jointly for every agent (AGENTIC_7 §0: Co-NavGPT's joint assignment; exactly-once).
+            // Phase 2: choose, jointly for every agent (agentic.md §0: Co-NavGPT's joint assignment; exactly-once).
             std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
             std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
@@ -2131,22 +2185,39 @@ int main(int argc, char** argv) {
                 std::vector<std::vector<std::pair<double, double>>> prev_goals(static_cast<size_t>(NA));
                 try {   // run 4: the orchestrator's handler died and Send threw out of main; the unwind destroyed a
                         // joinable thread -> std::terminate. A dead chooser link degrades like a timeout, never a crash.
-                    chooser->Send(q.str());
-                    if (lc.demo) {   // D169: never wait on the control path - poll the previous horizon's answer
+                    if (lc.demo) {
+                        // One outstanding supervisory request. Motion keeps using the classical
+                        // planner while inference or a human review is pending. A completed answer
+                        // is checked against THIS horizon's candidates below, never replayed blindly.
                         vdid = demo_prev_did;
-                        for (int k = 0; k < NA; ++k) prev_goals[k] = std::move(demo_prev_goals[k]);
-                        demo_prev_did = did;
-                        for (int k = 0; k < NA; ++k) {
-                            demo_prev_goals[k].clear();
-                            for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
-                        }
-                        if (vdid.empty()) {
-                            top_problem = "first horizon: no previous request";
-                        } else {
+                        if (!vdid.empty()) {
+                            prev_goals = demo_prev_goals;
                             ans = chooser->Wait(vdid, std::chrono::steady_clock::now());
-                            if (ans.empty()) top_problem = "expired: no answer within one horizon";
+                            const double age = std::chrono::duration<double>(
+                                std::chrono::steady_clock::now() - demo_request_started).count();
+                            if (!ans.empty() || age >= lc.llm_timeout_s) {
+                                demo_prev_did.clear();
+                                if (ans.empty()) top_problem = "expired: supervisory request timed out";
+                            } else {
+                                top_problem = "pending: autonomous planner continues";
+                            }
+                        } else {
+                            top_problem = "first horizon: supervisory request queued";
+                        }
+                        if (demo_prev_did.empty()) {
+                            chooser->Send(q.str());
+                            demo_prev_did = did;
+                            demo_request_started = std::chrono::steady_clock::now();
+                            for (int k = 0; k < NA; ++k) {
+                                demo_prev_goals[k].clear();
+                                for (const auto& op : plan_out.agents[k].options) demo_prev_goals[k].push_back(op.goal_xy);
+                            }
+                            const auto tmp = run_dir / "supervisor.tmp";
+                            { std::ofstream f(tmp); f << "{\"decision_id\":\"" << did << "\",\"t_s\":" << T * 1e-9 << "}"; }
+                            fs::rename(tmp, run_dir / "supervisor.json");
                         }
                     } else {
+                        chooser->Send(q.str());
                         ans = chooser->Wait(did, std::chrono::steady_clock::now() +
                                                      std::chrono::milliseconds(int64_t(lc.llm_timeout_s * 1000)));
                     }
@@ -2182,6 +2253,7 @@ int main(int argc, char** argv) {
                             if (e["reason"]) pick_reason[k] = e["reason"].as<std::string>();
                         }
                     }
+                    const int requested_candidate = want[k];
                     if (lc.demo && want[k] >= 0) {   // D169: the answer names the PREVIOUS horizon's candidate;
                         int j = -2;                  // map it by goal, the same rule that continues current_task
                         if (size_t(want[k]) < prev_goals[k].size()) {
@@ -2199,13 +2271,24 @@ int main(int argc, char** argv) {
                         source[k] = "fallback", validation[k] = "missing or out of the candidate set";
                     } else if (want[k] >= 0 && P[k].risk[size_t(want[k])] > lc.autonomous_threshold &&
                                !P[k].exempt[size_t(want[k])]) {
-                        const std::string expect = vdid + "-a" + std::to_string(k) + "-c" + std::to_string(want[k]);
+                        const std::string expect = vdid + "-a" + std::to_string(k) + "-c" + std::to_string(lc.demo ? requested_candidate : want[k]);
                         std::ifstream f(run_dir / "approvals" / (expect + ".json"));
                         approval_raw[k].assign(std::istreambuf_iterator<char>(f), {});
                         bool approved = false;
                         try {
                             approved = !approval_raw[k].empty() && approval_id[k] == expect &&
                                        YAML::Load(approval_raw[k])["verdict"].as<std::string>() == "approved";
+                            if (approved && lc.demo) {
+                                const auto request = YAML::LoadFile((run_dir / "approvals" / (expect + ".request.json")).string());
+                                const auto goal = request["intended_action"]["goal_xy_m"];
+                                const auto current_goal = plan_out.agents[k].options[size_t(want[k])].goal_xy;
+                                // Human permission covers this goal and risk envelope, not another
+                                // nearby option that inherited an index after the map changed.
+                                approved = goal && goal.size() == 2 &&
+                                    std::hypot(goal[0].as<double>() - current_goal.first,
+                                               goal[1].as<double>() - current_goal.second) < 1e-6 &&
+                                    P[k].risk[size_t(want[k])] <= request["risk_score"].as<double>() + 1e-6;
+                            }
                         } catch (const std::exception&) {
                         }
                         if (!approved) source[k] = "fallback", validation[k] = "above the risk threshold without an approval";
@@ -2337,7 +2420,7 @@ int main(int argc, char** argv) {
                   << "\",\"command\":{\"stamp_ns\":" << T << ",\"topic\":\"" << cmd_topic.at(k) << "\",\"kind\":\""
                   << (turn_here ? "turn" : cmd.poses.empty() ? "hold" : cmd.poses.size() == 1 ? "goto" : "follow")
                   << "\",\"waypoints_xy_m\":[";
-                if (!turn_here)   // the turn's NaN position stays in the PoseArray only: the trace is JSON (B's rule)
+                if (!turn_here)   // the turn's NaN position stays in the PoseArray only: the trace is JSON (the trace rule)
                     for (size_t i = 0; i < cmd.poses.size(); ++i) o << (i ? "," : "") << Xy(cmd.poses[i].position.x, cmd.poses[i].position.y);
                 o << "]";
                 if (turn_here) o << ",\"turn_yaw\":" << turn_yaw;
@@ -2417,11 +2500,16 @@ int main(int argc, char** argv) {
         if (is_live && !lc.lockstep && !mission_err) {
             for (int k = 0; k < NA; ++k) {
                 runtime::ros_cdr::PoseArray hold;
-                hold.header.stamp.sec = int32_t(end_ns / 1000000000);
-                hold.header.stamp.nanosec = uint32_t(end_ns % 1000000000);
+                hold.header.stamp.sec = int32_t(terminal_ns / 1000000000);
+                hold.header.stamp.nanosec = uint32_t(terminal_ns % 1000000000);
                 hold.header.frame_id = "world";
                 SendCommand(k, hold);
             }
+        }
+        if (operator_stopped) {
+            past_end = true;
+            for (auto& lane : lanes) lane.images.Close();
+            ::shutdown(fd, SHUT_RDWR);
         }
         // The estimators stop when the READER closes their queues (the first image past end_s, or the end of the
         // input): never earlier, or live and replay would consume different tails.
@@ -2450,12 +2538,14 @@ int main(int argc, char** argv) {
         }
         if (is_live) ::shutdown(fd, SHUT_RDWR);
         reader.join();
+        if (replay_reader_error && !mission_err) mission_err = replay_reader_error;
         rec.Close();
         if (is_live) ::close(fd);
 
         std::ofstream res(run_dir / "results.yaml");
+        if (operator_stopped) res << "operator_stopped: true\nactual_end_s: " << terminal_ns * 1e-9 << "\n";
         if (mission_err) res << "mission_error: true   # the loop failed; see stderr - artifacts above the failure are valid\n";
-        res << "# ariadne_live results (design LIVE_RUNTIME_L1). Generated; do not hand-edit.\n"
+        res << "# ariadne_live results (design live-runtime.md). Generated; do not hand-edit.\n"
             << "mode: " << (is_live ? (lc.demo ? "live-demo" : "live") : "replay") << "\nscene_id: " << brief.scene_id
             << "\nlive_config: " << lc.name << "\nmission_config: " << mc.name << "\nend_s: " << lc.end_s
             << "\nconsumed: {messages: " << rec.count() << ", digest_fnv1a64: '" << std::hex << rec.digest() << std::dec

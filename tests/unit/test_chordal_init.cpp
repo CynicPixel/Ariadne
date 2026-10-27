@@ -1,4 +1,4 @@
-// Chordal initialisation and the MST baseline (design ROBUST_BACKEND_2.5.md §3, D70): the SO(3) projection and its
+// Chordal initialisation and the MST baseline (design robust-backend.md §3, D70): the SO(3) projection and its
 // mandatory determinant fix, SE-Sync's isotropic weights, exact recovery on noise-free graphs (anchor anywhere,
 // anisotropic information), and refusal of a graph that is not connected to the anchor.
 #include "slam/pose_graph/chordal_init.hpp"

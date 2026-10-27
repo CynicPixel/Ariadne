@@ -161,7 +161,7 @@ struct Pose {                        // geometry_msgs/msg/Pose (Point has Vector
     Vector3 position;
     Quaternion orientation;
 };
-struct PoseArray {                   // geometry_msgs/msg/PoseArray: the live command (design LIVE_RUNTIME_L1 D151)
+struct PoseArray {                   // geometry_msgs/msg/PoseArray: the live command (design live-runtime.md D151)
     Header header;
     std::vector<Pose> poses;
 };

@@ -78,7 +78,7 @@ enum class DustOrder {
 /// Which participating-medium model the dust stage uses (D139).
 enum class DustModel {
     kKoschmieder,  // I = J t + A (1 - t), t = exp(-beta d): the daylight model of §5.6 (the default)
-    kHeadlamp,     // ALGORITHMS §10.2: round-trip attenuation of the lamp-lit scene plus single-scatter backscatter of
+    kHeadlamp,     // algorithms.md §10.2: round-trip attenuation of the lamp-lit scene plus single-scatter backscatter of
                    // the carried lamp along each pixel's ray (near-field dominated; lamp offset is a parameter)
 };
 
@@ -160,7 +160,7 @@ struct DegradationParams {
     /// neglected: backscatter is a near-field veil along the view ray.
     double dust_lamp_cos_inner = 0.0, dust_lamp_cos_outer = 0.0, dust_lamp_focal_px = 0.0;
 
-    // --- Headlamp dust model (D139; ALGORITHMS §10.2, after Akkaynak & Treibitz CVPR 2018/2019) -------------
+    // --- Headlamp dust model (D139; algorithms.md §10.2, after Akkaynak & Treibitz CVPR 2018/2019) -------------
     // Direct: the rendered (lamp-lit) scene J is attenuated out and back, J exp(-2 beta_D range), beta_D = dust_beta.
     // Backscatter, single scatter, phase function folded into the strength:
     //   B(px) = S * Int_{near}^{range} RID(theta(s)) / |s u - L|^2 * exp(-beta_B (s + |s u - L|)) ds  / B_ref
@@ -370,7 +370,7 @@ struct HeadlampVeil {
 /// STAGE ORDER is exactly as listed in §5.6:
 ///   radiance scale -> shot noise -> read noise -> PRNU/vignette
 ///   -> exposure/gain -> quantize/clip -> dust
-/// See docs/DECISIONS.md D9: this order places dust after the sensor, so dust
+/// See docs/decisions.md D9: this order places dust after the sensor, so dust
 /// does not influence shot-noise statistics. That is the documented order and
 /// is implemented literally; the physical alternative is recorded there as an
 /// open question rather than silently applied here.

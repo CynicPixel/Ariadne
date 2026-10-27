@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // On-manifold IMU preintegration (Forster, Carlone, Dellaert, Scaramuzza, T-RO 2017, arXiv 1512.02363) and the
-// inertial factor between two keyframes, in Ariadne's conventions (arch §10.2, design INERTIAL_2.4.md §4).
+// inertial factor between two keyframes, in Ariadne's conventions (arch §10.2, design inertial.md §4).
 //
 // WHAT IT IS. Between keyframes i and j the IMU gives hundreds of samples. Integrating them once, in the frame of
 // body i and with the bias held at a linearisation point b̄, gives three "relative motion measurements"
@@ -23,7 +23,7 @@
 // (tests/numerical/test_preintegration.cpp), including large rotations.
 //
 // NOISE. Kalibr/EuRoC densities are continuous-time; the discrete per-sample covariance is density² / Δt (Forster,
-// after eq. 47). EuRoC measured (INERTIAL_2.4 §4.1): the datasheet underestimates the white noise ~3x (gyro) and ~10x
+// after eq. 47). EuRoC measured (inertial.md §4.1): the datasheet underestimates the white noise ~3x (gyro) and ~10x
 // (accel), so the caller passes inflated densities.
 //
 // OpenCV-free; the window BA (window_ba.hpp) assembles these blocks next to the reprojection ones.
@@ -99,7 +99,7 @@ public:
         const Mat3 aHat = core::Hat(a);
         // The accelerometer sample is rotated by the MID-interval orientation dRmid = ΔR_ik Exp(½ ω dt) (as VINS-Mono
         // does). The paper's start-of-interval rotation is first order in ω dt: ~1 cm/s of Δv error over 0.5 s at
-        // 1 rad/s and 200 Hz, as large as EuRoC's measured residuals (INERTIAL_2.4 §4.1). Covariance and bias
+        // 1 rad/s and 200 Hz, as large as EuRoC's measured residuals (inertial.md §4.1). Covariance and bias
         // Jacobians below are re-derived for this mean (the appendix's sums with ΔR_ik -> dRmid), FD-tested.
         const Mat3 Eh = core::SO3Exp(0.5 * w * dt);
         const Mat3 dRmid = dR_ * Eh;

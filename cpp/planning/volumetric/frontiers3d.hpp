@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // 4.1 frontiers and the coarse global layer (arch §20.4, §20.6; design
-// VOLUMETRIC_4.1 §3.4-§3.5, D110).
+// volumetric.md §3.4-§3.5, D110).
 //
 // Frontier voxel: FREE, inside the motion band [z_lo, z_hi], with an UNKNOWN
 // 6-neighbour (Yamauchi 1997, in 3D). Clustered by 26-connectivity; clusters

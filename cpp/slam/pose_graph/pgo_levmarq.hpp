@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Pose-graph optimization on OpenCV 5's LM driver (D51, design POSE_GRAPH_2.md §3).
+// Pose-graph optimization on OpenCV 5's LM driver (D51, design pose-graph.md §3).
 //
 // cv::detail::LevMarqBase runs the Levenberg-Marquardt loop: Marquardt damping
 // (J^T J + lambda diag(J^T J), clamped), step-quality-adaptive lambda, optional
@@ -59,7 +59,7 @@ struct PgoSettings {
 /// Ceres, whose min/max_lm_diagonal it mirrors, clamps diag(J^T J) before applying lambda, so its damping still vanishes
 /// as lambda -> 0. OpenCV's absolute floor throttles the last Gauss-Newton steps once lambda has shrunk: parking-garage
 /// took 95 iterations and stopped 3.7e-5 above the minimum with it, 15 and at the minimum without (design
-/// ROBUST_BACKEND_2.5.md §2). The floor also regularised a rank-deficient H (a component cut off from the anchor); that
+/// robust-backend.md §2). The floor also regularised a rank-deficient H (a component cut off from the anchor); that
 /// case is handled where it arises instead: GNC anchors every connected component of the active graph (design §6).
 inline PgoSettings PgoV2() {
     PgoSettings s;

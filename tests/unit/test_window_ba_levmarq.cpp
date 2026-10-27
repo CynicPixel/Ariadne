@@ -1,8 +1,8 @@
-// Windowed BA on OpenCV 5's LevMarqBase (LOCAL_SLAM_2.3.md §3, §6):
+// Windowed BA on OpenCV 5's LevMarqBase (local-slam.md §3, §6):
 //   1. noise-free window from a perturbed start returns the truth;
 //   2. one free pose against FIXED landmarks == cv::solvePnPRefineLM (OpenCV's own LM, left camera, quadratic cost);
 //   3. the reported camera covariance == the camera block of the dense inverse of the undamped H;
-//   4. visual-inertial (INERTIAL_2.4 §4.5): a noise-free window from a perturbed start returns the truth -- poses,
+//   4. visual-inertial (inertial.md §4.5): a noise-free window from a perturbed start returns the truth -- poses,
 //      velocities, biases -- and the bias marginal is the dense inverse's block.
 #include "slam/bundle_adjustment/window_ba_levmarq.hpp"
 #include "../numerical/inertial_window_fixture.hpp"

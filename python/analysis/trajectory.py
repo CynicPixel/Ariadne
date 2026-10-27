@@ -1,4 +1,4 @@
-"""Trajectory metrics for the evaluation harness (design HARNESS_1.9), matching the C++
+"""Trajectory metrics for the evaluation harness (design evaluation-harness.md), matching the C++
 `runtime/metrics/trajectory_metrics.hpp` definitions (D31):
 
 - association: estimate and GT samples with the SAME timestamp (integer ns; the sim's

@@ -1,11 +1,11 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Predicted wire bytes of fetching one keyframe's features (design SPECTRAL_3.4 §5, COLLAB_3.2 §7): the
+// Predicted wire bytes of fetching one keyframe's features (design spectral-selection.md §5, collaboration.md §7): the
 // MATCH_REQUEST plus the MATCH_RESPONSE, first transmission, as the ledger will count them.
 //
 //   payload   exact: a response of n features x feature_bytes is encoded through the real codec (FlatBuffers size,
 //             padding and envelope included) and its pre-compression size taken;
-//   compress  the per-class ratio model of COLLAB_3.2 §7 (calibrated on runs disjoint from the gate runs; 1.0 =
+//   compress  the per-class ratio model of collaboration.md §7 (calibrated on runs disjoint from the gate runs; 1.0 =
 //             uncalibrated, and then the prediction is an upper bound, stated); the codec keeps a compressed form only
 //             when it is smaller, so transmitted = min(payload, ratio * payload);
 //   framing   the codec's own formula (frame header, then fragment header + datagram overhead per fragment).
@@ -20,7 +20,7 @@
 
 namespace ariadne::collaboration {
 
-/// COLLAB_3.2 §7: the compression ratio of MATCH_RESPONSE, per feature encoding (ORB and int8 XFeat compress
+/// collaboration.md §7: the compression ratio of MATCH_RESPONSE, per feature encoding (ORB and int8 XFeat compress
 /// differently), calibrated on runs disjoint from the gate runs. A run without a calibration for the encoding it uses
 /// prices at ratio 1.0 (an upper bound) and is labelled uncalibrated: it is excluded from the I6 gate.
 struct ResponseCostModel {
@@ -38,7 +38,7 @@ struct ResponseCostModel {
     }
 };
 
-/// Per class: the byte gate is per class (COLLAB_3.2 §7), so the two halves are kept apart.
+/// Per class: the byte gate is per class (collaboration.md §7), so the two halves are kept apart.
 struct FetchCost {
     double request = 0, response = 0;
     double total() const { return request + response; }

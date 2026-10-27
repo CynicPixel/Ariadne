@@ -31,7 +31,7 @@ double RmsRelative(const FlatField& a, const FlatField& b) {
 
 }  // namespace
 
-// Acceptance (RADIOMETRIC_2.2.md §6): <= 0.5% RMS against the analytic K, RGB and mono. The PRNU alone
+// Acceptance (radiometric.md §6): <= 0.5% RMS against the analytic K, RGB and mono. The PRNU alone
 // is 1.2%, so a calibration that missed the fixed pattern (e.g. drew PRNU per frame) would fail this.
 TEST(FlatField, CalibrationMatchesTheAnalyticResponse) {
     for (int channels : {3, 1}) {

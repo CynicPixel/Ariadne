@@ -1,0 +1,42 @@
+{"w": 320, "h": 180, "n": 50000, "packed": false, "sh": 0, "train_ms_med": 5.057, "train_ms_p90": 5.096, "render_ms_med": 1.215, "render_ms_p90": 1.239, "peak_mem_mb": 37.4}
+{"w": 320, "h": 180, "n": 50000, "packed": true, "sh": 0, "train_ms_med": 5.534, "train_ms_p90": 5.584, "render_ms_med": 1.377, "render_ms_p90": 1.391, "peak_mem_mb": 38.9}
+{"w": 320, "h": 180, "n": 100000, "packed": false, "sh": 0, "train_ms_med": 5.929, "train_ms_p90": 6.056, "render_ms_med": 1.514, "render_ms_p90": 1.525, "peak_mem_mb": 54.8}
+{"w": 320, "h": 180, "n": 100000, "packed": true, "sh": 0, "train_ms_med": 6.72, "train_ms_p90": 6.831, "render_ms_med": 1.677, "render_ms_p90": 1.692, "peak_mem_mb": 59.4}
+{"w": 320, "h": 180, "n": 250000, "packed": false, "sh": 0, "train_ms_med": 8.555, "train_ms_p90": 8.823, "render_ms_med": 2.586, "render_ms_p90": 2.619, "peak_mem_mb": 107.1}
+{"w": 320, "h": 180, "n": 250000, "packed": true, "sh": 0, "train_ms_med": 10.251, "train_ms_p90": 10.489, "render_ms_med": 2.76, "render_ms_p90": 2.784, "peak_mem_mb": 115.9}
+{"w": 320, "h": 180, "n": 500000, "packed": false, "sh": 0, "train_ms_med": 12.69, "train_ms_p90": 13.316, "render_ms_med": 3.829, "render_ms_p90": 3.858, "peak_mem_mb": 192.7}
+{"w": 320, "h": 180, "n": 500000, "packed": true, "sh": 0, "train_ms_med": 16.476, "train_ms_p90": 17.209, "render_ms_med": 4.325, "render_ms_p90": 4.354, "peak_mem_mb": 208.2}
+{"w": 640, "h": 360, "n": 50000, "packed": false, "sh": 0, "train_ms_med": 8.416, "train_ms_p90": 8.542, "render_ms_med": 1.256, "render_ms_p90": 1.29, "peak_mem_mb": 81.3}
+{"w": 640, "h": 360, "n": 50000, "packed": true, "sh": 0, "train_ms_med": 8.94, "train_ms_p90": 9.031, "render_ms_med": 1.412, "render_ms_p90": 1.434, "peak_mem_mb": 82.7}
+{"w": 640, "h": 360, "n": 100000, "packed": false, "sh": 0, "train_ms_med": 10.115, "train_ms_p90": 10.202, "render_ms_med": 1.542, "render_ms_p90": 1.59, "peak_mem_mb": 96.4}
+{"w": 640, "h": 360, "n": 100000, "packed": true, "sh": 0, "train_ms_med": 10.723, "train_ms_p90": 10.891, "render_ms_med": 1.7, "render_ms_p90": 1.747, "peak_mem_mb": 100.0}
+{"w": 640, "h": 360, "n": 250000, "packed": false, "sh": 0, "train_ms_med": 14.133, "train_ms_p90": 14.515, "render_ms_med": 2.791, "render_ms_p90": 2.837, "peak_mem_mb": 149.8}
+{"w": 640, "h": 360, "n": 250000, "packed": true, "sh": 0, "train_ms_med": 15.91, "train_ms_p90": 16.173, "render_ms_med": 2.946, "render_ms_p90": 2.988, "peak_mem_mb": 155.8}
+{"w": 640, "h": 360, "n": 500000, "packed": false, "sh": 0, "train_ms_med": 19.427, "train_ms_p90": 20.369, "render_ms_med": 4.501, "render_ms_p90": 4.581, "peak_mem_mb": 230.7}
+{"w": 640, "h": 360, "n": 500000, "packed": true, "sh": 0, "train_ms_med": 23.124, "train_ms_p90": 23.821, "render_ms_med": 5.003, "render_ms_p90": 5.054, "peak_mem_mb": 245.9}
+{
+  "sh3": {
+    "w": 640,
+    "h": 360,
+    "n": 250000,
+    "train_ms_med": 14.499,
+    "train_ms_p90": 14.69
+  },
+  "append": {
+    "n_before": 100000,
+    "n_added": 10000,
+    "n_after": 110000,
+    "append_ms": 0.642,
+    "adam_state_kept": true,
+    "steps_after_ok": true
+  },
+  "env": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu128",
+    "cuda": "12.8",
+    "gpu": "Tesla T4",
+    "gsplat_install": "preinstalled 1.5.3 (compiled csrc: /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so)",
+    "gsplat": "1.5.3",
+    "install_s": 0.0
+  }
+}

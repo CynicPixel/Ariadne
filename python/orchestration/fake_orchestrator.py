@@ -1,5 +1,5 @@
 """A scripted stand-in for the orchestrator (no Bedrock, no spend): exercises every validation branch of ariadne_live's
-LLM chooser (design AGENTIC_7 D156, D158) deterministically, by replaying a live recording against it.
+LLM chooser (design agentic.md D156, D158) deterministically, by replaying a live recording against it.
 
   python -m orchestration.fake_orchestrator --socket SOCK --dir DIR --approvals DIR
 

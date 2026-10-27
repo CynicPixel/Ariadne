@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.3 next-best-view (arch §21.2-§21.4; design NBV_4.3, D114). Planning-level: no runtime, ROS or AWS type.
+// 4.3 next-best-view (arch §21.2-§21.4; design next-best-view.md, D114). Planning-level: no runtime, ROS or AWS type.
 //
 //   targets   generators A frontier clusters (PCA-split above 2 m), B low-weight surface coarse cells (bottom
 //             decile), C peers' keyframes this agent has not been near, D alias places, E low-support egress runs;
@@ -104,7 +104,7 @@ struct PeerKeyframe {
 };
 
 /// Delta lambda_2 of the inter-agent edge a view near `peer_kf_id` would enable (3.4's selector, via a runtime
-/// adapter; NBV_4.3 §1).
+/// adapter; next-best-view.md §1).
 class ConnectivityOracle {
 public:
     virtual ~ConnectivityOracle() = default;
@@ -117,14 +117,14 @@ struct AliasPlace {
     double value = 0;   // the disambiguation value of observing it (§21.3)
 };
 
-/// §17.3 alias-flagged places (no producer yet; NBV_4.3 §1).
+/// §17.3 alias-flagged places (no producer yet; next-best-view.md §1).
 class AliasSource {
 public:
     virtual ~AliasSource() = default;
     virtual std::vector<AliasPlace> Places() const = 0;
 };
 
-enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // NBV_4.3 §5; kTare: 4.6
+enum class NbvPolicy { kAriadne, kCoverageGreedy, kUncertaintyOnly, kRandom, kTare };   // next-best-view.md §5; kTare: 4.6
 
 /// D117: the command the live loop would send for a view, from the planner's own Route (Phase4Planner): its
 /// waypoints (one (NaN, NaN) = turn here, D125) and whether it was cut short of the view (D119: no final yaw).
@@ -152,7 +152,7 @@ struct NbvParams {
     double tare_subspace_m = 6.0;              // D116: 12 coarse cells = one horizon width (2 x the depth gate)
     double split_extent_m = 2.0;               // FUEL's PCA split above this AABB extent
     double peer_near_m = 4.0, peer_seen_m = 2.0;
-    double rho_r = 0.40, rho_a = 0.20, escape_m = 0.5;   // D158's risk mapping (B, AGENTIC_7)
+    double rho_r = 0.40, rho_a = 0.20, escape_m = 0.5;   // D158's risk mapping (agentic.md)
     double e_total_m = 1e9;                    // energy budget, in metres in the kinematic rig
     double e_per_m = 1.0, speed_mps = 0.5;
     double reserve = 1.3;
@@ -218,13 +218,13 @@ std::vector<int> ExactOpenTour(const std::vector<std::vector<double>>& D);
 /// p90 scale of `v` (sorted[floor(0.9 (n - 1))]); the max if that is 0; 0 if all are 0.
 double P90Scale(std::vector<double> v);
 
-/// D158 (B): per cell, the widest way from `from` over `plan` (maximin of `clr` along the path, 8-connected with the
+/// D158: per cell, the widest way from `from` over `plan` (maximin of `clr` along the path, 8-connected with the
 /// corner rule); cells within escape_cells of `from` count as unbounded. CV_64F, -1 unreachable.
 cv::Mat Bottleneck(const cv::Mat& plan, const cv::Mat& clr, const Cell& from, double escape_cells);
 
-/// The agent's plan space (D114 amendment, = B's D153b standoff rule): trav_a AND egress clearance >= rho_agent, i.e.
+/// The agent's plan space (D114 amendment, = the D153b standoff rule): trav_a AND egress clearance >= rho_agent, i.e.
 /// known-free columns with rho_agent clearance to anything not observed free. trav_a alone counts unknown space as
-/// passable, so views and paths ran through unobserved columns where clear_r = 0 (risk 1 on ~90 % of views; B).
+/// passable, so views and paths ran through unobserved columns where clear_r = 0 (risk 1 on ~90 % of views).
 cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a);
 
 /// The return space of §21.4's hard rule: `plan` plus the agent's swept body along its own flown track (segments
@@ -236,7 +236,7 @@ cv::Mat KnownFreePlan(const TraversabilityMaps& tm, double rho_a);
 cv::Mat FlownReturnSpace(const cv::Mat& plan, const cv::Mat& slab, const GridFrame& g, const std::vector<core::Vec3>& track,
                          const std::vector<Cell>& entrances, double body_m, cv::Mat* swept = nullptr);
 
-/// D158's arrival rule (B, planner.hpp): the widest way to ARRIVE within `rad` cells of the goal = the max of the
+/// D158's arrival rule (planner.hpp): the widest way to ARRIVE within `rad` cells of the goal = the max of the
 /// bottleneck map over that disc (a view goal sits at the edge of unknown space by design, so its own cell's clearance
 /// is not what a responder must pass). -1 if nothing in the disc is reachable.
 double ArrivalBottleneck(const cv::Mat& B, const Cell& goal, int rad);

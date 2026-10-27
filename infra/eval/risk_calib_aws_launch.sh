@@ -1,5 +1,5 @@
 #!/bin/bash
-# Host side of the 4.2 risk-calibration renders (design RISK_ZONES_4.2 §3, D112): stage the inputs, run
+# Host side of the 4.2 risk-calibration renders (design traversability-risk.md#risk-zones §3, D112): stage the inputs, run
 # infra/eval/risk_calib_aws.sh on one g4dn.xlarge through spinup.sh, then tear down everything this run staged.
 # Pattern of main's infra/eval/premerge_aws_launch.sh. Runs from the repo root on a clean HEAD.
 #   infra/eval/risk_calib_aws_launch.sh stage     inputs.tar (scenes + payload, SHA256SUMS), images to ECR (temp tags)
@@ -19,7 +19,7 @@ IMAGES=("ariadne/core-dev:dev ariadne/core-dev:dev" "ariadne/sim:dev ariadne/sim
 BINS=(ariadne_sim_collab ariadne_volumetric_eval)
 log() { echo "[launch $(date -u +%H:%M:%S)] $*" >&2; }
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md' ':!.cache')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- . ':!.cache')" ] || { log "dirty tree"; exit 1; }
   rm -rf "$W" payload; mkdir -p "$W" payload
   git rev-parse HEAD > "$W/commit"
   for b in "${BINS[@]}"; do cp "build/docker/cpp/runtime/$b" payload/; done

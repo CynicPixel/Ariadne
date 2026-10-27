@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The live closed-loop run (design docs/design/LIVE_RUNTIME_L1.md, D150-D155).
+# The live closed-loop run (design docs/design/live-runtime.md, D150-D155).
 #
 #   infra/scripts/live.sh build                    sim side: the mover plugin + ros2/ (colcon) in ariadne/sim
 #   infra/scripts/live.sh compose PRESET SEED RTF  scene + mission_live.* -> build/live/scenes/<preset>_<seed>
 #   infra/scripts/live.sh run SCENE OUT [END_S]    one live run -> OUT/<run>/  (+ sim/console logs)
 #                                                  config: ARIADNE_LIVE_CONFIG (default configs/mission/live_v1.yaml)
 #                                                  ARIADNE_LOCKSTEP=1: lockstep (D165), recorded in the run's config
-#                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: A1's Phase 4
+#                                                  ARIADNE_PLANNER_CONFIG=configs/mission/mission_v2.yaml: the Phase 4
 #                                                  planner (copied into the run as planner_config.yaml; replay uses it)
 #                                                  ARIADNE_SHADOW_MAP_CONFIG=configs/mission/mission_v2.yaml: a Phase 4
 #                                                  TSDF on the same keyframes -> snapshots/p4slab_<ms>.png (any planner)
 #   infra/scripts/live.sh replay RUN_DIR SCENE     the recording, replayed twice, compared (replay_check.json)
 #
 # Three containers per run, named ariadne-live-<id>-{rt,sim,console}. Only those are ever stopped, by the exact
-# container ids `docker run -d` printed for them (other sessions share the docker daemon):
+# container ids `docker run -d` printed for them (other users share the docker daemon):
 #   rt       ariadne/core-dev  ariadne_live --link <run>/link.sock  (listens first)
 #   sim      ariadne/sim       ros2 launch ariadne_sim live_world.launch.py: gz sim PAUSED + RosGzBridge +
 #                              RuntimeLink in one component container; unpaused here once <run>/link.ready exists
 #   console  ariadne-console   ARIADNE_LIVE=<run>:<scene> uvicorn, 127.0.0.1:${ARIADNE_CONSOLE_PORT:-8080};
 #                              a probe client keeps a WebSocket open so frames are served (and logged) during the run
-#   orch     ariadne-orchestrator  only with `chooser: llm` (AGENTIC_7 D156): the Bedrock tool loop + MCP servers,
+#   orch     ariadne-orchestrator  only with `chooser: llm` (agentic.md D156): the Bedrock tool loop + MCP servers,
 #                              listening on <run>/chooser.sock BEFORE the runtime starts (it connects, waiting <= 60 s).
 #                              Credentials: the current session exported to a mode-600 env file that is deleted as
 #                              soon as docker has read it (aws.sh's pattern for Terraform); short-lived, never logged.
@@ -116,15 +116,35 @@ start_orchestrator() {   # -> appends its container id; returns once <run>/choos
 
 cmd_run() {
   local scene="$1" out="$2" end_s="${3:-}"
+  if [ "${ARIADNE_EXTERNAL_CONSOLE:-0}" = "1" ]; then
+    mkdir -p "$REPO_ROOT/build/demo"
+    exec {demo_worker_lock}>"$REPO_ROOT/build/demo/runtime.lock"
+    flock -n "$demo_worker_lock" || { log "another demo mission owns this worker"; return 1; }
+  fi
   [ -f "$REPO_ROOT/$scene/mission_live.sdf" ] || { log "no $scene/mission_live.sdf (live.sh compose)"; exit 2; }
   local id; id="$(date -u +%Y%m%dT%H%M%SZ)-$(head -c2 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   local run="$out/live-$id"
   mkdir -p "$REPO_ROOT/$run"
-  local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con orch=""
+  local live_cfg="${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}" rt sim con="" orch="" recon=""
+  local perception_cfg="${ARIADNE_PERCEPTION_CONFIG:-configs/perception/sim_v1.yaml}"
+  local slam_cfg="${ARIADNE_SLAM_CONFIG:-configs/slam/sim_v1.yaml}"
+  local imu_noise_cfg="${ARIADNE_IMU_NOISE_CONFIG:-}"
+  local mission_cfg="${ARIADNE_MISSION_CONFIG:-configs/mission/mission_v1.yaml}"
   # The config this run used, always recorded beside it: replay reads it (chooser, gate, end_s).
   sed -e "${end_s:+s/^end_s: .*/end_s: $end_s/}" -e "${ARIADNE_LOCKSTEP:+s/^lockstep: .*/lockstep: true/}" \
     "$REPO_ROOT/$live_cfg" > "$REPO_ROOT/$run/live_config.yaml"
   live_cfg="$run/live_config.yaml"
+  cp "$REPO_ROOT/$perception_cfg" "$REPO_ROOT/$run/perception_config.yaml"
+  cp "$REPO_ROOT/$slam_cfg" "$REPO_ROOT/$run/slam_config.yaml"
+  cp "$REPO_ROOT/$mission_cfg" "$REPO_ROOT/$run/mission_config.yaml"
+  perception_cfg="$run/perception_config.yaml"
+  slam_cfg="$run/slam_config.yaml"
+  local imu_noise_arg=()
+  if [ -n "$imu_noise_cfg" ]; then
+    cp "$REPO_ROOT/$imu_noise_cfg" "$REPO_ROOT/$run/imu_noise_config.yaml"
+    imu_noise_arg=(--imu-noise-config "$run/imu_noise_config.yaml")
+  fi
+  mission_cfg="$run/mission_config.yaml"
   local planner=()
   if [ -n "${ARIADNE_PLANNER_CONFIG:-}" ]; then
     cp "$REPO_ROOT/$ARIADNE_PLANNER_CONFIG" "$REPO_ROOT/$run/planner_config.yaml"
@@ -134,7 +154,27 @@ cmd_run() {
     cp "$REPO_ROOT/$ARIADNE_SHADOW_MAP_CONFIG" "$REPO_ROOT/$run/shadow_map_config.yaml"
     planner+=(--shadow-map-config "$run/shadow_map_config.yaml")
   fi
+  {
+    printf 'source_perception: %s\n' "${ARIADNE_PERCEPTION_CONFIG:-configs/perception/sim_v1.yaml}"
+    printf 'source_slam: %s\n' "${ARIADNE_SLAM_CONFIG:-configs/slam/sim_v1.yaml}"
+    printf 'source_mission: %s\n' "${ARIADNE_MISSION_CONFIG:-configs/mission/mission_v1.yaml}"
+    printf 'source_live: %s\n' "${ARIADNE_LIVE_CONFIG:-configs/mission/live_v1.yaml}"
+    sha256sum "$REPO_ROOT/$run/perception_config.yaml" "$REPO_ROOT/$run/slam_config.yaml" \
+      "$REPO_ROOT/$run/mission_config.yaml" "$REPO_ROOT/$run/live_config.yaml"
+    [ ! -f "$REPO_ROOT/$run/imu_noise_config.yaml" ] || sha256sum "$REPO_ROOT/$run/imu_noise_config.yaml"
+    for cfg in planner_config.yaml shadow_map_config.yaml collab_config.yaml; do
+      [ ! -f "$REPO_ROOT/$run/$cfg" ] || sha256sum "$REPO_ROOT/$run/$cfg"
+    done
+    [ ! -f "$REPO_ROOT/${ARIADNE_COLLAB_CONFIG:-configs/collab/collab_live_v1.yaml}" ] || \
+      sha256sum "$REPO_ROOT/${ARIADNE_COLLAB_CONFIG:-configs/collab/collab_live_v1.yaml}"
+    for model in .cache/models/eigenplaces_sim_ref/eigenplaces_r50_256_640x360.onnx \
+      .cache/models/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx \
+      .cache/models/aliked_lg_sim_ref/lightglue_aliked.onnx; do
+      [ ! -f "$REPO_ROOT/$model" ] || sha256sum "$REPO_ROOT/$model"
+    done
+  } > "$REPO_ROOT/$run/config_manifest.txt"
   trap 'stop_mine' EXIT
+  trap 'exit 143' TERM INT
   local world; world="$(grep -o '<world name="[^"]*"' "$REPO_ROOT/$scene/mission_live.sdf" | head -1 | cut -d'"' -f2)"
   log "run $id: scene $scene, world '$world', end ${end_s:-config} s, config $live_cfg, render: $(render_args | cut -d' ' -f1-2)"
 
@@ -145,34 +185,55 @@ cmd_run() {
     chooser=(--chooser-socket "$run/chooser.sock")
   fi
 
-  # 0b. The splat recon service (A2, D231; tee D220), only with ARIADNE_SPLAT=1: it LISTENS before the runtime
-  # connects. cpu_init backend (numpy/scipy/cv2 - A2's ariadne-recon image, never the console image). The tee is a
+  # 0b. The splat recon service (D231; tee D220), only with ARIADNE_SPLAT=1: it LISTENS before the runtime
+  # connects. cpu_init backend (numpy/scipy/cv2 - the ariadne-recon image, never the console image). The tee is a
   # silent no-op when this did not start, so gate runs are untouched.
   local recon_env=()
-  # A pre-set ARIADNE_RECON_SOCK (container path) reaches the runtime as-is: the mock/test path - A2's
-  # service-side mock and my tee smoke both listen outside this script.
+  # A pre-set ARIADNE_RECON_SOCK (container path) reaches the runtime as-is: the mock/test path - the
+  # service-side mock and the tee smoke both listen outside this script.
   [ -n "${ARIADNE_RECON_SOCK:-}" ] && recon_env=(-e ARIADNE_RECON_SOCK="$ARIADNE_RECON_SOCK")
   if [ "${ARIADNE_SPLAT:-0}" = "1" ]; then
-    CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-recon" --memory=2g --memory-swap=2g -u "$U" -e HOME=/tmp \
+    local recon_backend="${ARIADNE_RECON_BACKEND:-cpu_init}"
+    local recon_gpu=() recon_train=()
+    if [ "$recon_backend" = gpu ]; then
+      recon_gpu=(--gpus all)
+      recon_train=(--iters "${ARIADNE_RECON_ITERS:-100}" --diagnostics)
+    elif [ "$recon_backend" != cpu_init ]; then
+      log "unsupported reconstruction backend: $recon_backend"; exit 2
+    fi
+    CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-recon" "${recon_gpu[@]}" \
+      --memory="${ARIADNE_RECON_MEM:-4g}" --memory-swap="${ARIADNE_RECON_MEM:-4g}" \
+      -u "$U" -e HOME=/tmp -e OMP_NUM_THREADS=2 -e MKL_NUM_THREADS=2 \
       -v "$REPO_ROOT":/work -w /work/python "${ARIADNE_RECON_IMAGE:-ariadne-recon:1}" \
       python -m ariadne_recon.live.service --listen "/work/$run/recon.sock" --out "/work/$run/splat" \
-      --scene "/work/$scene" --backend cpu_init --training-image rgb)")
+      --scene "/work/$scene" --backend "$recon_backend" --training-image rgb "${recon_train[@]}" --record-link "/work/$run/recon.link")")
+    recon="${CONTAINERS[-1]}"
     local t0r; t0r=$(date +%s)
     until [ -S "$REPO_ROOT/$run/recon.sock" ]; do
-      [ $(( $(date +%s) - t0r )) -lt 30 ] || { log "recon service not listening after 30 s (tee stays off)"; break; }
+      docker inspect -f '{{.State.Running}}' "$recon" | grep -q true || {
+        docker logs "$recon" > "$REPO_ROOT/$run/recon.log" 2>&1; log 'reconstruction service exited during startup'; exit 1;
+      }
+      [ $(( $(date +%s) - t0r )) -lt 120 ] || { log 'reconstruction socket startup timed out'; exit 1; }
       sleep 1
     done
     recon_env=(-e ARIADNE_RECON_SOCK="/work/$run/recon.sock")
   fi
 
   # 1. The runtime listens first.
+  local runtime_commit="${ARIADNE_GIT_COMMIT:-$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "payload:$(basename "$REPO_ROOT")")}"
+  local runtime_dirty="${ARIADNE_GIT_DIRTY:-$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator 2>/dev/null)" ] && echo true || echo false)}"
+  local runtime_image; runtime_image="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')"
+  python3 "$REPO_ROOT/infra/scripts/live_identity.py" record --run "$REPO_ROOT/$run" \
+    --binary "$REPO_ROOT/build/docker/cpp/runtime/ariadne_live" --image "$runtime_image" \
+    --commit "$runtime_commit" --dirty "$runtime_dirty"
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-rt" --memory="${ARIADNE_RT_MEM:-6g}" --memory-swap="${ARIADNE_RT_MEM:-6g}" -u "$U" -v "$REPO_ROOT":/work -w /work "${recon_env[@]}" \
-    -e ARIADNE_GIT_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "payload:$(basename "$REPO_ROOT")")" \
-    -e ARIADNE_GIT_DIRTY="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator 2>/dev/null)" ] && echo true || echo false)" \
-    -e ARIADNE_IMAGE_DIGEST="$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')" \
-    "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live --scene "$scene" \
-      --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
-      --mission-config configs/mission/mission_v1.yaml --live-config "$live_cfg" \
+    -e ARIADNE_DEMO_MEDIA="${ARIADNE_EXTERNAL_CONSOLE:-0}" \
+    -e ARIADNE_GIT_COMMIT="$runtime_commit" \
+    -e ARIADNE_GIT_DIRTY="$runtime_dirty" \
+    -e ARIADNE_IMAGE_DIGEST="$runtime_image" \
+    "$CORE_IMAGE" "${ARIADNE_LIVE_BINARY:-build/docker/cpp/runtime/ariadne_live}" --scene "$scene" \
+      --perception-config "$perception_cfg" --slam-config "$slam_cfg" "${imu_noise_arg[@]}" \
+      --mission-config "$mission_cfg" --live-config "$live_cfg" \
       --out "$run" --link "$run/link.sock" "${chooser[@]}" "${planner[@]}")")
   rt="${CONTAINERS[-1]}"
 
@@ -188,6 +249,7 @@ cmd_run() {
   # 3. Unpause once every topic is matched end to end.
   local t0; t0=$(date +%s)
   until [ -f "$REPO_ROOT/$run/link.ready" ]; do
+    [ ! -f "$REPO_ROOT/$out/stop.request.json" ] || { log "startup cancelled"; return 0; }
     [ $(( $(date +%s) - t0 )) -lt 300 ] || { log "link not ready after 300 s"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
     docker inspect -f '{{.State.Running}}' "$sim" | grep -q true || { log "sim container exited"; docker logs "$sim" 2>&1 | tail -40 >&2; exit 1; }
     sleep 2
@@ -199,7 +261,7 @@ cmd_run() {
   docker exec -d "$sim" sh -c "echo \"tap started $(date -u +%H:%M:%S)\" > /work/$run/gz_stats.err; . /opt/ros/jazzy/setup.sh; exec gz topic -e -t /world/$world/stats --json-output >> /work/$run/gz_stats.jsonl 2>> /work/$run/gz_stats.err" \
     || echo "docker exec for the stats tap failed" > "$REPO_ROOT/$run/gz_stats.err"
   docker exec "$sim" sh -c ". /opt/ros/jazzy/setup.sh; timeout 3 gz topic -l" > "$REPO_ROOT/$run/gz_topics.txt" 2>&1 || true
-  for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn (A1)
+  for _ in 1 2 3 4 5 6; do   # ogre2.log appears when the render engine initializes: the probe raced it on g4dn
     if docker exec "$sim" sh -c "grep -m4 -i 'GL_RENDERER\|GL_VENDOR\|Device Name\|RenderSystem Name' /tmp/.gz/rendering/ogre2.log 2>/dev/null" \
          > "$REPO_ROOT/$run/renderer.txt" 2>&1 && [ -s "$REPO_ROOT/$run/renderer.txt" ]; then break; fi
     echo "renderer: ogre2.log not found at probe time" > "$REPO_ROOT/$run/renderer.txt"
@@ -214,6 +276,8 @@ cmd_run() {
     log "world running"
   fi
 
+  # A hosted demo owns one console for the worker lifetime.
+  if [ "${ARIADNE_EXTERNAL_CONSOLE:-0}" != "1" ]; then
   # 4. Console, fed live, with a probe client so frames are served during the run.
   local port="${ARIADNE_CONSOLE_PORT:-8080}"
   CONTAINERS+=("$(docker run -d --name "ariadne-live-$id-console" -u "$U" -v "$REPO_ROOT":/work -w /work/python \
@@ -229,18 +293,40 @@ async def main():
         async for _ in ws: pass
 asyncio.run(main())" || log "console probe client not started (websockets missing?)"
 
+  fi
+
   # 5. Wait for the runtime (it ends at end_s of sim time), then stop the rest.
-  # D224: an external sampler (A2's profiling) beside the run - started after the containers, stopped with them.
+  # D224: an external sampler (profiling) beside the run - started after the containers, stopped with them.
   SAMPLER_PID=""
   if [ -n "${ARIADNE_SAMPLER:-}" ]; then
     bash "$ARIADNE_SAMPLER" "$REPO_ROOT/$run/sampler" > "$REPO_ROOT/$run/sampler.log" 2>&1 &
     SAMPLER_PID=$!
   fi
-  local rc; rc="$(docker wait "$rt")"
+  local rc
+  # Keep startup cancellation and an early End run visible to the runtime.
+  while [ "$(docker inspect -f '{{.State.Running}}' "$rt")" = true ]; do
+    if [ -f "$REPO_ROOT/$out/stop.request.json" ]; then
+      for d in "$REPO_ROOT/$run"/*/telemetry.jsonl; do
+        [ ! -f "$d" ] || cp "$REPO_ROOT/$out/stop.request.json" "$(dirname "$d")/stop.request.json"
+      done
+    fi
+    sleep 1
+  done
+  rc="$(docker wait "$rt")"
+  # Runtime EOF flushes the reconstruction table before containers are stopped.
+  if [ "${ARIADNE_SPLAT:-0}" = "1" ]; then
+    timeout 30 docker wait "ariadne-live-$id-recon" >/dev/null || true
+  fi
   docker logs "$rt" > "$REPO_ROOT/$run/runtime.log" 2>&1 || true
   docker logs "$sim" > "$REPO_ROOT/$run/sim.log" 2>&1 || true
+  if [ -n "$recon" ]; then
+    local recon_rc
+    recon_rc="$(timeout "${ARIADNE_RECON_DRAIN_S:-300}" docker wait "$recon")" || recon_rc=124
+    docker logs "$recon" > "$REPO_ROOT/$run/recon.log" 2>&1 || true
+    [ "$recon_rc" = 0 ] || { log "reconstruction exit $recon_rc"; rc=1; }
+  fi
   sleep 3   # the console's last poll sees results.yaml and ends its stream
-  docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
+  [ -z "$con" ] || docker logs "$con" > "$REPO_ROOT/$run/console.log" 2>&1 || true
   [ -z "$orch" ] || docker logs "$orch" > "$REPO_ROOT/$run/orchestrator.log" 2>&1 || true
   printf '%s\n' "${CONTAINERS[@]}" > "$REPO_ROOT/$run/container_ids.txt"
   [ -z "${SAMPLER_PID:-}" ] || kill "$SAMPLER_PID" 2>/dev/null || true
@@ -254,17 +340,27 @@ asyncio.run(main())" || log "console probe client not started (websockets missin
 cmd_replay() {
   local run="$1" scene="$2" i
   local cfg; cfg="$( [ -f "$REPO_ROOT/$run/live_config.yaml" ] && echo "$run/live_config.yaml" || echo configs/mission/live_v1.yaml)"
+  local perception_cfg="$run/perception_config.yaml" slam_cfg="$run/slam_config.yaml" mission_cfg="$run/mission_config.yaml"
+  [ -f "$REPO_ROOT/$perception_cfg" ] || perception_cfg="configs/perception/sim_v1.yaml"
+  [ -f "$REPO_ROOT/$slam_cfg" ] || slam_cfg="configs/slam/sim_v1.yaml"
+  [ -f "$REPO_ROOT/$mission_cfg" ] || mission_cfg="configs/mission/mission_v1.yaml"
+  local imu_noise_arg=()
+  if [ -f "$REPO_ROOT/$run/imu_noise_config.yaml" ]; then imu_noise_arg=(--imu-noise-config "$run/imu_noise_config.yaml"); fi
   local live_dir; live_dir="$(cd "$REPO_ROOT/$run" && ls -d */inputs.mcap | head -1 | xargs dirname)"
   # The recorded inputs beyond the sensors: operator directives always; the LLM's choices when chooser is llm (the
-  # model is never called in replay, AGENTIC_7 D161).
+  # model is never called in replay, agentic.md D161).
   local extra=(--directives "$run/$live_dir/directives.jsonl")
   grep -q '^chooser: *llm' "$REPO_ROOT/$cfg" && extra+=(--decisions "$run/$live_dir/trace.jsonl")
   [ -f "$REPO_ROOT/$run/planner_config.yaml" ] && extra+=(--planner-config "$run/planner_config.yaml")
   [ -f "$REPO_ROOT/$run/shadow_map_config.yaml" ] && extra+=(--shadow-map-config "$run/shadow_map_config.yaml")
+  python3 "$REPO_ROOT/infra/scripts/live_identity.py" replay --run "$REPO_ROOT/$run" \
+    --binary "$REPO_ROOT/build/docker/cpp/runtime/ariadne_live" \
+    --image "$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')"
   for i in ${ARIADNE_REPLAY_ONLY:-1 2}; do   # demorec250 split: each parallel AWS job runs ONE replay leg
-    docker run --rm --memory="${ARIADNE_RT_MEM:-4g}" --memory-swap="${ARIADNE_RT_MEM:-4g}" -u "$U" -v "$REPO_ROOT":/work -w /work "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
-      --scene "$scene" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \
-      --mission-config configs/mission/mission_v1.yaml --live-config "$cfg" \
+    docker run --rm --memory="${ARIADNE_RT_MEM:-4g}" --memory-swap="${ARIADNE_RT_MEM:-4g}" -u "$U" -v "$REPO_ROOT":/work -w /work \
+      --env-file "$REPO_ROOT/$run/replay_identity.env" "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
+      --scene "$scene" --perception-config "$perception_cfg" --slam-config "$slam_cfg" "${imu_noise_arg[@]}" \
+      --mission-config "$mission_cfg" --live-config "$cfg" \
       --out "$run/replay$i" --replay "$run/$live_dir/inputs.mcap" "${extra[@]}" \
       > "$REPO_ROOT/$run/replay$i.log" 2>&1
   done

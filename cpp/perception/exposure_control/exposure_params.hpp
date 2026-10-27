@@ -10,7 +10,7 @@ namespace ariadne::perception::exposure {
 /// Gradients below delta count as noise; lambda sets how much weak texture counts. The paper's values.
 struct GradientInfoParams {
     /// shim: the mapped mean above. percentile: the p-th percentile of gradient magnitude, Zhang, Forster & Scaramuzza
-    /// ICRA 2017's M_perc (best in 13 of 18 of their datasets, ALGORITHMS §9.4); the §6.5 comparator row (D132).
+    /// ICRA 2017's M_perc (best in 13 of 18 of their datasets, algorithms.md §9.4); the §6.5 comparator row (D132).
     std::string metric = "shim";
     double percentile = 0.5;   // [ASSUMPTION] p for `percentile`: Zhang's value not transcribed; a sweep row
     double delta = 0.06;

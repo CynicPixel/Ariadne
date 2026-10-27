@@ -1,4 +1,4 @@
-"""Are two LIVE lockstep runs of one scene and seed the same run? (design LIVE_RUNTIME_L1 D165; A1's 4.3 gate)
+"""Are two LIVE lockstep runs of one scene and seed the same run? (design live-runtime.md D165; the 4.3 gate)
 
   python3 python/analysis/lockstep_repro_check.py RUN_A RUN_B [OUT.json]   (live.sh's live-<id> directories)
 

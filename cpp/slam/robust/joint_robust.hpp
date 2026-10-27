@@ -1,11 +1,11 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The robust stage on a JOINT multi-agent pose graph (D76; design ROBUST_BACKEND_2.5.md §9): the entry point the
-// broker's solve (COLLAB_3.2 §5 "Robust stage", owned by main) calls instead of a plain SolvePoseGraph.
+// The robust stage on a JOINT multi-agent pose graph (D76; design robust-backend.md §9): the entry point the
+// broker's solve (collaboration.md §5 "Robust stage", owned by main) calls instead of a plain SolvePoseGraph.
 //
 // INPUT. A PoseGraph whose node ids are JointId(agent, keyframe) (multi_agent.hpp), each agent's keyframes and
 // odometry plus its own accepted local loops, and the verified inter-agent edges as kInterAgentLoop. Preconditions:
-//   - each inter-agent edge already passed the D71 gate where its geometry lives (COLLAB_3.2 §11: the verifying
+//   - each inter-agent edge already passed the D71 gate where its geometry lives (collaboration.md §11: the verifying
 //     agent). A broker that holds the geometry can gate here with GatedInterAgentEdge;
 //   - edge information already includes the loop noise model (var = k sigma_PnP^2 + floor^2, design §8). Raw PnP
 //     information is ~1000x overconfident on real data, and PCM's Bonferroni thresholds would be off by that much;

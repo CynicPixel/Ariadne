@@ -1,5 +1,5 @@
 #pragma once
-// 2.1 (PERCEPTION_2.1.md §3.4): the feature engine's and the selection caps' manifest entries, kept out of
+// 2.1 (perception.md §3.4): the feature engine's and the selection caps' manifest entries, kept out of
 // stereo_vo_runner.hpp so that shared file gains one call. A learned engine also records its weights' checksum, read
 // from the export's provenance file
 // (infra/scripts/models.sh writes manifest.yaml next to the weights, sha256 per file), the same way the dataset
@@ -23,7 +23,7 @@ inline void RecordFeatureEngine(runtime::RunManifest& m, const perception::Local
     const perception::FeatureParams& p = pc.features;
     m.feature_engine = engine.Name();
     for (const auto& [k, v] : engine.ManifestFields()) m.extra[k] = v;
-    // §7.3: the selection caps are manifest fields, not constants (PERCEPTION_2.1 §3.4).
+    // §7.3: the selection caps are manifest fields, not constants (perception.md §3.4).
     m.extra["max_keypoints"] = std::to_string(p.max_keypoints);
     m.extra["keypoint_grid"] = std::to_string(p.grid_cols) + "x" + std::to_string(p.grid_rows);
     m.extra["target_tracks"] = std::to_string(pc.tracker.target_tracks);

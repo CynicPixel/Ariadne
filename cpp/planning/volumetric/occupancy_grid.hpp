@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 1.8 placeholder occupancy (arch §20.2; design MISSION_1.8): a dense 3D voxel
+// 1.8 placeholder occupancy (arch §20.2; design mission.md): a dense 3D voxel
 // grid with OctoMap's sensor model (Hornung et al., Autonomous Robots 2013):
 // per-voxel log-odds, a hit adds logit(0.7), a miss adds logit(0.4), clamped to
 // [logit(0.12), logit(0.97)]. Stored as fixed-point integers (x1000) so the

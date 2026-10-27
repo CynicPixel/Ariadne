@@ -1,4 +1,4 @@
-"""The console fed live (design LIVE_RUNTIME_L1 D154): tail a running ariadne_live run directory.
+"""The console fed live (design live-runtime.md D154): tail a running ariadne_live run directory.
 
 ariadne_live appends telemetry.jsonl (estimated poses at 5 Hz of sim time, every decision, every mover answer, a line
 per map snapshot) and writes snapshots/slab_<ms>.png at each replan. LiveRun.poll() reads whatever was appended since
@@ -33,6 +33,7 @@ class LiveRun:
     events: list = field(default_factory=list)       # (t_s, kind, text)
     comms: dict | None = None    # D218: newest multiagent barrier (bytes by class, picks, components)
     collab: dict | None = None   # D174: newest CollabLive telemetry line (merged, kept edges, cut, injections)
+    decisions: list = field(default_factory=list)
     ended: bool = False
     # poll() is called from the event loop (websockets) AND from FastAPI's thread pool: one reader at a time, or two
     # threads advance `offset` past each other and a half line reaches json.loads (it killed every stream on 2026-10-23)
@@ -104,6 +105,8 @@ class LiveRun:
                 self.egress = new_egress
             elif kind == "decision":
                 r = d["record"]
+                self.decisions.append(r)
+                self.decisions = self.decisions[-40:]
                 pl = r.get("planner")
                 if isinstance(pl, dict) and pl.get("name") == "a1_phase4_multiagent":   # D218: the comms panel's rows
                     self.comms = {"t_s": r["t_s"], "broker_mode": pl.get("broker_mode"),
@@ -135,7 +138,8 @@ class LiveRun:
         """`samples`: every pose of the agent stamped after `since_pose` (sim time), [t_s, x, y, yaw] each, so the page
         can interpolate between them instead of jumping to the newest one."""
         agents = []
-        for k in sorted(set(self.poses) | set(self.gt)) or [0, 1]:   # P8: N agents
+        roster = set(range(len(self.meta()["exits_xy"])))
+        for k in sorted(roster | set(self.poses) | set(self.gt)):   # P8: N agents
             if k in self.poses:
                 t, x, y, yaw = self.poses[k]
                 h = self.history.get(k, [])

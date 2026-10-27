@@ -1,4 +1,4 @@
-"""The Bedrock orchestrator in the CHOOSE step (design AGENTIC_7 §0, D156-D160; arch §25).
+"""The Bedrock orchestrator in the CHOOSE step (design agentic.md §0, D156-D160; arch §25).
 
   python -m orchestration.orchestrator --socket RUN/chooser.sock --dir RUN/decisions [--max-calls 10]
 

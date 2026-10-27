@@ -1,9 +1,9 @@
-// SMOKE §4s (PERCEPTION_2.1.md §12): ALIKED-n16 + LightGlue exported from upstream (cvg/LightGlue eb42fee) by
+// SMOKE §4s (perception.md §12): ALIKED-n16 + LightGlue exported from upstream (cvg/LightGlue eb42fee) by
 // python/model_tools/aliked_lightglue_reference.py and run through OpenCV's OWN classes, cv::ALIKED and
 // cv::LightGlueMatcher (cv::dnn ENGINE_NEW), against upstream's unmodified PyTorch outputs on the same inputs.
 //
 // Needs the export in $ARIADNE_ALIKED_LG_REF: SKIPPED without it, FAILED without it under ARIADNE_REQUIRE_MODELS=1.
-// The sim-rig export (1280x720 RGB, PERCEPTION_2.1 §14) runs the SAME checks from $ARIADNE_ALIKED_LG_SIM_REF.
+// The sim-rig export (1280x720 RGB, perception.md §14) runs the SAME checks from $ARIADNE_ALIKED_LG_SIM_REF.
 #include "perception/features/xfeat/atb.hpp"
 
 #include <gtest/gtest.h>

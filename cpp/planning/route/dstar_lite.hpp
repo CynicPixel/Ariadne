@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// D* Lite on the egress lattice (arch §22.1/§22.3; design EGRESS_4.5, D113).
+// D* Lite on the egress lattice (arch §22.1/§22.3; design egress.md, D113).
 //
 // Koenig & Likhachev, AAAI 2002, Figure 3, transcribed from the rendered page:
 //   CalculateKey(s)     = [min(g, rhs) + h(s_start, s) + k_m ; min(g, rhs)]
@@ -10,7 +10,7 @@
 //                         else g = inf, UpdateVertex(preds and u)
 // The search runs FROM the goals, so g is cost-to-goal and the route is read greedily from s_start.
 //
-// Our case (EGRESS_4.5 §1): s_start = the target cell, fixed (nobody walks the route while the agents map), so
+// Our case (egress.md §1): s_start = the target cell, fixed (nobody walks the route while the agents map), so
 // k_m = 0 and this is the incremental core. Goals = every exit: each traversable exit is seeded rhs = 0 (a
 // multi-source backward search), and h(s) = octile(target, s) is consistent because every edge cost is at
 // least its octile length. Costs are in cells.

@@ -1,0 +1,1661 @@
+[final-e2e] source commit: c143db14eb9dfbd7ffef003cf80ab3c344c64dec
+perception=configs/perception/sim_v1_rad_flat.yaml
+slam=configs/slam/sim_v2_loops.yaml
+imu_noise=configs/sim/imu_noise_v1.yaml
+mission=configs/mission/mission_v1.yaml
+live=configs/mission/live_final_e2e.yaml
+planner=configs/mission/mission_v2.yaml
+scene=build/live/scenes/maze_short_6
+end_s=200
+[final-e2e] build current source and run complete CTest suite
+-- Populating eigen
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/eigen-subbuild
+[0/7] Performing update step for 'eigen-populate'
+[1/7] No patch step for 'eigen-populate'
+[3/7] No configure step for 'eigen-populate'
+[4/7] No build step for 'eigen-populate'
+[5/7] No install step for 'eigen-populate'
+[6/7] No test step for 'eigen-populate'
+[7/7] Completed 'eigen-populate'
+-- Populating flatbuffers
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/flatbuffers-subbuild
+[0/7] Performing update step for 'flatbuffers-populate'
+[1/7] No patch step for 'flatbuffers-populate'
+[3/7] No configure step for 'flatbuffers-populate'
+[4/7] No build step for 'flatbuffers-populate'
+[5/7] No install step for 'flatbuffers-populate'
+[6/7] No test step for 'flatbuffers-populate'
+[7/7] Completed 'flatbuffers-populate'
+-- Proceeding with version: 25.12.19.0
+-- CMAKE_CXX_FLAGS: 
+-- Populating zstd
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/zstd-subbuild
+[0/7] Performing update step for 'zstd-populate'
+[1/7] No patch step for 'zstd-populate'
+[3/7] No configure step for 'zstd-populate'
+[4/7] No build step for 'zstd-populate'
+[5/7] No install step for 'zstd-populate'
+[6/7] No test step for 'zstd-populate'
+[7/7] Completed 'zstd-populate'
+-- ZSTD VERSION: 1.5.7
+-- CMAKE_INSTALL_PREFIX: /usr/local
+-- CMAKE_INSTALL_LIBDIR: lib
+-- ZSTD_LEGACY_SUPPORT not defined!
+-- ZSTD_MULTITHREAD_SUPPORT is enabled
+-- Populating yaml-cpp
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/yaml-cpp-subbuild
+[0/7] Performing update step for 'yaml-cpp-populate'
+[1/7] No patch step for 'yaml-cpp-populate'
+[3/7] No configure step for 'yaml-cpp-populate'
+[4/7] No build step for 'yaml-cpp-populate'
+[5/7] No install step for 'yaml-cpp-populate'
+[6/7] No test step for 'yaml-cpp-populate'
+[7/7] Completed 'yaml-cpp-populate'
+-- Populating mcap
+-- Configuring done (0.1s)
+-- Generating done (0.1s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/mcap-subbuild
+[0/7] Performing update step for 'mcap-populate'
+[1/7] No patch step for 'mcap-populate'
+[3/7] No configure step for 'mcap-populate'
+[4/7] No build step for 'mcap-populate'
+[5/7] No install step for 'mcap-populate'
+[6/7] No test step for 'mcap-populate'
+[7/7] Completed 'mcap-populate'
+-- Populating googletest
+-- Configuring done (0.1s)
+-- Generating done (0.0s)
+-- Build files have been written to: /work/.cache/fetchcontent-docker/googletest-subbuild
+[0/7] Performing update step for 'googletest-populate'
+[1/7] No patch step for 'googletest-populate'
+[3/7] No configure step for 'googletest-populate'
+[4/7] No build step for 'googletest-populate'
+[5/7] No install step for 'googletest-populate'
+[6/7] No test step for 'googletest-populate'
+[7/7] Completed 'googletest-populate'
+-- Ariadne: OpenCV 5.0.0 from /opt/opencv5/lib/cmake/opencv5
+-- Configuring done (3.9s)
+-- Generating done (0.4s)
+-- Build files have been written to: /work/build/docker
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
+Internal ctest changing into directory: /work/build/docker
+Test project /work/build/docker
+        Start 527: GncWarm.TimingAtThreeThousandNodes
+        Start 518: Gnc.OutlierRatesOnGridAndSphere
+  1/712 Test #518: Gnc.OutlierRatesOnGridAndSphere .....................................................................................   Passed   30.17 sec
+        Start 519: Gnc.OutlierRampReported
+  2/712 Test #519: Gnc.OutlierRampReported .............................................................................................   Passed   30.96 sec
+        Start 526: GncWarm.EventSequenceMatchesColdGnc
+  3/712 Test #526: GncWarm.EventSequenceMatchesColdGnc .................................................................................   Passed    8.41 sec
+        Start 686: Cbba.BundleTwoWithBidWarping
+  4/712 Test #686: Cbba.BundleTwoWithBidWarping ........................................................................................   Passed    8.21 sec
+        Start 411: Inertial.FullModeInitialisesAndCarriesADarkStretch
+  5/712 Test #411: Inertial.FullModeInitialisesAndCarriesADarkStretch ..................................................................   Passed    4.22 sec
+        Start 683: MultiAgentPlanning.NAgentStepsOnNThreadsEqualTheSerialRun
+  6/712 Test #683: MultiAgentPlanning.NAgentStepsOnNThreadsEqualTheSerialRun ...........................................................   Passed    3.94 sec
+        Start 109: Gat.ClosedFormWeightedL2MatchesThePaper
+  7/712 Test #109: Gat.ClosedFormWeightedL2MatchesThePaper .............................................................................   Passed    3.82 sec
+        Start 525: Gnc.TimingAtDemoScale
+  8/712 Test #527: GncWarm.TimingAtThreeThousandNodes ..................................................................................   Passed   91.68 sec
+        Start 106: Gat.ExactInverseIsUnbiasedAndTheAlgebraicInverseIsNot
+  9/712 Test #525: Gnc.TimingAtDemoScale ...............................................................................................   Passed    3.57 sec
+        Start 228: CollabV2.FaultCampaignNeverEndsCorrupt
+ 10/712 Test #106: Gat.ExactInverseIsUnbiasedAndTheAlgebraicInverseIsNot ...............................................................   Passed    3.76 sec
+        Start 454: MultiAgent.ProtocolWithTheProductionSolveEndsConsistent
+ 11/712 Test #228: CollabV2.FaultCampaignNeverEndsCorrupt ..............................................................................   Passed    2.97 sec
+        Start 424: RadiometricStage.ExactInverseKeepsTheDimMeanAndTheAlgebraicDoesNot
+ 12/712 Test #454: MultiAgent.ProtocolWithTheProductionSolveEndsConsistent .............................................................   Passed    2.80 sec
+        Start 632: Traversability.CapsuleMatchesBruteForceAtBothRho
+ 13/712 Test #424: RadiometricStage.ExactInverseKeepsTheDimMeanAndTheAlgebraicDoesNot ..................................................   Passed    2.74 sec
+        Start 412: Inertial.FullModeIsDeterministic
+ 14/712 Test #632: Traversability.CapsuleMatchesBruteForceAtBothRho ....................................................................   Passed    2.30 sec
+        Start 422: RadiometricStage.GateFollowsTheMeasuredNoise
+ 15/712 Test #412: Inertial.FullModeIsDeterministic ....................................................................................   Passed    2.35 sec
+        Start 545: Certificate.PlantedOutliersFractionReportedAndOneDirectional
+ 16/712 Test #422: RadiometricStage.GateFollowsTheMeasuredNoise ........................................................................   Passed    2.25 sec
+        Start 376: PerceptionCv.OutputsIndependentOfThreadCountAndGlobalRng
+ 17/712 Test #545: Certificate.PlantedOutliersFractionReportedAndOneDirectional ........................................................   Passed    2.11 sec
+        Start 407: LostFrames.ShippedV2BridgeIsDeterministicAcrossThreadsAndGlobalRng
+ 18/712 Test #376: PerceptionCv.OutputsIndependentOfThreadCountAndGlobalRng ............................................................   Passed    2.00 sec
+        Start 549: AliasingRamp.BreakpointReported
+ 19/712 Test #407: LostFrames.ShippedV2BridgeIsDeterministicAcrossThreadsAndGlobalRng ..................................................   Passed    1.89 sec
+        Start 334: Comms.EveryShippedScenarioLoadsAndBuilds
+ 20/712 Test #549: AliasingRamp.BreakpointReported .....................................................................................   Passed    1.70 sec
+        Start 510: Pcm.OutlierRatesRecallAndPrecision
+ 21/712 Test #334: Comms.EveryShippedScenarioLoadsAndBuilds ............................................................................   Passed    1.49 sec
+        Start 634: Traversability.RiskProxyIsZeroInABareRoomAndRespondsToACantilever
+ 22/712 Test #510: Pcm.OutlierRatesRecallAndPrecision ..................................................................................   Passed    1.33 sec
+        Start 506: Pcm.PairStatisticIsChiSquare6ForEveryLegConfiguration
+ 23/712 Test #634: Traversability.RiskProxyIsZeroInABareRoomAndRespondsToACantilever ...................................................   Passed    1.32 sec
+        Start 636: Traversability.AHorizontalCameraCannotObserveTheStandingBodyVolumeButTheHybridRuleConnects
+ 24/712 Test #506: Pcm.PairStatisticIsChiSquare6ForEveryLegConfiguration ...............................................................   Passed    1.32 sec
+        Start 629: Volumetric.IncrementalEsdfEqualsARebuildBitForBit
+ 25/712 Test #636: Traversability.AHorizontalCameraCannotObserveTheStandingBodyVolumeButTheHybridRuleConnects ..........................   Passed    1.32 sec
+        Start 520: Gnc.NearMissesAfterPcm
+ 26/712 Test #629: Volumetric.IncrementalEsdfEqualsARebuildBitForBit ...................................................................   Passed    1.25 sec
+        Start 664: Phase4Planner.PartitionFreezesPeersAndIsLabelled
+ 27/712 Test #520: Gnc.NearMissesAfterPcm ..............................................................................................   Passed    1.27 sec
+        Start 633: Traversability.DoorwayAndBeamByHand
+ 28/712 Test #664: Phase4Planner.PartitionFreezesPeersAndIsLabelled ....................................................................   Passed    1.26 sec
+        Start 662: Phase4Planner.ThreeAgentPlanAndTopology
+ 29/712 Test #633: Traversability.DoorwayAndBeamByHand .................................................................................   Passed    1.21 sec
+        Start 394: StereoVo.DeterministicAcrossThreadsAndGlobalRng
+ 30/712 Test #662: Phase4Planner.ThreeAgentPlanAndTopology .............................................................................   Passed    1.05 sec
+        Start 670: NbvTime.ArrivalTwinsAndTheKeysOffIdentity
+ 31/712 Test #394: StereoVo.DeterministicAcrossThreadsAndGlobalRng .....................................................................   Passed    1.06 sec
+        Start 107: Gat.RoundTripInImageUnits
+ 32/712 Test #670: NbvTime.ArrivalTwinsAndTheKeysOffIdentity ...........................................................................   Passed    0.98 sec
+        Start 605: PlaceIndex.AnnoyAgreesWithExactAndRepeats
+ 33/712 Test #107: Gat.RoundTripInImageUnits ...........................................................................................   Passed    0.95 sec
+        Start 522: Gnc.NearMissesWithoutPcmReported
+ 34/712 Test #605: PlaceIndex.AnnoyAgreesWithExactAndRepeats ...........................................................................   Passed    0.89 sec
+        Start 391: StereoVo.TracksASyntheticSequenceEndToEnd
+ 35/712 Test #522: Gnc.NearMissesWithoutPcmReported ....................................................................................   Passed    0.87 sec
+        Start 405: LostFrames.BridgedTranslationDecaysToRest
+ 36/712 Test #391: StereoVo.TracksASyntheticSequenceEndToEnd ...........................................................................   Passed    0.88 sec
+        Start 118: FlatField.DividingByKRestoresOneNoiseModel
+ 37/712 Test #405: LostFrames.BridgedTranslationDecaysToRest ...........................................................................   Passed    0.87 sec
+        Start 406: LostFrames.ShippedV2DarkStretchIsBridgedAndRecovers
+ 38/712 Test #118: FlatField.DividingByKRestoresOneNoiseModel ..........................................................................   Passed    0.80 sec
+        Start 528: GncWarm.BitIdenticalOverAFixedEventSequence
+ 39/712 Test #406: LostFrames.ShippedV2DarkStretchIsBridgedAndRecovers .................................................................   Passed    0.70 sec
+        Start 403: LostFrames.DarkStretchIsBridgedWithoutAKeyframeFloodAndReanchors
+ 40/712 Test #528: GncWarm.BitIdenticalOverAFixedEventSequence .........................................................................   Passed    0.72 sec
+        Start 537: GravityPgo.ReferenceGravityErrorIsRecoveredAsWellAsTheInformationAllowsAndTiltShrinks
+ 41/712 Test #403: LostFrames.DarkStretchIsBridgedWithoutAKeyframeFloodAndReanchors ....................................................   Passed    0.70 sec
+        Start 658: Phase4Planner.IntegratePlanRouteSmoke
+ 42/712 Test #537: GravityPgo.ReferenceGravityErrorIsRecoveredAsWellAsTheInformationAllowsAndTiltShrinks ...............................   Passed    0.62 sec
+        Start 150: Preintegration.CovarianceMatchesMonteCarlo
+ 43/712 Test #658: Phase4Planner.IntegratePlanRouteSmoke ...............................................................................   Passed    0.58 sec
+        Start 554: SpectralSelector.ExactOracleUnderSharedCost
+ 44/712 Test #150: Preintegration.CovarianceMatchesMonteCarlo ..........................................................................   Passed    0.53 sec
+        Start 677: MultiAgentPlanning.PlanOwnWithoutReceivedDataEqualsPlansOwnAgent
+ 45/712 Test #554: SpectralSelector.ExactOracleUnderSharedCost .........................................................................   Passed    0.60 sec
+        Start 393: StereoVo.SurvivesCorruptedTracks
+ 46/712 Test #677: MultiAgentPlanning.PlanOwnWithoutReceivedDataEqualsPlansOwnAgent ....................................................   Passed    0.57 sec
+        Start 511: Pcm.NearMissOutliersPrecisionReported
+ 47/712 Test #393: StereoVo.SurvivesCorruptedTracks ....................................................................................   Passed    0.51 sec
+        Start 329: Comms.LossMatchesRfCommsPerPacketMonteCarlo
+ 48/712 Test #511: Pcm.NearMissOutliersPrecisionReported ...............................................................................   Passed    0.50 sec
+        Start 104: Gat.ExpectedValueMatchesMonteCarlo
+ 49/712 Test #329: Comms.LossMatchesRfCommsPerPacketMonteCarlo .........................................................................   Passed    0.51 sec
+        Start 628: Volumetric.TsdfSurfaceAgreesWithOpenCvHashTsdfOracle
+ 50/712 Test #104: Gat.ExpectedValueMatchesMonteCarlo ..................................................................................   Passed    0.52 sec
+        Start 370: PerceptionCv.SgbmNearRangeBoundary
+ 51/712 Test #628: Volumetric.TsdfSurfaceAgreesWithOpenCvHashTsdfOracle ................................................................   Passed    0.52 sec
+        Start 335: Comms.OneLedgerAndForwardedDatagramsAreNeverRecorded
+ 52/712 Test #370: PerceptionCv.SgbmNearRangeBoundary ..................................................................................   Passed    0.43 sec
+        Start 330: Comms.LossIsPricedAtTheDatagramsOwnSize
+ 53/712 Test #335: Comms.OneLedgerAndForwardedDatagramsAreNeverRecorded ................................................................   Passed    0.54 sec
+        Start 392: StereoVo.BlackoutFrameIsFlaggedAndRecovers
+ 54/712 Test #330: Comms.LossIsPricedAtTheDatagramsOwnSize .............................................................................   Passed    0.48 sec
+        Start 377: PerceptionCv.TrackerSeededByAPredictedHomographyFollowsALargeMotion
+ 55/712 Test #392: StereoVo.BlackoutFrameIsFlaggedAndRecovers ..........................................................................   Passed    0.47 sec
+        Start 660: Phase4Planner.AllocationIsEventTriggered
+ 56/712 Test #377: PerceptionCv.TrackerSeededByAPredictedHomographyFollowsALargeMotion .................................................   Passed    0.43 sec
+        Start 414: Lens.RigMapConvergesAndStaysInsideTheRender
+ 57/712 Test #660: Phase4Planner.AllocationIsEventTriggered ............................................................................   Passed    0.38 sec
+        Start 601: StereoConfidence.CostSplitIsReported
+ 58/712 Test #414: Lens.RigMapConvergesAndStaysInsideTheRender .........................................................................   Passed    0.40 sec
+        Start 679: MultiAgentPlanning.FootprintsSumToCoverageAndOnlyPerAgent
+ 59/712 Test #601: StereoConfidence.CostSplitIsReported ................................................................................   Passed    0.38 sec
+        Start 678: MultiAgentPlanning.PeerKnownColumnsAreNoGain
+ 60/712 Test #679: MultiAgentPlanning.FootprintsSumToCoverageAndOnlyPerAgent ...........................................................   Passed    0.42 sec
+        Start 631: Volumetric.IntegrationIsDeterministicAndTheCoarseRleRoundTrips
+ 61/712 Test #678: MultiAgentPlanning.PeerKnownColumnsAreNoGain ........................................................................   Passed    0.41 sec
+        Start 437: Falloff.NoisyStereoDepthNormalsAndTheIncidenceOption
+ 62/712 Test #631: Volumetric.IntegrationIsDeterministicAndTheCoarseRleRoundTrips ......................................................   Passed    0.37 sec
+        Start 327: ImuNoise.BiasRandomWalkVarianceGrowsAsDensitySquaredTimesT
+ 63/712 Test #437: Falloff.NoisyStereoDepthNormalsAndTheIncidenceOption ................................................................   Passed    0.36 sec
+        Start 635: Traversability.UnobservedColumnsCloseEgressButNotTheAgent
+ 64/712 Test #327: ImuNoise.BiasRandomWalkVarianceGrowsAsDensitySquaredTimesT ..........................................................   Passed    0.37 sec
+        Start 665: NbvTime.AtCellViewRoutesAsOneTurnHereWaypoint
+ 65/712 Test #635: Traversability.UnobservedColumnsCloseEgressButNotTheAgent ...........................................................   Passed    0.36 sec
+        Start 115: NoiseEstimate.GrayPathScalesTheModel
+ 66/712 Test #665: NbvTime.AtCellViewRoutesAsOneTurnHereWaypoint .......................................................................   Passed    0.34 sec
+        Start 668: NbvTime.CutCommandCarriesNoFinalYawAndUnreachableHolds
+ 67/712 Test #115: NoiseEstimate.GrayPathScalesTheModel ................................................................................   Passed    0.36 sec
+        Start 541: Certificate.GroundedTestEqualsTheReducedTest
+ 68/712 Test #668: NbvTime.CutCommandCarriesNoFinalYawAndUnreachableHolds ..............................................................   Passed    0.34 sec
+        Start 667: NbvTime.ExecutingTheTurnCollectsTheGainSoTheViewStopsWinning
+ 69/712 Test #541: Certificate.GroundedTestEqualsTheReducedTest ........................................................................   Passed    0.34 sec
+        Start 404: LostFrames.EveryFrameReanchorFloodsKeyframes
+ 70/712 Test #667: NbvTime.ExecutingTheTurnCollectsTheGainSoTheViewStopsWinning ........................................................   Passed    0.31 sec
+        Start 116: FlatField.CalibrationMatchesTheAnalyticResponse
+ 71/712 Test #404: LostFrames.EveryFrameReanchorFloodsKeyframes ........................................................................   Passed    0.33 sec
+        Start 712: RngSequencing.NoUnsequencedDrawsInTests
+ 72/712 Test #116: FlatField.CalibrationMatchesTheAnalyticResponse .....................................................................   Passed    0.24 sec
+        Start 497: Degeneracy.MonteCarloNeesMatchesChiSquare6
+ 73/712 Test #712: RngSequencing.NoUnsequencedDrawsInTests .............................................................................   Passed    0.26 sec
+        Start 455: MultiAgent.RobustStageRejectsFalseInterAgentEdgesAndLeavesNoConsensusUnplaced
+ 74/712 Test #497: Degeneracy.MonteCarloNeesMatchesChiSquare6 ..........................................................................   Passed    0.26 sec
+        Start 369: PerceptionCv.SgbmRecoversAPlaneWithinSigma
+ 75/712 Test #369: PerceptionCv.SgbmRecoversAPlaneWithinSigma ..........................................................................   Passed    0.21 sec
+        Start 367: PerceptionCv.TrackerKeepsMinimumSpacing
+ 76/712 Test #455: MultiAgent.RobustStageRejectsFalseInterAgentEdgesAndLeavesNoConsensusUnplaced .......................................   Passed    0.29 sec
+        Start 365: PerceptionCv.TrackerRecoversKnownShift
+ 77/712 Test #367: PerceptionCv.TrackerKeepsMinimumSpacing .............................................................................   Passed    0.24 sec
+        Start 466: LiveLink.ReordererReleasesBehindTheWatermark
+ 78/712 Test #365: PerceptionCv.TrackerRecoversKnownShift ..............................................................................   Passed    0.24 sec
+        Start 630: Volumetric.FrontiersMatchBruteForceAndIncrementalMatchesFull
+ 79/712 Test #630: Volumetric.FrontiersMatchBruteForceAndIncrementalMatchesFull ........................................................   Passed    0.20 sec
+        Start 627: Volumetric.TsdfOnAKnownRoomCarvesFreeAndPlacesSurfacesWithinAVoxel
+ 80/712 Test #466: LiveLink.ReordererReleasesBehindTheWatermark ........................................................................   Passed    0.26 sec
+        Start 113: NoiseEstimate.StabilisedSigmaExposesAWrongModel
+ 81/712 Test #627: Volumetric.TsdfOnAKnownRoomCarvesFreeAndPlacesSurfacesWithinAVoxel ..................................................   Passed    0.17 sec
+        Start 434: Falloff.TheSameSurfaceReadsTheSameAtAnyDistanceAndLampPower
+ 82/712 Test #113: NoiseEstimate.StabilisedSigmaExposesAWrongModel .....................................................................   Passed    0.20 sec
+        Start 599: StereoConfidence.IndependentOfThreadCount
+ 83/712 Test #434: Falloff.TheSameSurfaceReadsTheSameAtAnyDistanceAndLampPower .........................................................   Passed    0.20 sec
+        Start 111: NoiseEstimate.GainScalesA
+ 84/712 Test #599: StereoConfidence.IndependentOfThreadCount ...........................................................................   Passed    0.18 sec
+        Start 637: DStarLite.EqualsFreshDijkstraUnderCellFlips
+ 85/712 Test #111: NoiseEstimate.GainScalesA ...........................................................................................   Passed    0.22 sec
+        Start 533: LoopBackend.CertificateFlagIsReadOnly
+ 86/712 Test #637: DStarLite.EqualsFreshDijkstraUnderCellFlips .........................................................................   Passed    0.20 sec
+        Start 117: FlatField.CalibrationIsSpecificToTheCamerasSilicon
+ 87/712 Test #117: FlatField.CalibrationIsSpecificToTheCamerasSilicon ..................................................................   Passed    0.18 sec
+        Start 397: StereoVo.CoastingPredictsByElapsedTimeAcrossDroppedFrames
+ 88/712 Test #533: LoopBackend.CertificateFlagIsReadOnly ...............................................................................   Passed    0.24 sec
+        Start 428: ExposureControl.ClosedLoopConvergesWithinTheSlewLimit
+ 89/712 Test #397: StereoVo.CoastingPredictsByElapsedTimeAcrossDroppedFrames ...........................................................   Passed    0.19 sec
+        Start 396: StereoVo.LongBlackoutCoastsOnTheLastMeasuredVelocity
+ 90/712 Test #428: ExposureControl.ClosedLoopConvergesWithinTheSlewLimit ...............................................................   Passed    0.18 sec
+        Start 515: Pcm.TimingAtThreeHundredLoops
+ 91/712 Test #515: Pcm.TimingAtThreeHundredLoops .......................................................................................   Passed    0.19 sec
+        Start 103: Gat.StabilisesTheVarianceToUnity
+ 92/712 Test #396: StereoVo.LongBlackoutCoastsOnTheLastMeasuredVelocity ................................................................   Passed    0.19 sec
+        Start 112: NoiseEstimate.InterceptBiasAtDeepDarknessIsBoundedAndHarmless
+ 93/712 Test #112: NoiseEstimate.InterceptBiasAtDeepDarknessIsBoundedAndHarmless .......................................................   Passed    0.17 sec
+        Start  61: Distributions.ExactPoissonMatchesClosedFormPmf
+ 94/712 Test #103: Gat.StabilisesTheVarianceToUnity ....................................................................................   Passed    0.18 sec
+        Start 505: Pcm.OdometryLegMonteCarloNees
+ 95/712 Test #505: Pcm.OdometryLegMonteCarloNees .......................................................................................   Passed    0.16 sec
+        Start 523: Gnc.BitIdenticalTwice
+ 96/712 Test  #61: Distributions.ExactPoissonMatchesClosedFormPmf ......................................................................   Passed    0.16 sec
+        Start 110: NoiseEstimate.RecoversTheModelDProduces
+ 97/712 Test #523: Gnc.BitIdenticalTwice ...............................................................................................   Passed    0.14 sec
+        Start 583: TrackerCadence.RescalePreviousAppliesTheKnownGain
+ 98/712 Test #110: NoiseEstimate.RecoversTheModelDProduces .............................................................................   Passed    0.16 sec
+        Start 366: PerceptionCv.TrackerReportsDegradedOnABlankFrame
+ 99/712 Test #583: TrackerCadence.RescalePreviousAppliesTheKnownGain ...................................................................   Passed    0.17 sec
+        Start 609: PlaceRecognizer.ClaheIsRetrievalOnlyAndLeavesTheFrameUntouched
+100/712 Test #366: PerceptionCv.TrackerReportsDegradedOnABlankFrame ....................................................................   Passed    0.15 sec
+        Start 452: MultiAgent.LoopClosuresAcrossAgentsCorrectDrift
+101/712 Test #452: MultiAgent.LoopClosuresAcrossAgentsCorrectDrift .....................................................................   Passed    0.13 sec
+        Start 582: TrackerCadence.ReplenishDetectsOnTheDetectionImageInsideItsMask
+102/712 Test #609: PlaceRecognizer.ClaheIsRetrievalOnlyAndLeavesTheFrameUntouched ......................................................   Passed    0.16 sec
+        Start 598: StereoConfidence.FilteredDisparityIsOptInAndKeepsTheConfidence
+103/712 Test #582: TrackerCadence.ReplenishDetectsOnTheDetectionImageInsideItsMask .....................................................   Passed    0.15 sec
+        Start 433: Falloff.RecoversAlbedoOnATiltedPlane
+104/712 Test #598: StereoConfidence.FilteredDisparityIsOptInAndKeepsTheConfidence ......................................................   Passed    0.14 sec
+        Start 231: CollabV2.SameSeedSameLedgerAndOutcome
+105/712 Test #231: CollabV2.SameSeedSameLedgerAndOutcome ...............................................................................   Passed    0.11 sec
+        Start  18: Covariance.ComposeMatchesMonteCarlo
+106/712 Test #433: Falloff.RecoversAlbedoOnATiltedPlane ................................................................................   Passed    0.13 sec
+        Start 364: PerceptionCv.OrbLowThresholdRescuesDarkCells
+107/712 Test #364: PerceptionCv.OrbLowThresholdRescuesDarkCells ........................................................................   Passed    0.12 sec
+        Start 421: RadiometricStage.FlatFieldEqualisesTheVignette
+108/712 Test  #18: Covariance.ComposeMatchesMonteCarlo .................................................................................   Passed    0.13 sec
+        Start 442: FalloffGlue.UndoesExposureAndLampPower
+109/712 Test #421: RadiometricStage.FlatFieldEqualisesTheVignette ......................................................................   Passed    0.10 sec
+        Start 581: TrackerCadence.EveryFrameIsThePhaseOneBehaviourAndReplenishIsANoOp
+110/712 Test #442: FalloffGlue.UndoesExposureAndLampPower ..............................................................................   Passed    0.14 sec
+        Start 435: Falloff.UnknownPixelsAreInvalidAndTheGainIsCapped
+111/712 Test #581: TrackerCadence.EveryFrameIsThePhaseOneBehaviourAndReplenishIsANoOp ..................................................   Passed    0.11 sec
+        Start 438: Falloff.InvalidPixelsAreFilledAndTheFeatureMaskKeepsClearOfThem
+112/712 Test #435: Falloff.UnknownPixelsAreInvalidAndTheGainIsCapped ...................................................................   Passed    0.10 sec
+        Start 226: CollabV2.SplitBrainMergesUnderANewEpoch
+113/712 Test #438: Falloff.InvalidPixelsAreFilledAndTheFeatureMaskKeepsClearOfThem .....................................................   Passed    0.10 sec
+        Start 114: NoiseEstimate.PosterisedDarknessIsNotMistakenForUsableNoise
+114/712 Test #226: CollabV2.SplitBrainMergesUnderANewEpoch .............................................................................   Passed    0.10 sec
+        Start 595: StereoConfidence.WlsLeavesTheLeftDisparityUntouched
+115/712 Test #114: NoiseEstimate.PosterisedDarknessIsNotMistakenForUsableNoise .........................................................   Passed    0.10 sec
+        Start 644: Nbv.RaycastIgWallAndHole
+116/712 Test #595: StereoConfidence.WlsLeavesTheLeftDisparityUntouched .................................................................   Passed    0.10 sec
+        Start 574: Reassociation.TrackerRelabelCarriesTheNewIdForward
+117/712 Test #644: Nbv.RaycastIgWallAndHole ............................................................................................   Passed    0.10 sec
+        Start 685: Cbba.EqualsSequentialGreedyAtBundleOne
+118/712 Test #574: Reassociation.TrackerRelabelCarriesTheNewIdForward ..................................................................   Passed    0.09 sec
+        Start  93: DegradationFidelity.CorrelatedDustFieldChangesSlowly
+119/712 Test #685: Cbba.EqualsSequentialGreedyAtBundleOne ..............................................................................   Passed    0.09 sec
+        Start 579: TrackerCadence.KeyframeModeStartsTracksOnlyWhenAsked
+120/712 Test  #93: DegradationFidelity.CorrelatedDustFieldChangesSlowly ................................................................   Passed    0.09 sec
+        Start 164: Scripted.MatchesPythonGoldenSamples
+121/712 Test #579: TrackerCadence.KeyframeModeStartsTracksOnlyWhenAsked ................................................................   Passed    0.09 sec
+        Start 580: TrackerCadence.OffCadenceRecoveryReplenishesBelowTheThreshold
+122/712 Test #164: Scripted.MatchesPythonGoldenSamples .................................................................................   Passed    0.08 sec
+        Start 470: LivePlanner.CommandPathChordsFreeAndShort
+123/712 Test #580: TrackerCadence.OffCadenceRecoveryReplenishesBelowTheThreshold .......................................................   Passed    0.09 sec
+        Start 233: CollabSelection.PredictionMeetsTheByteGateOnADisjointScene
+124/712 Test #470: LivePlanner.CommandPathChordsFreeAndShort ...........................................................................   Passed    0.09 sec
+        Start 584: TrackerCadence.QualityGateKeepsNewTracksOffWeakGradients
+125/712 Test #233: CollabSelection.PredictionMeetsTheByteGateOnADisjointScene ..........................................................   Passed    0.08 sec
+        Start 232: CollabSelection.TokenBucketCapsTheFetchBytesSent
+126/712 Test #584: TrackerCadence.QualityGateKeepsNewTracksOffWeakGradients ............................................................   Passed    0.07 sec
+        Start 423: RadiometricStage.ForcedOnRefusesWithoutANoiseModel
+127/712 Test #232: CollabSelection.TokenBucketCapsTheFetchBytesSent ....................................................................   Passed    0.07 sec
+        Start  19: Covariance.InverseMatchesMonteCarlo
+128/712 Test #423: RadiometricStage.ForcedOnRefusesWithoutANoiseModel ..................................................................   Passed    0.07 sec
+        Start 596: StereoConfidence.HighOnSmoothSurfacesLowAtTheDepthStep
+129/712 Test  #19: Covariance.InverseMatchesMonteCarlo .................................................................................   Passed    0.08 sec
+        Start 597: StereoConfidence.LeftRightCheckRejectsTheOcclusionBand
+130/712 Test #596: StereoConfidence.HighOnSmoothSurfacesLowAtTheDepthStep ..............................................................   Passed    0.07 sec
+        Start 373: PerceptionCv.FisheyeRectificationPutsCorrespondencesOnOneRowWithMetricDisparity
+131/712 Test #597: StereoConfidence.LeftRightCheckRejectsTheOcclusionBand ..............................................................   Passed    0.07 sec
+        Start 126: ReprojectionLm.CovarianceIsConsistentMonteCarloNees
+132/712 Test #373: PerceptionCv.FisheyeRectificationPutsCorrespondencesOnOneRowWithMetricDisparity .....................................   Passed    0.07 sec
+        Start 167: CommandPlanner.PlanProfileMatchesThePythonScripts
+133/712 Test #126: ReprojectionLm.CovarianceIsConsistentMonteCarloNees .................................................................   Passed    0.07 sec
+        Start 646: Nbv.LambdaScheduleByHand
+134/712 Test #167: CommandPlanner.PlanProfileMatchesThePythonScripts ...................................................................   Passed    0.06 sec
+        Start 530: LoopBackend.TwoLapsWithLateOdometryAndOneWrongLoop
+135/712 Test #646: Nbv.LambdaScheduleByHand ............................................................................................   Passed    0.06 sec
+        Start 550: JointRobust.RejectsAnInterAgentAliasingGroupPlacedFirst
+136/712 Test #530: LoopBackend.TwoLapsWithLateOdometryAndOneWrongLoop ..................................................................   Passed    0.06 sec
+        Start 362: PerceptionCv.OrbDescriptorsAlignWithKeypoints
+137/712 Test #550: JointRobust.RejectsAnInterAgentAliasingGroupPlacedFirst .............................................................   Passed    0.06 sec
+        Start  63: Distributions.BranchesAgreeAcrossTheThreshold
+138/712 Test #362: PerceptionCv.OrbDescriptorsAlignWithKeypoints .......................................................................   Passed    0.05 sec
+        Start 429: ExposureControl.PercentileMetricAlsoSettlesWithoutClipping
+139/712 Test  #63: Distributions.BranchesAgreeAcrossTheThreshold .......................................................................   Passed    0.05 sec
+        Start 575: Reassociation.TrackerRelabelRejectsCollisions
+140/712 Test #429: ExposureControl.PercentileMetricAlsoSettlesWithoutClipping ..........................................................   Passed    0.05 sec
+        Start 243: DeferredFeatures.AnsweredOnALaterTickEndsConsistent
+141/712 Test #575: Reassociation.TrackerRelabelRejectsCollisions .......................................................................   Passed    0.06 sec
+        Start 308: PerceptionConfig.EveryShippedConfigLoads
+142/712 Test #243: DeferredFeatures.AnsweredOnALaterTickEndsConsistent .................................................................   Passed    0.05 sec
+        Start 524: Gnc.SelfConsistentClusterReported
+143/712 Test #308: PerceptionConfig.EveryShippedConfigLoads ............................................................................   Passed    0.04 sec
+        Start 544: Certificate.LowNoiseGraphsCertify
+144/712 Test #524: Gnc.SelfConsistentClusterReported ...................................................................................   Passed    0.05 sec
+        Start 225: CollabV2.NoFaultsEndsConsistentWithGroundTruthFrames
+145/712 Test #544: Certificate.LowNoiseGraphsCertify ...................................................................................   Passed    0.05 sec
+        Start 354: RosbagReader.ReadsTheCanonicalStreamBagRosFree
+146/712 Test #225: CollabV2.NoFaultsEndsConsistentWithGroundTruthFrames ................................................................   Passed    0.05 sec
+        Start 648: Nbv.SamplerContract
+147/712 Test #354: RosbagReader.ReadsTheCanonicalStreamBagRosFree ......................................................................   Passed    0.03 sec
+        Start 625: Volumetric.EsdfMatchesBruteForceNearestPointOfCubeOnRandomGrids
+148/712 Test #648: Nbv.SamplerContract .................................................................................................   Passed    0.04 sec
+        Start 697: VisibilityGraph.IncrementalEqualsRebuild
+149/712 Test #625: Volumetric.EsdfMatchesBruteForceNearestPointOfCubeOnRandomGrids .....................................................   Passed    0.04 sec
+        Start 653: Nbv.ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved
+150/712 Test #697: VisibilityGraph.IncrementalEqualsRebuild ............................................................................   Passed    0.06 sec
+        Start 651: Nbv.TareSchedulesLocalThenGlobal
+151/712 Test #653: Nbv.ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved .............................................................   Passed    0.05 sec
+        Start 649: Nbv.EgressTargetAtLowestSupport
+152/712 Test #651: Nbv.TareSchedulesLocalThenGlobal ....................................................................................   Passed    0.05 sec
+        Start 326: ImuNoise.WhiteNoiseStdIsDensityOverSqrtDt
+153/712 Test #649: Nbv.EgressTargetAtLowestSupport .....................................................................................   Passed    0.04 sec
+        Start 230: CollabV2.RunEndingPartitionedIsExplicitlyIncomplete
+154/712 Test #326: ImuNoise.WhiteNoiseStdIsDensityOverSqrtDt ...........................................................................   Passed    0.06 sec
+        Start 453: MultiAgent.GaugeIsHeldAndUnconnectedAgentsAreUnplaced
+155/712 Test #230: CollabV2.RunEndingPartitionedIsExplicitlyIncomplete .................................................................   Passed    0.07 sec
+        Start 647: Nbv.EnergyReserveRuleIsOutsideTheOptimizer
+156/712 Test #647: Nbv.EnergyReserveRuleIsOutsideTheOptimizer ..........................................................................   Passed    0.04 sec
+        Start 594: StereoConfidence.DefaultIsThePlaceholder
+157/712 Test #453: MultiAgent.GaugeIsHeldAndUnconnectedAgentsAreUnplaced ...............................................................   Passed    0.05 sec
+        Start 379: StereoRowRefinement.EstimatorRecoversAKnownResidualAndZeroOnAnAlignedPair
+158/712 Test #379: StereoRowRefinement.EstimatorRecoversAKnownResidualAndZeroOnAnAlignedPair ...........................................   Passed    0.04 sec
+        Start 159: InertialInit.WrongScaleIsVisibleInTheFit
+159/712 Test #594: StereoConfidence.DefaultIsThePlaceholder ............................................................................   Passed    0.05 sec
+        Start  99: DegradationHeadlamp.DeterministicAndBandSplitInvariant
+160/712 Test #159: InertialInit.WrongScaleIsVisibleInTheFit ............................................................................   Passed    0.03 sec
+        Start 552: SpectralSelector.FiedlerMatchesDenseColdAndWarm
+161/712 Test  #99: DegradationHeadlamp.DeterministicAndBandSplitInvariant ..............................................................   Passed    0.04 sec
+        Start 695: Cbba.WireTransportLeavesTheAssignmentUnchanged
+162/712 Test #552: SpectralSelector.FiedlerMatchesDenseColdAndWarm .....................................................................   Passed    0.03 sec
+        Start 108: Gat.ClosedFormAndAsymptoticErrorsMatchThePaperLinf
+163/712 Test #695: Cbba.WireTransportLeavesTheAssignmentUnchanged ......................................................................   Passed    0.04 sec
+        Start 450: EdgeVerifier.HomographyExplainsPlanarMatchesOnly
+164/712 Test #108: Gat.ClosedFormAndAsymptoticErrorsMatchThePaperLinf ..................................................................   Passed    0.04 sec
+        Start 277: RunManifest.DeterminismDigestsAreMeasuredNotCopied
+165/712 Test #450: EdgeVerifier.HomographyExplainsPlanarMatchesOnly ....................................................................   Passed    0.03 sec
+        Start 389: Tum.SourceReadsDepthAtFactor5000AndReportsAnIdentityVirtualRig
+166/712 Test #277: RunManifest.DeterminismDigestsAreMeasuredNotCopied ..................................................................   Passed    0.03 sec
+        Start 419: Lens.OutputIsPinnedByADigest
+167/712 Test #389: Tum.SourceReadsDepthAtFactor5000AndReportsAnIdentityVirtualRig ......................................................   Passed    0.03 sec
+        Start  90: Degradation.ParallelRowBandsAreByteIdentical
+168/712 Test #419: Lens.OutputIsPinnedByADigest ........................................................................................   Passed    0.03 sec
+        Start 551: JointRobust.SharedGravityRemovesAnInterAgentTiltBias
+169/712 Test  #90: Degradation.ParallelRowBandsAreByteIdentical ........................................................................   Passed    0.03 sec
+        Start 699: VisibilityGraph.Hazard0Regression
+170/712 Test #699: VisibilityGraph.Hazard0Regression ...................................................................................   Passed    0.01 sec
+        Start 557: SpectralSelector.NothingAffordableWithGainIsLeft
+171/712 Test #551: JointRobust.SharedGravityRemovesAnInterAgentTiltBias ................................................................   Passed    0.03 sec
+        Start 516: Gnc.TlsWeightIsTheArgminOfTheDual
+172/712 Test #557: SpectralSelector.NothingAffordableWithGainIsLeft ....................................................................   Passed    0.02 sec
+        Start  97: DegradationHeadlamp.TabulatedIntegralMatchesAFineReference
+173/712 Test #516: Gnc.TlsWeightIsTheArgminOfTheDual ...................................................................................   Passed    0.02 sec
+        Start 152: WindowBaInertial.HessianMatchesFiniteDifferencesOfTheGradientAtTheTruth
+174/712 Test  #97: DegradationHeadlamp.TabulatedIntegralMatchesAFineReference ..........................................................   Passed    0.02 sec
+        Start 420: RadiometricStage.OffIsAPassThrough
+175/712 Test #152: WindowBaInertial.HessianMatchesFiniteDifferencesOfTheGradientAtTheTruth .............................................   Passed    0.02 sec
+        Start 380: StereoRowRefinement.EstimatorRefusesWhatItCannotTrust
+176/712 Test #420: RadiometricStage.OffIsAPassThrough ..................................................................................   Passed    0.02 sec
+        Start 363: PerceptionCv.OrbOnABlankImageReturnsNothing
+177/712 Test #380: StereoRowRefinement.EstimatorRefusesWhatItCannotTrust ...............................................................   Passed    0.02 sec
+        Start 383: StereoRowRefinement.SamplesPoolAcrossKeyframes
+178/712 Test #363: PerceptionCv.OrbOnABlankImageReturnsNothing .........................................................................   Passed    0.02 sec
+        Start 381: StereoRowRefinement.RefineRightRowsMovesTheRightImageByMinusDy
+179/712 Test #383: StereoRowRefinement.SamplesPoolAcrossKeyframes ......................................................................   Passed    0.02 sec
+        Start 640: DStarLite.RouteNeverLeavesTraversable
+180/712 Test #381: StereoRowRefinement.RefineRightRowsMovesTheRightImageByMinusDy ......................................................   Passed    0.02 sec
+        Start 371: PerceptionCv.StereoMatcherRecoversDisparityAndRejectsRowOffsets
+181/712 Test #640: DStarLite.RouteNeverLeavesTraversable ...............................................................................   Passed    0.02 sec
+        Start 576: Reassociation.OrbDescribeIsStableUnderShiftAndFlagsBorders
+182/712 Test #371: PerceptionCv.StereoMatcherRecoversDisparityAndRejectsRowOffsets .....................................................   Passed    0.02 sec
+        Start 514: Pcm.DeterministicUnderEdgeReordering
+183/712 Test #514: Pcm.DeterministicUnderEdgeReordering ................................................................................   Passed    0.02 sec
+        Start 229: CollabV2.ClassifierFlagsARogueEstimateAsCorrupt
+184/712 Test #576: Reassociation.OrbDescribeIsStableUnderShiftAndFlagsBorders ..........................................................   Passed    0.03 sec
+        Start  62: Distributions.ApproximatePoissonHasVarianceEqualToMean
+185/712 Test #229: CollabV2.ClassifierFlagsARogueEstimateAsCorrupt .....................................................................   Passed    0.01 sec
+        Start 244: DeferredFeatures.AlwaysReadyHooksNeverDefer
+186/712 Test  #62: Distributions.ApproximatePoissonHasVarianceEqualToMean ..............................................................   Passed    0.02 sec
+        Start 287: DegradationConfig.AllSixteenNamedConfigsLoadAndValidate
+187/712 Test #287: DegradationConfig.AllSixteenNamedConfigsLoadAndValidate .............................................................   Passed    0.01 sec
+        Start 254: McapReplay.GateHoldsOverTheMcapContainer
+188/712 Test #244: DeferredFeatures.AlwaysReadyHooksNeverDefer .........................................................................   Passed    0.04 sec
+        Start 572: Reassociation.PnpKeepsTrueMatchesAndDropsAliases
+189/712 Test #254: McapReplay.GateHoldsOverTheMcapContainer ............................................................................   Passed    0.04 sec
+        Start 567: WindowBaLevMarq.TiltedWindowIsRotatedBackOntoGravity
+190/712 Test #572: Reassociation.PnpKeepsTrueMatchesAndDropsAliases ....................................................................   Passed    0.03 sec
+        Start 484: PgoLevMarq.NoisyGraphReachesAStationaryPoint
+191/712 Test #567: WindowBaLevMarq.TiltedWindowIsRotatedBackOntoGravity ................................................................   Passed    0.03 sec
+        Start 217: Transport.AckBurstNeverOverflowsAHeartbeat
+192/712 Test #484: PgoLevMarq.NoisyGraphReachesAStationaryPoint ........................................................................   Passed    0.02 sec
+        Start 521: Gnc.ComponentsAnchoredWhenRejectionsSplitTheGraph
+193/712 Test #217: Transport.AckBurstNeverOverflowsAHeartbeat ..........................................................................   Passed    0.02 sec
+        Start 374: PerceptionCv.RectificationCheckDetectsAWrongCalibration
+194/712 Test #374: PerceptionCv.RectificationCheckDetectsAWrongCalibration .............................................................   Passed    0.01 sec
+        Start 548: AliasingGenerator.PcmAcceptsAPlantedGroupAsOneClique
+195/712 Test #521: Gnc.ComponentsAnchoredWhenRejectionsSplitTheGraph ...................................................................   Passed    0.01 sec
+        Start 485: PgoLevMarq.SolveIsBitIdenticalTwice
+196/712 Test #548: AliasingGenerator.PcmAcceptsAPlantedGroupAsOneClique ................................................................   Passed    0.01 sec
+        Start 324: ImuNoise.IncrementalStreamMatchesBatchAcrossArbitraryChunks
+197/712 Test #485: PgoLevMarq.SolveIsBitIdenticalTwice .................................................................................   Passed    0.01 sec
+        Start 562: WindowBaLevMarq.CameraCovarianceIsTheDenseInverseBlock
+198/712 Test #324: ImuNoise.IncrementalStreamMatchesBatchAcrossArbitraryChunks .........................................................   Passed    0.01 sec
+        Start 323: ImuNoise.BitIdenticalPerSeedAndSampleWhateverTheReplayLength
+199/712 Test #562: WindowBaLevMarq.CameraCovarianceIsTheDenseInverseBlock ..............................................................   Passed    0.01 sec
+        Start 399: RotationBridge.PureRotationSelectsTheHomography
+200/712 Test #323: ImuNoise.BitIdenticalPerSeedAndSampleWhateverTheReplayLength ........................................................   Passed    0.01 sec
+        Start  59: Distributions.StandardNormalMomentsAreCorrect
+201/712 Test #399: RotationBridge.PureRotationSelectsTheHomography .....................................................................   Passed    0.01 sec
+        Start 560: WindowBaLevMarq.NoiseFreeWindowReturnsTheTruth
+202/712 Test  #59: Distributions.StandardNormalMomentsAreCorrect .......................................................................   Passed    0.01 sec
+        Start 245: DeferredFeatures.NeverReadyIsGivenUpAndNeverCorrupt
+203/712 Test #560: WindowBaLevMarq.NoiseFreeWindowReturnsTheTruth ......................................................................   Passed    0.01 sec
+        Start 415: Lens.TooShortAFocalLengthIsRefused
+204/712 Test #245: DeferredFeatures.NeverReadyIsGivenUpAndNeverCorrupt .................................................................   Passed    0.01 sec
+        Start 643: Egress.BodySupportByHand
+205/712 Test #415: Lens.TooShortAFocalLengthIsRefused ..................................................................................   Passed    0.01 sec
+        Start 538: GravityPgo.HuberDownWeightsAnOutlierPrior
+206/712 Test #643: Egress.BodySupportByHand ............................................................................................   Passed    0.01 sec
+        Start 382: StereoRowRefinement.MatchExposureRemovesAGlobalGainAndBias
+207/712 Test #538: GravityPgo.HuberDownWeightsAnOutlierPrior ...........................................................................   Passed    0.01 sec
+        Start 573: Reassociation.RefusesMatchesWithoutGeometricSupport
+208/712 Test #382: StereoRowRefinement.MatchExposureRemovesAGlobalGainAndBias ..........................................................   Passed    0.01 sec
+        Start  36: Philox.ExhaustingASiteThrowsRatherThanReusingItsStream
+209/712 Test  #36: Philox.ExhaustingASiteThrowsRatherThanReusingItsStream ..............................................................   Passed    0.00 sec
+        Start 565: WindowBaLevMarq.BiasCovarianceIsTheDenseInverseBlock
+210/712 Test #573: Reassociation.RefusesMatchesWithoutGeometricSupport .................................................................   Passed    0.01 sec
+        Start 690: Cbba.HalfOptimalAndTwoAgentScanIsExact
+211/712 Test #565: WindowBaLevMarq.BiasCovarianceIsTheDenseInverseBlock ................................................................   Passed    0.01 sec
+        Start 462: LiveLink.FramesRoundTripOverASocket
+212/712 Test #690: Cbba.HalfOptimalAndTwoAgentScanIsExact ..............................................................................   Passed    0.01 sec
+        Start 493: ChordalInit.RecoversNoiseFreeGraphsExactly
+213/712 Test #462: LiveLink.FramesRoundTripOverASocket .................................................................................   Passed    0.01 sec
+        Start 212: Transport.SelectiveRetransmitDeliversEverythingAt30PercentLoss
+214/712 Test #493: ChordalInit.RecoversNoiseFreeGraphsExactly ..........................................................................   Passed    0.01 sec
+        Start 564: WindowBaLevMarq.NoiseFreeVisualInertialWindowReturnsTheTruth
+215/712 Test #212: Transport.SelectiveRetransmitDeliversEverythingAt30PercentLoss ......................................................   Passed    0.01 sec
+        Start 222: Membership.ThirtyPercentLossDoesNotFlapTheBroker
+216/712 Test #564: WindowBaLevMarq.NoiseFreeVisualInertialWindowReturnsTheTruth ........................................................   Passed    0.01 sec
+        Start 517: Gnc.NoOutliersStopsAtOnceAndMatchesPlainLm
+217/712 Test #222: Membership.ThirtyPercentLossDoesNotFlapTheBroker ....................................................................   Passed    0.01 sec
+        Start 151: WindowBaInertial.GradientIsTheEnergyGradient
+218/712 Test #517: Gnc.NoOutliersStopsAtOnceAndMatchesPlainLm ..........................................................................   Passed    0.01 sec
+        Start 401: RotationBridge.RefusesTooFewTracksAndIsAPureFunction
+219/712 Test #151: WindowBaInertial.GradientIsTheEnergyGradient ........................................................................   Passed    0.01 sec
+        Start 368: PerceptionCv.EpipolarRejectsOutliersOnNonPlanarScene
+220/712 Test #401: RotationBridge.RefusesTooFewTracksAndIsAPureFunction ................................................................   Passed    0.01 sec
+        Start 395: StereoVo.MotionOnlyLmAgreesWithSolvePnPRefineLM
+221/712 Test #368: PerceptionCv.EpipolarRejectsOutliersOnNonPlanarScene ................................................................   Passed    0.01 sec
+        Start 507: Pcm.CliqueSolversOnPlantedCliques
+222/712 Test #395: StereoVo.MotionOnlyLmAgreesWithSolvePnPRefineLM .....................................................................   Passed    0.01 sec
+        Start 372: PerceptionCv.RectificationPutsCorrespondencesOnOneRowWithMetricDisparity
+223/712 Test #507: Pcm.CliqueSolversOnPlantedCliques ...................................................................................   Passed    0.01 sec
+        Start 148: Preintegration.ResidualJacobiansMatchFiniteDifferences
+224/712 Test #372: PerceptionCv.RectificationPutsCorrespondencesOnOneRowWithMetricDisparity ............................................   Passed    0.01 sec
+        Start 418: Lens.DepthUsesNearestNeighbour
+225/712 Test #148: Preintegration.ResidualJacobiansMatchFiniteDifferences ..............................................................   Passed    0.01 sec
+        Start 618: LoopVerifyGeometry.RecoversAKnownRelativePose
+226/712 Test #418: Lens.DepthUsesNearestNeighbour ......................................................................................   Passed    0.01 sec
+        Start  60: Distributions.NormalAppliesMeanAndStddev
+227/712 Test #618: LoopVerifyGeometry.RecoversAKnownRelativePose .......................................................................   Passed    0.01 sec
+        Start 553: SpectralSelector.RepeatedLambda2IsAClusterAndOrderDoesNotMatter
+228/712 Test  #60: Distributions.NormalAppliesMeanAndStddev ............................................................................   Passed    0.01 sec
+        Start 430: ExposureControl.OverexposureStepsDownAtTheSlewLimit
+229/712 Test #553: SpectralSelector.RepeatedLambda2IsAClusterAndOrderDoesNotMatter .....................................................   Passed    0.01 sec
+        Start 425: ExposureControl.GradientInformationIgnoresFlatAndSubThresholdTexture
+230/712 Test #430: ExposureControl.OverexposureStepsDownAtTheSlewLimit .................................................................   Passed    0.01 sec
+        Start 352: RosbagReader.ReadsEveryTopicInLogTimeOrderAndDecodes
+231/712 Test #352: RosbagReader.ReadsEveryTopicInLogTimeOrderAndDecodes ................................................................   Passed    0.00 sec
+        Start  98: DegradationHeadlamp.DirectAttenuationIsOutAndBack
+232/712 Test #425: ExposureControl.GradientInformationIgnoresFlatAndSubThresholdTexture ................................................   Passed    0.01 sec
+        Start 561: WindowBaLevMarq.OneFreePoseMatchesSolvePnPRefineLM
+233/712 Test  #98: DegradationHeadlamp.DirectAttenuationIsOutAndBack ...................................................................   Passed    0.01 sec
+        Start  12: SE3.NormalizeRemovesAccumulatedDrift
+234/712 Test #561: WindowBaLevMarq.OneFreePoseMatchesSolvePnPRefineLM ..................................................................   Passed    0.01 sec
+        Start 157: InertialInit.RecoversBiasesGravityAndVelocities
+235/712 Test  #12: SE3.NormalizeRemovesAccumulatedDrift ................................................................................   Passed    0.01 sec
+        Start 682: MultiAgentPlanning.OperatorEgressRoutesOnlyOverWhatWasReceivedAndCertified
+236/712 Test #157: InertialInit.RecoversBiasesGravityAndVelocities .....................................................................   Passed    0.01 sec
+        Start 242: CoordinationNode.PartitionRoutesBidsToEachComponentsBroker
+237/712 Test #682: MultiAgentPlanning.OperatorEgressRoutesOnlyOverWhatWasReceivedAndCertified ..........................................   Passed    0.01 sec
+        Start 624: Volumetric.EdgeMinConvolutionMatchesBruteForceIncludingEmptyRuns
+238/712 Test #242: CoordinationNode.PartitionRoutesBidsToEachComponentsBroker ..........................................................   Passed    0.01 sec
+        Start 478: Planning.ClearanceMatchesBruteForceEdgeDistance
+239/712 Test #624: Volumetric.EdgeMinConvolutionMatchesBruteForceIncludingEmptyRuns ....................................................   Passed    0.01 sec
+        Start 543: Certificate.PerturbedPointIsNotCertified
+240/712 Test #478: Planning.ClearanceMatchesBruteForceEdgeDistance .....................................................................   Passed    0.01 sec
+        Start 400: RotationBridge.ParallaxSelectsTheEssentialMatrix
+241/712 Test #543: Certificate.PerturbedPointIsNotCertified ............................................................................   Passed    0.01 sec
+        Start 417: Lens.BilinearIsExactOnALinearImage
+242/712 Test #400: RotationBridge.ParallaxSelectsTheEssentialMatrix ....................................................................   Passed    0.01 sec
+        Start 375: PerceptionCv.RectifierRejectsAnInvertedExtrinsic
+243/712 Test #417: Lens.BilinearIsExactOnALinearImage ..................................................................................   Passed    0.01 sec
+        Start 483: PgoLevMarq.NoiseFreeGraphReturnsTheTruth
+244/712 Test #375: PerceptionCv.RectifierRejectsAnInvertedExtrinsic ....................................................................   Passed    0.01 sec
+        Start 604: PlaceIndex.ExactFindsItselfAndHonoursTheFilter
+245/712 Test #483: PgoLevMarq.NoiseFreeGraphReturnsTheTruth ............................................................................   Passed    0.01 sec
+        Start 158: InertialInit.AccelBiasTradesOffAgainstGravityTiltUnderThePrior
+246/712 Test #604: PlaceIndex.ExactFindsItselfAndHonoursTheFilter ......................................................................   Passed    0.01 sec
+        Start 390: Tum.DenseDepthHasTheKeyframeRecordContract
+247/712 Test #158: InertialInit.AccelBiasTradesOffAgainstGravityTiltUnderThePrior ......................................................   Passed    0.01 sec
+        Start 546: Certificate.DoesNotModifyTheGraph
+248/712 Test #390: Tum.DenseDepthHasTheKeyframeRecordContract ..........................................................................   Passed    0.01 sec
+        Start 467: LiveLink.RecordingReplaysInConsumedOrderWithTies
+249/712 Test #467: LiveLink.RecordingReplaysInConsumedOrderWithTies ....................................................................   Passed    0.01 sec
+        Start 468: LiveLink.AssemblerLenientDropsWhereStrictThrows
+250/712 Test #546: Certificate.DoesNotModifyTheGraph ...................................................................................   Passed    0.01 sec
+        Start 460: KeyframeSpool.StrideIsPerAgentAndIndexHasEveryField
+251/712 Test #468: LiveLink.AssemblerLenientDropsWhereStrictThrows .....................................................................   Passed    0.01 sec
+        Start 663: Phase4Planner.JointPickNeverCoordinatesAcrossAPartition
+252/712 Test #460: KeyframeSpool.StrideIsPerAgentAndIndexHasEveryField .................................................................   Passed    0.01 sec
+        Start  72: Degradation.RepeatedCallsAreBitIdentical
+253/712 Test #663: Phase4Planner.JointPickNeverCoordinatesAcrossAPartition .............................................................   Passed    0.01 sec
+        Start 235: CollabSelection.GraphStartsAtTheFirstReleasedKeyframe
+254/712 Test  #72: Degradation.RepeatedCallsAreBitIdentical ............................................................................   Passed    0.01 sec
+        Start 476: Planning.VoxelTraversalMatchesBruteForce
+255/712 Test #235: CollabSelection.GraphStartsAtTheFirstReleasedKeyframe ...............................................................   Passed    0.01 sec
+        Start 566: WindowBaLevMarq.DarkWindowIsDeadReckonedWithTheVelocityOfWindow0Held
+256/712 Test #476: Planning.VoxelTraversalMatchesBruteForce ............................................................................   Passed    0.01 sec
+        Start 555: SpectralSelector.BootstrapBridgesBeforeImprovingAComponent
+257/712 Test #566: WindowBaLevMarq.DarkWindowIsDeadReckonedWithTheVelocityOfWindow0Held ................................................   Passed    0.01 sec
+        Start 502: Degeneracy.SmallObjectIsNamedForConditioning
+258/712 Test #555: SpectralSelector.BootstrapBridgesBeforeImprovingAComponent ..........................................................   Passed    0.01 sec
+        Start 500: Degeneracy.ThreeDLineIsRefused
+259/712 Test #502: Degeneracy.SmallObjectIsNamedForConditioning ........................................................................   Passed    0.01 sec
+        Start 535: GravityPgo.GradientMatchesFiniteDifferencesIncludingHuber
+260/712 Test #500: Degeneracy.ThreeDLineIsRefused ......................................................................................   Passed    0.01 sec
+        Start 461: KeyframeSpool.Schema2CarriesTheAlbedoProxyPhotoAndLamp
+261/712 Test #535: GravityPgo.GradientMatchesFiniteDifferencesIncludingHuber ...........................................................   Passed    0.01 sec
+        Start 444: ExposureGlue.RefusesTheVstModes
+262/712 Test #444: ExposureGlue.RefusesTheVstModes .....................................................................................   Passed    0.01 sec
+        Start 449: EdgeVerifier.PlanaritySeparatesPlaneFromVolume
+263/712 Test #461: KeyframeSpool.Schema2CarriesTheAlbedoProxyPhotoAndLamp ..............................................................   Passed    0.01 sec
+        Start 592: XFeatEngine.ConfigRequiresWeightsAndValidSizes
+264/712 Test #449: EdgeVerifier.PlanaritySeparatesPlaneFromVolume ......................................................................   Passed    0.01 sec
+        Start 441: FalloffGlue.Refusals
+265/712 Test #592: XFeatEngine.ConfigRequiresWeightsAndValidSizes ......................................................................   Passed    0.01 sec
+        Start 693: Cbba.SparseWireRoundTripIsExact
+266/712 Test #693: Cbba.SparseWireRoundTripIsExact .....................................................................................   Passed    0.01 sec
+        Start 569: Reassociation.RatioTestRefusesAmbiguousCandidates
+267/712 Test #441: FalloffGlue.Refusals ................................................................................................   Passed    0.01 sec
+        Start 131: PoseGraph.EdgeInformationMatchesResidualTangentMonteCarlo
+268/712 Test #569: Reassociation.RatioTestRefusesAmbiguousCandidates ...................................................................   Passed    0.01 sec
+        Start 469: LiveLink.PipelinedIngestMatchesFeedExactly
+269/712 Test #131: PoseGraph.EdgeInformationMatchesResidualTangentMonteCarlo ...........................................................   Passed    0.01 sec
+        Start 431: ExposureControl.StageFourNormalisesToTheCanonicalState
+270/712 Test #469: LiveLink.PipelinedIngestMatchesFeedExactly ..........................................................................   Passed    0.01 sec
+        Start 359: PerceptionCv.GrayscaleHonoursChannelOrder
+271/712 Test #431: ExposureControl.StageFourNormalisesToTheCanonicalState ..............................................................   Passed    0.01 sec
+        Start 445: ExposureGlue.CommandBecomesTheAppliedReport
+272/712 Test #359: PerceptionCv.GrayscaleHonoursChannelOrder ...........................................................................   Passed    0.01 sec
+        Start 641: EgressPlanner.ObstacleOnRouteReroutes
+273/712 Test #445: ExposureGlue.CommandBecomesTheAppliedReport .........................................................................   Passed    0.01 sec
+        Start 410: Attitude.MahonyConvergesToGravity
+274/712 Test #641: EgressPlanner.ObstacleOnRouteReroutes ...............................................................................   Passed    0.01 sec
+        Start 458: KeyframeSpool.HalfDepthRoundTripsWithNan
+275/712 Test #410: Attitude.MahonyConvergesToGravity ...................................................................................   Passed    0.01 sec
+        Start 459: KeyframeSpool.IntrinsicsScaleWithPixelCentres
+276/712 Test #458: KeyframeSpool.HalfDepthRoundTripsWithNan ............................................................................   Passed    0.01 sec
+        Start 606: PlaceIndex.AddingAfterAQueryRebuilds
+277/712 Test #459: KeyframeSpool.IntrinsicsScaleWithPixelCentres .......................................................................   Passed    0.01 sec
+        Start 360: PerceptionCv.GridSelectSpreadsTheBudget
+278/712 Test #606: PlaceIndex.AddingAfterAQueryRebuilds ................................................................................   Passed    0.01 sec
+        Start 692: Cbba.WireBytesAtTheSerializer
+279/712 Test #360: PerceptionCv.GridSelectSpreadsTheBudget .............................................................................   Passed    0.01 sec
+        Start 694: Cbba.ConvergesWithoutAgreementAcrossComponents
+280/712 Test #692: Cbba.WireBytesAtTheSerializer .......................................................................................   Passed    0.01 sec
+        Start 540: Certificate.NoiseFreeGraphHasTheGaugeNullSpaceAndCertifies
+281/712 Test #694: Cbba.ConvergesWithoutAgreementAcrossComponents ......................................................................   Passed    0.01 sec
+        Start 451: MultiAgent.FrameFitRecoversAnExactTransform
+282/712 Test #540: Certificate.NoiseFreeGraphHasTheGaugeNullSpaceAndCertifies ..........................................................   Passed    0.01 sec
+        Start 241: CoordinationNode.PatchBidConsensusDeliveredAndPatchAcked
+283/712 Test #451: MultiAgent.FrameFitRecoversAnExactTransform .........................................................................   Passed    0.01 sec
+        Start 689: Cbba.ConflictFreeOnSwitchingGraph
+284/712 Test #241: CoordinationNode.PatchBidConsensusDeliveredAndPatchAcked ............................................................   Passed    0.01 sec
+        Start 413: Lens.ModelEqualsOpenCvProjection
+285/712 Test #689: Cbba.ConflictFreeOnSwitchingGraph ...................................................................................   Passed    0.01 sec
+        Start 193: Network.PerDatagramLossMatchesProbability
+286/712 Test #413: Lens.ModelEqualsOpenCvProjection ....................................................................................   Passed    0.01 sec
+        Start 591: XFeatEngine.FactoryKeepsOrbTheDefault
+287/712 Test #193: Network.PerDatagramLossMatchesProbability ...........................................................................   Passed    0.01 sec
+        Start 578: Reassociation.ShippedV2ConfigEnablesIt
+288/712 Test #591: XFeatEngine.FactoryKeepsOrbTheDefault ...............................................................................   Passed    0.01 sec
+        Start 447: ExposureGlue.DecidesFromTheAppliedStateAndStepsDownWhenOverexposed
+289/712 Test #578: Reassociation.ShippedV2ConfigEnablesIt ..............................................................................   Passed    0.01 sec
+        Start 542: Certificate.StationaryNonGlobalPointIsNotCertified
+290/712 Test #447: ExposureGlue.DecidesFromTheAppliedStateAndStepsDownWhenOverexposed ..................................................   Passed    0.01 sec
+        Start 479: Planning.DoorwayClearanceByHand
+291/712 Test #542: Certificate.StationaryNonGlobalPointIsNotCertified ..................................................................   Passed    0.01 sec
+        Start 499: Degeneracy.PixelsOnOneRowAreNotRefused
+292/712 Test #479: Planning.DoorwayClearanceByHand .....................................................................................   Passed    0.01 sec
+        Start 680: MultiAgentPlanning.OverlapBrokerAvoidsTheSharedBlockDiscountAvoidsTheNearGoal
+293/712 Test #499: Degeneracy.PixelsOnOneRowAreNotRefused ..............................................................................   Passed    0.01 sec
+        Start 464: LiveLink.OrderBreaksAreCounted
+294/712 Test #680: MultiAgentPlanning.OverlapBrokerAvoidsTheSharedBlockDiscountAvoidsTheNearGoal .......................................   Passed    0.01 sec
+        Start 439: FalloffGlue.ConfigSection
+295/712 Test #464: LiveLink.OrderBreaksAreCounted ......................................................................................   Passed    0.01 sec
+        Start 398: KeyframeBundle.StampsTheGraphVersionAndCarriesTheNodePose
+296/712 Test #439: FalloffGlue.ConfigSection ...........................................................................................   Passed    0.01 sec
+        Start 577: Reassociation.AbsentSectionMeansOff
+297/712 Test #398: KeyframeBundle.StampsTheGraphVersionAndCarriesTheNodePose ...........................................................   Passed    0.01 sec
+        Start 563: WindowBaLevMarq.SingularInformationIsReportedByBothCovariancePaths
+298/712 Test #577: Reassociation.AbsentSectionMeansOff .................................................................................   Passed    0.01 sec
+        Start 513: Pcm.BlindSpotSelfConsistentWrongClusterPasses
+299/712 Test #563: WindowBaLevMarq.SingularInformationIsReportedByBothCovariancePaths ..................................................   Passed    0.01 sec
+        Start 501: Degeneracy.FarOnlyPointsAreNamedForParallax
+300/712 Test #513: Pcm.BlindSpotSelfConsistentWrongClusterPasses .......................................................................   Passed    0.01 sec
+        Start 669: NbvTime.CommandTimeIsTheMoversProfileMonotoneInTurnAndPath
+301/712 Test #501: Degeneracy.FarOnlyPointsAreNamedForParallax .........................................................................   Passed    0.01 sec
+        Start 402: LostFrames.DefaultsAreThePhase1Behaviour
+302/712 Test #669: NbvTime.CommandTimeIsTheMoversProfileMonotoneInTurnAndPath ..........................................................   Passed    0.01 sec
+        Start 509: Pcm.RefusesAnOdometryGraphThatIsNotAChain
+303/712 Test #402: LostFrames.DefaultsAreThePhase1Behaviour ............................................................................   Passed    0.01 sec
+        Start 556: SpectralSelector.OneFetchServesEveryCandidateOnIt
+304/712 Test #509: Pcm.RefusesAnOdometryGraphThatIsNotAChain ...........................................................................   Passed    0.01 sec
+        Start 659: Phase4Planner.AuctionUsesCommonScales
+305/712 Test #556: SpectralSelector.OneFetchServesEveryCandidateOnIt ...................................................................   Passed    0.01 sec
+        Start 436: Falloff.LoadsTheCalibrationYaml
+306/712 Test #659: Phase4Planner.AuctionUsesCommonScales ...............................................................................   Passed    0.01 sec
+        Start 508: Pcm.GroupRules
+307/712 Test #436: Falloff.LoadsTheCalibrationYaml .....................................................................................   Passed    0.01 sec
+        Start 361: PerceptionCv.GridSelectIsOrderIndependent
+308/712 Test #508: Pcm.GroupRules ......................................................................................................   Passed    0.01 sec
+        Start 619: LoopVerifyGeometry.FailureIsInfiniteError
+309/712 Test #361: PerceptionCv.GridSelectIsOrderIndependent ...........................................................................   Passed    0.01 sec
+        Start 603: StereoValidator.ZminExactlyAtTheRequirementIsAccepted
+310/712 Test #619: LoopVerifyGeometry.FailureIsInfiniteError ...........................................................................   Passed    0.01 sec
+        Start 496: Degeneracy.EdgeInformationUsesTheOdometryEdgeConversion
+311/712 Test #603: StereoValidator.ZminExactlyAtTheRequirementIsAccepted ...............................................................   Passed    0.01 sec
+        Start 357: OpenCvIdentity.HashIsPrefixedAndStable
+312/712 Test #496: Degeneracy.EdgeInformationUsesTheOdometryEdgeConversion .............................................................   Passed    0.01 sec
+        Start 426: ExposureControl.AllocatePhotonsFirstWhenBrighterGainFirstWhenDarker
+313/712 Test #357: OpenCvIdentity.HashIsPrefixedAndStable ..............................................................................   Passed    0.01 sec
+        Start 532: LoopBackend.KeyframesBeforeTheAnchorAreUnreachable
+314/712 Test #426: ExposureControl.AllocatePhotonsFirstWhenBrighterGainFirstWhenDarker .................................................   Passed    0.01 sec
+        Start 491: ChordalInit.ProjectionIsNearestRotationAndFixesTheDeterminant
+315/712 Test #532: LoopBackend.KeyframesBeforeTheAnchorAreUnreachable ..................................................................   Passed    0.01 sec
+        Start 482: PgoLevMarq.DriverContractOneStepOnALinearProblem
+316/712 Test #491: ChordalInit.ProjectionIsNearestRotationAndFixesTheDeterminant .......................................................   Passed    0.01 sec
+        Start 639: DStarLite.CornerRule
+317/712 Test #482: PgoLevMarq.DriverContractOneStepOnALinearProblem ....................................................................   Passed    0.01 sec
+        Start 626: Volumetric.EsdfSliceEqualsThePlaceholdersEdgeClearance
+318/712 Test #639: DStarLite.CornerRule ................................................................................................   Passed    0.01 sec
+        Start 681: MultiAgentPlanning.CutOffAgentDiscountsByRememberedClaims
+319/712 Test #626: Volumetric.EsdfSliceEqualsThePlaceholdersEdgeClearance ..............................................................   Passed    0.01 sec
+        Start 638: DStarLite.CheapestExitNotNearest
+320/712 Test #681: MultiAgentPlanning.CutOffAgentDiscountsByRememberedClaims ...........................................................   Passed    0.01 sec
+        Start 672: MultiAgentPlanning.ExporterSendsOnlyBlocksChangedSinceTheAck
+321/712 Test #638: DStarLite.CheapestExitNotNearest ....................................................................................   Passed    0.01 sec
+        Start 675: MultiAgentPlanning.BrokerIsExactlyOnceByRSameAndIgnoresStrangers
+322/712 Test #672: MultiAgentPlanning.ExporterSendsOnlyBlocksChangedSinceTheAck ........................................................   Passed    0.01 sec
+        Start 676: MultiAgentPlanning.ApplyConsensusFollowsWhatArrivedOrSaysWhyNot
+323/712 Test #675: MultiAgentPlanning.BrokerIsExactlyOnceByRSameAndIgnoresStrangers ....................................................   Passed    0.01 sec
+        Start 498: Degeneracy.WellConditionedControlPassesEveryCriterion
+324/712 Test #676: MultiAgentPlanning.ApplyConsensusFollowsWhatArrivedOrSaysWhyNot .....................................................   Passed    0.01 sec
+        Start 534: LoopRetrieval.ExclusionThresholdAndOrder
+325/712 Test #534: LoopRetrieval.ExclusionThresholdAndOrder ............................................................................   Passed    0.01 sec
+        Start 671: MultiAgentPlanning.EncodeCellsTriStatePlusResponderBit
+326/712 Test #498: Degeneracy.WellConditionedControlPassesEveryCriterion ...............................................................   Passed    0.01 sec
+        Start 503: Degeneracy.NoiseModelReplacesTheEdgeCovarianceOnly
+327/712 Test #671: MultiAgentPlanning.EncodeCellsTriStatePlusResponderBit ..............................................................   Passed    0.01 sec
+        Start 656: Phase4Planner.KeepOutMasksPaths
+328/712 Test #503: Degeneracy.NoiseModelReplacesTheEdgeCovarianceOnly ..................................................................   Passed    0.01 sec
+        Start 539: Certificate.ObjectiveIsTheTraceFormAndGradientMatchesFiniteDifferences
+329/712 Test #656: Phase4Planner.KeepOutMasksPaths .....................................................................................   Passed    0.01 sec
+        Start 652: Nbv.ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc
+330/712 Test #539: Certificate.ObjectiveIsTheTraceFormAndGradientMatchesFiniteDifferences ..............................................   Passed    0.01 sec
+        Start 155: WindowBaInertial.InertialFactorsTieOnlyOutOfAGroupThatPinsTheVelocity
+331/712 Test #652: Nbv.ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc ..................................................................   Passed    0.01 sec
+        Start 698: VisibilityGraph.MultiGoalAndNoRoute
+332/712 Test #155: WindowBaInertial.InertialFactorsTieOnlyOutOfAGroupThatPinsTheVelocity ...............................................   Passed    0.01 sec
+        Start 661: Phase4Planner.JointPickExactlyOnceThreeAgents
+333/712 Test #698: VisibilityGraph.MultiGoalAndNoRoute .................................................................................   Passed    0.01 sec
+        Start 471: LockstepGate.WaitsOnEveryLane
+334/712 Test #661: Phase4Planner.JointPickExactlyOnceThreeAgents .......................................................................   Passed    0.01 sec
+        Start 570: Reassociation.HammingCapRejectsDistantNeighbours
+335/712 Test #471: LockstepGate.WaitsOnEveryLane .......................................................................................   Passed    0.01 sec
+        Start 492: ChordalInit.IsotropicWeightsFollowSeSyncConvention
+336/712 Test #570: Reassociation.HammingCapRejectsDistantNeighbours ....................................................................   Passed    0.01 sec
+        Start 650: Nbv.OpenTourAgainstExactOracle
+337/712 Test #492: ChordalInit.IsotropicWeightsFollowSeSyncConvention ..................................................................   Passed    0.01 sec
+        Start 408: Attitude.GyroBiasFromVoRotationsIsRobust
+338/712 Test #650: Nbv.OpenTourAgainstExactOracle ......................................................................................   Passed    0.01 sec
+        Start 440: FalloffGlue.NeedsTheFlatFieldFirst
+339/712 Test #408: Attitude.GyroBiasFromVoRotationsIsRobust ............................................................................   Passed    0.01 sec
+        Start 495: Degeneracy.StereoPointJacobianMatchesFiniteDifferences
+340/712 Test #495: Degeneracy.StereoPointJacobianMatchesFiniteDifferences ..............................................................   Passed    0.01 sec
+        Start 568: Reassociation.MutualRatioPairsIdenticalDescriptors
+341/712 Test #440: FalloffGlue.NeedsTheFlatFieldFirst ..................................................................................   Passed    0.01 sec
+        Start 614: HardPair.UpstreamNormalisationKeepsTheAspect
+342/712 Test #614: HardPair.UpstreamNormalisationKeepsTheAspect ........................................................................   Passed    0.01 sec
+        Start 358: OpenCvIdentity.RecordFillsTheManifest
+343/712 Test #568: Reassociation.MutualRatioPairsIdenticalDescriptors ..................................................................   Passed    0.01 sec
+        Start 477: Planning.CarvingGivesTriStateAndKeepsTheSurface
+344/712 Test #358: OpenCvIdentity.RecordFillsTheManifest ...............................................................................   Passed    0.01 sec
+        Start 536: GravityPgo.DisabledIsBitIdenticalToNoPriors
+345/712 Test #477: Planning.CarvingGivesTriStateAndKeepsTheSurface .....................................................................   Passed    0.01 sec
+        Start 481: Planning.FrontiersClusterAndDropSmallOnes
+346/712 Test #536: GravityPgo.DisabledIsBitIdenticalToNoPriors .........................................................................   Passed    0.01 sec
+        Start 571: Reassociation.MutualCheckKeepsOneQueryPerCandidate
+347/712 Test #481: Planning.FrontiersClusterAndDropSmallOnes ...........................................................................   Passed    0.01 sec
+        Start 387: Tum.SigmaModelIsKhoshelhamElberinkAndMatchesTheVirtualRig
+348/712 Test #571: Reassociation.MutualCheckKeepsOneQueryPerCandidate ..................................................................   Passed    0.01 sec
+        Start 494: ChordalInit.RefusesAGraphNotConnectedToTheAnchor
+349/712 Test #387: Tum.SigmaModelIsKhoshelhamElberinkAndMatchesTheVirtualRig ...........................................................   Passed    0.01 sec
+        Start 465: LiveLink.AnswersReleasedInCanonicalOrder
+350/712 Test #494: ChordalInit.RefusesAGraphNotConnectedToTheAnchor ....................................................................   Passed    0.01 sec
+        Start 480: Planning.AStarFindsTheOptimumAndRespectsCorners
+351/712 Test #465: LiveLink.AnswersReleasedInCanonicalOrder ............................................................................   Passed    0.01 sec
+        Start 432: DegradationSrgb.DecodesBeforeTheSensorChain
+352/712 Test #480: Planning.AStarFindsTheOptimumAndRespectsCorners .....................................................................   Passed    0.01 sec
+        Start 355: OpenCvIdentity.IsOpenCv5
+353/712 Test #432: DegradationSrgb.DecodesBeforeTheSensorChain .........................................................................   Passed    0.01 sec
+        Start 473: LockstepGate.AllDoneShortNeedsEveryLaneDoneBeforeT
+354/712 Test #355: OpenCvIdentity.IsOpenCv5 ............................................................................................   Passed    0.01 sec
+        Start 475: DepthEval.RectifiedZFromRawDepthAndBinnedRelativeError
+355/712 Test #473: LockstepGate.AllDoneShortNeedsEveryLaneDoneBeforeT ..................................................................   Passed    0.01 sec
+        Start 687: Cbba.StaleSecondSlotBidRegression
+356/712 Test #475: DepthEval.RectifiedZFromRawDepthAndBinnedRelativeError ..............................................................   Passed    0.01 sec
+        Start 655: Phase4Planner.DirectivesAndRefusals
+357/712 Test #687: Cbba.StaleSecondSlotBidRegression ...................................................................................   Passed    0.01 sec
+        Start 529: LoopBackend.NoiseFreeLoopEdgeHasZeroResidualAtTheTruth
+358/712 Test #655: Phase4Planner.DirectivesAndRefusals .................................................................................   Passed    0.01 sec
+        Start 602: StereoValidator.RangeCoveringTheImageWidthIsRefused
+359/712 Test #529: LoopBackend.NoiseFreeLoopEdgeHasZeroResidualAtTheTruth ..............................................................   Passed    0.01 sec
+        Start 673: MultiAgentPlanning.ReceivedLayersPlaceMergeAndRefuseOwn
+360/712 Test #602: StereoValidator.RangeCoveringTheImageWidthIsRefused .................................................................   Passed    0.01 sec
+        Start 645: Nbv.P90ScaleInvarianceAndFallbacks
+361/712 Test #673: MultiAgentPlanning.ReceivedLayersPlaceMergeAndRefuseOwn .............................................................   Passed    0.01 sec
+        Start 593: XFeatEngine.ShippedAblationConfigIsTheMeasuredRow
+362/712 Test #645: Nbv.P90ScaleInvarianceAndFallbacks ..................................................................................   Passed    0.01 sec
+        Start 688: Cbba.DiscountedInsertionMarginalIsNotDmg
+363/712 Test #593: XFeatEngine.ShippedAblationConfigIsTheMeasuredRow ...................................................................   Passed    0.01 sec
+        Start 388: Tum.VirtualStereoReturnsSensorDepthAndMasksEdgesAndRange
+364/712 Test #688: Cbba.DiscountedInsertionMarginalIsNotDmg ............................................................................   Passed    0.01 sec
+        Start 512: Pcm.ChiSquare6QuantileIsTheInverseOfItsSurvival
+365/712 Test #388: Tum.VirtualStereoReturnsSensorDepthAndMasksEdgesAndRange ............................................................   Passed    0.01 sec
+        Start 356: OpenCvIdentity.LoadedBuildHasThePinnedModules
+366/712 Test #512: Pcm.ChiSquare6QuantileIsTheInverseOfItsSurvival .....................................................................   Passed    0.01 sec
+        Start 457: EntryGate.ChainCovarianceGrowsAlongTheOdometry
+367/712 Test #356: OpenCvIdentity.LoadedBuildHasThePinnedModules .......................................................................   Passed    0.01 sec
+        Start 141: WindowBa.UnanchoredHessianHasTheSixDimensionalGauge
+368/712 Test #457: EntryGate.ChainCovarianceGrowsAlongTheOdometry ......................................................................   Passed    0.01 sec
+        Start 463: LiveLink.CommandAndMoverStateCdrRoundTrip
+369/712 Test #141: WindowBa.UnanchoredHessianHasTheSixDimensionalGauge .................................................................   Passed    0.01 sec
+        Start 684: Cbba.TableIRowByRow
+370/712 Test #463: LiveLink.CommandAndMoverStateCdrRoundTrip ...........................................................................   Passed    0.01 sec
+        Start 474: LockstepGate.MinProgressIsTheSlowestUnfinishedLane
+371/712 Test #684: Cbba.TableIRowByRow .................................................................................................   Passed    0.01 sec
+        Start 427: ExposureControl.BlurCeilingShortensExposureAndKeepsBrightness
+372/712 Test #474: LockstepGate.MinProgressIsTheSlowestUnfinishedLane ..................................................................   Passed    0.01 sec
+        Start 691: Cbba.DiscountedScoreIsDmgAdditiveIsNot
+373/712 Test #427: ExposureControl.BlurCeilingShortensExposureAndKeepsBrightness .......................................................   Passed    0.01 sec
+        Start 384: Tum.TimestampsParseExactlyWithoutFloatingPoint
+374/712 Test #691: Cbba.DiscountedScoreIsDmgAdditiveIsNot ..............................................................................   Passed    0.01 sec
+        Start 642: Egress.PenaltyTermsByHand
+375/712 Test #384: Tum.TimestampsParseExactlyWithoutFloatingPoint ......................................................................   Passed    0.01 sec
+        Start 448: ExposureGlue.RadianceEventStepsTheSceneNotTheSensor
+376/712 Test #642: Egress.PenaltyTermsByHand ...........................................................................................   Passed    0.01 sec
+        Start 386: Tum.AssociationIsGreedyOneToOneWithin20ms
+377/712 Test #448: ExposureGlue.RadianceEventStepsTheSceneNotTheSensor .................................................................   Passed    0.01 sec
+        Start 385: Tum.GroundTruthQuaternionIsXyzwOnFile
+378/712 Test #386: Tum.AssociationIsGreedyOneToOneWithin20ms ...........................................................................   Passed    0.01 sec
+        Start 472: LockstepGate.PreD225ShapeTripsHere
+379/712 Test #385: Tum.GroundTruthQuaternionIsXyzwOnFile ...............................................................................   Passed    0.01 sec
+        Start 657: Phase4Planner.JointPickExactlyOnce
+380/712 Test #472: LockstepGate.PreD225ShapeTripsHere ..................................................................................   Passed    0.01 sec
+        Start 328: ImuNoise.ShippedConfigLoadsAndMatchesTheRigRate
+381/712 Test #657: Phase4Planner.JointPickExactlyOnce ..................................................................................   Passed    0.01 sec
+        Start  88: Degradation.DustFieldVariesSpatially
+382/712 Test #328: ImuNoise.ShippedConfigLoadsAndMatchesTheRigRate .....................................................................   Passed    0.00 sec
+        Start 456: EntryGate.KeepsTheTrueLoopRejectsTheAliasAndLeavesUnknownAgentsUngated
+383/712 Test  #88: Degradation.DustFieldVariesSpatially ................................................................................   Passed    0.01 sec
+        Start 558: LocalDescriptorCodec.RoundTripErrorsAreBoundedByTheEncoding
+384/712 Test #456: EntryGate.KeepsTheTrueLoopRejectsTheAliasAndLeavesUnknownAgentsUngated ..............................................   Passed    0.01 sec
+        Start  89: Degradation.GoldenDigestForAFixedConfiguration
+385/712 Test #558: LocalDescriptorCodec.RoundTripErrorsAreBoundedByTheEncoding .........................................................   Passed    0.01 sec
+        Start 531: LoopBackend.BrokenChainThrows
+386/712 Test  #89: Degradation.GoldenDigestForAFixedConfiguration ......................................................................   Passed    0.01 sec
+        Start 674: MultiAgentPlanning.BrokerEqualsCentralisedSgaUnderFullDelivery
+387/712 Test #531: LoopBackend.BrokenChainThrows .......................................................................................   Passed    0.01 sec
+        Start  96: DegradationHeadlamp.LampOffsetLowersTheVeil
+388/712 Test #674: MultiAgentPlanning.BrokerEqualsCentralisedSgaUnderFullDelivery ......................................................   Passed    0.01 sec
+        Start 620: PerThread.OneInstancePerThreadStableAcrossCalls
+389/712 Test  #96: DegradationHeadlamp.LampOffsetLowersTheVeil .........................................................................   Passed    0.01 sec
+        Start 187: Serialization.LargeFeatureResponseRoundTripsThroughFragmentation
+390/712 Test #620: PerThread.OneInstancePerThreadStableAcrossCalls .....................................................................   Passed    0.01 sec
+        Start 409: Attitude.StationaryStartIsDetectedOnlyAtRest
+391/712 Test #187: Serialization.LargeFeatureResponseRoundTripsThroughFragmentation ....................................................   Passed    0.01 sec
+        Start 443: ExposureGlue.ConfigSection
+392/712 Test #409: Attitude.StationaryStartIsDetectedOnlyAtRest ........................................................................   Passed    0.01 sec
+        Start 446: ExposureGlue.TheWrapperForwardsTheSeam
+393/712 Test #443: ExposureGlue.ConfigSection ..........................................................................................   Passed    0.01 sec
+        Start 416: Lens.IdentityModelReproducesTheImageExactly
+394/712 Test #446: ExposureGlue.TheWrapperForwardsTheSeam ..............................................................................   Passed    0.01 sec
+        Start 666: NbvTime.TurnHereIsOnePureTurnFromAnyNearbyPose
+395/712 Test #416: Lens.IdentityModelReproducesTheImageExactly .........................................................................   Passed    0.01 sec
+        Start 504: Pcm.OdometryLegIsTheEdgeForwardAndBackward
+396/712 Test #666: NbvTime.TurnHereIsOnePureTurnFromAnyNearbyPose ......................................................................   Passed    0.01 sec
+        Start 600: StereoConfidence.ConfigIsValidated
+397/712 Test #504: Pcm.OdometryLegIsTheEdgeForwardAndBackward ..........................................................................   Passed    0.01 sec
+        Start 654: Phase4Planner.StringPullLCorridor
+398/712 Test #600: StereoConfidence.ConfigIsValidated ..................................................................................   Passed    0.01 sec
+        Start  94: DegradationFidelity.LampAirlightFollowsTheLobeAndThePower
+399/712 Test  #94: DegradationFidelity.LampAirlightFollowsTheLobeAndThePower ...........................................................   Passed    0.00 sec
+        Start  38: Philox.UniformIsInRangeAndRoughlyFlat
+400/712 Test #654: Phase4Planner.StringPullLCorridor ...................................................................................   Passed    0.01 sec
+        Start 344: RosCdr.EveryTruncationThrows
+401/712 Test  #38: Philox.UniformIsInRangeAndRoughlyFlat ...............................................................................   Passed    0.00 sec
+        Start  80: Degradation.ReadNoiseDominatesInDarkness
+402/712 Test #344: RosCdr.EveryTruncationThrows ........................................................................................   Passed    0.00 sec
+        Start  92: DegradationFidelity.PreSensorAirlightCarriesShotNoise
+403/712 Test  #80: Degradation.ReadNoiseDominatesInDarkness ............................................................................   Passed    0.00 sec
+        Start  79: Degradation.ShotNoiseVarianceGrowsWithSignal
+404/712 Test  #92: DegradationFidelity.PreSensorAirlightCarriesShotNoise ...............................................................   Passed    0.00 sec
+        Start 215: Transport.SameSeedSameLedger
+405/712 Test #215: Transport.SameSeedSameLedger ........................................................................................   Passed    0.00 sec
+        Start  73: Degradation.SeedAndFrameChangeTheNoiseField
+406/712 Test  #79: Degradation.ShotNoiseVarianceGrowsWithSignal ........................................................................   Passed    0.01 sec
+        Start 153: WindowBaInertial.SchurSolveEqualsDenseSolve
+407/712 Test  #73: Degradation.SeedAndFrameChangeTheNoiseField .........................................................................   Passed    0.00 sec
+        Start 291: DegradationConfig.LoadedConfigsProduceMonotonicallyDarkerImages
+408/712 Test #153: WindowBaInertial.SchurSolveEqualsDenseSolve .........................................................................   Passed    0.00 sec
+        Start 309: PerceptionConfig.SweepDisparityRangesAreTheValidatorMinimum
+409/712 Test #291: DegradationConfig.LoadedConfigsProduceMonotonicallyDarkerImages .....................................................   Passed    0.00 sec
+        Start 147: Preintegration.BiasJacobiansMatchReintegration
+410/712 Test #309: PerceptionConfig.SweepDisparityRangesAreTheValidatorMinimum .........................................................   Passed    0.00 sec
+        Start 211: Transport.StrictPriorityUnderASendBudget
+411/712 Test #211: Transport.StrictPriorityUnderASendBudget ............................................................................   Passed    0.00 sec
+        Start  95: DegradationHeadlamp.VeilIsNearFieldDominated
+412/712 Test #147: Preintegration.BiasJacobiansMatchReintegration ......................................................................   Passed    0.00 sec
+        Start  41: Philox.DigestOverFixedGridIsStable
+413/712 Test  #95: DegradationHeadlamp.VeilIsNearFieldDominated ........................................................................   Passed    0.00 sec
+        Start 154: WindowBaInertial.InertialOnlyChainHasTheGalileanNullSpace
+414/712 Test  #41: Philox.DigestOverFixedGridIsStable ..................................................................................   Passed    0.00 sec
+        Start 246: Phase0Gate.GenerateSerializeReplayScoreIsBitIdenticalTwice
+415/712 Test #154: WindowBaInertial.InertialOnlyChainHasTheGalileanNullSpace ...........................................................   Passed    0.00 sec
+        Start 288: DegradationConfig.DarknessAndDustLaddersAreMonotone
+416/712 Test #246: Phase0Gate.GenerateSerializeReplayScoreIsBitIdenticalTwice ..........................................................   Passed    0.00 sec
+        Start 156: WindowBaInertial.GravityAlignmentIsARigidMotionThatPreservesTheEnergy
+417/712 Test #288: DegradationConfig.DarknessAndDustLaddersAreMonotone .................................................................   Passed    0.00 sec
+        Start 311: Euroc.AcceptsEquidistantAndRefusesUnknownModels
+418/712 Test #156: WindowBaInertial.GravityAlignmentIsARigidMotionThatPreservesTheEnergy ...............................................   Passed    0.00 sec
+        Start  31: Philox.DistinctSitesGiveDistinctStreams
+419/712 Test #311: Euroc.AcceptsEquidistantAndRefusesUnknownModels .....................................................................   Passed    0.00 sec
+        Start 149: Preintegration.ResidualVanishesAtTheTruth
+420/712 Test  #31: Philox.DistinctSitesGiveDistinctStreams .............................................................................   Passed    0.00 sec
+        Start  47: DetMath.ExpReachesTheSmallestSubnormalBeforeUnderflowing
+421/712 Test #149: Preintegration.ResidualVanishesAtTheTruth ...........................................................................   Passed    0.00 sec
+        Start 105: Gat.ExpectedValueIsContinuousIntoPurePoisson
+422/712 Test  #47: DetMath.ExpReachesTheSmallestSubnormalBeforeUnderflowing ............................................................   Passed    0.00 sec
+        Start 285: DegradationConfig.RejectsPhysicallyMeaninglessValues
+423/712 Test #105: Gat.ExpectedValueIsContinuousIntoPurePoisson ........................................................................   Passed    0.00 sec
+        Start 135: PgoProblem.EdgeJacobiansMatchFiniteDifferences
+424/712 Test #285: DegradationConfig.RejectsPhysicallyMeaninglessValues ................................................................   Passed    0.00 sec
+        Start 213: Transport.FeatureResponseRecoversItsMissingFragments
+425/712 Test #135: PgoProblem.EdgeJacobiansMatchFiniteDifferences ......................................................................   Passed    0.00 sec
+        Start  75: Degradation.PrnuPatternIsIdenticalAcrossFrames
+426/712 Test #213: Transport.FeatureResponseRecoversItsMissingFragments ................................................................   Passed    0.00 sec
+        Start 165: Scripted.QuaternionIsRzTimesRy
+427/712 Test #165: Scripted.QuaternionIsRzTimesRy ......................................................................................   Passed    0.00 sec
+        Start 136: PgoProblem.UnanchoredInformationHasExactlyTheGaugeNullSpace
+428/712 Test  #75: Degradation.PrnuPatternIsIdenticalAcrossFrames ......................................................................   Passed    0.00 sec
+        Start  76: Degradation.PrnuPatternDependsOnSeed
+429/712 Test #136: PgoProblem.UnanchoredInformationHasExactlyTheGaugeNullSpace .........................................................   Passed    0.00 sec
+        Start 143: WindowBa.SchurSolveEqualsDenseSolve
+430/712 Test  #76: Degradation.PrnuPatternDependsOnSeed ................................................................................   Passed    0.00 sec
+        Start  48: DetMath.ExpAccurateOnTheRangeDegradationUses
+431/712 Test #143: WindowBa.SchurSolveEqualsDenseSolve .................................................................................   Passed    0.00 sec
+        Start 289: DegradationConfig.SensorParametersAreConstantAcrossDarknessLevels
+432/712 Test  #48: DetMath.ExpAccurateOnTheRangeDegradationUses ........................................................................   Passed    0.00 sec
+        Start  30: Philox.ThreadCountDoesNotChangeResults
+433/712 Test #289: DegradationConfig.SensorParametersAreConstantAcrossDarknessLevels ...................................................   Passed    0.00 sec
+        Start  58: Distributions.PoissonIsIndependentOfThreadCount
+434/712 Test  #30: Philox.ThreadCountDoesNotChangeResults ..............................................................................   Passed    0.00 sec
+        Start 127: ReprojectionLm.TwoFrameBaRecoversPoseAndLandmarksWithGaugeFixed
+435/712 Test  #58: Distributions.PoissonIsIndependentOfThreadCount .....................................................................   Passed    0.00 sec
+        Start 132: PoseGraph.VersionBumpsOnEveryMutation
+436/712 Test #127: ReprojectionLm.TwoFrameBaRecoversPoseAndLandmarksWithGaugeFixed .....................................................   Passed    0.00 sec
+        Start 100: DegradationHeadlamp.ConfigIsStrict
+437/712 Test #132: PoseGraph.VersionBumpsOnEveryMutation ...............................................................................   Passed    0.00 sec
+        Start 142: WindowBa.GradientIsTheRobustCostGradient
+438/712 Test #100: DegradationHeadlamp.ConfigIsStrict ..................................................................................   Passed    0.00 sec
+        Start  17: Covariance.TransportIsCongruenceNotSimilarity
+439/712 Test #142: WindowBa.GradientIsTheRobustCostGradient ............................................................................   Passed    0.00 sec
+        Start 168: CommandPlanner.AppendedPathIsContiguousAndReachesTheGoal
+440/712 Test  #17: Covariance.TransportIsCongruenceNotSimilarity .......................................................................   Passed    0.00 sec
+        Start 253: Phase0Gate.TruncatedRecordFileIsDetectedNotSilentlyAccepted
+441/712 Test #168: CommandPlanner.AppendedPathIsContiguousAndReachesTheGoal ............................................................   Passed    0.00 sec
+        Start 301: TrajectoryMetrics.MismatchedLengthsYieldNoNumber
+442/712 Test #253: Phase0Gate.TruncatedRecordFileIsDetectedNotSilentlyAccepted .........................................................   Passed    0.00 sec
+        Start 261: Seeds.PurposeIdsAreNameDerivedNotPositional
+443/712 Test #301: TrajectoryMetrics.MismatchedLengthsYieldNoNumber ....................................................................   Passed    0.00 sec
+        Start 290: DegradationConfig.Dust0DisablesDustEverywhere
+444/712 Test #261: Seeds.PurposeIdsAreNameDerivedNotPositional .........................................................................   Passed    0.00 sec
+        Start 137: PgoProblem.GradientMatchesFiniteDifferenceOfTheEnergy
+445/712 Test #290: DegradationConfig.Dust0DisablesDustEverywhere .......................................................................   Passed    0.00 sec
+        Start 183: Serialization.TruncatedOrInvalidHeaderIsRejected
+446/712 Test #137: PgoProblem.GradientMatchesFiniteDifferenceOfTheEnergy ...............................................................   Passed    0.00 sec
+        Start 303: PerceptionConfig.ShippedPlaceholderLoadsAndValidates
+447/712 Test #183: Serialization.TruncatedOrInvalidHeaderIsRejected ....................................................................   Passed    0.00 sec
+        Start 347: RosCdrWriter.ReproducesRclpyBytesExactly
+448/712 Test #303: PerceptionConfig.ShippedPlaceholderLoadsAndValidates ................................................................   Passed    0.00 sec
+        Start 300: TrajectoryMetrics.RotationErrorSurvivesReframing
+449/712 Test #347: RosCdrWriter.ReproducesRclpyBytesExactly ............................................................................   Passed    0.00 sec
+        Start  49: DetMath.ExpNearZeroIsAccurate
+450/712 Test #300: TrajectoryMetrics.RotationErrorSurvivesReframing ....................................................................   Passed    0.00 sec
+        Start 192: Network.SameSeedSameEventLog
+451/712 Test  #49: DetMath.ExpNearZeroIsAccurate .......................................................................................   Passed    0.00 sec
+        Start  87: Degradation.ZeroOrInvalidDepthLeavesPixelUntouched
+452/712 Test #192: Network.SameSeedSameEventLog ........................................................................................   Passed    0.00 sec
+        Start  33: Philox.LongDrawFromOneSiteStaysDistinct
+453/712 Test  #87: Degradation.ZeroOrInvalidDepthLeavesPixelUntouched ..................................................................   Passed    0.00 sec
+        Start  67: Distributions.ValueNoiseVariesAcrossSpaceAndSeed
+454/712 Test  #33: Philox.LongDrawFromOneSiteStaysDistinct .............................................................................   Passed    0.00 sec
+        Start 258: McapReplay.IdenticalInputsProduceAByteIdenticalBag
+455/712 Test  #67: Distributions.ValueNoiseVariesAcrossSpaceAndSeed ....................................................................   Passed    0.00 sec
+        Start 207: Transport.HeldWhileUnreachableThenSent
+456/712 Test #258: McapReplay.IdenticalInputsProduceAByteIdenticalBag ..................................................................   Passed    0.00 sec
+        Start  83: Degradation.BitDepthQuantizes
+457/712 Test #207: Transport.HeldWhileUnreachableThenSent ..............................................................................   Passed    0.00 sec
+        Start 224: Membership.EpochCounterIsNewerThanEveryMemberAndAcceptanceRules
+458/712 Test  #83: Degradation.BitDepthQuantizes .......................................................................................   Passed    0.00 sec
+        Start 351: RosCdrWriter.RejectsEmbeddedNul
+459/712 Test #224: Membership.EpochCounterIsNewerThanEveryMemberAndAcceptanceRules .....................................................   Passed    0.00 sec
+        Start 346: RosCdr.BytesPerPixel
+460/712 Test #351: RosCdrWriter.RejectsEmbeddedNul .....................................................................................   Passed    0.00 sec
+        Start 239: CoordinationWire.TaskBidRoundTrips
+461/712 Test #346: RosCdr.BytesPerPixel ................................................................................................   Passed    0.00 sec
+        Start 189: CollabProtocol.MalformedFeatureResponseIsRejected
+462/712 Test #239: CoordinationWire.TaskBidRoundTrips ..................................................................................   Passed    0.00 sec
+        Start  15: Covariance.ValidityChecks
+463/712 Test #189: CollabProtocol.MalformedFeatureResponseIsRejected ...................................................................   Passed    0.00 sec
+        Start 295: MetricRegistry.ACompleteReportPassesTheGate
+464/712 Test  #15: Covariance.ValidityChecks ...........................................................................................   Passed    0.00 sec
+        Start 325: ImuNoise.ZeroDensitiesReturnTheCleanStreamPlusTheInitialBias
+465/712 Test #295: MetricRegistry.ACompleteReportPassesTheGate .........................................................................   Passed    0.00 sec
+        Start  57: Distributions.NormalIsIndependentOfAccessOrder
+466/712 Test #325: ImuNoise.ZeroDensitiesReturnTheCleanStreamPlusTheInitialBias ........................................................   Passed    0.00 sec
+        Start 322: ImuIntegration.GyroIntegralClipsToTheIntervalAndRemovesBias
+467/712 Test  #57: Distributions.NormalIsIndependentOfAccessOrder ......................................................................   Passed    0.00 sec
+        Start 313: Euroc.RejectsNonRigidOrUnsupportedCalibration
+468/712 Test #322: ImuIntegration.GyroIntegralClipsToTheIntervalAndRemovesBias .........................................................   Passed    0.00 sec
+        Start  64: Distributions.PoissonEdgeCases
+469/712 Test #313: Euroc.RejectsNonRigidOrUnsupportedCalibration .......................................................................   Passed    0.00 sec
+        Start 160: GravityPrior.JacobianMatchesFiniteDifferences
+470/712 Test  #64: Distributions.PoissonEdgeCases ......................................................................................   Passed    0.00 sec
+        Start  32: Philox.ChangingSeedChangesStream
+471/712 Test #160: GravityPrior.JacobianMatchesFiniteDifferences .......................................................................   Passed    0.00 sec
+        Start 284: StrictConfig.ReportsEveryUnconsumedKeySorted
+472/712 Test  #32: Philox.ChangingSeedChangesStream ....................................................................................   Passed    0.00 sec
+        Start 310: Euroc.ParsesSensorYamlIncludingTheOpenCvDirective
+473/712 Test #284: StrictConfig.ReportsEveryUnconsumedKeySorted ........................................................................   Passed    0.00 sec
+        Start 348: RosCdrWriter.ReproducesLiveBridgeBytesIncludingPadding
+474/712 Test #310: Euroc.ParsesSensorYamlIncludingTheOpenCvDirective ...................................................................   Passed    0.00 sec
+        Start 166: Scripted.ValidateRejectsJumpsAndGaps
+475/712 Test #348: RosCdrWriter.ReproducesLiveBridgeBytesIncludingPadding ..............................................................   Passed    0.00 sec
+        Start 349: RosCdrWriter.PaddingIsZeroForEveryFrameIdLengthAndRoundTripsBitExact
+476/712 Test #166: Scripted.ValidateRejectsJumpsAndGaps ................................................................................   Passed    0.00 sec
+        Start 345: RosCdr.CorruptionIsRejected
+477/712 Test #349: RosCdrWriter.PaddingIsZeroForEveryFrameIdLengthAndRoundTripsBitExact ................................................   Passed    0.00 sec
+        Start 298: TrajectoryMetrics.RigidReframingGivesZeroAbsoluteError
+478/712 Test #345: RosCdr.CorruptionIsRejected .........................................................................................   Passed    0.00 sec
+        Start 133: PoseGraph.InvariantsAreEnforced
+479/712 Test #298: TrajectoryMetrics.RigidReframingGivesZeroAbsoluteError ..............................................................   Passed    0.00 sec
+        Start 121: Pinhole.JacobiansMatchFiniteDifferencesNearZeroDepth
+480/712 Test #133: PoseGraph.InvariantsAreEnforced .....................................................................................   Passed    0.00 sec
+        Start 267: EventLog.HashChainLocalizesDivergence
+481/712 Test #121: Pinhole.JacobiansMatchFiniteDifferencesNearZeroDepth ................................................................   Passed    0.00 sec
+        Start 302: TrajectoryMetrics.TimeBasedRpeIsUnaffectedByDroppedSamples
+482/712 Test #267: EventLog.HashChainLocalizesDivergence ...............................................................................   Passed    0.00 sec
+        Start   3: SO3.ExpProducesValidRotation
+483/712 Test #302: TrajectoryMetrics.TimeBasedRpeIsUnaffectedByDroppedSamples ..........................................................   Passed    0.00 sec
+        Start 312: Euroc.StereoExtrinsicMatchesIndependentlyPublishedValue
+484/712 Test   #3: SO3.ExpProducesValidRotation ........................................................................................   Passed    0.00 sec
+        Start  70: Degradation.NullParamsAreExactlyIdentity
+485/712 Test #312: Euroc.StereoExtrinsicMatchesIndependentlyPublishedValue .............................................................   Passed    0.00 sec
+        Start 266: EventLog.IdenticalSequencesProduceIdenticalStateHash
+486/712 Test  #70: Degradation.NullParamsAreExactlyIdentity ............................................................................   Passed    0.00 sec
+        Start 208: Transport.DescriptorExpiresAtItsTtlWhileHeld
+487/712 Test #266: EventLog.IdenticalSequencesProduceIdenticalStateHash ................................................................   Passed    0.00 sec
+        Start  10: SE3.AdjointMovesPerturbationsBetweenFrames
+488/712 Test #208: Transport.DescriptorExpiresAtItsTtlWhileHeld ........................................................................   Passed    0.00 sec
+        Start 191: CollabProtocol.MeanBitDescriptorIsUnitAndSelfSimilar
+489/712 Test  #10: SE3.AdjointMovesPerturbationsBetweenFrames ..........................................................................   Passed    0.00 sec
+        Start 209: Transport.CancelRemovesAQueuedFeatureResponse
+490/712 Test #191: CollabProtocol.MeanBitDescriptorIsUnitAndSelfSimilar ................................................................   Passed    0.00 sec
+        Start 299: TrajectoryMetrics.RotationErrorIsInvisibleToTranslationAtE
+491/712 Test #209: Transport.CancelRemovesAQueuedFeatureResponse .......................................................................   Passed    0.00 sec
+        Start 236: CoordinationWire.SubmapPatchRoundTripsAndPacksTwoBitsPerCell
+492/712 Test #299: TrajectoryMetrics.RotationErrorIsInvisibleToTranslationAtE ..........................................................   Passed    0.00 sec
+        Start  84: Degradation.DustRequiresDepthAndIsOtherwiseInert
+493/712 Test #236: CoordinationWire.SubmapPatchRoundTripsAndPacksTwoBitsPerCell ........................................................   Passed    0.00 sec
+        Start  68: Distributions.FractalNoiseStaysInRange
+494/712 Test  #84: Degradation.DustRequiresDepthAndIsOtherwiseInert ....................................................................   Passed    0.00 sec
+        Start 214: Transport.ElectionChangeAbandonsReliableMessagesToTheOldBroker
+495/712 Test  #68: Distributions.FractalNoiseStaysInRange ..............................................................................   Passed    0.00 sec
+        Start 182: Serialization.ClassIsReadableWithoutDecompressing
+496/712 Test #214: Transport.ElectionChangeAbandonsReliableMessagesToTheOldBroker ......................................................   Passed    0.00 sec
+        Start 161: GravityPrior.ZeroWhenThePoseAgreesAndBlindToYaw
+497/712 Test #182: Serialization.ClassIsReadableWithoutDecompressing ...................................................................   Passed    0.00 sec
+        Start 124: Pinhole.EachTangentDirectionMatches
+498/712 Test #161: GravityPrior.ZeroWhenThePoseAgreesAndBlindToYaw .....................................................................   Passed    0.00 sec
+        Start  29: Philox.ValueAtSiteIsIndependentOfAccessOrder
+499/712 Test #124: Pinhole.EachTangentDirectionMatches .................................................................................   Passed    0.00 sec
+        Start 101: Gat.ForwardEqualsReducedFormForAnyGainAndOffset
+500/712 Test  #29: Philox.ValueAtSiteIsIndependentOfAccessOrder ........................................................................   Passed    0.00 sec
+        Start  74: Degradation.EachOutputPixelDependsOnlyOnItsOwnInput
+501/712 Test #101: Gat.ForwardEqualsReducedFormForAnyGainAndOffset .....................................................................   Passed    0.00 sec
+        Start 340: RosCdr.PoseStamped
+502/712 Test  #74: Degradation.EachOutputPixelDependsOnlyOnItsOwnInput .................................................................   Passed    0.00 sec
+        Start  81: Degradation.RadianceScaleDarkensTheImage
+503/712 Test #340: RosCdr.PoseStamped ..................................................................................................   Passed    0.00 sec
+        Start   1: Hat.MatchesCrossProduct
+504/712 Test  #81: Degradation.RadianceScaleDarkensTheImage ............................................................................   Passed    0.00 sec
+        Start 248: Phase0Gate.ReplayReconstructsTheRecordedTrajectoryExactly
+505/712 Test   #1: Hat.MatchesCrossProduct .............................................................................................   Passed    0.00 sec
+        Start 255: McapReplay.FramesSurviveTheContainerByteForByte
+506/712 Test #248: Phase0Gate.ReplayReconstructsTheRecordedTrajectoryExactly ...........................................................   Passed    0.00 sec
+        Start 227: CollabV2.PoseInAnUnknownFrameIsRejectedNotComposed
+507/712 Test #255: McapReplay.FramesSurviveTheContainerByteForByte .....................................................................   Passed    0.00 sec
+        Start 210: Transport.SupersededSnapshotLeavesNoSequenceHole
+508/712 Test #227: CollabV2.PoseInAnUnknownFrameIsRejectedNotComposed ..................................................................   Passed    0.00 sec
+        Start 146: WindowBa.AnchorWindowTiesEveryFreeKeyframeToAFixedOne
+509/712 Test #210: Transport.SupersededSnapshotLeavesNoSequenceHole ....................................................................   Passed    0.00 sec
+        Start  66: Distributions.ValueNoiseIsContinuousAcrossLatticeCells
+510/712 Test #146: WindowBa.AnchorWindowTiesEveryFreeKeyframeToAFixedOne ...............................................................   Passed    0.00 sec
+        Start 247: Phase0Gate.ADifferentSeedProducesDifferentMetrics
+511/712 Test  #66: Distributions.ValueNoiseIsContinuousAcrossLatticeCells ..............................................................   Passed    0.00 sec
+        Start 223: Membership.LinkLossDropsTheNeighbourAfterKMissedPeriods
+512/712 Test #247: Phase0Gate.ADifferentSeedProducesDifferentMetrics ...................................................................   Passed    0.00 sec
+        Start 705: CollabSnapshot.BeforeTheFirstPublishedTickAllByteClassesAreZero
+513/712 Test #223: Membership.LinkLossDropsTheNeighbourAfterKMissedPeriods .............................................................   Passed    0.00 sec
+        Start 317: Euroc.AssociatesNearestWithinEvoDefault
+514/712 Test #317: Euroc.AssociatesNearestWithinEvoDefault .............................................................................   Passed    0.00 sec
+        Start 170: CommandPlanner.ClearanceRefusalPropagates
+515/712 Test #170: CommandPlanner.ClearanceRefusalPropagates ...........................................................................   Passed    0.00 sec
+        Start  44: DetMath.ExpSpecialValues
+516/712 Test #705: CollabSnapshot.BeforeTheFirstPublishedTickAllByteClassesAreZero .....................................................   Passed    0.01 sec
+        Start 216: Transport.AbandonedSequenceNumbersDoNotStallTheNextIncarnation
+517/712 Test  #44: DetMath.ExpSpecialValues ............................................................................................   Passed    0.00 sec
+        Start 181: Serialization.MeasuredSizesAreReportedAgainstTheSection157Table
+518/712 Test #216: Transport.AbandonedSequenceNumbersDoNotStallTheNextIncarnation ......................................................   Passed    0.00 sec
+        Start  54: DetMath.ExpLogRoundTrip
+519/712 Test #181: Serialization.MeasuredSizesAreReportedAgainstTheSection157Table .....................................................   Passed    0.00 sec
+        Start 219: Membership.AsymmetricLinkIsNotANeighbourLink
+520/712 Test  #54: DetMath.ExpLogRoundTrip .............................................................................................   Passed    0.00 sec
+        Start   4: SO3.LogInvertsExp
+521/712 Test #219: Membership.AsymmetricLinkIsNotANeighbourLink ........................................................................   Passed    0.00 sec
+        Start  65: Distributions.ValueNoiseIsInRangeAndDeterministic
+522/712 Test   #4: SO3.LogInvertsExp ...................................................................................................   Passed    0.00 sec
+        Start 120: Pinhole.JacobiansMatchFiniteDifferencesTypicalDepth
+523/712 Test  #65: Distributions.ValueNoiseIsInRangeAndDeterministic ...................................................................   Passed    0.00 sec
+        Start 203: Transport.FragmentedChargeMatchesTheDatagramsSent
+524/712 Test #120: Pinhole.JacobiansMatchFiniteDifferencesTypicalDepth .................................................................   Passed    0.00 sec
+        Start 269: EventLog.AnyFieldChangeChangesTheHash
+525/712 Test #203: Transport.FragmentedChargeMatchesTheDatagramsSent ...................................................................   Passed    0.00 sec
+        Start   9: SE3.CompositionAndInverse
+526/712 Test #269: EventLog.AnyFieldChangeChangesTheHash ...............................................................................   Passed    0.00 sec
+        Start  40: Philox.BitsToUniformConversionsAreExact
+527/712 Test   #9: SE3.CompositionAndInverse ...........................................................................................   Passed    0.00 sec
+        Start 264: EventLog.AllTwentyEventTypesAreNamed
+528/712 Test  #40: Philox.BitsToUniformConversionsAreExact .............................................................................   Passed    0.00 sec
+        Start 318: Euroc.WritesEvoCompatibleTum
+529/712 Test #264: EventLog.AllTwentyEventTypesAreNamed ................................................................................   Passed    0.00 sec
+        Start 179: Serialization.CompressionPolicyCoversTheIntendedClasses
+530/712 Test #318: Euroc.WritesEvoCompatibleTum ........................................................................................   Passed    0.00 sec
+        Start 704: CollabSnapshot.PublishedByteCountsStayFrozenAsTheLedgerAdvances
+531/712 Test #179: Serialization.CompressionPolicyCoversTheIntendedClasses .............................................................   Passed    0.00 sec
+        Start 138: PgoProblem.GuardRejectsADisconnectedNode
+532/712 Test #138: PgoProblem.GuardRejectsADisconnectedNode ............................................................................   Passed    0.00 sec
+        Start 200: Network.ReorderAndDuplicate
+533/712 Test #200: Network.ReorderAndDuplicate .........................................................................................   Passed    0.00 sec
+        Start 353: RosbagReader.TopicFilterAndMissingFile
+534/712 Test #704: CollabSnapshot.PublishedByteCountsStayFrozenAsTheLedgerAdvances .....................................................   Passed    0.01 sec
+        Start 283: StrictConfig.OptionalKeysFallBackButStillTypeCheck
+535/712 Test #353: RosbagReader.TopicFilterAndMissingFile ..............................................................................   Passed    0.00 sec
+        Start 337: RosCdr.RgbImageWithLongFrameId
+536/712 Test #283: StrictConfig.OptionalKeysFallBackButStillTypeCheck ..................................................................   Passed    0.00 sec
+        Start 278: StrictConfig.UnknownKeyIsAnError
+537/712 Test #337: RosCdr.RgbImageWithLongFrameId ......................................................................................   Passed    0.00 sec
+        Start 319: Euroc.RectifiedCameraToBodyRoundTripNeedsR1
+538/712 Test #278: StrictConfig.UnknownKeyIsAnError ....................................................................................   Passed    0.00 sec
+        Start 350: RosCdrWriter.TfMessageRoundTripsWithZeroPadding
+539/712 Test #319: Euroc.RectifiedCameraToBodyRoundTripNeedsR1 .........................................................................   Passed    0.00 sec
+        Start 221: Membership.AnchorWinsBeforeAgentId
+540/712 Test #350: RosCdrWriter.TfMessageRoundTripsWithZeroPadding .....................................................................   Passed    0.00 sec
+        Start  43: DetMath.Exp2IntHandlesSubnormalAndOverflow
+541/712 Test #221: Membership.AnchorWinsBeforeAgentId ..................................................................................   Passed    0.00 sec
+        Start 268: EventLog.AZeroChainValueDoesNotRestartTheChain
+542/712 Test  #43: DetMath.Exp2IntHandlesSubnormalAndOverflow ..........................................................................   Passed    0.00 sec
+        Start  78: Degradation.VignetteIsRadiallySymmetric
+543/712 Test #268: EventLog.AZeroChainValueDoesNotRestartTheChain ......................................................................   Passed    0.00 sec
+        Start   7: SE3.ExpLogRoundTrip
+544/712 Test  #78: Degradation.VignetteIsRadiallySymmetric .............................................................................   Passed    0.00 sec
+        Start 128: ReprojectionLm.HuberLimitsTheInfluenceOfOutliers
+545/712 Test   #7: SE3.ExpLogRoundTrip .................................................................................................   Passed    0.00 sec
+        Start 201: Network.OversizePayloadIsRejected
+546/712 Test #128: ReprojectionLm.HuberLimitsTheInfluenceOfOutliers ....................................................................   Passed    0.00 sec
+        Start 177: Serialization.LargeMessagesAreChargedFramingPerDatagram
+547/712 Test #201: Network.OversizePayloadIsRejected ...................................................................................   Passed    0.00 sec
+        Start 321: EurocImu.NoiseModelRequiresIdentityExtrinsic
+548/712 Test #177: Serialization.LargeMessagesAreChargedFramingPerDatagram .............................................................   Passed    0.00 sec
+        Start  51: DetMath.LogMatchesLibmAcrossRange
+549/712 Test #321: EurocImu.NoiseModelRequiresIdentityExtrinsic ........................................................................   Passed    0.00 sec
+        Start  45: DetMath.ExpMatchesLibmAcrossRange
+550/712 Test  #51: DetMath.LogMatchesLibmAcrossRange ...................................................................................   Passed    0.00 sec
+        Start 139: PgoProblem.MarginalCovariancesMatchTheDenseInverse
+551/712 Test  #45: DetMath.ExpMatchesLibmAcrossRange ...................................................................................   Passed    0.00 sec
+        Start 171: Serialization.PoseGraphRoundTripsExactly
+552/712 Test #139: PgoProblem.MarginalCovariancesMatchTheDenseInverse ..................................................................   Passed    0.00 sec
+        Start 341: RosCdr.TfMessageWithTwoTransforms
+553/712 Test #171: Serialization.PoseGraphRoundTripsExactly ............................................................................   Passed    0.00 sec
+        Start 286: DegradationConfig.AcceptsAMinimalValidConfig
+554/712 Test #341: RosCdr.TfMessageWithTwoTransforms ...................................................................................   Passed    0.00 sec
+        Start 270: EventLog.EmitsOneValidJsonObjectPerLine
+555/712 Test #286: DegradationConfig.AcceptsAMinimalValidConfig ........................................................................   Passed    0.00 sec
+        Start  28: Philox.MulHiLoIsExact
+556/712 Test #270: EventLog.EmitsOneValidJsonObjectPerLine .............................................................................   Passed    0.00 sec
+        Start 125: ReprojectionLm.MotionOnlyConvergesToTruthOnCleanData
+557/712 Test  #28: Philox.MulHiLoIsExact ...............................................................................................   Passed    0.00 sec
+        Start 259: McapReplay.OpeningAMissingOrCorruptBagFails
+558/712 Test #125: ReprojectionLm.MotionOnlyConvergesToTruthOnCleanData ................................................................   Passed    0.00 sec
+        Start 272: RunManifest.UnrecordedFieldsAreVisibleNotAbsent
+559/712 Test #259: McapReplay.OpeningAMissingOrCorruptBagFails .........................................................................   Passed    0.00 sec
+        Start  91: DegradationFidelity.LampPowerIsARadianceScale
+560/712 Test #272: RunManifest.UnrecordedFieldsAreVisibleNotAbsent .....................................................................   Passed    0.00 sec
+        Start 122: Pinhole.JacobiansMatchFiniteDifferencesWideFovRay
+561/712 Test  #91: DegradationFidelity.LampPowerIsARadianceScale .......................................................................   Passed    0.00 sec
+        Start 306: PerceptionConfig.SgbmContractViolationsAreRefused
+562/712 Test #122: Pinhole.JacobiansMatchFiniteDifferencesWideFovRay ...................................................................   Passed    0.00 sec
+        Start   5: SO3.SmallAngleBranchStaysAccurate
+563/712 Test #306: PerceptionConfig.SgbmContractViolationsAreRefused ...................................................................   Passed    0.00 sec
+        Start 273: RunManifest.SerializesTheSection282FieldSet
+564/712 Test   #5: SO3.SmallAngleBranchStaysAccurate ...................................................................................   Passed    0.00 sec
+        Start 305: PerceptionConfig.WideBaselineWithoutMoreDisparitiesIsRefused
+565/712 Test #273: RunManifest.SerializesTheSection282FieldSet .........................................................................   Passed    0.00 sec
+        Start 271: EventLog.EscapesJsonHostileContent
+566/712 Test #305: PerceptionConfig.WideBaselineWithoutMoreDisparitiesIsRefused ........................................................   Passed    0.00 sec
+        Start  27: Philox.KatPiDigits
+567/712 Test #271: EventLog.EscapesJsonHostileContent ..................................................................................   Passed    0.00 sec
+        Start 130: PoseGraph.ResidualIsZeroAtTheMeasurement
+568/712 Test  #27: Philox.KatPiDigits ..................................................................................................   Passed    0.00 sec
+        Start  42: DetMath.Exp2IntIsExact
+569/712 Test #130: PoseGraph.ResidualIsZeroAtTheMeasurement ............................................................................   Passed    0.00 sec
+        Start  46: DetMath.ExpIsFiniteAndAccurateAtTheOverflowBoundary
+570/712 Test  #42: DetMath.Exp2IntIsExact ..............................................................................................   Passed    0.00 sec
+        Start  77: Degradation.VignetteDarkensTowardTheCorners
+571/712 Test  #46: DetMath.ExpIsFiniteAndAccurateAtTheOverflowBoundary .................................................................   Passed    0.00 sec
+        Start 331: Comms.PathLossRangeCutAndRate
+572/712 Test  #77: Degradation.VignetteDarkensTowardTheCorners .........................................................................   Passed    0.00 sec
+        Start 198: Network.AsymmetricLinkIsDirected
+573/712 Test #331: Comms.PathLossRangeCutAndRate .......................................................................................   Passed    0.00 sec
+        Start  56: DetMath.DigestOverFixedGridIsStable
+574/712 Test #198: Network.AsymmetricLinkIsDirected ....................................................................................   Passed    0.00 sec
+        Start 184: Serialization.PoseGraphsRemainHighlyCompressible
+575/712 Test  #56: DetMath.DigestOverFixedGridIsStable .................................................................................   Passed    0.00 sec
+        Start 169: CommandPlanner.HoldIsNoSegmentAndCoincidentWaypointsAreSkipped
+576/712 Test #184: Serialization.PoseGraphsRemainHighlyCompressible ....................................................................   Passed    0.00 sec
+        Start 249: Phase0Gate.OdometryNoiseAccumulatesIntoDrift
+577/712 Test #169: CommandPlanner.HoldIsNoSegmentAndCoincidentWaypointsAreSkipped ......................................................   Passed    0.00 sec
+        Start 294: MetricRegistry.AnEmptyReportIsMissingEverything
+578/712 Test #249: Phase0Gate.OdometryNoiseAccumulatesIntoDrift ........................................................................   Passed    0.00 sec
+        Start 293: MetricRegistry.HasExactlyTheSection302MetricsPerGroup
+579/712 Test #294: MetricRegistry.AnEmptyReportIsMissingEverything .....................................................................   Passed    0.00 sec
+        Start 320: EurocImu.ParsesRowsAndRejectsMalformedOnes
+580/712 Test #293: MetricRegistry.HasExactlyTheSection302MetricsPerGroup ...............................................................   Passed    0.00 sec
+        Start 275: RunManifest.YamlQuotesValuesThatWouldOtherwiseReparse
+581/712 Test #320: EurocImu.ParsesRowsAndRejectsMalformedOnes ..........................................................................   Passed    0.00 sec
+        Start  24: Time.OffsetCalibrationDefaultsToTheStatedSimplification
+582/712 Test #275: RunManifest.YamlQuotesValuesThatWouldOtherwiseReparse ...............................................................   Passed    0.00 sec
+        Start 307: PerceptionConfig.MisspelledSectionKeyFails
+583/712 Test  #24: Time.OffsetCalibrationDefaultsToTheStatedSimplification .............................................................   Passed    0.00 sec
+        Start 197: Network.DisconnectAndExtraLatency
+584/712 Test #307: PerceptionConfig.MisspelledSectionKeyFails ..........................................................................   Passed    0.00 sec
+        Start 162: GravityPrior.CostEqualsGtsamAttitudeFactorFormWithIsotropicInformation
+585/712 Test #197: Network.DisconnectAndExtraLatency ...................................................................................   Passed    0.00 sec
+        Start  11: SE3.AdjointIsMultiplicativeAndIdentityAtIdentity
+586/712 Test #162: GravityPrior.CostEqualsGtsamAttitudeFactorFormWithIsotropicInformation ..............................................   Passed    0.00 sec
+        Start 173: Serialization.EncodingIsDeterministic
+587/712 Test  #11: SE3.AdjointIsMultiplicativeAndIdentityAtIdentity ....................................................................   Passed    0.00 sec
+        Start 265: EventLog.SequenceIdsAreContiguousFromZero
+588/712 Test #173: Serialization.EncodingIsDeterministic ...............................................................................   Passed    0.00 sec
+        Start 257: McapReplay.LogTimesComeFromMessageStampsNotWallClock
+589/712 Test #265: EventLog.SequenceIdsAreContiguousFromZero ...........................................................................   Passed    0.00 sec
+        Start 280: StrictConfig.WrongTypeIsAnError
+590/712 Test #257: McapReplay.LogTimesComeFromMessageStampsNotWallClock ................................................................   Passed    0.00 sec
+        Start  14: SE3.LeftJacobianQIsContinuousAtTheSeriesSwitch
+591/712 Test #280: StrictConfig.WrongTypeIsAnError .....................................................................................   Passed    0.00 sec
+        Start 185: Serialization.PreTaskConsensusBytesUnchanged
+592/712 Test  #14: SE3.LeftJacobianQIsContinuousAtTheSeriesSwitch ......................................................................   Passed    0.00 sec
+        Start  82: Degradation.GainAndSaturationClip
+593/712 Test #185: Serialization.PreTaskConsensusBytesUnchanged ........................................................................   Passed    0.00 sec
+        Start 119: Pinhole.ProjectUnprojectRoundTrip
+594/712 Test  #82: Degradation.GainAndSaturationClip ...................................................................................   Passed    0.00 sec
+        Start 163: GravityPrior.PoseGraphKeepsThemApartFromTheEdgeCost
+595/712 Test #119: Pinhole.ProjectUnprojectRoundTrip ...................................................................................   Passed    0.00 sec
+        Start 240: CoordinationWire.TaskConsensusRoundTrips
+596/712 Test #163: GravityPrior.PoseGraphKeepsThemApartFromTheEdgeCost .................................................................   Passed    0.00 sec
+        Start 332: Comms.WallsCountBlocksNotFacesAndDoorwaysAreFree
+597/712 Test #240: CoordinationWire.TaskConsensusRoundTrips ............................................................................   Passed    0.00 sec
+        Start 237: CoordinationWire.UniformBlocksCompress
+598/712 Test #332: Comms.WallsCountBlocksNotFacesAndDoorwaysAreFree ....................................................................   Passed    0.00 sec
+        Start 333: Comms.TracksInterpolateAndClamp
+599/712 Test #237: CoordinationWire.UniformBlocksCompress ..............................................................................   Passed    0.00 sec
+        Start 256: McapReplay.MessagesReplayInLogTimeOrder
+600/712 Test #333: Comms.TracksInterpolateAndClamp .....................................................................................   Passed    0.00 sec
+        Start 338: RosCdr.CameraInfoAlignmentAndArrays
+601/712 Test #256: McapReplay.MessagesReplayInLogTimeOrder .............................................................................   Passed    0.00 sec
+        Start  13: SE3.LeftJacobianInverseMatchesTheDefinition
+602/712 Test #338: RosCdr.CameraInfoAlignmentAndArrays .................................................................................   Passed    0.00 sec
+        Start 314: Euroc.PairsByExactTimestampNotByRow
+603/712 Test  #13: SE3.LeftJacobianInverseMatchesTheDefinition .........................................................................   Passed    0.00 sec
+        Start  16: Covariance.NearestPsdRepairsSmallNegativeEigenvalues
+604/712 Test #314: Euroc.PairsByExactTimestampNotByRow .................................................................................   Passed    0.00 sec
+        Start 282: StrictConfig.MissingFileIsAnError
+605/712 Test  #16: Covariance.NearestPsdRepairsSmallNegativeEigenvalues ................................................................   Passed    0.00 sec
+        Start 218: Membership.FullMeshElectsLowestAgent
+606/712 Test #282: StrictConfig.MissingFileIsAnError ...................................................................................   Passed    0.00 sec
+        Start 144: WindowBa.GuardRefusesAnUnobservedLandmark
+607/712 Test #218: Membership.FullMeshElectsLowestAgent ................................................................................   Passed    0.00 sec
+        Start   2: Hat.VeeInverts
+608/712 Test #144: WindowBa.GuardRefusesAnUnobservedLandmark ...........................................................................   Passed    0.00 sec
+        Start 140: WindowBa.JacobiansMatchFiniteDifferences
+609/712 Test   #2: Hat.VeeInverts ......................................................................................................   Passed    0.00 sec
+        Start 279: StrictConfig.MissingRequiredKeyIsAnError
+610/712 Test #140: WindowBa.JacobiansMatchFiniteDifferences ............................................................................   Passed    0.00 sec
+        Start 134: PoseGraph.AddEdgeRefusesInformationThatIsNotPsd
+611/712 Test #279: StrictConfig.MissingRequiredKeyIsAnError ............................................................................   Passed    0.00 sec
+        Start 199: Network.BandwidthSerializesDatagramsOnALink
+612/712 Test #134: PoseGraph.AddEdgeRefusesInformationThatIsNotPsd .....................................................................   Passed    0.00 sec
+        Start 175: Serialization.MalformedInputIsRejectedNotCrashed
+613/712 Test #199: Network.BandwidthSerializesDatagramsOnALink .........................................................................   Passed    0.00 sec
+        Start 176: Serialization.WireBytesIncludeDatagramFraming
+614/712 Test #175: Serialization.MalformedInputIsRejectedNotCrashed ....................................................................   Passed    0.00 sec
+        Start 250: Phase0Gate.UmeyamaRecoversAKnownRigidTransform
+615/712 Test #176: Serialization.WireBytesIncludeDatagramFraming .......................................................................   Passed    0.00 sec
+        Start 202: Transport.HeartbeatAckAndEstimateRoundTrip
+616/712 Test #250: Phase0Gate.UmeyamaRecoversAKnownRigidTransform ......................................................................   Passed    0.00 sec
+        Start  50: DetMath.LogSpecialValues
+617/712 Test #202: Transport.HeartbeatAckAndEstimateRoundTrip ..........................................................................   Passed    0.00 sec
+        Start 220: Membership.ChainElectsPerNeighbourhood
+618/712 Test  #50: DetMath.LogSpecialValues ............................................................................................   Passed    0.00 sec
+        Start 102: Gat.PurePoissonIsAnscombe
+619/712 Test #220: Membership.ChainElectsPerNeighbourhood ..............................................................................   Passed    0.00 sec
+        Start 252: Phase0Gate.ScaleAlignmentRecoversAKnownScale
+620/712 Test #102: Gat.PurePoissonIsAnscombe ...........................................................................................   Passed    0.00 sec
+        Start  21: Time.ArithmeticIsExact
+621/712 Test #252: Phase0Gate.ScaleAlignmentRecoversAKnownScale ........................................................................   Passed    0.00 sec
+        Start 180: Serialization.LedgerAccumulatesTotalAndPerClass
+622/712 Test  #21: Time.ArithmeticIsExact ..............................................................................................   Passed    0.00 sec
+        Start 188: CollabProtocol.PayloadsRoundTrip
+623/712 Test #180: Serialization.LedgerAccumulatesTotalAndPerClass .....................................................................   Passed    0.00 sec
+        Start 129: ReprojectionLm.FreeLandmarksWithoutAFixedPoseIsRejected
+624/712 Test #188: CollabProtocol.PayloadsRoundTrip ....................................................................................   Passed    0.00 sec
+        Start  34: Philox.BlockAdvanceCannotCollideWithAnotherSite
+625/712 Test #129: ReprojectionLm.FreeLandmarksWithoutAFixedPoseIsRejected .............................................................   Passed    0.00 sec
+        Start  86: Degradation.DustMatchesTheClosedFormTransmission
+626/712 Test  #34: Philox.BlockAdvanceCannotCollideWithAnotherSite .....................................................................   Passed    0.00 sec
+        Start  71: Degradation.EmptyInputYieldsEmptyOutput
+627/712 Test  #86: Degradation.DustMatchesTheClosedFormTransmission ....................................................................   Passed    0.00 sec
+        Start 304: PerceptionConfig.MinObservableRangeMatchesSection94
+628/712 Test  #71: Degradation.EmptyInputYieldsEmptyOutput .............................................................................   Passed    0.00 sec
+        Start 260: Seeds.DerivationIsDeterministicAndPurposeSpecific
+629/712 Test #304: PerceptionConfig.MinObservableRangeMatchesSection94 .................................................................   Passed    0.00 sec
+        Start  20: Covariance.MonteCarloRejectsTheNaiveRule
+630/712 Test #260: Seeds.DerivationIsDeterministicAndPurposeSpecific ...................................................................   Passed    0.00 sec
+        Start 281: StrictConfig.MalformedYamlIsAnError
+631/712 Test  #20: Covariance.MonteCarloRejectsTheNaiveRule ............................................................................   Passed    0.00 sec
+        Start  85: Degradation.DustAttenuatesWithDepthTowardAirlight
+632/712 Test #281: StrictConfig.MalformedYamlIsAnError .................................................................................   Passed    0.00 sec
+        Start 234: CollabSelection.V1DescriptorBytesUnchangedAndNewFieldsRoundTrip
+633/712 Test  #85: Degradation.DustAttenuatesWithDepthTowardAirlight ...................................................................   Passed    0.00 sec
+        Start  37: Philox.SiteAndBlockOccupyDisjointCounterFields
+634/712 Test #234: CollabSelection.V1DescriptorBytesUnchangedAndNewFieldsRoundTrip .....................................................   Passed    0.00 sec
+        Start  25: Philox.KatAllZeros
+635/712 Test  #37: Philox.SiteAndBlockOccupyDisjointCounterFields ......................................................................   Passed    0.00 sec
+        Start 123: Pinhole.RightCameraJacobiansMatchFiniteDifferences
+636/712 Test  #25: Philox.KatAllZeros ..................................................................................................   Passed    0.00 sec
+        Start 205: Transport.ReliableClassHoldsBackUntilTheGapFills
+637/712 Test #123: Pinhole.RightCameraJacobiansMatchFiniteDifferences ..................................................................   Passed    0.00 sec
+        Start 190: CollabProtocol.InboxIsIdempotentAndRestoresOrder
+638/712 Test #205: Transport.ReliableClassHoldsBackUntilTheGapFills ....................................................................   Passed    0.00 sec
+        Start  23: Time.Ordering
+639/712 Test #190: CollabProtocol.InboxIsIdempotentAndRestoresOrder ....................................................................   Passed    0.00 sec
+        Start   6: SO3.NearAndAtPiRecoversAxis
+640/712 Test  #23: Time.Ordering .......................................................................................................   Passed    0.00 sec
+        Start  26: Philox.KatAllOnes
+641/712 Test   #6: SO3.NearAndAtPiRecoversAxis .........................................................................................   Passed    0.00 sec
+        Start 194: Network.LossOnOneLinkIndependentOfOtherTraffic
+642/712 Test  #26: Philox.KatAllOnes ...................................................................................................   Passed    0.00 sec
+        Start 178: Serialization.DatagramCountRoundsUpAndNeverReturnsZero
+643/712 Test #194: Network.LossOnOneLinkIndependentOfOtherTraffic ......................................................................   Passed    0.00 sec
+        Start  53: DetMath.LogNearOneIsAccurate
+644/712 Test #178: Serialization.DatagramCountRoundsUpAndNeverReturnsZero ..............................................................   Passed    0.00 sec
+        Start 145: WindowBa.IllConditionedLandmarksAreFound
+645/712 Test  #53: DetMath.LogNearOneIsAccurate ........................................................................................   Passed    0.00 sec
+        Start  52: DetMath.LogHandlesSubnormals
+646/712 Test #145: WindowBa.IllConditionedLandmarksAreFound ............................................................................   Passed    0.00 sec
+        Start 315: Euroc.RejectsNonIncreasingTimestamps
+647/712 Test  #52: DetMath.LogHandlesSubnormals ........................................................................................   Passed    0.00 sec
+        Start 204: Transport.DescriptorHoleDoesNotStallLaterDescriptors
+648/712 Test #315: Euroc.RejectsNonIncreasingTimestamps ................................................................................   Passed    0.00 sec
+        Start 172: Serialization.LoopEdgeRoundTripsExactly
+649/712 Test #204: Transport.DescriptorHoleDoesNotStallLaterDescriptors ................................................................   Passed    0.00 sec
+        Start  39: Philox.UniformRangeOverload
+650/712 Test #172: Serialization.LoopEdgeRoundTripsExactly .............................................................................   Passed    0.00 sec
+        Start 339: RosCdr.Imu
+651/712 Test  #39: Philox.UniformRangeOverload .........................................................................................   Passed    0.00 sec
+        Start 336: RosCdr.MonoImage
+652/712 Test #339: RosCdr.Imu ..........................................................................................................   Passed    0.00 sec
+        Start 276: RunManifest.ExecutionModeIsRecordedBecauseDeterminismDiffers
+653/712 Test #336: RosCdr.MonoImage ....................................................................................................   Passed    0.00 sec
+        Start   8: SE3.SmallMotionRoundTrip
+654/712 Test #276: RunManifest.ExecutionModeIsRecordedBecauseDeterminismDiffers ........................................................   Passed    0.00 sec
+        Start 263: Seeds.DistinctPurposesProduceDistinctStreams
+655/712 Test   #8: SE3.SmallMotionRoundTrip ............................................................................................   Passed    0.00 sec
+        Start 292: SimDepth.ForwardSplatKeepsTheNearestAndLeavesDisocclusionsUnknown
+656/712 Test #263: Seeds.DistinctPurposesProduceDistinctStreams ........................................................................   Passed    0.00 sec
+        Start 342: RosCdr.Clock
+657/712 Test #292: SimDepth.ForwardSplatKeepsTheNearestAndLeavesDisocclusionsUnknown ...................................................   Passed    0.00 sec
+        Start 238: CoordinationWire.PatchRefusesBadCells
+658/712 Test #342: RosCdr.Clock ........................................................................................................   Passed    0.00 sec
+        Start  69: Distributions.RoundToInt64TiesAwayFromZero
+659/712 Test #238: CoordinationWire.PatchRefusesBadCells ...............................................................................   Passed    0.00 sec
+        Start 251: Phase0Gate.AlignmentRejectsReflections
+660/712 Test  #69: Distributions.RoundToInt64TiesAwayFromZero ..........................................................................   Passed    0.00 sec
+        Start 195: Network.PartitionCutsOnlyAcrossGroupsAndOnlyInWindow
+661/712 Test #251: Phase0Gate.AlignmentRejectsReflections ..............................................................................   Passed    0.00 sec
+        Start  35: Philox.SiteTruncationIsDefinedNotAliasingByAccident
+662/712 Test #195: Network.PartitionCutsOnlyAcrossGroupsAndOnlyInWindow ................................................................   Passed    0.00 sec
+        Start 297: MetricRegistry.UnknownIdsAreReported
+663/712 Test  #35: Philox.SiteTruncationIsDefinedNotAliasingByAccident .................................................................   Passed    0.00 sec
+        Start  55: DetMath.SqrtIsExactPowersOfTwo
+664/712 Test #297: MetricRegistry.UnknownIdsAreReported ................................................................................   Passed    0.00 sec
+        Start 206: Transport.LostHeartbeatDoesNotFreezeLaterOnes
+665/712 Test  #55: DetMath.SqrtIsExactPowersOfTwo ......................................................................................   Passed    0.00 sec
+        Start 174: Serialization.UntaggedPoseIsRejected
+666/712 Test #206: Transport.LostHeartbeatDoesNotFreezeLaterOnes .......................................................................   Passed    0.00 sec
+        Start 186: Serialization.CbbaConsensusRoundTripsAndIsCounted
+667/712 Test #174: Serialization.UntaggedPoseIsRejected ................................................................................   Passed    0.00 sec
+        Start 196: Network.OpenPartitionLastsUntilEnded
+668/712 Test #186: Serialization.CbbaConsensusRoundTripsAndIsCounted ...................................................................   Passed    0.00 sec
+        Start 343: RosCdr.BigEndianEncapsulationIsHonoured
+669/712 Test #196: Network.OpenPartitionLastsUntilEnded ................................................................................   Passed    0.00 sec
+        Start  22: Time.AccumulationDoesNotDrift
+670/712 Test #343: RosCdr.BigEndianEncapsulationIsHonoured .............................................................................   Passed    0.00 sec
+        Start 274: RunManifest.RequiredFieldValidationCatchesAnUnpublishableRun
+671/712 Test  #22: Time.AccumulationDoesNotDrift .......................................................................................   Passed    0.00 sec
+        Start 316: Euroc.ParsesGroundTruthRows
+672/712 Test #274: RunManifest.RequiredFieldValidationCatchesAnUnpublishableRun ........................................................   Passed    0.00 sec
+        Start 262: Seeds.NearbyRootSeedsDecorrelate
+673/712 Test #316: Euroc.ParsesGroundTruthRows .........................................................................................   Passed    0.00 sec
+        Start 296: MetricRegistry.NonFiniteValuesCountAsMissing
+674/712 Test #262: Seeds.NearbyRootSeedsDecorrelate ....................................................................................   Passed    0.00 sec
+        Start 700: CollabLink.KeyframeInRoundTrips
+675/712 Test #296: MetricRegistry.NonFiniteValuesCountAsMissing ........................................................................   Passed    0.00 sec
+        Start 703: CollabLink.DamagedMessagesAreRefused
+676/712 Test #700: CollabLink.KeyframeInRoundTrips .....................................................................................   Passed    0.01 sec
+        Start 701: CollabLink.ReleaseAndRecordRoundTrip
+677/712 Test #703: CollabLink.DamagedMessagesAreRefused ................................................................................   Passed    0.01 sec
+        Start 702: CollabLink.FeatureReplyRequestWatermarkHello
+678/712 Test #701: CollabLink.ReleaseAndRecordRoundTrip ................................................................................   Passed    0.01 sec
+        Start 378: KltTracker.UsacEmptyModelDefectIsAbsorbedByARedraw
+679/712 Test #702: CollabLink.FeatureReplyRequestWatermarkHello ........................................................................   Passed    0.01 sec
+        Start 486: PgoOracle.AgreesWithGtsamOnEveryCase
+680/712 Test #378: KltTracker.UsacEmptyModelDefectIsAbsorbedByARedraw ..................................................................***Skipped   0.01 sec
+        Start 487: PgoOracle.SeSyncBenchmarkGraphs
+681/712 Test #486: PgoOracle.AgreesWithGtsamOnEveryCase ................................................................................***Skipped   0.01 sec
+        Start 488: PgoOracle.DampingAblation
+682/712 Test #487: PgoOracle.SeSyncBenchmarkGraphs .....................................................................................***Skipped   0.01 sec
+        Start 489: PgoInit.SeSyncDeadReckoningGate
+683/712 Test #488: PgoOracle.DampingAblation ...........................................................................................***Skipped   0.01 sec
+        Start 490: PgoInit.ChordalRotationsAgreeWithGtsam
+684/712 Test #489: PgoInit.SeSyncDeadReckoningGate .....................................................................................***Skipped   0.01 sec
+        Start 547: Certificate.SeSyncBenchmarkGraphs
+685/712 Test #490: PgoInit.ChordalRotationsAgreeWithGtsam ..............................................................................***Skipped   0.01 sec
+        Start 559: LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs
+686/712 Test #547: Certificate.SeSyncBenchmarkGraphs ...................................................................................***Skipped   0.01 sec
+        Start 585: XFeatEngine.DescribeAtDetectedKeypointsIsTheDetectorsDescriptorExactly
+687/712 Test #559: LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs ....................................................***Skipped   0.01 sec
+        Start 586: XFeatEngine.OneForwardPerImageWhateverIsAsked
+688/712 Test #585: XFeatEngine.DescribeAtDetectedKeypointsIsTheDetectorsDescriptorExactly ..............................................***Skipped   0.01 sec
+        Start 587: XFeatEngine.MaskAppliesBeforeSelectionSoTheBudgetIsSpentWhereAllowed
+689/712 Test #586: XFeatEngine.OneForwardPerImageWhateverIsAsked .......................................................................***Skipped   0.01 sec
+        Start 588: XFeatEngine.PadModeNeverDetectsInThePad
+690/712 Test #587: XFeatEngine.MaskAppliesBeforeSelectionSoTheBudgetIsSpentWhereAllowed ................................................***Skipped   0.01 sec
+        Start 589: XFeatEngine.ResizeModeMapsBackToImagePixels
+691/712 Test #588: XFeatEngine.PadModeNeverDetectsInThePad .............................................................................***Skipped   0.01 sec
+        Start 590: XFeatEngine.DescribeRefusesOnlyPointsOutsideTheImage
+692/712 Test #589: XFeatEngine.ResizeModeMapsBackToImagePixels .........................................................................***Skipped   0.01 sec
+        Start 607: PlaceRecognizer.PreprocessingAndDescriptorMatchUpstream
+693/712 Test #590: XFeatEngine.DescribeRefusesOnlyPointsOutsideTheImage ................................................................***Skipped   0.01 sec
+        Start 608: PlaceRecognizer.SimRgbPathMatchesUpstreamAndSeesAChannelSwap
+694/712 Test #607: PlaceRecognizer.PreprocessingAndDescriptorMatchUpstream .............................................................***Skipped   0.01 sec
+        Start 610: AlikedLightGlueReference.AlikedMatchesUpstream
+695/712 Test #608: PlaceRecognizer.SimRgbPathMatchesUpstreamAndSeesAChannelSwap ........................................................***Skipped   0.01 sec
+        Start 611: AlikedLightGlueReference.LightGlueMatchesUpstream
+696/712 Test #610: AlikedLightGlueReference.AlikedMatchesUpstream ......................................................................***Skipped   0.01 sec
+        Start 612: AlikedLightGlueSimReference.AlikedMatchesUpstream
+697/712 Test #611: AlikedLightGlueReference.LightGlueMatchesUpstream ...................................................................***Skipped   0.01 sec
+        Start 613: AlikedLightGlueSimReference.LightGlueMatchesUpstream
+698/712 Test #612: AlikedLightGlueSimReference.AlikedMatchesUpstream ...................................................................***Skipped   0.01 sec
+        Start 615: HardPair.RejectsBadParamsAndTheWrongImageSize
+699/712 Test #613: AlikedLightGlueSimReference.LightGlueMatchesUpstream ................................................................***Skipped   0.01 sec
+        Start 616: HardPair.UpstreamModeReproducesUpstreamMatches
+700/712 Test #615: HardPair.RejectsBadParamsAndTheWrongImageSize .......................................................................***Skipped   0.01 sec
+        Start 617: HardPair.SimRgbPathIsTheReferenceInputAndSeesAChannelSwap
+701/712 Test #616: HardPair.UpstreamModeReproducesUpstreamMatches ......................................................................***Skipped   0.01 sec
+        Start 621: DnnContract.XFeatSharedAcrossTwoThreadsIsByteIdentical
+702/712 Test #617: HardPair.SimRgbPathIsTheReferenceInputAndSeesAChannelSwap ...........................................................***Skipped   0.01 sec
+        Start 622: DnnContract.PlaceRecognizerSharedAcrossTwoThreadsIsByteIdentical
+703/712 Test #621: DnnContract.XFeatSharedAcrossTwoThreadsIsByteIdentical ..............................................................***Skipped   0.01 sec
+        Start 623: DnnContract.HardPairMatcherSharedAcrossTwoThreadsIsByteIdentical
+704/712 Test #622: DnnContract.PlaceRecognizerSharedAcrossTwoThreadsIsByteIdentical ....................................................***Skipped   0.01 sec
+        Start 696: VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice
+705/712 Test #696: VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice .................................................***Not Run (Disabled)   0.00 sec
+        Start 706: Engines/XFeatReference.ForwardAndDetectMatchUpstream/opencv_dnn_graph  # GetParam() = 4-byte object <00-00 00-00>
+706/712 Test #623: DnnContract.HardPairMatcherSharedAcrossTwoThreadsIsByteIdentical ....................................................***Skipped   0.01 sec
+        Start 707: Engines/XFeatReference.ForwardAndDetectMatchUpstream/gemm_reference  # GetParam() = 4-byte object <01-00 00-00>
+707/712 Test #706: Engines/XFeatReference.ForwardAndDetectMatchUpstream/opencv_dnn_graph  # GetParam() = 4-byte object <00-00 00-00> ...***Skipped   0.01 sec
+        Start 708: Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2
+708/712 Test #707: Engines/XFeatReference.ForwardAndDetectMatchUpstream/gemm_reference  # GetParam() = 4-byte object <01-00 00-00> .....***Skipped   0.01 sec
+        Start 709: Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1
+709/712 Test #708: Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2 ...........................***Skipped   0.01 sec
+        Start 710: Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2
+710/712 Test #709: Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1 .......................***Skipped   0.01 sec
+        Start 711: Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1
+711/712 Test #710: Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2 .....................***Skipped   0.01 sec
+712/712 Test #711: Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1 .................***Skipped   0.01 sec
+
+100% tests passed, 0 tests failed out of 711
+
+Total Test time (real) = 130.53 sec
+
+The following tests did not run:
+	378 - KltTracker.UsacEmptyModelDefectIsAbsorbedByARedraw (Skipped)
+	486 - PgoOracle.AgreesWithGtsamOnEveryCase (Skipped)
+	487 - PgoOracle.SeSyncBenchmarkGraphs (Skipped)
+	488 - PgoOracle.DampingAblation (Skipped)
+	489 - PgoInit.SeSyncDeadReckoningGate (Skipped)
+	490 - PgoInit.ChordalRotationsAgreeWithGtsam (Skipped)
+	547 - Certificate.SeSyncBenchmarkGraphs (Skipped)
+	559 - LocalDescriptorCodec.LightGlueMatchSetUnderFp16AndInt8OnSimPairs (Skipped)
+	585 - XFeatEngine.DescribeAtDetectedKeypointsIsTheDetectorsDescriptorExactly (Skipped)
+	586 - XFeatEngine.OneForwardPerImageWhateverIsAsked (Skipped)
+	587 - XFeatEngine.MaskAppliesBeforeSelectionSoTheBudgetIsSpentWhereAllowed (Skipped)
+	588 - XFeatEngine.PadModeNeverDetectsInThePad (Skipped)
+	589 - XFeatEngine.ResizeModeMapsBackToImagePixels (Skipped)
+	590 - XFeatEngine.DescribeRefusesOnlyPointsOutsideTheImage (Skipped)
+	607 - PlaceRecognizer.PreprocessingAndDescriptorMatchUpstream (Skipped)
+	608 - PlaceRecognizer.SimRgbPathMatchesUpstreamAndSeesAChannelSwap (Skipped)
+	610 - AlikedLightGlueReference.AlikedMatchesUpstream (Skipped)
+	611 - AlikedLightGlueReference.LightGlueMatchesUpstream (Skipped)
+	612 - AlikedLightGlueSimReference.AlikedMatchesUpstream (Skipped)
+	613 - AlikedLightGlueSimReference.LightGlueMatchesUpstream (Skipped)
+	615 - HardPair.RejectsBadParamsAndTheWrongImageSize (Skipped)
+	616 - HardPair.UpstreamModeReproducesUpstreamMatches (Skipped)
+	617 - HardPair.SimRgbPathIsTheReferenceInputAndSeesAChannelSwap (Skipped)
+	621 - DnnContract.XFeatSharedAcrossTwoThreadsIsByteIdentical (Skipped)
+	622 - DnnContract.PlaceRecognizerSharedAcrossTwoThreadsIsByteIdentical (Skipped)
+	623 - DnnContract.HardPairMatcherSharedAcrossTwoThreadsIsByteIdentical (Skipped)
+	696 - VisibilityGraph.ConvexGraphMatchesAllVertexReferenceAndBeatsLattice (Disabled)
+	706 - Engines/XFeatReference.ForwardAndDetectMatchUpstream/opencv_dnn_graph  # GetParam() = 4-byte object <00-00 00-00> (Skipped)
+	707 - Engines/XFeatReference.ForwardAndDetectMatchUpstream/gemm_reference  # GetParam() = 4-byte object <01-00 00-00> (Skipped)
+	708 - Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2 (Skipped)
+	709 - Engines/EigenPlacesReference.OnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1 (Skipped)
+	710 - Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_NEW  # GetParam() = 2 (Skipped)
+	711 - Engines/EigenPlacesReference.SimRigOnnxThroughCvDnnMatchesUpstream/ENGINE_CLASSIC  # GetParam() = 1 (Skipped)
+[final-e2e] build simulation plugins and ROS bridge
+[live 00:06:52] sim plugins (mover live mode) -> build/sim-plugins
+[ 71%] Built target ariadne_canonical_streams
+[ 71%] Built target ariadne_kinematic_mover
+[100%] Built target ariadne_gz_recorder
+[live 00:06:55] ros2 packages -> build/ros2/install
+Starting >>> ariadne_bridge
+Finished <<< ariadne_bridge [0.44s]
+Starting >>> ariadne_sim
+Finished <<< ariadne_sim [0.21s]
+
+Summary: 2 packages finished [0.83s]
+[final-e2e] compose deterministic two-agent maze scene
+[live 00:06:56] compose maze_short seed 6 (real-time factor 0.15) -> build/live/scenes/maze_short_6
+{
+ "scene_id": "89e61fecbb277f69",
+ "attempt": 0,
+ "target_room": [
+  1,
+  0
+ ],
+ "lengths": {
+  "0": {
+   "responder_m": 10.98284271247462,
+   "agent_m": 10.98284271247462
+  },
+  "1": {
+   "responder_m": 20.398275605729708,
+   "agent_m": 20.005382386916253
+  }
+ }
+}
+[final-e2e] launch all-in-one recorded mission at 200s
+
+WARNING! Your credentials are stored unencrypted in '/home/cynicpixel/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+[live_aws 00:07:25] push ariadne-orchestrator:1 -> 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-orchestrator:live-a007806eb911
+[live_aws 00:07:27] push ariadne/core-dev:dev -> 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-core:live-e436db52aa66
+[live_aws 00:07:30] push ariadne-console:1 -> 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-console:live-6fb2e1a366ee
+[live_aws 00:07:33] push ariadne/sim:dev -> 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-sim:live-8b780f52cb9a
+[live_aws 00:07:35] push ariadne-recon:1 -> 836505524290.dkr.ecr.eu-north-1.amazonaws.com/ariadne/ariadne-gpu:live-ac7d351bf93b
+[live_aws 00:09:56] payload 427M -> s3://ariadne-836505524290-eun1/runs/live-payload-20261026T000737Z/payload.tar.gz
+[spinup 00:10:00] run 20261026T001000Z-gpu-5bebcd: g4dn.xlarge (spot) in eu-north-1a at $0.104300/h, max 180 min
+[spinup 00:10:52] uploaded repo snapshot (30M)
+[spinup 00:10:59] launched i-09492834f6cf1b8a7
+[spinup 01:51:21] done: exit_code=0, 5947s, compute ~$0.1723 (EBS/IPv4 extra, cents)
+[spinup 01:51:21] results: build/runs/20261026T001000Z-gpu-5bebcd/output/
++ command -v aws
++ mkdir -p /opt/ariadne/src /opt/ariadne/results
++ cd /opt/ariadne/src
++ aws s3 cp s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/input/repo.tar.gz -
++ tar xz
++ export ARIADNE_RESULTS=/opt/ariadne/results ARIADNE_RESULTS_URI=s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/output/results
++ ARIADNE_RESULTS=/opt/ariadne/results
++ ARIADNE_RESULTS_URI=s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/output/results
++ base64 -d
++ echo c2V0IC1ldW8gcGlwZWZhaWwKUj0kQVJJQURORV9SRVNVTFRTClJFRz04MzY1MDU1MjQyOTAuZGtyLmVjci5ldS1ub3J0aC0xLmFtYXpvbmF3cy5jb20KY29tbWFuZCAtdiBkb2NrZXIgPi9kZXYvbnVsbCB8fCB7IGFwdC1nZXQgdXBkYXRlIC1xcSAmJiBhcHQtZ2V0IGluc3RhbGwgLXkgLXFxIGRvY2tlci5pbzsgfQpudmlkaWEtc21pID4gJFIvbnZpZGlhLXNtaS50eHQgMj4mMSB8fCB0cnVlCmRvY2tlciBpbmZvIC0tZm9ybWF0ICd7e2pzb24gLlJ1bnRpbWVzfX0nID4gJFIvZG9ja2VyX3J1bnRpbWVzLmpzb24KbHNjcHUgPiAkUi9sc2NwdS50eHQ7IGZyZWUgLW0gPiAkUi9mcmVlLnR4dAphd3MgZWNyIGdldC1sb2dpbi1wYXNzd29yZCAtLXJlZ2lvbiBldS1ub3J0aC0xIHwgZG9ja2VyIGxvZ2luIC0tdXNlcm5hbWUgQVdTIC0tcGFzc3dvcmQtc3RkaW4gJFJFRyA+L2Rldi9udWxsCndoaWxlIHJlYWQgLXIgaW1nIHJlZiBpZDsgZG8KICBkb2NrZXIgcHVsbCAtcSAiJHJlZiIgPi9kZXYvbnVsbCAmJiBkb2NrZXIgdGFnICIkcmVmIiAiJGltZyIKICBnb3Q9JChkb2NrZXIgaW1hZ2UgaW5zcGVjdCAiJGltZyIgLS1mb3JtYXQgJ3t7LklkfX0nKTsgWyAiJGdvdCIgPSAiJGlkIiBdIHx8IHsgZWNobyAiZGlnZXN0IG1pc21hdGNoICRpbWciOyBleGl0IDM7IH0KICBlY2hvICIkaW1nICRyZWYgJGdvdCIgPj4gJFIvaW1hZ2VzLnR4dApkb25lIDw8J1JFRlMnCmFyaWFkbmUtb3JjaGVzdHJhdG9yOjEgODM2NTA1NTI0MjkwLmRrci5lY3IuZXUtbm9ydGgtMS5hbWF6b25hd3MuY29tL2FyaWFkbmUvYXJpYWRuZS1vcmNoZXN0cmF0b3I6bGl2ZS1hMDA3ODA2ZWI5MTEgc2hhMjU2OmEwMDc4MDZlYjkxMWQ2YWQ0ZGRlODhjYWIzNzNmMmI1ODU5NzM0MTViYzU4NWEwODhhMmE3N2I1ZWYyYzBmOTIKYXJpYWRuZS9jb3JlLWRldjpkZXYgODM2NTA1NTI0MjkwLmRrci5lY3IuZXUtbm9ydGgtMS5hbWF6b25hd3MuY29tL2FyaWFkbmUvYXJpYWRuZS1jb3JlOmxpdmUtZTQzNmRiNTJhYTY2IHNoYTI1NjplNDM2ZGI1MmFhNjY1MmI2NmJiZGY3ZjZiZGYzMmIyMDA1OWI2YWVhY2RjOTUxZGE2ZThlNTI5NzM2M2Q1MmI2CmFyaWFkbmUtY29uc29sZToxIDgzNjUwNTUyNDI5MC5ka3IuZWNyLmV1LW5vcnRoLTEuYW1hem9uYXdzLmNvbS9hcmlhZG5lL2FyaWFkbmUtY29uc29sZTpsaXZlLTZmYjJlMWEzNjZlZSBzaGEyNTY6NmZiMmUxYTM2NmVlMmUxY2RjZTcxNzNkYzA2ZDQ1ZjBiYTVjMWM5MDRjMWFkZjU5YTYzYmNhMzU3NWI3YjBkYQphcmlhZG5lL3NpbTpkZXYgODM2NTA1NTI0MjkwLmRrci5lY3IuZXUtbm9ydGgtMS5hbWF6b25hd3MuY29tL2FyaWFkbmUvYXJpYWRuZS1zaW06bGl2ZS04Yjc4MGY1MmNiOWEgc2hhMjU2OjhiNzgwZjUyY2I5YTFkNDhjMTQyZTE3NmUxNjkwZGM1MzczZjIzOGZlYjYwNmJiNmU4NjlhYmE5MzNkZjMzZDkKYXJpYWRuZS1yZWNvbjoxIDgzNjUwNTUyNDI5MC5ka3IuZWNyLmV1LW5vcnRoLTEuYW1hem9uYXdzLmNvbS9hcmlhZG5lL2FyaWFkbmUtZ3B1OmxpdmUtYWM3ZDM1MWJmOTNiIHNoYTI1NjphYzdkMzUxYmY5M2IwNGNjYjY5NTZmNjM1NTAxN2FmOGUwNzJlYTc4NGVkYjkwN2ZiMjQzYmE2ZjZmYmU4ODNkClJFRlMKY29tbWFuZCAtdiB6c3RkID4vZGV2L251bGwgfHwgeyBhcHQtZ2V0IHVwZGF0ZSAtcXEgJiYgYXB0LWdldCBpbnN0YWxsIC15IC1xcSB6c3RkOyB9CmF3cyBzMyBjcCAnczM6Ly9hcmlhZG5lLTgzNjUwNTUyNDI5MC1ldW4xL3J1bnMvaW1hZ2VzL2FyaWFkbmUtcmVjb24tZ3B1LWE4MjdkZTU1MTRmZS50YXIuenN0JyAvdG1wL2FyaWFkbmUtcmVjb24tZ3B1LnRhci56c3QgLS1vbmx5LXNob3ctZXJyb3JzCmF3cyBzMyBjcCAnczM6Ly9hcmlhZG5lLTgzNjUwNTUyNDI5MC1ldW4xL3J1bnMvaW1hZ2VzL2FyaWFkbmUtcmVjb24tZ3B1LWE4MjdkZTU1MTRmZS50YXIuenN0LnNoYTI1NicgL3RtcC9hcmlhZG5lLXJlY29uLWdwdS5zaGEyNTYgLS1vbmx5LXNob3ctZXJyb3JzCmV4cGVjdGVkPSQoYXdrICd7cHJpbnQgJDF9JyAvdG1wL2FyaWFkbmUtcmVjb24tZ3B1LnNoYTI1NikKZWNobyAiJGV4cGVjdGVkICAvdG1wL2FyaWFkbmUtcmVjb24tZ3B1LnRhci56c3QiIHwgc2hhMjU2c3VtIC1jIC0KenN0ZCAtZGMgL3RtcC9hcmlhZG5lLXJlY29uLWdwdS50YXIuenN0IHwgZG9ja2VyIGxvYWQgPiAkUi9yZWNvbl9ncHVfbG9hZC50eHQKZG9ja2VyIHRhZyBhcmlhZG5lL3JlY29uLWdwdTpidWlsZCBhcmlhZG5lLXJlY29uLWdwdToxCmRvY2tlciBpbWFnZSBpbnNwZWN0IGFyaWFkbmUtcmVjb24tZ3B1OjEgLS1mb3JtYXQgJ3t7LklkfX0nID4gJFIvcmVjb25fZ3B1X2ltYWdlLnR4dApkb2NrZXIgcnVuIC0tcm0gLS1ncHVzIGFsbCBhcmlhZG5lLXJlY29uLWdwdToxIHB5dGhvbiAtYyAnaW1wb3J0IHRvcmNoLCBnc3BsYXQ7IGZyb20gZ3NwbGF0IGltcG9ydCBjc3JjOyBhc3NlcnQgdG9yY2guY3VkYS5pc19hdmFpbGFibGUoKTsgcHJpbnQodG9yY2guX192ZXJzaW9uX18sIGdzcGxhdC5fX3ZlcnNpb25fXywgdG9yY2guY3VkYS5nZXRfZGV2aWNlX25hbWUoMCksIGNzcmMuX19maWxlX18pJyA+ICRSL3JlY29uX2dwdV9wcmVmbGlnaHQudHh0CmV4cG9ydCBBUklBRE5FX0dJVF9DT01NSVQ9YzE0M2RiMTRlYjlkZmJkN2ZmZWYwMDNjZjgwYWIzYzM0NGM2NGRlYyBBUklBRE5FX0dJVF9ESVJUWT10cnVlIEFSSUFETkVfUlRfTUVNPTEwZwphd3MgczMgY3AgczM6Ly9hcmlhZG5lLTgzNjUwNTUyNDI5MC1ldW4xL3J1bnMvbGl2ZS1wYXlsb2FkLTIwMjYxMDI2VDAwMDczN1ovcGF5bG9hZC50YXIuZ3ogLSB8IHRhciB4eiAtQyAvdG1wCihjZCAvdG1wL3AgJiYgc2hhMjU2c3VtIC1jIC0tcXVpZXQgU0hBMjU2U1VNUykgJiYgZWNobyAicGF5bG9hZCBzaGEyNTYgT0siID4gJFIvcGF5bG9hZF9jaGVjay50eHQKY3AgLWEgL3RtcC9wLy4gLiAmJiBjcCAvdG1wL3AvU0hBMjU2U1VNUyAkUi8KbWtkaXIgLXAgYnVpbGQvbGl2ZS9ydW5zCmlmIGVudiBBUklBRE5FX0xPQ0tTVEVQPTEgQVJJQURORV9MSVZFX0NPTkZJRz1jb25maWdzL21pc3Npb24vbGl2ZV9maW5hbF9lMmUueWFtbCBBUklBRE5FX1BMQU5ORVJfQ09ORklHPWNvbmZpZ3MvbWlzc2lvbi9taXNzaW9uX3YyLnlhbWwgQVJJQURORV9QRVJDRVBUSU9OX0NPTkZJRz1jb25maWdzL3BlcmNlcHRpb24vc2ltX3YxX3JhZF9mbGF0LnlhbWwgQVJJQURORV9TTEFNX0NPTkZJRz1jb25maWdzL3NsYW0vc2ltX3YyX2xvb3BzLnlhbWwgQVJJQURORV9JTVVfTk9JU0VfQ09ORklHPWNvbmZpZ3Mvc2ltL2ltdV9ub2lzZV92MS55YW1sIEFSSUFETkVfTUlTU0lPTl9DT05GSUc9Y29uZmlncy9taXNzaW9uL21pc3Npb25fdjEueWFtbCBBUklBRE5FX1NIQURPV19NQVBfQ09ORklHPWNvbmZpZ3MvbWlzc2lvbi9taXNzaW9uX3YyLnlhbWwgQVJJQURORV9TUExBVD0xIEFSSUFETkVfUkVDT05fSU1BR0U9YXJpYWRuZS1yZWNvbi1ncHU6MSBBUklBRE5FX1JFQ09OX0JBQ0tFTkQ9Z3B1IEFSSUFETkVfUkVDT05fSVRFUlM9MTAwIEFSSUFETkVfUlRfTUVNPTEwZyBBUklBRE5FX1BST0ZJTEU9IEFSSUFETkVfU0FNUExFUj0gICBpbmZyYS9zY3JpcHRzL2xpdmUuc2ggcnVuIGJ1aWxkL2xpdmUvc2NlbmVzL21hemVfc2hvcnRfNiBidWlsZC9saXZlL3J1bnMgMjAwID4gJFIvbGl2ZV9ydW4ubG9nIDI+JjE7IHRoZW4gbGl2ZV9yYz0wOyBlbHNlIGxpdmVfcmM9JD87IGZpCnJ1bj0kKGZpbmQgYnVpbGQvbGl2ZS9ydW5zIC1taW5kZXB0aCAxIC1tYXhkZXB0aCAxIC10eXBlIGQgLW5hbWUgJ2xpdmUtKicgLXByaW50ZiAnJVRAICVwXG4nIHwgc29ydCAtbnIgfCBoZWFkIC0xIHwgY3V0IC1kJyAnIC1mMi0pCmlmIFsgLW4gIiRydW4iIF07IHRoZW4KICBpZiBpbmZyYS9zY3JpcHRzL2xpdmUuc2ggcmVwbGF5ICRydW4gYnVpbGQvbGl2ZS9zY2VuZXMvbWF6ZV9zaG9ydF82ID4gJFIvcmVwbGF5LmxvZyAyPiYxOyB0aGVuIHJlcGxheV9yYz0wOyBlbHNlIHJlcGxheV9yYz0kPzsgZmkKICBpZiBbICdzZXBhcmF0ZScgPSBzZXBhcmF0ZSBdOyB0aGVuCiAgICByZWNvcmRpbmc9JChmaW5kICIkcnVuIiAtbmFtZSBpbnB1dHMubWNhcCAtdHlwZSBmIHwgaGVhZCAtMSkKICAgIGlmIFsgLW4gIiRyZWNvcmRpbmciIF07IHRoZW4KICAgICAgcmVjb3JkaW5nX3VyaT0iJHtBUklBRE5FX1JFU1VMVFNfVVJJJS9vdXRwdXQvcmVzdWx0c30vcmVjb3JkaW5ncy9pbnB1dHMubWNhcCIKICAgICAgc2hhMjU2c3VtICIkcmVjb3JkaW5nIiA+ICRSL3JlY29yZGluZy5zaGEyNTYKICAgICAgYXdzIHMzIGNwICIkcmVjb3JkaW5nIiAiJHJlY29yZGluZ191cmkiIC0tb25seS1zaG93LWVycm9ycwogICAgICBwcmludGYgJyVzXG4nICIkcmVjb3JkaW5nX3VyaSIgPiAkUi9yZWNvcmRpbmdfdXJpLnR4dAogICAgZWxzZQogICAgICBlY2hvICdtaXNzaW9uIGZhaWxlZCBiZWZvcmUgY3JlYXRpbmcgYSByZWNvcmRpbmcnID4gJFIvcmVjb3JkaW5nX2Vycm9yLnR4dAogICAgZmkKICAgIHRhciBjemYgJFIvcnVuLnRhci5neiAtLWV4Y2x1ZGU9Jyouc29jaycgLS1leGNsdWRlPSdpbnB1dHMubWNhcCcgJHJ1bgogIGVsc2UKICAgIHRhciBjemYgJFIvcnVuLnRhci5neiAtLWV4Y2x1ZGU9Jyouc29jaycgJHJ1bgogIGZpCmVsc2UKICByZXBsYXlfcmM9MTI1CiAgZWNobyAnbm8gbGl2ZSBydW4gZGlyZWN0b3J5IHdhcyBjcmVhdGVkJyA+ICRSL3JlcGxheS5sb2cKZmkKcHJpbnRmICdsaXZlX2V4aXQ9JXNcbnJlcGxheV9leGl0PSVzXG4nICIkbGl2ZV9yYyIgIiRyZXBsYXlfcmMiID4gJFIvbWlzc2lvbl9leGl0X3N0YXR1cy50eHQKdGVzdCAiJGxpdmVfcmMiIC1lcSAwIC1hICIkcmVwbGF5X3JjIiAtZXEgMA==
++ bash /opt/ariadne/test.sh
+
+WARNING! Your credentials are stored unencrypted in '/root/.docker/config.json'.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/go/credential-store/
+
+/tmp/ariadne-recon-gpu.tar.zst: OK
++ finish
++ rc=0
++ echo exit_code=0
++ aws s3 cp /tmp/exit_code s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/output/exit_code --only-show-errors
++ '[' -d /opt/ariadne/results ']'
++ aws s3 cp --recursive /opt/ariadne/results s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/output/results/ --only-show-errors
++ aws s3 cp /var/log/ariadne-run.log s3://ariadne-836505524290-eun1/runs/20261026T001000Z-gpu-5bebcd/output/run.log --only-show-errors
+build/runs/20261026T001000Z-gpu-5bebcd
+{
+  "verdict": "PASS",
+  "live_results": "evaluation/runs/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z/results.yaml",
+  "agents": [
+    {
+      "agent": 0,
+      "frames": 4001,
+      "keyframes": 335,
+      "keyframes_integrated": 335
+    },
+    {
+      "agent": 1,
+      "frames": 4001,
+      "keyframes": 342,
+      "keyframes_integrated": 341
+    }
+  ],
+  "replans": 40,
+  "commands_sent": 80,
+  "slam_reports": [
+    "evaluation/runs/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z/raw/89e61fecbb277f69-agent0-20261026T005756Z/results.yaml",
+    "evaluation/runs/final_stack_e2e/20261026T000432Z/aws_run/build/live/runs/live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z/raw/89e61fecbb277f69-agent1-20261026T005756Z/results.yaml"
+  ],
+  "reconstruction": {
+    "backend": "gpu",
+    "training_image": "rgb",
+    "keyframes": 677,
+    "wall_s": 2491.53
+  },
+  "replay": "PASS",
+  "failures": []
+}
+[final-e2e] evidence: evaluation/runs/final_stack_e2e/20261026T000432Z

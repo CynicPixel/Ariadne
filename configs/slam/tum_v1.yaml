@@ -1,4 +1,4 @@
-# 2.6 (D100): TUM RGB-D. euroc_v2's values (LOCAL_SLAM_2.3, D51-D57) with: no imu section (TUM has an accelerometer
+# 2.6 (D100): TUM RGB-D. euroc_v2's values (local-slam.md, D51-D57) with: no imu section (TUM has an accelerometer
 # only: imu.mode none), the near depth limit of the Kinect, and the triangulation's disparity noise derived in code
 # from the sensor's sigma_Z = k Z^2 model. ba.sigma_px stays EuRoC's calibrated 0.46 [ASSUMPTION: not re-calibrated
 # on TUM]. Pair with configs/perception/tum_v1.yaml.
@@ -28,7 +28,7 @@ keyframe:
 ba:
   huber_delta: 2.0
   max_iterations: 10            # per keyframe solve (design §3; §11.6 says 15)
-  sigma_px: 0.46                # calibrated (LOCAL_SLAM_2.3.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
+  sigma_px: 0.46                # calibrated (local-slam.md §5): dof-corrected chi^2-inlier sigma, MH_01 at 1.0 px
   backend: window               # LevMarqBase windowed BA (D51); v1 = two_frame_stub (the 1.5 baseline)
   window_size: 10               # DSO N_f = 7 is "marginal beyond"; catalogue 10-15 (ablate 7 / 15)
   chi2_reject: 5.991            # chi^2_2(0.95): drop an observation after the solve
@@ -38,7 +38,7 @@ ba:
   step_norm_tolerance: 1.0e-8
   min_gradient_tolerance: 1.0e-8
 
-lost:                           # lost-frame handling (LOST_FRAMES.md, D56); absent = coast / every_frame (the 1.5 baseline)
+lost:                           # lost-frame handling (local-slam.md#lost-frames, D56); absent = coast / every_frame (the 1.5 baseline)
   motion: bridge                # rotation from the 2-D tracks (H/E selection) + decaying velocity; coast = frozen constant velocity
   reanchor: every_frame         # gated (keyframe only if the next PnP can succeed) RAISED lost frames: rejected, D56
   bridge_threshold_px: 1.5      # H / E inlier threshold, rectified px

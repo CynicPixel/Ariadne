@@ -1,4 +1,4 @@
-"""Phase 6 live path, CPU parts (RECON_6, D190/D193): submap frames and re-anchoring (exit-gate bullet 2's algebra),
+"""Phase 6 live path, CPU parts (reconstruction.md, D190/D193): submap frames and re-anchoring (exit-gate bullet 2's algebra),
 depth seeding, chunk export. No GPU, no torch."""
 import json
 
@@ -7,7 +7,7 @@ import pytest
 
 from ariadne_recon.live.export import SPLAT_BYTES, chunk_bytes, table
 from ariadne_recon.live.seeding import SeedParams, seed
-from ariadne_recon.live.submaps import SubmapManager, inv_se3
+from ariadne_recon.live.submaps import FrameStore, SubmapManager, inv_se3
 
 
 def se3(yaw, t):
@@ -29,6 +29,27 @@ def test_submaps_close_at_max_and_hold_anchor_relative_poses():
     assert s1.anchor_kf == 3
     np.testing.assert_allclose(s1.T_anchor_C[3], np.eye(4), atol=1e-12)
     np.testing.assert_allclose(s1.T_O_anchor @ s1.T_anchor_C[5], se3(0.5, [5, 0, 0]), atol=1e-12)
+
+
+def test_training_frame_cache_is_scoped_to_submap_and_close_isolated():
+    """Agents can both emit kf 18; closing one submap must preserve the other's frame and optimizer state."""
+    from types import SimpleNamespace
+    from ariadne_recon.live.trainer import LiveTrainer
+
+    trainer = LiveTrainer.__new__(LiveTrainer)
+    trainer.frames = {(3, 18): {"agent": 0, "sid": 3}, (7, 18): {"agent": 1, "sid": 7}}
+    trainer.state = {
+        3: SimpleNamespace(opt=SimpleNamespace(state={"old": "optimizer state"})),
+        7: SimpleNamespace(opt=SimpleNamespace(state={"keep": "optimizer state"})),
+    }
+    assert trainer._frame(SimpleNamespace(sid=3), 18)["agent"] == 0
+    assert trainer._frame(SimpleNamespace(sid=7), 18)["agent"] == 1
+
+    trainer._close(3)
+    assert (3, 18) not in trainer.frames
+    assert trainer._frame(SimpleNamespace(sid=7), 18)["agent"] == 1
+    assert trainer.state[3].opt.state == {}
+    assert trainer.state[7].opt.state == {"keep": "optimizer state"}
 
 
 def test_reanchor_moves_the_placement_and_nothing_inside():
@@ -323,3 +344,54 @@ def test_paced_replay_waits_for_each_keyframe_mission_time(tmp_path, monkeypatch
                          "--training-image", "rgb", "--pace", "1e-9"]) == 0   # 1 ns of mission = 1 s of wall
     assert len(waits) == 3 and max(waits) <= 11.0 and min(waits) > 0     # one wait per later keyframe, none longer
     assert json.loads((tmp_path / "o" / "manifest.json").read_text())["pace"] == 1e-9
+
+
+def test_frame_store_keeps_agents_with_colliding_keyframe_ids_apart():
+    """The 626abe g4dn crash (KeyError 999): every agent numbers its own keyframes from 0, so a store keyed by kf alone
+    lost one agent's frame when another agent's submap closed, and overwrote images before that."""
+    m, fs = SubmapManager(max_keyframes=3), FrameStore()
+    for k in range(5):                  # interleaved like the service: agent 0's kf k, then agent 1's kf k
+        for agent in (0, 1):
+            sm, opened = m.add_keyframe(agent, k, se3(0.0, [k, agent, 0]), pose_version=1)
+            if opened:                  # the trainer closes the agent's previous submap when a new one opens
+                for old in [s for s in m.submaps if s.agent == agent and s.closed]:
+                    fs.drop_submap(old.sid)
+            fs.put(sm.sid, k, (agent, k))
+    for agent in (0, 1):
+        sm = m.active(agent)
+        for k in sm.keyframes:          # every keyframe the trainer may sample is present, and is THIS agent's
+            assert fs.get(sm.sid, k) == (agent, k)
+    assert len(fs) == sum(len(m.active(a).keyframes) for a in (0, 1))   # closed submaps released, nothing leaked
+
+
+def test_spool_train_kernel_fails_when_a_budget_fails(tmp_path):
+    """A failed budget fails the run and stops the later budgets (the 626abe run reported rc 0 with its live budget
+    crashed). CPU only: stub torch/gsplat, and a spool the service cannot load."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    stub = tmp_path / "stub"
+    (stub / "torch").mkdir(parents=True)
+    (stub / "torch" / "__init__.py").write_text(
+        "__version__ = '0+stub'\nclass _V: cuda = '0'\nversion = _V()\n"
+        "class _C:\n    @staticmethod\n    def is_available(): return False\ncuda = _C()\n")
+    (stub / "gsplat").mkdir()
+    (stub / "gsplat" / "__init__.py").write_text("__version__ = 'stub'\n")
+    (stub / "gsplat" / "csrc.py").write_text("")
+    inp = tmp_path / "in"
+    (inp / "spools" / "agent0").mkdir(parents=True)
+    (inp / "spools" / "agent0" / "spool.yaml").write_text("not: a spool\n")
+    (inp / "scene").mkdir()
+    (inp / "scene" / "scene.json").write_text("{}")
+    work = tmp_path / "work"
+    work.mkdir()
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONPATH=str(stub), ARIADNE_WORK=str(work), ARIADNE_INPUT=str(inp),
+               ARIADNE_PKG=str(root), ARIADNE_BUDGETS='{"first": [15, 2], "second": 15}')
+    r = subprocess.run([sys.executable, str(root / "kaggle" / "spool_train_kernel.py")], env=env,
+                       capture_output=True, text=True, timeout=120)
+    assert r.returncode == 1, r.stdout + r.stderr
+    out = json.loads((work / "remote.json").read_text())
+    assert list(out["budgets"]) == ["first"] and out["budgets"]["first"]["rc"] != 0

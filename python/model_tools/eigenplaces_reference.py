@@ -1,4 +1,4 @@
-"""EigenPlaces reference exporter (2.1, design PERCEPTION_2.1 §11.4). OFFLINE tool, run in the session image
+"""EigenPlaces reference exporter (2.1, design perception.md §11.4). OFFLINE tool, run in the reference image
 ariadne-eigenplaces-ref:feat-2.1 with --network none, the upstream checkout and the weights mounted read-only:
 
   python -I eigenplaces_reference.py --upstream /ep --weights /w/ResNet50_256_eigenplaces.pth --out /out \
@@ -155,7 +155,7 @@ def main() -> int:
         manifest["preprocessing_rgb"] = ("colour PNG -> RGB order -> /255 -> cv2.resize INTER_AREA (3 channels) to WxH "
                                          "(if different) -> ImageNet mean/std, NCHW (PlaceRecognizer::DescribeRgb)")
         manifest["rgb_images"] = [s.split("=", 1)[0] for s in a.rgb_image]
-    (a.out / "manifest.yaml").write_text("# EigenPlaces reference export (PERCEPTION_2.1 §11.4). Generated.\n"
+    (a.out / "manifest.yaml").write_text("# EigenPlaces reference export (perception.md §11.4). Generated.\n"
                                          + yaml.safe_dump(manifest, sort_keys=False))
     return 0
 

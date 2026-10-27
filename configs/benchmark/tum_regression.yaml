@@ -1,8 +1,8 @@
 # 2.6 TUM RGB-D regression (D100). Phase 2 exit-gate line "TUM: stereo/RGB pipeline ATE regression pinned".
-# A separate pinned check, NOT part of phase1.sh --premerge (maintainer, 2026-10-21). Checked by
+# A separate pinned check, NOT part of phase1.sh --premerge (2026-10-21). Checked by
 # infra/scripts/tum_regression.py against each run's results.yaml.
 #
-# TARGETS were fixed 2026-10-21 BEFORE any TUM measurement, as for EuRoC (PHASE2_PLAN): per sequence, the WORST of the
+# TARGETS were fixed 2026-10-21 BEFORE any TUM measurement, as for EuRoC (local-slam.md#estimator-plan): per sequence, the WORST of the
 # published RGB-D class. Source: ORB-SLAM2 (Mur-Artal & Tardos, T-RO 2017) Table III "TUM RGB-D dataset, translation
 # RMSE (m)", columns ORB-SLAM2 / ElasticFusion / Kintinuous / DVO-SLAM / RGBD-SLAM, read from arXiv 1610.06475.
 # Those are full SLAM systems (loops, global BA); ours is VO with loops off, so the class bar is not easy.

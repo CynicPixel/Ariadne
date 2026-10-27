@@ -1,4 +1,4 @@
-// 4.6 FAR-style visibility graph (design EXPLORATION_4.6 §4, D116): on random rectangle maps whose free space is a
+// 4.6 FAR-style visibility graph (design exploration.md §4, D116): on random rectangle maps whose free space is a
 // HOLE of the blocked border (so the orientation test matters), the convex-vertex graph's route is within the derived
 // per-bend node offset (2 sqrt 2 cells) of a reference graph over ALL polygon vertices and of the string-pulled A* path, never
 // crosses a blocked cell, and the incremental update equals a full rebuild.
@@ -45,7 +45,7 @@ double PolyLen(const std::vector<Cell>& p) {
 // QUARANTINED (D116/D123 OPEN, 2026-10-24; parked until after the feature freeze). With the map draws sequenced
 // (D123), trial #9 routes 37.40 cells against the string-pulled lattice's 33.24 (+12.5 %). So "FAR <= string-pulled
 // lattice" is FALSE on this instance. The old pass came from x86's right-to-left argument order, which drew a
-// different map. Same defect class as hazard seed 0 (EXPLORATION_4.6 §10). Kept unchanged, not weakened; re-enable
+// different map. Same defect class as hazard seed 0 (exploration.md §10). Kept unchanged, not weakened; re-enable
 // when the FAR route is fixed. The live Route uses A*, so the gate rows are unaffected.
 TEST(VisibilityGraph, DISABLED_ConvexGraphMatchesAllVertexReferenceAndBeatsLattice) {
     std::mt19937 rng(46);
@@ -113,9 +113,9 @@ TEST(VisibilityGraph, MultiGoalAndNoRoute) {
 }
 
 TEST(VisibilityGraph, Hazard0Regression) {
-    // EXPLORATION_4.6 §10: on ci_tiny_hazard seed 0's final egress map (rho_responder traversable, 200 x 320 cells),
+    // exploration.md §10: on ci_tiny_hazard seed 0's final egress map (rho_responder traversable, 200 x 320 cells),
     // the FAR route from the target to the exits was 11.115 m vs the string-pulled A* 4.424 m. Fixture: the run's
-    // trav_responder.png (evaluation/runs/egress_4.5_hazard/s0_w0, build artefact), copied verbatim.
+    // trav_responder.png (evaluation/runs/egress/hazard_replan/s0_w0, build artefact), copied verbatim.
     const cv::Mat png = cv::imread(std::string(ARIADNE_SOURCE_DIR) + "/tests/data/planning/far_regression_hazard0_trav_r.png",
                                    cv::IMREAD_UNCHANGED);
     ASSERT_FALSE(png.empty());

@@ -1,5 +1,5 @@
 // D225: the lockstep barrier gate predicates (runtime/live/lockstep_gate.hpp). The pre-D225 barrier checked
-// lanes 0 and 1 only; this test is the deterministic guard M asked for - the old shape fails these assertions
+// lanes 0 and 1 only; this test is the deterministic guard - the old shape fails these assertions
 // on every run, no timing involved (a race reproduction could not trip it: replay's answer wait hard-syncs all
 // lanes, so the divergence only showed live on the instance, ma200).
 #include "runtime/live/lockstep_gate.hpp"

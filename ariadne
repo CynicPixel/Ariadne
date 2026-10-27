@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# ariadne: one entry point for building, testing, running, replaying and evaluating Ariadne.
+# Every command is a thin wrapper over the scripts in infra/ (read them for the details); Docker is the only host
+# dependency for the local commands, AWS credentials (infra/scripts/aws.sh login) for the cloud ones.
+#
+#   ./ariadne build                    all images: OpenCV 5 base, core (compile + full C++ test suite), simulator,
+#                                      orchestrator; then the simulator workspace (mover plugin + ROS 2 packages)
+#   ./ariadne test                     C++ suite (ctest) + reconstruction, world-generation and determinism tests
+#   ./ariadne gate                     the end-to-end replay gate: build, tests, VIO, collaboration, mission,
+#                                      reconstruction and report over the pinned recording, one verdict
+#   ./ariadne run PRESET SEED [END_S]  compose a seeded world and run the live closed loop (Gazebo + estimator +
+#                                      planner + console); output under build/live/runs/
+#   ./ariadne replay RUN_DIR SCENE     replay a recorded live run twice and compare the digests
+#   ./ariadne eval COLLAB RECON MISSION SCENE OUT   evaluation report over a run chain (trajectory, map,
+#                                      bytes, every registered metric and gate, figures, report.html)
+#   ./ariadne demo [PORT]              the web operator console (https://www.ariadne.cynicpixel.xyz/ runs this)
+#   ./ariadne cloud e2e                the final integrated stack on an AWS GPU instance (full evidence bundle)
+#   ./ariadne cloud premerge           the replay gate on an AWS spot instance (stage, run, teardown)
+#   ./ariadne cloud arm64              native Graviton4 build + full test suite
+#   ./ariadne cloud cool               COOL protocol on the Graviton4 COOL AMI (stock vs COOL, loader switch)
+#   ./ariadne cloud audit              list every billable AWS resource in the account
+#   ./ariadne infra plan|apply         Terraform for the AWS account (state bucket, ECR, S3, IAM, budget)
+#   ./ariadne runs                     rebuild submission/runs/runs.csv (every AWS run: cost, outcome, evidence, S3)
+# ---------------------------------------------------------------------------
+set -euo pipefail
+cd "$(dirname "$(readlink -f "$0")")"
+S=infra/scripts
+E=infra/eval
+OPENCV_TAG="${OPENCV_TAG:-5.0.0}"
+
+usage() { sed -n '3,24p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+need() { command -v "$1" >/dev/null || { echo "ariadne: '$1' is required" >&2; exit 1; }; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  build)
+    need docker
+    DOCKER_BUILDKIT=1 docker build -t "ariadne/opencv-base:$OPENCV_TAG" --build-arg OPENCV_TAG="$OPENCV_TAG" \
+      -f infra/docker/opencv-base.Dockerfile infra/docker
+    $S/core.sh image
+    DOCKER_BUILDKIT=1 docker build -t ariadne/sim:dev -f infra/docker/sim.Dockerfile .
+    DOCKER_BUILDKIT=1 docker build -t ariadne-orchestrator:1 -f infra/docker/orchestrator.Dockerfile infra/docker
+    $S/live.sh build ;;
+  test)
+    need docker
+    $S/core.sh dev
+    $S/recon.sh test
+    $S/worldgen.sh test
+    $S/check_determinism.sh ;;
+  gate)    $S/phase1.sh --premerge "$@" ;;
+  run)
+    [ $# -ge 2 ] || usage 2
+    $S/live.sh compose "$1" "$2" "${RTF:-0.15}"
+    $S/live.sh run "build/live/scenes/$1_$2" build/live/runs "${3:-}" ;;
+  replay)  [ $# -eq 2 ] || usage 2; $S/live.sh replay "$1" "$2" ;;
+  eval)    [ $# -ge 1 ] || usage 2; $S/report.sh "$@" ;;
+  demo)
+    need npm
+    (cd python/operator_console && npm ci && npm run build)
+    $S/demo.sh "${1:-8080}" ;;
+  cloud)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      e2e)      $E/final_stack_e2e.sh "$@" ;;
+      premerge) $E/premerge_aws_launch.sh stage && $E/premerge_aws_launch.sh run; $E/premerge_aws_launch.sh teardown ;;
+      arm64)    $E/arm64_aws_launch.sh run ;;
+      cool)     $S/spinup.sh run --profile cool --type c8g.4xlarge --max-minutes 90 -- 'bash infra/cool/day1.sh' ;;
+      audit)    $S/aws_audit.sh "$@" ;;
+      *)        usage 2 ;;
+    esac ;;
+  infra)
+    case "${1:-}" in plan|apply) $S/aws.sh tf main "$1" ;; *) usage 2 ;; esac ;;
+  runs)    python3 $S/runs_index.py "$@" ;;
+  help|-h|--help) usage 0 ;;
+  *) usage 2 ;;
+esac

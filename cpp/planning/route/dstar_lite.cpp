@@ -44,7 +44,7 @@ double DStarLite::EdgeCost(int r0, int c0, int r1, int c1) const {
 DStarLite::Key DStarLite::CalculateKey(size_t s) const {
     const double m = std::min(g_[s], rhs_[s]);
     const Cell c{int(s / size_t(W_)), int(s % size_t(W_))};
-    return {m + Octile(start_, c), m};   // k_m = 0: the start never moves (EGRESS_4.5 §1)
+    return {m + Octile(start_, c), m};   // k_m = 0: the start never moves (egress.md §1)
 }
 
 void DStarLite::UpdateVertex(size_t u) {

@@ -1,4 +1,4 @@
-// 2.1 XFeatEngine (PERCEPTION_2.1.md §4.1): the §7.1 contract over the D50 network. The network itself is checked
+// 2.1 XFeatEngine (perception.md §4.1): the §7.1 contract over the D50 network. The network itself is checked
 // against upstream by test_xfeat_reference.cpp; these tests check what the engine adds: one forward per image,
 // §7.3 selection with the mask applied first, input-size handling, and Describe() agreeing with the detector's own
 // descriptor sampling.
@@ -178,7 +178,7 @@ TEST(XFeatEngine, ConfigRequiresWeightsAndValidSizes) {
     EXPECT_THROW(ValidatePerception(c), ConfigError);
 }
 
-// The XFeat ablation config of D60 (row A4t-r, PERCEPTION_2.1.md §9.11) parses and carries the measured values.
+// The XFeat ablation config of D60 (row A4t-r, perception.md §9.11) parses and carries the measured values.
 TEST(XFeatEngine, ShippedAblationConfigIsTheMeasuredRow) {
     const PerceptionConfig c =
         LoadPerception(std::string(ARIADNE_SOURCE_DIR) + "/configs/perception/euroc_v2_xfeat.yaml");

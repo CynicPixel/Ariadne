@@ -1,4 +1,4 @@
-"""Replay a Phase 1 run chain as console telemetry (design CONSOLE_1.10).
+"""Replay a Phase 1 run chain as console telemetry (design live-runtime.md#operator-console).
 
 A frame is a pure function of (chain, tick index, speed): the console never invents state. Sources:
 - agents: the ESTIMATED body trajectories (sim_collab raw/*/estimate_body.tum) through the mission's world anchor

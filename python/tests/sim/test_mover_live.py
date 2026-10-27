@@ -1,4 +1,4 @@
-"""The kinematic mover's live command mode (design LIVE_RUNTIME_L1 D151), against the real plugin in gz.
+"""The kinematic mover's live command mode (design live-runtime.md D151), against the real plugin in gz.
 
 ci_tiny seed 0, the live mission with its cameras removed (server only, no rendering). With the world running:
   1. a goto 1 m ahead of agent 0's entrance pose is ACCEPTED (mover_state), and GT pose ends there with the commanded

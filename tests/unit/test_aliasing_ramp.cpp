@@ -1,4 +1,4 @@
-// Perceptual-aliasing outlier ramp (D75; design ROBUST_BACKEND_2.5.md §6; PHASE2_PLAN §3 "outlier ramp").
+// Perceptual-aliasing outlier ramp (D75; design robust-backend.md §6; local-slam.md#estimator-plan §3 "outlier ramp").
 // Protocol, fixed before the first measured run:
 //   - world: 3 laps of a 20 m x 10 m rectangular corridor at 1 m spacing (60 keyframes per lap, 180 in all), laps
 //     offset 0.2 m sideways; odometry left noise 0.02 m / 0.005 rad per step; every run starts from dead reckoning;

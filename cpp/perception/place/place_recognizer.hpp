@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Global place descriptor (arch §13, §7.4; PERCEPTION_2.1.md §11): EigenPlaces
+// Global place descriptor (arch §13, §7.4; perception.md §11): EigenPlaces
 // R50-256 (Berton et al., ICCV 2023; gmberton/EigenPlaces, MIT) exported to
 // ONNX by python/model_tools/eigenplaces_reference.py and run by cv::dnn.
 //

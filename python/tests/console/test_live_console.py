@@ -1,4 +1,4 @@
-"""The console fed live (design LIVE_RUNTIME_L1 D154), against a fake ariadne_live run directory.
+"""The console fed live (design live-runtime.md D154), against a fake ariadne_live run directory.
 
 Telemetry appended WHILE the websocket is open must reach the client in later frames (the console tails, it does not
 load once), and every frame served is logged to console_frames.jsonl. Runs in the console image:

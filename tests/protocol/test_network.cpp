@@ -1,4 +1,4 @@
-// COLLAB_3.2 §2: the link seam and the discrete-event datagram network.
+// collaboration.md §2: the link seam and the discrete-event datagram network.
 #include "collaboration/protocol/network.hpp"
 
 #include <gtest/gtest.h>

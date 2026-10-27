@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_collab_worker: one agent's DNN work for the live collaboration (design LIVE_COLLAB §1-§2, D174). Spawned by
+// ariadne_collab_worker: one agent's DNN work for the live collaboration (design live-collaboration.md §1-§2, D174). Spawned by
 // ariadne_live per agent with `collab: true`; never part of the estimator worker, whose OpenCV pool must stay
 // unperturbed (D152a/D168).
 //
@@ -9,7 +9,7 @@
 // Listens on PATH, accepts two peers, each identified by its first frame (#hello role): the agent's estimator worker
 // (#ckin, #crel, #cprog) and the parent (#freq). One processing thread handles every frame in arrival order
 // (runtime/live/collab_worker_core.hpp), so EigenPlaces and ALIKED never overlap in this process's pool. `--threads`
-// pins OpenCV's pool (cv::ALIKED's output depends on the thread count, LIVE_COLLAB §7): recorded on stdout's last line
+// pins OpenCV's pool (cv::ALIKED's output depends on the thread count, live-collaboration.md §7): recorded on stdout's last line
 // with the counters. Exits when both peers have closed.
 // ---------------------------------------------------------------------------
 #include "runtime/live/collab_worker_core.hpp"

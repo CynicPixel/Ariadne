@@ -1,9 +1,9 @@
-# 3.2 sim integration, pass B (ariadne_collab_sim; design SIMCOLLAB_3.2, D171). The sweep (infra/eval/collab_aws.sh)
+# 3.2 sim integration, pass B (ariadne_collab_sim; design collaboration.md#simulated-collaboration, D171). The sweep (infra/eval/collab_aws.sh)
 # writes one copy per run with arm / budget / ratio / scenario filled in; these are the shared values.
 arm: similarity                 # similarity (no budget: every candidate) | greedy (SelectBySimilarity) | spectral (D170)
 # budget_bytes_per_s / budget_burst_bytes / budget_source: required for greedy and spectral; derived per D171 §4
 # (fractions of the similarity arm's measured fetch rate on the OTHER scene; burst = one selection period)
-# response_ratio / calibration_run: the MATCH_RESPONSE compression ratio measured on the OTHER scene (COLLAB_3.2 §7)
+# response_ratio / calibration_run: the MATCH_RESPONSE compression ratio measured on the OTHER scene (collaboration.md §7)
 comms_scenario: configs/comms/collapsed_v1.yaml
 dt_s: 0.02                      # sim step (D171 §1); 20 ms << the 1 s heartbeat and the 5 s selection period
 drain_s: 30.0                   # after the last release, before the §6 outcome

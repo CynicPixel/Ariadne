@@ -1,10 +1,10 @@
-"""Phase 6 T4 microbenchmark (RECON_6 §1, D190): runs as a Kaggle GPU kernel. Self-contained.
+"""Phase 6 T4 microbenchmark (reconstruction.md §1, D190): runs as a Kaggle GPU kernel. Self-contained.
 
 Why: the live trainer's iterations per keyframe must be derived from the measured ms/iteration on the target GPU,
-and no T4 number for gsplat is published (RECON_6 Appendix A.4). This kernel measures, on whatever GPU Kaggle gives:
+and no T4 number for gsplat is published (reconstruction.md Appendix A.4). This kernel measures, on whatever GPU Kaggle gives:
 
   train   forward + backward + Adam step of gsplat.rasterization (render_mode "RGB+ED": colour and expected depth,
-          the live loss), 0.8 L1 + 0.2 D-SSIM + 0.1 depth L1 (RECON_6 §2), for N in {50k, 100k, 250k, 500k} Gaussians at
+          the live loss), 0.8 L1 + 0.2 D-SSIM + 0.1 depth L1 (reconstruction.md §2), for N in {50k, 100k, 250k, 500k} Gaussians at
           320x180 and 640x360, packed False/True, SH degree 0 (the .splat export is SH0)
   render  the forward pass alone at the same points (no_grad)
   sh3     one train point at SH degree 3, for the cost of view-dependent colour
@@ -18,6 +18,7 @@ its content does not change the per-Gaussian cost model, only how many Gaussians
 that this is representative of a 640x360 indoor keyframe; the live run logs its own ms/iteration to confirm.
 """
 import json
+import os
 import subprocess
 import sys
 import time
@@ -99,8 +100,13 @@ def main():
         raise RuntimeError("no CUDA device")
     env["gpu"] = torch.cuda.get_device_name(0)
     t0 = time.time()
-    env["gsplat_install"] = install_gsplat(torch)
-    sh(f"{sys.executable} -m pip install -q jaxtyping rich")
+    try:   # an image with gsplat compiled ahead of time (recon-gpu) must not pip-install over it
+        import gsplat
+        from gsplat import csrc   # noqa: F401
+        env["gsplat_install"] = f"preinstalled {gsplat.__version__} (compiled csrc: {csrc.__file__})"
+    except ImportError:
+        env["gsplat_install"] = install_gsplat(torch)
+        sh(f"{sys.executable} -m pip install -q jaxtyping rich")
     import gsplat
     from gsplat import rasterization
     env["gsplat"] = gsplat.__version__
@@ -142,7 +148,7 @@ def main():
                 opt = torch.optim.Adam([{"params": [v], "lr": 1e-3} for v in p.values()])
                 torch.cuda.reset_peak_memory_stats()
 
-                def step():   # the RECON_6 §2 live loss: 0.8 L1 + 0.2 D-SSIM + depth L1
+                def step():   # the reconstruction.md §2 live loss: 0.8 L1 + 0.2 D-SSIM + depth L1
                     img, _, _ = render(p, w, h, packed)
                     rgb = img[..., :3]
                     loss = (0.8 * (rgb - tgt_rgb).abs().mean() + 0.2 * (1.0 - ssim(torch, rgb, tgt_rgb))
@@ -214,7 +220,7 @@ def main():
     out["append"] = {"n_before": 100_000, "n_added": 10_000, "n_after": int(p["means"].shape[0]),
                      "append_ms": round(append_ms, 3), "adam_state_kept": kept,
                      "steps_after_ok": bool(torch.isfinite(p["means"]).all())}
-    json.dump(out, open("/kaggle/working/remote.json", "w"), indent=2)
+    json.dump(out, open(os.path.join(os.environ.get("ARIADNE_WORK", "/kaggle/working"), "remote.json"), "w"), indent=2)
     print(json.dumps({"sh3": out["sh3"], "append": out["append"], "env": env}, indent=2))
 
 

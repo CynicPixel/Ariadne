@@ -1,0 +1,10 @@
+arm=bedrock
+run_id=20261025T001221Z-cpux86-c4e130
+live_run_id=live-20261025T001411Z-5ccc
+source_object=s3://ariadne-836505524290-eun1/runs/20261025T001221Z-cpux86-c4e130/output/results/run.tar.gz
+source_object_bytes=5853988131
+inputs_mcap_bytes=5922331526
+inputs_mcap_sha256=6676d385eebcc0b55ef8e4f0596e51d9048bd1360b3ffa7850d0d38de0c8e7fe
+trace_records=36
+decision_files=37
+replay_verdict=PASS

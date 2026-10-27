@@ -1,4 +1,4 @@
-// 4.2 traversability and the structural-risk proxy (design TRAVERSABILITY_4.2 §4, D111), on exact SDFs of known
+// 4.2 traversability and the structural-risk proxy (design traversability-risk.md §4, D111), on exact SDFs of known
 // geometry: the capsule against brute force at both rho, a doorway and a beam by hand, the risk proxy's zero, its
 // response to a cantilever and its monotonicity, and egress-implies-agent.
 #include "planning/volumetric/esdf.hpp"
@@ -250,7 +250,7 @@ TEST(Traversability, AHorizontalCameraCannotObserveTheStandingBodyVolumeButTheHy
     EXPECT_EQ(false_claims, 0);
     // Even with 48 noise-free views the strict rule loses columns to the body volume a horizontal camera at 1.0 m
     // never sees (measured here: 1535 vs 1949; on the evidence spool, with real gating and fewer views, the loss
-    // closes the target: TRAVERSABILITY_4.2 §6).
+    // closes the target: traversability-risk.md §6).
     EXPECT_LT(strict, hybrid);
     // The hybrid connects the two rooms through the doorway (8-connected flood from west to east).
     cv::Mat lab;

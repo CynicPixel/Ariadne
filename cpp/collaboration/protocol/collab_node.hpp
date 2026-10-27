@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// One agent's collaboration node (design COLLAB_3.2 §3-§6): the transport, the
+// One agent's collaboration node (design collaboration.md §3-§6): the transport, the
 // membership state machine, the §15.1 two-stage exchange and, when elected,
 // the broker duties. OpenCV-free: retrieval, geometric verification and the
 // broker solve are injected (`NodeHooks`), so the protocol is tested with
@@ -361,7 +361,7 @@ private:
         ep_.Enqueue(to, std::move(m));
     }
 
-    /// COLLAB_3.2 §7 / D171: price a planned message (a sample encode with a representative reliable sequence, as
+    /// collaboration.md §7 / D171: price a planned message (a sample encode with a representative reliable sequence, as
     /// FetchCostPredictor) and tag a resend to a new broker. Prediction and tag reach the ledger with the first
     /// transmission; a message that expires unsent never does.
     void Plan(OutMessage& m, core::Timestamp t) {
@@ -613,7 +613,7 @@ private:
         }
     }
 
-    /// 3.4 (design SPECTRAL_3.4): every selection_interval_s, hand the pending candidates, the broker's keyframe graph
+    /// 3.4 (design spectral-selection.md): every selection_interval_s, hand the pending candidates, the broker's keyframe graph
     /// and the predicted fetch bytes to the policy; request what it selects; charge the predicted bytes per class.
     void MaybeSelect(core::Timestamp t) {
         if (!hooks_.select) return;
@@ -633,7 +633,7 @@ private:
         // Nodes and odometry as Swarm-SLAM builds them (cslam algebraic_connectivity_maximization.py, fill_odometry):
         // every keyframe id min..max seen per agent, consecutive ids joined at the fixed weight 1. Gaps in what the
         // broker has seen are full chains, not one collapsed edge. cslam starts at 0 because every keyframe is sent;
-        // ours start at the first one sent, since a VO startup prefix is never released (SIMCOLLAB_3.2 §1, D87 carry).
+        // ours start at the first one sent, since a VO startup prefix is never released (collaboration.md#simulated-collaboration §1, D87 carry).
         std::map<AgentId, std::pair<uint64_t, uint64_t>> span;
         auto see = [&](const KeyframeRef& k) {
             const auto [it, fresh] = span.try_emplace(k.agent, k.keyframe, k.keyframe);
@@ -805,7 +805,7 @@ private:
     }
 
 public:
-    // --- D175: coordination through the radio (MULTIAGENT_PIPELINE) ---------------------------------------------
+    // --- D175: coordination through the radio (live-runtime.md#multi-agent-pipeline) ---------------------------------------------
     struct ComponentView {
         AgentId broker = 0;
         std::vector<AgentId> members;

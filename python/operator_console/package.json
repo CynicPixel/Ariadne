@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild frontend/main.js frontend/geometry-worker.js --bundle --minify --format=esm --splitting --outdir=static/dist --loader:.wasm=file"
+  },
+  "dependencies": {
+    "three": "0.180.0",
+    "@sparkjsdev/spark": "2.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.11"
+  }
+}

@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // Phase 4's task option: what the planner (4.3 NBV, 4.4 allocation) hands to the runtime's chooser through
-// runtime/live/planner.hpp's TaskOption (B's L1 / 7.x seam, maintainer's option B, 2026-10-23). Planning-level:
+// runtime/live/planner.hpp's TaskOption (the L1 / 7.x seam, option B, 2026-10-23). Planning-level:
 // no runtime, ROS or AWS type. Deterministic: every field is a pure function of the planner's inputs.
 //
 // The runtime reads: task_id (exactly-once across agents), goal_xy, path_m, standoff_m, centroid_xy, cells, risk,

@@ -1,4 +1,4 @@
-"""Unit tests for the 1.7 reconstruction service's local stages (design RECON_1.7).
+"""Unit tests for the 1.7 reconstruction service's local stages (design reconstruction.md#first-reconstruction-loop).
 
 Synthetic spools in the C++ writer's exact format (spool.yaml + RGB/fp16 PNGs):
 a fronto-parallel plane seen by two agents whose odometry frames differ by a known
@@ -176,7 +176,7 @@ def test_schema1_still_loads_without_photo(tmp_path):
 
 
 def test_schema3_merges_list_places_every_agent(tmp_path):
-    """Schema 3 (A1/M/A2, 2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
+    """Schema 3 (2026-10-23): merges: replaces merge:, one entry per non-anchor agent."""
     make_spool(tmp_path)
     y = yaml.safe_load((tmp_path / "spool.yaml").read_text())
     y["schema_version"] = 3

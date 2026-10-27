@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The link seam and a discrete-event datagram network (design COLLAB_3.2 §2).
+// The link seam and a discrete-event datagram network (design collaboration.md §2).
 //
 // WHAT THIS IS. The protocol (outbox, ARQ, election) never touches a socket. It
 // hands datagrams to `Network`, which decides, on the simulated clock, whether
@@ -59,7 +59,7 @@ public:
     virtual ~LinkModel() = default;
     virtual LinkState Sample(AgentId from, AgentId to, Timestamp t) const = 0;
     /// The state one datagram of `wire_bytes` (payload + the 28 B UDP/IP header) sees. A physical model's loss
-    /// depends on the size (RFComms: PER over the datagram's bytes); the default ignores it (D171, SIMCOLLAB_3.2 §3).
+    /// depends on the size (RFComms: PER over the datagram's bytes); the default ignores it (D171, collaboration.md#simulated-collaboration §3).
     virtual LinkState SampleSized(AgentId from, AgentId to, Timestamp t, double /*wire_bytes*/) const {
         return Sample(from, to, t);
     }

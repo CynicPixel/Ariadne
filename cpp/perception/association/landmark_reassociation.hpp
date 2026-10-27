@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Lost-mode re-association (PERCEPTION_2.1.md §4.3): relocalisation against
+// Lost-mode re-association (perception.md §4.3): relocalisation against
 // the healthy part of the local map, by appearance, verified by geometry.
 //
 // The situation it serves (§4.0, measured on D56 v2): a lost frame still has

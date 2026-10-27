@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_report_check: the §30.2 gate (D31; design HARNESS_1.9). The metric
+// ariadne_report_check: the §30.2 gate (D31; design evaluation-harness.md). The metric
 // registry in runtime/metrics/metric_registry.hpp is the single source of truth;
 // the Python harness never re-lists the ids.
 //

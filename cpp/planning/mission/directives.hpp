@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Operator directives (design AGENTIC_7 §0b; arch §23, §29): the SubT "directed autonomy" vocabulary
+// Operator directives (design agentic.md §0b; arch §23, §29): the SubT "directed autonomy" vocabulary
 // (arXiv:2212.05626: geometric prioritisation regions + direct task assignment on an allocator; CERBERUS
 // arXiv:2207.04914: explore within/beyond comms with a time budget, waypoint as last resort).
 //

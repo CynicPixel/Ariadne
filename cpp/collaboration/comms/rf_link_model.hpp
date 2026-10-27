@@ -20,7 +20,7 @@
 // fine fixed grid over +-8 sigma (not Gauss-Hermite), tabulated once against the mean received power.
 //
 // DATAGRAM SIZE (D171): Network asks SampleSized(.., wire_bytes), and loss_p is E[PER] at that size -- RFComms as
-// modelled (bytes exponent, per-packet sigma), the case under which COMMS_3.3 §L8 keeps the 1500 B MTU. Sample()
+// modelled (bytes exponent, per-packet sigma), the case under which comms.md §L8 keeps the 1500 B MTU. Sample()
 // without a size keeps `datagram_bytes` (default 1500), for the probe and the D102 tables.
 //
 // Other deviations: RFComms enforces `capacity` by dropping over a 1 s window; here it is the link rate

@@ -1,12 +1,12 @@
-"""Keyframe-anchored submaps (arch §18.6; RECON_6 §2, D190).
+"""Keyframe-anchored submaps (arch §18.6; reconstruction.md §2, D190).
 
 Each submap is anchored to its FIRST keyframe. Its Gaussians live in that keyframe's camera frame ("anchor frame")
 and are never rewritten by a pose update: a pose-graph update changes only T_O_anchor, so the whole submap moves
-rigidly. The console places a submap at T_W_O[agent] @ T_O_anchor (B's tee sends T_W_O per agent), so a PGO update
+rigidly. The console places a submap at T_W_O[agent] @ T_O_anchor (the runtime tee sends T_W_O per agent), so a PGO update
 or an O -> W change is one 4x4 per submap: no retraining, no re-download (exit-gate bullet 2).
 
 Intra-submap drift is deliberately not corrected (arch §18.6); submaps are kept short instead: a submap closes after
-`max_keyframes` keyframes (arch: 20-40; RECON_6 uses 30) or when told a loop closure bent the trajectory.
+`max_keyframes` keyframes (arch: 20-40; reconstruction.md uses 30) or when told a loop closure bent the trajectory.
 
 Pure numpy: no torch, no GPU. The trainer holds the Gaussian tensors; this module holds the frames.
 """
@@ -87,3 +87,35 @@ class SubmapManager:
                 sm.pose_version = pose_version
                 moved.append(sm.sid)
         return moved
+
+
+class FrameStore:
+    """The trainer's per-keyframe training data for the ACTIVE submaps, keyed by (submap id, keyframe id).
+
+    Every agent numbers its own keyframes, so a bare keyframe id collides across agents. A submap belongs to one
+    agent, so (sid, kf) is unique. Keying by kf alone crashed the 626abe g4dn run (KeyError 999): one agent's submap
+    closing deleted another agent's frame. Before that, colliding ids silently overwrote training images across
+    agents. Pure Python: the values are whatever the trainer stores (GPU tensors there, anything in tests).
+    """
+
+    def __init__(self) -> None:
+        self._d: dict[tuple[int, int], object] = {}
+
+    def put(self, sid: int, kf: int, data) -> None:
+        self._d[(sid, kf)] = data
+
+    def get(self, sid: int, kf: int):
+        return self._d[(sid, kf)]
+
+    def drop_submap(self, sid: int) -> int:
+        """A closed submap's frames are released (bounded memory); returns how many."""
+        keys = [k for k in self._d if k[0] == sid]
+        for k in keys:
+            del self._d[k]
+        return len(keys)
+
+    def __len__(self) -> int:
+        return len(self._d)
+
+    def __contains__(self, key: tuple[int, int]) -> bool:
+        return key in self._d

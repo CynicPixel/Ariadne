@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Visual-inertial initialisation (INERTIAL_2.4.md §4.3, D59): from N keyframes whose poses the stereo window has
+// Visual-inertial initialisation (inertial.md §4.3, D59): from N keyframes whose poses the stereo window has
 // already solved (metric: stereo gives scale), estimate what the IMU factor needs and vision cannot give -- the gyro
 // bias, every keyframe's velocity, gravity in the VO world, and the accelerometer bias.
 //
@@ -24,7 +24,7 @@
 //
 // OBSERVABILITY. b_a trades off against gravity's tilt (a rotation of g by θ looks like a bias of 9.81 θ) until the
 // body has rotated enough; over ~2 s of mild motion the zero-mean b_a prior decides that direction. The window BA
-// keeps refining b_a afterwards (its bias prior is inflated, INERTIAL_2.4 §4.2).
+// keeps refining b_a afterwards (its bias prior is inflated, inertial.md §4.2).
 // Refusals are returned (why), never thrown: the caller retries at the next keyframe.
 //
 // The poses are BODY poses (T_W_B = T_W_C T_C_B). OpenCV-free.

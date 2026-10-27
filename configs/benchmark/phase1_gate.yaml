@@ -1,4 +1,4 @@
-# Phase 1 exit gate (design PHASE1_GATE). Read by python/analysis/phase1_gate.py.
+# Phase 1 exit gate (design evaluation-harness.md#end-to-end-gate). Read by python/analysis/phase1_gate.py.
 #
 # determinism: the gate run is compared, file by file, with committed reference outputs. Until D55 these were the
 # per-item evidence from SEPARATE runs of DIFFERENT clean commits (1.6 2ed0a49 / 1.7 c9f17c1 / 1.8 60763bf /
@@ -11,7 +11,7 @@
 # reference lacks (e.g. ledger.csv, contracts.yaml, snapshots/, which postdate the evidence) is reported as
 # "new", not compared.
 name: phase1_gate_v1
-reference_root: evaluation/runs/phase1
+reference_root: evaluation/runs/gates/phase1_thin_e2e
 reference:   # D55
   sim_collab: exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-20261017T072237Z
   sim_collab_faults: exit_gate/aadffb8df5790ca0-20261017T072201Z/sim_collab/aadffb8df5790ca0-faults-20261017T072237Z

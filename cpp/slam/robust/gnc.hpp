@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
 // GNC-TLS: graduated non-convexity with a truncated-least-squares loss (arch §14.6, D73 part 1; design
-// ROBUST_BACKEND_2.5.md §6). Runs AFTER PCM (D72) on the loops PCM accepted.
+// robust-backend.md §6). Runs AFTER PCM (D72) on the loops PCM accepted.
 //
 // Idea (Yang, Antonante, Tzoumas, Carlone, RA-L 2020). TLS cost per loop: min(r^2, c^2), with r^2 = r^T Omega r
 // (full, no 1/2) and c^2 = chi^2_6(0.99) = 16.81: an outlier costs a constant, so it stops pulling. TLS is

@@ -1,11 +1,11 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The live runtime's planner seam (design AGENTIC_7 §0b, option B). Phase 4's planner (A1: NBV 4.3, CBBA 4.4,
+// The live runtime's planner seam (design agentic.md §0b, option B). Phase 4's planner (NBV 4.3, CBBA 4.4,
 // route graph 4.5/4.6) implements MissionPlanner; until it lands, PlaceholderPlanner is the 1.8 layer plus the L1
 // standoff rule (D153b), an ablation baseline under the standing rule. Everything here is deterministic.
 //
-//   Integrate(keyframe)   one keyframe's depth into the planner's map. KeyframeInput mirrors A1's
-//                         planning::MissionInput keyframe (feat/ph4-mission, VOLUMETRIC_4.1 §4); swap = one adapter.
+//   Integrate(keyframe)   one keyframe's depth into the planner's map. KeyframeInput mirrors the
+//                         planning::MissionInput keyframe (volumetric.md §4); swap = one adapter.
 //   Plan(context)         Plane E's products for this replan: per agent the ranked task options (each with risk and
 //                         the reason for it), the per-agent classical pick and the joint (allocated) pick, and the
 //                         map summary the console and the LLM's images are drawn from.
@@ -30,7 +30,7 @@ namespace ariadne::runtime::live {
 namespace mis = planning::mission;
 using planning::Cell;
 
-/// One keyframe for the map, at the spool's scale (A1's MissionInput keyframe carries the same fields).
+/// One keyframe for the map, at the spool's scale (the planning MissionInput keyframe carries the same fields).
 struct KeyframeInput {
     int agent = 0;
     uint64_t id = 0;
@@ -53,11 +53,11 @@ struct PlanContext {   // sized by the scene's agent count (P8 D213: N agents; 2
     std::vector<double> yaw;                  // its estimated heading in W (camera optical axis, rad), NaN unknown (D117)
     std::vector<double> flown_m;   // metres flown to T: the ground-truth path length (the rig's executed motion)
     std::vector<std::pair<int, std::pair<double, double>>> refused_goals;  // the mover's refusals (agent, goal xy)
-    std::vector<mis::Directive> directives;   // active at T (recorded inputs; AGENTIC_7 §0b): region kinds reach here
+    std::vector<mis::Directive> directives;   // active at T (recorded inputs; agentic.md §0b): region kinds reach here
 };
 
-/// What the runtime reads of a task option. Field names follow A1's planning::TaskCandidate
-/// (cpp/planning/mission/task_candidate.hpp, feat/ph4-mission e2e538d), so A1's adapter is a field copy.
+/// What the runtime reads of a task option. Field names follow planning::TaskCandidate
+/// (cpp/planning/mission/task_candidate.hpp, e2e538d), so the planner's adapter is a field copy.
 struct TaskOption {
     int64_t task_id = -1;                 // stable task identity (exactly-once); placeholder: the frontier cluster id
     std::pair<double, double> goal_xy{};  // world metres
@@ -69,9 +69,9 @@ struct TaskOption {
     std::string risk_reason;
     // §21.4 energy-reserve return ordered by the planner's supervisor: never blocked by the §23 gate (it is taken,
     // logged and alerted). Maintainer, 2026-10-23: holding at the reserve strands the agent, and the return's risk is
-    // 1.0 whenever the way in was flown but not observed (A1, NBV_4.3 §13).
+    // 1.0 whenever the way in was flown but not observed (next-best-view.md §13).
     bool supervisor_return = false;
-    double utility = 0;                   // the planner's own value (A1: U = G - sum lambda C); options are sorted by it
+    double utility = 0;                   // the planner's own value (U = G - sum lambda C); options are sorted by it
     mis::Candidate c;                     // PlaceholderPlanner's own (grid cell goal for Route); not read by the runtime
 };
 
@@ -293,7 +293,7 @@ public:
                 ao.options.push_back(o);
             }
         }
-        // Allocation (placeholder for A1's CBBA, 4.4): greedy, agent 0 first, exactly-once (ALGORITHMS line 1165).
+        // Allocation (placeholder for the CBBA, 4.4): greedy, agent 0 first, exactly-once (algorithms.md line 1165).
         // Exactly-once across agents, ascending index (P8 D213: N agents; at N=2 this is the old pairwise rule:
         // agent 1 moves to its best other cluster when it collides with agent 0's pick).
         for (int k = 0; k < ctx.n(); ++k) out.joint[size_t(k)] = out.agents[size_t(k)].classical;
@@ -320,7 +320,7 @@ public:
     }
 
     static int64_t ClusterOf(const PlanOutput& p, int k, int i) { return TaskOf(p, k, i); }
-    /// The nearest option of agent k at or below the threshold whose task is not `taken`; -1 if none (A1: OtherTask).
+    /// The nearest option of agent k at or below the threshold whose task is not `taken`; -1 if none (OtherTask).
     int OtherCluster(const PlanOutput& p, int k, int64_t taken) const { return OtherTask(p, k, taken, p_.autonomous_threshold); }
 
 private:

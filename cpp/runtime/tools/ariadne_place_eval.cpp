@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// 2.1 retrieval evaluation dump (PERCEPTION_2.1.md §11.5). OFFLINE: no estimator, no runner hunk.
+// 2.1 retrieval evaluation dump (perception.md §11.5). OFFLINE: no estimator, no runner hunk.
 //
 // For one EuRoC flight: one raw cam0 frame per --every images (20 = 1.0 s), kept only where ground truth exists
 // within 10 ms. Per sample, three GLOBAL_DESCRIPTOR candidates (256-D unit vectors, cosine):
@@ -14,12 +14,12 @@
 // Writes: samples.csv, <method>.f32 (N x 256 float32, row i = sample i), annoy_<method>.csv, timing.yaml,
 // manifest.yaml.
 //
-// --retrieval-3.1 (RETRIEVAL_3.1_3.6.md §3, D92): the CLAHE ablation instead. Methods ep376 and ep376_clahe only
+// --retrieval-3.1 (retrieval.md §3, D92): the CLAHE ablation instead. Methods ep376 and ep376_clahe only
 // (no ep752, meanbit or annoy), optionally on frames darkened by the seeded operator D (--degradation YAML, --seed;
 // applied to the left frame at consumption time, frame id = the stream index; a darkened-EuRoC [PROXY]).
 //
 // --rec DIR --scene DIR --agent N (instead of --sequence): one agent of a clean sim recording. With --sim-d90
-// (RETRIEVAL_SIM_D90.md, D90) the methods are ep640 and ep1280: EigenPlaces at 640x360 and 1280x720 through the RGB
+// (retrieval.md#sim-retrieval, D90) the methods are ep640 and ep1280: EigenPlaces at 640x360 and 1280x720 through the RGB
 // path (DescribeRgb on StereoFrame::left_rgb, the sim export of models.sh eigenplaces-sim), exact only.
 // --samples-only writes samples.csv and the manifest without running any network (revisit counting).
 // ---------------------------------------------------------------------------
@@ -242,7 +242,7 @@ int main(int argc, char** argv) {
             std::ofstream mf(fs::path(a.out) / "manifest.yaml");
             std::string cmd;
             for (int i = 0; i < argc; ++i) cmd += (i ? " " : "") + std::string(argv[i]);
-            mf << "# ariadne_place_eval (PERCEPTION_2.1 §11.5). Generated.\n"
+            mf << "# ariadne_place_eval (perception.md §11.5). Generated.\n"
                << "tool: ariadne_place_eval\ncommand: \"" << cmd << "\"\n"
                << "scene: " << source.SceneName() << "\nbag_checksum: " << source.BagChecksum() << '\n'
                << "git_commit: " << (std::getenv("ARIADNE_GIT_COMMIT") ? std::getenv("ARIADNE_GIT_COMMIT") : "UNRECORDED")

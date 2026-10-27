@@ -1,17 +1,17 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Phase 4's planner behind B's seam (runtime/live/planner.hpp MissionPlanner, AGENTIC_7 §0b option B), at the
-// planning level: no runtime, ROS or AWS type, so replay and live drive the same object. B's MissionPlanner adapter
+// Phase 4's planner behind the runtime's planner seam (runtime/live/planner.hpp MissionPlanner, agentic.md §0b option B), at the
+// planning level: no runtime, ROS or AWS type, so replay and live drive the same object. The MissionPlanner adapter
 // copies KeyframeInput -> DepthFrame, TaskCandidate -> TaskOption and these maps -> ReplanMaps, field by field.
 //
 //   Integrate(agent, t, frame)  4.1: TSDF -> incremental ESDF -> frontier update; the agent's track for 4.3.
 //   Plan(t, agents, directives) 4.2 maps, 4.5 egress replan (D* Lite), 4.3 NBV options per active agent, then the
 //                               operator directives and the mover's refusals: keep_out masks the plan space (no
-//                               path or goal through it; B's review) and drops goals in it; assign/explore keep
-//                               only goals inside, when one exists (B's semantics); priority_region scales G of
+//                               path or goal through it; seam review) and drops goals in it; assign/explore keep
+//                               only goals inside, when one exists (the seam's semantics); priority_region scales G of
 //                               every task that OBSERVES the region (goal or observed centroid inside, or the
 //                               centroid within the depth gate of it: a region in unexplored space still pulls the
-//                               frontier views that look into it, B's LLM-run lesson); then the joint
+//                               frontier views that look into it, an LLM-run lesson); then the joint
 //                               exactly-once pick by 4.4's allocator (D115: CBBA with L_t = 1 by default, broker
 //                               SGA, or the greedy pick as an ablation row), event-triggered: re-run only when the
 //                               task set or the topology changed.
@@ -57,22 +57,22 @@ struct Phase4Params {
     EgressWeights egress;
     double support_band_lo = -0.31, support_band_hi = 2.31;   // D113's pre-registered band (= the full envelope)
     NbvParams nbv;
-    double refused_radius_m = 0.5;   // B's PlaceholderParams default: a refused goal excludes options this close
-    double max_command_m = 3.0;      // B's PlaceholderParams default
+    double refused_radius_m = 0.5;   // the PlaceholderParams default: a refused goal excludes options this close
+    double max_command_m = 3.0;      // the PlaceholderParams default
     bool risk_calibrated = false;    // D112's bar
     enum class Allocator { kCbba, kSga, kGreedy } allocator = Allocator::kCbba;   // D115; greedy = ablation row
     int max_bundle = 1;              // D115 correction: L_t = 1 by default (CBBA = SGA exactly)
 };
 
-/// The region kinds of B's Directive (planning/mission/directives.hpp, feat/ph7-agentic), mirrored field by field.
+/// The region kinds of the Directive (planning/mission/directives.hpp), mirrored field by field.
 /// goto / hold / release / cancel are runtime-level and never reach the planner.
 struct RegionDirective {
     std::string id, kind;   // priority_region | keep_out | assign | explore
     int agent = -1;         // -1 = every agent
     std::vector<std::pair<double, double>> polygon;
     double weight = 1.0;    // priority_region
-    bool Covers(double px, double py) const;     // even-odd, as B's
-    double Distance(double px, double py) const;  // 0 inside, else to the nearest edge (as B's)
+    bool Covers(double px, double py) const;     // even-odd, as the Directive's
+    double Distance(double px, double py) const;  // 0 inside, else to the nearest edge (as the Directive's)
 };
 
 struct Phase4AgentInput {

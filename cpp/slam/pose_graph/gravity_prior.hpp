@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// GRAVITY_PRIOR edge (arch §10.4, §12.1; design INERTIAL_2.4.md §4.10): a unary pose-graph factor on a keyframe's
+// GRAVITY_PRIOR edge (arch §10.4, §12.1; design inertial.md §4.10): a unary pose-graph factor on a keyframe's
 // roll and pitch. Produced by the inertial layer (2.4); consumed by the pose-graph solver (2.5), which this header
 // does not touch.
 //

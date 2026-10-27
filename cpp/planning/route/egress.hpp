@@ -1,10 +1,10 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.5 egress (arch §22; design EGRESS_4.5, D113): the responder's route from the target to any exit over
+// 4.5 egress (arch §22; design egress.md, D113): the responder's route from the target to any exit over
 // D111's egress lattice at rho_responder (invariant 4), replanned by D* Lite as the map grows.
 //
 //   support(col)  fraction of the standing-body envelope (voxels within rho of the capsule axis) that is
-//                 observed (TSDF weight > w_min), optionally restricted to a z band (EGRESS_4.5 §7: the
+//                 observed (TSDF weight > w_min), optionally restricted to a z band (egress.md §7: the
 //                 pre-registered fallback if support is flat along the route);
 //   penalty(col)  w_u (1 - support) + w_r risk + w_c max(0, rho_safe - clearance) / rho_safe   (§22.1);
 //                 w_r = 0 until D112's calibration passes its bar (the risk term is a [PROXY]);
@@ -30,7 +30,7 @@ cv::Mat BodySupport(const TsdfMap& map, const GridFrame& g, const BodyCapsule& b
                     double band_hi = 1e9);
 
 struct EgressWeights {
-    double w_u = 1, w_r = 0, w_c = 1;   // fixed a priori (EGRESS_4.5 §2); w_r = 0 unless D112 passes
+    double w_u = 1, w_r = 0, w_c = 1;   // fixed a priori (egress.md §2); w_r = 0 unless D112 passes
     double rho_safe = 0.5;              // m: d_max = rho_r + 2 voxels
 };
 

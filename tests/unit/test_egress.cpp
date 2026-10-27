@@ -1,4 +1,4 @@
-// 4.5 egress (design EGRESS_4.5 §6, D113): D* Lite equals a fresh multi-source Dijkstra after every round of random
+// 4.5 egress (design egress.md §6, D113): D* Lite equals a fresh multi-source Dijkstra after every round of random
 // cell flips driven through the same diff -> 3x3 UpdateVertex path the replan loop uses, and expands fewer vertices
 // than the fresh searches; the cheapest (not the nearest) exit wins; the corner rule; no route cell is ever
 // non-traversable (invariant 4); an obstacle closing the route reroutes it; body support counted by hand.

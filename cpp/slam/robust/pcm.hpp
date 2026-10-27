@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Pairwise Consistency Maximization (arch §14.5, D72; design ROBUST_BACKEND_2.5.md §5). Runs AFTER the degeneracy
+// Pairwise Consistency Maximization (arch §14.5, D72; design robust-backend.md §5). Runs AFTER the degeneracy
 // gate (D71) and BEFORE GNC (D73); the order is inviolable (arch §14.5).
 //
 // Idea (Mangelson, Dominic, Eustice, Vasudevan, ICRA 2018). Two loop closures a->b (Z1) and c->d (Z2) close a cycle

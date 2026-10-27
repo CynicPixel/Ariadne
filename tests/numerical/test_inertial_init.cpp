@@ -1,4 +1,4 @@
-// Visual-inertial initialisation (slam/inertial/initialization.hpp, INERTIAL_2.4 §4.3): from exact body poses and an
+// Visual-inertial initialisation (slam/inertial/initialization.hpp, inertial.md §4.3): from exact body poses and an
 // ideal biased IMU it recovers b_g, b_a, gravity and every velocity; a scale error in the poses (what a wrong frame or
 // a monocular map gives) is refused by the |g| check instead of producing a wrong gravity.
 #include "slam/inertial/initialization.hpp"

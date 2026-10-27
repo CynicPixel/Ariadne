@@ -87,6 +87,7 @@ if(OpenCV_FOUND)
     unit/test_multi_agent.cpp
     unit/test_entry_gate.cpp
     unit/test_keyframe_spool.cpp
+    unit/test_demo_camera.cpp
     unit/test_live_link.cpp
     unit/test_live_planner.cpp
     unit/test_lockstep_gate.cpp
@@ -125,7 +126,8 @@ if(OpenCV_FOUND)
     unit/test_multiagent.cpp
     unit/test_allocation.cpp
     unit/test_visibility_graph.cpp
-    unit/test_collab_link.cpp)
+    unit/test_collab_link.cpp
+    unit/test_collab_snapshot.cpp)
   target_link_libraries(test_opencv PRIVATE ariadne::runtime_opencv ariadne::perception_opencv
     ariadne::slam_opencv ariadne::planning opencv_features opencv_imgcodecs opencv_ptcloud opencv_geometry GTest::gtest_main)
   target_compile_definitions(test_opencv PRIVATE ARIADNE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

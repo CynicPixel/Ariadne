@@ -1,4 +1,4 @@
-// GNC-TLS and per-component anchoring (design ROBUST_BACKEND_2.5.md §6, D73 part 1).
+// GNC-TLS and per-component anchoring (design robust-backend.md §6, D73 part 1).
 // Definitions, fixed before the first measured run:
 //   - inlier = final weight > 0.5; precision and recall are over LOOP edges only;
 //   - every run starts from the odometry-composed poses (never a chordal init that includes the outliers);

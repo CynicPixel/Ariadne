@@ -1,4 +1,4 @@
-"""Chain checks for the console replay (design CONSOLE_1.10). Exit 1 on any failure.
+"""Chain checks for the console replay (design live-runtime.md#operator-console). Exit 1 on any failure.
 
   python -m operator_console.check COLLAB_RUN MISSION_RUN SCENE
 

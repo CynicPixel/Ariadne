@@ -1,4 +1,4 @@
-// 4.3's time-axis fixes (NBV_4.3 §15.4):
+// 4.3's time-axis fixes (next-best-view.md §15.4):
 //   - D125: an at-cell view (its goal in the agent's own cell) routes as ONE "turn here" waypoint (NaN x, y) with the
 //     view's yaw, not as an empty path (which the live loop sends as hold: the ci_tiny seed-2 livelock, t = 20-45 s);
 //     PlanCommand turns it into exactly one turn from any nearby pose, and executing that turn collects the view's
@@ -96,7 +96,7 @@ TEST(NbvTime, TurnHereIsOnePureTurnFromAnyNearbyPose) {
     }
     const Vec5 at{3.0, 2.0, 1.0, 0.3, 0.0};
     EXPECT_TRUE(PlanCommand(at, 7.0, {{nan, nan, 1.0, false, 0.0}}, L, wide, "x").empty()) << "no yaw: nothing to do";
-    // Every finite waypoint is as before (M's check): 1e-12 m away is the existing coincident rule (the final turn
+    // Every finite waypoint is as before (checked): 1e-12 m away is the existing coincident rule (the final turn
     // only), 1 cm away is a face-turn, a move and the final turn.
     const auto same = PlanCommand(at, 7.0, {{3.0 + 1e-12, 2.0, 1.0, true, M_PI}}, L, wide, "x");
     ASSERT_EQ(same.size(), 1u);

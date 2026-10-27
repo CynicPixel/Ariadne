@@ -1,4 +1,4 @@
-// PCM (design ROBUST_BACKEND_2.5.md §5, D72):
+// PCM (design robust-backend.md §5, D72):
 //   - the odometry leg: pose and LEFT covariance from the chain (forward and backward storage), Monte Carlo NEES;
 //   - the pair statistic: Monte Carlo mean ~ 6 (chi^2_6) for disjoint, nested, crossing and backward legs on ONE
 //     chain (shared odometry edges counted once) and for inter-agent pairs, including a loop stored reversed;

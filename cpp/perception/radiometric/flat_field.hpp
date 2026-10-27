@@ -12,7 +12,7 @@
 // D's analytic VignetteFactor x PrnuGain is the ground truth it is tested
 // against. Sensor only: the lamp's beam profile is Phase 5 (falloff, §6.3).
 //
-// Where it sits relative to the noise (recorded in RADIOMETRIC_2.2.md §3): D
+// Where it sits relative to the noise (recorded in radiometric.md §3): D
 // applies K AFTER shot and read noise, so a raw pixel has var = K a m' + K^2 b;
 // dividing by K first restores one homogeneous (a, b) for the whole frame,
 // which is what the GAT needs. This is arch §6.2's order (flat-field, then VST).

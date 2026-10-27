@@ -13,24 +13,24 @@
 #   infra/scripts/core.sh euroc [SEQ]  run the 1.4 front-end over a fetched
 #                                      EuRoC sequence (default MH_01_easy) and
 #                                      write manifest + results under
-#                                      evaluation/runs/phase1/euroc_frontend/
+#                                      evaluation/runs/gates/phase1_thin_e2e/euroc_frontend/
 #                                      (fetch first: infra/scripts/fetch_euroc.py)
 #   infra/scripts/core.sh sim-calib REC SCENE  the 1.1 acceptance test (design §6)
 #                                      over a sim recording; results + manifest into
-#                                      evaluation/runs/phase1/sim_calib/; exit 1 on FAIL
+#                                      evaluation/runs/gates/phase1_thin_e2e/sim_calib/; exit 1 on FAIL
 #   infra/scripts/core.sh sim-vo REC SCENE [AGENT]  the same 1.4+1.5 pipeline over one
 #                                      agent of a sim recording (configs sim_v1), into
-#                                      evaluation/runs/phase1/sim_vo/
+#                                      evaluation/runs/gates/phase1_thin_e2e/sim_vo/
 #   infra/scripts/core.sh sim-collab REC SCENE [FAULTS] [SPOOL]  1.6 placeholder collaboration
 #                                      (both agents, broker = agent 0, collab_v1) into
-#                                      evaluation/runs/phase1/sim_collab/; FAULTS=1
+#                                      evaluation/runs/gates/phase1_thin_e2e/sim_collab/; FAULTS=1
 #                                      duplicates/reorders messages (results must match);
 #                                      SPOOL=1 also writes the 1.7 recon spool to build/spool/
 #   infra/scripts/core.sh mission SPOOL SCENE  1.8 mission layer over a spool: merged, agent 0 alone and
-#                                      agent 1 alone (the comparison), into evaluation/runs/phase1/mission/
+#                                      agent 1 alone (the comparison), into evaluation/runs/gates/phase1_thin_e2e/mission/
 #   infra/scripts/core.sh euroc-vo [SEQ]  run the 1.5 stereo VO over a fetched
 #                                      sequence, scored against ground truth,
-#                                      into evaluation/runs/phase1/euroc_vo/
+#                                      into evaluation/runs/gates/phase1_thin_e2e/euroc_vo/
 #
 # Docker is the only host dependency.
 # ---------------------------------------------------------------------------
@@ -42,12 +42,12 @@ DEV_IMAGE="${ARIADNE_CORE_DEV_IMAGE:-ariadne/core-dev:dev}"
 JOBS="${ARIADNE_BUILD_JOBS:-4}"
 
 # Untracked files count: they are copied into the build context too. Paths
-# that .dockerignore keeps out of the context (docs/, IDEA.md, graphify-out/,
+# that .dockerignore keeps out of the context (docs/, graphify-out/,
 # evaluation/runs/) cannot change the image, so they are excluded here; keep the
 # two lists in step. evaluation/runs/ holds run OUTPUTS: an evidence run that
 # copies its manifests there must not mark the next run's tree dirty.
 git_dirty() {
-  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs')" ]; then
+  if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs')" ]; then
     echo true
   else
     echo false
@@ -122,7 +122,7 @@ cmd_euroc() {
        /work/build/docker/cpp/runtime/ariadne_euroc_frontend \
        --sequence /work/.cache/datasets/euroc/$seq \
        --config /work/configs/perception/euroc.yaml \
-       --out /work/evaluation/runs/phase1/euroc_frontend --stereo-every 10"
+       --out /work/evaluation/runs/gates/phase1_thin_e2e/euroc_frontend --stereo-every 10"
 }
 
 cmd_euroc_vo() {
@@ -137,7 +137,7 @@ cmd_euroc_vo() {
        --sequence /work/.cache/datasets/euroc/$seq \
        --perception-config /work/configs/perception/euroc.yaml \
        --slam-config /work/configs/slam/euroc.yaml \
-       --out /work/evaluation/runs/phase1/euroc_vo"
+       --out /work/evaluation/runs/gates/phase1_thin_e2e/euroc_vo"
 }
 
 cmd_sim_calib() {
@@ -147,7 +147,7 @@ cmd_sim_calib() {
   cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_sim_calib --parallel $JOBS >/dev/null \
     && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty ARIADNE_SOURCE_DIR=/work \
        /work/build/docker/cpp/runtime/ariadne_sim_calib --rec /work/$rec --scene /work/$scene \
-       --out /work/evaluation/runs/phase1/sim_calib"
+       --out /work/evaluation/runs/gates/phase1_thin_e2e/sim_calib"
 }
 
 cmd_sim_vo() {
@@ -158,7 +158,7 @@ cmd_sim_vo() {
     && ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty \
        /work/build/docker/cpp/runtime/ariadne_sim_vo --rec /work/$rec --scene /work/$scene --agent $agent \
        --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v1.yaml \
-       --out /work/evaluation/runs/phase1/sim_vo"
+       --out /work/evaluation/runs/gates/phase1_thin_e2e/sim_vo"
 }
 
 cmd_sim_collab() {
@@ -171,7 +171,7 @@ cmd_sim_collab() {
        /work/build/docker/cpp/runtime/ariadne_sim_collab --rec /work/$rec --scene /work/$scene \
        --perception-config /work/configs/perception/sim_v1.yaml --slam-config /work/configs/slam/sim_v1.yaml \
        --collab-config /work/configs/collab/collab_v1.yaml --inject-faults $faults $spool_args \
-       --out /work/evaluation/runs/phase1/sim_collab"
+       --out /work/evaluation/runs/gates/phase1_thin_e2e/sim_collab"
 }
 
 cmd_mission() {
@@ -183,7 +183,7 @@ cmd_mission() {
   cmd_dev bash -c "cmake --build /work/build/docker --target ariadne_mission --parallel $JOBS >/dev/null \
     && for ag in merged 0 1; do ARIADNE_GIT_COMMIT=$commit ARIADNE_GIT_DIRTY=$dirty ARIADNE_SPOOL_SHA256=$sha \
        /work/build/docker/cpp/runtime/ariadne_mission --spool /work/$spool --scene /work/$scene \
-       --config /work/configs/mission/mission_v1.yaml --out /work/evaluation/runs/phase1/mission --agents \$ag \
+       --config /work/configs/mission/mission_v1.yaml --out /work/evaluation/runs/gates/phase1_thin_e2e/mission --agents \$ag \
        || exit 1; done"
 }
 

@@ -1,0 +1,6 @@
+# Host-side demo controller; runtime algorithms remain in the pinned containers.
+fastapi==0.143.2
+uvicorn==0.54.0
+websockets==17.2
+numpy==2.5.4
+pyyaml==6.0.3

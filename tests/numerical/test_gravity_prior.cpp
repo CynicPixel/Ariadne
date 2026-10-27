@@ -1,4 +1,4 @@
-// GRAVITY_PRIOR edge (slam/pose_graph/gravity_prior.hpp, INERTIAL_2.4 §4.10): the Jacobian for the left perturbation
+// GRAVITY_PRIOR edge (slam/pose_graph/gravity_prior.hpp, inertial.md §4.10): the Jacobian for the left perturbation
 // of T_W_C against central differences (large rotations; the translation block exactly zero), zero residual when the
 // pose agrees, blindness to yaw about gravity, and the cost against GTSAM's AttitudeFactor form with isotropic
 // information (1 - (R g_C . ĝ)^2).

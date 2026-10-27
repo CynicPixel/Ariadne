@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_collab_passa: pass A of the 3.2 sim integration (design SIMCOLLAB_3.2 §1-§2, D171). One agent's shipped
+// ariadne_collab_passa: pass A of the 3.2 sim integration (design collaboration.md#simulated-collaboration §1-§2, D171). One agent's shipped
 // front-end (ariadne_sim_vo's pipeline, unchanged: the hooks never change the run) over a sim recording, writing the
 // keyframe store pass B replays (runtime/agent/collab_store.hpp).
 //
@@ -15,7 +15,7 @@
 //
 // The per-keyframe work is runtime/agent/collab_frontend.hpp (D174: the live estimator worker runs the same class).
 // --check-lazy 1 runs a lazy twin of it on the same keyframes and checks, per released keyframe, that its on-request
-// features are bitwise the eager ones (LIVE_COLLAB §2: lazy == eager); a mismatch exits 3. --check-live 1 runs the live
+// features are bitwise the eager ones (live-collaboration.md §2: lazy == eager); a mismatch exits 3. --check-live 1 runs the live
 // split in-process (the estimator worker's release tracker -> the collab worker's core, through the #ckin/#crel/#ckf/
 // #freq/#fresp encoders) and checks every #ckf record and #fresp reply bitwise against the store; a mismatch exits 3.
 //

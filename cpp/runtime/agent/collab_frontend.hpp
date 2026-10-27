@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// One agent's side of the 3.x collaboration, fed by its VO front end (design LIVE_COLLAB §1-§2, D174). Extracted from
+// One agent's side of the 3.x collaboration, fed by its VO front end (design live-collaboration.md §1-§2, D174). Extracted from
 // ariadne_collab_passa so pass A (replay) and the live processes run the same code. Three pieces:
 //
 //   CollabReleaseTracker   a LoopBackend mirror with no loop candidates, synced at every keyframe: a keyframe is

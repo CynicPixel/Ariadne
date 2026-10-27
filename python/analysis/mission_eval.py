@@ -1,4 +1,4 @@
-"""Evaluate a 1.8 mission run against the scene ground truth (design MISSION_1.8). Evaluation
+"""Evaluate a 1.8 mission run against the scene ground truth (design mission.md). Evaluation
 only: GT is read here and nowhere in the planner.
 
   python -m analysis.mission_eval --run MISSION_RUN --scene SCENE --collab-run SIM_COLLAB_RUN \
@@ -174,7 +174,7 @@ def main(argv=None) -> int:
     import os
     out["provenance"] = {"git_commit": os.environ.get("ARIADNE_GIT_COMMIT", "unknown"),
                          "git_dirty": os.environ.get("ARIADNE_GIT_DIRTY", "unknown"), "command": " ".join(sys.argv)}
-    (run_dir / "eval.yaml").write_text("# mission_eval (design MISSION_1.8). Generated.\n" +
+    (run_dir / "eval.yaml").write_text("# mission_eval (design mission.md). Generated.\n" +
                                        yaml.safe_dump(out, sort_keys=False))
     print(yaml.safe_dump(out, sort_keys=False))
     return 0

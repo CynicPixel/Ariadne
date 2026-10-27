@@ -1,4 +1,4 @@
-"""The Phase 1 exit gate verdict (plan "Phase 1 testing / exit gate", design PHASE1_GATE).
+"""The Phase 1 exit gate verdict (plan "Phase 1 testing / exit gate", design evaluation-harness.md#end-to-end-gate).
 
   python -m analysis.phase1_gate --gate G --big BIG --config configs/benchmark/phase1_gate.yaml
 
@@ -245,7 +245,7 @@ def main(argv=None) -> int:
     doc = {"gate": cfg["name"], "run": G.name, "mode": mode, "verdict": "PASS" if g.ok else "FAIL",
            "checks": g.rows, "determinism": det,
            "chain": {k: str(v) for k, v in runs.items()}}
-    (G / "gate.yaml").write_text("# Phase 1 exit gate (design PHASE1_GATE). Generated; do not hand-edit.\n"
+    (G / "gate.yaml").write_text("# Phase 1 exit gate (design evaluation-harness.md#end-to-end-gate). Generated; do not hand-edit.\n"
                                  + yaml.dump(doc, Dumper=NoAliases, sort_keys=False, width=120, allow_unicode=True))
     for r in g.rows:
         print(f"{'PASS' if r['ok'] else 'FAIL'}  [{r['group']}] {r['check']}")

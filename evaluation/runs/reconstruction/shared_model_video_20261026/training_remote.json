@@ -1,0 +1,78 @@
+{
+  "gsplat": "1.5.3",
+  "torch": "2.11.0+cu128",
+  "cuda": "12.8",
+  "gpu": "Tesla T4",
+  "install": "preinstalled 1.5.3 (compiled csrc: /opt/venv/lib/python3.12/site-packages/gsplat/csrc.so)",
+  "dataset": null,
+  "spools": [
+    "agent0",
+    "agent1",
+    "agent2"
+  ],
+  "budgets": {
+    "smoke": {
+      "iters_per_kf": 15,
+      "max_keyframes": 120,
+      "rc": 0,
+      "wall_s": 30.4,
+      "log_tail": "service: 120 keyframes -> /out/splat_smoke (5 submaps)\n",
+      "keyframes": 120,
+      "submaps": 5,
+      "gaussians_last_per_submap_max": 65914,
+      "ms_per_kf_median": 171.22018399999206,
+      "ms_per_kf_p95": 219.59659200001624,
+      "ms_iter_median": 7.8189930000007735,
+      "psnr_train_init_median": 30.37,
+      "psnr_train_after_median": 30.73,
+      "frozen_bitwise_all": true,
+      "per_agent_keyframes": {
+        "0": 61,
+        "1": 30,
+        "2": 29
+      }
+    },
+    "live": {
+      "iters_per_kf": 15,
+      "max_keyframes": 0,
+      "rc": 0,
+      "wall_s": 349.7,
+      "log_tail": "service: 1476 keyframes -> /out/splat_live (51 submaps)\n",
+      "keyframes": 1476,
+      "submaps": 51,
+      "gaussians_last_per_submap_max": 179446,
+      "ms_per_kf_median": 203.4065919999648,
+      "ms_per_kf_p95": 275.8699580000439,
+      "ms_iter_median": 8.45040600000857,
+      "psnr_train_init_median": 23.14,
+      "psnr_train_after_median": 25.71,
+      "frozen_bitwise_all": true,
+      "per_agent_keyframes": {
+        "0": 568,
+        "1": 482,
+        "2": 426
+      }
+    },
+    "batch": {
+      "iters_per_kf": 100,
+      "max_keyframes": 0,
+      "rc": 0,
+      "wall_s": 1484.1,
+      "log_tail": "service: 1476 keyframes -> /out/splat_batch (51 submaps)\n",
+      "keyframes": 1476,
+      "submaps": 51,
+      "gaussians_last_per_submap_max": 137751,
+      "ms_per_kf_median": 978.1222359999902,
+      "ms_per_kf_p95": 1102.808492999884,
+      "ms_iter_median": 8.561447500028407,
+      "psnr_train_init_median": 23.34,
+      "psnr_train_after_median": 27.4,
+      "frozen_bitwise_all": true,
+      "per_agent_keyframes": {
+        "0": 568,
+        "1": 482,
+        "2": 426
+      }
+    }
+  }
+}

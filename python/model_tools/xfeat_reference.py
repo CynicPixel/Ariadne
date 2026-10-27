@@ -1,4 +1,4 @@
-"""XFeat reference exporter (D15, design PERCEPTION_2.1). OFFLINE tool, run in the pinned ariadne-xfeat-ref image
+"""XFeat reference exporter (D15, design perception.md). OFFLINE tool, run in the pinned ariadne-xfeat-ref image
 with --network none and the upstream checkout mounted read-only:
 
   python -I xfeat_reference.py --upstream /xf --out /out [--image NAME=PATH ...]

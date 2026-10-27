@@ -1,7 +1,7 @@
 #!/bin/bash
 # ---------------------------------------------------------------------------
-# Host-side CPU sampler for the pipeline profile (A2, 2026-10-24; measurement only). B's live.sh starts it beside a
-# run when ARIADNE_SAMPLER=<this script> (the D179+ profiling flag, B's code) and stops it with SIGTERM when the run's
+# Host-side CPU sampler for the pipeline profile (2026-10-24; measurement only). live.sh starts it beside a
+# run when ARIADNE_SAMPLER=<this script> (the D179+ profiling flag) and stops it with SIGTERM when the run's
 # containers stop; it never touches the run itself. Runs as root on the instance:
 #
 #   infra/eval/perf_sampler.sh OUTDIR           (foreground until SIGTERM/SIGINT)

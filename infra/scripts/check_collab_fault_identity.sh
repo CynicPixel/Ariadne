@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The 1.6 protocol check (design COLLAB_1.6, D43): a sim-collab run with
+# The 1.6 protocol check (design collaboration.md#first-collaboration-loop, D43): a sim-collab run with
 # --inject-faults 1 must produce the same results as one without. Compares
 #   - candidates.csv and negative_probe.csv byte for byte,
 #   - results.yaml with only the inject_faults / protocol lines removed,

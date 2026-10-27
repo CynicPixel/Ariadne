@@ -4,7 +4,7 @@
 //   ariadne_comms_probe --rec DIR --scene DIR --comms YAML --out DIR [--rate-hz R]
 //
 // For every directed agent pair, at R Hz over the mission: distance, walls crossed, mean received power, up,
-// loss_p (for the scenario's datagram size) and loss_p for a 40-byte heartbeat (the seam limit, COMMS_3.3 L8).
+// loss_p (for the scenario's datagram size) and loss_p for a 40-byte heartbeat (the seam limit, comms.md L8).
 // Writes links.csv and summary.yaml: per pair the fraction of time up and with loss < 1 %, the wall histogram,
 // and the L8 table (goodput vs datagram size at the pair's median received power).
 // Evidence that link state follows range, walls and the scripted faults; it moves no protocol traffic (that needs

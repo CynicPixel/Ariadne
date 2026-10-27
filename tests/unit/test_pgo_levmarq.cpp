@@ -1,4 +1,4 @@
-// The pose graph on OpenCV 5's LevMarqBase (D51, POSE_GRAPH_2.md §3, §5).
+// The pose graph on OpenCV 5's LevMarqBase (D51, pose-graph.md §3, §5).
 //   1. The DRIVER CONTRACT, pinned with a linear problem: if our reading of levmarq.cpp were wrong (the sign of jtb,
 //      the energy scale, solveDecomposed's -right), the first step would go uphill or be mis-scaled.
 //   2. A noise-free SE(3) graph from a perturbed start returns the truth.

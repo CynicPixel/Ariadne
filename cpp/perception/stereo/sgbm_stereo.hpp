@@ -20,7 +20,7 @@
 // Z and sigma_Z are computed in float32 and stored as fp16 (relative precision
 // ~5e-4, far below sigma_Z itself).
 //
-// `confidence` (2.1, PERCEPTION_2.1.md §10), with stereo.confidence:
+// `confidence` (2.1, perception.md §10), with stereo.confidence:
 //   none  [PLACEHOLDER] all zero, `confidence_is_placeholder` says so; zero
 //         rather than 255 so a consumer that reads it by mistake discards the
 //         depth instead of trusting it.

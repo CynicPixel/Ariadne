@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Place index over unit global descriptors (PERCEPTION_2.1.md §11.2-11.3):
+// Place index over unit global descriptors (perception.md §11.2-11.3):
 // top-k by cosine, with an admission filter (a loop-closure query admits only
 // keyframes older than a time window).
 //

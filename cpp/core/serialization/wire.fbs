@@ -54,12 +54,12 @@ struct Pose { q:Quaternion; t:Translation; }
 /// cannot be composed with anything.
 struct FrameTag { agent:uint; epoch:uint; }
 
-/// COLLAB_3.2 §4: a broker solve's identity. `counter` = 1 + max over the
+/// collaboration.md §4: a broker solve's identity. `counter` = 1 + max over the
 /// members' last accepted counters, so a merge is newer than both sides; the
 /// full triple (not the counter alone) identifies an estimate.
 struct Epoch { counter:ulong; members_hash:ulong; broker:uint; }
 
-/// COLLAB_3.2 §3.2: transport acks name transport message ids. `done` lists
+/// collaboration.md §3.2: transport acks name transport message ids. `done` lists
 /// messages completed (or re-received whole) since the receiver's last ack;
 /// `partial` carries a fragment bitmap (bit i = fragment i received) for a
 /// message still being reassembled, so only missing fragments are resent.
@@ -114,7 +114,7 @@ table Heartbeat {
   battery:float;
   link_state:float;
   keyframe_watermark:ulong;
-  // Appended (3.2, COLLAB_3.2 §4).
+  // Appended (3.2, collaboration.md §4).
   neighbors:[uint];
   anchor:uint;
   broker:uint;
@@ -176,14 +176,14 @@ table FeatureResponse {
   header_bytes:ushort;
 }
 
-/// D175 (MULTIAGENT_PIPELINE): coordination through the radio. Mirrors A1's planning::multi structs field for field.
+/// D175 (live-runtime.md#multi-agent-pipeline): coordination through the radio. Mirrors the planning::multi structs field for field.
 /// One 32 x 32 block of the briefing grid (0.05 m): 1024 cell codes (0 unknown, 1 occupied, 2 free not
 /// rho_responder-passable, 3 free and passable), packed 4 per byte (cell i in bits 2*(i%4)..+1 of byte i/4): 256 B.
 table SlabBlock { bx:int; by:int; cells:[ubyte]; }
 /// SUBMAP_PATCH (8): the sender's OWN observations only, in its frame W_sender (`frame`), the blocks changed since the
 /// version the receiver acknowledged.
 table SubmapPatch { sender:int; epoch:uint; version:ulong; t_ns:long; blocks:[SlabBlock]; frame:FrameTag; }
-struct BlockGain { bx:short; by:short; w:ubyte; }   // w: the view's full-IG unknown voxels in the block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; A1 20de9e8)
+struct BlockGain { bx:short; by:short; w:ubyte; }   // w: the view's full-IG unknown voxels in the block not known to peers, in units of kFootprintUnit = 16 voxels (rounded up, cap 255; 20de9e8)
 /// One of the sender's top-M options (everything the broker's auction needs). Goals in G (`TaskBid.frame`).
 table BidOption {
   task_key:long; goal_x:double; goal_y:double;

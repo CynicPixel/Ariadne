@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 4.6 FAR-style visibility graph (arch §21.6; FAR, Yang et al. IROS 2022; design EXPLORATION_4.6, D116) on a 2D
+// 4.6 FAR-style visibility graph (arch §21.6; FAR, Yang et al. IROS 2022; design exploration.md, D116) on a 2D
 // traversable mask (CV_8U, nonzero = free; row 0 = south, as every planning layer).
 //
 //   polygons  cv::findContours(blocked, RETR_CCOMP) + cv::approxPolyDP(eps); holes (free pockets inside blocked

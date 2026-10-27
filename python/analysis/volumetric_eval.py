@@ -1,4 +1,4 @@
-"""4.1 volumetric map vs GT (VOLUMETRIC_4.1 §6, D110): the three map metrics of mission_eval.py, on a slab.png.
+"""4.1 volumetric map vs GT (volumetric.md §6, D110): the three map metrics of mission_eval.py, on a slab.png.
 
   python3 -I volumetric_eval.py --scene SCENE_DIR --slab NEW/slab.png --baseline OLD/slab.png --out DIR
 
@@ -142,7 +142,7 @@ def main() -> int:
         print(f"{k:28s} trav_responder: claimed {m['claimed']}  precision {m['precision']:.4f}  recall {m['recall']:.3f}  "
               f"false claims {m['false_claims']}  start->target {m['start_to_target']}")
     a.out.mkdir(parents=True, exist_ok=True)
-    y = ["# volumetric_eval (VOLUMETRIC_4.1 §6). Generated.", f"slab: {a.slab}", f"baseline: {a.baseline}", "rows:"]
+    y = ["# volumetric_eval (volumetric.md §6). Generated.", f"slab: {a.slab}", f"baseline: {a.baseline}", "rows:"]
     for k, m in rows.items():
         print(f"{k:16s} coverage {m['coverage']:.3f}  free precision {m['free_precision']:.3f}  occupied precision "
               f"{m['occupied_precision']:.3f}  false-occupied {m['false_occupied_cells']} by distance {m['false_occupied_distance_cells']}")

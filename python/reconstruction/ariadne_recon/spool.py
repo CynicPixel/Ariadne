@@ -1,4 +1,4 @@
-"""Read and validate the reconstruction spool (design RECON_1.7, arch §18.2).
+"""Read and validate the reconstruction spool (design reconstruction.md#first-reconstruction-loop, arch §18.2).
 
 The spool is written by C++ (`cpp/reconstruction/spool/keyframe_spool.hpp`). Every
 §18.2 field must be present; a missing or malformed field is an error, never a
@@ -8,7 +8,7 @@ Schema 2 (6.1, D195) adds the §19.1 albedo proxy per keyframe (`rgb_kind: albed
 photometric state per bundle (exposure x gain, lamp power, controller decision), and the run's lamp (its calibration
 copied into the spool, the render intensity, R_rect_raw). Schema 1 spools load unchanged.
 
-Schema 3 (agreed with A1 and M, 2026-10-23) = schema 2's fields plus a `merges:` list REPLACING the single `merge:`
+Schema 3 (agreed 2026-10-23) = schema 2's fields plus a `merges:` list REPLACING the single `merge:`
 block, for N agents: {agent: k, ok, T_O0_O: 12 row-major floats (agent k's odometry frame in agent 0's), edge}, one
 entry per non-anchor agent; agent 0 anchors. Schema < 3 reads `merge:` (agent 1 into agent 0); schema 3 requires
 `merges:` and refuses a `merge:` block. N = 1 + the largest bundle agent id.

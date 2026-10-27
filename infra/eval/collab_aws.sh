@@ -1,5 +1,5 @@
 #!/bin/bash
-# The 3.2/3.4 gate sweep (design SIMCOLLAB_3.2 §4-§6, D171) on one AWS instance, as root, launched by
+# The 3.2/3.4 gate sweep (design collaboration.md#simulated-collaboration §4-§6, D171) on one AWS instance, as root, launched by
 # infra/eval/collab_aws_launch.sh through spinup.sh. Inputs staged under $STAGE as for the pre-merge
 # (premerge_aws.sh): repo.bundle, images.txt (the dev image), inputs.tar (the sim exports), and the recordings as
 # persistent datasets under $DATA0 / $DATA1 with their SHA256SUMS in inputs.tar.
@@ -12,7 +12,7 @@
 #      scene (D171 §4-§5)
 #   C  the fault campaign on the spectral arm at the 25 % level: ideal, collapsed_partition_v1, datagram faults; one
 #      seed (C_SEEDS) per variant and scene
-# Trimmed to the Phase 3 gate's rows (maintainer, 2026-10-23: no runs beyond what the gate needs): two budget levels
+# Trimmed to the Phase 3 gate's rows (2026-10-23: no runs beyond what the gate needs): two budget levels
 # instead of D171's four, the campaign on one seed. STORES_FROM=<S3 prefix of an earlier run's results> fetches its
 # pass-A stores (checked against stores.SHA256SUMS) instead of rerunning stage A.
 # Any failure still collects what exists (the B1 runs, the pass-A stores) before the instance goes away.

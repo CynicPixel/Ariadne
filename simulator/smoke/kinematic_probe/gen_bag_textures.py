@@ -3,7 +3,7 @@
 
 Seven-octave value noise (amplitude 0.6^octave), 1024x1024, tinted grey. This is
 the texture whose soft, cloud-like render motivated the corner-bearing layers in
-docs/design/SIM_1.1-1.3_WORLDGEN.md §3. Throwaway; superseded by worldgen.
+docs/design/simulation.md §3. Throwaway; superseded by worldgen.
 """
 import struct
 import zlib

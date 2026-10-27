@@ -1,11 +1,11 @@
-# D174 live collaboration (LIVE_COLLAB; D221 wiring): collab_v2's values over the live runtime's radio. The
+# D174 live collaboration (live-collaboration.md; D221 wiring): collab_v2's values over the live runtime's radio. The
 # runtime asserts comms_scenario == multiagent.scenario.
-# 3.2 sim integration, pass B (ariadne_collab_sim; design SIMCOLLAB_3.2, D171). The sweep (infra/eval/collab_aws.sh)
+# 3.2 sim integration, pass B (ariadne_collab_sim; design collaboration.md#simulated-collaboration, D171). The sweep (infra/eval/collab_aws.sh)
 # writes one copy per run with arm / budget / ratio / scenario filled in; these are the shared values.
 arm: similarity                 # similarity (no budget: every candidate) | greedy (SelectBySimilarity) | spectral (D170)
 # budget_bytes_per_s / budget_burst_bytes / budget_source: required for greedy and spectral; derived per D171 §4
 # (fractions of the similarity arm's measured fetch rate on the OTHER scene; burst = one selection period)
-# response_ratio / calibration_run: the MATCH_RESPONSE compression ratio measured on the OTHER scene (COLLAB_3.2 §7)
+# response_ratio / calibration_run: the MATCH_RESPONSE compression ratio measured on the OTHER scene (collaboration.md §7)
 comms_scenario: configs/comms/ideal.yaml   # MUST equal the live config multiagent.scenario (one radio; D174/D175)
 dt_s: 0.02                      # sim step (D171 §1); 20 ms << the 1 s heartbeat and the 5 s selection period
 drain_s: 30.0                   # after the last release, before the §6 outcome
@@ -33,7 +33,7 @@ gate:                           # D71 gate + the loop noise model; EuRoC-fitted 
   noise_floor_t_m: 0.014
   noise_k_r: 0.178
   noise_floor_r_rad: 0.0095
-entry_gate:                     # D178 known-entry gate, ENABLED on M's sweep PASS (26864da, 2026-10-24: scene-0
+entry_gate:                     # D178 known-entry gate, ENABLED on the D178 sweep PASS (26864da, 2026-10-24: scene-0
   enabled: true                 # worst cell 3.78 m -> 0.0147 m, scene 1 unchanged, 0 corrupt, 0/269 + 0/291 true
   chi2: 22.4577                 # edges rejected). chi-square 99.9 % at 6 dof (97.5 % would be 14.449)
   entry_sigma_m: 0.10           # operator placement, per axis [ASSUMPTION, physical]

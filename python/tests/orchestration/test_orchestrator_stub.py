@@ -1,5 +1,5 @@
 """The orchestrator's Bedrock tool loop with Bedrock stubbed (botocore Stubber; no network, no spend), against the real
-MCP servers over stdio (design AGENTIC_7 D156-D160). Runs in ariadne-orchestrator:1:
+MCP servers over stdio (design agentic.md D156-D160). Runs in ariadne-orchestrator:1:
 
   docker run --rm -v "$PWD":/work:ro -w /work/python ariadne-orchestrator:1 python -m pytest -q -p no:cacheprovider \
       tests/orchestration/test_orchestrator_stub.py

@@ -2,7 +2,7 @@
 <package format="3">
   <name>ariadne_sim</name>
   <version>0.1.0</version>
-  <description>The live Ariadne world (design LIVE_RUNTIME_L1): gz sim server (paused until the runtime link is ready)
+  <description>The live Ariadne world (design live-runtime.md): gz sim server (paused until the runtime link is ready)
     plus the ariadne_bridge link, one launch.</description>
   <maintainer email="noreply@example.invalid">Ariadne</maintainer>
   <license>Apache-2.0</license>

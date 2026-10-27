@@ -54,7 +54,7 @@ For XFeat (D15) the architecture and forward pass are ours; the weights are upst
 Apache-2.0, and credited.
 
 Only permissively licensed weights and reference implementations are used, per the
-`ALGORITHMS.md` licence audit.
+`algorithms.md` licence audit.
 
 ## Ariadne's own licence
 

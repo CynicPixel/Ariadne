@@ -148,7 +148,7 @@ class Routes:
 
 @dataclass(frozen=True)
 class Hazards:
-    """Structural hazards above a standing responder (design RISK_ZONES_4.2, D112): they threaten a route without
+    """Structural hazards above a standing responder (design traversability-risk.md#risk-zones, D112): they threaten a route without
     blocking it, so GT traversability is unchanged. Opt-in: at the defaults (no hazards) this section is left out of
     Preset.to_canonical(), so every existing preset digest and scene id is unchanged."""
     cantilevers: tuple[int, int] = (0, 0)       # per scene
@@ -286,7 +286,7 @@ def _validate_hazards(p: Preset, hz: Hazards, g: float) -> None:
             raise PresetError(f"hazards.{name}: need 0 <= lo <= hi <= 8")
     for name in ("cant_projection_m", "cant_width_m", "cant_thickness_m", "hung_side_m", "hung_height_m"):
         _range(f"hazards.{name}", getattr(hz, name), lo=g)
-    # Above a standing responder (1.8 m, design TRAVERSABILITY_4.2) and under the lowest ceiling.
+    # Above a standing responder (1.8 m, design traversability-risk.md) and under the lowest ceiling.
     top = p.structure.wall_height_m[0] - 0.1
     _range("hazards.cant_underside_m", hz.cant_underside_m, lo=1.9, hi=top - hz.cant_thickness_m[1])
     _range("hazards.hung_underside_m", hz.hung_underside_m, lo=1.9, hi=top - hz.hung_height_m[1])

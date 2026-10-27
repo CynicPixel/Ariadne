@@ -1,5 +1,5 @@
-// 4.4 allocation (design ALLOCATION_4.4 §7, D115 + correction): Table I row by row (expected actions written from
-// ALGORITHMS §22.3.1, not from the code); CBBA = SGA exactly at L_t = 1 (Theorem 1) within N_min D rounds; at L_t = 2
+// 4.4 allocation (design allocation.md §7, D115 + correction): Table I row by row (expected actions written from
+// algorithms.md §22.3.1, not from the code); CBBA = SGA exactly at L_t = 1 (Theorem 1) within N_min D rounds; at L_t = 2
 // the insertion marginal is not DMG (pinned), so at L_t = 2 Johnson's bid warping: eq. 9, conflict-free, N_min D;
 // conflict-free convergence on a jointly connected switching graph within rho N_min; Theorem 2's 50 % bound against
 // brute force; the two-agent sorted scan equals brute force; eq. 7 holds for the time-discounted score and fails for
@@ -176,7 +176,7 @@ TEST(Cbba, BundleTwoWithBidWarping) {
 }
 
 TEST(Cbba, StaleSecondSlotBidRegression) {
-    // Hand-built (ALLOCATION_4.4 §7, worked from ALGORITHMS §22.3.1). Line topology B - A - C; positions on a line:
+    // Hand-built (allocation.md §7, worked from algorithms.md §22.3.1). Line topology B - A - C; positions on a line:
     // A 0, B 10, C 1.5; tasks X 1, Y 2, W -1, P 11, Z 12. Values: A {X 10, Y 15, W 8} rate 1; B {Y 3, P 10, Z 1}
     // rate 0.1; C {X 20} rate 1.
     //  round 1: A builds [X 3.679, Y 2.030]; B [P 9.048, Y 1.104]; C [X 12.13]. A hears C: loses X, eq. 6 resets Y

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The Phase 1 exit gate (plan "Phase 1 testing / exit gate", design PHASE1_GATE): ONE deterministic replay of
+# The Phase 1 exit gate (plan "Phase 1 testing / exit gate", design evaluation-harness.md#end-to-end-gate): ONE deterministic replay of
 # the whole thin chain from the recorded bag, every stage into one gate directory, then one verdict.
 #
 #   infra/scripts/phase1.sh [OUT_ROOT]              FULL: the exit gate / evidence run (clean tree),
-#                                                    default OUT_ROOT = evaluation/runs/phase1/exit_gate
+#                                                    default OUT_ROOT = evaluation/runs/gates/phase1_thin_e2e/exit_gate
 #   infra/scripts/phase1.sh --premerge [OUT_ROOT]   PRE-MERGE (D49): same chain on the working tree, but the
 #                                                    render is REUSED from build/render_cache/<package sha256>
 #                                                    and only if this run's package is byte-identical to one a
@@ -31,15 +31,15 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 S=infra/scripts
-REC=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
+REC=evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_0-20261001T133914Z/raw
 SCENE=$REC/scene
 mode=full
 if [ "${1:-}" = --premerge ]; then mode=premerge; shift; fi
-if [ "$mode" = full ]; then out_root="${1:-evaluation/runs/phase1/exit_gate}"; else out_root="${1:-build/premerge}"; fi
+if [ "$mode" = full ]; then out_root="${1:-evaluation/runs/gates/phase1_thin_e2e/exit_gate}"; else out_root="${1:-build/premerge}"; fi
 CACHE=build/render_cache
 
 die() { echo "phase1.sh: $*" >&2; exit 1; }
-dirty="$(git status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs' | grep -q . \
+dirty="$(git status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs' | grep -q . \
   && echo true || echo false)"
 [ "$dirty" = false ] || [ "$mode" = premerge ] || [ "${DIRTY_OK:-0}" = 1 ] || die "dirty tree (evidence needs a clean commit; DIRTY_OK=1 for dev)"
 [ -d "$REC/rec" ] && [ -f "$SCENE/scene.json" ] || die "missing the recording $REC"

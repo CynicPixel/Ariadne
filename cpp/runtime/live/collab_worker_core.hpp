@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The logic of ariadne_collab_worker (design LIVE_COLLAB §1-§2, D174), one per agent, socket-agnostic so it is tested
+// The logic of ariadne_collab_worker (design live-collaboration.md §1-§2, D174), one per agent, socket-agnostic so it is tested
 // in-process. All DNN work of the live collaboration happens here, never in the estimator worker (D152a/D168):
 //
 //   #ckin  (estimator) -> MaskedDepth32 of the bundle's depth + mask, EigenPlaces now, keep rgb + depth for ALIKED

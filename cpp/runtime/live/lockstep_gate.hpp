@@ -3,7 +3,7 @@
 // D225: the lockstep barrier's gate predicates over N lanes, factored out of ariadne_live so a unit test can
 // hold the line. The pre-D225 inline checks were hardcoded to lanes 0 and 1: agent 2's estimator was never
 // waited on and its keyframes slid past barrier cuts under load (the ma200 replay-to-replay trace divergence).
-// A race reproduction cannot trip that deterministically; a predicate test does, on every run (M, 2026-10-24).
+// A race reproduction cannot trip that deterministically; a predicate test does, on every run (2026-10-24).
 // Works over any range whose elements expose `done` and `progress` (AgentLane, or the test's LaneGate).
 // ---------------------------------------------------------------------------
 #include <cstdint>

@@ -39,7 +39,7 @@ public:
 
     /// Keypoints and descriptors, rows aligned: descriptors.rows == keypoints.size().
     virtual FeatureSet DetectAndCompute(const cv::Mat& gray, const cv::Mat& mask) const = 0;
-    /// Descriptors AT given pixels, without detecting (re-association, PERCEPTION_2.1.md §4.3: an LK-tracked point
+    /// Descriptors AT given pixels, without detecting (re-association, perception.md §4.3: an LK-tracked point
     /// gets an appearance without being re-detected). Row i describes points[i]; `described[i]` is 0 where the
     /// engine cannot (ORB: the patch leaves the image), and that row is zero.
     virtual cv::Mat Describe(const cv::Mat& gray, const std::vector<cv::Point2f>& points,

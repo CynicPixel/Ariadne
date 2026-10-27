@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// ariadne_collab_sim: pass B of the 3.2 sim integration (design SIMCOLLAB_3.2, D171). The v2 protocol (CollabNode)
+// ariadne_collab_sim: pass B of the 3.2 sim integration (design collaboration.md#simulated-collaboration, D171). The v2 protocol (CollabNode)
 // over the 3.3 comms node (CommsNode: RFComms-derived links, walls, scripted partitions), as a seeded discrete-event
 // run on the recording clock, fed by the pass-A keyframe stores (ariadne_collab_passa).
 //
@@ -7,7 +7,7 @@
 //       --aliked-onnx ONNX --lightglue-onnx ONNX
 //
 // Each step of dt sim seconds: deliver the network up to t, release every store record whose t_final <= t whole
-// (CollabNode::AddKeyframe), tick every node. After the last release, `drain_s` more, then the COLLAB_3.2 §6 outcome.
+// (CollabNode::AddKeyframe), tick every node. After the last release, `drain_s` more, then the collaboration.md §6 outcome.
 //
 // Hooks (design §2):
 //   retrieve    cosine over the broker's RECEIVED global descriptors (EigenPlaces R50-256), other agents only,
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
         // --- scoring (evaluation only) -------------------------------------------------------------------------
         std::map<ac::AgentId, std::vector<const runtime::CollabStoreRecord*>> released;
         // Agents share a frame only if they adopted estimates of the same anchor (G = W_anchor, held across epochs,
-        // COLLAB_3.2 §5). After a split brain each side has its own G: scored is the frame holding the most released
+        // collaboration.md §5). After a split brain each side has its own G: scored is the frame holding the most released
         // keyframes (ties: the lower anchor), never a mix of frames.
         auto merged_ate = [&](size_t& merged_agents, size_t& kf_merged, size_t& kf_total, ac::AgentId* frame = nullptr) {
             std::map<ac::AgentId, size_t> kf_in;   // anchor -> released keyframes of agents in that frame
@@ -273,7 +273,7 @@ int main(int argc, char** argv) {
           << "\nverify: {min_pnp_inliers: " << cfg.verify.min_pnp_inliers << ", calibration: \"" << cfg.verify_calibration
           << "\"}" << "\nagents: " << fleet.size()
           << "\nduration_s: " << 1e-9 * double(t_end - t_first) << "\n";
-        // Per class (COLLAB_3.2 §7, D171): first transmission outside resync (the I6 measured side) with the senders'
+        // Per class (collaboration.md §7, D171): first transmission outside resync (the I6 measured side) with the senders'
         // per-message predictions; overhead rows apart: retransmissions, resends to a new broker (resync) and protocol
         // re-sends of a request id (D180).
         struct ClassBytes { uint64_t msgs = 0, wire = 0, transmitted = 0, retx = 0, resync = 0, resend = 0, predicted_msgs = 0;

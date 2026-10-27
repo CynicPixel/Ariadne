@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// Intra-agent loop closure, the runtime adapter (D73 part 2b; design ROBUST_BACKEND_2.5.md §8). It lives in runtime
-// because it joins perception-side features, collaboration's verifier and slam's backend (CLAUDE.md §3: slam and
+// Intra-agent loop closure, the runtime adapter (D73 part 2b; design robust-backend.md §8). It lives in runtime
+// because it joins perception-side features, collaboration's verifier and slam's backend (arch §3: slam and
 // collaboration are peers; only runtime may include both).
 //
 // Per keyframe (data in -> data out):

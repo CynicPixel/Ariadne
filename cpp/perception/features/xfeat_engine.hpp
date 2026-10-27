@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// XFeat as a §7.1 LocalFeatureEngine (PERCEPTION_2.1.md §4.1), over the D50
+// XFeat as a §7.1 LocalFeatureEngine (perception.md §4.1), over the D50
 // network (xfeat/xfeat_net.hpp: our cv::dnn graph, upstream's weights).
 //
 // ONE FORWARD PER IMAGE. The network gives dense maps (keypoint logits,

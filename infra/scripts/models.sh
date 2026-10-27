@@ -9,13 +9,13 @@
 #   infra/scripts/models.sh test      the D15 acceptance test against that export (both engines; fails if absent)
 #   infra/scripts/models.sh eigenplaces   EigenPlaces R50-256 (D62): pinned clone + weights (sha256-checked) -> export
 #                                     OFFLINE into $MODELS/eigenplaces_ref/, then every output checked against the
-#                                     sha256s PINNED below (the bit-exact re-run claim of PERCEPTION_2.1 §13)
+#                                     sha256s PINNED below (the bit-exact re-run claim of perception.md §13)
 #   infra/scripts/models.sh aliked-lg     ALIKED-n16 + LightGlue (D63), same contract -> $MODELS/aliked_lg_ref/
 #   infra/scripts/models.sh eigenplaces-sim  the sim-rig export (L3): 1280x720 and 640x360, RGB reference frames
 #                                     -> $MODELS/eigenplaces_sim_ref/
 #   infra/scripts/models.sh aliked-lg-sim    ALIKED-n16 K=1024 at 1280x720 + LightGlue, RGB -> $MODELS/aliked_lg_sim_ref/
 #     The sim frames are four left_rgb frames of the phase-1 recording, written by ariadne_frame_dump into
-#     $ARIADNE_SIM_FRAMES (default $MODELS/sim_rgb_frames; command in PERCEPTION_2.1 §14) and sha256-checked here.
+#     $ARIADNE_SIM_FRAMES (default $MODELS/sim_rgb_frames; command in perception.md §14) and sha256-checked here.
 #     Overrides: ARIADNE_UPSTREAM (clones/weights, default .cache/upstream), ARIADNE_MODELS (default .cache/models).
 #   infra/scripts/models.sh pgo-oracle    100 seeded random pose graphs (half with full correlated information) solved by
 #                                     GTSAM 4.3 in the pinned ariadne-oracle:1 image, OFFLINE -> .cache/oracle/pgo/
@@ -43,7 +43,7 @@ fetch_pinned() {
   [ -f "$1" ] || { mkdir -p "$(dirname "$1")"; curl -sfL -o "$1" "$2" || die "fetch $2"; }
   echo "$3  $1" | sha256sum -c --quiet || die "$1 sha256 mismatch"
 }
-# The torch + onnx export image (PERCEPTION_2.1 §13). Inline so infra/docker/ stays untouched; built on the xfeat image.
+# The torch + onnx export image (perception.md §13). Inline so infra/docker/ stays untouched; built on the xfeat image.
 dnn_image() {
   docker image inspect ariadne-xfeat-ref:1 >/dev/null 2>&1 \
     || docker build -q -t ariadne-xfeat-ref:1 -f infra/docker/xfeat_ref.Dockerfile infra/docker >/dev/null
@@ -58,7 +58,7 @@ DOCKERFILE
 SIMF="$(realpath -m "${ARIADNE_SIM_FRAMES:-$MODELS/sim_rgb_frames}")"
 # The phase-1 ci_tiny recording (bag sha256:21399732...), agent 0, frames 200/205 (10 s) and 700/710 (35 s).
 sim_frames() {
-  [ -d "$SIMF" ] || die "no sim frames in $SIMF (ariadne_frame_dump, PERCEPTION_2.1 §14)"
+  [ -d "$SIMF" ] || die "no sim frames in $SIMF (ariadne_frame_dump, perception.md §14)"
   (cd "$SIMF" && sha256sum -c --quiet) <<'SUMS' || die "sim frames differ from the pinned ones"
 c4dc66bb6b5c3a586132c56b494e80e0ffbdc25837bac681c8ee00f5a98e1758  agent0_f200.png
 fb12ec0d6bf28cf64efe1133a8ceb959249799b8b65a64c4c9c63bd81eef6aa5  agent0_f205.png
@@ -185,7 +185,7 @@ SUMS
       --weights /w/ResNet50_256_eigenplaces.pth --out /out --size 1280x720 --size 640x360 \
       --rgb-image sim_a0_f200=/sim/agent0_f200.png --rgb-image sim_a0_f700=/sim/agent0_f700.png \
       --upstream-commit "$EP_COMMIT"
-    # Pinned 2026-10-22 (L3, PERCEPTION_2.1 §14).
+    # Pinned 2026-10-22 (L3, perception.md §14).
     check_pinned "$OUT" <<'SUMS' ;;
 50e78c74f59e432244d83250077122f0b54a162461f0606cfe540dca8e5d04a6  eigenplaces_r50_256_1280x720.onnx
 60b2c65af30e3eb742010111c6f4714f29b4c67035e3a538917b8a38e6f2e555  eigenplaces_r50_256_640x360.onnx
@@ -219,7 +219,7 @@ SUMS
       --rgb-image sim_a0_f700=/sim/agent0_f700.png --rgb-image sim_a0_f710=/sim/agent0_f710.png \
       --pair sim_a0_f200,sim_a0_f205 --pair sim_a0_f700,sim_a0_f710 \
       --upstream-commit "$LG_COMMIT" --aliked-commit "$AL_COMMIT"
-    # Pinned 2026-10-22 (L3, PERCEPTION_2.1 §14). lightglue_aliked.onnx is byte-identical to the EuRoC export's.
+    # Pinned 2026-10-22 (L3, perception.md §14). lightglue_aliked.onnx is byte-identical to the EuRoC export's.
     check_pinned "$OUT" <<'SUMS' ;;
 98a1a3b43acca1d5e6ccb2b93d6eb1a74c65c9fa174afc53c24e6cbbdcbaab0a  aliked_n16_k1024_1280x720.onnx
 c4dc66bb6b5c3a586132c56b494e80e0ffbdc25837bac681c8ee00f5a98e1758  input_sim_a0_f200.png

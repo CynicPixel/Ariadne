@@ -1,4 +1,4 @@
-// Windowed BA, OpenCV-free (LOCAL_SLAM_2.3.md §2-§3): finite-difference Jacobians including near-zero depth and
+// Windowed BA, OpenCV-free (local-slam.md §2-§3): finite-difference Jacobians including near-zero depth and
 // wide-FOV rays (Phase 2 exit-gate item, §11.4 / §37.1), the gauge null space [I; I-blocks for cameras, [I, -[X]x]
 // for landmarks], the robust gradient, and Schur == dense solve.
 #include "slam/bundle_adjustment/window_ba.hpp"

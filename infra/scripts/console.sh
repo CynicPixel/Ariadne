@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The operator console stub (arch §29, design CONSOLE_1.10) over a committed run chain.
+# The operator console stub (arch §29, design live-runtime.md#operator-console) over a committed run chain.
 #
 #   infra/scripts/console.sh check COLLAB_RUN MISSION_RUN SCENE        chain checks (exit 1 on failure)
 #   infra/scripts/console.sh serve COLLAB_RUN MISSION_RUN SCENE [PORT] http://127.0.0.1:PORT (default 8080)

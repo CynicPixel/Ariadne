@@ -20,7 +20,7 @@
 // (tools/canonical_streams.cc, D39). This file only adapts them to gz.
 // IMU noise is NOT added here: it is a seeded consumption-time operator (D37).
 //
-// LIVE MODE (design LIVE_RUNTIME_L1 D151; only with a <live> element): the mover
+// LIVE MODE (design live-runtime.md D151; only with a <live> element): the mover
 // also takes commands on a gz Pose_V topic (bridged from geometry_msgs/PoseArray):
 // 0 poses = hold(), 1 = goto(pose), N = follow(path); the header stamp is the
 // command id. A command replaces every segment not yet started; the segment in

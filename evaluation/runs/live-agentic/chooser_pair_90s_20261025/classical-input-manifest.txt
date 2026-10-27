@@ -1,0 +1,10 @@
+arm=classical
+run_id=20261025T001119Z-cpux86-3f6e0b
+live_run_id=live-20261025T001308Z-a688
+source_object=s3://ariadne-836505524290-eun1/runs/20261025T001119Z-cpux86-3f6e0b/output/results/run.tar.gz
+source_object_bytes=5624582561
+inputs_mcap_bytes=5694996118
+inputs_mcap_sha256=c2ed745bf3520db5e61cfae08d7d185f5972a19a2518514138d757b86eb2fde4
+trace_records=36
+decision_files=0
+replay_verdict=PASS

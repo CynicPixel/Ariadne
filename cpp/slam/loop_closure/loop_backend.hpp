@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The intra-agent loop backend (D73 part 2b; design ROBUST_BACKEND_2.5.md §8): degeneracy gate (D71) -> PCM (D72)
+// The intra-agent loop backend (D73 part 2b; design robust-backend.md §8): degeneracy gate (D71) -> PCM (D72)
 // -> GNC-TLS with weight reuse (D73 parts 1, 2a), in that inviolable order (arch §14.5), on a MIRROR of the VO's
 // pose graph. Plain slam types only (the runtime adapter does features, retrieval storage and verification).
 //

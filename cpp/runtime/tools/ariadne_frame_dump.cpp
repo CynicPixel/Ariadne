@@ -1,6 +1,6 @@
 // ariadne_frame_dump: write chosen left-camera frames of a sim recording as colour PNGs, exactly the RGB pixels the
 // pipeline sees (StereoFrame::left_rgb: rgb8 decoded, the D41 lens applied, no degradation). These are the reference
-// inputs of the sim-rig exports (models.sh eigenplaces-sim / aliked-lg-sim, PERCEPTION_2.1 §14).
+// inputs of the sim-rig exports (models.sh eigenplaces-sim / aliked-lg-sim, perception.md §14).
 //
 //   ariadne_frame_dump --rec RECDIR --scene SCENEDIR [--agent 0] --frames 400,405,1500 --out DIR
 //

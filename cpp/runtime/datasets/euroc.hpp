@@ -283,7 +283,7 @@ inline std::vector<GroundTruthInertial> ParseEurocGroundTruthInertial(const std:
 /// T_B_Crect: the RECTIFIED left camera in the body frame. Rectification
 /// rotates camera 0 by R1 (x_rect = R1 x_c0), so T_C0_Crect has rotation R1^T.
 /// Leaving R1 out barely moves positions but adds a constant rotation that
-/// trajectory alignment cannot remove (advisor, 1.5 design).
+/// trajectory alignment cannot remove (design review, 1.5 design).
 inline core::SE3 BodyFromRectifiedLeft(const core::SE3& T_B_C0, const core::Mat3& R1) {
     core::SE3 T_C0_Crect;
     T_C0_Crect.R = R1.transpose();

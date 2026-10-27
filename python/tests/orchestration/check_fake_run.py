@@ -1,4 +1,4 @@
-"""Check an ariadne_live run against fake_orchestrator's scripted scenarios (design AGENTIC_7 D156, D158).
+"""Check an ariadne_live run against fake_orchestrator's scripted scenarios (design agentic.md D156, D158).
 
   python3 python/tests/orchestration/check_fake_run.py RUN_DIR     (the ariadne_live run directory)
 

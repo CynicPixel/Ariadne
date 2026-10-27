@@ -1,4 +1,4 @@
-"""ALIKED + LightGlue reference exporter (2.1, design PERCEPTION_2.1 §12, SMOKE §4s). OFFLINE tool, run in the session
+"""ALIKED + LightGlue reference exporter (2.1, design perception.md §12, SMOKE §4s). OFFLINE tool, run in the reference
 image ariadne-eigenplaces-ref:feat-2.1 with --network none, the upstream checkout and the weights mounted read-only:
 
   python -I aliked_lightglue_reference.py --upstream /lg --weights /w --out /out --size 752x480 --k 1024 --k 2048 \
@@ -474,7 +474,7 @@ def main() -> int:
             "rgb_images": [s.split("=", 1)[0] for s in a.rgb_image]} if a.rgb_image else {}),
         "sha256": {p.name: sha256(p) for p in sorted(a.out.iterdir()) if p.name != "manifest.yaml"},
     }
-    (a.out / "manifest.yaml").write_text("# ALIKED + LightGlue reference export (PERCEPTION_2.1 §12). Generated.\n"
+    (a.out / "manifest.yaml").write_text("# ALIKED + LightGlue reference export (perception.md §12). Generated.\n"
                                          + yaml.safe_dump(manifest, sort_keys=False))
     return 0
 

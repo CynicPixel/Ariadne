@@ -1,4 +1,4 @@
-// 1.7 spool (design RECON_1.7): the C++ -> Python boundary. fp16-in-PNG depth
+// 1.7 spool (design reconstruction.md#first-reconstruction-loop): the C++ -> Python boundary. fp16-in-PNG depth
 // round-trips (NaN preserved, half precision), intrinsics scale with the
 // pixel-centre convention, the keyframe stride applies per agent, and the index
 // carries every §18.2 field.

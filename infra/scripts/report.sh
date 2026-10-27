@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# The 1.9 evaluation harness over one Phase 1 run chain (design HARNESS_1.9):
+# The 1.9 evaluation harness over one Phase 1 run chain (design evaluation-harness.md):
 #   1. dump the §30.2 registry (C++, the single source of truth)
 #   2. compute every metric + gates + oracles (analysis image: numpy, evo 1.31.1)
 #   3. ariadne_report_check: MissingMetrics / UnknownMetrics on the report (the gate)
@@ -19,7 +19,7 @@ shift 5
 IMAGE=ariadne-analysis:1
 docker image inspect "$IMAGE" >/dev/null 2>&1 \
   || docker build -q -t "$IMAGE" -f "$REPO_ROOT/infra/docker/analysis.Dockerfile" "$REPO_ROOT/infra/docker" >/dev/null
-dirty="$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!IDEA.md' ':!graphify-out' ':!evaluation/runs' \
+dirty="$(git -C "$REPO_ROOT" status --porcelain -- . ':!docs' ':!graphify-out' ':!evaluation/runs' \
   | grep -q . && echo true || echo false)"
 commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 mkdir -p "$REPO_ROOT/$out"

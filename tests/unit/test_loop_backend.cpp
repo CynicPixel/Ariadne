@@ -1,4 +1,4 @@
-// The intra-agent loop backend and retrieval (design ROBUST_BACKEND_2.5.md §8, D73 part 2b), synthetic, no runtime:
+// The intra-agent loop backend and retrieval (design robust-backend.md §8, D73 part 2b), synthetic, no runtime:
 //   - edge convention: a noise-free loop from the gate has ~zero residual at the true poses;
 //   - Sync: late (window-exit) odometry edges, Ready() false until both ends are mirrored, zero added energy,
 //     a broken chain throws;

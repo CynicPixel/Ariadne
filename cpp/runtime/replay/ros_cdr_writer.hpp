@@ -117,7 +117,7 @@ inline std::vector<uint8_t> EncodePoseStamped(const PoseStamped& m) {
     return w.bytes();
 }
 
-/// geometry_msgs/msg/PoseArray (the live command, design LIVE_RUNTIME_L1 D151)
+/// geometry_msgs/msg/PoseArray (the live command, design live-runtime.md D151)
 inline std::vector<uint8_t> EncodePoseArray(const PoseArray& m) {
     detail::RequireLittleEndianHost();
     CdrWriter w;

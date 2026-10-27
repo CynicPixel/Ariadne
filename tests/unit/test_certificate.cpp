@@ -1,10 +1,10 @@
-// The D74 certificate (design ROBUST_BACKEND_2.5.md §7). Definitions, fixed before the first measured run:
+// The D74 certificate (design robust-backend.md §7). Definitions, fixed before the first measured run:
 //   - "certified" = S_g + eta I_R factorises at eta = rel_eta ||M||_inf (certificate.hpp); a certified point carries
 //     the bound f - f* <= |gap| + 3 n eta;
 //   - known-optimal graphs = noise-free graphs and low-noise synthetic graphs (sigma 0.02 m / 0.005 rad), plus the
 //     SE-Sync benchmark graphs (env-gated: ARIADNE_PGO_SESYNC);
 //   - planted-outlier graphs = the same synthetic graphs plus 3 random loop edges (uniform SE(3)) KEPT IN THE COST
-//     (plain least squares, no GNC): the fraction certified is reported (PHASE2_PLAN §3: a certificate proves
+//     (plain least squares, no GNC): the fraction certified is reported (local-slam.md#estimator-plan §3: a certificate proves
 //     optimality of the given cost, not correctness). The hard gate is the one-directional property: a stationary
 //     point with a strictly cheaper competitor (another start) must come out not certified;
 //   - the same planted-outlier graphs after GNC (outliers at weight 0) must certify.

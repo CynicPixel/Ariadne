@@ -14,7 +14,7 @@ gz cameras look along the sensor link's +x with image-right = -y and image-down 
 the ROS optical frame is x right, y down, z forward. So R_B_optical has columns
 (x_opt, y_opt, z_opt) = (-y_B, -z_B, +x_B).
 
-write_live_mission (design LIVE_RUNTIME_L1 D151) composes mission_live.*: each agent
+write_live_mission (design live-runtime.md D151) composes mission_live.*: each agent
 starts with only the stationary hold at its entrance, and its mover takes commands
 (<live> block); the bridge YAML gains the command (ROS -> GZ, PoseArray -> Pose_V) and
 mover-state (GZ -> ROS, StringMsg -> String) entries; the GT depth cameras are off

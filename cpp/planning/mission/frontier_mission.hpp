@@ -1,7 +1,7 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// The 1.8 placeholder mission layer as a library (design MISSION_1.8; extracted for the live runtime, design
-// LIVE_RUNTIME_L1 D153). One implementation, two callers:
+// The 1.8 placeholder mission layer as a library (design mission.md; extracted for the live runtime, design
+// live-runtime.md D153). One implementation, two callers:
 //   ariadne_mission  (batch, replay of a spool; its outputs are byte-identical to before the extraction)
 //   ariadne_live     (incremental: per keyframe, per replan, on a sim-time barrier)
 //
@@ -272,7 +272,7 @@ public:
         return out;
     }
 
-    /// The §23 risk input (design AGENTIC_7 D158): for every cell, the WIDEST way to it from `from` over `plan` =
+    /// The §23 risk input (design agentic.md D158): for every cell, the WIDEST way to it from `from` over `plan` =
     /// max over paths of the narrowest clr_free on the path (a maximin / bottleneck Dijkstra, 8-connected with the
     /// A* corner rule). The agent's own escape disc counts as unbounded: it is where the agent already is, not a gap
     /// it must pass. A shortest path hugs walls at exactly the allowed clearance, so its minimum clearance would

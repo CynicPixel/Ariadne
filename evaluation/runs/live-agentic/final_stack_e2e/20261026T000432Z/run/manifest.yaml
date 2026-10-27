@@ -1,0 +1,64 @@
+# Ariadne run manifest (arch §28.2). Generated; do not hand-edit.
+run_id: 89e61fecbb277f69-live-20261026T001641Z
+created_utc: "2026-10-26T00:58:06Z"
+git_commit: c143db14eb9dfbd7ffef003cf80ab3c344c64dec
+git_dirty: true
+image_digest: "sha256:e436db52aa6652b66bbdf7f6bdf32b20059b6aeacdc951da6e8e5297363d52b6"
+
+# Software identity
+opencv_version: 5.0.0
+opencv_build_hash: "fnv1a64:cf8ea084bb984703"
+opencv_cpu_features: "SSE SSE2 SSE3 *SSE4.1 *SSE4.2 *AVX *FP16 *AVX2 *AVX512-SKX"
+cool_version: UNRECORDED
+cuda_version: UNRECORDED
+compiler: gcc 13.3.0
+architecture: amd64
+
+# Experiment
+scene: sim-live/89e61fecbb277f69
+seed: 1
+agent_count: 2
+execution_mode: live
+bag_checksum: UNRECORDED
+
+# Configuration
+camera_config: UNRECORDED
+illumination_config: UNRECORDED
+communication_config: UNRECORDED
+planner_config: mission_v1
+degradation_config: UNRECORDED
+perception_config: UNRECORDED
+slam_config: UNRECORDED
+
+# Backends
+feature_engine: UNRECORDED
+place_recognition: UNRECORDED
+loop_backend: UNRECORDED
+reconstruction_backend: UNRECORDED
+imu_mode: attitude_only
+
+# Determinism
+det_math_digest: 11806531094783593156
+philox_digest: 14182439601419266695
+degradation_digest: 8535765251477677907
+lens_digest: 1253886791886396038
+pgo_digest: 6731216556590135862
+stereo_row_refinement: not_applicable
+lost_handling: not_applicable
+radiometric: off
+final_state_hash: UNRECORDED
+
+# Additional
+collab: true
+collab_config: build/live/runs/live-20261026T001605Z-ff97/89e61fecbb277f69-live-20261026T001641Z/collab_config.yaml
+collab_config_fnv1a64: 1fdc15e41b1c9f90
+collab_feature_latency_s: 3.000000
+collab_models: .cache/models/eigenplaces_sim_ref/eigenplaces_r50_256_640x360.onnx + .cache/models/aliked_lg_sim_ref/aliked_n16_k1024_1280x720.onnx
+collab_parent_threads: 4
+collab_worker_threads: 4
+command: build/docker/cpp/runtime/ariadne_live --scene build/live/scenes/maze_short_6 --perception-config build/live/runs/live-20261026T001605Z-ff97/perception_config.yaml --slam-config build/live/runs/live-20261026T001605Z-ff97/slam_config.yaml --imu-noise-config build/live/runs/live-20261026T001605Z-ff97/imu_noise_config.yaml --mission-config build/live/runs/live-20261026T001605Z-ff97/mission_config.yaml --live-config build/live/runs/live-20261026T001605Z-ff97/live_config.yaml --out build/live/runs/live-20261026T001605Z-ff97 --link build/live/runs/live-20261026T001605Z-ff97/link.sock --chooser-socket build/live/runs/live-20261026T001605Z-ff97/chooser.sock --planner-config build/live/runs/live-20261026T001605Z-ff97/planner_config.yaml --shadow-map-config build/live/runs/live-20261026T001605Z-ff97/shadow_map_config.yaml
+live_config: build/live/runs/live-20261026T001605Z-ff97/live_config.yaml
+multiagent: broker_mode=plain scenario=configs/comms/ideal.yaml
+perception_config: build/live/runs/live-20261026T001605Z-ff97/perception_config.yaml
+planner: frontier candidates (1.8) + chooser llm
+slam_config: build/live/runs/live-20261026T001605Z-ff97/slam_config.yaml

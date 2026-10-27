@@ -1,4 +1,4 @@
-// Spectral prioritisation (design SPECTRAL_3.4 §7, D170), synthetic graphs, no runtime:
+// Spectral prioritisation (design spectral-selection.md §7, D170), synthetic graphs, no runtime:
 //   - the block inverse-iteration Fiedler solver against a dense eigensolver, cold and warm;
 //   - a repeated lambda_2 (a cycle): the cluster is detected and the selection does not depend on input order;
 //   - the exact oracle (every subset under the SHARED byte cost, |C| <= 12): the dual bound is >= the optimum on

@@ -1,5 +1,5 @@
 #pragma once
-// A synthetic multi-agent scenario for the 3.2 protocol tests (COLLAB_3.2 §8):
+// A synthetic multi-agent scenario for the 3.2 protocol tests (collaboration.md §8):
 // agents circle a shared loop with phase offsets, so their keyframes revisit
 // each other's places. Ground truth drives the injected hooks: retrieval
 // returns other agents' keyframes within `overlap_m`, verification returns the
@@ -39,7 +39,7 @@ struct Scenario {
     double overlap_m = 0.8;
     size_t keypoints = 200;       // feature response size: ~6 datagrams
     bool advertise_features = false;   // 3.4: descriptors carry n_features / feature_bytes
-    uint64_t first_keyframe = 0;  // ids below it are never released (a VO startup prefix, SIMCOLLAB_3.2 §1)
+    uint64_t first_keyframe = 0;  // ids below it are never released (a VO startup prefix, collaboration.md#simulated-collaboration §1)
 
     /// Agent a's camera in the world at time t.
     core::SE3 T_World_C(size_t a, double t) const {

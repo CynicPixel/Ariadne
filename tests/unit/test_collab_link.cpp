@@ -1,6 +1,6 @@
-// D174 (LIVE_COLLAB §2): the live collaboration's messages round-trip exactly, and a damaged message is refused.
+// D174 (live-collaboration.md §2): the live collaboration's messages round-trip exactly, and a damaged message is refused.
 #include "runtime/live/collab_link.hpp"
-#include "runtime/live/collab_live.hpp"   // compiled here until ariadne_live wires it (B)
+#include "runtime/live/collab_live.hpp"   // compiled here until ariadne_live wires it
 #include "runtime/live/collab_tee.hpp"
 #include "runtime/live/collab_worker_core.hpp"
 

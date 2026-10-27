@@ -4,7 +4,7 @@
 #   infra/eval/premerge_aws_launch.sh stage [full]  git bundle, inputs.tar, recording sync, images to ECR (temp tags)
 #   infra/eval/premerge_aws_launch.sh run       spinup.sh (cpux86, 120 min cap; 150 full) -> build/runs/<id>/
 #   infra/eval/premerge_aws_launch.sh teardown  delete this run's temp ECR tags and staged inputs; sweep strays
-# The recording (12 GB) is a PERSISTENT dataset under $DATA (maintainer, 2026-10-23: re-uploading per run costs
+# The recording (12 GB) is a PERSISTENT dataset under $DATA (2026-10-23: re-uploading per run costs
 # too much time). `stage` uploads it once: `s3 sync` skips unchanged files, and its SHA256SUMS is computed once and
 # kept next to it. Teardown never deletes it; remove it by hand when the recording is retired.
 # `stage full` stages the FULL gate (phase1.sh without --premerge; phase gates): its fresh Kaggle render (D44) is
@@ -18,22 +18,22 @@ ACCT=836505524290 REGION=eu-north-1
 REG=$ACCT.dkr.ecr.$REGION.amazonaws.com REPO_ECR=ariadne/ariadne-core
 BUCKET=s3://ariadne-$ACCT-eun1
 # Both under runs/: the runner role may read and write runs/* only and "cannot touch datasets/" (compute module,
-# least privilege; maintainer kept it, 2026-10-23). runs/ has no expiry (IA transition only), so the copy persists.
+# least privilege; kept, 2026-10-23). runs/ has no expiry (IA transition only), so the copy persists.
 STAGE=$BUCKET/runs/_staging/premerge
 DATA=$BUCKET/runs/_datasets/phase1_sim_record/ci_tiny_0-20261001T133914Z/raw
-REC=evaluation/runs/phase1/sim_record/ci_tiny_0-20261001T133914Z/raw
+REC=evaluation/runs/gates/phase1_thin_e2e/sim_record/ci_tiny_0-20261001T133914Z/raw
 W=build/premerge_aws
 IMAGES=("ariadne/core-dev:m-premerge ariadne/core-dev:dev" "ariadne-recon:1 ariadne-recon:1"
         "ariadne-analysis:1 ariadne-analysis:1" "ariadne-console:1 ariadne-console:1")
 log() { echo "[launch $(date -u +%H:%M:%S)] $*" >&2; }
 
 stage() {
-  [ -z "$(git status --porcelain -- . ':!IDEA.md' ':!docs/ARIADNE_PHASED_PLAN.md')" ] || { log "dirty tree"; exit 1; }
+  [ -z "$(git status --porcelain -- .)" ] || { log "dirty tree"; exit 1; }
   local mode="${1:-premerge}"; [ "$mode" = premerge ] || [ "$mode" = full ] || { log "mode: premerge | full"; exit 1; }
   rm -rf "$W"; mkdir -p "$W"
   local commit; commit=$(git rev-parse HEAD); echo "$commit" > "$W/commit"; echo "$mode" > "$W/mode"
   git bundle create "$W/repo.bundle" HEAD 2>/dev/null
-  # The dev image from this tree's Dockerfile, under a private tag (the shared :dev tag moves with other sessions).
+  # The dev image from this tree's Dockerfile, under a private tag (the shared :dev tag moves with other builds).
   DOCKER_BUILDKIT=1 docker build -q -f infra/docker/core.Dockerfile --target dev -t ariadne/core-dev:m-premerge . >/dev/null
   local ins=(.cache/models/xfeat_ref .cache/models/eigenplaces_ref .cache/models/aliked_lg_ref
              .cache/models/eigenplaces_sim_ref .cache/models/aliked_lg_sim_ref .cache/oracle/pgo build/render_cache)

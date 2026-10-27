@@ -1,6 +1,6 @@
 #pragma once
 // ---------------------------------------------------------------------------
-// 1.6 inter-agent loop verification (design COLLAB_1.6 §5): the broker holds its
+// 1.6 inter-agent loop verification (design collaboration.md#first-collaboration-loop §5): the broker holds its
 // own keyframe A (2D ORB keypoints + descriptors) and receives agent B's
 // FEATURE RESPONSE (keypoints, descriptors, 3D points in B's rectified-left
 // camera frame, camera metadata). Three stages, each a hard gate:
@@ -68,7 +68,7 @@ struct VerifyResult {
     core::SE3 T_A_B;      // p_A = T_A_B p_B (rectified-left cameras)
     double h_over_e = NAN;    // diagnostic, set once PnP ran
     double planarity = NAN;   // diagnostic, set once PnP ran
-    // The PnP inlier correspondences (D73, maintainer-approved hunk): B's 3D points and A's pixels, for the 2.5
+    // The PnP inlier correspondences (D73): B's 3D points and A's pixels, for the 2.5
     // degeneracy gate (slam/robust/degeneracy.hpp). Output only; set once PnP ran; no gate reads them.
     std::vector<cv::Point3f> inlier_points_B;
     std::vector<cv::Point2f> inlier_pixels_A;

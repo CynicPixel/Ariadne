@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// 2.1 hard-pair evaluation (PERCEPTION_2.1.md §12.4): loop-candidate verification on one EuRoC flight. OFFLINE: no
+// 2.1 hard-pair evaluation (perception.md §12.4): loop-candidate verification on one EuRoC flight. OFFLINE: no
 // estimator, no runner hunk.
 //
 // Pairs: the §11 place dump of this flight (samples.csv, ep376.f32 from ariadne_place_eval). For every query the
@@ -294,7 +294,7 @@ int main(int argc, char** argv) {
             std::string cmd;
             for (int i = 0; i < argc; ++i) cmd += (i ? " " : "") + std::string(argv[i]);
             auto env = [](const char* k) { return std::getenv(k) ? std::getenv(k) : "UNRECORDED"; };
-            mf << "# ariadne_loop_verify (PERCEPTION_2.1 §12.4). Generated.\n"
+            mf << "# ariadne_loop_verify (perception.md §12.4). Generated.\n"
                << "tool: ariadne_loop_verify\ncommand: \"" << cmd << "\"\n"
                << "scene: " << source.SceneName() << "\nbag_checksum: " << source.BagChecksum()
                << "\ngit_commit: " << env("ARIADNE_GIT_COMMIT") << "\ngit_dirty: " << env("ARIADNE_GIT_DIRTY")

@@ -1,4 +1,4 @@
-"""ros_gz_bridge + RuntimeLink in ONE component container with intra-process comms (design LIVE_RUNTIME_L1 D150).
+"""ros_gz_bridge + RuntimeLink in ONE component container with intra-process comms (design live-runtime.md D150).
 
   ros2 launch ariadne_bridge live_link.launch.py config_file:=<bridge_live.yaml> socket_path:=<run>/link.sock \
       ready_file:=<run>/link.ready

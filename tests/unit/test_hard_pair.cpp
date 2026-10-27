@@ -1,4 +1,4 @@
-// 2.1 hard-pair path (PERCEPTION_2.1.md §12.3): HardPairMatcher's conventions. The model-backed tests use the
+// 2.1 hard-pair path (perception.md §12.3): HardPairMatcher's conventions. The model-backed tests use the
 // ALIKED + LightGlue export in $ARIADNE_ALIKED_LG_REF (SKIPPED without it, FAILED under ARIADNE_REQUIRE_MODELS=1).
 #include "perception/association/hard_pair_matcher.hpp"
 #include "perception/features/xfeat/atb.hpp"

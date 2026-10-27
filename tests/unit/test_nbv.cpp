@@ -1,4 +1,4 @@
-// 4.3 NBV (design NBV_4.3 §6, D114): the IG raycast on a wall with and without a hole (exact zero behind a solid
+// 4.3 NBV (design next-best-view.md §6, D114): the IG raycast on a wall with and without a hole (exact zero behind a solid
 // wall; the entropy identity), self-normalisation's scale invariance and fallbacks, the lambda schedule by hand, the
 // energy-reserve rule unreachable from the optimizer (alias views of a 1e6-gain place are emitted above the reserve and all dropped below it), the sampler's
 // trav_a / line-of-sight / determinism contract, generator E's target at the route's lowest support.
@@ -240,9 +240,9 @@ TEST(Nbv, ArrivalBottleneckIsTheWidestWayIntoTheGoalDisc) {
 }
 
 TEST(Nbv, ReturnOverTheFlownTrackWhenTheWayInWasNeverObserved) {
-    // B's live finding (2026-10-23): the forward rig never observes the space behind it, so the way back to the entrance
+    // A live-run finding (2026-10-23): the forward rig never observes the space behind it, so the way back to the entrance
     // is not known-free; E(return) = inf fired the hard rule on every replan and left only {hold}. The return space adds
-    // the swept body of the flown track (GBPlanner's homing over the robot's own path; NBV_4.3 §13).
+    // the swept body of the flown track (GBPlanner's homing over the robot's own path; next-best-view.md §13).
     Scene sc(WallMap(true));
     sc.tm.trav_a(cv::Rect(2, 2, 11, 56)).setTo(0);   // x 0.10..0.65 m (the way in, entrance cell (30, 3)): unobserved
     NbvInputs in = sc.Inputs();

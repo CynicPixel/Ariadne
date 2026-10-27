@@ -53,7 +53,7 @@ struct FeatureParams {
     int orb_levels = 8;
     double orb_scale_factor = 1.2;
     int orb_patch_size = 31;
-    // 2.1 engine choice (PERCEPTION_2.1.md §4.1). "orb" = the Phase 1 placeholder, kept as the ablation baseline.
+    // 2.1 engine choice (perception.md §4.1). "orb" = the Phase 1 placeholder, kept as the ablation baseline.
     std::string engine = "orb";                    // orb | xfeat
     // XFeat (D50 network; upstream verlab/accelerated_features e92685f).
     std::string xfeat_weights;                     // ATB export (infra/scripts/models.sh xfeat); required for xfeat
@@ -82,7 +82,7 @@ struct TrackerParams {
     // spacing mask then rejects most of a cluster, so asking for exactly the
     // shortfall leaves the tracker far below target (measured: 339 of 1200).
     int replenish_request_factor = 4;
-    // 2.1 cadence (PERCEPTION_2.1.md §4.2; arch §7.2, C8). every_frame: Process() replenishes whenever tracks are short
+    // 2.1 cadence (perception.md §4.2; arch §7.2, C8). every_frame: Process() replenishes whenever tracks are short
     // (Phase 1 behaviour). keyframe: Process() replenishes only below replenish_min_tracks (the off-cadence recovery
     // path); otherwise new tracks start only when the runtime calls Replenish() on a keyframe's image.
     std::string replenish = "every_frame";   // every_frame | keyframe
@@ -124,7 +124,7 @@ struct StereoParams {
     // are sparse blobs. Consumers that carve free space must use it.
     int support_window_px = 31;
     double support_min_density = 0.75;
-    // 2.1 (PERCEPTION_2.1.md §10): §9.3's confidence from cv::ximgproc::DisparityWLSFilter. none = the placeholder
+    // 2.1 (perception.md §10): §9.3's confidence from cv::ximgproc::DisparityWLSFilter. none = the placeholder
     // (zeros, no right-matcher cost). wls = a right-matcher pass + the filter's confidence map, the left disparity
     // unchanged unless wls_filtered_disparity.
     std::string confidence = "none";        // none | wls
@@ -141,7 +141,7 @@ struct StereoMatchParams {
     int max_level = 3;
     double fb_threshold_px = 0.5;
     double max_dy_px = 1.0;           // rectified: a correct match stays on its row
-    // Online row refinement (AUDIT_2.3.md, D54): at the first keyframes, fit the residual dy = a + b x + c y of the
+    // Online row refinement (local-slam.md#window-audit, D54): at the first keyframes, fit the residual dy = a + b x + c y of the
     // rectification from round-trip-consistent matches with |dy| <= row_search_px, and fold it into the right map.
     bool row_refinement = true;
     double row_search_px = 4.0;
@@ -151,7 +151,7 @@ struct StereoMatchParams {
     bool exposure_match = true;
 };
 
-/// Re-association of untracked landmarks (PERCEPTION_2.1.md §4.3). Absent from a config = off, and the run is the
+/// Re-association of untracked landmarks (perception.md §4.3). Absent from a config = off, and the run is the
 /// pre-2.1 pipeline byte for byte.
 struct ReassociationParams {
     bool enabled = false;

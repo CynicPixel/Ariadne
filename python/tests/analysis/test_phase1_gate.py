@@ -1,4 +1,4 @@
-"""phase1_gate's comparison rules (design PHASE1_GATE): byte identity, named line exclusions, nothing silent."""
+"""phase1_gate's comparison rules (design evaluation-harness.md#end-to-end-gate): byte identity, named line exclusions, nothing silent."""
 from pathlib import Path
 
 import pytest

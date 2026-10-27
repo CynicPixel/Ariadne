@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ---------------------------------------------------------------------------
-# ariadne-orchestrator (arch §25, design AGENTIC_7 D156-D160): the Bedrock tool loop and the MCP server over the
+# ariadne-orchestrator (arch §25, design agentic.md D156-D160): the Bedrock tool loop and the MCP server over the
 # deterministic core's decision requests. Pins: base by digest (the console's), every package exact.
 # The repo is bind-mounted at /work (read-only); the run directory is mounted writable (decisions/, approvals/).
 # Credentials come from the environment (live.sh exports the dev host's `aws login` session) or the instance role.

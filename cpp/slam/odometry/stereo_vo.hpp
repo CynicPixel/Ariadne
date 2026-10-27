@@ -137,7 +137,7 @@ struct VoKeyframeResult {
     double ba_inlier_sq_px = 0.0;      // sum |r|^2 over chi^2 inliers at the solution (sigma_px calibration)
     long ba_inlier_dof = 0;            // their scalar residual count minus the free parameters
     int ba_chi2_failed = 0;       // residuals above chi2_reject at the solution (vs ~5% expected at chi^2_2(0.95))
-    // imu_mode full (D59, INERTIAL_2.4 §4).
+    // imu_mode full (D59, inertial.md §4).
     bool ba_inertial = false;          // the solve had inertial factors (initialised)
     bool ba_v0_held = false;           // window[0] was the only pose-determined keyframe: its velocity held (§4.2)
     int ba_inertial_factors = 0;       // inertial factors in the solve (9 scalar residuals each)
@@ -233,8 +233,8 @@ public:
         for (const auto& [id, o] : keyframes_[kf].obs) px.push_back(o.left);
         return px;
     }
-    /// 2.1 re-association (PERCEPTION_2.1.md §4.3): every live landmark with the provenance of the keyframe that
-    /// created it, so a caller can restrict itself to landmarks mapped from MEASURED poses (AUDIT_2.3 §4: a landmark
+    /// 2.1 re-association (perception.md §4.3): every live landmark with the provenance of the keyframe that
+    /// created it, so a caller can restrict itself to landmarks mapped from MEASURED poses (local-slam.md#window-audit §4: a landmark
     /// triangulated at a predicted pose locks that pose's error in). Ascending id. Changes nothing.
     struct LandmarkInfo {
         uint64_t id = 0;
@@ -274,7 +274,7 @@ private:
         core::Vec3 v = core::Vec3::Zero(), bg = core::Vec3::Zero(), ba = core::Vec3::Zero();   // body, in W
     };
 
-    /// 2.3 windowed BA path (LOCAL_SLAM_2.3.md): solve the last window_size keyframes, reject / cull, update the
+    /// 2.3 windowed BA path (local-slam.md): solve the last window_size keyframes, reject / cull, update the
     /// graph, and emit the exit edge of the keyframe that leaves the window.
     VoKeyframeResult AddKeyframeWindow(KeyframeState kf, VoKeyframeResult out, int64_t t_ns);
 
