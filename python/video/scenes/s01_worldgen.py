@@ -158,7 +158,9 @@ class WorldGen(CaptionedScene, ThreeDScene):
         self.remove(title, sub)
         self.play(flat_map.animate.set_stroke(opacity=0.15), VGroup(dots, ring, target2d, bots).animate.set_opacity(0.15),
                   VGroup(trails, hint).animate.set_stroke(opacity=0.15), FadeOut(radios), FadeOut(chip), FadeOut(seed), run_time=0.8)
-        self.say("This is Ariadne, named for the thread that once led a hero out of a labyrinth.",
-                 run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.2), FadeIn(sub, run_time=1.6)])
-        self.clear_caption()
-        self.play(*[FadeOut(m) for m in (dots, flat_map, ring, target2d, bots, trails, hint, title, sub)], run_time=0.8)
+        self.say("This is Ariadne, named for the thread that led a hero out of the labyrinth.",
+                 run_with=[FadeIn(title, shift=UP * 0.2, run_time=1.0), FadeIn(sub, run_time=1.2)])
+        # the caption and the whole splash leave together, quickly
+        self.play(FadeOut(self._caption), *[FadeOut(m) for m in (dots, flat_map, ring, target2d, bots, trails, hint,
+                                                                 title, sub)], run_time=0.4)
+        self._caption = None
