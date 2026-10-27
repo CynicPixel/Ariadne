@@ -4,8 +4,8 @@ DRAFT (2026-10-24). Sources are the decision entries (`docs/decisions.md`) and t
 = a run we can point to; **[DESIGN]** = built and unit-tested, not yet measured end to end; **[PROJECTION]** = a
 derived number. Nothing here is a projection presented as measured.
 
-**Status: the live incremental path works end to end on the CPU initialiser. GPU training is measured on synthetic
-smokes; real-scene GPU training on the 200 s demo recording is running/next (Kaggle T4). The Phase 6 exit-gate
+**Status: the live incremental path works end to end on the CPU initialiser, and GPU training of the 200 s 3-agent demo
+recording is measured on an AWS T4 (training-view PSNR only). The Phase 6 exit-gate
 metrics (held-out PSNR/SSIM/LPIPS, Chamfer to the GT mesh, the double-wall check, the exposure-delay ablation) are
 NOT yet measured on a sim spool.**
 
@@ -44,16 +44,27 @@ NOT yet measured on a sim spool.**
   time for T4/A10G/L4; `evaluation/runs/reconstruction/recon_gpu_build_20261023T194812Z`). Built and uploaded to S3. **Not yet
   validated on a GPU instance.**
 
-### Running / next (fill before submission)
-- **GPU training on the 200 s demo recording**, Kaggle T4, pre-approved.
-  - Dataset: the ma200 rerun `20261024T022434Z-cpux86-626abe` (tree 95544d6, which contains the D225 barrier fix).
-    It is lens-ON, since it predates D227. Per-agent spools via `ariadne_sim_vo --spool`.
-  - Report: held-out PSNR/SSIM/LPIPS at the batch and live budgets, ms/KF, Gaussians.
-- The exit-gate geometry checks (Chamfer to the GT mesh, the double wall) and the exposure-delay ablation are not
-  started.
+### GPU training on the 200 s demo recording (measured)
+- **Run.** `20261024T121121Z-gpu-ae604c`: AWS g4dn.xlarge spot, T4, image `ariadne-recon-gpu`, $0.0673. Evidence:
+  `evaluation/runs/reconstruction/gpu_aws_20261024T121121Z`. Dataset: the ma200 rerun `20261024T022434Z-cpux86-626abe`
+  (contains the D225 fix; lens ON; lit maze_demo_0), 3 agents, 1,476 keyframes.
+- **Training-view PSNR (NOT held-out)**, median before → after each keyframe's iterations: live budget (15 iterations
+  per keyframe) 23.1 → 25.7 dB; batch (100) 23.3 → 27.4 dB. It measures fitting, not novel-view quality. No held-out
+  protocol for real spools exists yet.
+- **Cost per keyframe:** 203 ms (live) and 978 ms (batch) per keyframe at ~8.5 ms per iteration. The batch splat holds
+  2.59 M Gaussians in 51 submaps.
+- **Limitation:** at the live budget a T4 trains the 200 s mission in 350 s, 0.57× real time. The demo therefore
+  shows a recorded run's splat, not live training at mission speed.
+- **The judge-box GPU image is validated on a real T4.** gsplat's compiled kernels load with no run-time compile, and
+  AWS-T4 speed equals the Kaggle T4 within −8 to +5 % (D196 points).
+- **Not measured:** held-out PSNR/SSIM/LPIPS, Chamfer to the GT mesh, the double-wall check, the exposure-delay
+  ablation.
+- **Bug found and fixed on the way.** The first GPU run (`20261024T115234Z-gpu-130b29`) crashed and is void. The
+  trainer keyed frames by keyframe id alone, which collides across agents. It is fixed, with CPU tests.
 
 ### Spend
-- AWS: GPU image builds $0.097. Everything else ran locally or on Kaggle (free).
+- AWS: GPU image builds $0.097. GPU training $0.0872 (first, void run $0.0199; rerun $0.0673). Everything else ran
+  locally or on Kaggle (free).
 
 ### Honest summary sentence
 Incremental, keyframe-anchored splatting runs live from the real multi-agent runtime into the browser, with exact

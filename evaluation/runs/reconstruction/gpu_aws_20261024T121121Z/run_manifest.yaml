@@ -1,0 +1,10 @@
+run_kind: recon_gpu_training
+created_utc: 2026-10-24T12:13:42Z
+instance_type: g4dn.xlarge
+gpu: "Tesla T4, 595.91.07, 15360 MiB"
+image: ariadne/recon-gpu:build
+image_id: sha256:a827de5514fe8f9314f17418c9f84edd4a1c53af907a6a6d7ea8456aeb2f0caf
+image_tar: s3://ariadne-836505524290-eun1/runs/images/ariadne-recon-gpu-a827de5514fe.tar.zst
+spools: s3://ariadne-836505524290-eun1/runs/20261024T113021Z-cpux86-b83165/output/spools.tar.gz
+scene_id: 8410a254a94cc16b
+spool_dirs: "agent0 agent1 agent2 "

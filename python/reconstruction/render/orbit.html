@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splat render</title>
+<!-- Offline renderer for the demo video (6.x; D190/D197): the trained splat ONLY - one canvas, no console chrome, no
+     axes, no labels. Same placement as the console (python/operator_console/static/splat.html): one Spark SplatMesh
+     per submap at its table row's T_W_anchor (row-major 4x4, anchor frame -> mission world W, z-up). Driven by
+     render_orbit.mjs over the DevTools protocol:
+       ?base=<url of a service output dir: table.json + chunks/>&w=1920&h=1080
+       await window.loaded                     -> {submaps, agents, bounds: {min:[x,y,z], max:[x,y,z]}}
+       await window.renderView(view)           view = {pos:[x,y,z], target:[x,y,z], fov_deg, agents: [k...] | null}
+     renderView resolves after Spark's sort has settled (several frames), so the next screenshot is the final image. -->
+<style>
+  :root { --bg: #000; }
+  html, body { margin: 0; background: var(--bg); overflow: hidden; }
+  canvas { display: block; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+    "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.js" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from "three";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+const q = new URLSearchParams(location.search);
+const base = (q.get("base") || ".").replace(/\/$/, "");
+const W = +(q.get("w") || 1920), H = +(q.get("h") || 1080);
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.add(new SparkRenderer({ renderer }));
+const camera = new THREE.PerspectiveCamera(50, W / H, 0.02, 500);
+camera.up.set(0, 0, 1);   // mission world W is z-up
+
+const meshes = [];   // {agent, sid, mesh}
+const frame = () => new Promise(r => requestAnimationFrame(() => { renderer.render(scene, camera); r(); }));
+
+window.loaded = (async () => {
+  const table = await (await fetch(`${base}/table.json`)).json();
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const row of table.submaps) {
+    if (!row.chunk) continue;
+    const bytes = new Uint8Array(await (await fetch(`${base}/chunks/${row.chunk}`)).arrayBuffer());
+    const mesh = new SplatMesh({ fileBytes: bytes, fileType: "splat" });
+    await mesh.initialized;
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.set(...row.T_W_anchor);                  // Matrix4.set takes row-major arguments (as splat.html)
+    mesh.matrixWorldNeedsUpdate = true;
+    scene.add(mesh);
+    meshes.push({ agent: row.agent, sid: row.sid, mesh });
+    const t = [row.T_W_anchor[3], row.T_W_anchor[7], row.T_W_anchor[11]];   // anchors bound the agents' paths
+    for (let i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], t[i]); hi[i] = Math.max(hi[i], t[i]); }
+  }
+  for (let i = 0; i < 10; i++) await frame();
+  return { submaps: meshes.length, agents: [...new Set(meshes.map(m => m.agent))].sort(), label: table.label,
+           bounds: { min: lo, max: hi } };
+})();
+
+window.renderView = async (v) => {
+  for (const m of meshes) m.mesh.visible = !v.agents || v.agents.includes(m.agent);
+  camera.fov = v.fov_deg || 50;
+  camera.position.fromArray(v.pos);
+  camera.lookAt(new THREE.Vector3().fromArray(v.target));
+  camera.updateProjectionMatrix();
+  for (let i = 0; i < (v.settle || 8); i++) await frame();   // Spark re-sorts splats asynchronously per view
+  return true;
+};
+
+window.glInfo = () => {
+  const gl = renderer.getContext(), ext = gl.getExtension("WEBGL_debug_renderer_info");
+  return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+};
+</script>
+</body>
+</html>

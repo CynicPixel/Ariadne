@@ -18,6 +18,7 @@ its content does not change the per-Gaussian cost model, only how many Gaussians
 that this is representative of a 640x360 indoor keyframe; the live run logs its own ms/iteration to confirm.
 """
 import json
+import os
 import subprocess
 import sys
 import time
@@ -99,8 +100,13 @@ def main():
         raise RuntimeError("no CUDA device")
     env["gpu"] = torch.cuda.get_device_name(0)
     t0 = time.time()
-    env["gsplat_install"] = install_gsplat(torch)
-    sh(f"{sys.executable} -m pip install -q jaxtyping rich")
+    try:   # an image with gsplat compiled ahead of time (recon-gpu) must not pip-install over it
+        import gsplat
+        from gsplat import csrc   # noqa: F401
+        env["gsplat_install"] = f"preinstalled {gsplat.__version__} (compiled csrc: {csrc.__file__})"
+    except ImportError:
+        env["gsplat_install"] = install_gsplat(torch)
+        sh(f"{sys.executable} -m pip install -q jaxtyping rich")
     import gsplat
     from gsplat import rasterization
     env["gsplat"] = gsplat.__version__
@@ -214,7 +220,7 @@ def main():
     out["append"] = {"n_before": 100_000, "n_added": 10_000, "n_after": int(p["means"].shape[0]),
                      "append_ms": round(append_ms, 3), "adam_state_kept": kept,
                      "steps_after_ok": bool(torch.isfinite(p["means"]).all())}
-    json.dump(out, open("/kaggle/working/remote.json", "w"), indent=2)
+    json.dump(out, open(os.path.join(os.environ.get("ARIADNE_WORK", "/kaggle/working"), "remote.json"), "w"), indent=2)
     print(json.dumps({"sh3": out["sh3"], "append": out["append"], "env": env}, indent=2))
 
 
