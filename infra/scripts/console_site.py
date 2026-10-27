@@ -43,7 +43,8 @@ if OUT.exists():
 api.mkdir(parents=True)
 # Status as a static site serves it: no worker, no controller, no session.
 st.update(enabled=False, controller_remaining_s=0, commands=[], frame={}, session_id=None, state="offline", error=None)
-st["links"] = {"github": None, "paper": "/api/demo/paper", "video": None}
+st["links"] = {"github": "https://github.com/CynicPixel/Ariadne", "paper": "/api/demo/paper",
+                "video": st["links"].get("video")}
 (api / "status").write_text(json.dumps(st))
 (api / "entrances").write_bytes(req("/entrances"))
 (api / "world.obj").write_bytes(req("/world.obj"))

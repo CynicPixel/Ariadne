@@ -32,6 +32,7 @@ ID = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 ACTIVE = {"starting", "running", "stopping", "recovering"}
 PRESETS = ("maze_demo", "maze_short", "ci_tiny")
 router = APIRouter(prefix="/api/demo")
+VIDEO_URL = "https://youtu.be/VIDEO_ID_TBD"   # placeholder until the film is published
 
 
 def atomic(path: Path, value):
@@ -183,7 +184,7 @@ class Demo:
                     "reconstruction": self.recon_state,
                     "links": {"github": "https://github.com/CynicPixel/Ariadne",
                               "paper": "/api/demo/paper" if (self.root / "docs/report/main.pdf").is_file() else None,
-                              "video": os.environ.get("ARIADNE_DEMO_VIDEO_URL")},
+                              "video": os.environ.get("ARIADNE_DEMO_VIDEO_URL", VIDEO_URL)},
                     "frame": self.snapshot, "commands": list(self.commands.values())[-20:]}
 
     def generate(self, spec):
