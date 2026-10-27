@@ -1,6 +1,6 @@
 # Ariadne: Agentic Vision evidence
 
-The typeset version is `docs/report/AGENTIC_VISION_EVIDENCE.pdf`, built from `AGENTIC_VISION_EVIDENCE.tex`. The design is in `docs/design/agentic.md`.
+The typeset version is [`submission/report/agentic_vision_evidence.pdf`](../report/agentic_vision_evidence.pdf), built from `docs/report/agentic_vision_evidence.tex`. The design is in `docs/design/agentic.md`.
 
 ## Workflow: perception → orchestration → action
 ```

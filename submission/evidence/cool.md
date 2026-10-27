@@ -1,6 +1,6 @@
 # Ariadne: Best Use of COOL evidence
 
-The typeset version is `docs/report/COOL_EVIDENCE.pdf`, built from `COOL_EVIDENCE.tex`.
+The typeset version is [`submission/report/cool_evidence.pdf`](../report/cool_evidence.pdf), built from `docs/report/cool_evidence.tex`.
 
 ## Workload
 Each stereo agent gets a frame every 50 ms of simulated time. Every frame goes through rectification (`cv::remap`), pyramid construction and `cv::calcOpticalFlowPyrLK`, then colour conversion and resize, then stereo. The cost scales with the number of agents.
