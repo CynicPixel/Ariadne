@@ -36,7 +36,7 @@ from ariadne_video.data import load_scene  # noqa: E402
 from ariadne_video.evidence import REPO  # noqa: E402
 from ariadne_video.mobjects import maze_frame, maze_walls, polyline  # noqa: E402
 from ariadne_video.slides import chip_top, note  # noqa: E402
-from ariadne_video.style import AGENT, DATA, DIM, FONT, TARGET, TEXT, THREAD, CaptionedScene, tag  # noqa: E402
+from ariadne_video.style import AGENT, DATA, DIM, FONT, GIF, TARGET, TEXT, THREAD, CaptionedScene, tag  # noqa: E402
 
 GOOD = "#56d364"
 PACK = DATA / "pack_collab60d"
@@ -132,6 +132,8 @@ class Trust(CaptionedScene):
         mid1 = top - H / 2
         boxes = VGroup(*[RoundedRectangle(corner_radius=0.12, width=6.5, height=H, stroke_color=DIM, stroke_width=1.2,
                                           fill_color="#151a22", fill_opacity=0.9).move_to([x, mid1, 0]) for x in (-3.35, 3.35)])
+        if GIF:  # the standalone GIFs have no panels
+            boxes.set_stroke(opacity=0).set_fill(opacity=0)
 
         def img(a, f):
             return ImageMobject(np.asarray(Image.open(PACK / "frames" / f"agent{a}" / f"agent{a}_f{f}.png")
@@ -208,8 +210,11 @@ class Trust(CaptionedScene):
         def pane(x, head_):
             box = RoundedRectangle(corner_radius=0.1, width=pw, height=ph, stroke_color=DIM, stroke_width=1.2,
                                    fill_color="#151a22", fill_opacity=0.9).move_to([x, py, 0])
-            return VGroup(box, Text(head_, font=FONT, font_size=12, color=DIM).next_to(box.get_corner(UP + LEFT),
-                                                                                        DOWN + RIGHT, 0.1))
+            head = Text(head_, font=FONT, font_size=12, color=DIM).next_to(box.get_corner(UP + LEFT), DOWN + RIGHT, 0.1)
+            if GIF:  # the standalone GIFs have no panels
+                box.set_stroke(opacity=0).set_fill(opacity=0)
+                head.set_opacity(0)
+            return VGroup(box, head)
 
         panes = VGroup(pane(cx[0], "known-start d² per loop · logged sweep"), pane(cx[1], "PCM · illustrative"),
                        pane(cx[2], "GNC-TLS · illustrative"))

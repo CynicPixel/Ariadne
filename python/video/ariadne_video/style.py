@@ -16,6 +16,7 @@ from manim import (DOWN, LEFT, ORIGIN, UP, RIGHT, FadeIn, FadeOut, RoundedRectan
 ROOT = Path(__file__).resolve().parents[1]
 DATA = Path(os.environ.get("ARIADNE_VIDEO_DATA", ROOT / "data"))
 
+GIF = os.environ.get("ARIADNE_GIF") == "1"  # standalone-GIF renders: chips, titles, panels and subtitles drawn invisible
 BG = "#0e1116"
 WALL = "#d8dee9"
 FLOOR = "#1b2028"
@@ -52,7 +53,8 @@ def tag(kind: str, source: str = "") -> VGroup:
     label = Text(kind if not source else f"{kind} · {source}", font=FONT, font_size=16, color=TAG_COLOR[kind])
     box = RoundedRectangle(corner_radius=0.08, width=label.width + 0.25, height=label.height + 0.15,
                            stroke_color=TAG_COLOR[kind], stroke_width=1.2)
-    return VGroup(box, label.move_to(box))
+    g = VGroup(box, label.move_to(box))
+    return g.set_opacity(0) if GIF else g  # same geometry either way, so layouts do not move
 
 
 WPM = 150  # narration pace the cue timing assumes (the TTS / voice pass reads the same cue sheet)
@@ -110,6 +112,8 @@ class CaptionedScene(Scene):
         box = RoundedRectangle(corner_radius=0.1, width=t.width + 0.4, height=t.height + 0.22, stroke_width=0,
                                fill_color=BG, fill_opacity=0.72)
         g = VGroup(box, t.move_to(box)).move_to(self.caption_pos)
+        if GIF:
+            g.set_opacity(0)
         if hasattr(self, "add_fixed_in_frame_mobjects"):  # 3D scenes: subtitles stay on the screen, not in the world
             self.add_fixed_in_frame_mobjects(g)
         return g

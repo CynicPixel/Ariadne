@@ -10,5 +10,5 @@ q=("$@"); [ ${#q[@]} -eq 0 ] && q=(-ql)
 # --user: write media as the host user, not root. The repo is mounted whole so evidence.py reads evaluation/runs.
 REPO="$(cd "$HERE/../.." && pwd)"
 exec docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$REPO":/repo -w /repo/python/video -e ARIADNE_VIDEO_DATA=/repo/python/video/data \
+  -v "$REPO":/repo -w /repo/python/video -e ARIADNE_VIDEO_DATA=/repo/python/video/data -e ARIADNE_GIF="${ARIADNE_GIF:-}" \
   "$IMAGE" manim "${q[@]}" "$file" "$scene"
