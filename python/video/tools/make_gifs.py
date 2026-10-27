@@ -38,7 +38,7 @@ SPECS = {
     "aliasing_known_entry_gate": ("s06_trust", "Trust", 1.0, 21.0, 2.0,
                                   [[box(70, 80, 153, 182), box(262, 84, 450, 174)]]),
     "chi2_pcm_gnc": ("s06_trust", "Trust", 22.0, 36.0, 1.5,
-                     [[box(38, 105, 162, 188), box(178, 105, 302, 188), box(318, 105, 442, 188)]]),
+                     [[box(38, 105, 162, 188), box(178, 105, 302, 188)], [box(318, 105, 442, 188)]]),
     "cbba_task_allocation": ("s07_cbba", "SharingWork", 6.5, 35.5, 3.0,
                              [[box(45, 28, 435, 62)], [box(50, 62, 225, 215), box(270, 118, 410, 182)]]),
     "agentic_decision_chain": ("s08_agentic", "HumanInLoop", 0.6, 16.5, 1.6, [[box(25, 22, 455, 212)]]),
