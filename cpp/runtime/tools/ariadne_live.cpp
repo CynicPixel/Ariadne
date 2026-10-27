@@ -632,7 +632,38 @@ std::string JsonEscape(const std::string& s) {
 
 }  // namespace
 
+// The crash teller (collab60d/e: two replays died as 'terminate called without an active exception' and exit
+// 139 with NOTHING in the log - no e.what(), no location; gdb is not in the core image and apt failed on the
+// instance). On terminate or a fatal signal, print raw return addresses (async-signal-unsafe formatting is
+// acceptable: the process is dying anyway); the binary is not stripped, so addr2line/llvm-symbolizer resolves
+// them offline against the payload's own ariadne_live.
+#include <execinfo.h>
+#include <csignal>
+namespace {
+void DumpBacktrace(const char* why) {
+    void* fr[64];
+    const int n = ::backtrace(fr, 64);
+    std::fprintf(stderr, "ariadne_live: FATAL (%s), %d frames:\n", why, n);
+    ::backtrace_symbols_fd(fr, n, 2);
+}
+void OnFatalSignal(int sig) {
+    DumpBacktrace(sig == SIGSEGV ? "SIGSEGV" : sig == SIGABRT ? "SIGABRT" : "signal");
+    ::signal(sig, SIG_DFL);
+    ::raise(sig);
+}
+}  // namespace
+
 int main(int argc, char** argv) {
+    std::set_terminate([] {
+        DumpBacktrace("std::terminate");
+        if (auto e = std::current_exception()) {
+            try { std::rethrow_exception(e); }
+            catch (const std::exception& ex) { std::fprintf(stderr, "ariadne_live: active exception: %s\n", ex.what()); }
+            catch (...) { std::fprintf(stderr, "ariadne_live: active exception: non-std\n"); }
+        }
+        std::abort();
+    });
+    ::signal(SIGSEGV, OnFatalSignal);
     try {
         std::string scene, mission_cfg_path, live_cfg_path, out, link_path, replay_path, chooser_socket, decisions_path,
             directives_path, planner_cfg_path, shadow_cfg_path, worker_socket, collab_socket;
@@ -1185,6 +1216,20 @@ int main(int argc, char** argv) {
         // a DNN. collab: false = none of this exists (D168 digests unchanged).
         uint64_t collab_config_digest = 0;              // the consumed collab config BYTES (collab60d lesson)
         std::string collab_config_path_used;
+        std::atomic<bool> integ_stop{false};
+        std::thread integrator;
+        int replans = 0, commands_sent = 0, answer_timeouts = 0;
+        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
+        size_t rays = 0;
+        std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
+        // The loud-fail scope starts HERE, not at the mission loop: diag4 (8bab46) proved a throw between
+        // collab init and the loop - lanes already running, ~0.6 s consumed - unwinds main past the joinable
+        // lane threads and dies as terminate-without-exception with the reason lost. Everything from collab
+        // init on is inside the try; the ONE teardown below always runs; results.yaml says mission_error.
+        std::exception_ptr mission_err;
+        bool operator_stopped = false;   // demo stop.request.json (main 714924a); read by the results block
+        int64_t terminal_ns = end_ns;
+        try {
         if (ma && lc.collab.enabled) {
             if (!lc.estimator_processes)
                 throw std::invalid_argument("collab: true requires estimator_processes: true (the tee lives in the worker)");
@@ -1228,11 +1273,25 @@ int main(int argc, char** argv) {
             live::CollabLiveParams cp;   // D179: async; the event log is the reproducibility substrate
             if (is_live) cp.log_path = (run_dir / "collab_events.jsonl").string();
             else cp.replay_log = (fs::path(replay_path).parent_path() / "collab_events.jsonl").string();
-            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ
+            {   // 7aa8a67: the log's identity line - replay refuses a log whose config bytes or build differ.
+                // The build component is the BINARY's own fnv1a64 (/proc/self/exe): invariant between the live
+                // and replay legs of one payload, different for any byte-different build. It was ARIADNE_GIT_COMMIT
+                // first, which cmd_run sets and cmd_replay does not - every gate-on replay was refused at the
+                // CollabLive ctor ("payload:src" vs "unknown") and died as collab60e's naked terminate (diag5).
                 char hx[17];
                 std::snprintf(hx, sizeof hx, "%016llx", (unsigned long long)collab_config_digest);
-                const char* gc = std::getenv("ARIADNE_GIT_COMMIT");
-                cp.identity = std::string(hx) + ":" + (gc && *gc ? gc : "unknown");
+                core::Fnv1a64 bh;
+                {
+                    std::ifstream exe("/proc/self/exe", std::ios::binary);
+                    char buf[1 << 16];
+                    while (exe.read(buf, sizeof buf) || exe.gcount() > 0) {
+                        for (std::streamsize i = 0; i < exe.gcount(); ++i) bh.AbsorbByte(uint8_t(buf[i]));
+                        if (!exe) break;
+                    }
+                }
+                char bx[17];
+                std::snprintf(bx, sizeof bx, "%016llx", (unsigned long long)bh.value());
+                cp.identity = std::string(hx) + ":bin-" + bx;
             }
             const uint64_t cseed = YAML::LoadFile(scene + "/scene.json")["seed"].as<uint64_t>();
             ma->collab = std::make_unique<live::CollabLive>(
@@ -1398,7 +1457,7 @@ int main(int argc, char** argv) {
             fs::create_directories(run_dir / "approvals");
             chooser = std::make_unique<ChooserLink>(chooser_socket);
         }
-        int replans = 0, commands_sent = 0, answer_timeouts = 0;
+        // replans/commands_sent/answer_timeouts declared above the try: the results block in the teardown reads them
         // Operator directives (agentic.md §0b): recorded inputs. Live: <run>/directives_inbox/*.json, taken at the
         // replan barrier in name order, stamped and appended to directives.jsonl. Replay: that file, verbatim.
         std::vector<mis::Directive> directives;
@@ -1411,9 +1470,7 @@ int main(int argc, char** argv) {
         if (is_live) fs::create_directories(run_dir / "directives_inbox");
         Lines directives_log(run_dir / "directives.jsonl"), directives_rejected(run_dir / "directives_rejected.jsonl");
         if (!is_live) for (const auto& d : directives) directives_log.Put(mis::DirectiveJson(d));
-        std::vector<size_t> integrated(static_cast<size_t>(NA), 0);
-        size_t rays = 0;
-        std::vector<std::pair<int, std::pair<double, double>>> refused_goals;   // (agent, goal xy): never re-chosen
+        // integrated/rays/refused_goals: declared above the try (the teardown's results block reads them)
         std::map<int, std::pair<double, double>> last_goal;                      // per agent, the last commanded goal
         // Per agent, the task its last command serves (agentic.md D164): the chooser's memory across replans. A new pick
         // whose goal lies within refused_radius_m of it CONTINUES it (since_ns kept); anything else starts a new one.
@@ -1430,8 +1487,7 @@ int main(int argc, char** argv) {
         // (t, agent, id) sort keeps it); cross-agent interleaving makes the demo map not bit-reproducible, which is
         // accepted - demo is not the evidence substrate.
         std::mutex planner_mu;
-        std::atomic<bool> integ_stop{false};
-        std::thread integrator;
+        // integ_stop/integrator are declared above the mission try block: the teardown joins them.
         if (lc.demo) {
             integrator = std::thread([&] {
                 while (!integ_stop) {
@@ -1468,11 +1524,11 @@ int main(int argc, char** argv) {
         // a replay arrival-wait runtime_error reached main, the std::thread members' dtors called terminate
         // 'without an active exception', and e.what() was lost). Caught here, printed, then the one teardown
         // path below runs (joins, Shutdown, rec.Close, results.yaml) and the process still exits nonzero.
-        std::exception_ptr mission_err;
-        bool operator_stopped = false;
-        int64_t terminal_ns = end_ns;
+        // mission_err + the loud-fail try open EARLIER on this branch (above collab init, diag4 8bab46), and
+        // operator_stopped/terminal_ns are declared up there too (the teardown reads them after the catch).
+        // Deferred ingestion start (main 714924a): the reader thread begins only now, after model/config
+        // validation and the worker sockets exist - replay could otherwise race startup and lose early GT.
         start_reader();
-        try {
         for (int64_t T = replan_ns; T <= end_ns; T += replan_ns) {
             if (is_live && lc.demo && fs::exists(run_dir / "stop.request.json")) {
                 operator_stopped = true;
@@ -2045,7 +2101,7 @@ int main(int argc, char** argv) {
                     pd.agent_json = q.str();
                 }
             }
-            // Phase 2: choose, jointly for both agents (agentic.md §0: Co-NavGPT's joint assignment; exactly-once).
+            // Phase 2: choose, jointly for every agent (agentic.md §0: Co-NavGPT's joint assignment; exactly-once).
             std::vector<int> picks(plan_out.joint.begin(), plan_out.joint.end());   // the planner's allocation
             std::vector<std::string> choice(static_cast<size_t>(NA)), pick_reason(static_cast<size_t>(NA), "classical choice");
             const auto other_cluster = [&](int k, int64_t taken) { return live::OtherTask(plan_out, k, taken, lc.autonomous_threshold); };
@@ -2064,7 +2120,7 @@ int main(int argc, char** argv) {
                     choice[k] = it->second.second;
                 }
             } else {
-                // The joint request: both agents' facts and candidates, plus the images the model may look at, all
+                // The joint request: every agent's facts and candidates, plus the images the model may look at, all
                 // rendered here with OpenCV (the orchestrator image has no OpenCV).
                 const std::string did = "t" + std::to_string(T / 1000000) + "ms";
                 const fs::path ddir = run_dir / "decisions";
@@ -2475,6 +2531,10 @@ int main(int argc, char** argv) {
             for (const pid_t cp : ma->collab_pids) {
                 int st = 0;
                 ::waitpid(cp, &st, 0);
+                if (WIFSIGNALED(st))   // 788896: a SIGKILLed worker (cgroup OOM) left no stats and no stderr
+                    std::fprintf(stderr, "ariadne_live: collab worker pid %d KILLED by signal %d\n", cp, WTERMSIG(st));
+                else if (WIFEXITED(st) && WEXITSTATUS(st) != 0)
+                    std::fprintf(stderr, "ariadne_live: collab worker pid %d exited rc %d\n", cp, WEXITSTATUS(st));
             }
             for (const auto& sp : ma->collab_socks) ::unlink(sp.c_str());
         }
@@ -2524,7 +2584,7 @@ int main(int argc, char** argv) {
         man.scene = "sim-live/" + brief.scene_id;
         man.seed_recorded = true;
         man.seed = va.seed;
-        man.agent_count = 2;
+        man.agent_count = NA;   // was hardcoded 2 (D213 leftover; demo-video caught it in c51ab2s manifest)
         man.execution_mode = is_live ? "live" : "replay";
         man.planner_config = mc.name;
         man.extra["planner"] = "frontier candidates (1.8) + chooser " + lc.chooser;

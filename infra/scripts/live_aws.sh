@@ -71,6 +71,9 @@ cmd_payload() {   # SCENE... (one or more scene directories)
   # D221: the collab worker binary + the ONNX models ride the payload when present (.cache is gitignored, so the
   # tree sync never ships them; the collab run needs them at the configured relative paths).
   [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_collab_worker" ] && extra+=(build/docker/cpp/runtime/ariadne_collab_worker)
+  # Spool tooling rides along when built (in-region spool builds, D214 + D195: the maintainer's no-download rule)
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_sim_vo" ] && extra+=(build/docker/cpp/runtime/ariadne_sim_vo)
+  [ -f "$REPO_ROOT/build/docker/cpp/runtime/ariadne_live_canonical" ] && extra+=(build/docker/cpp/runtime/ariadne_live_canonical)
   [ -d "$REPO_ROOT/.cache/models" ] && extra+=(.cache/models)
   (cd "$REPO_ROOT" && tar chf - build/docker/cpp/runtime/ariadne_live build/sim-plugins/libariadne_kinematic_mover.so \
      build/ros2/install "${extra[@]}" "$@") | tar xf - -C "$stage/p"
@@ -123,6 +126,7 @@ cmd_smoke() {
   mkdir -p "$(dirname "$script")"
   { prologue "$refs"; cat <<'EOF'
 # [SMOKE-TEST] the sim image's headless EGL under the NVIDIA runtime (never run before: llvmpipe only, SMOKE §4).
+mkdir -p $R/sim-smoke && chmod 777 $R/sim-smoke   # the sim container runs as the image user; $R is root's
 ARIADNE_SMOKE_OUT_HOST=$R/sim-smoke ARIADNE_SMOKE_TIMEOUT=120 infra/scripts/sim.sh > $R/sim_smoke.log 2>&1; echo "sim_smoke_exit=$?" >> $R/sim_smoke.log
 docker run --rm --gpus all ariadne/sim:dev bash -c 'ls -la /usr/share/glvnd/egl_vendor.d/; ldconfig -p | grep -iE "libEGL_nvidia|libnvidia-egl" | head' > $R/egl_vendor.txt 2>&1 || true
 EOF
@@ -135,7 +139,10 @@ cmd_run() {
   local source_commit; source_commit="$(git -C "$REPO_ROOT" rev-parse HEAD)"
   local source_dirty; source_dirty="$([ -n "$(git -C "$REPO_ROOT" status --porcelain -- cpp configs ros2 simulator infra)" ] && echo true || echo false)"
   local refs; refs="$(cmd_push)"
-  local uri="${ARIADNE_LIVE_PAYLOAD_URI:-}"
+  # LIVE_AWS_PAYLOAD_URI (merge: = main's ARIADNE_LIVE_PAYLOAD_URI, both honored) pins an existing payload
+  # (demorec250: the replay legs must run the live leg's exact binary); LIVE_AWS_SKIP_REPLAY=1 runs the live leg
+  # only (spinup brakes at 240 min, so the 250 s mission splits live + two parallel replay-s3 jobs).
+  local uri="${LIVE_AWS_PAYLOAD_URI:-${ARIADNE_LIVE_PAYLOAD_URI:-}}"
   [ -n "$uri" ] || uri="$(cmd_payload "$scene")"
   local script="$REPO_ROOT/build/live_payload/run-$(date -u +%Y%m%dT%H%M%SZ).sh"
   { prologue "$refs"; cat <<EOF
@@ -153,7 +160,8 @@ ARIADNE_RT_MEM=${ARIADNE_RT_MEM:-6g} ARIADNE_PROFILE=${ARIADNE_PROFILE:-} ARIADN
   infra/scripts/live.sh run $scene build/live/runs $end_s > \$R/live_run.log 2>&1; then live_rc=0; else live_rc=\$?; fi
 run=\$(find build/live/runs -mindepth 1 -maxdepth 1 -type d -name 'live-*' -printf '%T@ %p\\n' | sort -nr | head -1 | cut -d' ' -f2-)
 if [ -n "\$run" ]; then
-  if infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1; then replay_rc=0; else replay_rc=\$?; fi
+  if [ -n '${LIVE_AWS_SKIP_REPLAY:-}' ]; then replay_rc=0; echo 'replay skipped (LIVE_AWS_SKIP_REPLAY; legs run as replay-s3 jobs)' > \$R/replay.log
+  elif infra/scripts/live.sh replay \$run $scene > \$R/replay.log 2>&1; then replay_rc=0; else replay_rc=\$?; fi
   if [ '${ARIADNE_ARCHIVE_RECORDING:-inline}' = separate ]; then
     recording=\$(find "\$run" -name inputs.mcap -type f | head -1)
     if [ -n "\$recording" ]; then
@@ -179,10 +187,11 @@ EOF
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
 
-cmd_replay_s3() {   # S3_RUN_TARBALL SCENE - replay an EXISTING recording in-region (no local download; collab60d)
-  local tarball="$1" scene="$2"
+cmd_replay_s3() {   # S3_RUN_TARBALL SCENE [PAYLOAD_URI] - replay an EXISTING recording in-region
+  local tarball="$1" scene="$2" pay="${3:-}"
   local refs; refs="$(cmd_push)"
-  local uri; uri="$(cmd_payload "$scene")"
+  local uri
+  if [ -n "$pay" ]; then uri="$pay"; else uri="$(cmd_payload "$scene")"; fi
   local script="$REPO_ROOT/build/live_payload/replays3-$(date -u +%Y%m%dT%H%M%SZ).sh"
   { prologue "$refs"; cat <<EOF
 aws s3 cp $uri - | tar xz -C /tmp
@@ -194,10 +203,171 @@ src=\$(ls -d /tmp/runsrc/build/live/runs/live-* | tail -1)
 rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
 cp -a "\$src" build/live/runs/
 run=build/live/runs/\$(basename "\$src")
-ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+memmon() {   # 788896 diag (M): 1 s host-side sampler - per-container mem, biggest processes, cgroup peak/oom_kill
+  while :; do
+    { date -u '+%H:%M:%S'; docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' 2>/dev/null; } >> \$R/docker_stats.txt
+    { date -u '+%H:%M:%S'; ps -eo pid,ppid,rss,comm --sort=-rss | head -12; } >> \$R/ps_rss.txt
+    for cg in /sys/fs/cgroup/system.slice/docker-*.scope; do
+      [ -d "\$cg" ] || continue
+      echo "\$(date -u '+%H:%M:%S') \$(basename \$cg) peak=\$(cat \$cg/memory.peak 2>/dev/null) \$(grep oom_kill \$cg/memory.events 2>/dev/null | tr '\n' ' ')" >> \$R/cgroup_mem.txt
+    done
+    sleep 1
+  done
+}
+memmon & MEMMON=\$!
+ARIADNE_REPLAY_ONLY=${ARIADNE_REPLAY_ONLY:-} ARIADNE_RT_MEM=\${ARIADNE_RT_MEM:-20g} infra/scripts/live.sh replay "\$run" $scene > \$R/replay.log 2>&1 || echo "replay_check_failed" >> \$R/replay.log
+kill \$MEMMON 2>/dev/null || true
+dmesg -T 2>/dev/null | grep -iE 'oom|killed process' > \$R/dmesg_oom.txt || true
+docker ps -aq | xargs -r docker inspect --format '{{.Name}} {{json .State}}' > \$R/docker_state.txt 2>/dev/null || true
 cp "\$run/replay_check.json" \$R/ 2>/dev/null || true
 tar czf \$R/replays.tar.gz "\$run"/replay1 "\$run"/replay2 "\$run"/replay*.log 2>/dev/null || true
 EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
+cmd_spool_s3() {   # S3_RUN_TARBALL SCENE - build per-agent recon spools from an S3 recording, in-region (D214/D195)
+  local tarball="$1" scene="$2"
+  local refs; refs="$(cmd_push)"
+  local uri; uri="$(cmd_payload "$scene")"
+  local script="$REPO_ROOT/build/live_payload/spools3-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $uri - | tar xz -C /tmp
+(cd /tmp/p && sha256sum -c --quiet SHA256SUMS) && echo "payload sha256 OK" > \$R/payload_check.txt
+cp -a /tmp/p/. .
+mkdir -p build/runsrc
+aws s3 cp $tarball - | tar xz -C build/runsrc
+inner=\$(find build/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap in the recording tarball" > \$R/spool_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
+# RELATIVE to the repo root on purpose: live_to_rec/sim_vo run in containers that mount only the repo at
+# /work - a /tmp path on the instance host does not exist inside them (spool626b's failure, run b577dd).
+mkdir -p build/rec626 build/spools build/vo_out
+ARIADNE_CORE_IMAGE=ariadne/core-dev:dev infra/scripts/live_to_rec.sh "\$inner" $scene build/rec626 > \$R/live_to_rec.log 2>&1
+for k in 0 1 2; do
+  docker run --rm -u "\$(id -u):\$(id -g)" -v "\$PWD":/work -w /work ariadne/core-dev:dev \\
+    build/docker/cpp/runtime/ariadne_sim_vo --rec build/rec626 --scene $scene --agent \$k \\
+    --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \\
+    --out build/vo_out/agent\$k --spool build/spools/agent\$k --recon-config configs/recon/recon_v1.yaml \\
+    > \$R/sim_vo_agent\$k.log 2>&1 || echo "sim_vo agent \$k FAILED" >> \$R/sim_vo_agent\$k.log
+done
+tar czf /tmp/spools.tar.gz build/spools $scene
+aws s3 cp --only-show-errors /tmp/spools.tar.gz "\${ARIADNE_RESULTS_URI%/results}/spools.tar.gz"
+{
+  echo "spools.tar.gz bytes: \$(stat -c%s /tmp/spools.tar.gz)"
+  du -sh build/spools
+  for k in 0 1 2; do
+    echo "agent\$k files: \$(find build/spools/agent\$k -type f | wc -l)  size: \$(du -sh build/spools/agent\$k | cut -f1)"
+    grep -h "keyframes" build/vo_out/agent\$k/*/results.yaml 2>/dev/null | head -2
+  done
+  grep -h "scene_id" $scene/scene.json | head -1
+  (cd build/spools && find . -type f | sort | head -50)
+} > \$R/spools_listing.txt
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
+cmd_replay_gdb() {   # S3_RUN_TARBALL SCENE PAYLOAD_URI - re-run a failed replay under gdb, in-region; small files only
+  local tarball="$1" scene="$2" pay="$3"
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/replaygdb-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $pay - | tar xz -C /tmp
+cp -a /tmp/p/. .
+mkdir -p /tmp/runsrc build/live/runs
+aws s3 cp $tarball - | tar xz -C /tmp/runsrc
+inner=\$(find /tmp/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap" > \$R/diag_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
+outer=\$(dirname "\$inner")
+# 1. The FAILED replay's own small artifacts, straight out of the tarball.
+cp "\$outer"/replay1.log \$R/ 2>/dev/null || true
+find "\$outer/replay1" -name 'collab_worker_*.err' -exec cp {} \$R/ \\; 2>/dev/null || true
+find "\$outer/replay1" -name trace.jsonl -exec sh -c 'tail -5 "\$1" > "\$2/replay1_trace_tail.jsonl"' _ {} \$R \\; 2>/dev/null || true
+cp "\$outer"/results.yaml \$R/live_results.yaml 2>/dev/null || true
+# 2. The live gate/alias verdict (D178 on: beat-6 numbers).
+python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
+# 2b. The film data pack (same schema as collab60d's), built where the data already is.
+python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_build.log 2>&1 || true
+tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz "\${ARIADNE_RESULTS_URI%/results}/pack.tar.gz" || true
+du -sh /tmp/pack >> \$R/pack_build.log 2>/dev/null || true
+# 3. Fresh staging and the gdb re-run of replay1 (root container: core-dev has no gdb, apt it in).
+src="\$outer"
+rm -rf "\$src/replay1" "\$src/replay2" "\$src"/replay*.log "\$src/replay_check.json"
+cp -a "\$src" build/live/runs/
+run=build/live/runs/\$(basename "\$src")
+live_dir=\$(basename "\$inner")
+cat > gdbrun.sh <<'GEOF'
+set -x
+RUNNER="bare"
+if apt-get update -qq && apt-get install -y -qq gdb; then RUNNER="gdb"; fi
+run_cmd() { "\$@"; }
+[ "\$RUNNER" = gdb ] && run_cmd() { gdb -batch -ex run -ex bt -ex 'thread apply all bt 8' --args "\$@"; }
+# The binary also self-reports on terminate/SIGSEGV (backtrace_symbols_fd to stderr), so a bare run still
+# yields resolvable addresses when gdb cannot be installed.
+run_cmd \\
+  build/docker/cpp/runtime/ariadne_live \\
+  --scene "\$GDB_SCENE" --perception-config configs/perception/sim_v1.yaml --slam-config configs/slam/sim_v1.yaml \\
+  --mission-config configs/mission/mission_v1.yaml --live-config "\$GDB_RUN/live_config.yaml" \\
+  --out "\$GDB_RUN/replay1" --replay "\$GDB_RUN/\$GDB_LIVEDIR/inputs.mcap" \\
+  --directives "\$GDB_RUN/\$GDB_LIVEDIR/directives.jsonl" --planner-config "\$GDB_RUN/planner_config.yaml"
+GEOF
+docker run --rm --memory=20g --memory-swap=20g -v "\$PWD":/work -w /work \\
+  -e GDB_SCENE=$scene -e GDB_RUN="\$run" -e GDB_LIVEDIR="\$live_dir" \\
+  ariadne/core-dev:dev bash gdbrun.sh > /tmp/gdb_full.log 2>&1 || true
+echo "gdb container rc=\$?" >> /tmp/gdb_full.log
+tail -300 /tmp/gdb_full.log > \$R/gdb_bt.txt
+grep -n "Program received\|#0 \|#1 \|#2 \|SIGSEGV" /tmp/gdb_full.log | head -40 >> \$R/gdb_bt.txt || true
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
+cmd_extract_s3() {   # S3_TARBALL GLOB... - stream-extract small members from a run tarball, in-region
+  local tarball="$1"; shift
+  local globs=""
+  local g; for g in "$@"; do globs="$globs --wildcards '$g'"; done
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/extract-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+mkdir -p /tmp/x
+cd /tmp/x
+aws s3 cp $tarball - | tar xz $globs || true
+find /tmp/x -type f | head -40 > \$R/extracted_listing.txt
+cd /tmp/x && find . -type f -size -32M -print0 | tar czf /tmp/extracted.tar.gz --null -T -
+aws s3 cp --only-show-errors /tmp/extracted.tar.gz "\${ARIADNE_RESULTS_URI%/results}/extracted.tar.gz"
+du -sh /tmp/x >> \$R/extracted_listing.txt
+EOF
+  } > "$script"
+  "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
+}
+
+cmd_pack_s3() {   # S3_RUN_TARBALL SCENE PAYLOAD_URI - build the film pack + gate report from a recording, no replay
+  local tarball="$1" scene="$2" pay="$3"
+  local refs; refs="$(cmd_push)"
+  local script="$REPO_ROOT/build/live_payload/packs3-$(date -u +%Y%m%dT%H%M%SZ).sh"
+  { prologue "$refs"; cat <<EOF
+aws s3 cp $pay - | tar xz -C /tmp
+cp -a /tmp/p/. .
+mkdir -p build/runsrc
+aws s3 cp $tarball - | tar xz -C build/runsrc
+inner=\$(find build/runsrc -name inputs.mcap | head -1)
+[ -n "\$inner" ] || { echo "no inputs.mcap" > \$R/pack_error.txt; exit 5; }
+inner=\$(dirname "\$inner")
+python3 python/analysis/collab_gate_report.py "\$inner" > \$R/gate_report.json 2>\$R/gate_report.err || true
+python3 python/analysis/manim_pack.py "\$inner" $scene /tmp/pack > \$R/pack_build.log 2>&1 || true
+tar czf /tmp/pack.tar.gz -C /tmp pack 2>/dev/null && aws s3 cp --only-show-errors /tmp/pack.tar.gz "\${ARIADNE_RESULTS_URI%/results}/pack.tar.gz" || true
+grep -h "mission loop failed\|KILLED\|exited rc" "\$inner"/../*.log 2>/dev/null | head -5 >> \$R/pack_build.log || true
+EOF
+    # LIVE_AWS_EXTRA_MANIFEST_TARBALL: also pull every manifest.yaml out of ANOTHER recording on the same
+    # instance (free in-region; rides the pack job so no second launch). Used for the 60d/60e A/B seed check.
+    if [ -n "${LIVE_AWS_EXTRA_MANIFEST_TARBALL:-}" ]; then cat <<EOF
+mkdir -p /tmp/xman
+aws s3 cp ${LIVE_AWS_EXTRA_MANIFEST_TARBALL} - | tar xz -C /tmp/xman --wildcards '*manifest.yaml' || true
+find /tmp/xman -name manifest.yaml | while read -r m; do { echo "== \$m"; cat "\$m"; } >> \$R/extra_manifest.txt; done
+EOF
+    fi
   } > "$script"
   "$REPO_ROOT/infra/scripts/spinup.sh" run --profile "$PROFILE" --max-minutes "$RUN_MAX_MIN" -- "$(cat "$script")"
 }
@@ -262,6 +432,10 @@ case "${1:-}" in
   smoke) shift; cmd_smoke "$@" ;;
   run) shift; cmd_run "$@" ;;
   replay-s3) shift; cmd_replay_s3 "$@" ;;
+  spool-s3) shift; cmd_spool_s3 "$@" ;;
+  replay-gdb) shift; cmd_replay_gdb "$@" ;;
+  extract-s3) shift; cmd_extract_s3 "$@" ;;
+  pack-s3) shift; cmd_pack_s3 "$@" ;;
   batch) shift; cmd_batch "$@" ;;
   *) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

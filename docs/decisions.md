@@ -5910,3 +5910,28 @@ its payoff case is a live path whose ingest is heavy again (lens-on rows, the pa
 DegradeParallel runs inside Ingest and would overlap tracking).
 **RTF ≥ 1 (inference, agreed):** needs less tracking/keyframe compute per frame or keyframe work off the
 lockstep path - a new decision, NOT started (feature freeze).
+
+## 2026-10-27 — D178 demorec250 RESULT: the entry gate holds over 250 s and the fleet keeps 291 TRUE inter-agent edges
+The demo recording mission (run 20261024T123707Z-cpux86-99ee9d live leg, 3 agents, live_demo_rec_v1.yaml =
+live_collab_v1 + llm chooser + end_s 250, gate ON; gate report from the in-region pack job 285fd8):
+- entry gate: tested 11,251 candidates, rejected 2,686; verify 3,610 calls / 350 gated; **kept_inter_edges 291**
+  by t=245 s, all three agents merged into agent 0's anchor frame.
+- shared-frame pose vs GT (max / final, m): agent0 0.221 / 0.181, agent1 0.219 / 0.130, agent2 0.194 / 0.188
+  (5,000 samples each). The collab60d gate-off failure mode (aliased merge, 15.263 m corruption) is absent.
+- A/B provenance for the film: collab60d and collab60e are same scene (sim-live/8410a254a94cc16b) AND same run
+  seed (1) — both manifests read (60e's extracted in-region from the debba5 recording in the same pack job).
+
+## 2026-10-27 — demorec250 replay RESULT: replay1 died to cgroup OOM (diagnosed, not fixed); D179 replay×2 NOT met for this recording
+replay1 (run 788896) failed exit 4 ("worker closed its socket after 0.993 s; 405 records, 0 replies"). The
+diagnostic rerun (c442c1, same pinned payload live-payload-20261024T120124Z, same ARIADNE_RT_MEM=20g, host-side
+1 s memory sampler + post-exit dmesg per the agreed spec, live_aws.sh c365126) names the mechanism:
+- dmesg: "Memory cgroup out of memory: Killed process (ariadne_collab_)" — two workers at ~6.0/5.9 GB anon-RSS,
+  oom_kill count 3 on the RT container scope, memory.peak exactly 20 GiB (the limit). Three free-running collab
+  workers in replay inflate to ~6-7 GB each (an unpaced replay floods the worker inbox; live stays modest).
+- Verdict (rule agreed before the run): **worker inbox backpressure is the fix — a post-demo design item
+  under preflight. No cap tweak** ("never raised just to make it pass" would prove nothing on a 32 GiB c7i).
+- Consequence, stated not buried: the demorec250 recording has a PASSING live leg and NO passing replay pair, so
+  the D179 replay×2 acceptance is NOT met for this recording. The gate/edge results above come from the live
+  leg's telemetry (its own digest-checked recording), not from a replay.
+- The reaper now names worker deaths ("collab worker pid N KILLED by signal S", 90c41fe); replay-s3 ships
+  docker-stats/ps-RSS/cgroup-peak samplers + dmesg on every future replay (c365126).

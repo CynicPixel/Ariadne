@@ -2,7 +2,7 @@
 
   python -m orchestration.mcp_server DECISION_DIR [--text-only]
 
-One decision request per replan covers both agents (§0 change 1, Co-NavGPT's joint assignment). ariadne_live writes it
+One decision request per replan covers every agent (§0 change 1, Co-NavGPT's joint assignment). ariadne_live writes it
 to DECISION_DIR/<decision_id>.json: per agent the map facts built from keyframe depth, the estimator's state and the
 candidate set the planner proved reachable (with the deterministic §23 risk); the egress route at rho_responder; the
 paths of the images it rendered with OpenCV. Every tool is a view of that request, plus two actions:

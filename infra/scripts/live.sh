@@ -356,7 +356,7 @@ cmd_replay() {
   python3 "$REPO_ROOT/infra/scripts/live_identity.py" replay --run "$REPO_ROOT/$run" \
     --binary "$REPO_ROOT/build/docker/cpp/runtime/ariadne_live" \
     --image "$(docker image inspect "$CORE_IMAGE" --format '{{.Id}}')"
-  for i in 1 2; do
+  for i in ${ARIADNE_REPLAY_ONLY:-1 2}; do   # demorec250 split: each parallel AWS job runs ONE replay leg
     docker run --rm --memory="${ARIADNE_RT_MEM:-4g}" --memory-swap="${ARIADNE_RT_MEM:-4g}" -u "$U" -v "$REPO_ROOT":/work -w /work \
       --env-file "$REPO_ROOT/$run/replay_identity.env" "$CORE_IMAGE" build/docker/cpp/runtime/ariadne_live \
       --scene "$scene" --perception-config "$perception_cfg" --slam-config "$slam_cfg" "${imu_noise_arg[@]}" \
@@ -364,7 +364,7 @@ cmd_replay() {
       --out "$run/replay$i" --replay "$run/$live_dir/inputs.mcap" "${extra[@]}" \
       > "$REPO_ROOT/$run/replay$i.log" 2>&1
   done
-  python3 "$REPO_ROOT/python/analysis/live_replay_check.py" "$REPO_ROOT/$run"
+  [ -n "${ARIADNE_REPLAY_ONLY:-}" ] || python3 "$REPO_ROOT/python/analysis/live_replay_check.py" "$REPO_ROOT/$run"
 }
 
 case "${1:-}" in

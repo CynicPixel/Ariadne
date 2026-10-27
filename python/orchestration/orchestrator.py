@@ -35,11 +35,11 @@ from mcp.client.client import Client
 PRIMARY = "eu.amazon.nova-2-lite-v1:0"
 FALLBACK = "deepseek.v3.2"
 SYSTEM = (
-    "You direct two search agents exploring a dark, partially collapsed building, mapped only from their stereo "
+    "You direct a team of search agents exploring a dark, partially collapsed building, mapped only from their stereo "
     "cameras. Each turn you assign each agent its next exploration target among candidates a deterministic planner "
     "computed. Use the tools to look at the map (and, if available, its image and the agents' camera keyframes), "
     "the agents' pose certainty, the responder egress route and the candidates; then call assign exactly once. "
-    "Prefer targets that reveal more unknown space (larger clusters) per metre driven, do not send both agents to "
+    "Prefer targets that reveal more unknown space (larger clusters) per metre driven, do not send two agents to "
     "the same cluster when another is available, keep risk low, and remember the mission: find a route a human "
     "responder can use. A candidate whose risk exceeds the threshold needs request_human_approval first; if the "
     "verdict is not 'approved', pick another candidate or hold. "
