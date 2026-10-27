@@ -21,6 +21,16 @@ communication-constrained disaster environments, and a route a person can follow
 · [**Video**](submission/video/) · [**Submission package**](submission/README.md) · [**Results**](docs/results/index.md)
 · [**Docs map**](docs/README.md)
 
+## Papers
+
+| document | what it covers |
+|---|---|
+| [**Technical report (PDF)**](submission/report/ariadne_technical_report.pdf) | the full system: problem and users, architecture, OpenCV 5 implementation, AWS deployment, evaluation, failure cases, limitations, responsible use |
+| [**Best Use of COOL evidence (PDF)**](submission/report/cool_evidence.pdf) | COOL version and AWS configuration, the reproducible stock-vs-COOL protocol on Graviton4, execution identity, Graviton results |
+| [**Agentic Vision evidence (PDF)**](submission/report/agentic_vision_evidence.pdf) | the perception → decision → action loop, traces where OpenCV output changes the next action, task success, failure handling, human control |
+
+LaTeX sources: [`docs/report/`](docs/report/).
+
 ## What Ariadne is
 
 After a structural collapse, the spaces that most need searching are the ones people cannot safely enter: dark,
